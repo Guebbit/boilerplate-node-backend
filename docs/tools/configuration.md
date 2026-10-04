@@ -375,13 +375,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### rate-limit
 
-| Variable                         | Type              | Default      | Rules                                                          | What it does                                                                                                                                 |
-| -------------------------------- | ----------------- | ------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_RATE_LIMIT_WINDOW_MS`      | whole number >= 1 | `60000`      | —                                                              | The window every `shared` budget counts over.                                                                                                |
-| `NODE_RATE_LIMIT_REDIS_ENABLED`  | switch            | `on`         | —                                                              | Kill switch: false counts in memory even when a Redis URL is inherited.                                                                      |
-| `NODE_RATE_LIMIT_REDIS_URL`      | text              | —            | secret: never logged; or `NODE_RATE_LIMIT_REDIS_URL_FILE`      | The limiter’s own Redis. Falls back to the cache’s.                                                                                          |
-| `NODE_RATE_LIMIT_REDIS_PASSWORD` | text              | —            | secret: never logged; or `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` | Password merged into `NODE_RATE_LIMIT_REDIS_URL`, replacing any it carries. Read from `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` in a deployment. |
-| `NODE_RATE_LIMIT_REDIS_PREFIX`   | text              | `rate-limit` | —                                                              | Key namespace of every counter, apart from the cache’s.                                                                                      |
+| Variable                         | Type              | Default      | Rules                                                          | What it does                                                                                                                                             |
+| -------------------------------- | ----------------- | ------------ | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_RATE_LIMIT_WINDOW_MS`      | whole number >= 1 | `60000`      | —                                                              | The window every `shared` budget counts over.                                                                                                            |
+| `NODE_RATE_LIMIT_REDIS_URL`      | text              | —            | secret: never logged; or `NODE_RATE_LIMIT_REDIS_URL_FILE`      | The `limits` Redis: rate-limit counters and single-use claims, on its own instance (`noeviction`), never the cache’s. Unset counts in this process only. |
+| `NODE_RATE_LIMIT_REDIS_PASSWORD` | text              | —            | secret: never logged; or `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` | Password merged into `NODE_RATE_LIMIT_REDIS_URL`, replacing any it carries. Read from `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` in a deployment.             |
+| `NODE_RATE_LIMIT_REDIS_PREFIX`   | text              | `rate-limit` | —                                                              | Key namespace of every counter and claim on the `limits` Redis.                                                                                          |
 
 ### uploads
 

@@ -20,10 +20,8 @@
  * regression.
  */
 
-import {
-    rateLimitStore,
-    stopRateLimitStore
-} from '@infrastructure/http/middlewares/rate-limit-store';
+import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';
+import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { setEnvironment } from '@tests/environment';
 
 /** How many times a `connect()` was asked for across the run, whatever the client instance. */
@@ -92,11 +90,10 @@ describe('the rate limiter’s Redis connection', () => {
     beforeEach(() => {
         connectCalls = 0;
         seam.rateLimitFakeClient = fakeClient();
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://127.0.0.1:6379' });
     });
 
-    afterEach(() => stopRateLimitStore());
+    afterEach(() => stopLimitsRedis());
 
     it('opens one socket for commands issued before the handshake finishes', () => {
         /*
@@ -129,7 +126,6 @@ describe('the rate limiter’s Redis connection', () => {
     it('counts in memory when no Redis is configured', () => {
         // The other half of the choice, so the case above cannot pass by never reaching Redis.
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '0' });
 
         const store = rateLimitStore('unit');
         void store.init?.({ windowMs: 60_000 } as never);

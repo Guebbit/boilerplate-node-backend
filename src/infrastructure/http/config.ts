@@ -9,7 +9,7 @@
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { defineConfig } from '@infrastructure/config/define';
-import { csv, flag, int, text } from '@infrastructure/config/fields';
+import { csv, int, text } from '@infrastructure/config/fields';
 import type { RateLimitBudget } from '@types';
 
 /** Where this deployment and its paired frontend live. */
@@ -39,7 +39,10 @@ export const siteConfig = defineConfig({
     }
 });
 
-/** The rate limiter's shared window and its Redis. Per-budget limits are generated from manifests. */
+/**
+ * The rate limiter's shared window and the `limits` Redis it counts in. Per-budget limits are
+ * generated from manifests.
+ */
 export const rateLimitConfig = defineConfig({
     name: 'rate-limit',
     shape: {
@@ -48,13 +51,10 @@ export const rateLimitConfig = defineConfig({
             min: 1,
             describe: 'The window every `shared` budget counts over.'
         }),
-        NODE_RATE_LIMIT_REDIS_ENABLED: flag({
-            default: true,
-            describe: 'Kill switch: false counts in memory even when a Redis URL is inherited.'
-        }),
         NODE_RATE_LIMIT_REDIS_URL: text({
             sensitive: true,
-            describe: 'The limiter’s own Redis. Falls back to the cache’s.'
+            describe:
+                'The `limits` Redis: rate-limit counters and single-use claims, on its own instance (`noeviction`), never the cache’s. Unset counts in this process only.'
         }),
         NODE_RATE_LIMIT_REDIS_PASSWORD: text({
             sensitive: true,
@@ -63,7 +63,7 @@ export const rateLimitConfig = defineConfig({
         }),
         NODE_RATE_LIMIT_REDIS_PREFIX: text({
             default: 'rate-limit',
-            describe: 'Key namespace of every counter, apart from the cache’s.'
+            describe: 'Key namespace of every counter and claim on the `limits` Redis.'
         })
     }
 });

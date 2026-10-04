@@ -35,10 +35,10 @@ const SCRIPTED_MAX = '100000';
  * traffic that was not its own. A counter that lives and dies with the process is the only one
  * that describes the process.
  *
- * The kill switch is explicit because the URL is INHERITED from the cache's: leaving a variable
- * unset cannot say "do not share counters" — see `rate-limit-store.ts`'s own note.
+ * Blank rather than absent: a blank value set before dotenv runs beats the `.env` file's own
+ * limits URL, which an unset variable could not.
  */
-const PRIVATE_COUNTERS = { NODE_RATE_LIMIT_REDIS_ENABLED: '0' };
+const PRIVATE_COUNTERS = { NODE_RATE_LIMIT_REDIS_URL: '' };
 
 /**
  * Every rate-limit variable a scripted driver trips — every budget in the app

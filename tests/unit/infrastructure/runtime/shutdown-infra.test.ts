@@ -16,9 +16,9 @@ jest.mock('@infrastructure/adapters/pdf', () => ({
     __esModule: true,
     settleRenders: jest.fn(() => Promise.resolve())
 }));
-jest.mock('@infrastructure/http/middlewares/rate-limit-store', () => ({
+jest.mock('@infrastructure/adapters/limits-redis', () => ({
     __esModule: true,
-    stopRateLimitStore: jest.fn()
+    stopLimitsRedis: jest.fn()
 }));
 jest.mock('@infrastructure/i18n', () => ({
     __esModule: true,

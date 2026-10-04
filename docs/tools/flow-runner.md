@@ -93,7 +93,7 @@ even opened if it were backdated too.
 
 `scenarios/rate-limits.ts` is what makes a script safe to run at all: every rate-limit budget a
 person-sized default would throttle is raised to a scripted allowance
-(`NODE_RATE_LIMIT_REDIS_ENABLED=0` too, so the counters live and die with the process rather than
+(`NODE_RATE_LIMIT_REDIS_URL` blank too, so the counters live and die with the process rather than
 spending a real deployment's Redis-backed allowance). It also carries `DEMO_BANK_TRANSFER` — a
 fictional `NODE_BANK_TRANSFER_BENEFICIARY`/`_IBAN` pair, since the `shop` scenario's
 `order.awaitingTransfer` guarantee needs bank transfer offered at all

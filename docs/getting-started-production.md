@@ -68,6 +68,7 @@ flowchart LR
         root["mongo_root_password"]
         appdb["mongo_app_password"]
         redis["redis_password"]
+        limits_file["limits_password"]
         rabbit["rabbitmq_password"]
         keys["token_access, token_refresh,<br/>totp / pii / webhook keys,<br/>pseudonym_key, metrics_token"]
     end
@@ -80,6 +81,9 @@ flowchart LR
     redis --> cache
     redis --> app
     redis --> cron
+    limits_file --> limits
+    limits_file --> app
+    limits_file --> cron
     rabbit --> queue
     rabbit --> app
     rabbit --> cron
@@ -93,7 +97,7 @@ whitespace-delimited config line:
 
 ```bash
 mkdir -p -m 0700 "clients/acme/secrets"
-for name in mongo_root_password mongo_app_password redis_password rabbitmq_password \
+for name in mongo_root_password mongo_app_password redis_password limits_password rabbitmq_password \
             token_access token_refresh totp_encryption_key pii_encryption_key \
             webhook_secret_encryption_key pseudonym_key metrics_token; do
   openssl rand -hex 32 > "clients/acme/secrets/$name"

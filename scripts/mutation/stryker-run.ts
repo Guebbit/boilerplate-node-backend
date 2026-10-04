@@ -105,7 +105,7 @@ export const runStryker = ({
      * machine — a worker wanting more dies in the first minute. It cannot bound memory held outside
      * the heap, such as `bson`'s buffers. See docs/tools/mutation-testing.md#worker-heap-cap.
      *
-     * `...process.env`, never `.env` merged in first: `.env`'s real `NODE_RATE_LIMIT_REDIS_ENABLED`/
+     * `...process.env`, never `.env` merged in first: `.env`'s real `NODE_RATE_LIMIT_REDIS_URL`/
      * `NODE_REDIS_URL` would otherwise reach every spawned jest before `tests/support/setup-environment.ts` can
      * override them, and every rate-limit suite fails open against a Redis that is not reachable
      * from here — see `environmentKnob`'s own reasoning in `machine-budget.ts`.

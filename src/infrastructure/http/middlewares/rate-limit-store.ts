@@ -2,151 +2,23 @@
  * @module
  * Where the rate limiters keep their counters. `express-rate-limit`'s default store is an
  * in-process `Map`, and `cluster.ts` forks one worker per CPU — so a single-process budget becomes
- * `budget × workers`. Redis makes it one budget again, across workers and instances, and fails
- * open on error (`passOnStoreError` in `rate-limit.ts`) rather than turning an outage into an
- * authentication outage. A separate connection from the cache, so disabling that never disables this.
+ * `budget × workers`. The `limits` Redis (`src/infrastructure/adapters/limits-redis.ts`) makes it one budget again,
+ * across workers and instances. It is a separate INSTANCE from the response cache, so a flood of
+ * cache keys can never evict a counter.
  */
 
 import { MemoryStore, type Options, type Store } from 'express-rate-limit';
-import { RedisStore, type RedisReply } from 'rate-limit-redis';
+import { RedisStore } from 'rate-limit-redis';
 import { logger } from '@infrastructure/adapters/logger';
-import {
-    manageConnection,
-    type ManagedConnection
-} from '@infrastructure/adapters/managed-connection';
 import { drainMatchingKeys } from '@infrastructure/adapters/cache';
 import {
-    closeRedisClient,
-    createRedisClient,
-    configuredRedisUrl,
-    type RedisClient
-} from '@infrastructure/adapters/redis';
-import { rateLimitConfig } from '@infrastructure/http/config';
+    buildLimitsClient,
+    limitsKeyPrefix,
+    limitsRedisUrl,
+    sendToLimits
+} from '@infrastructure/adapters/limits-redis';
+import { closeRedisClient } from '@infrastructure/adapters/redis';
 import { clusterConfig } from '@infrastructure/runtime/config';
-
-/**
- * Key namespace for every limiter counter. Separate from the cache's prefix so
- * `NODE_REDIS_CACHE_PREFIX` can be rotated — or the cache flushed wholesale — without also
- * resetting everyone's budget.
- */
-const KEY_PREFIX = rateLimitConfig().NODE_RATE_LIMIT_REDIS_PREFIX;
-
-/**
- * The limiter's own Redis URL. Falls back to the cache's, because one Redis is the normal
- * deployment and asking for the same URL twice is a way to get two different ones.
- */
-export const rateLimitRedisUrl = (): string | undefined => {
-    /*
-     * The explicit kill switch, the twin of `NODE_REDIS_CACHE_ENABLED`. Needed because the URL is
-     * INHERITED from the cache's, so "do not share counters" cannot be said by leaving a variable
-     * unset — `src/app.ts` imports `dotenv/config`, so `.env`'s compose hostname reaches every
-     * test, and without this the limiters would fail open against a Redis that is not there.
-     */
-    const config = rateLimitConfig();
-    if (!config.NODE_RATE_LIMIT_REDIS_ENABLED) return;
-    // The config layer already reads a blank `NAME=` as unset, so `??` falls through to the shared
-    // Redis URL rather than counting in memory while Redis is right there.
-    return config.NODE_RATE_LIMIT_REDIS_URL ?? configuredRedisUrl();
-};
-
-/**
- * Construct (but do not connect) the limiter's own Redis client.
- *
- * @param url - the limiter's Redis URL — see {@link rateLimitRedisUrl}
- */
-const build = (url: string): RedisClient => {
-    const redisClient: RedisClient = createRedisClient(url);
-
-    // node-redis is an EventEmitter and an unhandled 'error' event would crash the process, so this
-    // listener is mandatory rather than merely useful.
-    redisClient.on('error', () => undefined);
-
-    return redisClient;
-};
-
-/**
- * The one client every limiter shares — lifecycle (memoised handle, deduped connect, warn-once)
- * delegated to {@link manageConnection}, same as the cache adapter. Unlike it, this fails CLOSED:
- * `getOrThrow` rejects instead of resolving `undefined`, and the outage logs at `error` rather
- * than `warn` — see the header for why.
- */
-let redisConnection: ManagedConnection<RedisClient> | undefined;
-
-/** Builds {@link redisConnection} on first call, from `url`, and memoises it thereafter. */
-const connectionFor = (url: string): ManagedConnection<RedisClient> => {
-    if (redisConnection) return redisConnection;
-
-    // Kept apart from `manageConnection`'s own memoised handle: a client whose handshake hasn't
-    // finished is still the SAME socket worth reconnecting, not one to throw away. node-redis
-    // rejects a second `connect()` racing the first with `Socket already opened`, so a fresh
-    // client per attempt (like the cache adapter) is not an option here.
-    let redisClient: RedisClient | undefined;
-
-    const connection = manageConnection<RedisClient>({
-        unavailableMessage:
-            'Rate-limit Redis unreachable — requests are passing unbudgeted until it returns.',
-        unavailableLevel: 'error',
-        // Enablement is already decided by `rateLimitStore` before a Redis-backed store is ever
-        // built — this connection only exists when Redis is configured.
-        isEnabled: () => true,
-        connect: () => {
-            redisClient ??= build(url);
-            const client = redisClient;
-
-            return client.connect().then(
-                () => client,
-                (error: unknown) => {
-                    redisClient = undefined;
-                    client.destroy();
-                    throw error;
-                }
-            );
-        },
-        isReady: (client) => client.isReady,
-        close: (client) => {
-            redisClient = undefined;
-            return closeRedisClient(client);
-        },
-        onRecovered: () =>
-            // Stryker disable next-line all
-            logger.info({ message: 'Rate-limit Redis is back — counters are shared again.' })
-    });
-
-    redisConnection = {
-        ...connection,
-        forget: () => {
-            redisClient = undefined;
-            connection.forget();
-        }
-    };
-
-    return redisConnection;
-};
-
-/**
- * Send one command, opening the connection if this is the first that needs it.
- *
- * Rejects when Redis cannot be reached, which `passOnStoreError` turns into "let the request
- * through" rather than a 500 — see the header. The client is forgotten on failure so the next
- * command starts from a clean socket instead of retrying a dead one.
- */
-const send = (url: string, command: string[]): Promise<RedisReply> => {
-    const connection = connectionFor(url);
-
-    return connection.getOrThrow().then((redisClient) =>
-        /*
-         * The reply type is stated, not inferred: node-redis answers a wide `ReplyUnion` for an
-         * arbitrary command, and `rate-limit-redis`'s own `RedisReply` is the shape its commands
-         * (`SCRIPT LOAD`, `EVALSHA`, `DECR`, `DEL`) answer with.
-         */
-        redisClient.sendCommand<RedisReply>(command).catch((error: unknown) => {
-            redisClient.destroy();
-            connection.forget();
-            connection.reportUnavailable(error);
-            throw error;
-        })
-    );
-};
 
 /**
  * A `RedisStore` that is not built until something is counted.
@@ -163,10 +35,10 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
     const store = (): RedisStore => {
         if (!inner) {
             inner = new RedisStore({
-                prefix: `${KEY_PREFIX}:${namespace}:`,
+                prefix: `${limitsKeyPrefix()}:${namespace}:`,
                 // `rate-limit-redis` speaks raw Redis commands so it works with any client; this
                 // is the one line that binds it to node-redis.
-                sendCommand: (...command: string[]) => send(url, command)
+                sendCommand: (...command: string[]) => sendToLimits(url, command)
             });
             // The options `init` was given at construction, replayed now that there is a store.
             // `windowMs` is the only one `RedisStore` reads.
@@ -216,7 +88,7 @@ const lazyRedisStore = (namespace: string, url: string): Store => {
  * @returns a Redis-backed store when Redis is configured, an in-process one otherwise
  */
 export const rateLimitStore = (namespace: string): Store => {
-    const url = rateLimitRedisUrl();
+    const url = limitsRedisUrl();
 
     if (!url) {
         /*
@@ -230,7 +102,7 @@ export const rateLimitStore = (namespace: string): Store => {
                 message:
                     'Rate limiting is counting per process: no Redis is configured and this app runs a worker per CPU. ' +
                     'Every budget in NODE_RATE_LIMIT_* is effectively multiplied by the worker count. ' +
-                    'Set NODE_REDIS_URL (or NODE_RATE_LIMIT_REDIS_URL), or run NODE_CLUSTER_WORKERS=1.',
+                    'Set NODE_RATE_LIMIT_REDIS_URL, or run NODE_CLUSTER_WORKERS=1.',
                 namespace
             });
         // Stryker restore all
@@ -241,10 +113,6 @@ export const rateLimitStore = (namespace: string): Store => {
     return lazyRedisStore(namespace, url);
 };
 
-/** Release the limiter's connection on shutdown, so a restart begins from a clean socket. */
-export const stopRateLimitStore = (): Promise<void> =>
-    redisConnection ? redisConnection.stop() : Promise.resolve();
-
 /**
  * Delete every limiter counter, so the next request starts with a full budget.
  *
@@ -252,14 +120,15 @@ export const stopRateLimitStore = (): Promise<void> =>
  * every spent budget behind: the keys are identical after a reseed (fixed ids, a stable email
  * hash, 127.0.0.1).
  *
- * Scoped to this app's `KEY_PREFIX`, never `FLUSHALL`, and independent of the cache's own clear
- * on purpose (separate prefixes, see above). Uses a short-lived client of its own: the shared one
- * is switched off in the process that calls this.
+ * Scoped to this app's key prefix, never `FLUSHALL`, and independent of the cache's own clear
+ * on purpose (a separate instance). Uses a short-lived client of its own: the shared one is
+ * switched off in the process that calls this. Single-use claims share the prefix, so a reset
+ * reopens those too.
  *
  * Never rejects; `reachable: false` tells the caller the counters may survive.
  *
- * @param url - the limiter's Redis URL as the DEPLOYMENT configured it (see
- *  {@link rateLimitRedisUrl}), read before anything switches the limiter off. `undefined` means
+ * @param url - the `limits` Redis URL as the DEPLOYMENT configured it (see
+ *  {@link limitsRedisUrl}), read before anything switches the limiter off. `undefined` means
  *  no Redis: nothing to clear
  */
 export const clearRateLimitCounters = (
@@ -267,11 +136,11 @@ export const clearRateLimitCounters = (
 ): Promise<{ deleted: number; reachable: boolean }> => {
     if (!url) return Promise.resolve({ deleted: 0, reachable: true });
 
-    const redisClient = build(url);
+    const redisClient = buildLimitsClient(url);
 
     return redisClient
         .connect()
-        .then(() => drainMatchingKeys(redisClient, `${KEY_PREFIX}:*`))
+        .then(() => drainMatchingKeys(redisClient, `${limitsKeyPrefix()}:*`))
         .then((deleted) => ({ deleted, reachable: true }))
         .catch((error: unknown) => {
             // Stryker disable all

@@ -44,7 +44,8 @@
 #
 #   mongo_root_password  database, mongo-rs-init    The only place the root account's password exists.
 #   mongo_app_password   database, app, cron, setup
-#   redis_password       cache, app, cron
+#   redis_password       cache, app, cron        The response cache's Redis (it evicts).
+#   limits_password      limits, app, cron       The limits Redis: counters and single-use claims.
 #   rabbitmq_password    queue, app, cron
 #   the app's keys       app, cron, setup           token_access, token_refresh, totp_encryption_key,
 #                                                   pii_encryption_key, webhook_secret_encryption_key,
@@ -148,6 +149,9 @@ x-app-env: &app-env
     # volume that CA's public cert is shared into, mounted read-only on this container too.
     NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}@database:27017/${MONGO_DB:-api}?replicaSet=rs0&tls=true&tlsCAFile=/ca-dir/mongo-ca.crt}'
     NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://cache:6379}'
+    # A SECOND Redis, on purpose: rate-limit counters and single-use claims must never be evicted,
+    # and eviction is per instance. There is no fallback from this to `NODE_REDIS_URL`.
+    NODE_RATE_LIMIT_REDIS_URL: '${NODE_RATE_LIMIT_REDIS_URL:-redis://limits:6379}'
     NODE_RABBITMQ_URL: '${NODE_RABBITMQ_URL:-amqp://${RABBITMQ_USER:-guest}@queue:5672}'
     # Every service that runs this image dials Mongo, so every one gets this password.
     NODE_DB_PASSWORD_FILE: '/run/secrets/mongo_app_password'
@@ -163,16 +167,18 @@ x-app-key-env: &app-key-env
     NODE_PSEUDONYM_KEY_FILE: '/run/secrets/pseudonym_key'
     NODE_METRICS_TOKEN_FILE: '/run/secrets/metrics_token'
 
-# The queue and cache clients: `app` and `cron` reach Redis and RabbitMQ, `setup` (indexes and the
-# shop row, Mongo only) does not, and so is given neither password.
+# The queue, cache and limits clients: `app` and `cron` reach both Redis instances and RabbitMQ,
+# `setup` (indexes and the shop row, Mongo only) does not, and so is given no password.
 x-backing-env: &backing-env
     NODE_REDIS_PASSWORD_FILE: '/run/secrets/redis_password'
+    NODE_RATE_LIMIT_REDIS_PASSWORD_FILE: '/run/secrets/limits_password'
     NODE_RABBITMQ_PASSWORD_FILE: '/run/secrets/rabbitmq_password'
 
 # The secret files `app` and `cron` hold. A YAML anchor on a list, since compose cannot merge two.
 x-service-secrets: &service-secrets
     - mongo_app_password
     - redis_password
+    - limits_password
     - rabbitmq_password
     - token_access
     - token_refresh
@@ -259,6 +265,9 @@ services:
                 condition: service_healthy
                 required: false
             cache:
+                condition: service_healthy
+                required: false
+            limits:
                 condition: service_healthy
                 required: false
             queue:
@@ -358,6 +367,9 @@ services:
                 condition: service_healthy
                 required: false
             cache:
+                condition: service_healthy
+                required: false
+            limits:
                 condition: service_healthy
                 required: false
             queue:
@@ -550,10 +562,13 @@ services:
         # `--save 60 1` keeps an RDB snapshot so a restart does not cold-start every cache key at
         # once. The cache is not a source of truth: losing it is a latency event, not a data loss.
         #
-        # `requirepass`: this instance also backs the rate-limit store (see
-        # `NODE_RATE_LIMIT_REDIS_URL`'s fallback to `NODE_REDIS_URL`), so an unauthenticated
-        # reader on the compose network could reset rate-limit budgets or read another user's
-        # cached response, not just warm the cache.
+        # `--maxmemory` + `allkeys-lru`: the cache is bounded and EVICTS, so a flood of distinct
+        # keys costs hit rate, never memory. Anything that must not be evicted (counters, single-use
+        # claims) is on `limits` below, a separate instance, because eviction is per instance.
+        # https://redis.io/docs/latest/develop/reference/eviction/
+        #
+        # `requirepass`: an unauthenticated reader on the compose network could read another
+        # user's cached response, not just warm the cache.
         #
         # The password goes into a config file written to this container's own `/tmp` at start, NOT
         # onto the command line (`--requirepass` shows in `ps` and `docker inspect`). `umask 077`,
@@ -573,6 +588,7 @@ services:
                 printf 'requirepass %s\n' "$$(cat /run/secrets/redis_password)" > /tmp/redis-auth.conf) &&
                 chown redis:redis /tmp/redis-auth.conf &&
                 exec docker-entrypoint.sh redis-server /tmp/redis-auth.conf --save 60 1 --appendonly no
+                --maxmemory ${NODE_REDIS_MAXMEMORY:-256mb} --maxmemory-policy ${NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}
         volumes:
             - redis-data:/data
         healthcheck:
@@ -584,6 +600,40 @@ services:
                 [
                     'CMD-SHELL',
                     'REDISCLI_AUTH="$$(cat /run/secrets/redis_password)" redis-cli --no-auth-warning ping | grep -q PONG'
+                ]
+            interval: 10s
+            timeout: 3s
+            retries: 5
+
+    # The `limits` Redis: rate-limit counters and single-use claims (a spent ALTCHA solution).
+    # Its own instance, `noeviction`: at the ceiling a write is REFUSED and the app counts in its
+    # own memory until it recovers, but no counter is ever dropped. Small on purpose: a counter is
+    # about a hundred bytes. Same password-file mechanism as `cache` (see its comment).
+    # `--save 60 1`: a restart keeps the counters, so a Redis bounce is not a free budget reset.
+    limits:
+        image: docker.io/library/redis:8-alpine
+        restart: unless-stopped
+        # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
+        profiles: [bundled]
+        <<: *data-hardening
+        secrets:
+            - limits_password
+        entrypoint:
+            - 'sh'
+            - '-c'
+            - >-
+                (umask 077 &&
+                printf 'requirepass %s\n' "$$(cat /run/secrets/limits_password)" > /tmp/redis-auth.conf) &&
+                chown redis:redis /tmp/redis-auth.conf &&
+                exec docker-entrypoint.sh redis-server /tmp/redis-auth.conf --save 60 1 --appendonly no
+                --maxmemory ${NODE_LIMITS_MAXMEMORY:-64mb} --maxmemory-policy noeviction
+        volumes:
+            - limits-data:/data
+        healthcheck:
+            test:
+                [
+                    'CMD-SHELL',
+                    'REDISCLI_AUTH="$$(cat /run/secrets/limits_password)" redis-cli --no-auth-warning ping | grep -q PONG'
                 ]
             interval: 10s
             timeout: 3s
@@ -637,6 +687,8 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/mongo_app_password
     redis_password:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/redis_password
+    limits_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/limits_password
     rabbitmq_password:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/rabbitmq_password
     token_access:
@@ -659,6 +711,7 @@ volumes:
     mongo-keyfile-dir:
     mongo-ca-dir:
     redis-data:
+    limits-data:
     rabbitmq-data:
     uploads:
     # Both exist because `app` runs with a read-only root — see `app`'s own `volumes:` for why

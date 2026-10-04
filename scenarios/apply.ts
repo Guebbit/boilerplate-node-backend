@@ -31,10 +31,8 @@ import { currentEnvironment, installEnvironment } from '@infrastructure/config/s
 import { emptyDatabase, isDatabaseEmpty } from './support/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
-import {
-    clearRateLimitCounters,
-    rateLimitRedisUrl
-} from '@infrastructure/http/middlewares/rate-limit-store';
+import { limitsRedisUrl } from '@infrastructure/adapters/limits-redis';
+import { clearRateLimitCounters } from '@infrastructure/http/middlewares/rate-limit-store';
 import { isRelaxedEnvironment, nodeEnvironment } from '@infrastructure/runtime/config';
 import { runScript } from '../scripts/run-script';
 import { DEFAULT_SCENARIO, isScenarioName, buildScenario } from '@scenarios/index';
@@ -42,11 +40,11 @@ import { seedCredentials } from '@scenarios/accounts';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from '@scenarios/rate-limits';
 
 /**
- * The limiter's Redis as the DEPLOYMENT configured it, read before {@link SCRIPTED_RATE_LIMITS}
+ * The `limits` Redis as the DEPLOYMENT configured it, read before {@link SCRIPTED_RATE_LIMITS}
  * below switches the limiter to in-memory counting for this process. `--reset` clears the counters
  * there, since a reseed leaves the same keys behind (same ids, same email hash, same address).
  */
-const deploymentRateLimitRedisUrl = rateLimitRedisUrl();
+const deploymentRateLimitRedisUrl = limitsRedisUrl();
 
 /*
  * OVERRIDES `.env`, which is the whole point: a deployment's budgets are sized for a person, and

@@ -262,12 +262,12 @@ The one hit/miss signal this cache has: a Prometheus counter labelled `result`, 
 
 ## Memory is capped, and the cap evicts
 
-`docker-compose.yml` starts Redis with `--maxmemory` and `--maxmemory-policy`, both overridable
+Both composes start the cache Redis with `--maxmemory` and `--maxmemory-policy`, both overridable
 from `.env`:
 
 | Variable                      | Default       | What it does                                           |
 | ----------------------------- | ------------- | ------------------------------------------------------ |
-| `NODE_REDIS_MAXMEMORY`        | `256mb`       | Ceiling for the Redis container                        |
+| `NODE_REDIS_MAXMEMORY`        | `256mb`       | Ceiling for the cache container                        |
 | `NODE_REDIS_MAXMEMORY_POLICY` | `allkeys-lru` | What happens at the ceiling                            |
 | `NODE_REDIS_CACHE_MAX_BYTES`  | `262144`      | Largest single response the app will store (see above) |
 
@@ -281,6 +281,36 @@ than an error: Redis evicts the least recently used key and accepts the write. R
 would keep serving correctly, but it would log a warning per request and cache nothing more until
 something expired. `allkeys-` rather than `volatile-` because every key written here carries a
 TTL anyway, so the two would behave alike until they didn't.
+
+## Two Redis instances
+
+Eviction is a property of a Redis INSTANCE, not of a key, so whatever must never be evicted cannot
+share an instance with a cache that evicts on purpose.
+([Redis eviction](https://redis.io/docs/latest/develop/reference/eviction/))
+
+```mermaid
+flowchart LR
+    App["app / cron"]
+    Cache[("cache<br/>allkeys-lru<br/>response bodies, tag indexes,<br/>refresh claims")]
+    Limits[("limits<br/>noeviction<br/>rate-limit counters,<br/>single-use claims")]
+    App -->|NODE_REDIS_URL| Cache
+    App -->|NODE_RATE_LIMIT_REDIS_URL| Limits
+```
+
+| Instance | URL                         | Policy                | What a lost key costs                                                               |
+| -------- | --------------------------- | --------------------- | ----------------------------------------------------------------------------------- |
+| `cache`  | `NODE_REDIS_URL`            | `allkeys-lru`, capped | a miss                                                                              |
+| `limits` | `NODE_RATE_LIMIT_REDIS_URL` | `noeviction`, small   | a budget that resets, or a solved ALTCHA challenge that can be replayed on a worker |
+
+- **No inheritance.** `NODE_RATE_LIMIT_REDIS_URL` never falls back to `NODE_REDIS_URL`: one unset
+  variable must not turn two instances into one. Unset means the in-process stores, and each
+  instance is named explicitly, with its own password.
+- **`noeviction` fails by refusing.** At its ceiling `limits` rejects a write rather than dropping a
+  counter; the app then counts in its own memory for that request. `NODE_LIMITS_MAXMEMORY` (default
+  `64mb`) is far above need: a counter is about a hundred bytes.
+- **Why the flood no longer matters.** Search keys are hashed and bounded
+  ([What reaches the key](#what-reaches-the-key-and-how)), the tag index is pruned as entries
+  expire, and even a flood that fills the cache evicts cache entries, never a counter.
 
 ## Writes that bypass the API
 
@@ -443,7 +473,7 @@ A non-zero rate on that counter means some endpoint is serving a stale answer to
 | `NODE_REDIS_CACHE_PREFIX`          | —                       | Namespaces every key, so two deployments may share one Redis                                                                           |
 | `NODE_REDIS_CACHE_DEV_TTL_MAX`     | `30`                    | Outside production, clamps every route's declared TTL — see [Writes that bypass the API](#writes-that-bypass-the-api)                  |
 | `NODE_REDIS_CACHE_MAX_BYTES`       | `262144` (256 KB)       | See [Entry size is bounded](#entry-size-is-bounded)                                                                                    |
-| `NODE_REDIS_MAXMEMORY` / `_POLICY` | `256mb` / `allkeys-lru` | Read by `docker-compose.yml`, not by the app — see [Memory is capped](#memory-is-capped-and-the-cap-evicts)                            |
+| `NODE_REDIS_MAXMEMORY` / `_POLICY` | `256mb` / `allkeys-lru` | Read by the compose files, not by the app — see [Memory is capped](#memory-is-capped-and-the-cap-evicts)                               |
 
 Disabling the cache is not the same as Redis being unreachable. `NODE_REDIS_CACHE_ENABLED=0`
 never builds a client at all; an unreachable Redis builds one, fails, and falls through — the

@@ -13,7 +13,7 @@ import { shutdownAnalytics } from '@infrastructure/observability/analytics';
 import { shutdownTracing } from '@infrastructure/runtime/otel-sdk';
 import { stopDatabase } from '@infrastructure/runtime/database';
 import { stopCache } from '@infrastructure/adapters/cache';
-import { stopRateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
+import { stopLimitsRedis } from '@infrastructure/adapters/limits-redis';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { stopLocaleOverrideRefresh } from '@infrastructure/i18n';
 import { settleRenders } from '@infrastructure/adapters/pdf';
@@ -155,7 +155,7 @@ export const shutdownInfra = (
         // connection that was just closed under it.
         .then(() => stopQueue())
         .then(() => stopCache())
-        .then(() => stopRateLimitStore())
+        .then(() => stopLimitsRedis())
         .then(() => stopDatabase())
         .then(() => shutdownAnalytics())
         .then(() => shutdownTracing());

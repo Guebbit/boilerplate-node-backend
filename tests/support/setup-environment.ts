@@ -182,15 +182,14 @@ process.env.NODE_VAT_RATE_REDUCED ??= '0.10';
  * The limiters count IN MEMORY here, never in Redis.
  *
  * Not a preference — a requirement. `src/app.ts` imports `dotenv/config`, so `.env` reaches the
- * suite, and its `NODE_REDIS_URL` names a compose hostname that does not resolve from a test
- * runner. The limiters would then fail open on every request (`passOnStoreError`, deliberately),
- * and every case asserting a 429 would fail for a reason that has nothing to do with the code
- * under test.
+ * suite, and a limits URL there names a compose hostname that does not resolve from a test
+ * runner. Every case asserting a 429 would then fail for a reason that has nothing to do with the
+ * code under test. A blank value, set before dotenv runs, beats whatever `.env` carries.
  *
  * It is also the right answer on its own terms: a suite that shares counters with whatever else is
  * talking to that Redis is a suite whose result depends on who else is running.
  */
-process.env.NODE_RATE_LIMIT_REDIS_ENABLED ??= '0';
+process.env.NODE_RATE_LIMIT_REDIS_URL ??= '';
 
 /**
  * Rung 2 of the breached-password check (`checkHibpRange`) is a REAL outbound call to

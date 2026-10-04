@@ -50,6 +50,8 @@ services:
             # Read once at process start (hence here, not `.env`); this service is development only.
             NODE_EXTRA_CA_CERTS: '/app/scenarios/support/tls/webhook-sink-ca.pem'
             NODE_REDIS_URL: 'redis://redis:6379'
+            # The `limits` instance: rate-limit counters and single-use claims, never evicted.
+            NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             NODE_ENABLE_CLUSTERING: '${NODE_ENABLE_CLUSTERING:-0}'
             # 0 = one worker per CPU core (see `.env-example`). On a many-core dev machine that is
@@ -144,6 +146,8 @@ services:
                 condition: service_healthy
             redis:
                 condition: service_started
+            limits:
+                condition: service_started
             rabbitmq:
                 condition: service_started
 
@@ -197,6 +201,8 @@ services:
         environment:
             NODE_ENV: 'development'
             NODE_REDIS_URL: 'redis://redis:6379'
+            # The `limits` instance: rate-limit counters and single-use claims, never evicted.
+            NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
             NODE_RABBITMQ_URL: 'amqp://guest:guest@rabbitmq:5672'
             OTEL_EXPORTER_OTLP_ENDPOINT: '${OTEL_EXPORTER_OTLP_ENDPOINT:-}'
             NODE_SERVICE_NAME: 'cron'
@@ -234,6 +240,8 @@ services:
             database:
                 condition: service_healthy
             redis:
+                condition: service_started
+            limits:
                 condition: service_started
             rabbitmq:
                 condition: service_started
@@ -302,9 +310,10 @@ services:
             retries: 12
             start_period: 30s
 
-    # Redis is used as an in-memory cache layer. The app stores response data here with a TTL so repeated
-    # requests are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is lost),
-    # which is fine since Redis here is cache-only, not a primary store.
+    # Redis is the response CACHE. The app stores response data here with a TTL so repeated requests
+    # are served from memory instead of hitting MongoDB again. On restart the cache is cold (data is
+    # lost), which is fine: nothing here is a source of truth, and nothing here may be relied on to
+    # stay. Counters and single-use claims live on `limits` below, because THIS instance evicts.
     redis:
         logging: *container-logging
         image: redis:7
@@ -330,6 +339,23 @@ services:
             # On café Wi-Fi anyone could otherwise read queued reset links or take Grafana. Only
             # the API and the Faro receiver follow `NODE_HOST`, since a device on the LAN may need them.
             - '127.0.0.1:${NODE_REDIS_PORT:-6379}:6379'
+
+    # The `limits` Redis: rate-limit counters and single-use claims (a spent ALTCHA solution).
+    # A SEPARATE instance from the cache because eviction is per instance: the cache evicts any key
+    # under pressure, and a counter evicted that way is a budget that resets. `noeviction` means the
+    # opposite here: at the ceiling a write is REFUSED, the app counts in its own memory until it
+    # recovers, and nothing is ever dropped. Small on purpose: a counter is about a hundred bytes.
+    # https://redis.io/docs/latest/develop/reference/eviction/
+    limits:
+        logging: *container-logging
+        image: redis:7
+        restart: unless-stopped
+        command: >-
+            redis-server
+            --maxmemory ${NODE_LIMITS_MAXMEMORY:-64mb}
+            --maxmemory-policy noeviction
+        ports:
+            - '127.0.0.1:${NODE_LIMITS_REDIS_PORT:-6380}:6379'
 
     # RabbitMQ: message broker for async tasks (email, PDF generation, etc.). Matches production
     # (docker-compose.production.yml) — quorum-queue message priority is a 4.x feature, and dev

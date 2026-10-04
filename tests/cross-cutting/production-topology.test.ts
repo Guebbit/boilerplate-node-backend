@@ -91,7 +91,7 @@ const OWN_CODE_SERVICES = ['app', 'cron', 'setup'] as const;
  * else — `profiles: [bundled]` means a deployment may replace them with managed instances, but
  * while they are here they are the crown jewels.
  */
-const BACKING_SERVICES = ['database', 'cache', 'queue'] as const;
+const BACKING_SERVICES = ['database', 'cache', 'limits', 'queue'] as const;
 
 /**
  * The host interface a port mapping binds, or `undefined` when it names none — which is compose's
@@ -131,7 +131,7 @@ describe('production data services are hardened, within what their entrypoints n
      * drop everything and take back only what that sequence uses; a service that keeps the full
      * default set, or may gain privilege through a setuid binary, is the regression.
      */
-    it.each(['database', 'mongo-rs-init', 'cache', 'queue'])(
+    it.each(['database', 'mongo-rs-init', 'cache', 'limits', 'queue'])(
         '%s drops every capability, adds back only the entrypoint set, and gains no privilege',
         (name) => {
             const service = compose.services[name];
@@ -290,10 +290,11 @@ describe('each service gets only its own secrets', () => {
         expect(holders.toSorted()).toEqual(['database', 'mongo-rs-init']);
     });
 
-    it('keeps the cache and broker passwords out of the one-shot setup', () => {
+    it('keeps the cache, limits and broker passwords out of the one-shot setup', () => {
         const { setup } = mountedSecrets();
 
         expect(setup).not.toContain('redis_password');
+        expect(setup).not.toContain('limits_password');
         expect(setup).not.toContain('rabbitmq_password');
         expect(setup).toContain('mongo_app_password');
     });
@@ -322,7 +323,7 @@ describe('each service gets only its own secrets', () => {
         const mounted = [...new Set(Object.values(mountedSecrets()).flat())].toSorted();
 
         // Exact count: a vacuous pass on an empty list would prove nothing.
-        expect(declared).toHaveLength(11);
+        expect(declared).toHaveLength(12);
         expect(declared).toEqual(mounted);
         for (const secret of Object.values(compose.secrets ?? {}))
             expect(secret.file).toMatch(
@@ -341,5 +342,50 @@ describe('each service gets only its own secrets', () => {
         ]);
 
         expect(text.join('\n')).not.toMatch(/--requirepass|redis-cli.* -a |PASSWORD(?!_FILE)/);
+    });
+});
+
+/**
+ * The command a service runs, flattened to one string whichever way compose spelled it.
+ *
+ * @param name - the service
+ */
+const commandLineOf = (name: string): string => {
+    const { entrypoint, command } = compose.services[name] ?? {};
+    return [entrypoint, command].flat().filter(Boolean).join(' ');
+};
+
+describe('the cache and the limits are two Redis instances', () => {
+    /*
+     * Eviction is per Redis INSTANCE. A rate-limit counter or a spent single-use claim on the
+     * evicting cache is a budget that resets and a solution that replays, so they live on their own
+     * instance that can only refuse a write, never drop a key.
+     * https://redis.io/docs/latest/develop/reference/eviction/
+     */
+    it('evicts on the cache, never on the limits', () => {
+        expect(commandLineOf('cache')).toMatch(
+            /--maxmemory-policy \$\{NODE_REDIS_MAXMEMORY_POLICY:-allkeys-lru}/
+        );
+        expect(commandLineOf('cache')).toMatch(/--maxmemory \$\{NODE_REDIS_MAXMEMORY:-256mb}/);
+        expect(commandLineOf('limits')).toMatch(/--maxmemory-policy noeviction/);
+        expect(commandLineOf('limits')).toMatch(/--maxmemory \S+/);
+    });
+
+    it('gives the limits its own password, held only by the services that dial it', () => {
+        const holders = Object.entries(mountedSecrets())
+            .filter(([, secrets]) => secrets.includes('limits_password'))
+            .map(([name]) => name);
+
+        expect(holders.toSorted()).toEqual(['app', 'cron', 'limits']);
+    });
+
+    it('points the limiter at the limits service, never at the cache', () => {
+        const appEnvironment = environmentOf('app');
+
+        expect(appEnvironment.NODE_RATE_LIMIT_REDIS_URL).toContain('redis://limits:6379');
+        expect(appEnvironment.NODE_RATE_LIMIT_REDIS_URL).not.toContain('cache');
+        expect(appEnvironment.NODE_RATE_LIMIT_REDIS_PASSWORD_FILE).toBe(
+            '/run/secrets/limits_password'
+        );
     });
 });

@@ -61,14 +61,14 @@ grow towards: three providers, one of them a real defence that phones nobody
 
 Nothing to write. These already speak a protocol somebody else's server also speaks.
 
-| Concern                     | Protocol                 | Default                                                                      | Where to read                                 |
-| --------------------------- | ------------------------ | ---------------------------------------------------------------------------- | --------------------------------------------- |
-| **Transactional email**     | SMTP (nodemailer)        | any SMTP host; a JSON transport under test, and the demo outbox in demo mode | [Email & PDF](./email-and-rendering.md)       |
-| **Cache**                   | Redis                    | in-memory when no URL is set                                                 | [Redis Cache](./redis-cache.md)               |
-| **Rate-limit counters**     | Redis                    | in-memory; its own URL so it survives a cache flush                          | [Security](./security.md)                     |
-| **Message queue**           | AMQP 0-9-1 (amqplib)     | RabbitMQ in the compose stack                                                | [RabbitMQ](./rabbitmq.md)                     |
-| **Database**                | MongoDB 8 wire           | the bundled container                                                        | [MongoDB](./mongodb-mongoose.md)              |
-| **Logs · metrics · traces** | Loki · Prometheus · OTLP | the bundled Grafana stack                                                    | [Observability](./observability-reference.md) |
+| Concern                     | Protocol                 | Default                                                                            | Where to read                                 |
+| --------------------------- | ------------------------ | ---------------------------------------------------------------------------------- | --------------------------------------------- |
+| **Transactional email**     | SMTP (nodemailer)        | any SMTP host; a JSON transport under test, and the demo outbox in demo mode       | [Email & PDF](./email-and-rendering.md)       |
+| **Cache**                   | Redis                    | in-memory when no URL is set                                                       | [Redis Cache](./redis-cache.md)               |
+| **Rate-limit counters**     | Redis                    | in-memory; its own Redis instance (`noeviction`), so a cache flood cannot evict it | [Security](./security.md)                     |
+| **Message queue**           | AMQP 0-9-1 (amqplib)     | RabbitMQ in the compose stack                                                      | [RabbitMQ](./rabbitmq.md)                     |
+| **Database**                | MongoDB 8 wire           | the bundled container                                                              | [MongoDB](./mongodb-mongoose.md)              |
+| **Logs · metrics · traces** | Loki · Prometheus · OTLP | the bundled Grafana stack                                                          | [Observability](./observability-reference.md) |
 
 Every one of these is a managed offering somewhere. The point of the column is that **choosing a
 managed one is a URL change**, not a migration — and that the self-hosted default is a complete

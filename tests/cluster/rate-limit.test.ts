@@ -86,7 +86,6 @@ describe('the rate limiter across a real cluster', () => {
             {
                 workers: WORKERS,
                 env: {
-                    NODE_RATE_LIMIT_REDIS_ENABLED: '1',
                     NODE_RATE_LIMIT_REDIS_URL: redis.url,
                     NODE_RATE_LIMIT_REDIS_PREFIX: keyPrefix(),
                     NODE_RATE_LIMIT_MAX: String(LIMIT),
@@ -110,17 +109,15 @@ describe('the rate limiter across a real cluster', () => {
          * burst reached both workers — anything less and the first case would be passing because
          * only one worker ever served.
          *
-         * `NODE_REDIS_URL` is blanked as well: the limiter falls back to the cache's URL when it
-         * has none of its own, so leaving it set would quietly put these counters back in Redis and
-         * turn this case into a duplicate of the one above.
+         * The limits URL is blanked explicitly: a developer's `.env` may carry one, and leaving it
+         * would quietly put these counters back in Redis and turn this case into a duplicate of
+         * the one above.
          */
         return withCluster(
             {
                 workers: WORKERS,
                 env: {
-                    NODE_RATE_LIMIT_REDIS_ENABLED: '0',
                     NODE_RATE_LIMIT_REDIS_URL: '',
-                    NODE_REDIS_URL: '',
                     NODE_RATE_LIMIT_MAX: String(LIMIT),
                     NODE_RATE_LIMIT_WINDOW_MS: '60000'
                 }

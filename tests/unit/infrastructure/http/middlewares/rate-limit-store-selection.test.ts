@@ -14,8 +14,8 @@
  * fresh via `jest.resetModules()` + `require()` — the same pattern `cache.test.ts` uses for the
  * same reason.
  *
- * The test suite's own `tests/support/setup-environment.ts` sets `NODE_RATE_LIMIT_REDIS_ENABLED ??= '0'`
- * globally, so every case that means to exercise the Redis path re-enables it explicitly.
+ * The test suite's own `tests/support/setup-environment.ts` blanks `NODE_RATE_LIMIT_REDIS_URL`
+ * globally, so every case that means to exercise the Redis path sets one explicitly.
  */
 // Also forces module scope for this file — otherwise its top-level `const`s collide, at the type
 // checker, with the identically-named ones in cache.test.ts's own copy of the same pattern.
@@ -81,6 +81,14 @@ const freshStore = () => {
     return require('@infrastructure/http/middlewares/rate-limit-store') as typeof import('@infrastructure/http/middlewares/rate-limit-store');
 };
 
+/**
+ * The limits adapter from the module epoch `freshStore()` just built: `jest.resetModules()` would
+ * otherwise hand a different copy of the connection state.
+ */
+const freshLimits = () =>
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require
+    require('@infrastructure/adapters/limits-redis') as typeof import('@infrastructure/adapters/limits-redis');
+
 /* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require */
 const freshLogger = () => {
     const loggerModule =
@@ -109,9 +117,13 @@ beforeEach(() => {
 });
 
 describe('rateLimitStore — which store gets built', () => {
-    it('returns an in-process MemoryStore when the Redis kill switch is off', () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '0' });
+    // The cache's Redis evicts under pressure, so a counter there is a budget that resets. The
+    // limiter never reaches for it, however it is configured.
+    it('returns an in-process MemoryStore when only the CACHE Redis is configured', () => {
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
         setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_REDIS_HOST: 'redis' });
+        setEnvironment({ NODE_REDIS_PORT: '6379' });
 
         const rateLimitStore = freshStore();
         const store = rateLimitStore.rateLimitStore('global');
@@ -120,11 +132,8 @@ describe('rateLimitStore — which store gets built', () => {
         expect(mockCreateClient).not.toHaveBeenCalled();
     });
 
-    it('returns MemoryStore when Redis is enabled but nothing configures a URL', () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
+    it('returns MemoryStore when nothing configures a limits URL', () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_REDIS_URL: undefined });
-        setEnvironment({ NODE_REDIS_PORT: undefined });
 
         const rateLimitStore = freshStore();
         const store = rateLimitStore.rateLimitStore('global');
@@ -133,8 +142,7 @@ describe('rateLimitStore — which store gets built', () => {
     });
 
     it('does not build a RedisStore until something is actually counted', () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
 
         freshStore().rateLimitStore('global');
 
@@ -143,8 +151,7 @@ describe('rateLimitStore — which store gets built', () => {
     });
 
     it('builds the RedisStore on the first increment, once, and memoises it', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         const store = freshStore().rateLimitStore('global');
 
         await store.increment('key-a');
@@ -155,8 +162,7 @@ describe('rateLimitStore — which store gets built', () => {
     });
 
     it('namespaces the RedisStore prefix per limiter, so budgets cannot cross', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         const store = freshStore().rateLimitStore('credentials-identity');
 
         await store.increment('key-a');
@@ -169,8 +175,7 @@ describe('rateLimitStore — which store gets built', () => {
 
 describe('rateLimitStore — the missing-config alert', () => {
     it('logs when no Redis is configured and more than one worker is running', () => {
-        setEnvironment({ NODE_REDIS_URL: undefined });
-        setEnvironment({ NODE_REDIS_PORT: undefined });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
         setEnvironment({ NODE_CLUSTER_WORKERS: '4' });
 
         freshStore().rateLimitStore('global');
@@ -181,8 +186,7 @@ describe('rateLimitStore — the missing-config alert', () => {
     });
 
     it('stays quiet when a single worker makes per-process counting correct anyway', () => {
-        setEnvironment({ NODE_REDIS_URL: undefined });
-        setEnvironment({ NODE_REDIS_PORT: undefined });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
         setEnvironment({ NODE_CLUSTER_WORKERS: '1' });
 
         freshStore().rateLimitStore('global');
@@ -192,41 +196,34 @@ describe('rateLimitStore — the missing-config alert', () => {
 });
 
 const urlUsedFor = async (): Promise<string> => {
-    setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
     const store = freshStore().rateLimitStore('global');
     await store.increment('key');
     return (mockCreateClient.mock.calls.at(-1)?.[0] as { url: string }).url;
 };
 
-describe('rateLimitStore — URL resolution priority', () => {
-    it('prefers NODE_RATE_LIMIT_REDIS_URL over every other source', async () => {
+describe('rateLimitStore — which URL the limits connection dials', () => {
+    it('dials NODE_RATE_LIMIT_REDIS_URL', async () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limiter-only:6379' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://shared:6379' });
 
         await expect(urlUsedFor()).resolves.toBe('redis://limiter-only:6379');
     });
 
-    it('falls back to NODE_REDIS_URL when the limiter has no URL of its own', async () => {
+    it('never inherits NODE_REDIS_URL: an unset limits URL counts in memory instead', async () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
         setEnvironment({ NODE_REDIS_URL: 'redis://shared:6379' });
+        const store = freshStore().rateLimitStore('global');
 
-        await expect(urlUsedFor()).resolves.toBe('redis://shared:6379');
+        await store.increment('key');
+
+        expect(store).toBeInstanceOf(freshMemoryStore());
+        expect(mockCreateClient).not.toHaveBeenCalled();
     });
 
-    it('treats an empty NODE_RATE_LIMIT_REDIS_URL as unset, the way an env file writes it', async () => {
+    it('treats an empty NODE_RATE_LIMIT_REDIS_URL as unset, the way an env file writes it', () => {
         setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: '' });
         setEnvironment({ NODE_REDIS_URL: 'redis://shared:6379' });
 
-        await expect(urlUsedFor()).resolves.toBe('redis://shared:6379');
-    });
-
-    it('assembles a URL from host and port as the last resort, defaulting the host', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: undefined });
-        setEnvironment({ NODE_REDIS_URL: undefined });
-        setEnvironment({ NODE_REDIS_HOST: undefined });
-        setEnvironment({ NODE_REDIS_PORT: '6380' });
-
-        await expect(urlUsedFor()).resolves.toBe('redis://127.0.0.1:6380');
+        expect(freshStore().rateLimitStore('global')).toBeInstanceOf(freshMemoryStore());
     });
 });
 
@@ -240,8 +237,7 @@ describe('rateLimitStore — an init failure fails open instead of crashing (reg
      * instead.
      */
     it('logs the failure and lets the request proceed rather than throwing', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         mockInit.mockRejectedValue(new TypeError('unexpected reply from redis client'));
         const store = freshStore().rateLimitStore('global');
         // `express-rate-limit` calls this on the real Store before any request ever increments it —
@@ -267,8 +263,7 @@ describe('rateLimitStore — an init failure fails open instead of crashing (reg
 
 describe('rateLimitStore — a failed init does not disable the limiter for good', () => {
     it('builds a fresh RedisStore on the next count instead of reusing the broken one', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         mockInit.mockRejectedValueOnce(new Error('connection refused'));
         const store = freshStore().rateLimitStore('global');
         void store.init?.({ windowMs: 60_000 } as Options);
@@ -283,33 +278,33 @@ describe('rateLimitStore — a failed init does not disable the limiter for good
     });
 });
 
-describe('stopRateLimitStore', () => {
+describe('stopLimitsRedis', () => {
     it('resolves without touching Redis when no client was ever built', async () => {
-        await expect(freshStore().stopRateLimitStore()).resolves.toBeUndefined();
+        freshStore();
+
+        await expect(freshLimits().stopLimitsRedis()).resolves.toBeUndefined();
         expect(mockSelectionQuit).not.toHaveBeenCalled();
     });
 
     it('closes the client that was actually built', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         mockSelectionQuit.mockImplementation(() => Promise.resolve());
         const rateLimitStore = freshStore();
         await rateLimitStore.rateLimitStore('global').increment('key');
 
-        await rateLimitStore.stopRateLimitStore();
+        await freshLimits().stopLimitsRedis();
 
         expect(mockSelectionQuit).toHaveBeenCalledTimes(1);
         expect(mockSelectionDestroy).not.toHaveBeenCalled();
     });
 
     it('destroys the socket when the close itself fails, rather than hanging on shutdown', async () => {
-        setEnvironment({ NODE_RATE_LIMIT_REDIS_ENABLED: '1' });
-        setEnvironment({ NODE_REDIS_URL: 'redis://redis:6379' });
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
         mockSelectionQuit.mockImplementation(() => Promise.reject(new Error('socket closed')));
         const rateLimitStore = freshStore();
         await rateLimitStore.rateLimitStore('global').increment('key');
 
-        await expect(rateLimitStore.stopRateLimitStore()).resolves.toBeUndefined();
+        await expect(freshLimits().stopLimitsRedis()).resolves.toBeUndefined();
 
         expect(mockSelectionDestroy).toHaveBeenCalledTimes(1);
     });

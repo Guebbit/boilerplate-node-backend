@@ -10,17 +10,16 @@
  * made earlier would let an attacker fill memory (and Redis) with random ids.
  */
 
-import { claimCacheKey, isCacheKeyClaimed } from '../cache';
+import { claimLimitsKey, isLimitsKeyClaimed } from '../limits-redis';
 
 /** How long a spent record must live: past this, the challenge itself has expired anyway. */
 const RECORD_TTL_SECONDS = 600;
 
 /**
- * The floor under the shared cache: `adapters/cache.ts` is "an optimisation, never a dependency"
- * and quietly no-ops with no Redis configured — fine for a byte cache, a silent hole for
- * single-use enforcement. This is the same floor `rate-limit-store.ts` falls back to: a replay is
- * always caught within ONE process, and Redis widens that across `cluster.ts`'s worker fork when
- * it is reachable.
+ * The floor under the `limits` Redis: with no Redis configured (or one that fails) single-use is
+ * still enforced inside ONE process, and Redis widens that across `cluster.ts`'s worker fork when
+ * it is reachable. The claims live on the `limits` instance, never the cache's: the cache evicts
+ * under pressure, and an evicted claim is a replayable solution.
  *
  * Insertion order IS expiry order (every record has the same TTL), which {@link sweepExpired}
  * relies on.
@@ -81,7 +80,7 @@ const claimLocally = (key: string): boolean => {
 export const isSpent = (id: string): Promise<boolean> => {
     if (id.length > MAX_KEY_LENGTH) return Promise.resolve(true);
     if (spentHere(keyOf(id))) return Promise.resolve(true);
-    return isCacheKeyClaimed(keyOf(id));
+    return isLimitsKeyClaimed(keyOf(id));
 };
 
 /**
@@ -97,5 +96,5 @@ export const claim = (id: string): Promise<boolean> => {
     if (!claimLocally(keyOf(id))) return Promise.resolve(false);
     // `unavailable` (no Redis) keeps the local claim as the answer: single-use within this
     // process, the same floor as before Redis is reachable.
-    return claimCacheKey(keyOf(id), RECORD_TTL_SECONDS).then((result) => result !== 'taken');
+    return claimLimitsKey(keyOf(id), RECORD_TTL_SECONDS).then((result) => result !== 'taken');
 };
