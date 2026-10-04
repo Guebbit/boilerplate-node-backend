@@ -5,7 +5,7 @@
  * module's repository, model and factories directly (never the other way), so a production image
  * can omit this whole folder and nothing under `src/` notices.
  *
- * Walked by `app/demo.ts` and `scenarios/apply.ts` — neither of which imports a module for any
+ * Walked by `support/demo.ts` and `scenarios/apply.ts` — neither of which imports a module for any
  * other reason. `./check.ts` holds a compile-time twin of the module registry, refusing a
  * `shopModules` entry whose name `enabledModules` does not also carry — this file cannot check
  * that itself, since only `apply.ts`/`run-server.ts`/`check.ts` may reach `src/modules.ts`
@@ -59,7 +59,7 @@ interface Scenario {
 
 /**
  * The named, whole-database scenarios this repo can seed. `scenarios/apply.ts` and
- * `src/app/demo.ts` both index this instead of a hand-rolled ternary, so a new scenario is added
+ * `support/demo.ts` both index this instead of a hand-rolled ternary, so a new scenario is added
  * in exactly one place.
  */
 export const SCENARIOS = {

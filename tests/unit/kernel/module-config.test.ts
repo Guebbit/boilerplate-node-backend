@@ -2,7 +2,7 @@
  * `assertModuleConfig` — the boot gate that turns a misconfigured deployment into a refusal
  * instead of a runtime surprise.
  *
- * Every presence case sets `NODE_ENV` away from `test` first: presence, forbidden and cross-field
+ * Every presence case sets `NODE_ENV` away from `test` first: presence and cross-field
  * rules short-circuit under the test environment, so a suite that left it alone would assert
  * nothing at all. The wording and grouping of the message is `assertConfigIn`'s, covered in
  * `tests/unit/infrastructure/config/define.test.ts`; this file covers the COLLECTING — what a
@@ -123,51 +123,6 @@ describe('the environment that skips the presence rules', () => {
         setEnvironment({ NODE_ENV: 'test' });
 
         expect(() => assertModuleConfig([moduleRequiring('demo', 'SECRET', 16)], [])).not.toThrow();
-    });
-});
-
-describe('forbiddenOutsideRelaxed — forbidden, not required', () => {
-    // `SECRET` stands in for a module's own forbidden variable here — the mechanism under test is
-    // generic; `src/modules/webhooks/tests/unit/module.test.ts` covers the real
-    // NODE_WEBHOOK_DEMO_SINK_URL case against this module's actual slice.
-    const modules: AppModule[] = [
-        {
-            name: 'demo',
-            config: [
-                defineConfig({
-                    name: 'demo',
-                    shape: { SECRET: text({ forbiddenOutsideRelaxed: true }) }
-                }).slice
-            ],
-            personalData: 'none'
-        }
-    ];
-
-    it('accepts it set outside production', () => {
-        configure();
-        setEnvironment({ SECRET: 'a-real-secret-value' });
-
-        expect(() => assertModuleConfig(modules, [])).not.toThrow();
-    });
-
-    it('refuses to boot in production with it set', () => {
-        setEnvironment({ NODE_ENV: 'production' });
-        setEnvironment({ SECRET: 'a-real-secret-value' });
-
-        expect(() => assertModuleConfig(modules, [])).toThrow(/SECRET/);
-    });
-
-    it('refuses to boot with NODE_ENV unset and it set: only development/test relax the rule', () => {
-        setEnvironment({ NODE_ENV: undefined });
-        setEnvironment({ SECRET: 'a-real-secret-value' });
-
-        expect(() => assertModuleConfig(modules, [])).toThrow(/SECRET/);
-    });
-
-    it('accepts production with it unset', () => {
-        setEnvironment({ NODE_ENV: 'production' });
-
-        expect(() => assertModuleConfig(modules, [])).not.toThrow();
     });
 });
 

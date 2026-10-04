@@ -1,7 +1,7 @@
 /**
  * @module
  * MongoDB connection lifecycle. The demo profile's snapshot machinery (empty, capture, restore) is
- * `database-snapshot.ts` — a different concern, needed by only two callers.
+ * `scenarios/support/database-snapshot.ts` — a different concern, needed by only two callers.
  *
  * See: docs/tools/mongodb-mongoose.md
  */

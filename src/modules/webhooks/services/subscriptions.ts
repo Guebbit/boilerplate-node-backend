@@ -25,7 +25,7 @@ import type {
 import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
 import { mintRingSecret, removeRingSecret } from '../secrets';
-import { getWebhookDemoAllowedHost, getWebhookSubscriptionCap } from '../config';
+import { getWebhookSubscriptionCap } from '../config';
 import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { ERROR_CODES } from '@api/error-codes';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
@@ -46,18 +46,13 @@ const URL_CHECK_TIMEOUT_MS = 5000;
 /**
  * Refuses a subscription URL the delivery-time SSRF guard would refuse anyway — fail fast where
  * the operator is looking (OWASP SSRF: validate on input, and again at connection). The delivery
- * check stays: DNS can change after this one passes. Same demo-sink exemption as delivery, or the
- * sink could not be subscribed to.
+ * check stays: DNS can change after this one passes.
  *
  * @param url - the address an operator asked deliveries to go to
  * @returns a 422 naming the URL field, or `undefined` when the URL is fine
  */
 const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
-    resolveSafeOutboundTarget(
-        url,
-        getWebhookDemoAllowedHost(),
-        AbortSignal.timeout(URL_CHECK_TIMEOUT_MS)
-    )
+    resolveSafeOutboundTarget(url, AbortSignal.timeout(URL_CHECK_TIMEOUT_MS))
         .then((): undefined => undefined)
         .catch((error: unknown) =>
             generateReject(422, [

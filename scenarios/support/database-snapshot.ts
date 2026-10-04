@@ -1,8 +1,9 @@
 /**
  * @module
  * The demo profile's restore machinery: empty the database, read it whole into memory, write a
- * copy back. Split from `database.ts` — connection lifecycle is a different concern from taking
- * and replaying a snapshot, and only `app/demo.ts` and `scenarios/apply.ts` need this half.
+ * copy back. Split from `src/infrastructure/runtime/database.ts` — connection lifecycle is a
+ * different concern from taking and replaying a snapshot, and only `./demo` and
+ * `scenarios/apply.ts` need this half.
  *
  * See: docs/tools/mongodb-mongoose.md
  */
@@ -21,7 +22,7 @@ import { connection } from '@infrastructure/runtime/database';
  * refusal, payment idempotency, cart expiry) is silently gone until the process restarts. Emptying
  * leaves every collection, and every index on it, exactly where `start()` built it.
  *
- * Used by `src/app/demo.ts`'s `restoreScenario` and `scenarios/apply.ts --reset` — the same bug,
+ * Used by `./demo`'s `restoreScenario` and `scenarios/apply.ts --reset` — the same bug,
  * against the same two callers, is why this is one helper rather than two.
  */
 export const emptyDatabase = (): Promise<void> =>
@@ -55,7 +56,7 @@ export type DatabaseCopy = Readonly<Record<string, Document[]>>;
 /**
  * Read the whole database into memory.
  *
- * Exists for `src/app/demo.ts`: a `shop` restore replays this copy instead of reseeding, which
+ * Exists for `./demo`: a `shop` restore replays this copy instead of reseeding, which
  * skips the fourteen bcrypt cost-12 hashes and the whole HTTP flow run that produced the
  * scenario in the first place. Nothing else should reach for it — a copy of the database in a
  * process's heap is only affordable because the demo profile's database is small and disposable.
@@ -78,7 +79,7 @@ export const captureDatabase = (): Promise<DatabaseCopy> =>
  * skipped: `insertMany([])` is an error in the driver, not a no-op.
  * https://www.mongodb.com/docs/manual/reference/method/db.collection.insertMany/
  *
- * MUST NOT run concurrently with itself — `src/app/demo.ts`'s restore queue is what guarantees
+ * MUST NOT run concurrently with itself — `./demo`'s restore queue is what guarantees
  * that. Two overlapping replays of the same copy collide on `_id`.
  */
 export const restoreDatabaseCopy = (copy: DatabaseCopy): Promise<void> =>

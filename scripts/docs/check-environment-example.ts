@@ -16,7 +16,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { allConfigSlices } from '../../src/app/config';
 import { enabledModules } from '../../src/modules';
-import { seedPasswordsConfig } from '../../scenarios/config';
+import { demoSinkConfig, seedPasswordsConfig } from '../../scenarios/config';
 import { REPO_ROOT } from '../git-base';
 import {
     lingeringInExample,
@@ -28,8 +28,8 @@ import {
 
 /** Every variable any slice declares, the seeder's own included (the app never boots with it). */
 const declaredVariables = (): DeclaredVariable[] =>
-    [...allConfigSlices(enabledModules), seedPasswordsConfig.slice].flatMap((slice) =>
-        slice.fields.map(({ name, doc }) => ({ name, setBy: doc.setBy }))
+    [...allConfigSlices(enabledModules), seedPasswordsConfig.slice, demoSinkConfig.slice].flatMap(
+        (slice) => slice.fields.map(({ name, doc }) => ({ name, setBy: doc.setBy }))
     );
 
 /**

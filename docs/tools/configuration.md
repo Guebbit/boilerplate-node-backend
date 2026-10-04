@@ -553,12 +553,11 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### webhooks
 
-| Variable                               | Type                                                              | Default | Rules                                                                                | What it does                                                                                                  |
-| -------------------------------------- | ----------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------- |
-| `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`   | versioned key ring (`version:key`, comma-separated, newest first) | `empty` | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Ring encrypting stored subscription secrets, `version:key`, newest first.                                     |
-| `NODE_WEBHOOK_SUBSCRIPTION_CAP`        | whole number >= 1                                                 | `20`    | —                                                                                    | Subscriptions one tenant may hold — the fan-out guard.                                                        |
-| `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` | whole number >= 1                                                 | `30`    | —                                                                                    | Days a delivery row is kept. Changing it needs `db:sync`.                                                     |
-| `NODE_WEBHOOK_DEMO_SINK_URL`           | text                                                              | —       | must be unset outside development/test                                               | The demo webhook sink (https); its host is exempt from the SSRF private-address check. Development/test only. |
+| Variable                               | Type                                                              | Default | Rules                                                                                | What it does                                                              |
+| -------------------------------------- | ----------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`   | versioned key ring (`version:key`, comma-separated, newest first) | `empty` | required, 16+ characters, never the `.env-example` placeholder; secret: never logged | Ring encrypting stored subscription secrets, `version:key`, newest first. |
+| `NODE_WEBHOOK_SUBSCRIPTION_CAP`        | whole number >= 1                                                 | `20`    | —                                                                                    | Subscriptions one tenant may hold — the fan-out guard.                    |
+| `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` | whole number >= 1                                                 | `30`    | —                                                                                    | Days a delivery row is kept. Changing it needs `db:sync`.                 |
 
 ### scenario-seeds
 
@@ -577,6 +576,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_SEED_WAREHOUSE_PASSWORD`      | text | `Demo-Warehouse1!`     | secret: never logged | The warehouse seed account's password. Keep it identical to the paired frontend's own `.env`.              |
 | `NODE_SEED_SUPPORT_PASSWORD`        | text | `Demo-Support1!`       | secret: never logged | The support seed account's password. Keep it identical to the paired frontend's own `.env`.                |
 | `NODE_SEED_OPERATOR_PASSWORD`       | text | `Demo-Operator1!`      | secret: never logged | The platform operator seed account's password. Keep it identical to the paired frontend's own `.env`.      |
+
+### scenario-webhook-sink
+
+| Variable                     | Type | Default | Rules | What it does                                                                                                                                               |
+| ---------------------------- | ---- | ------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_WEBHOOK_DEMO_SINK_URL` | text | —       | —     | The demo webhook sink (https), seeded as a subscription. Its origin is exempt from the SSRF private-address check in a process that loads the dev preload. |
 
 <!-- config-reference:end -->
 

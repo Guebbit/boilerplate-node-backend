@@ -5,8 +5,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, text, versionedKeyRing } from '@infrastructure/config/fields';
-import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
+import { int, versionedKeyRing } from '@infrastructure/config/fields';
 import type { VersionedKey } from '@infrastructure/security/versioned-secret';
 
 /**
@@ -15,9 +14,6 @@ import type { VersionedKey } from '@infrastructure/security/versioned-secret';
  * A subscription's secret ring is encrypted under `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`
  * (`./secrets.ts`); the shipped placeholder would make every stored secret recoverable by anyone
  * who has read this repo — same failure shape `NODE_TOTP_ENCRYPTION_KEY` guards against, same fix.
- *
- * `NODE_WEBHOOK_DEMO_SINK_URL` is the one variable in this repo that must be ABSENT outside
- * development/test — see {@link getWebhookDemoAllowedHost} for the second, narrower gate.
  */
 export const webhooksConfig = defineConfig({
     name: 'webhooks',
@@ -38,11 +34,6 @@ export const webhooksConfig = defineConfig({
             default: 30,
             min: 1,
             describe: 'Days a delivery row is kept. Changing it needs `db:sync`.'
-        }),
-        NODE_WEBHOOK_DEMO_SINK_URL: text({
-            forbiddenOutsideRelaxed: true,
-            describe:
-                'The demo webhook sink (https); its host is exempt from the SSRF private-address check. Development/test only.'
         })
     }
 });
@@ -70,26 +61,3 @@ export const getWebhookSubscriptionCap = (): number =>
  */
 export const getWebhookDeliveryRetentionDays = (): number =>
     webhooksConfig().NODE_WEBHOOK_DELIVERY_RETENTION_DAYS;
-
-/**
- * The one hostname the SSRF guard (`@infrastructure/adapters/ssrf-guard`) may deliver to without a
- * publicly-routable address — `NODE_WEBHOOK_DEMO_SINK_URL`'s host, so the sink behind
- * `docker compose --profile integrations`'s `webhook-tester-tls` (loopback, or a private
- * compose-network address) is reachable at all. The `https:` rule is NOT relaxed: the sink speaks
- * TLS too. `undefined` outside development/test even when the variable is set:
- * `infrastructure/config/define.ts` refuses to boot with it set there too, and this is the second
- * gate.
- *
- * @returns the hostname to exempt, or `undefined` when there is nothing to exempt
- */
-export const getWebhookDemoAllowedHost = (): string | undefined => {
-    const sinkUrl = webhooksConfig().NODE_WEBHOOK_DEMO_SINK_URL;
-    if (!isRelaxedEnvironment() || !sinkUrl) return undefined;
-
-    // eslint-disable-next-line no-restricted-syntax -- URL's constructor has no non-throwing form; a malformed sink URL means no exemption, not a crash
-    try {
-        return new URL(sinkUrl).hostname;
-    } catch {
-        return undefined;
-    }
-};

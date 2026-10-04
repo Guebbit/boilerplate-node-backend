@@ -31,10 +31,10 @@ export const configSlicesOf = (appModule: AppModule): readonly ConfigSlice[] => 
 ];
 
 /**
- * Refuse to boot on any wrongly-shaped value, missing secret, forbidden variable or failed
+ * Refuse to boot on any wrongly-shaped value, missing secret or failed
  * cross-field check, across every slice — thrown ONCE, listing every problem.
  *
- * Presence, forbidden and cross-field rules are skipped under `NODE_ENV=test` (jest builds its own
+ * Presence and cross-field rules are skipped under `NODE_ENV=test` (jest builds its own
  * environment per suite, never this one); shape rules are not. The demo profile carries no
  * exemption: it satisfies this gate the ordinary way, by setting every variable a slice
  * asks for (`scenarios/run-server.ts`'s `REQUIRED_DEFAULTS`), the same as any other deployment.

@@ -14,6 +14,7 @@
 import { resolve4, resolve6 } from 'node:dns/promises';
 import net, { type LookupFunction } from 'node:net';
 import ipaddr from 'ipaddr.js';
+import { isSsrfExemptOrigin } from './ssrf-exemptions';
 
 /** Why {@link resolveSafeOutboundTarget} refused a URL — so a caller and a test can branch on why. */
 export type SsrfRefusalReason =
@@ -230,10 +231,6 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  * with `Promise.resolve().then(...)` is what turns "throws sometimes, rejects sometimes" into
  * "always rejects".
  *
- * @param exemptHostname - an exact hostname (case-sensitive; callers pass an already-lowercased
- *   host) to exempt from the private/unsafe-address check, and ONLY that one — the `https:` rule,
- *   parsing, credentials and DNS resolution still run in full. For a caller's own
- *   development/test-only exemption; absent for every other caller and every other call.
  * @param signal - the caller's total-attempt-budget abort, so a slow resolver can't add its own
  *   time on top of whatever the caller times the rest of the attempt at. This module owns no
  *   second timer of its own — one `AbortSignal.timeout` covers the whole outbound attempt.
@@ -241,14 +238,16 @@ const buildPinnedLookup = (address: string): LookupFunction => {
  */
 export const resolveSafeOutboundTarget = (
     rawUrl: string,
-    exemptHostname?: string,
     signal?: AbortSignal
 ): Promise<SafeOutboundTarget> =>
     Promise.resolve()
-        .then(() => stripBrackets(parseOutboundUrl(rawUrl).hostname))
-        .then((hostname) =>
+        .then(() => parseOutboundUrl(rawUrl))
+        .then((url) => ({
+            hostname: stripBrackets(url.hostname),
+            isExempt: isSsrfExemptOrigin(url.origin)
+        }))
+        .then(({ hostname, isExempt }) =>
             resolveAllAddresses(hostname, signal).then((addresses) => {
-                const isExempt = hostname === exemptHostname;
                 // Wrapped rather than passed by reference: `Array.prototype.find` calls its
                 // callback with (element, index, array), and a direct reference would silently
                 // feed the index in as a second, unused argument to `isAddressUnsafe`.

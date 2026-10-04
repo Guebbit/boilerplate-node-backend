@@ -265,10 +265,10 @@ captured requests are also at `GET /api/session/<id>/requests`).
 
 Two things make this reachable at all, both narrowed on purpose:
 
-- The sink is on loopback, which `ssrf-guard.ts` exists to refuse. It gets a one-hostname exemption
-  (`@modules/webhooks/config`'s `getWebhookDemoAllowedHost`) from the private-address check only,
-  and only in development/test; set `NODE_WEBHOOK_DEMO_SINK_URL` under production and the app
-  refuses to boot. The `https:` rule has no exemption, so the demo's URL is `https://` like every
+- The sink is on loopback, which `ssrf-guard.ts` exists to refuse. It gets a one-origin exemption
+  (host AND port; `scenarios/support/doubles/webhook-sink.ts`, registered by the dev preload) from
+  the private-address check only. Production code has no exemption at all: nothing in `src/`
+  registers one. The `https:` rule has no exemption, so the demo's URL is `https://` like every
   other and the edit form saves it.
 - The seeded subscription's ring secret is a FIXED plaintext
   (`scenarios/webhooks.ts`'s `WEBHOOK_DEMO_SECRET`), not one a real `POST /webhooks/subscriptions`

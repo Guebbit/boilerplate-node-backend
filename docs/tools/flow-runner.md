@@ -49,7 +49,7 @@ challenge flows the paired frontend's own specs drive against a real card form.
 
 ## Once per boot: the mechanism behind the copy
 
-`src/app/demo.ts`'s `buildOnce` is what "once, then replayed" (see
+`scenarios/support/demo.ts`'s `buildOnce` is what "once, then replayed" (see
 [Demo profile](./demo-profile.md#how-a-scenario-is-built)) actually is in code: a `Map<name,
 ScenarioCopy>` keyed by scenario name, checked before anything is built. The first restore of a
 name calls `buildScenario`, then `captureDatabase()` — read every collection into memory as plain
@@ -60,7 +60,7 @@ so one bad document does not abandon the rest.
 Measured 2026-09-13, on this machine: a `shop` restore replay runs in roughly 12 ms against the
 several-hundred-request build it replays; a `blank` restore (no flows to drive) in roughly 6 ms.
 
-Restores are serialised through a queue in `src/app/demo.ts`, not run as called: two overlapping
+Restores are serialised through a queue in `scenarios/support/demo.ts`, not run as called: two overlapping
 restores emptying and reseeding the same collections would interleave their writes, and two
 concurrent replays of the same copy would collide on `_id`.
 
@@ -106,7 +106,7 @@ default), `scenarios/webhooks.ts` seeds no demo subscription at all — a develo
 the `webhook-tester` compose profile never gets a dead subscription auto-disabling in their logs.
 Set it and a subscription appears, pointed at the sink, with a fixed and documented secret so a
 captured delivery's signature is a copy-paste rather than a mystery — see
-[Seeing it work](../modules/webhooks.md#seeing-it-work). Honoured only in development/test.
+[Seeing it work](../modules/webhooks.md#seeing-it-work). Only a process that loads the [dev preload](./test-doubles.md) exempts the sink.
 
 ## The seeded language coverage
 

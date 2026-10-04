@@ -1,10 +1,9 @@
 /**
- * `installDemo`'s two routes, mounted on a throwaway Express app rather than the real
- * `src/app.ts` — except for the mount-gate case below, which imports the real app instead.
- * `demo-profile.test.ts`'s `isDemoMode` unit tests prove the boolean logic, refusing production
- * included; the mount-gate case here proves the HTTP behaviour a caller actually sees when the
- * flag is off, which a boolean assertion alone does not. What the rest of this file proves is the
- * route HANDLERS — the body validation and the status codes a caller sees once mounted.
+ * `installDemo`'s routes (`scenarios/support/demo.ts`), mounted on a throwaway Express app rather
+ * than the real `src/app.ts` — except for the first case below, which imports the real app instead.
+ * That case proves production has no such routes: `createApp()` with no extension answers 404.
+ * What the rest of this file proves is the route HANDLERS — the body validation and the status
+ * codes a caller sees once mounted.
  */
 
 import express from 'express';
@@ -12,12 +11,12 @@ import request from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { emptyFileSandbox } from '@tests/file-sandbox';
-import { installDemo } from '@app/demo';
+import { installDemo } from '@scenarios/support/demo';
 import { installRequestParsing, installSecurity } from '@app/security';
 import { installRequestContext } from '@app/request-context';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
-import { registerDemoClock, type DemoClock } from '@infrastructure/runtime/demo-clock';
+import { registerDemoClock, type DemoClock } from '@scenarios/support/demo-clock';
 import { productModel } from '@modules/products/model';
 import { orderModel } from '@modules/orders/model';
 import { createUser } from '@modules/users/tests/factories';
@@ -31,9 +30,9 @@ import { createOrder, toOrderItem, detachOrderUserId } from '@modules/orders/tes
  */
 const mockFailNextEmptyDatabase = { armed: false };
 
-jest.mock('@infrastructure/runtime/database-snapshot', () => {
-    const actual = jest.requireActual<typeof import('@infrastructure/runtime/database-snapshot')>(
-        '@infrastructure/runtime/database-snapshot'
+jest.mock('@scenarios/support/database-snapshot', () => {
+    const actual = jest.requireActual<typeof import('@scenarios/support/database-snapshot')>(
+        '@scenarios/support/database-snapshot'
     );
 
     return {
@@ -89,10 +88,10 @@ const drivableApp = () => {
     return app;
 };
 
-describe('the mount gate', () => {
-    it('answers 404 when enableDemoProfile() was never called', async () => {
+describe('production has no demo surface', () => {
+    it('answers 404 from an app built without the demo extension', async () => {
         // The real app, not `testApp()` above: `testApp()` calls `installDemo` directly, which
-        // bypasses the gate this case exists to prove.
+        // is exactly the extension this case proves a plain `createApp()` does not carry.
         const response = await api().post('/__test/restore');
 
         expect(response.status).toBe(404);

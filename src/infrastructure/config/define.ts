@@ -32,8 +32,6 @@ export interface FieldInfo {
     presence?: Presence;
     /** Whether the value is a credential. */
     sensitive: boolean;
-    /** Whether setting it outside development/test is the mistake. */
-    forbiddenOutsideRelaxed: boolean;
 }
 
 /** Everything wrong with one slice's values, grouped by kind so the message can say which. */
@@ -42,8 +40,6 @@ export interface SliceProblems {
     invalid: string[];
     /** A variable missing, too short, or still its placeholder. */
     presence: string[];
-    /** A variable set where it must never be. */
-    forbidden: string[];
     /** The slice's own cross-field messages. */
     checks: string[];
 }
@@ -55,8 +51,8 @@ export interface ConfigSlice {
     /** Every field, in declaration order. */
     readonly fields: readonly FieldInfo[];
     /**
-     * Every problem this slice has against `environment`. Shape problems always; presence, forbidden and
-     * cross-field ones only outside `NODE_ENV=test`.
+     * Every problem this slice has against `environment`. Shape problems always; presence and cross-field
+     * ones only outside `NODE_ENV=test`.
      *
      * @param environment - the environment to judge
      */
@@ -129,8 +125,7 @@ const describeShape = (shape: Shape): FieldInfo[] =>
         name,
         doc: field.doc,
         ...(field.presence && { presence: field.presence }),
-        sensitive: field.sensitive,
-        forbiddenOutsideRelaxed: field.forbiddenOutsideRelaxed
+        sensitive: field.sensitive
     }));
 
 /**
@@ -172,7 +167,7 @@ export interface ConfigDefinition<TShape extends Shape> {
 }
 
 /**
- * Presence and forbidden problems for one shape outside `NODE_ENV=test`.
+ * Presence problems for one shape outside `NODE_ENV=test`.
  *
  * @param info - the fields
  * @param environment - the environment
@@ -180,7 +175,7 @@ export interface ConfigDefinition<TShape extends Shape> {
 const presenceProblems = (
     info: readonly FieldInfo[],
     environment: Environment
-): Pick<SliceProblems, 'presence' | 'forbidden'> => {
+): Pick<SliceProblems, 'presence'> => {
     const relaxed = isRelaxedIn(environment);
     return {
         presence: info
@@ -189,12 +184,6 @@ const presenceProblems = (
                     presence !== undefined &&
                     (!presence.productionOnly || !relaxed) &&
                     presenceBroken(presence, environment[name])
-            )
-            .map(({ name }) => name),
-        forbidden: info
-            .filter(
-                ({ forbiddenOutsideRelaxed, name }) =>
-                    forbiddenOutsideRelaxed && !relaxed && (environment[name] ?? '') !== ''
             )
             .map(({ name }) => name)
     };
@@ -218,8 +207,7 @@ export const defineConfig = <TShape extends Shape>(
         inspect: (environment) => {
             const parsed = parseShape(definition.shape, environment);
             const invalid = parsed.ok ? [] : parsed.issues;
-            if (environment.NODE_ENV === 'test')
-                return { invalid, presence: [], forbidden: [], checks: [] };
+            if (environment.NODE_ENV === 'test') return { invalid, presence: [], checks: [] };
             return {
                 invalid,
                 ...presenceProblems(info, environment),
@@ -266,8 +254,7 @@ export const configProblems = (
     return {
         invalid: merged((problems) => problems.invalid),
         presence: merged((problems) => problems.presence),
-        checks: merged((problems) => problems.checks),
-        forbidden: merged((problems) => problems.forbidden)
+        checks: merged((problems) => problems.checks)
     };
 };
 
@@ -286,9 +273,7 @@ export const assertConfigIn = (slices: readonly ConfigSlice[], environment: Envi
         problems.presence.length > 0 &&
             `missing, too short, or still set to their .env-example placeholder — ${problems.presence.join(', ')}`,
         problems.checks.length > 0 &&
-            `failing their own configuration check — ${problems.checks.join(', ')}`,
-        problems.forbidden.length > 0 &&
-            `set, which must never happen here — ${problems.forbidden.join(', ')}`
+            `failing their own configuration check — ${problems.checks.join(', ')}`
     ].filter((clause) => clause !== false);
     if (clauses.length > 0) throw new ConfigError(`Refusing to boot: ${clauses.join('; ')}`);
 };

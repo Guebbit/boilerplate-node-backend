@@ -20,7 +20,7 @@ It is also the lightest way for a human to get a working API for anything — a 
 
 ## The control surface
 
-`npm run demo` calls `enableDemoProfile()` in-process, before `src/app.ts` is even imported — the only call site, so no environment variable can switch this on. It additionally mounts six routes, before the 404 catch-all and inert in every other profile:
+`npm run demo` hands `createApp` an `extension` (`scenarios/support/demo.ts`) in-process — the only caller, so no environment variable can switch this on, and nothing under `src/` imports it. It additionally mounts six routes, before the 404 catch-all, and builds the first scenario before listening:
 
 | Route                     | What it does                                                                                                                                                                                                                                                                                                                                                                                                          |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -31,17 +31,19 @@ It is also the lightest way for a human to get a working API for anything — a 
 | `POST /__test/jobs/:name` | Run one background job now, through the same service function its `scripts/ops/` script calls. `reap-orders` scrubs the PII of orders past their retention window and answers `{ job, result }` (how many it scrubbed); any other name is a 404. Move the clock first, then run the job                                                                                                                               |
 | `GET /__test/emails`      | The emails the app "sent" since the last restore. In demo mode the mailer (`src/infrastructure/adapters/mailer.ts`) sends through the `outbox` transport (`scenarios/support/doubles/mail-outbox.ts`, a [test double](./test-doubles.md)), which records to memory instead of talking to SMTP, with the reset/verify token lifted out of the link — a password-reset spec is the token in the email, or it is nothing |
 
-The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — `enableDemoProfile()` is called nowhere but `scenarios/run-server.ts`.
+The routes are unauthenticated on purpose: the profile only ever binds beside an in-memory database that `npm run demo` created seconds earlier. There is nothing to protect and no deployment that mounts them — the code is outside `src/`, and `scenarios/run-server.ts` is the only caller that passes it.
 
 Two values the paired e2e suite needs from the demo backend, both set in `scenarios/run-server.ts` or by whoever boots it:
 
-| Variable                      | Demo value                                        | Why                                                                                                                                                                                                                                |
-| ----------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_WEBHOOK_SECRET` | `demo-payment-webhook-secret` (filled when blank) | Known, so a spec can sign a payment-provider delivery for `POST /payments/webhook`                                                                                                                                                 |
-| `NODE_WEBHOOK_DEMO_SINK_URL`  | unset; the frontend's runner sets it              | Seeds the demo subscription at that `https://` URL (`scenarios/webhooks.ts`). The suite hosts the receiver itself over TLS, so a replay has somewhere to land; `npm run demo` trusts its certificate through `NODE_EXTRA_CA_CERTS` |
+| Variable                      | Demo value                                        | Why                                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_PAYMENT_WEBHOOK_SECRET` | `demo-payment-webhook-secret` (filled when blank) | Known, so a spec can sign a payment-provider delivery for `POST /payments/webhook`                                                                                                                                                                                                                                             |
+| `NODE_WEBHOOK_DEMO_SINK_URL`  | unset; the frontend's runner sets it              | Seeds the demo subscription at that `https://` URL (`scenarios/webhooks.ts`), and exempts its origin from the SSRF address check in a process that loads the dev preload. The suite hosts the receiver itself over TLS, so a replay has somewhere to land; `npm run demo` trusts its certificate through `NODE_EXTRA_CA_CERTS` |
 
-Not mounted at all when `enableDemoProfile()` was never called — every route 404s, same as a path
+Not mounted at all in an app built without the extension — every route 404s, same as a path
 that does not exist.
+
+Two things it needs from the SSRF guard and the mailer live next to it as [test doubles](./test-doubles.md): the `outbox` mail transport behind `GET /__test/emails`, and the webhook sink's exempt origin (`NODE_WEBHOOK_DEMO_SINK_URL`, port included).
 
 ### Bodies and status codes
 
@@ -89,9 +91,9 @@ answers.
 
 `Date` alone is faked (`@sinonjs/fake-timers`, `toFake: ['Date']`, `shouldAdvanceTime`), installed by
 `scenarios/run-server.ts` before the app loads. Timers, the Mongo driver's heartbeats and
-`performance` stay real, so nothing freezes. The `src/` side only knows the `DemoClock` interface
-(`src/infrastructure/runtime/demo-clock.ts`); the package is a dev dependency and a production image
-never loads it. Why not short env windows: they cannot reach the 21-day withdrawal minimum or the
+`performance` stay real, so nothing freezes. The interface and the slot the routes read it from are in
+`scenarios/support/demo-clock.ts`, with the fake; the package is a dev dependency and a production
+image never loads it. Why not short env windows: they cannot reach the 21-day withdrawal minimum or the
 constants that are hard-coded, and they are process-wide.
 
 ```mermaid

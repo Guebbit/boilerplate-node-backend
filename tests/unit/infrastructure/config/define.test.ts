@@ -24,8 +24,7 @@ const slice = defineConfig({
             placeholder: 'your-key-here',
             productionOnly: true
         }),
-        NODE_SAMPLE_HOST: text({ required: { minLength: 1 } }),
-        NODE_SAMPLE_DEMO_SINK: text({ forbiddenOutsideRelaxed: true })
+        NODE_SAMPLE_HOST: text({ required: { minLength: 1 } })
     },
     check: (config) =>
         config.NODE_SAMPLE_ON && config.NODE_SAMPLE_LIMIT > 100
@@ -113,12 +112,11 @@ describe('assertConfigIn', () => {
         const env = {
             NODE_ENV: 'production',
             NODE_SAMPLE_LIMIT: 'lots',
-            NODE_SAMPLE_KEY: 'your-key-here',
-            NODE_SAMPLE_DEMO_SINK: 'http://sink'
+            NODE_SAMPLE_KEY: 'your-key-here'
         };
 
         expect(() => assertConfigIn([slice.slice], env)).toThrow(
-            /^Refusing to boot: invalid values — NODE_SAMPLE_LIMIT: expected whole number >= 1 \(got "lots"\); missing, too short, or still set to their \.env-example placeholder — NODE_SAMPLE_KEY, NODE_SAMPLE_HOST; set, which must never happen here — NODE_SAMPLE_DEMO_SINK$/
+            /^Refusing to boot: invalid values — NODE_SAMPLE_LIMIT: expected whole number >= 1 \(got "lots"\); missing, too short, or still set to their \.env-example placeholder — NODE_SAMPLE_KEY, NODE_SAMPLE_HOST$/
         );
     });
 
@@ -178,8 +176,7 @@ describe('assertConfigIn', () => {
             'NODE_SAMPLE_LIMIT',
             'NODE_SAMPLE_ON',
             'NODE_SAMPLE_KEY',
-            'NODE_SAMPLE_HOST',
-            'NODE_SAMPLE_DEMO_SINK'
+            'NODE_SAMPLE_HOST'
         ]);
     });
 });

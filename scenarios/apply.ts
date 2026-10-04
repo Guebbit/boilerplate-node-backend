@@ -28,7 +28,7 @@ import './support/development-doubles';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
-import { emptyDatabase, isDatabaseEmpty } from '@infrastructure/runtime/database-snapshot';
+import { emptyDatabase, isDatabaseEmpty } from './support/database-snapshot';
 import { clearCache } from '@infrastructure/adapters/cache';
 import { logger } from '@infrastructure/adapters/logger';
 import {

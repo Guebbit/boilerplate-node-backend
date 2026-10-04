@@ -4,8 +4,9 @@
  *
  * Every webhook URL is `https://`, the demo's included, so the row the seeder writes straight to
  * the database must be one the contract's own edit body accepts and the service saves — a record
- * its own form cannot save is the failure this guards. The sink host stays exempt from the
- * private-address check only, which is why a loopback `https://` URL passes here at all.
+ * its own form cannot save is the failure this guards. The sink's origin is exempt from the
+ * private-address check only (registered below, as the dev preload does), which is why a loopback
+ * `https://` URL passes here at all.
  */
 
 import { UpdateWebhookSubscriptionBody } from '@api/schemas.zod';
@@ -16,6 +17,8 @@ import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { update } from '@modules/webhooks/services/subscriptions';
 import { seedWebhooksCollection } from '@scenarios/webhooks';
 import { setEnvironment } from '@tests/environment';
+import { registerWebhookSinkExemption } from '@scenarios/support/doubles/webhook-sink';
+import { clearSsrfExemptOrigins } from '@infrastructure/adapters/ssrf-exemptions';
 
 setupTestDb();
 
@@ -30,6 +33,13 @@ const context = {
 
 beforeEach(() => {
     setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: SINK_URL });
+    // What the dev preload does for a process that has the sink configured: the sink is on
+    // loopback, which the SSRF guard refuses unless its origin is registered.
+    registerWebhookSinkExemption();
+});
+
+afterEach(() => {
+    clearSsrfExemptOrigins();
 });
 
 /** Seed, then read the one subscription it wrote. */

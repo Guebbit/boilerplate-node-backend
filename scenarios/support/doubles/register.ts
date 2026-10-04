@@ -18,6 +18,7 @@ import { registerMailTransport } from '@infrastructure/adapters/mail-transports'
 import { logMailTransport } from './mail-log';
 import { outboxMailTransport } from './mail-outbox';
 import { registerPaymentDouble } from './payments/register';
+import { registerWebhookSinkExemption } from './webhook-sink';
 
 /**
  * Registers every double a process may use. Safe to call more than once: a registry entry is
@@ -27,4 +28,5 @@ export const registerDoubles = (): void => {
     registerPaymentDouble();
     registerMailTransport('log', logMailTransport);
     registerMailTransport('outbox', outboxMailTransport);
+    registerWebhookSinkExemption();
 };

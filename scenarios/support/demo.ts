@@ -1,7 +1,8 @@
 /**
  * @module
- * The demo profile's control surface — mounted only when `enableDemoProfile()` was called (see
- * `npm run demo`).
+ * The demo profile's control surface — mounted only by `scenarios/run-server.ts`, which hands
+ * {@link installDemo} and {@link restoreScenario} to `createApp` as its extension (`npm run
+ * demo`). Nothing under `src/` knows it exists: production has no such routes to mount.
  *
  * Six routes for the paired frontend's e2e suite, all under `/__test/*`:
  *
@@ -14,23 +15,25 @@
  *                          is then triggered through its own door, e.g. the reservation sweep
  * `POST /__test/jobs/:name` run one background job now (`scenarios/jobs.ts`), e.g. `reap-orders`
  *
- * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}. App-tier
- * since it is the one tier `eslint-plugin-boundaries` lets reach `scenarios/`; unauthenticated
- * since the profile only ever binds beside a database `npm run demo` just created.
+ * A scenario is BUILT once per process and REPLAYED thereafter — see {@link buildOnce}.
+ * Unauthenticated since the profile only ever binds beside a database `npm run demo` just created.
  */
 
 import type { Express, Request, Response } from 'express';
+import { clearCache } from '@infrastructure/adapters/cache';
+import { logger } from '@infrastructure/adapters/logger';
+import { refreshLocaleOverrides } from '@infrastructure/i18n';
+import { seedCredentials } from '@scenarios/accounts';
+import { DEFAULT_SCENARIO, buildScenario, isScenarioName } from '@scenarios/index';
+import { DEMO_JOBS } from '@scenarios/jobs';
 import {
     captureDatabase,
     emptyDatabase,
     restoreDatabaseCopy,
     type DatabaseCopy
-} from '@infrastructure/runtime/database-snapshot';
-import { clearDemoOutbox, readDemoOutbox } from '@scenarios/support/doubles/mail-outbox';
-import { getDemoClock } from '@infrastructure/runtime/demo-clock';
-import { clearCache } from '@infrastructure/adapters/cache';
-import { logger } from '@infrastructure/adapters/logger';
-import { refreshLocaleOverrides } from '@infrastructure/i18n';
+} from './database-snapshot';
+import { getDemoClock } from './demo-clock';
+import { clearDemoOutbox, readDemoOutbox } from './doubles/mail-outbox';
 
 /**
  * Thrown for anything `scenarios/index.ts`'s `SCENARIOS` registry does not carry — by
@@ -70,12 +73,6 @@ let demoApp: Express | undefined;
  * checking out twice makes two orders — so it happens once and every later restore replays the
  * rows it produced.
  *
- * Imported dynamically rather than at the top of this file: `app.ts` imports `installDemo`
- * unconditionally, and a static import here would pull every module's scenario factories into
- * every process whether or not `enableDemoProfile()` is ever called — the exact cost this file's
- * split from `src/modules/*` exists to avoid. `DEFAULT_SCENARIO` is applied here for the same
- * reason: a static import of it would load the registry everywhere.
- *
  * Empties the database itself, and only on the path that actually builds: `buildScenario` assumes
  * an empty one, so the emptying belongs to the build rather than to every caller — a replay's own
  * emptying is `restoreDatabaseCopy`'s.
@@ -85,15 +82,15 @@ let demoApp: Express | undefined;
  * @throws {Error} when the scenario has flows to drive and `installDemo` never handed over an app
  */
 const buildOnce = (name: string | undefined): Promise<ScenarioCopy> =>
-    import('@scenarios/index').then((scenarios) => {
-        const requested = name ?? scenarios.DEFAULT_SCENARIO;
-        if (!scenarios.isScenarioName(requested)) throw new UnknownScenarioError(requested);
+    Promise.resolve().then(() => {
+        const requested = name ?? DEFAULT_SCENARIO;
+        if (!isScenarioName(requested)) throw new UnknownScenarioError(requested);
 
         const known = copies.get(requested);
         if (known) return known;
 
         return emptyDatabase()
-            .then(() => scenarios.buildScenario(requested, demoApp))
+            .then(() => buildScenario(requested, demoApp))
             .then((subjects) =>
                 captureDatabase().then((database) => {
                     const copy = { name: requested, database, subjects };
@@ -166,14 +163,13 @@ export const restoreScenario = (scenario?: string): Promise<void> => {
  * the ones the flow runner recorded at boot — which is the only way an order id can be published
  * at all, since orders are produced rather than written.
  */
-const describeScenario = (): Promise<Record<string, unknown>> =>
-    import('@scenarios/accounts').then((accounts) => ({
-        scenario: currentScenario,
-        accounts: accounts.seedCredentials,
-        subjects: currentScenario ? (copies.get(currentScenario)?.subjects ?? {}) : {}
-    }));
+const describeScenario = (): Record<string, unknown> => ({
+    scenario: currentScenario,
+    accounts: seedCredentials,
+    subjects: currentScenario ? (copies.get(currentScenario)?.subjects ?? {}) : {}
+});
 
-/** Mount the demo profile's routes. Only ever called when `enableDemoProfile()` was called. */
+/** Mount the demo profile's routes — `createApp`'s `extension.install`, called by `run-server.ts` alone. */
 export const installDemo = (app: Express): void => {
     // Kept for `buildOnce`: the flow runner drives the real application over real HTTP, on a
     // throwaway loopback listener of its own (`scenarios/flows/loopback.ts`).
@@ -203,13 +199,7 @@ export const installDemo = (app: Express): void => {
     });
 
     app.get('/__test/scenario', (_request: Request, response: Response) => {
-        describeScenario()
-            .then((description) => response.json(description))
-            .catch((error: unknown) => {
-                // Stryker disable next-line all
-                logger.error({ message: 'scenario description failed', error });
-                response.status(500).json({ success: false });
-            });
+        response.json(describeScenario());
     });
 
     app.get('/__test/clock', (_request: Request, response: Response) => {
@@ -248,9 +238,9 @@ export const installDemo = (app: Express): void => {
         // Express types a route parameter as `string | string[]`; this route has one plain segment.
         const name = String(request.params.name);
 
-        import('@scenarios/jobs')
-            .then((jobs) => {
-                const job = jobs.DEMO_JOBS.get(name);
+        Promise.resolve()
+            .then(() => {
+                const job = DEMO_JOBS.get(name);
                 if (!job) {
                     response.status(404).json({ success: false, message: `unknown job: ${name}` });
                     return undefined;

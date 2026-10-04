@@ -56,8 +56,6 @@ export interface Field<T> {
     readonly presence?: Presence;
     /** `true` for a credential: its value is never echoed into an error message. */
     readonly sensitive: boolean;
-    /** `true` when SETTING it outside development/test is itself the mistake. */
-    readonly forbiddenOutsideRelaxed: boolean;
 }
 
 /** Options every builder accepts. */
@@ -70,8 +68,6 @@ export interface CommonOptions {
     required?: Presence;
     /** Never echo the value into an error. */
     sensitive?: boolean;
-    /** Setting this outside development/test refuses boot. */
-    forbiddenOutsideRelaxed?: boolean;
 }
 
 /**
@@ -141,8 +137,7 @@ function build<T>(
             ...(options.setBy && { setBy: options.setBy })
         },
         ...(options.required && { presence: options.required }),
-        sensitive: options.sensitive ?? false,
-        forbiddenOutsideRelaxed: options.forbiddenOutsideRelaxed ?? false
+        sensitive: options.sensitive ?? false
     };
 }
 

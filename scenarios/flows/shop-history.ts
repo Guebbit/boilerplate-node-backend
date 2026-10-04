@@ -9,7 +9,7 @@
  * reservations, shipments, audit entries and analytics events behind these orders are the real
  * ones, produced by the real code, and they stay right when that code changes.
  *
- * Runs ONCE per process — `src/app/demo.ts` keeps the result in memory and replays it on every
+ * Runs ONCE per process — `scenarios/support/demo.ts` keeps the result in memory and replays it on every
  * restore. See: docs/tools/demo-profile.md
  */
 

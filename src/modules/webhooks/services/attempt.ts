@@ -23,7 +23,6 @@ import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
 import { webhookSubscriptionRepository, webhookDeliveryRepository } from '../repository';
 import { activeRingSecrets } from '../secrets';
-import { getWebhookDemoAllowedHost } from '../config';
 import { nextAttemptAt, shouldAutoDisable } from '../domain';
 import { subscriptionDisabledEmail } from '../emails';
 import { webhooksAuditActions } from '../audit';
@@ -248,10 +247,7 @@ export const attemptDelivery = (
             type: delivery.eventType,
             timestamp: delivery.createdAt.toISOString(),
             data: delivery.payload
-        },
-        // `undefined` outside development/test, or with no sink configured — see the SSRF
-        // guard's own docblock for what this one exemption does and does not relax.
-        allowedPrivateHost: getWebhookDemoAllowedHost()
+        }
     }).then((result) =>
         result.success
             ? recordSuccess(delivery, result.statusCode, result.durationMs)

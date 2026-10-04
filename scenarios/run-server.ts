@@ -7,8 +7,9 @@
  * cache and queue run `disabled`, which is a supported deployment shape.
  *
  * This is what the paired frontend's dev server and e2e suite run against instead of a hand-written
- * mock. Calls `enableDemoProfile()` in-process below, which additionally mounts the control
- * surface in `src/app/demo.ts` — no environment variable can do that on its own.
+ * mock. Hands `createApp` an extension (`./support/demo`) that additionally mounts the control
+ * surface and builds the first scenario before listening — no environment variable can do that on
+ * its own, and nothing under `src/` knows it exists.
  *
  * Several instances can run side by side, each owning its own in-memory Mongo:
  *
@@ -24,9 +25,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
 import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
-import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
-import { registerDemoClock } from '@infrastructure/runtime/demo-clock';
-import { installDemoClock } from './support/demo-clock';
+import { installDemoClock, registerDemoClock } from './support/demo-clock';
 import { startEphemeralMongo } from './support/ephemeral-mongo';
 import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
@@ -195,21 +194,21 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
             NODE_URL: `http://localhost:${currentEnvironment().NODE_PORT ?? '3000'}/`
         });
 
-        // The only call site in the whole codebase, on purpose: no copied `.env` can mount the
-        // control surface on a host that isn't this one.
-        enableDemoProfile();
-
         // The movable clock behind `/__test/clock`. Installed before the app is imported, so every
         // module sees the fake `Date` from its first read; a time journey moves it, and the next
         // restore puts it back. See `scenarios/support/demo-clock.ts`.
         registerDemoClock(installDemoClock());
 
-        // Import AFTER the environment is shaped. `createApp()` builds the app; its own
-        // `start()` seeds `shop` (via `restoreScenario`, since `enableDemoProfile()` above turned
-        // the demo profile on) before it starts listening.
+        // Import AFTER the environment is shaped: both load every module, and a model reads some
+        // of it at import. `createApp()` builds the app with the demo extension; its own `start()`
+        // seeds `shop` (the extension's `afterBoot`) before it starts listening.
         const port = currentEnvironment().NODE_PORT ?? '3000';
-        return import('../src/app')
-            .then(({ createApp }) => createApp().start())
+        return Promise.all([import('../src/app'), import('./support/demo')])
+            .then(([{ createApp }, { installDemo, restoreScenario }]) =>
+                createApp({
+                    extension: { install: installDemo, afterBoot: () => restoreScenario() }
+                }).start()
+            )
             .then(() => waitUntilListening(port))
             .then(() => {
                 console.log(`[demo] API listening on :${port} — seeded, cache/queue disabled.`);

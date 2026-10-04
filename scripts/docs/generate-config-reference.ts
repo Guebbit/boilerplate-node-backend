@@ -17,7 +17,7 @@
 import path from 'node:path';
 import { allConfigSlices } from '../../src/app/config';
 import { enabledModules } from '../../src/modules';
-import { seedPasswordsConfig } from '../../scenarios/config';
+import { demoSinkConfig, seedPasswordsConfig } from '../../scenarios/config';
 import type { ConfigSlice, FieldInfo } from '@infrastructure/config/define';
 import { applyMarkerBlocks } from './marker-block';
 
@@ -54,7 +54,6 @@ const rules = (field: FieldInfo): string => {
         const scope = presence.productionOnly ? ', outside development/test' : '';
         parts.push(`required${length}${placeholder}${scope}`);
     }
-    if (field.forbiddenOutsideRelaxed) parts.push('must be unset outside development/test');
     if (field.sensitive) parts.push('secret: never logged');
     return parts.length > 0 ? parts.join('; ') : '—';
 };
@@ -76,9 +75,11 @@ const collect = (): { slices: { name: string; fields: FieldInfo[] }[]; conflicts
     const conflicts: string[] = [];
     const slices: { name: string; fields: FieldInfo[] }[] = [];
 
-    for (const slice of [...allConfigSlices(enabledModules), seedPasswordsConfig.slice].filter(
-        (entry) => !isBudgetSlice(entry)
-    )) {
+    for (const slice of [
+        ...allConfigSlices(enabledModules),
+        seedPasswordsConfig.slice,
+        demoSinkConfig.slice
+    ].filter((entry) => !isBudgetSlice(entry))) {
         const fields: FieldInfo[] = [];
         for (const field of slice.fields) {
             const earlier = seen.get(field.name);

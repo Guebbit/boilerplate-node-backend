@@ -59,8 +59,6 @@ import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
 import { installRoutes } from '@app/routes';
 import { installErrorHandling } from '@app/error-handling';
-import { installDemo, restoreScenario } from '@app/demo';
-import { isDemoMode } from '@infrastructure/runtime/demo-profile';
 
 /** One built application's lifecycle — what {@link createApp} hands back. */
 export interface AppInstance {
@@ -75,9 +73,9 @@ export interface AppInstance {
      */
     boot: () => Promise<void>;
     /**
-     * {@link AppInstance.boot}, the demo profile's own data, then listen. Idempotent — a second
-     * call while the server is already listening resolves with the running instance rather than
-     * binding twice.
+     * {@link AppInstance.boot}, the extension's `afterBoot` step if it has one, then listen.
+     * Idempotent — a second call while the server is already listening resolves with the running
+     * instance rather than binding twice.
      */
     start: () => Promise<Server>;
     /**
@@ -85,6 +83,26 @@ export interface AppInstance {
      * handler and a test's `afterAll`) share one shutdown rather than racing two.
      */
     stop: () => Promise<void>;
+}
+
+/**
+ * What a process may bolt on without the application knowing why: extra routes, and a step between
+ * boot and listening. The demo profile's control surface is the only user (`scenarios/run-server.ts`
+ * passes it); production passes none, so nothing here is reachable in a deployment.
+ */
+export interface AppExtension {
+    /**
+     * Mount extra routes. Called before the routes' own 404 catch-all, which would swallow
+     * anything mounted after it.
+     *
+     * @param app - the application being built
+     */
+    install?: (app: Express) => void;
+    /**
+     * A step that runs after {@link AppInstance.boot} and before the socket opens — the demo's
+     * first scenario build, so a readiness probe never sees an unfurnished shop.
+     */
+    afterBoot?: () => Promise<void>;
 }
 
 /** What {@link createApp} takes. */
@@ -98,6 +116,8 @@ export interface AppOptions {
      * this file — `scenarios/apply.ts` does that with `installEnvironment` itself.
      */
     env?: EnvironmentOverrides;
+    /** Extra routes and a post-boot step. Absent for every profile but the demo one. */
+    extension?: AppExtension;
 }
 
 /**
@@ -170,13 +190,13 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
         return (
             boot()
                 /*
-                 * Only in demo mode, and only ever the initial build — `npm run demo`'s own
+                 * The extension's own step — for the demo, only ever the initial build:
                  * `POST /__test/restore` replays it from memory afterwards. Before `listen`, so the
                  * paired frontend's readiness probe (`GET /`, which only resolves once listening)
                  * never observes a shop that is connected but has not lived its history yet: the
-                 * flows this runs drive the app on a throwaway loopback listener of their own.
+                 * flows it runs drive the app on a throwaway loopback listener of their own.
                  */
-                .then(() => (isDemoMode() ? restoreScenario() : undefined))
+                .then(() => options.extension?.afterBoot?.())
                 .then(() => {
                     const { NODE_PORT: port, NODE_HOST: host } = serverConfig();
                     // Unset by default, which binds every interface — the shape every profile but
@@ -252,9 +272,9 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
     installRequestParsing(app);
     installRequestContext(app);
     installTelemetry(app);
-    // Demo control surface (/__test/restore, /__test/scenario, /__test/emails) — inert outside
-    // `npm run demo`. Before installRoutes, whose 404 catch-all would swallow anything mounted after it.
-    if (isDemoMode()) installDemo(app);
+    // The extension's routes (the demo's /__test/*), when a process passed one. Before
+    // installRoutes, whose 404 catch-all would swallow anything mounted after it.
+    options.extension?.install?.(app);
     installRoutes(app);
     installErrorHandling(app);
 

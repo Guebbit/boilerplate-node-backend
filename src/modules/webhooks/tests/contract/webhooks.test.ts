@@ -11,6 +11,10 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { webhookDeliveryRepository, webhookSubscriptionRepository } from '../../repository';
 import { setEnvironment } from '@tests/environment';
+import {
+    clearSsrfExemptOrigins,
+    registerSsrfExemptOrigin
+} from '@infrastructure/adapters/ssrf-exemptions';
 
 setupTestDb();
 
@@ -471,7 +475,7 @@ const resolvesToPrivateAddress = () => jest.mocked(resolve4).mockResolvedValueOn
 
 describe('a private target is refused at create and update', () => {
     afterEach(() => {
-        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: undefined });
+        clearSsrfExemptOrigins();
     });
 
     it('422s a create whose host resolves to a private address, naming the url field', async () => {
@@ -526,9 +530,9 @@ describe('a private target is refused at create and update', () => {
         expect(resolve4).not.toHaveBeenCalled();
     });
 
-    it('lets the configured demo sink through, private address and all', async () => {
+    it('lets a registered exempt origin through, private address and all', async () => {
         const { bearer } = await authenticateAsRole('manager');
-        setEnvironment({ NODE_WEBHOOK_DEMO_SINK_URL: 'https://sink.internal/' });
+        registerSsrfExemptOrigin('https://sink.internal');
         resolvesToPrivateAddress();
 
         const response = await api()

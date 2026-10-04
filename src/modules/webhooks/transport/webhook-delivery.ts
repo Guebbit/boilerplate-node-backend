@@ -40,8 +40,6 @@ export interface WebhookDeliveryAttempt {
     payload: unknown;
     /** Overrides {@link DEFAULT_TIMEOUT_MS}. */
     timeoutMs?: number;
-    /** Passed straight through to `ssrf-guard.ts`'s `resolveSafeOutboundTarget` as its exempt host. */
-    allowedPrivateHost?: string;
 }
 
 /** What happened, in the shape a delivery-log row is written from. */
@@ -161,7 +159,7 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
     // `signal` parameter docblock for why the resolver needs it too.
     const signal = AbortSignal.timeout(timeoutMs);
 
-    return resolveSafeOutboundTarget(attempt.url, attempt.allowedPrivateHost, signal)
+    return resolveSafeOutboundTarget(attempt.url, signal)
         .then((target) => {
             const body = JSON.stringify(attempt.payload);
             const { headers } = signWebhookPayload({

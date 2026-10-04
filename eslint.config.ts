@@ -1179,19 +1179,6 @@ export default tseslint.config(
                         },
 
                         /*
-                         * `src/app/demo.ts` is the one file under `src/` allowed back into
-                         * `scenarios/` — it mounts `POST /__test/restore`, which has to walk the
-                         * same tables `scenarios/apply.ts` does. Nothing else may: that is what lets a
-                         * production image omit `scenarios/` outright, since every OTHER file
-                         * reaching it would pull the whole folder into the bundle whether or not
-                         * `enableDemoProfile()` is ever called.
-                         */
-                        {
-                            from: { element: { type: 'app', fileInternalPath: 'demo.ts' } },
-                            allow: { to: { element: { type: 'scenarios' } } }
-                        },
-
-                        /*
                          * A module reaches its own files freely — a service imports its repository,
                          * a controller imports its service — so "the same module" is compared by
                          * the captured name rather than listed per domain.

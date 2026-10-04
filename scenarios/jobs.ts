@@ -6,7 +6,7 @@
  * made true. Each entry calls the same service function its `scripts/ops/` script calls, so the
  * lever proves the real sweep, not a copy of it.
  *
- * Reached through `POST /__test/jobs/:name` in `src/app/demo.ts`.
+ * Reached through `POST /__test/jobs/:name` in `./support/demo.ts`.
  */
 
 import { orderService } from '@modules/orders';

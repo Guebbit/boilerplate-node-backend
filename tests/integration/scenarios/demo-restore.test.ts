@@ -1,8 +1,8 @@
 /**
- * `src/app/demo.ts`'s `restoreScenario` for the `blank` scenario — harness infrastructure only,
+ * `scenarios/support/demo.ts`'s `restoreScenario` for the `blank` scenario — harness infrastructure only,
  * against a real database. Exercised as a function call rather than over HTTP: `installDemo`'s
- * route is a thin wrapper around this, gated behind `enableDemoProfile()` at import time, which
- * this suite has no reason to call.
+ * route is a thin wrapper around this, mounted only by `scenarios/run-server.ts`, which this suite
+ * has no reason to boot.
  *
  * Two cases below drive a restored database over real HTTP instead — the two defects
  * `emptyDatabase()` and the pinned `DEPLOYMENT_TENANT_ID` exist to close, proven against the thing that
@@ -11,7 +11,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
-import { restoreScenario } from '@app/demo';
+import { restoreScenario } from '@scenarios/support/demo';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userModel } from '@modules/users/model';
 import { productModel } from '@modules/products/model';

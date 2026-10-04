@@ -62,7 +62,7 @@ const readCapped = (response: IncomingMessage): Promise<Buffer> =>
  */
 const download = (rawUrl: string): Promise<Buffer> => {
     const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
-    return resolveSafeOutboundTarget(rawUrl, undefined, signal).then(
+    return resolveSafeOutboundTarget(rawUrl, signal).then(
         (target) =>
             new Promise<Buffer>((resolve, reject) => {
                 const url = new URL(rawUrl);

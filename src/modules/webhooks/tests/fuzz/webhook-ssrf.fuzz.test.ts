@@ -10,6 +10,10 @@
 import { EventEmitter } from 'node:events';
 import { request as httpsRequest } from 'node:https';
 import { deliverWebhook } from '@modules/webhooks/transport/webhook-delivery';
+import {
+    clearSsrfExemptOrigins,
+    registerSsrfExemptOrigin
+} from '@infrastructure/adapters/ssrf-exemptions';
 
 // `resolve4`/`resolve6` are mocked so DNS resolution inside `deliverWebhook`'s own SSRF check is
 // deterministic — this suite must never depend on what a real DNS server answers.
@@ -108,6 +112,16 @@ describe('deliverWebhook — a redirect is a failed delivery, never followed', (
 });
 
 describe('deliverWebhook — the exempted demo host is still https-only', () => {
+    // What the dev preload registers for the demo sink: the whole origin, port included.
+    beforeEach(() => {
+        registerSsrfExemptOrigin('https://127.0.0.1:8443');
+        registerSsrfExemptOrigin('http://127.0.0.1:8080');
+    });
+
+    afterEach(() => {
+        clearSsrfExemptOrigins();
+    });
+
     it('delivers over node:https to a private address the guard exempts', async () => {
         const mockedHttpsRequest = httpsRequest as jest.Mock;
         mockedHttpsRequest.mockImplementation(
@@ -132,8 +146,7 @@ describe('deliverWebhook — the exempted demo host is still https-only', () => 
             url: 'https://127.0.0.1:8443/hook',
             secrets: ['whsec_test-secret'],
             eventId: 'evt_demo_1',
-            payload: { a: 1 },
-            allowedPrivateHost: '127.0.0.1'
+            payload: { a: 1 }
         });
 
         expect(mockedHttpsRequest).toHaveBeenCalledTimes(1);
@@ -148,8 +161,7 @@ describe('deliverWebhook — the exempted demo host is still https-only', () => 
             url: 'http://127.0.0.1:8080/hook',
             secrets: ['whsec_test-secret'],
             eventId: 'evt_demo_2',
-            payload: { a: 1 },
-            allowedPrivateHost: '127.0.0.1'
+            payload: { a: 1 }
         });
 
         expect(mockedHttpsRequest).not.toHaveBeenCalled();

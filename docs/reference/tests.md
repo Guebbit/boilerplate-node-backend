@@ -202,10 +202,9 @@ One function, no database, no HTTP. Fast enough to run from the pre-commit hook.
 
 ### `tests/unit/infrastructure/runtime/` and `persistence/`
 
-| File                                                     | What it guarantees                                                                                                          | Read next                                |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| `tests/unit/infrastructure/runtime/environment.test.ts`  | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md)           |
-| `tests/unit/infrastructure/runtime/demo-profile.test.ts` | Demo mode is exactly `enableDemoProfile()` having been called, and production refuses it even then.                         | [Demo profile](../tools/demo-profile.md) |
+| File                                                    | What it guarantees                                                                                                          | Read next                      |
+| ------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `tests/unit/infrastructure/runtime/environment.test.ts` | The fail-fast boot check, tested exhaustively because it is small and because it decides whether the process starts at all. | [Runtime](../tools/runtime.md) |
 
 ### `tests/unit/infrastructure/adapters/`
 
@@ -275,7 +274,7 @@ Boots the application against an in-memory MongoDB and drives it as a client wou
 | `tests/integration/malformed-ids.test.ts`             | Every id site `openapi.yaml` declares holds to the one-answer-per-position rule: a malformed path id is the unknown-id 404, a malformed body or query id a 422 naming the field.                                 | [Request Flow](../theory/request-flow.md#a-malformed-id-has-one-answer-per-position) |
 | `tests/integration/persistence/revision.test.ts`      | The edit counter behind every `ETag`, against a real database: moves by one per edit through every form of write, never for a non-edit, never repeats under two writers.                                         | [Write Methods](../api/write-methods.md#what-the-tag-is)                             |
 | `tests/integration/scripts/db/index-sync.test.ts`     | `db:sync` builds every declared index, drops every undeclared one, converges on a second run, and refuses a unique constraint the rows already violate.                                                          | [Data](./data.md)                                                                    |
-| `tests/integration/app/demo-restore.test.ts`          | `restoreScenario`'s `blank` path against a real database, plus two real-HTTP cases proving the defects `emptyDatabase()` and the pinned tenant id exist to close.                                                | [Demo profile](../tools/demo-profile.md)                                             |
+| `tests/integration/scenarios/demo-restore.test.ts`    | `restoreScenario`'s `blank` path against a real database, plus two real-HTTP cases proving the defects `emptyDatabase()` and the pinned tenant id exist to close.                                                | [Demo profile](../tools/demo-profile.md)                                             |
 | `tests/integration/scenarios/shop.test.ts`            | Builds the `shop` scenario for real, then reads every row back through the real serializers against the generated response schemas, and holds every declared guarantee equal to the subjects the build produced. | [Demo profile](../tools/demo-profile.md)                                             |
 
 ## `tests/cluster/` — more than one worker

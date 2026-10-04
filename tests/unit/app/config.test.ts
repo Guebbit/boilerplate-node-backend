@@ -9,7 +9,6 @@
  */
 import { assertModuleConfig } from '@kernel/module-config';
 import { APP_CONFIG_SLICES } from '@app/config';
-import { enableDemoProfile } from '@infrastructure/runtime/demo-profile';
 import { resetAnalyticsProvider } from '@infrastructure/observability/analytics';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
@@ -47,7 +46,6 @@ const configure = (): void => {
 const assertApp = (): void => assertModuleConfig([], APP_CONFIG_SLICES);
 
 afterEach(() => {
-    enableDemoProfile(false);
     // Memoised on first resolve — a case left over from a previous one would otherwise decide
     // this one, the same reason `analytics.test.ts` resets it in its own `beforeEach`.
     resetAnalyticsProvider();

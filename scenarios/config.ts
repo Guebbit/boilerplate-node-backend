@@ -1,11 +1,11 @@
 /**
  * @module
- * The seed accounts' passwords, as a config slice: the thirteen `NODE_SEED_*_PASSWORD` variables,
- * each with its committed, public fallback.
+ * The seeder's and the demo's own variables, as config slices: the thirteen `NODE_SEED_*_PASSWORD`
+ * variables, each with its committed, public fallback, and the demo webhook sink's address.
  *
- * Not part of the app's boot gate — the seeder is a script, not the app — but read through the
- * same layer, so the variable list on `docs/tools/configuration.md` is complete and a blank value
- * means "unset" here as everywhere.
+ * Not part of the app's boot gate — the seeder is a script, not the app, and production has none of
+ * these — but read through the same layer, so the variable list on `docs/tools/configuration.md`
+ * is complete and a blank value means "unset" here as everywhere.
  *
  * See: docs/tools/demo-profile.md#the-named-accounts
  */
@@ -51,5 +51,20 @@ export const seedPasswordsConfig = defineConfig({
         NODE_SEED_WAREHOUSE_PASSWORD: seedPassword('warehouse', 'Demo-Warehouse1!'),
         NODE_SEED_SUPPORT_PASSWORD: seedPassword('support', 'Demo-Support1!'),
         NODE_SEED_OPERATOR_PASSWORD: seedPassword('platform operator', 'Demo-Operator1!')
+    }
+});
+
+/**
+ * Where the demo's webhook sink listens. Read by the seeder (the subscription it writes points
+ * here) and by the dev preload (which exempts this origin from the SSRF address check, since the
+ * sink is on loopback or a private compose address) — never by production code.
+ */
+export const demoSinkConfig = defineConfig({
+    name: 'scenario-webhook-sink',
+    shape: {
+        NODE_WEBHOOK_DEMO_SINK_URL: text({
+            describe:
+                'The demo webhook sink (https), seeded as a subscription. Its origin is exempt from the SSRF private-address check in a process that loads the dev preload.'
+        })
     }
 });

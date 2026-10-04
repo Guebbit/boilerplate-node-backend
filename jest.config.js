@@ -241,7 +241,7 @@ module.exports = {
          * Connect-retry and `stopDatabase` are driven by boot and shutdown, which no unit owns —
          * and `emptyDatabase`, `isDatabaseEmpty`, `captureDatabase` and `restoreDatabaseCopy`
          * joined them when the demo profile learned to snapshot a scenario. Each needs a live
-         * connection to mean anything; `tests/integration/app/demo-restore.test.ts` is where they
+         * connection to mean anything; `tests/integration/scenarios/demo-restore.test.ts` is where they
          * are actually exercised. Unit-testing them would assert a mock's choreography.
          */
         'src/infrastructure/runtime/database.ts': floor(70, 100, 12),

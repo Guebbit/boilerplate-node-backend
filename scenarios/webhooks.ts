@@ -10,11 +10,11 @@
  * inert-by-default shape as `scenarios/support/doubles/mail-outbox.ts`.
  *
  * The URL is `https://` like every webhook URL, so the edit form can save it. Reachable at all only
- * because `@infrastructure/adapters/ssrf-guard`'s one exemption (`@modules/webhooks/config`'s
- * `getWebhookDemoAllowedHost`) lets THIS ONE hostname through without a public address — the sink
- * is on loopback, which the guard refuses for everyone else. The sink's certificate is the test
- * CA's (`scenarios/support/tls/`), trusted by the backend through `NODE_EXTRA_CA_CERTS`.
- * Honoured only in development/test.
+ * because the dev preload registers the sink's origin with `@infrastructure/adapters/ssrf-guard`
+ * (`scenarios/support/doubles/webhook-sink.ts`), which lets THIS ONE origin through without a
+ * public address — the sink is on loopback, which the guard refuses for everyone else. The sink's
+ * certificate is the test CA's (`scenarios/support/tls/`), trusted by the backend through
+ * `NODE_EXTRA_CA_CERTS`.
  *
  * A fixed session id, not a generated one: `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` means a
  * POST to `/<any-uuid>` creates that session on arrival, so this subscription is watchable without
@@ -29,11 +29,11 @@
 
 import { Types } from 'mongoose';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { webhooksConfig } from '@modules/webhooks/config';
 import { webhookSubscriptionRepository } from '@modules/webhooks/repository';
 import { encryptRingSecret } from '@modules/webhooks/secrets';
 import type { WebhookSubscriptionDocument } from '@modules/webhooks/model';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
+import { demoSinkConfig } from '@scenarios/config';
 
 /** The fixed `_id` this subscription is upserted under, so re-seeding is a no-op like every other fixture. */
 const WEBHOOK_SUBSCRIPTION_ID = '65e0000000000000000000a1';
@@ -61,7 +61,7 @@ export const WEBHOOK_DEMO_SECRET =
  * Seeds nothing when `NODE_WEBHOOK_DEMO_SINK_URL` is unset, the default.
  */
 export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
-    const sinkBaseUrl = webhooksConfig().NODE_WEBHOOK_DEMO_SINK_URL;
+    const sinkBaseUrl = demoSinkConfig().NODE_WEBHOOK_DEMO_SINK_URL;
     if (!sinkBaseUrl) return Promise.resolve([]);
 
     // `id`/`ciphertext` only — `createdAt` is the ring entry's own subdocument timestamp
