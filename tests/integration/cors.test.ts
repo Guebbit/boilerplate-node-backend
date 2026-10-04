@@ -50,6 +50,30 @@ describe('CORS', () => {
     });
 
     /**
+     * `cors` adds `Vary: Origin` only when it reflects an origin, so a refused origin's header-less
+     * answer would be cached under the same key as the real frontend's. The app adds it itself,
+     * for every caller, with or without an `Origin`.
+     */
+    it.each([
+        ['an allowed origin', ALLOWED_ORIGIN],
+        ['a disallowed origin', DISALLOWED_ORIGIN],
+        ['no origin at all', undefined]
+    ])('says Vary: Origin for %s', async (_label, origin) => {
+        const request = api().get('/');
+        const response = await (origin === undefined ? request : request.set('Origin', origin));
+
+        expect(response.headers.vary?.split(/\s*,\s*/)).toContain('Origin');
+    });
+
+    it('says Vary: Origin once, not twice, when cors adds its own', async () => {
+        const response = await api().get('/').set('Origin', ALLOWED_ORIGIN);
+
+        expect(
+            response.headers.vary?.split(/\s*,\s*/).filter((name) => name === 'Origin')
+        ).toHaveLength(1);
+    });
+
+    /**
      * The property from the file header, pinned on an endpoint that answers a deliberate status
      * of its own. `POST /account/login` with a wrong password must still answer that rejection
      * rather than a generic server fault, whatever the request's origin header says.
