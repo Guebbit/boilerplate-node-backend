@@ -247,6 +247,28 @@ export const claimCacheKey = (
         });
 
 /**
+ * Whether `key` is currently claimed, WITHOUT claiming it — a read-only `EXISTS`. The companion of
+ * {@link claimCacheKey} for a caller that must look before it spends a claim.
+ * https://redis.io/commands/exists/
+ *
+ * @param key - what to look up; the same name {@link claimCacheKey} was given
+ * @returns true only when Redis answered that the claim stands; false on a miss, no Redis or any
+ *   failure — the caller keeps its own in-process floor
+ */
+export const isCacheKeyClaimed = (key: string): Promise<boolean> =>
+    cacheConnection
+        .get()
+        .then((redisClient) => {
+            if (!redisClient) return false;
+            return redisClient.exists(prefix(`claim:${key}`)).then((count) => count > 0);
+        })
+        .catch((error: unknown) => {
+            // Stryker disable next-line all
+            logger.warn({ message: 'Redis claim lookup failed.', key, error });
+            return false;
+        });
+
+/**
  * Claim the right to rebuild one stale entry — refresh-ahead's only mechanism.
  *
  * `SET key 1 NX EX seconds`: Redis grants the key to exactly one caller across every worker and

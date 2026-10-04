@@ -1,10 +1,16 @@
 /**
  * @module
  * The single-use record ALTCHA checks a solved challenge against, so one solution cannot be spent
- * twice. Shaped as the library's own `Store` interface and backed by this app's cache.
+ * twice. Two steps, in this order, around altcha-lib's `verify`:
+ *
+ * Peek:   {@link isSpent} looks, records nothing. A spent id is refused before the verify is paid.
+ * Claim:  {@link claim} records the id, and only runs once `verify` said `verified: true`.
+ *
+ * Nothing unsigned ever writes: the id is read from the payload before it is trusted, so a claim
+ * made earlier would let an attacker fill memory (and Redis) with random ids.
  */
 
-import { claimCacheKey } from '../cache';
+import { claimCacheKey, isCacheKeyClaimed } from '../cache';
 
 /** How long a spent record must live: past this, the challenge itself has expired anyway. */
 const RECORD_TTL_SECONDS = 600;
@@ -15,23 +21,45 @@ const RECORD_TTL_SECONDS = 600;
  * single-use enforcement. This is the same floor `rate-limit-store.ts` falls back to: a replay is
  * always caught within ONE process, and Redis widens that across `cluster.ts`'s worker fork when
  * it is reachable.
+ *
+ * Insertion order IS expiry order (every record has the same TTL), which {@link sweepExpired}
+ * relies on.
  */
 const spentLocally = new Map<string, number>();
 
-/** Drops records past their own expiry, so a long-lived process does not leak memory. */
+/**
+ * Drops records past their own expiry, so a long-lived process does not leak memory.
+ *
+ * Stops at the first live entry: the Map iterates in insertion order and every record shares one
+ * TTL, so nothing after a live entry can be expired. Amortised O(1) per call.
+ */
 const sweepExpired = (): void => {
     const now = Date.now();
-    for (const [key, expiresAt] of spentLocally) if (expiresAt <= now) spentLocally.delete(key);
+    for (const [key, expiresAt] of spentLocally) {
+        if (expiresAt > now) return;
+        spentLocally.delete(key);
+    }
 };
 
 /** Namespaced so a challenge record can never collide with another cache user's key. */
 const keyOf = (key: string): string => `antibot:spent:${key}`;
 
 /**
- * Longest challenge id this store records. A real one is a short nonce; the id is read from the
- * unverified payload, so an attacker could otherwise make each record kilobytes long.
+ * Longest challenge id this store looks up or records. A real one is a short nonce; the id is
+ * read from the payload before its signature is checked, so an attacker could otherwise make each
+ * lookup, and each record, kilobytes long.
  */
 const MAX_KEY_LENGTH = 256;
+
+/**
+ * Whether the in-process floor holds a live record of `key`.
+ *
+ * @param key - the namespaced key
+ */
+const spentHere = (key: string): boolean => {
+    sweepExpired();
+    return spentLocally.has(key);
+};
 
 /**
  * Claim `key` locally, synchronously — the in-process half of the single-use check.
@@ -39,29 +67,35 @@ const MAX_KEY_LENGTH = 256;
  * @returns whether this call was the first to claim it
  */
 const claimLocally = (key: string): boolean => {
-    sweepExpired();
-    if (spentLocally.has(key)) return false;
+    if (spentHere(key)) return false;
     spentLocally.set(key, Date.now() + RECORD_TTL_SECONDS * 1000);
     return true;
 };
 
 /**
- * ALTCHA's `Store` contract: `get` answers whether this challenge was already used, `set` records
- * that it now has been. https://github.com/altcha-org/altcha-lib
+ * Whether a challenge id was already used — read-only, so an unverified payload leaves no trace.
  *
- * The library awaits `get`, then calls `set`. Two requests carrying the same solution could both
- * pass `get` before either reached `set`, so `get` itself CLAIMS the id — locally at once, then in
- * Redis with `SET NX` — and `set` has nothing left to do. The first caller gets "unused"; every
- * other caller, in any process, gets "used".
+ * @param id - the challenge id the payload carries
+ * @returns true when it was spent (here, or in Redis); an over-long id counts as spent
  */
-export const altchaStore = {
-    get: (key: string): Promise<unknown> => {
-        if (key.length > MAX_KEY_LENGTH) return Promise.resolve(true);
-        if (!claimLocally(keyOf(key))) return Promise.resolve(true);
-        // `unavailable` (no Redis) keeps the local claim as the answer: single-use within this
-        // process, the same floor as before Redis is reachable.
-        return claimCacheKey(keyOf(key), RECORD_TTL_SECONDS).then((claim) => claim === 'taken');
-    },
+export const isSpent = (id: string): Promise<boolean> => {
+    if (id.length > MAX_KEY_LENGTH) return Promise.resolve(true);
+    if (spentHere(keyOf(id))) return Promise.resolve(true);
+    return isCacheKeyClaimed(keyOf(id));
+};
 
-    set: (): Promise<unknown> => Promise.resolve()
+/**
+ * Record a challenge id as used, atomically: the local map first (synchronous, so two requests in
+ * one process cannot both win), then Redis `SET NX`, which settles it across workers. Call it only
+ * for a payload `verify` accepted.
+ *
+ * @param id - the challenge id the payload carries
+ * @returns true for the one caller that got the claim; false for every later one
+ */
+export const claim = (id: string): Promise<boolean> => {
+    if (id.length > MAX_KEY_LENGTH) return Promise.resolve(false);
+    if (!claimLocally(keyOf(id))) return Promise.resolve(false);
+    // `unavailable` (no Redis) keeps the local claim as the answer: single-use within this
+    // process, the same floor as before Redis is reachable.
+    return claimCacheKey(keyOf(id), RECORD_TTL_SECONDS).then((result) => result !== 'taken');
 };

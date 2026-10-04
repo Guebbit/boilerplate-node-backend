@@ -66,6 +66,29 @@ protocol together with the widget that solves it, under permissive licences and 
 service involved. If this deployment ever wants the no-vendor option, it arrives as another entry
 in the registry above, not as a second seam.
 
+## ALTCHA: verify first, claim after
+
+A solved ALTCHA challenge may be spent once. The order matters: the id is read from the payload
+before anyone has checked its signature, so a claim made first would let an unsigned payload with a
+random id write a record, one per request, into memory and into Redis.
+
+```mermaid
+sequenceDiagram
+    participant W as Widget payload
+    participant S as altcha-store
+    participant L as altcha-lib verify
+    W->>S: isSpent(id) - read only
+    S-->>W: spent, so refused (nothing verified, nothing written)
+    W->>L: verify(payload), no store
+    L-->>W: verified or not
+    W->>S: claim(id) - only after verified
+    S-->>W: first caller wins, any other is refused
+```
+
+A payload that carries no id cannot be made single-use, so it is refused. The in-process record is
+a Map swept from its front (every record lives the same time, so insertion order is expiry order);
+Redis `SET NX` widens the claim across workers when it is reachable.
+
 ## Related pages
 
 - [Modules overview](./index.md) — the whole context map

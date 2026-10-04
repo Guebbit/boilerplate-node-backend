@@ -11,7 +11,8 @@ import { deriveKey } from 'altcha-lib/algorithms/pbkdf2';
 import { verify } from 'altcha-lib/frameworks/shared';
 import type { HumanChallengeProvider, IssuedChallenge } from './index';
 import type { RungVerdict } from '../antibot-verdict';
-import { altchaStore } from './altcha-store';
+import { claim, isSpent } from './altcha-store';
+import { isPlainObject } from '@infrastructure/object-guards';
 import { antibotConfig } from '@infrastructure/adapters/config';
 
 /**
@@ -58,17 +59,70 @@ const issue = (): Promise<IssuedChallenge> =>
     }));
 
 /**
- * altcha-lib: verify the payload the widget returns — signature, expiry, the work itself, and
- * single-use via the store. `verified` is only true when every one of those passed.
+ * The id altcha-lib itself would single-use-check, read the same way for both payload types: a
+ * `client` payload's `challenge.parameters.data.challengeId`, else its `nonce`; a `server`
+ * payload's `id`. altcha-lib keeps that reader private, so this is a copy.
+ * https://github.com/altcha-org/altcha-lib
+ *
+ * @param decoded - the payload, already JSON-parsed and not yet trusted
+ * @returns the id, or `undefined` when the payload has no usable one
+ */
+const challengeIdOf = (decoded: unknown): string | undefined => {
+    if (!isPlainObject(decoded)) return undefined;
+    if ('verificationData' in decoded)
+        return typeof decoded.id === 'string' ? decoded.id : undefined;
+    if (!isPlainObject(decoded.challenge) || !isPlainObject(decoded.challenge.parameters))
+        return undefined;
+    const { data, nonce } = decoded.challenge.parameters;
+    const challengeId = isPlainObject(data) ? data.challengeId : undefined;
+    // altcha-lib stringifies it; a string or a number is the only thing a real challenge carries.
+    if (typeof challengeId === 'string' || typeof challengeId === 'number')
+        return String(challengeId);
+    return typeof nonce === 'string' ? nonce : undefined;
+};
+
+/**
+ * The challenge id inside a widget's base64 payload, or `undefined` when it does not decode.
+ * `JSON.parse` and `atob` report malformed input only by throwing, hence the one `try`.
+ *
+ * @param payload - what the widget sent back
+ */
+const payloadId = (payload: string): string | undefined => {
+    // eslint-disable-next-line no-restricted-syntax -- atob and JSON.parse have no non-throwing form; an undecodable payload is a refusal, not a crash
+    try {
+        return challengeIdOf(JSON.parse(atob(payload)));
+    } catch {
+        return undefined;
+    }
+};
+
+/**
+ * altcha-lib: verify the payload the widget returns — signature, expiry and the work itself.
+ * Single-use is ours, around it: a read-only "already spent?" first, no store handed to `verify`
+ * (the library would record the id BEFORE checking the signature), and the claim only for a
+ * payload that verified. A payload with no id cannot be made single-use, so it is refused.
  * https://github.com/altcha-org/altcha-lib#verifysolution
  */
-const check = (payload: string): Promise<RungVerdict> =>
-    // `signatureSecret`'s throw has to happen INSIDE the chain: raised while evaluating an
-    // argument it would escape synchronously, past the `.catch` that makes a broken deployment
-    // refuse callers rather than 500 at them.
-    Promise.resolve()
-        .then(() => verify(payload, deriveKey, signatureSecret(), undefined, altchaStore))
-        .then((result) => (result.verification?.verified === true ? 'ok' : 'refused'));
+const check = (payload: string): Promise<RungVerdict> => {
+    const id = payloadId(payload);
+    if (id === undefined) return Promise.resolve('refused');
+
+    return (
+        isSpent(id)
+            // `signatureSecret`'s throw has to happen INSIDE the chain: raised while evaluating an
+            // argument it would escape synchronously, past the `.catch` that makes a broken
+            // deployment refuse callers rather than 500 at them.
+            .then((spent) =>
+                spent
+                    ? false
+                    : verify(payload, deriveKey, signatureSecret()).then(
+                          (result) => result.verification?.verified === true
+                      )
+            )
+            .then((verified) => (verified ? claim(id) : false))
+            .then((won) => (won ? 'ok' : 'refused'))
+    );
+};
 
 /** ALTCHA behind the port: this server issues the challenge and verifies the solution. */
 export const altchaProvider: HumanChallengeProvider = {
