@@ -85,8 +85,8 @@ describe('contract scalars', () => {
             ([, value]) => (value as RegExp).source === CONTRACT_ID_PATTERN
         );
 
-        // Hundreds of fields carry the shared `Id`; a pattern that moved in the contract leaves
-        // none carrying this one.
-        expect(ids.length).toBeGreaterThan(100);
+        // Dozens of fields carry the shared `Id` even after `demo:remove` has taken the shop's
+        // schemas away (87 then); a pattern that moved in the contract leaves none carrying this one.
+        expect(ids.length).toBeGreaterThan(50);
     });
 });

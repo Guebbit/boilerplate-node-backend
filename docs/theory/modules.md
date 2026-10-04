@@ -340,7 +340,7 @@ at all, and the templates interpolate rather than translate.
 `src/modules/example` is this template in code: the module to copy when you start a new domain, and
 to delete once you have your own. It is only an example, which is why it has no page under
 `docs/modules/`: a page would restate files that are better read. It has its own group
-(`module.yaml#group: example`), so `npm run demo:remove` leaves it, nothing may import it, and it
+(`module.yaml#group: example`), so `npm run demo:remove` deletes it with the shop, nothing may import it, and it
 imports only the foundation (it reads the owner's name through the `users` barrel).
 
 The table above lists what a module MAY have; this is the same shape as one block, with the
@@ -386,7 +386,7 @@ column, and the manifest entry, to drop it.
 | Translatable fields        | the `locales` port's methods on `repository.ts`                             | `translatables`                        | the title, per language                             |
 | An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path | `imageTargets`                         | a cover image                                       |
 | A typed setting            | `config.ts`                                                                 | `config`                               | the longest body an example may have                |
-| Demo records               | `scenarios/examples.ts`, one line in `scenarios/shop-modules.ts`            | (the scenario table)                   | a few seeded examples for the demo profile          |
+| Demo records               | `scenarios/example.ts`, one line in `scenarios/shop-modules.ts`             | (the scenario table)                   | a few seeded examples for the demo profile          |
 | Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                   | (found by name, not declared)          | one counter, one probe, one event                   |
 | Personal data              | `services/personal-data.ts`                                                 | `personalData` (`collect` and `erase`) | exports and erases the person's examples            |
 

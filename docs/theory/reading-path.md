@@ -76,7 +76,7 @@ which is why several used to be here and are not.
 ### 4 · `src/modules/example/module.ts` — one module, declared
 
 **`example` is the module to copy** — when you add a domain, start from this one. It has its own
-group (it outlives `npm run demo:remove`) and depends only on `users`, so it shows the shape without
+group (`npm run demo:remove` deletes it too — copy it first) and depends only on `users`, so it shows the shape without
 the complications. Start the tour here rather than in a shop module for the same reason. It has no
 docs page on purpose: the header of each of its files says its role in any module, and
 [the module template](./modules.md#the-module-template) lists what each optional capability costs.

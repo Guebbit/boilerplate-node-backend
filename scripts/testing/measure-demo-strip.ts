@@ -23,7 +23,7 @@
 import os from 'node:os';
 import path from 'node:path';
 import { removeModules } from '../ops/demo-remove-modules';
-import { readShopModuleNames } from './shop-module-names';
+import { readDemoModuleNames } from './demo-module-names';
 import { assembleScratchCopy, runIn } from './scratch-copy';
 
 /** Repo root, two levels up from `scripts/testing/`. */
@@ -89,7 +89,8 @@ const RECIPES: Partial<Record<string, Recipe>> = {
         apply: () => {
             runInScratch('npx', ['tsx', 'scripts/ops/demo-remove.ts']);
         },
-        describe: () => `every group: shop module (${readShopModuleNames(REPO_ROOT).join(', ')})`
+        describe: () =>
+            `every group: shop and group: example module (${readDemoModuleNames(REPO_ROOT).join(', ')})`
     },
     locales: {
         apply: () => {

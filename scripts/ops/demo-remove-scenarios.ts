@@ -13,7 +13,7 @@
  * instead of writing something half right.
  */
 
-import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { RemovalNote } from './demo-remove-registry';
 
@@ -59,25 +59,58 @@ export const removeShopOnlyScenarioFiles = (repoRoot: string): RemovalNote[] =>
     });
 
 /**
- * Delete every seed image the deleted `scenarios/products-images.generated.json` manifest pointed
- * at, before that manifest is itself deleted — an orphaned `public/images/seed/*.jpg` a future
- * `npm run scenario:images` run would otherwise have to notice and sweep on its own.
+ * Delete the whole `public/images/seed/` folder — every photo, thumbnail and avatar the generator
+ * wrote, not only the ones a manifest names. The folder is the demo's own and nothing foundation
+ * reads it; left behind it is 2 MB of images in a deployment's image that belong to a shop it no
+ * longer has.
+ *
+ * Also takes what pointed at it: the user avatars' manifest, the `scenario:images` generator that
+ * wrote both, its npm script, and the avatar spread in each seeded user — so no seeded row names
+ * a file that is gone.
+ * @param repoRoot - the checkout to edit
  */
-export const removeGeneratedProductImages = (repoRoot: string): RemovalNote[] => {
-    const manifestPath = path.join(repoRoot, 'scenarios', 'products-images.generated.json');
-    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<
-        string,
-        { imageUrl: string; thumbnailUrl: string }
-    >;
+export const removeSeedImages = (repoRoot: string): RemovalNote[] => {
+    rmSync(path.join(repoRoot, 'public', 'images', 'seed'), { recursive: true, force: true });
+    for (const file of [
+        'scenarios/users-images.generated.json',
+        'scenarios/tools/generate-seed-images.ts'
+    ])
+        rmSync(path.join(repoRoot, file), { force: true });
 
-    return Object.values(manifest).flatMap(({ imageUrl, thumbnailUrl }) => {
-        for (const publicPath of [imageUrl, thumbnailUrl])
-            unlinkSync(path.join(repoRoot, 'public', publicPath));
-        return [
-            { file: `public${imageUrl}`, detail: 'deleted' },
-            { file: `public${thumbnailUrl}`, detail: 'deleted' }
-        ];
-    });
+    const packageFile = path.join(repoRoot, 'package.json');
+    writeFileSync(
+        packageFile,
+        removeOnce(
+            readFileSync(packageFile, 'utf8'),
+            /^ {8}"scenario:images": "[^"\n]*",?\n/m,
+            'package.json'
+        )
+    );
+
+    const usersFile = path.join(repoRoot, 'scenarios', 'users.ts');
+    const label = 'scenarios/users.ts';
+    const withoutImport = removeOnce(
+        readFileSync(usersFile, 'utf8'),
+        /^import userImages from '\.\/users-images\.generated\.json';\n/m,
+        label
+    );
+    // `,\n        ...userImages.customer`, or the customer base's `...(index % 2 === 0 ? userImages.root :
+    // userImages.customer)` — the spread is always a user's last property.
+    writeFileSync(
+        usersFile,
+        withoutImport.replaceAll(
+            /,\n\s*\.\.\.(?:userImages\.\w+|\([^\n]*userImages[^\n]*\))(?=\n)/g,
+            ''
+        )
+    );
+
+    return [
+        { file: 'public/images/seed/', detail: 'deleted' },
+        { file: 'scenarios/users-images.generated.json', detail: 'deleted' },
+        { file: 'scenarios/tools/generate-seed-images.ts', detail: 'deleted' },
+        { file: 'package.json', detail: 'removed the "scenario:images" script' },
+        { file: label, detail: 'dropped the avatar of each seeded user' }
+    ];
 };
 
 /**
@@ -324,11 +357,11 @@ export const stripSubjects = (repoRoot: string): RemovalNote => {
         label
     );
     content = removeOnce(content, /^ {4}'product\.[^']*': SEED_PRODUCT_IDS\.\w+,?\n/gm, label);
-    // Only the address pins stay in `SHOP_SUBJECTS`: the `addresses` module is foundation.
+    // Nothing stays in `SHOP_SUBJECTS`: `products` was the only module that pinned a row.
     content = replaceOnce(
         content,
-        'Only `products` and `addresses` appear',
-        'Only `addresses` appears',
+        'Only `products` appears',
+        'Nothing appears now that `products` is gone',
         label
     );
     content = replaceOnce(
@@ -468,73 +501,4 @@ const ORDER_ID_VARIABLE = '{{orderId}}';
     );
     writeFileSync(file, content);
     return { file: label, detail: 'dropped the shop’s example values' };
-};
-
-/**
- * Edit `scenarios/tools/generate-seed-images.ts` (`npm run scenario:images`): stop generating and
- * writing the catalogue's image manifest, keep the named accounts' avatars.
- */
-export const stripSeedImageGenerator = (repoRoot: string): RemovalNote => {
-    const file = path.join(repoRoot, 'scenarios', 'tools', 'generate-seed-images.ts');
-    const label = 'scenarios/tools/generate-seed-images.ts';
-    let content = readFileSync(file, 'utf8');
-
-    content = replaceOnce(
-        content,
-        `import { FILLER_IMAGE_ROLE_KEYS } from '@scenarios/products-filler';`,
-        '',
-        label
-    );
-    content = replaceOnce(
-        content,
-        `/** The five named product roles that keep an image — \`barebones\` deliberately has none, since
- * its whole point is exercising the schema's own \`imageUrl\` default. The filler roles are a
- * fixed pool (\`FILLER_IMAGE_ROLE_KEYS\`), independent of how large the generated catalogue grid
- * is — \`scenarios/products.ts\` cycles through them, so growing the grid never needs a new
- * download. */
-const PRODUCT_ROLES = [
-    'dogFoodStandard',
-    'heaterSoftDeleted',
-    'scratchPostOutOfStock',
-    'dogBedPremium',
-    'bundleInactive',
-    ...FILLER_IMAGE_ROLE_KEYS
-];
-
-/** The two named accounts`,
-        `/** The two named accounts`,
-        label
-    );
-    content = replaceOnce(
-        content,
-        `    const products: Record<string, ImageEntry> = {};
-    for (const role of PRODUCT_ROLES) products[role] = await generateOne(role, \`product-\${role}\`);
-
-    const users: Record<string, ImageEntry> = {};
-    for (const role of USER_ROLES) users[role] = await generateOne(role, \`user-\${role}\`);
-
-    const written = Object.values({ ...products, ...users });`,
-        `    const users: Record<string, ImageEntry> = {};
-    for (const role of USER_ROLES) users[role] = await generateOne(role, \`user-\${role}\`);
-
-    const written = Object.values(users);`,
-        label
-    );
-    content = replaceOnce(
-        content,
-        `    await writeManifest('scenarios/products-images.generated.json', products);
-    await writeManifest('scenarios/users-images.generated.json', users);
-
-    console.info(
-        \`[seed-images] done: \${Object.keys(products).length} product images, \` +
-            \`\${Object.keys(users).length} user images.\`
-    );`,
-        `    await writeManifest('scenarios/users-images.generated.json', users);
-
-    console.info(\`[seed-images] done: \${Object.keys(users).length} user images.\`);`,
-        label
-    );
-
-    writeFileSync(file, content);
-    return { file: label, detail: 'dropped the catalogue image generation, kept the avatars' };
 };

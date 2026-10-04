@@ -163,8 +163,8 @@ owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is 
 
 ::: tip The module to copy is `example`
 Start from `src/modules/example` ([the module template](./modules.md#the-module-template)), not from
-a shop module. It is `group: example`, so it survives `npm run demo:remove`, and it depends only on
-`users`. It carries a public route above a gate, keyed writes with a `self` and an `any` breadth, a
+a shop module. It is `group: example` (`npm run demo:remove` deletes it with the shop, since it is mounted in
+production — copy it first), and it depends only on `users`. It carries a public route above a gate, keyed writes with a `self` and an `any` breadth, a
 status lifecycle, a rate-limit budget, locales, a mail template, a personal-data section with an
 export and an erasure, an audit vocabulary and a contract slice, and it shows each optional
 capability in its own files. It has no page of its own on purpose, so there is nothing to keep in

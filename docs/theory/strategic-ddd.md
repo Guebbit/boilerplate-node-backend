@@ -211,7 +211,8 @@ generic, and each module declares its own public events on its manifest (`public
 instead of importing `orders`/`payments` event constants directly. The `example` group has two
 rules of its own: `nothing-reaches-example` (no other module may reach it, so deleting it breaks
 nothing) and `example-cannot-reach-shop` (it uses the foundation and nothing of the demo shop, so
-`demo:remove` leaves it).
+either can be deleted without the other). `demo:remove` deletes both groups: `example` is mounted
+in production, so a deployment copies it first and then removes it.
 
 This is also the axis a CI job measures "is the demo shop removable" against: deleting every
 `group: shop` folder and seeing what still compiles and passes is a checked experiment now, not a

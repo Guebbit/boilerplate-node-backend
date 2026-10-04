@@ -15,7 +15,7 @@
  * translations     (the repository's `writeTranslatedFields`)   translatables
  * cover image      ./services/cover.ts, ./controllers/put-example-cover.ts  imageTargets
  * typed setting    ./config.ts                                  config
- * demo seed        ../../../scenarios/examples.ts               (the scenario table)
+ * demo seed        ../../../scenarios/example.ts               (the scenario table)
  * metrics, probes, analytics   ./metrics.ts, ./probes.ts, ./analytics.ts   (found by name)
  *
  * See: docs/theory/modules.md#the-module-template

@@ -11,7 +11,7 @@ import type { SeedOutcome } from '@scenarios/seed';
 import type { WaveEntry } from './waves';
 import type { Caller } from './flows/client';
 import { seedAddressBooksCollection } from './addresses';
-import { seedExampleCollection } from './examples';
+import { seedExampleCollection } from './example';
 import { driveLocaleEntryEdit, seedLocalesCollection } from './locales';
 import { seedProductsCollection } from './products';
 import { seedUsersCollection } from './users';

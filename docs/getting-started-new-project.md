@@ -54,7 +54,7 @@ generated from each module's own `module.yaml`, so it is never behind.
 
 `npm run measure:demo-strip` is the checked version of that claim: on every push and PR, CI copies
 the repo to a scratch directory, applies a removal recipe (`--recipe shop` runs the real
-`demo:remove`; `--recipe locales` deletes the optional locales module), then runs `regenerate`,
+`demo:remove`, the `example` module included; `--recipe locales` deletes the optional locales module), then runs `regenerate`,
 `ts-check`, the cross-cutting suite and `docs:build` against what's left. It reports on its own
 squares (`demo-strip-measure` in `.github/workflows/ci.yml`) without blocking the merge gate —
 deliberately, until it has stayed green long enough to be promoted into the merge gate. It is the
@@ -88,7 +88,11 @@ npm run ts-check        # see exactly what is left
 `demo:remove` is a real edit of your working tree, not a scratch-copy measurement — run it on a
 branch, or after committing whatever you had in progress. It touches:
 
-- **Every `group: shop` module folder**, deleted outright — its routes, model, tests, everything.
+- **Every `group: shop` module folder and the `group: example` one**, deleted outright — routes,
+  model, tests, everything. `example` goes too because it is mounted in production: anyone could
+  create notes, upload a cover and publish (which sends mail and webhooks). Copy it first if you
+  want its shape for your own domain; it is also the module [the template page](./theory/modules.md#the-module-template)
+  describes.
 - **The handful of central files a module folder cannot own by itself**: the module registry
   (`src/modules.ts`) and the shared contract fragment (`shared/contracts/openapi.root.yaml`), for
   the account data-export schema. Everything else that names a module is read from disk or from the
@@ -100,14 +104,19 @@ branch, or after committing whatever you had in progress. It touches:
 - **The reap/sweep scripts a shop module owns** (`scripts/ops/reap-orders.ts` and friends), found by
   their own `Removal: owned by` doc comment rather than a second hand-kept list, plus the
   `package.json` script and `docker/crontab` line each one has.
+- **The removed modules' test doubles** (`scenarios/support/doubles/<module>/`, such as the fake
+  payment provider) and the lines that register them. See [Test doubles](./tools/test-doubles.md).
 - **The removed modules' permission keys** in `shared/authorization-roles.yaml` (every role's grants)
   and `shared/authorization-conformance.yaml` (the callers' keys, and every case about a subject only
   a removed module declared).
 - **Every test that imports a removed module** — or says `// requires-module: <name>` — along with any
   test helper or test that imported one of those. The report lists each file it deleted.
 - **The demo catalogue's own scenario data** (`scenarios/products.ts`, `scenarios/wishlist.ts`, the
-  generated catalogue images, the flows that drive and backdate a shop's order history) — deleted,
-  since none of it means anything without a shop. The `shop` scenario keeps seeding its
+  flows that drive and backdate a shop's order history) — deleted, since none of it means anything
+  without a shop.
+- **The seed images**: the whole `public/images/seed/` folder (2 MB of photos, thumbnails and
+  avatars), the avatar manifest, the `scenario:images` generator and its npm script, and the avatar
+  of each seeded user. Nothing foundation reads that folder. The `shop` scenario keeps seeding its
   foundation-only fixtures (named accounts, address books, locale entries, a webhook subscription);
   the default scenario becomes `blank` once there is no catalogue left to make `shop` the more
   interesting choice.

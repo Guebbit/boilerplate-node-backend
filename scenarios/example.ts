@@ -1,7 +1,7 @@
 /**
  * @module
  * The `example` module's slice of the demo dataset: a few examples in each status, so its screens
- * open on something. The module is not a shop module, so this entry survives `demo:remove`.
+ * open on something. `demo:remove` deletes it with the module (`group: example`).
  *
  * See: docs/tools/demo-profile.md
  */

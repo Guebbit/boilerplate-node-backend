@@ -246,7 +246,8 @@ export const SEED_CUSTOMER_EMAILS = Object.fromEntries(
 ) as Record<keyof typeof SEED_CUSTOMER_IDS, string>;
 
 /**
- * The generated customer base — verified, ACTIVE accounts, alternating consent and avatar.
+ * The generated customer base — verified, ACTIVE accounts, alternating consent and avatar (the
+ * avatar is what `demo:remove` takes out, with the seed images).
  *
  * None is seeded banned, however much the demo needs a banned one: `marcus` shops first and is
  * then banned by the owner through `PATCH /users/{id}`, so the audit trail records the ban actually
@@ -258,9 +259,8 @@ const customerUsers = CUSTOMER_NAMES.map(([key, username], index) =>
         username,
         email: SEED_CUSTOMER_EMAILS[key],
         verifiedAt: new Date(),
-        // Alternating, same as the image cycling below: a real customer base is a mix of
-        // opted-in and not, and `root`/`customer` alone left the "granted" path exercised
-        // by exactly one account.
+        // Alternating: a real customer base is a mix of opted-in and not, and `root`/`customer`
+        // alone left the "granted" path exercised by exactly one account.
         analyticsConsent: index % 2 === 0,
         ...(index % 2 === 0 ? userImages.root : userImages.customer)
     })
