@@ -3,7 +3,7 @@
  * Secret-ring encryption at rest, and the ring operations built on it — mint, rotate, drop.
  * Encryption itself is `@infrastructure/security/versioned-secret`'s — AES-256-GCM under a
  * versioned key ring from `getWebhookEncryptionKeyRing` (`./config`, backed by
- * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`, `requiredConfig` — see `./module`) — shared with
+ * `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`, a required `versionedKeyRing` field) — shared with
  * `account/two-factor/totp.ts`'s TOTP secret encryption.
  *
  * A plaintext secret exists here only for the seconds it takes to mint it and hand it back in an

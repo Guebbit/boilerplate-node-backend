@@ -44,8 +44,8 @@ export const rateLimitRedisUrl = (): string | undefined => {
      */
     const config = rateLimitConfig();
     if (!config.NODE_RATE_LIMIT_REDIS_ENABLED) return;
-    // `||`, not `??`: an env file carries `NAME=` as an empty string, and an empty URL is "not
-    // configured" — `??` would stop at it and count in memory while Redis is right there.
+    // The config layer already reads a blank `NAME=` as unset, so `??` falls through to the shared
+    // Redis URL rather than counting in memory while Redis is right there.
     return config.NODE_RATE_LIMIT_REDIS_URL ?? configuredRedisUrl();
 };
 

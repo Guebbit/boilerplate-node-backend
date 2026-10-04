@@ -115,7 +115,7 @@ process.env.NODE_EXAMPLE_RATE_LIMIT_MAX ??= '1000';
 
 /**
  * The shared window every limiter above measures against
- * (`DEFAULT_RATE_LIMIT_WINDOW_MS`, one minute) — raised tenfold for the same reason as the
+ * (`NODE_RATE_LIMIT_WINDOW_MS`, one minute by default) — raised tenfold for the same reason as the
  * budgets themselves: a suite spends a window's worth of requests in milliseconds, so a
  * real one-minute window would roll over mid-run and leave two requests fired a heartbeat
  * apart reading inconsistent budgets.

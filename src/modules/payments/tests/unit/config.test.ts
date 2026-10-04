@@ -1,7 +1,7 @@
 /**
  * `payments/config.ts` — `listPaymentMethods` (what `GET /payments/methods` and checkout both
- * defer to), `validateBankTransferConfig` (this module's boot-time `customCheck`, run through
- * `ibantools`), and `validateStripeSecretKey` (the same `customCheck`). All three are pure
+ * defer to), `validateBankTransferConfig` (a boot-time check of the slice, run through
+ * `ibantools`), and `validateStripeSecretKey` (the same slice check). All three are pure
  * reads over the environment, so no database is needed.
  */
 import {

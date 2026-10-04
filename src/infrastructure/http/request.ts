@@ -329,7 +329,7 @@ export const callerContextOf = (request: {
         // The stored account preference wins over the header — but only when the account has
         // granted it. A logged-in caller who hasn't granted it falls through to the header too,
         // so a banner choice made before logging in still counts until `PUT /account` records it.
-        // The header is read the way `environmentFlag` reads an env var — never `Boolean(value)`,
+        // The header is read with `parseFormBoolean` — never `Boolean(value)`,
         // which would make the string `'false'` truthy. Unrecognised (absent included) is `false`,
         // matching the stored field's own default.
         analyticsConsent:
