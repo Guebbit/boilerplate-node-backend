@@ -7,8 +7,9 @@
  *          `products` and `users`).
  * Shares:  {@link buildRateLimiter} — every module's own `rate-limits.ts` budget goes through the
  *          same factory as this file's three.
- * Backing: one Redis-or-memory store (`rate-limit-store.ts`), fails open on a store error, answers
- *          through the shared error envelope, never express-rate-limit's own plain-text body.
+ * Backing: one Redis-or-memory store (`rate-limit-store.ts`) that falls back to counting in memory
+ *          on a store error, answers through the shared error envelope, never express-rate-limit's
+ *          own plain-text body.
  *
  * See: docs/tools/security.md#the-rate-limit-budgets
  */
@@ -111,7 +112,7 @@ const budgetLimit = (budget: RateLimitBudget): number =>
  */
 export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
     rateLimit({
-        store: rateLimitStore(budget.namespace),
+        store: rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory'),
         windowMs:
             budget.windowMs === 'shared'
                 ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS
@@ -120,11 +121,11 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
         standardHeaders: 'draft-7',
         legacyHeaders: false,
         /*
-         * A store that cannot answer lets the request through, rather than answering 500. Failing
-         * closed would turn a Redis blip into an authentication outage — worse than a window with
-         * unenforced budgets. The outage is logged at `error` once, so it is never a silent one.
+         * Only a `pass` budget lets a request through when its store cannot answer. Every other
+         * budget's store falls back to counting in this process (see `failoverStore`), so a Redis
+         * blip is neither an authentication outage nor an open door. Logged once per outage.
          */
-        passOnStoreError: true,
+        passOnStoreError: budget.onStoreError === 'pass',
         handler: refuse(budget.audited),
         // `logger` shipped in express-rate-limit 8.5.0. https://github.com/express-rate-limit/express-rate-limit/releases
         logger: limiterLogger,
@@ -207,9 +208,10 @@ export const identityOf = (request: Request): string => {
 
 /**
  * A budget's own {@link RateLimitInfo} off `request`, under the name its `requestPropertyName`
- * chose — `undefined` when the limiter never ran, or a store error let the request through
- * without recording anything. Every gate built on this must fail open on that `undefined`: it
- * must never be the reason a request fails when the budget it reads already failed open.
+ * chose — `undefined` when the limiter never ran, or a `pass` budget's store error let the
+ * request through without recording anything. A `memory` budget keeps counting through an outage,
+ * so a gate reads the fallback's numbers; a gate must still treat `undefined` as "not yet", never
+ * as the reason a request fails.
  *
  * @param property - the budget's own `requestPropertyName`
  */
@@ -248,6 +250,9 @@ const GLOBAL_RATE_LIMIT_BUDGET: RateLimitBudget = {
         'Every request across the whole surface — a scanner sweeping for paths that do not exist ' +
         'is the traffic most worth braking, same as a browsing session.',
     audited: false,
+    // The one budget that lets a request through while the limits Redis is down: it guards
+    // browsing, not a credential, and counting it per worker would only brake honest traffic.
+    onStoreError: 'pass',
     // `GET /livez` and `GET /readyz` are an orchestrator's own probes, on a fixed interval — see
     // `RateLimitBudget.skip`.
     skip: (request) =>

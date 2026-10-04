@@ -67,6 +67,16 @@ describe('rate-limit budgets, as a set', () => {
         expect(duplicatesOf('namespace')).toEqual([]);
     });
 
+    // A new budget fails SECURE without asking (`onStoreError` defaults to `memory`); passing a
+    // request unbudgeted during a Redis outage is a decision, and this is the list of them.
+    it('lets a request through a store outage only on the browsing brake', () => {
+        const passing = allBudgets
+            .filter((budget) => budget.onStoreError === 'pass')
+            .map((budget) => budget.namespace);
+
+        expect(passing).toEqual(['global']);
+    });
+
     it('declares each budget in exactly one place — a module, or infrastructure, never both', () => {
         const infrastructureVars = new Set(
             INFRASTRUCTURE_RATE_LIMITS.map((budget) => budget.environmentVariable)

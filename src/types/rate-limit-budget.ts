@@ -76,6 +76,14 @@ export interface RateLimitBudget {
     requestPropertyName?: string;
 
     /**
+     * What this budget does while the `limits` Redis is unavailable. `memory` (the default) counts
+     * in this process, so the limit still holds, per worker; `pass` lets the request through
+     * unbudgeted. A new budget fails secure without asking: only the browsing brake, which guards
+     * nothing worth a lock-out, says `pass`.
+     */
+    onStoreError?: 'memory' | 'pass';
+
+    /**
      * Why this budget's env var is deliberately NOT raised in `tests/support/setup-environment.ts`, when it
      * isn't. Absent means `tests/cross-cutting/rate-limit-budgets.test.ts` requires it raised;
      * present is that test's exemption, and the reason it prints on failure.

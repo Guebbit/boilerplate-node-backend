@@ -19,7 +19,7 @@
  */
 // Also forces module scope for this file — otherwise its top-level `const`s collide, at the type
 // checker, with the identically-named ones in cache.test.ts's own copy of the same pattern.
-import type { Options } from 'express-rate-limit';
+import type { Options, Store } from 'express-rate-limit';
 import { setEnvironment } from '@tests/environment';
 
 const mockSelectionOn = jest.fn();
@@ -275,6 +275,110 @@ describe('rateLimitStore — a failed init does not disable the limiter for good
         await store.increment('key');
 
         expect(mockConstruct).toHaveBeenCalledTimes(2);
+    });
+});
+
+/** One increment's hit count, read at once: `MemoryStore` reuses (and mutates) the record. */
+const hitsOf = (store: Store, key: string) =>
+    Promise.resolve(store.increment(key)).then((info) => info.totalHits);
+
+/** The fallback counter from the module epoch `freshStore()` just built. */
+/* eslint-disable @typescript-eslint/no-require-imports -- jest.resetModules demands a fresh synchronous require */
+const freshFallbackCounter = () => {
+    const metrics =
+        require('@infrastructure/observability/metrics-rate-limit') as typeof import('@infrastructure/observability/metrics-rate-limit');
+    return metrics.rateLimitStoreFallbackTotal;
+};
+/* eslint-enable @typescript-eslint/no-require-imports -- back to normal for the rest of the file */
+
+/**
+ * A store whose Redis is down: `sendCommand` rejects, which is what every `RedisStore` call becomes.
+ * `MockRedisStore.increment` reaches `sendCommand` the way the real one does, so a refusal travels
+ * the same road a dead socket's would.
+ */
+const redisIsDown = () =>
+    mockSelectionSendCommand.mockImplementation(() => Promise.reject(new Error('ECONNREFUSED')));
+
+describe('rateLimitStore — while the limits Redis is down', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379' });
+        redisIsDown();
+    });
+
+    // The whole point of 4.3: an outage must not switch a security budget off.
+    it('counts in memory for a budget that fails secure, so its limit still holds', async () => {
+        const store = freshStore().rateLimitStore('credentials-identity', 'memory');
+        void store.init?.({ windowMs: 60_000 } as Options);
+
+        // Read at once: `MemoryStore` hands back the same record object for one key, which the
+        // next increment mutates.
+        const first = await hitsOf(store, 'attacker');
+        const second = await hitsOf(store, 'attacker');
+        const other = await hitsOf(store, 'someone-else');
+
+        expect([first, second, other]).toEqual([1, 2, 1]);
+    });
+
+    it('defaults to failing secure: no policy named means memory', async () => {
+        const store = freshStore().rateLimitStore('a-new-budget');
+        void store.init?.({ windowMs: 60_000 } as Options);
+
+        await expect(store.increment('k')).resolves.toMatchObject({ totalHits: 1 });
+    });
+
+    it('rejects for a budget that passes, so the limiter lets the request through', async () => {
+        const store = freshStore().rateLimitStore('global', 'pass');
+        void store.init?.({ windowMs: 60_000 } as Options);
+
+        await expect(store.increment('k')).rejects.toThrow('limits Redis is unavailable');
+    });
+
+    it('stops asking Redis for the whole breaker window, and every budget shares that verdict', async () => {
+        const rateLimitStore = freshStore();
+        const login = rateLimitStore.rateLimitStore('credentials-identity', 'memory');
+        const signup = rateLimitStore.rateLimitStore('signup-identity', 'memory');
+        void login.init?.({ windowMs: 60_000 } as Options);
+        void signup.init?.({ windowMs: 60_000 } as Options);
+
+        await login.increment('k');
+        const commandsAfterFailure = mockSelectionSendCommand.mock.calls.length;
+        await login.increment('k');
+        await signup.increment('k');
+
+        expect(mockSelectionSendCommand.mock.calls.length).toBe(commandsAfterFailure);
+    });
+
+    it('counts every operation served without Redis, by budget', async () => {
+        const store = freshStore().rateLimitStore('credentials-identity', 'memory');
+        void store.init?.({ windowMs: 60_000 } as Options);
+        const metrics = freshFallbackCounter();
+
+        await store.increment('k');
+        await store.increment('k');
+
+        const { values } = await metrics.get();
+        expect(
+            values.find((value) => value.labels.namespace === 'credentials-identity')?.value
+        ).toBe(2);
+    });
+
+    it('goes back to Redis after the window, once a probe works', async () => {
+        jest.useFakeTimers({ now: Date.now() });
+        try {
+            const store = freshStore().rateLimitStore('credentials-identity', 'memory');
+            void store.init?.({ windowMs: 60_000 } as Options);
+            await store.increment('k');
+
+            mockSelectionSendCommand.mockImplementation(() => Promise.resolve(7));
+            jest.setSystemTime(Date.now() + 31_000);
+            const probe = await store.increment('k');
+
+            // The mocked `RedisStore.increment` answers whatever `sendCommand` did: the 7 came
+            // from Redis, not from the in-process counter (which would say 2).
+            expect(probe).toBe(7);
+        } finally {
+            jest.useRealTimers();
+        }
     });
 });
 

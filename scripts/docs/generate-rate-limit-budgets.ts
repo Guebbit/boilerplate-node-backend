@@ -46,13 +46,13 @@ const windowCell = (windowMs: RateLimitBudget['windowMs']): string =>
 /** The budget table: one row per {@link RateLimitBudget} in the app. */
 const budgetTable = (): string =>
     [
-        '| Budget | Owner | Env var | Default | Window | Keyed by | Audited |',
-        '| --- | --- | --- | --- | --- | --- | --- |',
+        '| Budget | Owner | Env var | Default | Window | Keyed by | Audited | Redis down |',
+        '| --- | --- | --- | --- | --- | --- | --- | --- |',
         ...rows.map(
             (budget) =>
                 `| ${budget.name} | \`${budget.owner}\` | \`${budget.environmentVariable}\` | ` +
                 `${String(budget.defaultMax)} | ${windowCell(budget.windowMs)} | ${budget.keyedBy} | ` +
-                `${budget.audited ? 'yes' : 'no'} |`
+                `${budget.audited ? 'yes' : 'no'} | ${budget.onStoreError ?? 'memory'} |`
         )
     ].join('\n');
 

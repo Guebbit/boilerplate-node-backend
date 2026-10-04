@@ -74,7 +74,7 @@ const connectionFor = (url: string): ManagedConnection<RedisClient> => {
 
     const connection = manageConnection<RedisClient>({
         unavailableMessage:
-            'Limits Redis unreachable — budgets and single-use claims fall back to this process alone until it returns.',
+            'Limits Redis unreachable — until it returns, budgets count in this process alone (the browsing brake passes unbudgeted) and single-use claims are per process.',
         unavailableLevel: 'error',
         // Enablement is already decided by whoever builds a Redis-backed store: this connection
         // only exists when a URL is configured.

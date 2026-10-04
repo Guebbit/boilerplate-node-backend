@@ -28,6 +28,7 @@ Grafana reads Prometheus for all metric charts and dashboards.
 | `http_requests_in_flight`                    | concurrency at a glance                                |
 | `cache_invalidation_failures_total`          | writes whose stale cached response survived            |
 | `cache_requests_total`                       | `setCache` lookups by outcome — hit/miss/stale/refresh |
+| `rate_limit_store_fallback_total`            | limiter operations served without the `limits` Redis   |
 | `queue_jobs_dead_lettered_total`             | jobs parked in a `<queue>.dead`, by queue name         |
 | `webhook_delivery_attempts_total`            | outbound webhook delivery attempts, by outcome         |
 | `webhook_subscriptions_auto_disabled_total`  | subscriptions auto-disabled for sustained failure      |

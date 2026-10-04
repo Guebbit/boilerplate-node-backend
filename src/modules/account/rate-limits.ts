@@ -132,9 +132,9 @@ const CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT = 0.5;
 
 /**
  * Whether this login attempt has already burned enough of its account's failure budget that
- * rung 3's challenge should apply. Missing rate-limit info (the identity limiter didn't run, or a
- * store error let the request through) reads as "not yet": this gate must never be the reason a
- * login fails when the budget it reads already failed open.
+ * rung 3's challenge should apply. Missing rate-limit info (the identity limiter didn't run) reads
+ * as "not yet". During a Redis outage the budget counts in memory (`failoverStore`), so this gate
+ * reads the fallback's numbers rather than going blind.
  */
 const identityBudgetMostlySpent = (request: Request): boolean => {
     const info = rateLimitInfoOf(request, IDENTITY_RATE_LIMIT_PROPERTY);

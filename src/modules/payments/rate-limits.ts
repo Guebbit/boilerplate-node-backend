@@ -114,8 +114,8 @@ export const paymentConfirmDeclineLimiter: RequestHandler =
 
 /**
  * Whether this confirm attempt's account has at least one PRIOR decline already on record this
- * window. Missing rate-limit info (the decline limiter didn't run, or a store error let the
- * request through) reads as "not yet" — same fail-open reasoning account's own identity gate uses.
+ * window. Missing rate-limit info (the decline limiter didn't run) reads as "not yet". During a Redis
+ * outage the budget counts in memory (`failoverStore`), so the gate reads the fallback's numbers.
  *
  * `info.remaining` already reflects THIS request's own provisional count — express-rate-limit
  * increments before the outcome is known, then undoes it later if `requestWasSuccessful` says so —
