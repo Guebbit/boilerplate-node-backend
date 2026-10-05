@@ -178,6 +178,7 @@ tags:
     - name: Products
     - name: Cart
     - name: Wishlist
+    - name: Notifications
     - name: Orders
     - name: Payments
     - name: Invoicing
@@ -1709,7 +1710,8 @@ components:
                     apiKeys,
                     invoicing,
                     returns,
-                    examples
+                    examples,
+                    notifications
                 ]
             properties:
                 exportedAt:
@@ -1810,6 +1812,11 @@ components:
                     type: array
                     items:
                         $ref: '../../src/modules/example/openapi.yaml#/components/schemas/Example'
+                # Every notification in this account's inbox, read and unread. Empty, never absent.
+                notifications:
+                    type: array
+                    items:
+                        $ref: '../../src/modules/notifications/openapi.yaml#/components/schemas/Notification'
 
         # For the path-form deletes, which need no id — `{id}` already carries it — but do
         # read the flag from a body as readily as from the query.

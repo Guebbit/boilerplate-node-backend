@@ -1,0 +1,269 @@
+openapi: 3.0.3
+info:
+    title: notifications — module contract
+    version: '0.1.0'
+
+paths:
+    /notifications:
+        get:
+            tags: [Notifications]
+            summary: List notifications
+            description: >-
+                The caller's own inbox, newest first. A notification stays until its owner deletes it
+                (`DELETE /notifications/{id}`, `POST /notifications/dismiss-all`), the per-user cap
+                trims it, or the account goes. Never paginated: the inbox is bounded by that cap, so
+                one read is the whole of it. Empty and absent are the same state — this never
+                answers 404. A client keeps the list live with `GET /notifications/stream`; the
+                stream carries only what is written while it is open, so this read is what a login,
+                a reload or a dropped connection starts from.
+            operationId: listNotifications
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The caller's notifications
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/NotificationsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    # Mounted above `/{id}` in the router: Express matches in mount order, so the literal
+    # segments below must not be read as an id.
+    /notifications/stream:
+        get:
+            tags: [Notifications]
+            summary: Live notifications stream
+            description: >-
+                Server-Sent Events: a notification written, deleted or marked read for the caller
+                reaches an open tab as it happens. The channels and their payloads are in
+                `asyncapi.yaml` (`notifications.created`, `notifications.deleted`,
+                `notifications.read`). Per process, like the observability stream: a message
+                written by another worker process arrives at the next `GET /notifications` instead.
+            operationId: getNotificationsStream
+            responses:
+                '200':
+                    description: Server-Sent Events stream
+                    content:
+                        text/event-stream:
+                            schema:
+                                type: string
+                # An EventSource cannot set an Authorization header, so the HttpOnly refresh
+                # cookie is the credential here — the same as `GET /observability/events`.
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+
+    /notifications/read-all:
+        post:
+            tags: [Notifications]
+            summary: Mark every notification read
+            description: >-
+                Sets `readAt` on every unread notification of the caller. The bell calls it when it
+                opens, so the badge (unread count) goes to zero while the messages stay. Repeating
+                it is a no-op.
+            operationId: readAllNotifications
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /notifications/dismiss-all:
+        post:
+            tags: [Notifications]
+            summary: Delete every notification
+            description: >-
+                Permanently deletes every notification of the caller — a hard delete, like
+                `DELETE /notifications/{id}`. Emptying an empty inbox is the state the caller asked
+                for, so it answers 200.
+            operationId: dismissAllNotifications
+            security:
+                - bearerAuth: []
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /notifications/{id}:
+        delete:
+            tags: [Notifications]
+            summary: Delete a notification
+            description: >-
+                Permanently deletes the notification identified by `{id}`. Only the caller's own: an
+                id that belongs to someone else answers the same 404 as one that does not exist, so
+                a probe cannot tell the two apart.
+            operationId: deleteNotificationById
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- notifications — the schemas only this module's paths reference. ----------
+        # The backend stores a `code` and `params`, never text: the frontend translates it from
+        # its own locale files, like every other API code. A `Notification` is one variant per
+        # `code`, each with its own typed `params` (the `ReauthRequest` pattern in the account
+        # module's contract), so a client switches on `code` and gets the right `params` shape.
+        NotificationSeverity:
+            type: string
+            description: >-
+                Meaning, not look — a client picks the colour. The four words most notification
+                APIs share (Ant Design, Atlassian flags).
+            enum: [info, success, warning, error]
+
+        # Locale → the product's name in it. Copied into the notification because the product may
+        # be gone by the time anyone reads it, so a reader sees their own language.
+        ProductTitles:
+            type: object
+            additionalProperties:
+                type: string
+
+        CartLineRemovedParams:
+            type: object
+            additionalProperties: false
+            required: [productId, titles]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                titles:
+                    $ref: '#/components/schemas/ProductTitles'
+
+        CartMergeRefusedParams:
+            type: object
+            additionalProperties: false
+            required: [lines]
+            properties:
+                lines:
+                    type: array
+                    description: The guest-cart lines `POST /cart/merge` could not add at all.
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId, requested, titles]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            requested:
+                                type: integer
+                                minimum: 1
+                            titles:
+                                $ref: '#/components/schemas/ProductTitles'
+
+        NotificationCartLineRemoved:
+            type: object
+            additionalProperties: false
+            description: A product left the catalogue and left the caller's cart with it.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.cart-line-removed]
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationWishlistItemRemoved:
+            type: object
+            additionalProperties: false
+            description: A product left the catalogue and left the caller's wishlist with it.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.wishlist-item-removed]
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationCartMergeRefused:
+            type: object
+            additionalProperties: false
+            description: Guest-cart lines `POST /cart/merge` could not add at all, because the product is no longer available.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.cart-merge-refused]
+                params:
+                    $ref: '#/components/schemas/CartMergeRefusedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        Notification:
+            oneOf:
+                - $ref: '#/components/schemas/NotificationCartLineRemoved'
+                - $ref: '#/components/schemas/NotificationWishlistItemRemoved'
+                - $ref: '#/components/schemas/NotificationCartMergeRefused'
+            discriminator:
+                propertyName: code
+                mapping:
+                    notifications.cart-line-removed: '#/components/schemas/NotificationCartLineRemoved'
+                    notifications.wishlist-item-removed: '#/components/schemas/NotificationWishlistItemRemoved'
+                    notifications.cart-merge-refused: '#/components/schemas/NotificationCartMergeRefused'
+
+        NotificationsResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    description: Newest first.
+                    items:
+                        $ref: '#/components/schemas/Notification'
+
+        NotificationsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/NotificationsResponse'

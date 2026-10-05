@@ -308,6 +308,52 @@ paths:
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /cart/merge:
+        post:
+            tags: [Cart]
+            summary: Merge a guest cart into the cart
+            description: >-
+                Adds every line of a cart built while signed out, in one call, by the same rule as
+                `POST /cart`: a product already in the cart GROWS by the line's quantity, a new one
+                gets a line. The answer holds the cart as it now stands and ONE RESULT PER SUBMITTED
+                LINE, in request order, saying what the line asked for (`requested`), what the cart
+                holds for that product now (`resulting`) and, when the two differ or the line did
+                not land cleanly, why (`reason`). A line the cart cannot take is not a failure: the
+                call still answers 200, because one bad line must not strand the rest. Stock is CHECKED,
+                not enforced: a line that is short is still added (a stock-out is temporary) and
+                flagged `insufficientStock`, with the quantity left as the sum, so the answer never
+                says how many are for sale. The same rule runs at checkout, which refuses, and in
+                `GET /cart`, which flags, all three reading the stock ledger. Lines that could not be
+                added at all (`unavailable`: the product is deleted or hidden) are also written as ONE notification
+                (`notifications.cart-merge-refused`); nothing is written when there are none. Safe to
+                retry with an `Idempotency-Key`: a lost answer replays instead of adding the same
+                quantities twice. The caller empties its local guest cart once this answers.
+            operationId: mergeCart
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/MergeCartRequest'
+            responses:
+                '200':
+                    description: The updated cart, and what happened to each guest line
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/MergeCartResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # `IDEMPOTENCY_IN_FLIGHT`: another request with this key is still running.
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                # Also `IDEMPOTENCY_KEY_MISMATCH`: this key was used with a different body.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /cart/reorder/{orderId}:
         post:
             tags: [Cart]
@@ -409,6 +455,82 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 quantity:
                     $ref: '#/components/schemas/CartQuantity'
+
+        MergeCartRequest:
+            type: object
+            additionalProperties: false
+            required: [lines]
+            properties:
+                lines:
+                    type: array
+                    minItems: 1
+                    maxItems: 100
+                    description: The guest cart's lines. A product listed twice is two lines, summed like two `POST /cart`s.
+                    items:
+                        $ref: '#/components/schemas/AddCartItemRequest'
+
+        MergeLineReason:
+            type: string
+            description: >-
+                Why a guest line did not land exactly as asked. Absent when it did.
+
+                - `summed`: the cart already held some of the product, so `resulting` is the sum.
+                - `capped`: the sum would pass the per-line cap (`NODE_CART_LINE_MAX`); `resulting` is the cap.
+                - `unavailable`: the product is not publicly visible any more (deleted or hidden);
+                  nothing was added, `resulting` is what the cart already held (often 0). A product
+                  that is merely sold out is NOT unavailable: it is added and flagged
+                  `insufficientStock`.
+            enum: [summed, capped, unavailable]
+
+        MergeLineResult:
+            type: object
+            additionalProperties: false
+            required: [productId, requested, resulting, insufficientStock]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                requested:
+                    type: integer
+                    minimum: 1
+                    description: What the guest line asked for.
+                resulting:
+                    type: integer
+                    minimum: 0
+                    description: What the cart holds for this product after the merge.
+                reason:
+                    $ref: '#/components/schemas/MergeLineReason'
+                insufficientStock:
+                    type: boolean
+                    description: >-
+                        True when `resulting` is more than is for sale. A flag, never the number left.
+                        Independent of `reason`: a line can be `summed` and short.
+
+        MergeCartResponse:
+            type: object
+            additionalProperties: false
+            required: [cart, lines]
+            properties:
+                cart:
+                    $ref: '#/components/schemas/CartResponse'
+                lines:
+                    type: array
+                    description: One result per submitted line, in request order.
+                    items:
+                        $ref: '#/components/schemas/MergeLineResult'
+
+        MergeCartResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/MergeCartResponse'
 
         UpdateCartItemByIdRequest:
             type: object
@@ -539,11 +661,35 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/CartResponseItem'
                 summary:
                     $ref: '#/components/schemas/CartSummaryResponse'
                 shipping:
                     $ref: '#/components/schemas/CartShipping'
+
+        CartResponseItem:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity, insufficientStock]
+            description: >-
+                One line of the basket as the cart answers it: the stored line plus whether it fits
+                what is for sale. Not `CartItem`, which stays the bare stored line the export and the
+                order request use.
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                insufficientStock:
+                    type: boolean
+                    description: >-
+                        True when `quantity` is more than is for sale right now. A flag and never the
+                        number left: exact stock is for callers holding `inventory.any.read`, the same
+                        level of disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
+                        ledger by the cart view, the merge and checkout through one rule; `POST /cart`
+                        and `PUT` still do not refuse a line for stock, so a client polling `GET /cart`
+                        is how it learns a line has gone short.
 
         CartShippingOption:
             type: object

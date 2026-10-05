@@ -29,7 +29,7 @@ import {
     listMovements
 } from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
-import { reservationModel } from '../../model';
+import { reservationModel, stockLevelModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
 
@@ -603,6 +603,24 @@ describe('runReservationSweep', () => {
                 reserved: 0,
                 available: 20
             });
+        }));
+
+    it('skips a hold whose counters refuse, keeps it due, and still expires the rest', async () =>
+        withoutWindow(async () => {
+            const broken = await createProduct({ onHand: 20 });
+            const healthy = await createProduct({ onHand: 20 });
+            const brokenOrder = anOrderId();
+            const healthyOrder = anOrderId();
+            await reserveForOrder(brokenOrder, [{ productId: String(broken._id), quantity: 5 }]);
+            await reserveForOrder(healthyOrder, [{ productId: String(healthy._id), quantity: 5 }]);
+            // Records that disagree with the hold: nothing reserved left to give back.
+            await stockLevelModel.updateOne({ productId: broken._id }, { $set: { reserved: 0 } });
+
+            expect(await runReservationSweep()).toBe(1);
+            const brokenHold = await reservationRepository.findByOrderId(brokenOrder);
+            const healthyHold = await reservationRepository.findByOrderId(healthyOrder);
+            expect(brokenHold?.status).toBe('held');
+            expect(healthyHold?.status).toBe('released');
         }));
 });
 

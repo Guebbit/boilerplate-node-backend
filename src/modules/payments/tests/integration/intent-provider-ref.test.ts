@@ -16,6 +16,7 @@ import { createIntent } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import { asCustomer } from '@tests/callers';
+import { asReject } from '@tests/response';
 
 setupTestDb();
 
@@ -61,8 +62,8 @@ describe('a second ask for the same payment', () => {
         await createIntent(orderId, asCustomer(user.id));
         const second = await createIntent(orderId, asCustomer(user.id));
 
-        expect(second.success).toBe(false);
-        expect(!second.success && second.status).toBe(409);
+        expect(asReject(second).status).toBe(409);
+        expect(asReject(second).errors[0].code).toBe('PAYMENT_IN_FLIGHT');
         expect(cancel).toHaveBeenCalledTimes(1);
         expect(cancel).toHaveBeenCalledWith('pi_2', expect.anything());
         const stored = await paymentRepository.findByOrderId(orderId);

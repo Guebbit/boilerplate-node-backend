@@ -20,6 +20,7 @@ import {
 } from '@modules/cart/services';
 import { cartRepository } from '@modules/cart/repository';
 import { testCallerContext } from '@tests/callers';
+import { advanceDate, freezeDate } from '@tests/clock';
 
 setupTestDb();
 
@@ -117,8 +118,93 @@ describe('cart version increments on every write that changes it', () => {
         await cartItemSetById(user.id, String(product._id), 1);
         const before = await versionOf(user.id);
 
-        await productRemoveFromCartsById(String(product._id));
+        await productRemoveFromCartsById(String(product._id), {});
 
         await expect(versionOf(user.id)).resolves.toBe((before ?? 0) + 1);
+    });
+});
+
+/** A cart with one line and a shipping choice, and the version it stands at. */
+const cartWithChoice = async () => {
+    const user = await createUser();
+    const product = await createProduct();
+    await cartItemSetById(user.id, String(product._id), 2);
+    await cartRepository.setShippingMethod(user.id, 'pickup');
+    return { user, product, version: (await versionOf(user.id)) ?? -1 };
+};
+
+describe('clearLinesIfUnchanged', () => {
+    // The timestamp case freezes `Date`; a failed assertion must not leave it frozen.
+    afterEach(() => {
+        jest.useRealTimers();
+    });
+
+    it('empties the cart and its shipping choice when the version still matches', async () => {
+        const { user, version } = await cartWithChoice();
+
+        const cleared = await cartRepository.clearLinesIfUnchanged(user.id, version);
+
+        expect(cleared?.items).toHaveLength(0);
+        const stored = await cartRepository.findByUserId(user.id);
+        expect(stored?.items).toHaveLength(0);
+        // The choice was for the basket just bought; the next basket must not inherit it.
+        expect(stored?.shippingMethodId).toBeUndefined();
+        expect(stored?.__v).toBe(version + 1);
+    });
+
+    it('touches nothing when the cart moved since the version was read', async () => {
+        const { user, product, version } = await cartWithChoice();
+        await cartItemSetById(user.id, String(product._id), 5);
+        const before = await cartRepository.findByUserId(user.id);
+
+        const cleared = await cartRepository.clearLinesIfUnchanged(user.id, version);
+
+        expect(cleared).toBeNull();
+        const after = await cartRepository.findByUserId(user.id);
+        expect(after?.items.map((item) => item.quantity)).toEqual([5]);
+        expect(after?.shippingMethodId).toBe('pickup');
+        expect(after?.__v).toBe(before?.__v);
+    });
+
+    it('matches at most once per version: a replay of the same read loses', async () => {
+        const { user, version } = await cartWithChoice();
+
+        await cartRepository.clearLinesIfUnchanged(user.id, version);
+        const replay = await cartRepository.clearLinesIfUnchanged(user.id, version);
+
+        expect(replay).toBeNull();
+    });
+
+    it('does not let a cart emptied and refilled match an older read', async () => {
+        const { user, product, version } = await cartWithChoice();
+        await cartRepository.clearLines(user.id);
+        await cartItemSetById(user.id, String(product._id), 2);
+
+        const cleared = await cartRepository.clearLinesIfUnchanged(user.id, version);
+
+        expect(cleared).toBeNull();
+        const after = await cartRepository.findByUserId(user.id);
+        expect(after?.items).toHaveLength(1);
+    });
+
+    it('does not make a cart read as recently edited by the checkout that emptied it', async () => {
+        const { user, version } = await cartWithChoice();
+        const before = await cartRepository.findByUserId(user.id);
+        // A later instant, so a clear that DID stamp the cart would show.
+        freezeDate();
+        advanceDate(60_000);
+
+        await cartRepository.clearLinesIfUnchanged(user.id, version);
+
+        const after = await cartRepository.findByUserId(user.id);
+        expect(before?.updatedAt).toBeInstanceOf(Date);
+        expect(after?.updatedAt?.getTime()).toBe(before?.updatedAt?.getTime());
+    });
+
+    it('answers null, and creates nothing, for a user with no cart', async () => {
+        const user = await createUser();
+
+        await expect(cartRepository.clearLinesIfUnchanged(user.id, 0)).resolves.toBeNull();
+        await expect(cartRepository.findByUserId(user.id)).resolves.toBeNull();
     });
 });

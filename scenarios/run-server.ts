@@ -31,22 +31,36 @@ import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
 
 /**
- * `.env`'s own `NODE_CORS_ORIGIN`, read in isolation — never `import 'dotenv/config'` here: that
- * would load every OTHER key too, and `.env`'s real rate limits and token secrets are exactly
- * what `REQUIRED_DEFAULTS`/`SCRIPTED_RATE_LIMITS` below exist to override for this throwaway
- * profile. `dotenv.parse` only reads the file into a plain object — no `process.env` write — so
- * this borrows just the one value a lane's non-default frontend ports actually need.
+ * `.env` read in isolation — never `import 'dotenv/config'` here: that would load every key, and
+ * `.env`'s real rate limits and token secrets are exactly what `REQUIRED_DEFAULTS`/
+ * `SCRIPTED_RATE_LIMITS` below exist to override for this throwaway profile. `dotenv.parse` only
+ * reads the file into a plain object, with no `process.env` write.
  * https://github.com/motdotla/dotenv#parse
- * @returns the file's `NODE_CORS_ORIGIN`, or `undefined` when `.env` is missing or doesn't set it
+ * @returns the file's keys, or an empty object when `.env` is missing
  */
-const corsOriginFromDotenv = (): string | undefined => {
+const dotenvValues = (): Partial<Record<string, string>> => {
     const environmentPath = path.join(process.cwd(), '.env');
     try {
-        return parseDotenv(readFileSync(environmentPath, 'utf8')).NODE_CORS_ORIGIN;
+        return parseDotenv(readFileSync(environmentPath, 'utf8'));
     } catch {
         // No `.env` in this checkout — REQUIRED_DEFAULTS' own fallback below covers it.
-        return undefined;
+        return {};
     }
+};
+
+/**
+ * A variable the SHELL set, as opposed to one `.env` supplied.
+ *
+ * `development-doubles` has already loaded `.env` into `process.env`, so a `.env` copied from
+ * `.env-example` (every budget at its human default, a placeholder webhook secret) looks like a
+ * shell choice. A value equal to the file's own is that copy and does not count; a different one
+ * was set by the caller (the antibot run pins a small login budget on purpose) and does.
+ * @param key - the variable
+ * @returns the shell's value, or `undefined` when it set none
+ */
+const shellValue = (key: string): string | undefined => {
+    const current = process.env[key]?.trim();
+    return current && current !== dotenvValues()[key] ? current : undefined;
 };
 
 /**
@@ -71,12 +85,12 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
     // itself; the frontend's `paymentWebhookSecret` carries the same value.
     NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',
-    // `orders`' and `products`' own boot-time requirements — `assertModuleConfig` no
-    // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
-    // values `.env-example` ships for a plain developer checkout.
     // The mailbox a contact request is notified to falls back to the sender; with none, the
     // operator's mail is never queued and the e2e that reads it can only fail.
     NODE_SMTP_SENDER: 'Demo Shop <noreply@example.com>',
+    // `orders`' and `products`' own boot-time requirements — `assertModuleConfig` gates this
+    // profile too, so it satisfies the gate the ordinary way, with the same values `.env-example`
+    // ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',
     NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
     NODE_SHOP_STREET: 'Via Roma 1',
@@ -91,10 +105,8 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // Falls back to both standard local frontend ports: the dev server (8080) and the e2e preview
     // (8085). Without the second, a browser on the preview is refused by CORS while every
     // Node-side call passes.
-    NODE_CORS_ORIGIN: corsOriginFromDotenv() ?? 'http://localhost:8080,http://localhost:8085',
-    // The e2e suite is not a person browsing, and neither is the seeder behind it — see
-    // `./rate-limits`, which `scenarios/apply.ts` needs for the same reason.
-    ...SCRIPTED_RATE_LIMITS,
+    NODE_CORS_ORIGIN:
+        dotenvValues().NODE_CORS_ORIGIN ?? 'http://localhost:8080,http://localhost:8085',
     ...DEMO_BANK_TRANSFER
 };
 
@@ -174,10 +186,18 @@ startEphemeralMongo({ startInProcess: startInProcessMongod })
             ...Object.fromEntries(
                 Object.entries(REQUIRED_DEFAULTS).map(([key, value]) => [
                     key,
-                    process.env[key]?.trim() ? process.env[key] : value
+                    shellValue(key) ?? value
                 ])
             ),
             ...Object.fromEntries(FORCED_ABSENT.map((key) => [key, ''])),
+            // The e2e suite is not a person browsing, and neither is the seeder behind it — see
+            // `./rate-limits`; only a value the shell itself set survives.
+            ...Object.fromEntries(
+                Object.entries(SCRIPTED_RATE_LIMITS).map(([key, value]) => [
+                    key,
+                    shellValue(key) ?? value
+                ])
+            ),
             NODE_MAIL_TRANSPORT: FORCED_MAIL_TRANSPORT
         });
 

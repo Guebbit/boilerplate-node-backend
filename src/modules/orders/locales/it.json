@@ -96,15 +96,7 @@
             "detail-full": "È tutto ciò che hai pagato per questo ordine.",
             "detail-partial": "È una parte di ciò che hai pagato; il resto del pagamento resta sull'ordine. Quanto tempo serve perché compaia dipende dalla tua banca o dal tuo emittente."
         },
-        "email-product-unavailable": {
-            "subject": "Il tuo ordine è stato annullato — un articolo non è più disponibile",
-            "meta-title": "Ordine annullato",
-            "greeting": "Ciao!",
-            "body": "Il seguente articolo non è più disponibile, quindi questo ordine è stato annullato e non è stato addebitato nulla:",
-            "line": "{{title}}"
-        },
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
-        "product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`.",
         "restored": "Ordine ripristinato.",
         "not-deleted": "Questo ordine non è eliminato."
     }

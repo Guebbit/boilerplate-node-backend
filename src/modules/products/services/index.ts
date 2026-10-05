@@ -20,7 +20,15 @@ import { callerScope, getById, getByIdViewed, getAdmin } from './read';
 import { create, update, updateById } from './crud';
 import { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
 import { remove, removeById, restoreById } from './remove';
-import { findByIdRaw, findPublicById, findManyByIds, countPublic, syncStockCache } from './lookups';
+import {
+    findByIdRaw,
+    findPublicById,
+    findManyByIds,
+    countPublic,
+    syncStockCache,
+    titlesOf,
+    titlesById
+} from './lookups';
 
 /*
  * Every operation is published by name as well as through the object below: the suites drive
@@ -71,6 +79,8 @@ export const productService = {
     findManyByIds,
     countPublic,
     syncStockCache,
+    titlesOf,
+    titlesById,
     // Same reason as `toProduct` just above: the update controller's factory needs these to
     // validate PUT/PATCH bodies with the field-named price message, and may not reach `./model`
     // directly.

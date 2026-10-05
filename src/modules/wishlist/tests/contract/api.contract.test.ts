@@ -163,7 +163,9 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
         expect(response.body.data.items).toHaveLength(0);
 
         const cart = await api().get('/cart').set('Authorization', bearer);
-        expect(cart.body.data.items).toEqual([{ productId: String(product._id), quantity: 1 }]);
+        expect(cart.body.data.items).toEqual([
+            { productId: String(product._id), quantity: 1, insufficientStock: false }
+        ]);
     });
 
     it('matches the error contract for a product that was never saved', async () => {

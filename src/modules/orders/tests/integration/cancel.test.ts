@@ -441,8 +441,7 @@ describe('cancelById — the payment-window-expired email', () => {
             paymentMethod: 'bank_transfer'
         });
 
-        // Same shape `availability.ts` calls with: a system actor, no context, no reservation
-        // flag — its own listener sends its own explanation instead.
+        // A system actor with no context and no reservation flag: not the sweep, so no expiry notice.
         await orderService.cancelById(String(order._id), SYSTEM_ACTOR);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();

@@ -135,7 +135,9 @@ describe('wishlistMoveToCart', () => {
         expect(result.success).toBe(true);
         expect(await savedIds(user.id)).toEqual([]);
         const cart = await cartService.cartGetForBadge(user.id);
-        expect(cart.items).toEqual([{ productId: String(product._id), quantity: 1 }]);
+        expect(cart.items).toEqual([
+            { productId: String(product._id), quantity: 1, insufficientStock: false }
+        ]);
     });
 
     it('increments a line the cart already holds', async () => {
@@ -147,7 +149,9 @@ describe('wishlistMoveToCart', () => {
         await wishlistService.wishlistMoveToCart(user.id, String(product._id), testCallerContext);
 
         const cart = await cartService.cartGetForBadge(user.id);
-        expect(cart.items).toEqual([{ productId: String(product._id), quantity: 3 }]);
+        expect(cart.items).toEqual([
+            { productId: String(product._id), quantity: 3, insufficientStock: false }
+        ]);
     });
 
     it('answers 404 for a product that was never saved — and writes no cart line', async () => {

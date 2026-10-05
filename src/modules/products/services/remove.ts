@@ -19,6 +19,7 @@ import { productsAuditActions } from '../audit';
 import { PRODUCT_DELETED } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
+import { titlesOf } from './lookups';
 
 /**
  * Remove a product document (soft or hard delete). Hard delete also removes the image file;
@@ -27,7 +28,7 @@ import { productRepository } from '../repository';
  *
  * `product.deleted` is emitted and awaited AFTER the write, not before it — a past-tense event is
  * a report, not an "about to happen" hook: firing it first and having the write then fail would
- * leave every subscriber's cascade (cart emptying the line, `orders` cancelling a pending order)
+ * leave every subscriber's cascade (cart and wishlist pulling the line)
  * already run against a product that, as far as the database is concerned, was never removed at
  * all. This module still doesn't know who listens, which keeps the dependency arrow one-way.
  *
@@ -56,13 +57,23 @@ export const remove = (
     // Translations go with it, in this same operation — through the port, never the
     // `PRODUCT_DELETED` event above: that event fires on a SOFT delete too, with the same
     // `productId` — `hardDelete` on the payload is what lets a subscriber (`inventory`'s level
-    // row, `orders`' pending-order cancellation) tell the two apart. A soft delete can be
+    // row) tell the two apart. A soft delete can be
     // restored, so both the rows and the counters must survive it.
     if (hardDelete)
-        return productRepository
-            .deleteOne(product)
-            .then(() => removeTranslations('product', id))
-            .then(() => emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: true }))
+        // Titles are read first: `removeTranslations` below takes the other languages with it.
+        return titlesOf(product)
+            .then((titles) =>
+                productRepository
+                    .deleteOne(product)
+                    .then(() => removeTranslations('product', id))
+                    .then(() =>
+                        emitDomainEvent(PRODUCT_DELETED, {
+                            productId: id,
+                            hardDelete: true,
+                            titles
+                        })
+                    )
+            )
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => auditDeleted())
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
@@ -72,10 +83,15 @@ export const remove = (
         return Promise.resolve(generateSuccess(product, 200, t('products.soft-deleted')));
 
     product.deletedAt = new Date();
-    return productRepository
-        .save(product)
-        .then((saved) =>
-            emitDomainEvent(PRODUCT_DELETED, { productId: id, hardDelete: false }).then(() => saved)
+    return titlesOf(product)
+        .then((titles) =>
+            productRepository.save(product).then((saved) =>
+                emitDomainEvent(PRODUCT_DELETED, {
+                    productId: id,
+                    hardDelete: false,
+                    titles
+                }).then(() => saved)
+            )
         )
         .then((saved) => {
             auditDeleted();
@@ -104,8 +120,8 @@ export const removeById = (
         );
 
 /**
- * Undo a soft delete. Announces nothing: what the delete set in motion (pending orders
- * cancelled, carts emptied) stays done — a restore puts the product back on sale, not the past.
+ * Undo a soft delete. Announces nothing: what the delete set in motion (carts and
+ * wishlists emptied) stays done — a restore puts the product back on sale, not the past.
  *
  * @param id - the product to restore
  * @param context - records `ADMIN_PRODUCT_RESTORED`; omit for a caller with no request behind it

@@ -224,9 +224,11 @@ describe('cartGetForBadge', () => {
 
         const { items } = await cartGetForBadge(user.id);
 
-        // `CartItem` is additionalProperties:false — an extra key here is a contract violation.
-        expect(items).toEqual([{ productId: String(product._id), quantity: 2 }]);
-        expect(Object.keys(items[0])).toEqual(['productId', 'quantity']);
+        // `CartResponseItem` is additionalProperties:false — an extra key here is a contract violation.
+        expect(items).toEqual([
+            { productId: String(product._id), quantity: 2, insufficientStock: false }
+        ]);
+        expect(Object.keys(items[0])).toEqual(['productId', 'quantity', 'insufficientStock']);
     });
 
     it('computes the summary across several lines', async () => {
@@ -364,7 +366,7 @@ describe('cartItemSetById', () => {
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual({
-            items: [{ productId: String(product._id), quantity: 2 }],
+            items: [{ productId: String(product._id), quantity: 2, insufficientStock: false }],
             summary: {
                 itemsCount: 1,
                 totalQuantity: 2,
@@ -1478,7 +1480,7 @@ describe('productRemoveFromCartsById', () => {
         await cartItemSetById(first.id, String(kept._id), 2);
         await cartItemSetById(second.id, String(doomed._id), 3);
 
-        await productRemoveFromCartsById(String(doomed._id));
+        await productRemoveFromCartsById(String(doomed._id), {});
 
         // Both carts cleaned, and the unrelated line survives — a `$pull` that matched too
         // broadly would empty the whole cart instead.
@@ -1491,7 +1493,7 @@ describe('productRemoveFromCartsById', () => {
     it('resolves without error when no cart holds the product', async () => {
         const product = await createProduct();
 
-        await expect(productRemoveFromCartsById(String(product._id))).resolves.toBeUndefined();
+        await expect(productRemoveFromCartsById(String(product._id), {})).resolves.toBeUndefined();
     });
 
     /*
@@ -1510,7 +1512,8 @@ describe('productRemoveFromCartsById', () => {
 
         const settled = await emitDomainEvent(PRODUCT_DELETED, {
             productId: 'irrelevant',
-            hardDelete: false
+            hardDelete: false,
+            titles: {}
         });
 
         expect(settled).toBe(false);

@@ -23,6 +23,7 @@ import feedback from './modules/feedback/module';
 import inventory from './modules/inventory/module';
 import invoicing from './modules/invoicing/module';
 import locales from './modules/locales/module';
+import notifications from './modules/notifications/module';
 import observability from './modules/observability/module';
 import orders from './modules/orders/module';
 import payments from './modules/payments/module';
@@ -47,6 +48,7 @@ export const enabledModules: AppModule[] = [
     inventory,
     invoicing,
     locales,
+    notifications,
     observability,
     orders,
     payments,
@@ -105,6 +107,7 @@ export type ModuleName =
     | 'inventory'
     | 'invoicing'
     | 'locales'
+    | 'notifications'
     | 'observability'
     | 'orders'
     | 'payments'

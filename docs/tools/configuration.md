@@ -560,6 +560,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_LOCALE_TENANT_FRONTEND` | text                 | `demo-fe` | —     | The id of the default frontend translation tenant.             |
 | `NODE_LOCALE_TENANTS_EXTRA`   | comma-separated list | `empty`   | —     | Further frontend tenants as `id=Label` pairs, comma-separated. |
 
+### notifications
+
+| Variable                          | Type              | Default | Rules | What it does                                                           |
+| --------------------------------- | ----------------- | ------- | ----- | ---------------------------------------------------------------------- |
+| `NODE_NOTIFICATIONS_MAX_PER_USER` | whole number >= 1 | `100`   | —     | Newest notifications kept per user; a newer one pushes the oldest out. |
+
 ### observability
 
 | Variable                  | Type | Default | Rules                                                                                              | What it does                                                               |

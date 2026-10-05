@@ -1,0 +1,8 @@
+summary: 'A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.'
+subdomain: supporting
+group: shop
+dependsOn:
+    - cart # subscribes to its two events
+    - products # a notification quotes a product's names
+    - wishlist # subscribes to its event
+noAudit: "Writes and clears a person's own courtesy messages: nothing money, stock or identity related, and every row is the owner's to delete."

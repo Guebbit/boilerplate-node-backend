@@ -53,6 +53,7 @@ flowchart TD
     inventory
     invoicing
     locales
+    notifications
     observability
     orders
     payments
@@ -79,6 +80,8 @@ flowchart TD
     inventory --> products
     invoicing --> orders
     invoicing --> payments
+    notifications --> cart
+    notifications --> wishlist
     observability --> audit_logs
     orders --> access
     orders --> inventory
@@ -101,15 +104,15 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class addresses,delivery,inventory,invoicing,payments,returns,wishlist supporting;
+    class addresses,delivery,inventory,invoicing,notifications,payments,returns,wishlist supporting;
     class access,account,api_keys,audit_logs,example,observability,users,webhooks generic;
     class antibot,feedback,locales isolated;
 ```
 
 |                 | Reaches                                                           | Reached by                                                   |
 | --------------- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
+| `cart`          | addresses, delivery, inventory, orders, payments, products, users | notifications, wishlist                                      |
 | `orders`        | access, inventory, products, users                                | cart, delivery, invoicing, payments, returns                 |
-| `cart`          | addresses, delivery, inventory, orders, payments, products, users | wishlist                                                     |
 | `users`         | access                                                            | account, api-keys, cart, example, orders, payments, webhooks |
 | `payments`      | inventory, orders, users                                          | cart, invoicing, returns                                     |
 | `access`        | —                                                                 | account, api-keys, example, orders, users                    |
@@ -117,11 +120,12 @@ flowchart TD
 | `products`      | —                                                                 | cart, inventory, orders, wishlist                            |
 | `returns`       | delivery, inventory, orders, payments                             | —                                                            |
 | `delivery`      | orders                                                            | cart, returns                                                |
+| `wishlist`      | cart, products                                                    | notifications                                                |
 | `account`       | access, users                                                     | —                                                            |
 | `api-keys`      | access, users                                                     | —                                                            |
 | `example`       | access, users                                                     | —                                                            |
 | `invoicing`     | orders, payments                                                  | —                                                            |
-| `wishlist`      | cart, products                                                    | —                                                            |
+| `notifications` | cart, wishlist                                                    | —                                                            |
 | `addresses`     | —                                                                 | cart                                                         |
 | `audit-logs`    | —                                                                 | observability                                                |
 | `observability` | audit-logs                                                        | —                                                            |
@@ -203,6 +207,7 @@ The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in 
 - [`delivery`](./delivery.md) — Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival.
 - [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
 - [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
+- [`notifications`](./notifications.md) — A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.
 - [`orders`](./orders.md) — What a checkout produces: its status machine, its totals and its invoice link.
 - [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [The provider port](./payments-provider-port.md).
 - [`products`](./products.md) — The catalogue, its search surface and its cache.

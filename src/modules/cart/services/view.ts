@@ -10,10 +10,11 @@
  */
 
 import { orderTotal, sumLineItems, shopCurrency } from '@modules/orders';
+import { inventoryService } from '@modules/inventory';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
-import type { CartItem, CartShipping } from '@types';
+import type { CartItem, CartResponseItem, CartShipping } from '@types';
 import {
     SHIPPING_METHODS,
     methodFitsWeight,
@@ -21,7 +22,8 @@ import {
     type StaticShippingMethod
 } from '@modules/delivery';
 import type { CartDocument } from '../model';
-import { basketWeight, needsShipping } from '../domain';
+import { basketWeight, fitsStock, needsShipping } from '../domain';
+import { sellableUnits } from './shelf';
 
 /**
  * A cart line joined with the product it references.
@@ -45,7 +47,7 @@ export type JoinedCartLine = CartLine & { product: Lean<ProductDocument> };
  * which is why no controller has to re-read the cart after changing it.
  */
 export interface CartView {
-    items: CartItem[];
+    items: CartResponseItem[];
     summary: {
         itemsCount: number;
         totalQuantity: number;
@@ -145,37 +147,55 @@ export const effectiveShippingChoice = (
 ): string | null =>
     stored !== undefined && options.some((option) => option.id === stored) ? stored : null;
 
+/** Assemble the view from lines already joined and the ledger's units, with no further read. */
+const buildView = (
+    cart: CartDocument | null,
+    lines: CartLine[],
+    available: Map<string, number>
+): CartView => {
+    // A cart never freezes a currency of its own — it hasn't checked out — so it always
+    // prices against the shop's CURRENT setting, unlike an order's frozen `orderCurrency`.
+    const currency = shopCurrency();
+    const { count, quantity, price } = sumLineItems(lines, currency);
+    const joined = lines.filter((line) => isJoined(line));
+    const { required, options } = shippingOptionsFor(joined);
+    const selected = effectiveShippingChoice(cart?.shippingMethodId, options);
+    const shippingCost = options.find((option) => option.id === selected)?.price ?? 0;
+    return {
+        items: lines.map(({ productId, quantity: lineQuantity, product }) => ({
+            productId,
+            quantity: lineQuantity,
+            insufficientStock: !fitsStock(
+                lineQuantity,
+                sellableUnits({ product, available: available.get(productId) })
+            )
+        })),
+        summary: {
+            itemsCount: count,
+            totalQuantity: quantity,
+            itemsTotal: price,
+            shippingCost,
+            // The order and the payment intent total in minor units; adding the two decimals here
+            // would show 5.5600000000000005 for a basket that is charged 5.56.
+            totalPrice: orderTotal({ items: lines, shippingCost, currency }),
+            currency
+        },
+        shipping: { required, selected, options }
+    };
+};
+
 /**
  * Turn a cart document into the response the contract declares.
- * The joined `product` prices the cart, then is dropped: `CartItem` in `openapi.yaml` is
- * `additionalProperties: false` over `{ productId, quantity }`. Use `cartGet` where the joined
- * product is actually needed.
+ * The joined `product` prices the cart and, with the ledger's units, sets each line's
+ * `insufficientStock` flag, then is dropped: `CartResponseItem` in `openapi.yaml` is
+ * `additionalProperties: false` over `{ productId, quantity, insufficientStock }`. The ledger is
+ * read once for the whole cart (`inventoryService.availableFor`, the same source checkout and the
+ * merge use), and the flag is never the number left. Use `cartGet` where the joined product is
+ * actually needed.
  */
 export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
-    readCartLines(cart).then((lines) => {
-        // A cart never freezes a currency of its own — it hasn't checked out — so it always
-        // prices against the shop's CURRENT setting, unlike an order's frozen `orderCurrency`.
-        const currency = shopCurrency();
-        const { count, quantity, price } = sumLineItems(lines, currency);
-        const joined = lines.filter((line) => isJoined(line));
-        const { required, options } = shippingOptionsFor(joined);
-        const selected = effectiveShippingChoice(cart?.shippingMethodId, options);
-        const shippingCost = options.find((option) => option.id === selected)?.price ?? 0;
-        return {
-            items: lines.map(({ productId, quantity: lineQuantity }) => ({
-                productId,
-                quantity: lineQuantity
-            })),
-            summary: {
-                itemsCount: count,
-                totalQuantity: quantity,
-                itemsTotal: price,
-                shippingCost,
-                // The order and the payment intent total in minor units; adding the two decimals here
-                // would show 5.5600000000000005 for a basket that is charged 5.56.
-                totalPrice: orderTotal({ items: lines, shippingCost, currency }),
-                currency
-            },
-            shipping: { required, selected, options }
-        };
-    });
+    readCartLines(cart).then((lines) =>
+        inventoryService
+            .availableFor(lines.map(({ productId }) => productId))
+            .then((available) => buildView(cart, lines, available))
+    );

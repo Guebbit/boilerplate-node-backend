@@ -9,6 +9,7 @@
 import * as items from './items';
 import * as checkout from './checkout';
 import * as reorder from './reorder';
+import * as merge from './merge';
 import * as cleanup from './cleanup';
 
 /*
@@ -31,6 +32,7 @@ export {
 } from './items';
 export { orderConfirm, type CheckoutChoices } from './checkout';
 export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
+export { cartMerge, type MergeResult } from './merge';
 
 /** The module's barrel export — controllers and siblings call through this, never the bare functions. */
 export const cartService = {
@@ -47,5 +49,6 @@ export const cartService = {
     cartDeleteByUserId: cleanup.cartDeleteByUserId,
     orderConfirm: checkout.orderConfirm,
     reorderIntoCart: reorder.reorderIntoCart,
+    cartMerge: merge.cartMerge,
     productRemoveFromCartsById: cleanup.productRemoveFromCartsById
 };

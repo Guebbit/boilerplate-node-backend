@@ -57,6 +57,22 @@ describe('GET /cart', () => {
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
     });
+
+    it('matches the contract for a line over what is for sale: CartResponseItem flags it, no number', async () => {
+        const { bearer } = await authenticateAs('user');
+        const scarce = await createProduct({ onHand: 1 });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(scarce._id), quantity: 3 });
+
+        const response = await api().get('/cart').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([
+            { productId: String(scarce._id), quantity: 3, insufficientStock: true }
+        ]);
+    });
 });
 
 describe('POST /cart', () => {
@@ -170,6 +186,185 @@ describe('POST /cart — who may shop', () => {
             .send({ productId: String(product._id), quantity: 1 });
 
         expect(response.status).toBe(201);
+    });
+});
+
+/** `POST /cart/merge` with one guest line, and the `Idempotency-Key` header when a key is given. */
+const mergeOnce = (bearer: string, key: string | undefined, quantity: number, id: string) => {
+    const request = api().post('/cart/merge').set('Authorization', bearer);
+    return (key ? request.set('Idempotency-Key', key) : request).send({
+        lines: [{ productId: id, quantity }]
+    });
+};
+
+/**
+ * What the cart holds of the product, read back through `GET /cart`. The body is untyped
+ * (supertest), so the one `as` says what the contract guarantees it is.
+ */
+const heldOf = (bearer: string, id: string) =>
+    api()
+        .get('/cart')
+        .set('Authorization', bearer)
+        .then(
+            (response) =>
+                (response.body.data.items as { productId: string; quantity: number }[]).find(
+                    (item) => item.productId === id
+                )?.quantity ?? 0
+        );
+
+describe('POST /cart/merge', () => {
+    it('matches the contract when every guest line lands: the cart, and one result with no reason', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+
+        const response = await api()
+            .post('/cart/merge')
+            .set('Authorization', bearer)
+            .send({ lines: [{ productId: String(product._id), quantity: 2 }] });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines).toEqual([
+            {
+                productId: String(product._id),
+                requested: 2,
+                resulting: 2,
+                insufficientStock: false
+            }
+        ]);
+        expect(response.body.data.cart.items).toHaveLength(1);
+    });
+
+    it('matches the contract for every reason a line can carry, one result per line in request order', async () => {
+        const { bearer } = await authenticateAs('user');
+        const held = await createProduct();
+        const scarce = await createProduct({ onHand: 3 });
+        await api()
+            .post('/cart')
+            .set('Authorization', bearer)
+            .send({ productId: String(held._id), quantity: 1 });
+
+        const response = await api()
+            .post('/cart/merge')
+            .set('Authorization', bearer)
+            .send({
+                lines: [
+                    { productId: String(held._id), quantity: 2 },
+                    { productId: String(scarce._id), quantity: 5 },
+                    { productId: MISSING_ID, quantity: 1 }
+                ]
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines).toEqual([
+            {
+                productId: String(held._id),
+                requested: 2,
+                resulting: 3,
+                reason: 'summed',
+                insufficientStock: false
+            },
+            // Short, and kept at what was asked: the flag is all a shopper is told.
+            { productId: String(scarce._id), requested: 5, resulting: 5, insufficientStock: true },
+            {
+                productId: MISSING_ID,
+                requested: 1,
+                resulting: 0,
+                reason: 'unavailable',
+                insufficientStock: false
+            }
+        ]);
+    });
+
+    it('matches the contract when a line is unavailable: 200, with the line, and the rest landed', async () => {
+        const { bearer } = await authenticateAs('user');
+        const kept = await createProduct();
+
+        const response = await api()
+            .post('/cart/merge')
+            .set('Authorization', bearer)
+            .send({
+                lines: [
+                    { productId: MISSING_ID, quantity: 1 },
+                    { productId: String(kept._id), quantity: 1 }
+                ]
+            });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.lines.map(({ reason }: { reason?: string }) => reason)).toEqual([
+            'unavailable',
+            undefined
+        ]);
+        expect(response.body.data.cart.items).toHaveLength(1);
+    });
+
+    describe('with an Idempotency-Key', () => {
+        it('adds the guest cart once and replays the first answer to a retry after a lost response', async () => {
+            const { bearer } = await authenticateAs('user');
+            const product = await createProduct();
+            const id = String(product._id);
+
+            const first = await mergeOnce(bearer, 'merge-replay-key-1', 2, id);
+            // The client never saw `first`; it sends the same request again.
+            const retry = await mergeOnce(bearer, 'merge-replay-key-1', 2, id);
+
+            expect(retry.status).toBe(200);
+            expect(retry.headers['idempotent-replay']).toBe('true');
+            expect(retry.body).toEqual(first.body);
+            await expect(heldOf(bearer, id)).resolves.toBe(2);
+        });
+
+        it('refuses the same key on another body, and adds nothing for it', async () => {
+            const { bearer } = await authenticateAs('user');
+            const product = await createProduct();
+            const id = String(product._id);
+
+            await mergeOnce(bearer, 'merge-replay-key-2', 2, id);
+            const reused = await mergeOnce(bearer, 'merge-replay-key-2', 5, id);
+
+            expect(reused.status).toBe(422);
+            await expect(heldOf(bearer, id)).resolves.toBe(2);
+        });
+
+        it('adds twice without one: the header is a courtesy the client asks for', async () => {
+            const { bearer } = await authenticateAs('user');
+            const product = await createProduct();
+            const id = String(product._id);
+
+            await mergeOnce(bearer, undefined, 2, id);
+            await mergeOnce(bearer, undefined, 2, id);
+
+            await expect(heldOf(bearer, id)).resolves.toBe(4);
+        });
+    });
+
+    it.each([
+        ['an empty list', { lines: [] }],
+        ['a quantity of zero', { lines: [{ productId: MISSING_ID, quantity: 0 }] }],
+        ['no body', {}]
+    ])('matches the error contract for %s', async (_name, body) => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().post('/cart/merge').set('Authorization', bearer).send(body);
+
+        expect(response.status).toBe(422);
+    });
+
+    it('matches the error contract with no session', async () => {
+        const response = await api().post('/cart/merge').send({ lines: [] });
+
+        expect(response.status).toBe(401);
+    });
+
+    it.each(['manager', 'admin'])('refuses a %s, who owns no basket, with a 403', async (role) => {
+        const { bearer } = await authenticateAsRole(role);
+        const product = await createProduct();
+
+        const response = await api()
+            .post('/cart/merge')
+            .set('Authorization', bearer)
+            .send({ lines: [{ productId: String(product._id), quantity: 1 }] });
+
+        expect(response.status).toBe(403);
     });
 });
 

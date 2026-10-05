@@ -38,7 +38,6 @@ import {
     bankTransferInstructionsEmail,
     bankTransferExpiredEmail,
     cardHoldExpiredEmail,
-    productUnavailableCancelledEmail,
     orderCancelledEmail,
     refundIssuedEmail
 } from '@modules/orders/emails';
@@ -127,9 +126,6 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'orders.order-card-expired': cardHoldExpiredEmail(locale, {
         items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
     }),
-    'orders.order-product-unavailable': productUnavailableCancelledEmail(locale, [
-        { title: 'Boiled sweets' }
-    ]),
     'orders.order-cancelled': orderCancelledEmail(
         locale,
         'Ada',

@@ -30,10 +30,11 @@ import { clearCart } from './controllers/delete-cart-all';
 import { deleteCartItem } from './controllers/delete-cart-item';
 import { postCheckout } from './controllers/post-checkout';
 import { postReorder } from './controllers/post-reorder';
+import { postCartMerge } from './controllers/post-cart-merge';
 import { putCartShippingMethod } from './controllers/put-cart-shipping-method';
 import { invalidateCache } from '@infrastructure/http/middlewares/cache';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
-import { checkoutLimiter } from './rate-limits';
+import { checkoutLimiter, mergeLimiter } from './rate-limits';
 
 /** Express router for cart operations (add, update, remove items; checkout). */
 export const router = Router();
@@ -61,6 +62,12 @@ router.post(
     invalidateCache(['products']),
     postCheckout
 );
+
+// POST /cart/merge — fold a guest cart in; one result per line comes back, and a line that could
+// not be added at all becomes a notification. `idempotencyKey` for the same reason as checkout's:
+// a retry after a lost response must replay the answer, never add the guest's quantities twice.
+// `mergeLimiter` first: a hundred lines per call is a hundredfold of what the global brake counts.
+router.post('/merge', mergeLimiter, idempotencyKey, postCartMerge);
 
 // POST /cart/reorder/:orderId — copy one of the caller's own orders back into the cart
 router.post('/reorder/:orderId', postReorder);

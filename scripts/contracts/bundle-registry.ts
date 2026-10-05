@@ -24,14 +24,15 @@ import type { CollectionTool } from '@guebbit/openapi-runnable-collections';
 import path from 'node:path';
 import { REPO_ROOT } from './bundle-kinds';
 
-/*
- * The collections load app code (the seed values), and `api/` does not exist yet while
- * `postinstall` bundles. So their module is imported only when a collection is actually asked for,
- * and the dependency-cruiser rule `contracts-bundler-loads-no-generated-code` keeps it that way.
- */
-
 /**
  * One tool's collection as a generated bundle entry; its content loads on demand.
+ *
+ * On demand, because the collections load app code (the seed values) and `api/` does not exist yet
+ * while `postinstall` bundles. The dependency-cruiser rule
+ * `contracts-bundler-loads-no-generated-code` keeps the import dynamic.
+ *
+ * Written to the repo root as `contract.<tool>.<ext>`, next to `openapi.yaml`, where whoever asked
+ * for one will look; `.gitignore` keeps them out of the repo.
  *
  * @param tool - which tool's format to render
  * @param file - the file name at the repo root
@@ -46,11 +47,19 @@ const collectionBundle = (tool: CollectionTool, file: string): ContractBundle =>
     content: () => import('./client-collections-bundle').then((m) => m.collectionContent(tool))
 });
 
-// Written to the repo root as `contract.<tool>.<ext>` next to `openapi.yaml`; `.gitignore` keeps
-// them out of the repo. Insomnia's is `.json` by the tool's own export convention.
+/** The Bruno collection bundle. */
 const brunoBundle = collectionBundle('bruno', 'contract.bruno.yml');
+
+/**
+ * The Insomnia collection bundle. Named `.json` after the tool's own export convention, and YAML
+ * inside — Insomnia's importer accepts either and keys on the content, not the extension.
+ */
 const insomniaBundle = collectionBundle('insomnia', 'contract.insomnia.json');
+
+/** The Mockoon environment bundle. */
 const mockoonBundle = collectionBundle('mockoon', 'contract.mockoon.json');
+
+/** The Postman collection bundle. */
 const postmanBundle = collectionBundle('postman', 'contract.postman.json');
 
 /** Every contract bundle the repo knows, authored and generated alike. */

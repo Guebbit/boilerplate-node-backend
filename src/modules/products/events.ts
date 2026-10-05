@@ -10,29 +10,36 @@ declare module '@kernel/events' {
     interface DomainEventMap {
         /**
          * A product just stopped being reachable — soft-deleted or hard-deleted. Never fires on a
-         * restore: what the delete already set in motion (pending orders cancelled, carts and
-         * wishlists emptied) stays done, since a restore puts the product back on sale, not undoes
+         * restore: what the delete already set in motion (carts and wishlists emptied) stays
+         * done, since a restore puts the product back on sale, not undoes
          * the past — see `restoreById`'s own docblock.
          *
          * Emitted and awaited AFTER the write, not before it: this is a past-tense fact, and firing
-         * it first would let every listener's cascade (cart emptying the line, `orders` cancelling
-         * a pending order) run even if the write that follows then fails.
+         * it first would let every listener's cascade (cart and wishlist pulling the line) run
+         * even if the write that follows then fails.
          *
          * `hardDelete` is what lets a listener tell the destructive half apart from the reversible
          * one — `inventory` deletes this product's level row ONLY when it is `true`: a soft delete
          * must leave the counters exactly where they are, since the row is what a restore has to
          * come back to.
+         *
+         * `titles` is the product's name in every language it had, read BEFORE a hard delete drops
+         * the translation rows: once the event fires the product is gone, and a message that
+         * outlives it (`notifications`) can only quote what travelled with it. Locale → title.
          */
-        'product.deleted': { productId: string; hardDelete: boolean };
+        'product.deleted': {
+            productId: string;
+            hardDelete: boolean;
+            titles: Record<string, string>;
+        };
 
         /**
          * A product's `active` flag flipped from `true` to `false` — never fired for any other
          * edit, including one that repeats `active: false` unchanged (see `products/services/crud.ts`'s
          * `updateById`, the same "flip, not every write" shape `users`' `ADMIN_USER_BANNED` uses).
-         * No subscriber today — `orders` deliberately does NOT cancel a pending order over this:
-         * only a hard delete does (`product.deleted`, `hardDelete: true`). A deactivated product
-         * still refuses anything NEW against it, through `orders/services/availability.ts`'s own
-         * fresh `productService` read, not this event.
+         * No subscriber, and none is wanted: a deactivated product stays in carts and wishlists
+         * (their view reads `availability: unavailable`) and an order already placed treats it as
+         * present. Only `product.deleted` pulls lines.
          */
         'product.deactivated': { productId: string };
 

@@ -32,8 +32,8 @@ export default {
         }
     ],
     subscribe: () => {
-        onDomainEvent(PRODUCT_DELETED, ({ productId }) =>
-            productRemoveFromWishlistsById(productId)
+        onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
+            productRemoveFromWishlistsById(productId, titles)
         );
     },
     locales: path.join(__dirname, 'locales')

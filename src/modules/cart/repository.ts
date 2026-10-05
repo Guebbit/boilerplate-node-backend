@@ -7,7 +7,7 @@
  * See: docs/modules/cart.md
  */
 
-import type { UpdateWriteOpResult, QueryFilter, ClientSession } from 'mongoose';
+import type { QueryFilter, ClientSession } from 'mongoose';
 import { Types } from 'mongoose';
 import { cartModel, applyCartTransform } from './model';
 import { cartLineMax } from './config';
@@ -201,7 +201,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
         shippingMethodId: string | null
     ) => Promise<CartDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
-    removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
+    removeProductFromAll: (productId: string) => Promise<string[]>;
 } = {
     ...createRepository<CartDocument, Wire<CartDocument>>(cartModel, {
         transform: applyCartTransform
@@ -320,15 +320,24 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
             }),
 
     /**
-     * Drop one product from every cart that holds it — what a product deletion owes the carts.
+     * Drop one product from every cart that holds it — what a product deletion owes the carts —
+     * and answer whose carts they were, so the owners can be told.
+     *
+     * The owners are read first, then the pull runs: one more query, because `updateMany` does not
+     * say which documents it touched. A cart that gains the product in between keeps it for the
+     * pull to take but is not in the answer — a missed courtesy message, never a missed removal.
      *
      * Bumps `__v` — same reasoning as `pushNewLine`.
      */
-    removeProductFromAll: (productId: string) =>
-        cartModel
-            .updateMany(
-                { 'items.productId': toObjectId(productId) },
-                { $pull: { items: { productId: toObjectId(productId) } }, $inc: { __v: 1 } }
-            )
-            .exec()
+    removeProductFromAll: async (productId: string) => {
+        const filter = { 'items.productId': toObjectId(productId) };
+        const owners = await cartModel.distinct('userId', filter).exec();
+        await cartModel
+            .updateMany(filter, {
+                $pull: { items: { productId: toObjectId(productId) } },
+                $inc: { __v: 1 }
+            })
+            .exec();
+        return owners.map(String);
+    }
 };

@@ -70,8 +70,8 @@ export const cartGetForView = (userId: string, context: CallerContext): Promise<
  *
  * The per-line ceiling (`cartLineMax()`, `NODE_CART_LINE_MAX`) is enforced here for `'set'` — the
  * contract only bounds a request to its hard 999, so a shop's lower number is checked before
- * anything is written — and by the repository's own filter for `'add'`. Both answer 422
- * `CART_QUANTITY_LIMIT`.
+ * anything is written — and by the repository for `'add'`, a new line and an existing one alike,
+ * since every caller that adds goes through it. Both answer 422 `CART_QUANTITY_LIMIT`.
  */
 const upsertCartItem = (
     userId: string,

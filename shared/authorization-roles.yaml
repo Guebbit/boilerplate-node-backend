@@ -67,6 +67,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: customer
       scope: tenant
@@ -88,6 +90,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: manager
       scope: tenant
@@ -131,6 +135,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: warehouse
       scope: tenant
@@ -159,6 +165,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: support
       scope: tenant
@@ -186,6 +194,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: editor
       scope: tenant
@@ -215,6 +225,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: moderator
       scope: tenant
@@ -246,6 +258,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
 
     - name: admin
       scope: tenant
@@ -308,6 +322,8 @@ roles:
           - examples.self.create
           - examples.self.update
           - examples.self.delete
+          - notifications.self.read
+          - notifications.self.delete
           - examples.any.read
           - examples.any.update
           - examples.any.delete

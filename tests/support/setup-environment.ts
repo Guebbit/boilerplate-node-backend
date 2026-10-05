@@ -133,6 +133,12 @@ process.env.NODE_RETURNS_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_EXAMPLE_RATE_LIMIT_MAX ??= '1000';
 
 /**
+ * `mergeLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite merges many
+ * times as the one seeded customer.
+ */
+process.env.NODE_CART_MERGE_RATE_LIMIT_MAX ??= '1000';
+
+/**
  * The shared window every limiter above measures against
  * (`NODE_RATE_LIMIT_WINDOW_MS`, one minute by default) — raised tenfold for the same reason as the
  * budgets themselves: a suite spends a window's worth of requests in milliseconds, so a

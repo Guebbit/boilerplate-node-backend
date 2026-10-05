@@ -59,6 +59,8 @@ interface JsonSchema {
     type?: string;
     enum?: unknown[];
     oneOf?: JsonSchema[];
+    /** The property whose value picks the `oneOf` member — AsyncAPI spells it as a bare name, see `zodExpression`. */
+    discriminator?: string;
     anyOf?: JsonSchema[];
     allOf?: JsonSchema[];
     required?: string[];
@@ -343,12 +345,14 @@ const modelNameConstraints = typeScriptDefaultModelNameConstraints({
 /**
  * Modelina's TypeScript generator. `modelType: 'interface'` emits interfaces, not classes;
  * `enumType: 'union'` emits string-literal unions, not `enum`; `rawPropertyNames` keeps property
- * names exactly as the contract spells them.
+ * names exactly as the contract spells them; `mapType: 'indexedObject'` renders a schema with a typed
+ * `additionalProperties` as `{ [name: string]: V }`, not a `Map` — a JSON payload has no `Map`s.
  * https://github.com/asyncapi/modelina/blob/master/docs/languages/TypeScript.md
  */
 const generator = new TypeScriptGenerator({
     modelType: 'interface',
     enumType: 'union',
+    mapType: 'indexedObject',
     rawPropertyNames: true,
     constraints: {
         modelName: modelNameConstraints
@@ -429,6 +433,19 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
     if (schema.enum)
         return `z.enum([${schema.enum.map((value) => JSON.stringify(value)).join(', ')}])`;
 
+    /*
+     * A union: `oneOf` with a `discriminator` becomes `z.discriminatedUnion`, which picks the member
+     * by that property's value instead of trying each one — the same reading the OpenAPI side
+     * (`ReauthRequest`, `Notification`) gives the keyword. Without one, a plain `z.union`. Members
+     * must already be defined above (a `const` is not hoisted), so a contract lists them first.
+     */
+    if (schema.oneOf) {
+        const members = schema.oneOf.map((member) => zodExpression(member, depth, tolerant));
+        return schema.discriminator
+            ? `z.discriminatedUnion(${JSON.stringify(schema.discriminator)}, [${members.join(', ')}])`
+            : `z.union([${members.join(', ')}])`;
+    }
+
     switch (schema.type) {
         case 'string': {
             return 'z.string()';
@@ -447,8 +464,15 @@ const zodExpression = (schema: JsonSchema, depth = 0, tolerant = false): string 
         }
         case 'object': {
             // No declared properties means "any object" — `data`/`templateData`, whose whole point
-            // is that the producer decides what the template prints.
-            if (!schema.properties) return 'z.record(z.string(), z.unknown())';
+            // is that the producer decides what the template prints. A typed `additionalProperties`
+            // makes it a map whose every value has that type (locale → title).
+            if (!schema.properties) {
+                const value =
+                    typeof schema.additionalProperties === 'object'
+                        ? zodExpression(schema.additionalProperties, depth, tolerant)
+                        : 'z.unknown()';
+                return `z.record(z.string(), ${value})`;
+            }
 
             // Indented by hand: this file is in `.prettierignore`, because the freshness check
             // compares the generator's bytes to the committed ones and a second formatter would

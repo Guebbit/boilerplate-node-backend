@@ -1,0 +1,8 @@
+{
+    "notifications": {
+        "deleted": "Notification deleted.",
+        "dismissed-all": "All notifications deleted.",
+        "read-all": "All notifications marked as read.",
+        "not-found": "This notification was not found."
+    }
+}

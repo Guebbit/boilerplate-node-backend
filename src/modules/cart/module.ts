@@ -42,7 +42,9 @@ export default {
         }
     ],
     subscribe: () => {
-        onDomainEvent(PRODUCT_DELETED, ({ productId }) => productRemoveFromCartsById(productId));
+        onDomainEvent(PRODUCT_DELETED, ({ productId, titles }) =>
+            productRemoveFromCartsById(productId, titles)
+        );
     },
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

@@ -27,10 +27,10 @@ const SWEEP_MAX_BATCHES = 50;
  * Release one stale hold and announce it, as ONE transaction: the units come back and the
  * `RESERVATION_EXPIRED` event row is written together, or neither is.
  *
- * Releasing first and emitting after left a crash window: a hold released with its announcement
- * lost left the order `pending` with nothing set aside for it, and still payable. Through the
- * outbox the relay retries the announcement until `orders` has heard it, and a redelivery is safe:
- * the system actor cancels only an order still `pending`.
+ * One transaction, so a crash cannot release a hold whose announcement is lost — that would leave
+ * the order `pending`, still payable, with nothing set aside for it. Through the outbox the relay
+ * retries the announcement until `orders` has heard it, and a redelivery is safe: the system actor
+ * cancels only an order still `pending`.
  *
  * @param orderId - the order whose hold is stale
  * @returns whether this call was the one that released it
@@ -52,6 +52,26 @@ const expireOne = (orderId: string): Promise<boolean> =>
     );
 
 /**
+ * Expire one stale hold, or log why it could not be.
+ *
+ * A failure is this hold's alone: its counters refused, or a write threw. It rolled back and stays
+ * due, so the next tick tries again — but it must not stop the holds behind it in the batch.
+ *
+ * @param orderId - the order whose hold is stale
+ * @returns whether this call released it
+ */
+const tryExpireOne = (orderId: string): Promise<boolean> =>
+    expireOne(orderId).catch((error: unknown) => {
+        // Stryker disable all
+        logger.error({
+            message: `Reservation sweep: could not expire the hold for order ${orderId} — it stays due`,
+            error
+        });
+        // Stryker restore all
+        return false;
+    });
+
+/**
  * Expire one batch of stale holds: each is released and announced.
  *
  * @param stale - holds past their window, as `findExpired` returned them
@@ -60,7 +80,7 @@ const expireOne = (orderId: string): Promise<boolean> =>
 const expireBatch = async (stale: readonly { orderId: unknown }[]): Promise<number> => {
     let expired = 0;
 
-    for (const hold of stale) if (await expireOne(String(hold.orderId))) expired += 1;
+    for (const hold of stale) if (await tryExpireOne(String(hold.orderId))) expired += 1;
 
     return expired;
 };

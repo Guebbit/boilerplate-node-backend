@@ -19,6 +19,7 @@ import { setEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
+import { createNotification } from '@modules/notifications/tests/factories';
 import type { PersonalDataSection } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountExportRepository } from '@modules/account/repository';
@@ -164,6 +165,36 @@ const exportDueIn = async (email: string, millis: number) => {
     );
     return { user, id: String(result.data?.id) };
 };
+
+describe('what the export holds of the notifications module', () => {
+    it('lists the account’s own notifications, and nobody else’s', async () => {
+        // The real section list, as `@tests/http` installed it: nothing swapped in.
+        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
+        const stranger = await createUser({ email: 'stranger@example.com' });
+        await createNotification({ userId: user.id });
+        await createNotification({
+            userId: user.id,
+            body: {
+                code: 'notifications.wishlist-item-removed',
+                params: { productId: '64b7f1a2c3d4e5f607182930', titles: { en: 'Red mug' } }
+            }
+        });
+        await createNotification({ userId: stranger.id });
+
+        const result = await requestExport(user.id, user.email, testCallerContext);
+        await settleInlineExports();
+
+        if (!result.success) throw new Error('the request was refused');
+        const document = JSON.parse(await fileOf(`${result.data.id}.json`)) as {
+            notifications?: { code: string }[];
+        };
+
+        expect(document.notifications?.map(({ code }) => code).toSorted()).toEqual([
+            'notifications.cart-line-removed',
+            'notifications.wishlist-item-removed'
+        ]);
+    });
+});
 
 describe('requestExport', () => {
     it('answers 202 with a building row, and the worker then makes it ready', async () => {

@@ -18,17 +18,21 @@ graph cannot see._
 flowchart LR
     wishlist["wishlist<br/><i>this module</i>"]
     cart["cart"]
+    notifications["notifications"]
     products["products"]
 
+    notifications --> wishlist
     wishlist --> cart
     wishlist --> products
     products -. "product.deleted" .-> wishlist
+    wishlist -. "wishlist.items_removed" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
+    class notifications supporting;
     class wishlist centre;
 ```
 
@@ -53,6 +57,11 @@ here first.
 Products and users reach back the same way they reach the cart: a deleted product must leave every
 wishlist, and a destroyed account must take its wishlist with it. Both arrive as domain events, so
 the import graph stays acyclic even though the domains are mutually aware.
+
+A deleted product leaves a message behind: after the lines are pulled the module emits
+`wishlist.items_removed` with the owners and the product's names, and
+[`notifications`](./notifications.md) writes one row per owner. The wishlist itself never imports
+the inbox.
 
 ## The pipeline
 

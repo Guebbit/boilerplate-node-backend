@@ -7,7 +7,7 @@
  * See: docs/modules/wishlist.md
  */
 
-import type { UpdateWriteOpResult, ClientSession } from 'mongoose';
+import type { ClientSession } from 'mongoose';
 import { wishlistModel, applyWishlistTransform } from './model';
 import type { WishlistDocument } from './model';
 import {
@@ -37,7 +37,7 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
     ) => Promise<{ wishlist: WishlistDocument; added: boolean }>;
     removeLine: (userId: string, productId: string) => Promise<WishlistDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
-    removeProductFromAll: (productId: string) => Promise<UpdateWriteOpResult>;
+    removeProductFromAll: (productId: string) => Promise<string[]>;
 } = {
     ...createRepository<WishlistDocument, Wire<WishlistDocument>>(wishlistModel, {
         transform: applyWishlistTransform
@@ -117,13 +117,16 @@ export const wishlistRepository: Repository<WishlistDocument, Wire<WishlistDocum
             }),
 
     /**
-     * Drop one product from every wishlist that holds it — what a product deletion owes them.
+     * Drop one product from every wishlist that holds it — what a product deletion owes them —
+     * and answer whose they were, so the owners can be told. Same read-then-pull as the cart's
+     * twin, and the same tolerance for the gap between the two.
      */
-    removeProductFromAll: async (productId: string) =>
-        wishlistModel
-            .updateMany(
-                { 'items.productId': toObjectId(productId) },
-                { $pull: { items: { productId: toObjectId(productId) } } }
-            )
-            .exec()
+    removeProductFromAll: async (productId: string) => {
+        const filter = { 'items.productId': toObjectId(productId) };
+        const owners = await wishlistModel.distinct('userId', filter).exec();
+        await wishlistModel
+            .updateMany(filter, { $pull: { items: { productId: toObjectId(productId) } } })
+            .exec();
+        return owners.map(String);
+    }
 };

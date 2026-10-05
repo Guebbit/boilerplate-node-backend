@@ -9,77 +9,40 @@ import { StockMovementReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
-import type { ReservationItem } from '../model';
-import { reservationRepository } from '../repository';
 import type { ReservationStatus } from '../model';
+import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
-import { applyTransition, syncStockCache } from './transition';
-
-/**
- * Apply one ledger transition per line of an already-claimed hold — the loop
- * {@link commitForOrder}, {@link releaseForOrder} and {@link restockForOrder} each ran on their
- * own. A line whose counters refuse is logged, never thrown: the claim already made this call
- * at-most-once, so failing the request now would misreport that fact, and the refusal itself
- * means the records need a human.
- * @param reason - which ledger movement this is
- * @param verb - the same word, past tense, for the one log line a refusal writes
- * @param orderId - the order the claimed hold belonged to
- * @param items - the lines it carried
- * @param session - the caller's transaction, when the whole cancel is one
- */
-const applyToEveryLine = async (
-    reason: StockMovementReason,
-    verb: string,
-    orderId: string,
-    items: readonly ReservationItem[],
-    session?: ClientSession
-): Promise<void> => {
-    for (const { productId, quantity } of items) {
-        const applied = await applyTransition(
-            reason,
-            String(productId),
-            quantity,
-            { reference: orderId },
-            session
-        );
-        if (!applied)
-            // Stryker disable all
-            logger.error(
-                `Inventory: could not ${verb} ${quantity} of product ${String(productId)} for order ${orderId} — the hold was claimed but the counters refused`
-            );
-        // Stryker restore all
-    }
-};
+import { applyToEveryLine, syncStockCache } from './transition';
 
 /**
  * Claim a hold and move its counters as ONE unit: both land, or neither does.
  *
- * Claiming first made the move at-most-once, but a write that threw between the claim and the last
- * line left the hold closed and the counters untouched; the retry's claim then missed and reported
- * "already done", so nothing ever finished the job. In one transaction a throw undoes the claim as
- * well, and the retry starts over.
+ * The claim makes the move at-most-once; the transaction makes it all-or-nothing. A write that
+ * throws, or a line that refuses, undoes the claim too, so a retry starts over instead of finding
+ * the hold closed with its counters never moved.
  *
  * @param orderId - the order whose hold is claimed
  * @param from - the status the hold must be in
  * @param to - the status it moves to
  * @param reason - which ledger movement every line records
- * @param verb - the same word, past tense, for the log line a refused line writes
  * @param session - the caller's transaction; without one, this opens its own and refreshes the
  *   catalogue's stock cache once it has committed (see {@link refreshStockCacheForOrder})
  * @returns whether this call was the one that claimed the hold
+ * @throws {Error} when a line's counters refuse the movement; nothing is claimed
  */
 const claimAndApply = (
     orderId: string,
     from: ReservationStatus,
     to: ReservationStatus,
     reason: StockMovementReason,
-    verb: string,
     session?: ClientSession
 ): Promise<boolean> => {
     const claimAndMove = (active: ClientSession): Promise<boolean> =>
         reservationRepository.claimStatus(orderId, from, to, active).then((hold) => {
             if (!hold) return false;
-            return applyToEveryLine(reason, verb, orderId, hold.items, active).then(() => true);
+            return applyToEveryLine(reason, hold.items, { reference: orderId }, active).then(
+                () => true
+            );
         });
 
     if (session) return claimAndMove(session);
@@ -103,8 +66,7 @@ const claimAndApply = (
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = async (orderId: string): Promise<boolean> => {
-    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit, 'commit'))
-        return true;
+    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit)) return true;
 
     // The claim missed. Read what the reservation actually is, to tell a benign replay
     // (already `committed`) from the two states meaning the order is paid with nothing held.
@@ -154,7 +116,7 @@ export const releaseForOrder = async (
     // naming the pair stops a caller passing `commit` to a function that would record a sale.
     reason: 'release' | 'expire' = StockMovementReason.release,
     session?: ClientSession
-): Promise<boolean> => claimAndApply(orderId, 'held', 'released', reason, reason, session);
+): Promise<boolean> => claimAndApply(orderId, 'held', 'released', reason, session);
 
 /**
  * Give a PAID order's committed units back to the shelf — the customer cancelled after payment,
@@ -171,14 +133,7 @@ export const releaseForOrder = async (
  * @returns whether this call was the one that restocked
  */
 export const restockForOrder = async (orderId: string, session?: ClientSession): Promise<boolean> =>
-    claimAndApply(
-        orderId,
-        'committed',
-        'restocked',
-        StockMovementReason.restock,
-        'restock',
-        session
-    );
+    claimAndApply(orderId, 'committed', 'restocked', StockMovementReason.restock, session);
 
 /**
  * Bring the catalogue's stock cache into step for every line of an order's hold — the step a

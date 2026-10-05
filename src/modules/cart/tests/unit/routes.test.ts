@@ -24,6 +24,7 @@ import { router } from '@modules/cart/routes';
 const ALL = [
     'GET /summary',
     'POST /checkout',
+    'POST /merge',
     'POST /reorder/:orderId',
     'GET /',
     'POST /',
@@ -80,6 +81,19 @@ describe('cart routes — the checkout budget', () => {
 
         expect(chain.indexOf('checkout')).toBeGreaterThan(chain.indexOf('requirePermissionGuard'));
         expect(chain.indexOf('checkout')).toBeLessThan(chain.indexOf('idempotencyKey'));
+    });
+});
+
+describe('cart routes — a merge is a hundred writes in one request', () => {
+    it('is idempotent, so a retry after a lost response cannot add the guest cart twice', () => {
+        expect(chainOf(router, 'POST /merge')).toContain('idempotencyKey');
+    });
+
+    it('spends its own budget before it is replayed, so a replay is not free', () => {
+        const chain = chainOf(router, 'POST /merge');
+
+        expect(chain.indexOf('cart-merge')).toBeGreaterThanOrEqual(0);
+        expect(chain.indexOf('cart-merge')).toBeLessThan(chain.indexOf('idempotencyKey'));
     });
 });
 

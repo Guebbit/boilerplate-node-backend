@@ -4,7 +4,6 @@ info:
     version: '0.1.0'
 
 x-error-codes:
-    ORDER_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line on this order references a product that was deleted or deactivated since the intent was created.' }
     PAYMENT_DECLINED: { status: 409, description: 'The card issuer or gateway declined the charge.' }
     PAYMENT_IN_FLIGHT: { status: 409, description: 'Another payment attempt for this order is already being recorded.' }
     PAYMENT_NOT_CONFIRMABLE: { status: 409, description: 'The payment is not in a state this confirmation can apply to.' }
@@ -76,8 +75,9 @@ paths:
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
-                # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or `Idempotency-Key` names a request
-                # still in flight.
+                # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or the provider opened a second
+                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`), or
+                # `Idempotency-Key` names a request still in flight.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }

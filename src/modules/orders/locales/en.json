@@ -96,15 +96,7 @@
             "detail-full": "That is everything you paid for this order.",
             "detail-partial": "That is part of what you paid; the rest of the payment stays with the order. How long it takes to show up depends on your bank or card issuer."
         },
-        "email-product-unavailable": {
-            "subject": "Your order was cancelled — an item is no longer available",
-            "meta-title": "Order cancelled",
-            "greeting": "Hello!",
-            "body": "The following item is no longer available, so this order has been cancelled and nothing was charged:",
-            "line": "{{title}}"
-        },
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
-        "product-unavailable": "One or more products on this order are no longer available — see `details.lines`.",
         "restored": "Order restored.",
         "not-deleted": "This order is not deleted."
     }

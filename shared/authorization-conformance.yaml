@@ -83,6 +83,8 @@ admin-permissions: &admin_permissions
     - examples.self.create
     - examples.self.update
     - examples.self.delete
+    - notifications.self.read
+    - notifications.self.delete
     - examples.any.read
     - examples.any.update
     - examples.any.delete
@@ -107,6 +109,8 @@ moderator-permissions: &moderator_permissions
     - examples.self.create
     - examples.self.update
     - examples.self.delete
+    - notifications.self.read
+    - notifications.self.delete
 
 cases:
     # =============================================================================================

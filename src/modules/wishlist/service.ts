@@ -15,11 +15,13 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
+import { emitDomainEvent } from '@kernel/events';
 import { productService } from '@modules/products';
 import { cartService } from '@modules/cart';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from './analytics';
+import { WISHLIST_ITEMS_REMOVED } from './events';
 import { wishlistRepository } from './repository';
 import { presentWishlist, type WishlistView } from './presenter';
 
@@ -84,8 +86,8 @@ const wishlistRemove = (
  *
  * Whether the product may go in a cart is the cart's rule and is asked by asking the cart: a
  * refusal comes back as a reject envelope and becomes this operation's 404. A wishlist outlives
- * the catalogue by design — `PRODUCT_DELETED` clears hard deletions, so a line pointing at a
- * merely deactivated product is the state that survives — and re-deriving "is it still on sale"
+ * the catalogue by design — `PRODUCT_DELETED` pulls the line on a soft delete as well as a hard one, so a
+ * line pointing at a merely deactivated product is the state that survives — and re-deriving "is it still on sale"
  * here would be a second copy of a rule the cart already enforces for every other caller.
  *
  * Cart first, wishlist second, deliberately in that order: if the cart write fails the line is
@@ -129,9 +131,22 @@ const wishlistMoveToCart = (
 export const wishlistDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
     wishlistRepository.deleteByUserId(userId, session);
 
-/** What a product deletion owes the wishlists — see `module.ts`'s subscription. */
-export const productRemoveFromWishlistsById = (productId: string): Promise<unknown> =>
-    wishlistRepository.removeProductFromAll(productId);
+/**
+ * What a product deletion owes the wishlists — see `module.ts`'s subscription — then an
+ * announcement of whose lists held it. Nothing is emitted when none did.
+ *
+ * @param titles - the product's names by locale, carried on to the announcement (see `product.deleted`)
+ */
+export const productRemoveFromWishlistsById = (
+    productId: string,
+    titles: Record<string, string>
+): Promise<void> =>
+    wishlistRepository.removeProductFromAll(productId).then((userIds) => {
+        if (userIds.length === 0) return;
+        return emitDomainEvent(WISHLIST_ITEMS_REMOVED, { userIds, productId, titles }).then(
+            () => undefined
+        );
+    });
 
 /** The module's barrel export — the controllers call through this, never the bare functions. */
 export const wishlistService = {

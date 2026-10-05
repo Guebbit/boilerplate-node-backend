@@ -12,7 +12,9 @@
  */
 
 import type { ClientSession } from 'mongoose';
+import { emitDomainEvent } from '@kernel/events';
 import { cartRepository } from '../repository';
+import { CART_LINES_REMOVED } from '../events';
 
 /**
  * Delete a user's cart outright, for a hard account deletion.
@@ -26,6 +28,21 @@ import { cartRepository } from '../repository';
 export const cartDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
     cartRepository.deleteByUserId(userId, session);
 
-/** Remove a product from all users' carts by product ID. */
-export const productRemoveFromCartsById = (id: string): Promise<void> =>
-    cartRepository.removeProductFromAll(id).then(() => undefined);
+/**
+ * Remove a product from all users' carts by product ID, then announce whose carts held it.
+ *
+ * Announced, not told: this module never imports whoever shows the owners a message. Nothing is
+ * emitted when no cart held the product.
+ *
+ * @param titles - the product's names by locale, carried on to the announcement (see `product.deleted`)
+ */
+export const productRemoveFromCartsById = (
+    id: string,
+    titles: Record<string, string>
+): Promise<void> =>
+    cartRepository.removeProductFromAll(id).then((userIds) => {
+        if (userIds.length === 0) return;
+        return emitDomainEvent(CART_LINES_REMOVED, { userIds, productId: id, titles }).then(
+            () => undefined
+        );
+    });

@@ -80,8 +80,8 @@ export const applyTransition = async (
          * product's level row is deleted alongside it (see `module.ts`'s `PRODUCT_DELETED`
          * listener), so a hold still open against a since-deleted line has nowhere left to land.
          * Reporting `true` (moved, trivially) is what lets `releaseForOrder`/`commitForOrder`
-         * keep going instead of logging an alarm for counters that no longer exist by design —
-         * the sweep must still be able to expire the REST of an order's lines. `receive`/`adjust`
+         * keep going instead of refusing over counters that no longer exist by design — the
+         * sweep must still be able to expire the REST of an order's lines. `receive`/`adjust`
          * never reach this branch in practice: both check the product exists first.
          */
         if (reason !== StockMovementReason.receive && reason !== StockMovementReason.adjust) {
@@ -113,4 +113,32 @@ export const applyTransition = async (
     if (!session) await syncStockCache(productId);
 
     return true;
+};
+
+/**
+ * Apply one transition per line, all or none: a line whose counters refuse throws.
+ *
+ * Meant for a caller's transaction, where the throw rolls back every line before it. A refusal
+ * there means the records disagree with what the caller holds, so it fails loudly until a human
+ * fixes them.
+ *
+ * @param reason - the transition every line records
+ * @param lines - the products and how many units of each
+ * @param context - `reference` names the order; `note`, when given, names the refusal's subject
+ * @param session - the caller's transaction
+ * @throws {Error} when a line's counters refuse the movement
+ */
+export const applyToEveryLine = async (
+    reason: StockMovementReason,
+    lines: readonly { productId: Types.ObjectId | string; quantity: number }[],
+    context: { reference: string; note?: string },
+    session?: ClientSession
+): Promise<void> => {
+    for (const { productId, quantity } of lines) {
+        const id = String(productId);
+        if (!(await applyTransition(reason, id, quantity, context, session)))
+            throw new Error(
+                `Inventory: could not ${reason} ${quantity} of product ${id} for ${context.note ?? `order ${context.reference}`} — the counters refused`
+            );
+    }
 };

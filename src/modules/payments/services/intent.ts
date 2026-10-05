@@ -13,15 +13,9 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
-import {
-    orderService,
-    orderTotal,
-    isPayable,
-    unavailableLines,
-    orderCurrency
-} from '@modules/orders';
+import { orderService, orderTotal, isPayable, orderCurrency } from '@modules/orders';
 import { userService } from '@modules/users';
-import { resolvePaymentProvider, providerNamed } from '../providers';
+import { resolvePaymentProvider, providerNamed, type PaymentProvider } from '../providers';
 import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
@@ -41,7 +35,7 @@ import { ERROR_CODES } from '@api/error-codes';
  * @returns the 409 envelope
  */
 const rejectStrayIntent = (
-    provider: ReturnType<typeof providerNamed>,
+    provider: PaymentProvider,
     strayRef: string,
     orderId: string
 ): Promise<ResponseReject> =>
@@ -63,7 +57,7 @@ const rejectStrayIntent = (
             // Stryker restore all
             return generateReject(409, [
                 {
-                    code: ERROR_CODES.PAYMENT_NOT_CONFIRMABLE,
+                    code: ERROR_CODES.PAYMENT_IN_FLIGHT,
                     message: t('payments.intent-conflict')
                 }
             ]);
@@ -111,8 +105,9 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
  * placed. Re-asking is the double-click case: it refreshes and answers the same intent, 200 where
  * the first ask was 201; an order whose money already moved answers 409.
  *
- * The provider is asked for an intent only when this payment does not already have one — a second
- * intent for the same order is a second thing the customer could pay.
+ * A payment that already holds an intent resumes it: the stored reference goes to the provider, and
+ * a different reference back is refused (409 `PAYMENT_IN_FLIGHT`) — a second intent for the same
+ * order is a second thing the customer could pay.
  *
  * @param orderId - the order to pay
  * @param authContext - the caller; the order must be theirs — paying is the buyer's step, so an
@@ -133,25 +128,6 @@ export const createIntent = async (
     // check, correctly refuses a second intent on an order that is already `paid`.
     if (!isPayable(order.status)) return notPayable();
 
-    /*
-     * Checked fresh against `products`, never against the order's own frozen snapshot: a
-     * product removed or deactivated AFTER this order was placed must still block the FIRST
-     * payment attempt against it — the auto-cancel `orders`' own listener runs is the normal
-     * door, this is the race backstop for the gap between the event and a payment already in
-     * flight. Named per line, like `CART_INSUFFICIENT_STOCK`'s `details.lines`.
-     */
-    const unavailable = await unavailableLines(order);
-    if (unavailable.length > 0)
-        return generateReject(409, [
-            {
-                code: ERROR_CODES.ORDER_PRODUCT_UNAVAILABLE,
-                message: t('payments.order-product-unavailable'),
-                details: { lines: unavailable }
-            }
-        ]);
-
-    // A payment that already has an intent resumes it (the stored reference is handed to
-    // `prepare`): a second intent for the same order is a second thing the customer could pay.
     // No provider configured: this deployment takes no card payments, and the order stays unpaid.
     const provider = resolvePaymentProvider();
     if (!provider) return cardNotAvailable();
@@ -168,6 +144,7 @@ export const createIntent = async (
     if (!upserted) return notPayable();
     const { payment, created } = upserted;
 
+    // The stored reference, when there is one, asks the provider to resume that intent.
     const { providerRef, clientSecret } = await provider.prepare(
         { amount: payment.amount, currency: payment.currency },
         { orderId, paymentId: String(payment._id) },

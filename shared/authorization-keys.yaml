@@ -594,6 +594,28 @@ keys:
       scope: tenant
       description: Remove any example, whoever owns it.
 
+    # -- notifications -------------------------------------------------------------------------
+    # Only `self`: an inbox is somebody's own, and no role reads or clears another person's. The
+    # service filters every query by the caller's id, so there is no `any` breadth to declare.
+    # Held by every role that is a signed-in account — a staff member is a person with an inbox
+    # too, even though staff own no basket.
+    - key: notifications.self.read
+      module: notifications
+      subject: Notification
+      action: read
+      scope: tenant
+      description: Read the caller's own notifications, follow them live, and mark them read.
+      conditions:
+          userId: $caller.id
+    - key: notifications.self.delete
+      module: notifications
+      subject: Notification
+      action: delete
+      scope: tenant
+      description: Delete the caller's own notifications, one or all at once.
+      conditions:
+          userId: $caller.id
+
 # WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
 #
 # There is no per-family `manage` key. One that expanded to every action its family declared would

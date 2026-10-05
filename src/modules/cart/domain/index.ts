@@ -11,4 +11,10 @@ export {
     evaluateShippingRequirement
 } from './rules';
 
+export { planMergeLine } from './merge';
+
+export { fitsStock } from './stock';
+
+export type { MergeLineFacts, MergePlan, MergeReason } from './merge';
+
 export type { CheckoutShortfall, UnavailableCartLine, ShippingRequirementVerdict } from './rules';

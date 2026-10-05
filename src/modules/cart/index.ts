@@ -9,6 +9,8 @@
 
 export * from './services';
 
+export * from './events';
+
 export * from './domain';
 
 export type * from './model';

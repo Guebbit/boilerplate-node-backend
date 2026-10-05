@@ -92,7 +92,9 @@ describe('checkout holds units without selling them', () => {
         });
         // And the cart survives — a refused checkout is not a lost basket.
         const cart = await cartService.cartGetForBadge(user.id);
-        expect(cart.items).toEqual([{ productId: String(product._id), quantity: 3 }]);
+        expect(cart.items).toEqual([
+            { productId: String(product._id), quantity: 3, insufficientStock: true }
+        ]);
     });
 
     it('refuses a product whose units are all held by someone else', async () => {
@@ -464,7 +466,8 @@ describe('the expiry sweep', () => {
             const orderId = String(checkout.success && checkout.data?._id);
             jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('write failed'));
 
-            await expect(inventoryService.runReservationSweep()).rejects.toThrow('write failed');
+            // The failure is that hold's alone: the sweep logs it, skips it, and keeps it due.
+            await expect(inventoryService.runReservationSweep()).resolves.toBe(0);
 
             // Nothing half done: still held, and the order still waiting for its hold to end.
             expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 4 });

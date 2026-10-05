@@ -150,8 +150,7 @@ it('publishes the set the pair agreed on', () => {
      * flow, the inactive-account reaper and the email second factor only exist on this backend so
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
      * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `webhooks.subscription-disabled` is the same
-     * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. `orders.order-product-unavailable` (a hard
-     * delete or a deactivation cancelling a pending order) is likewise Node-only so far. So are
+     * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. So are
      * `orders.order-paid` (a payment settling to `succeeded` mails the buyer) and
      * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
      * `orders.order-transfer-expired` for the other payment method) — both new here. So is
@@ -182,7 +181,6 @@ it('publishes the set the pair agreed on', () => {
         'orders.order-card-expired',
         'orders.order-confirm',
         'orders.order-paid',
-        'orders.order-product-unavailable',
         'orders.order-refunded',
         'orders.order-transfer-expired',
         'orders.order-transfer-instructions',

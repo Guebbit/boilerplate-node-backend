@@ -3,7 +3,6 @@
         "order-not-found": "L'ordine da pagare non è stato trovato",
         "card-not-available": "I pagamenti con carta non sono offerti da questo negozio.",
         "order-not-payable": "Questo ordine non può essere pagato nel suo stato attuale.",
-        "order-product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`.",
         "not-found": "Nessun pagamento trovato",
         "not-confirmable": "Questo pagamento non è in attesa di conferma.",
         "intent-conflict": "Esiste già un pagamento aperto per questo ordine. Ricarica e riprova.",

@@ -6,8 +6,6 @@
  * `place.ts` is the one function that writes a new order; `read.ts`, `crud.ts` and `remove.ts`
  * read, amend and delete one; `notify.ts` sends the placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
- * `availability.ts` answers whether a line is still sellable and cancels an order that no longer
- * is.
  */
 
 import { search, getById, openUnpaidOrderIds, getByTransferReference } from './read';
@@ -40,7 +38,6 @@ import {
     markReturnStatus
 } from './status';
 import { overrideStatus, forceMove } from './override';
-import { unavailableLines } from './availability';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
@@ -87,7 +84,6 @@ export {
     reachesBuyerOf,
     withActions
 } from './scope';
-export { unavailableLines, cancelPendingOrdersHolding, type UnavailableLine } from './availability';
 export { freezeOrderLines } from './snapshot';
 export { allocateOrderNumber } from './order-numbering';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
@@ -155,6 +151,5 @@ export const orderService = {
     retryPendingEffects,
     markRefundOwed,
     clearRefundOwed,
-    unavailableLines,
     withActions
 };

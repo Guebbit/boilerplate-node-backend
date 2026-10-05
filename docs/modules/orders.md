@@ -37,7 +37,6 @@ flowchart LR
     orders --> products
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
-    products -. "product.deleted" .-> orders
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
@@ -83,7 +82,7 @@ The status enum is the module's public vocabulary:
 | `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                |
 | `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction) |
 | `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival                                                    |
-| `cancelled`             | units released, refund issued if one was due | admin, an expired hold, or the system when a held product is removed/deactivated                                      |
+| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product removed or deactivated afterwards does not cancel it                             |
 
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
@@ -313,7 +312,6 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 | -------------------------------------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------ |
 | The customer, or staff, cancelled                  | what the cancel did to their money: going back, no refund, or nothing charged | `orders.order-cancelled`                                     |
 | The reservation sweep cancelled (a hold timed out) | the expiry notice for the payment method                                      | `orders.order-transfer-expired`, `orders.order-card-expired` |
-| A product on the order was removed                 | the product-unavailable notice                                                | `orders.order-product-unavailable`                           |
 | The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                         | `returns.notice`                                             |
 | The account was erased                             | none: the address belongs to an account that no longer exists                 |                                                              |
 | Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |

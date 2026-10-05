@@ -2,6 +2,7 @@
 # Sources: shared/contracts/asyncapi.root.yaml
 #          src/modules/observability/asyncapi.yaml
 #          src/modules/webhooks/asyncapi.yaml
+#          src/modules/notifications/asyncapi.yaml
 #          src/modules/account/asyncapi.internal.yaml
 #          src/modules/webhooks/asyncapi.internal.yaml
 #          shared/contracts/asyncapi.workers.yaml
@@ -51,6 +52,10 @@ servers:
             subscriberPath:
                 default: /webhooks/inbox
                 description: Path of a subscription's configured URL.
+    sseNotificationsLocal:
+        host: localhost:3000
+        protocol: http
+        description: Local HTTP server for SSE (`/notifications/stream`).
     rabbitmqLocal:
         host: localhost:5672
         protocol: amqp
@@ -168,6 +173,34 @@ channels:
         messages:
             ExamplePublishedEvent:
                 $ref: '#/components/messages/ExamplePublishedEvent'
+    notifications.created:
+        address: notifications.created
+        servers:
+            - $ref: '#/servers/sseNotificationsLocal'
+        description: A notification was written for the connected user.
+        # `scripts/contracts/generate-asyncapi-types.ts` reads this to pick the SSE channels.
+        x-transport: sse
+        messages:
+            NotificationCreatedEvent:
+                $ref: '#/components/messages/NotificationCreatedEvent'
+    notifications.deleted:
+        address: notifications.deleted
+        servers:
+            - $ref: '#/servers/sseNotificationsLocal'
+        description: One or more notifications of the connected user are gone.
+        x-transport: sse
+        messages:
+            NotificationsDeletedEvent:
+                $ref: '#/components/messages/NotificationsDeletedEvent'
+    notifications.read:
+        address: notifications.read
+        servers:
+            - $ref: '#/servers/sseNotificationsLocal'
+        description: The connected user's notifications were marked read.
+        x-transport: sse
+        messages:
+            NotificationsReadEvent:
+                $ref: '#/components/messages/NotificationsReadEvent'
     worker.account.export:
         address: worker.account.export
         description: >-
@@ -324,6 +357,30 @@ operations:
             One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired each time an example moves to `published`, including after being archived and brought back.
         messages:
             - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
+    sseNotificationCreated:
+        action: send
+        channel:
+            $ref: '#/channels/notifications.created'
+        description: >-
+            Pushed when a notification is written for the user, with the whole notification, so a client adds it without a refetch. A message trimmed off the end by the per-user cap arrives as a `notifications.deleted` frame right after.
+        messages:
+            - $ref: '#/channels/notifications.created/messages/NotificationCreatedEvent'
+    sseNotificationsDeleted:
+        action: send
+        channel:
+            $ref: '#/channels/notifications.deleted'
+        description: >-
+            Pushed when the user deletes one (`DELETE /notifications/{id}`), empties the inbox (`dismiss-all`), or the cap trims the oldest, so a second tab stays in step with the first. `all` is true when the whole inbox went.
+        messages:
+            - $ref: '#/channels/notifications.deleted/messages/NotificationsDeletedEvent'
+    sseNotificationsRead:
+        action: send
+        channel:
+            $ref: '#/channels/notifications.read'
+        description: >-
+            Pushed when `POST /notifications/read-all` runs, so the badge clears in every open tab.
+        messages:
+            - $ref: '#/channels/notifications.read/messages/NotificationsReadEvent'
     workerAccountExportPublish:
         action: receive
         channel:
@@ -490,6 +547,21 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnRequestedEnvelope'
+        NotificationCreatedEvent:
+            name: NotificationCreatedEvent
+            title: A notification was written
+            payload:
+                $ref: '#/components/schemas/NotificationCreatedPayload'
+        NotificationsDeletedEvent:
+            name: NotificationsDeletedEvent
+            title: Notifications were deleted
+            payload:
+                $ref: '#/components/schemas/NotificationsDeletedPayload'
+        NotificationsReadEvent:
+            name: NotificationsReadEvent
+            title: Notifications were marked read
+            payload:
+                $ref: '#/components/schemas/NotificationsReadPayload'
         AccountExportJobMessage:
             name: AccountExportJobMessage
             title: Account export job
@@ -906,6 +978,192 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ExamplePublishedPayload'
+            additionalProperties: false
+        CartLineRemovedParamsPayload:
+            title: CartLineRemovedParamsPayload
+            type: object
+            required:
+                - productId
+                - titles
+            properties:
+                productId:
+                    type: string
+                titles:
+                    description: Locale → the product's name in it.
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false
+        CartMergeRefusedLinePayload:
+            title: CartMergeRefusedLinePayload
+            type: object
+            required:
+                - productId
+                - requested
+                - titles
+            properties:
+                productId:
+                    type: string
+                requested:
+                    type: integer
+                titles:
+                    description: Locale → the product's name in it.
+                    type: object
+                    additionalProperties:
+                        type: string
+            additionalProperties: false
+        CartMergeRefusedParamsPayload:
+            title: CartMergeRefusedParamsPayload
+            type: object
+            required:
+                - lines
+            properties:
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CartMergeRefusedLinePayload'
+            additionalProperties: false
+        NotificationCartLineRemovedPayload:
+            title: NotificationCartLineRemovedPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.cart-line-removed
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationWishlistItemRemovedPayload:
+            title: NotificationWishlistItemRemovedPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.wishlist-item-removed
+                params:
+                    $ref: '#/components/schemas/CartLineRemovedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationCartMergeRefusedPayload:
+            title: NotificationCartMergeRefusedPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.cart-merge-refused
+                params:
+                    $ref: '#/components/schemas/CartMergeRefusedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationPayload:
+            title: NotificationPayload
+            oneOf:
+                - $ref: '#/components/schemas/NotificationCartLineRemovedPayload'
+                - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
+                - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
+            # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
+            discriminator: code
+        NotificationCreatedPayload:
+            title: NotificationCreatedPayload
+            type: object
+            required:
+                - notification
+            properties:
+                notification:
+                    $ref: '#/components/schemas/NotificationPayload'
+            additionalProperties: false
+        NotificationsDeletedPayload:
+            title: NotificationsDeletedPayload
+            type: object
+            required:
+                - all
+                - ids
+            properties:
+                all:
+                    description: True when the whole inbox went (`dismiss-all`); `ids` is then empty.
+                    type: boolean
+                ids:
+                    description: The deleted notifications' ids.
+                    type: array
+                    items:
+                        type: string
+            additionalProperties: false
+        NotificationsReadPayload:
+            title: NotificationsReadPayload
+            type: object
+            required:
+                - readAt
+            properties:
+                readAt:
+                    type: string
+                    format: date-time
             additionalProperties: false
         AccountExportJobPayload:
             type: object

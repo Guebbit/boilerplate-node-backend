@@ -8,6 +8,8 @@
 
 export * from './service';
 
+export * from './events';
+
 export type * from './model';
 
 export type * from './presenter';

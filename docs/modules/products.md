@@ -30,7 +30,6 @@ flowchart LR
     products -. "product.deleted" .-> cart
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
-    products -. "product.deleted" .-> orders
     products -. "product.deleted" .-> wishlist
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -101,26 +100,23 @@ flowchart LR
 
 ## Removing or deactivating a product
 
-A hard delete (`hardDelete: true`) and a deactivation (an update that flips `active` to `false`)
-both mean the product can no longer be **newly** sold — but only a hard delete reaches back into
-an order already placed:
+A delete (soft or hard) and a deactivation (an update that flips `active` to `false`) both mean the
+product can no longer be **newly** sold, and neither reaches back into an order already placed:
 
 - [`inventory`](./inventory.md) deletes the product's `stocklevels` row on a hard delete; a
   deactivation leaves the counters alone, since the product still exists and might come back.
-- `orders` cancels every `pending` order still holding the product on a hard delete only, as the
-  `system` actor, and emails the customer — the same auto-cancel path an expired stock hold uses,
-  see [Who writes the status](./orders.md#who-writes-the-status). A **deactivation does not touch
-  a pending order at all**: it was placed while the product was sellable, and the buyer's money
-  (or its 7-day bank-transfer promise) should not evaporate because the catalogue changed its
-  mind. Both cases still refuse anything NEW against the product — `payments`' checkout start
-  answers a 409 `ORDER_PRODUCT_UNAVAILABLE` naming it, whether removed or merely deactivated.
-- `cart`'s own unavailability check carries the same `active`/`deletedAt` guard — either state
-  drops the line — and `CART_PRODUCT_UNAVAILABLE` carries `details.lines` naming exactly which
-  lines are affected, instead of leaving the client to work it out.
-
-An admin can still record an **offline** payment against an order holding a since-removed or
-deactivated product — that path is deliberately not refused, since a human operator confirming
-money already received is not the race this guard exists to catch.
+- `orders` and `payments` do nothing: an order placed while the product was sellable treats it as
+  present afterwards. It stays `pending`, nobody is emailed, and the buyer can still pay it, by card
+  or offline. A real problem with such an order is an admin's to cancel by hand.
+- `cart` and `wishlist` drop the line and announce whose lists held it, so
+  [`notifications`](./notifications.md) can tell those users. `product.deleted` carries `titles`
+  (the name in every language, locale → title) for exactly that: it is read before a hard delete
+  drops the translation rows, because once the event fires the product is gone and nothing else
+  could name it. A soft delete carries them too.
+- `cart`'s checkout still refuses a basket holding an inactive or deleted product, and
+  `CART_PRODUCT_UNAVAILABLE` carries `details.lines` naming exactly which lines are affected,
+  instead of leaving the client to work it out. That guard is about a NEW purchase; once an order
+  exists the product counts as present.
 
 ## Configuration
 

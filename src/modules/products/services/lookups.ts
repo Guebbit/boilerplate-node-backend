@@ -4,6 +4,9 @@
  */
 
 import { toObjectId } from '@infrastructure/persistence/create-repository';
+import { getFallbackLocale } from '@infrastructure/i18n';
+import { readAllTranslations } from '@kernel/translation';
+import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 
 /**
@@ -64,3 +67,32 @@ export const countPublic = (ids: readonly string[]): Promise<number> =>
  */
 export const syncStockCache = (productId: string, counters: { onHand: number; reserved: number }) =>
     productRepository.syncStockCache(productId, counters);
+
+/**
+ * A product's name in every language it has one in, locale → title.
+ *
+ * The product's own `title` column IS the fallback language's name, so it fills that slot when the
+ * translation port has no row for it (or no `locales` module at all) — the same rule the admin
+ * read applies. For a message that has to outlive the product: copy the names in, never look the
+ * product up again.
+ *
+ * @param product - the document whose names to collect
+ */
+export const titlesOf = (product: ProductDocument): Promise<Record<string, string>> =>
+    readAllTranslations('product', product._id.toString()).then((rows) => {
+        const titles: Record<string, string> = {};
+        for (const [locale, fields] of rows) titles[locale] = fields.title;
+
+        const fallbackLocale = getFallbackLocale();
+        if (!(fallbackLocale in titles)) titles[fallbackLocale] = product.title;
+        return titles;
+    });
+
+/**
+ * {@link titlesOf} for an id: the names of a product in any state, soft-deleted included, or an
+ * empty map when there is no such product (a hard-deleted one has none left to give).
+ *
+ * @param productId - the product to name
+ */
+export const titlesById = (productId: string): Promise<Record<string, string>> =>
+    productRepository.findById(productId).then((product) => (product ? titlesOf(product) : {}));

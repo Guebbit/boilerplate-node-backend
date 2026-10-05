@@ -4,6 +4,8 @@
  * See `docs/theory/domain-layer.md`.
  */
 
+import { fitsStock } from './stock';
+
 /**
  * A cart line as the rules see it. `product: null` is what the service-level join
  * (`services/view.ts`'s `readCartLines`) writes for a HARD-deleted product — the join is
@@ -163,7 +165,7 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
      * again on the next is being made to binary-search their own basket.
      */
     const shortfalls = lines
-        .filter(({ product, quantity }) => (quantity ?? 0) > (product?.available ?? 0))
+        .filter(({ product, quantity }) => !fitsStock(quantity ?? 0, product?.available))
         .map(({ productId, product, quantity }) => ({
             productId: productId ?? '',
             title: product?.title ?? '',

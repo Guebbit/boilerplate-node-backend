@@ -102,12 +102,11 @@ const moveToCancelled = (
  * customer's explanation by mail: the sweep's own expiry notice, or — when a person cancelled —
  * the cancelled notice saying what became of their money.
  * @param context - the caller's context; absent for a system-initiated cancel (the reservation
- *   sweep, or `availability.ts`'s own product-removed cancel), still audited as a system actor and
+ *   sweep), still audited as a system actor and
  *   reported under its own analytics name
- * @param viaReservationExpiry - true only for the `RESERVATION_EXPIRED` listener. A missing
- *   `context` alone cannot tell "the hold timed out" apart from "the product it held became
- *   unavailable" — `availability.ts` cancels with no context too, and sends its OWN explanation
- *   (`productUnavailableCancelledEmail`), never this one
+ * @param viaReservationExpiry - true only for the `RESERVATION_EXPIRED` listener. Only the
+ *   reservation sweep cancels with no context, but the flag keeps that explicit: the expiry
+ *   notice is for a hold that timed out, never for another system cancel
  * @param byPerson - true when the customer or staff cancelled, and nothing else mails about it:
  *   a withdrawal has its acknowledgement, and every system cancel its own explanation or none
  */
@@ -137,7 +136,7 @@ const afterCancel = async (
 
     /*
      * The customer's answer to "what happened to my order" — the reservation sweep's own expiry,
-     * never `availability.ts`'s product-removed cancel (that one mails its own explanation).
+     * never another system cancel.
      * Both payment methods get one: a `card` hold is thirty minutes, short but no shorter than
      * the time it takes to abandon a checkout tab and wonder later where the order went.
      */
@@ -201,8 +200,8 @@ const afterCancel = async (
  *   `withdrawal`: the cancel is a consumer exercising their right of withdrawal (Directive Art. 9),
  *   which is wider than an ordinary customer cancel — it reaches `processing` too, since the
  *   consumer may withdraw right up to the moment the goods leave — and always refunds in full
- * @param context - omitted by every system-initiated caller (the reservation sweep,
- *   `availability.ts`'s product-removed cancel), which is not a request; still audited as a
+ * @param context - omitted by every system-initiated caller (the reservation sweep),
+ *   which is not a request; still audited as a
  *   system actor and reported under its own analytics name
  * @param viaReservationExpiry - see {@link afterCancel} — set only by the `RESERVATION_EXPIRED`
  *   listener, so its own explanation mail never reaches a different system cancel's customer

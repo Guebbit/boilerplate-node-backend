@@ -2,8 +2,8 @@
  * @module
  * The cart's `totalPrice` is the amount the order and the payment intent will carry.
  *
- * Both are summed in integer minor units and converted once (`orderTotal`); the cart view used to
- * add two decimals, which differ by a float epsilon for some prices (0.56 + 5.00).
+ * All three are summed in integer minor units and converted once (`orderTotal`): two decimals
+ * added directly differ by a float epsilon for some prices (0.56 + 5.00).
  */
 
 import { api, authenticateAs } from '@tests/http';
