@@ -191,7 +191,11 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
     ) => Promise<LineWrite | typeof QUANTITY_LIMIT>;
     removeLine: (userId: string, productId: string) => Promise<CartDocument | null>;
     clearLines: (userId: string) => Promise<CartDocument | null>;
-    clearLinesIfUnchanged: (userId: string, version: number) => Promise<CartDocument | null>;
+    clearLinesIfUnchanged: (
+        userId: string,
+        version: number,
+        session?: ClientSession
+    ) => Promise<CartDocument | null>;
     setShippingMethod: (
         userId: string,
         shippingMethodId: string | null
@@ -248,19 +252,20 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
      * Empty a user's cart ONLY IF it still holds exactly the lines the caller read.
      *
      * The conditional-write half of checkout: emptying the cart is the step that can fail, so
-     * exactly one of two parallel `POST /cart/checkout` matches, and the loser undoes the order
-     * it already wrote — without this, one cart yields two orders and the customer is charged twice.
+     * exactly one of two parallel `POST /cart/checkout` matches, and the loser's order is never
+     * committed — without this, one cart yields two orders and the customer is charged twice.
      *
      * `$inc: { __v: 1 }` makes the guard reusable — a cart emptied and refilled would otherwise
      * still match an in-flight checkout's version. Mongoose's own optimistic concurrency doesn't
-     * apply (it covers `save()`, not `findOneAndUpdate`); a transaction would work too but forces
-     * `MongoMemoryReplSet` on every cart-touching suite.
+     * apply (it covers `save()`, not `findOneAndUpdate`); the transaction around the order is what
+     * keeps this clear and the order together.
      *
      * @param userId - whose cart
      * @param version - the `__v` the caller read the cart at
+     * @param session - the order's transaction: the clear commits with the order or not at all
      * @returns the emptied cart, or `null` when the cart moved and the caller lost the race
      */
-    clearLinesIfUnchanged: (userId: string, version: number) =>
+    clearLinesIfUnchanged: (userId: string, version: number, session?: ClientSession) =>
         cartModel
             .findOneAndUpdate(
                 /* `__v` below is Mongoose's version key; the name belongs to the driver. */
@@ -277,7 +282,7 @@ export const cartRepository: Repository<CartDocument, Wire<CartDocument>> & {
                  * side effect, not something the shopper did to their cart, so it should not make
                  * an untouched cart read as "recently edited".
                  */
-                { returnDocument: 'after', timestamps: false }
+                { returnDocument: 'after', timestamps: false, session: session ?? null }
             )
             .exec(),
 

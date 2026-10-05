@@ -1,7 +1,7 @@
 /**
  * @module
  * Writing an order through the admin door: create, amend. `create` composes around `placeOrder`
- * (`./place`), which owns its own rollback on a refused write — see `./retract`. Reads are in
+ * (`./place`), which owns its own rollback on a refused write. Reads are in
  * `./read`, deletes in `./remove`, and cancellation is a sequence with consequences of its own in
  * `./cancel`.
  */
@@ -128,6 +128,9 @@ export const create = async (
             return generateReject(422, [t('generic.error-missing-data')]);
         if (outcome.reason === 'product-missing')
             return generateReject(404, [t('products.not-found')]);
+        // Only a `commitWith` step can lose a race, and this door passes none.
+        if (outcome.reason === 'superseded')
+            throw new Error('placeOrder reported a lost race for a write with no commitWith step');
         return generateReject(409, [
             {
                 code: ERROR_CODES.ORDER_INSUFFICIENT_STOCK,

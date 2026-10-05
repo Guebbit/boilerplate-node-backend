@@ -84,7 +84,7 @@ durability — and would turn one indexed query into a hand-maintained secondary
 ## The pipeline
 
 The six arrows, in the order checkout walks them. [Checkout](./cart-checkout.md) draws the same
-flow at step-by-step resolution, including the retract.
+flow at step-by-step resolution, including the lost race.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
@@ -95,9 +95,9 @@ flowchart LR
     D --> E["reserve the units<br/><i>inventory</i>"]
     E -.->|"any line short"| R["refused<br/><i>every short line at once</i>"]
     E --> F["create the order<br/><i>orders</i>"]
-    F --> G{"clearLinesIfUnchanged<br/><i>still the version we read?</i>"}
-    G -->|yes| H["cart emptied · 201"]
-    G -.->|no| I["lost the race<br/><i>retract · 409</i>"]
+    F --> G{"clearLinesIfUnchanged, in the order's transaction<br/><i>still the version we read?</i>"}
+    G -->|yes| H["order and empty cart commit together · 201"]
+    G -.->|no| I["lost the race<br/><i>nothing committed · 409</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef guard fill:#ede9fe,stroke:#7c3aed,color:#111827;

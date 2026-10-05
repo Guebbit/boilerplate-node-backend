@@ -6,7 +6,8 @@
  *        `POST /cart/checkout` both read the same lines and both wrote an order, so one cart
  *        became two orders and the customer was charged twice. A double-clicked button reaches it.
  *        Closed by `clearLinesIfUnchanged` — the cart is emptied conditionally on the `__v` it was
- *        read at, so exactly one checkout matches and the loser retracts its order and answers 409.
+ *        read at, inside the order's own transaction, so exactly one checkout matches: the loser's order
+ *        and its `order.created` event are never committed, and it answers 409.
  *
  *   R3 — the cart upsert retry was correct, documented, and completely untested.
  *        `cart/repository.ts` carries each condition IN THE FILTER and retries a duplicate key
@@ -27,6 +28,20 @@ import { withEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
+import { createUser } from '@modules/users/tests/factories';
+import { cartService } from '@modules/cart/services';
+import { cartRepository } from '@modules/cart/repository';
+import { countOrders, readOrder } from '@modules/orders/tests/factories';
+import webhooksModule from '@modules/webhooks/module';
+import {
+    webhookSubscriptionRepository,
+    webhookDeliveryRepository
+} from '@modules/webhooks/repository';
+import { mintRingSecret } from '@modules/webhooks/secrets';
+import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
+import { resetDomainEvents } from '@kernel/events';
+import { registerCheckoutModules } from '@tests/checkout-modules';
+import { testCallerContext } from '@tests/callers';
 import { cartModel } from '@modules/cart/model';
 import { orderModel } from '@modules/orders/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
@@ -202,9 +217,9 @@ describe('R2 — concurrent checkouts of one cart', () => {
     });
 
     it('leaves no order behind for a request that lost the race', async () => {
-        // The loser has already written an order by the time the conditional cart write fails,
-        // so it retracts it. Without that compensation the invariant above would still read
-        // "one cart emptied" while the collection quietly held N orders.
+        // The conditional cart write runs inside the order's transaction, so the loser's order is
+        // never committed. Without that the invariant above would still read "one cart emptied"
+        // while the collection quietly held N orders.
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
         const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
@@ -229,10 +244,10 @@ describe('R2 — concurrent checkouts of one cart', () => {
     });
 
     it('gives the loser its hold back rather than leaking it on the product', async () => {
-        // `retractOrder(order, true)` releases the hold before deleting the order. Without it,
-        // each loser has already called `reserveForOrder` and the product accumulates a
-        // permanent hold per loser that no sweep can ever find, since it is keyed to an order
-        // that no longer exists.
+        // The hold is taken before the order is written, so each loser has already called
+        // `reserveForOrder`. `placeOrder` gives it back when the transaction aborts; without that
+        // the product accumulates a permanent hold per loser that no sweep can ever find, since it
+        // is keyed to an order that no longer exists.
         const { user, bearer } = await authenticateAs();
         await giveAddress(user.id);
         const product = await createProduct({ price: 10, onHand: RACE_SIZE * 5 });
@@ -284,6 +299,69 @@ describe('R2 — concurrent checkouts of one cart', () => {
         const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
 
         expect(response.status).toBe(201);
+    });
+});
+
+/** A checkout that loses the cart race deterministically: a line is added mid-join. */
+const loseTheRace = async () => {
+    const user = await createUser();
+    await giveAddress(user.id);
+    const product = await createProduct({ onHand: 10 });
+    const other = await createProduct({ onHand: 10 });
+    await cartService.cartItemAddById(user.id, String(product._id), 3);
+    await cartRepository.setShippingMethod(user.id, 'pickup');
+    const joinProducts = productService.findManyByIds;
+    jest.spyOn(productService, 'findManyByIds').mockImplementationOnce((ids) =>
+        joinProducts(ids).then(async (products) => {
+            await cartService.cartItemAddById(user.id, String(other._id), 1);
+            return products;
+        })
+    );
+    const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+    expect(!result.success && result.errors[0]?.code).toBe('CART_CHANGED');
+    await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+};
+
+describe('R2 — a checkout that lost the cart race announces nothing', () => {
+    beforeEach(async () => {
+        resetDomainEvents();
+        registerCheckoutModules([webhooksModule]);
+        const { entry } = mintRingSecret();
+        await webhookSubscriptionRepository.create({
+            tenant: 'shop',
+            url: 'https://example.test/inbox',
+            eventTypes: ['order.created'],
+            enabled: true,
+            consecutiveFailures: 0,
+            secrets: [entry]
+        });
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('writes no order.created for an order that never stood', async () => {
+        await loseTheRace();
+        await settleOutboxNudges();
+
+        const rows = await outboxEventModel.find({ name: 'order.created' }).lean();
+        const phantoms = [];
+        for (const row of rows) {
+            const { orderId } = row.payload as { orderId: string };
+            if (!(await readOrder(orderId))) phantoms.push(orderId);
+        }
+        expect(phantoms).toEqual([]);
+    });
+
+    it('tells no webhook subscriber about an order that does not exist', async () => {
+        await loseTheRace();
+        await settleOutboxNudges();
+        await relayOutbox();
+
+        await expect(webhookDeliveryRepository.count({ eventType: 'order.created' })).resolves.toBe(
+            0
+        );
     });
 });
 

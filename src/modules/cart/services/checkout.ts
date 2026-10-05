@@ -19,7 +19,6 @@ import {
     orderService,
     placeOrder,
     sendOrderPlacedEmail,
-    retractOrder,
     type OrderDocument
 } from '@modules/orders';
 import { availableStock } from '@modules/products';
@@ -453,8 +452,8 @@ const runCheckout = async (
     /*
      * The write itself — freezing the lines, allocating the invoice number, minting a
      * `bank_transfer` reference and holding the stock — is `placeOrder`'s job; this function keeps
-     * only what is genuinely checkout's own: the pre-flight above, and the cart-clearing/lost-race
-     * handling below.
+     * only what is genuinely checkout's own: the pre-flight above, and the cart clear, which
+     * commits with the order (`commitWith`) so a lost race writes no order at all.
      */
     const outcome = await placeOrder({
         userId: user.id,
@@ -484,9 +483,19 @@ const runCheckout = async (
                   }
                 : {}),
             holdMinutes
-        }
+        },
+        // Emptied only if the cart still holds the lines this checkout read; `false` aborts the
+        // order's transaction, so the cart's contents end up on exactly one of two racing orders.
+        commitWith: (session) =>
+            cartRepository
+                .clearLinesIfUnchanged(userId, version, session)
+                .then((cleared) => cleared !== null)
     });
     if (!outcome.ok) {
+        if (outcome.reason === 'superseded')
+            return generateReject(409, [
+                { code: ERROR_CODES.CART_CHANGED, message: t('cart.changed') }
+            ]);
         // `no-lines`/`product-missing` should not occur here — `evaluateCheckout` above already
         // proved the basket good — but map them defensively rather than assume the invariant.
         if (outcome.reason !== 'insufficient-stock')
@@ -495,17 +504,9 @@ const runCheckout = async (
     }
     const { order } = outcome;
 
-    const clearedCart = await cartRepository.clearLinesIfUnchanged(userId, version);
-    if (clearedCart) {
-        // Sent from the service, not the controller: only this point knows the order stood.
-        sendOrderPlacedEmail(order, buyerLocale, user.username, user.email);
-        return generateSuccess<OrderDocument>(order);
-    }
-
-    // Lost the race: hand the units back and retract the order this request
-    // wrote, so the cart's contents end up on exactly one of the two.
-    await retractOrder(order);
-    return generateReject(409, [{ code: ERROR_CODES.CART_CHANGED, message: t('cart.changed') }]);
+    // Sent from the service, not the controller: only this point knows the order stood.
+    sendOrderPlacedEmail(order, buyerLocale, user.username, user.email);
+    return generateSuccess<OrderDocument>(order);
 };
 
 /**

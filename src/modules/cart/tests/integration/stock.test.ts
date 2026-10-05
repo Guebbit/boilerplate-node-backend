@@ -203,7 +203,7 @@ describe('checkout holds units without selling them', () => {
     });
 });
 
-describe('a rollback that itself fails', () => {
+describe('a checkout that cannot keep its order', () => {
     /*
      * `clearMocks` empties the call log between tests but leaves implementations in place, so
      * the forced failures below have to be undone by hand.
@@ -235,27 +235,44 @@ describe('a rollback that itself fails', () => {
         expect(await countOrders({ userId: user._id })).toBe(0);
     });
 
-    it('still retracts the order when the hold refuses to release', async () => {
+    it('writes no order and leaves no hold when the cart moved under the checkout', async () => {
         const user = await createUser();
         await giveAddress(user.id);
         const product = await createProduct({ onHand: 5 });
         await cartService.cartItemAddById(user.id, String(product._id), 2);
-        jest.spyOn(logger, 'error').mockImplementation(() => logger);
-        // The cart moved under this checkout: the one branch with both an order and a hold to undo.
+        // The cart moved under this checkout: the clear matches nothing, so the order must not stand.
         jest.spyOn(cartRepository, 'clearLinesIfUnchanged').mockResolvedValue(null);
-        jest.spyOn(inventoryService, 'releaseForOrder').mockRejectedValue(
-            new Error('mongo is down')
-        );
-        const deleted = jest.spyOn(orderRepository, 'deleteOne');
 
         await cartRepository.setShippingMethod(user.id, 'pickup');
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(false);
         expect(!result.success && result.errors[0]?.code).toBe('CART_CHANGED');
-        // The guard's whole point: a failed release must not abort the delete that follows it, or
-        // the loser is left holding an order the customer never bought.
-        expect(deleted).toHaveBeenCalledTimes(1);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+        const counters = await countersOf(String(product._id));
+        expect(counters.reserved).toBe(0);
+    });
+
+    it('lets the shopper retry without a second order when the cart clear itself fails', async () => {
+        const user = await createUser();
+        await giveAddress(user.id);
+        const product = await createProduct({ onHand: 10 });
+        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+        jest.spyOn(logger, 'error').mockImplementation(() => logger);
+        jest.spyOn(cartRepository, 'clearLinesIfUnchanged').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+
+        const failed = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+        const retried = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(failed.success).toBe(false);
+        expect(retried.success).toBe(true);
+        // One cart, one live order, one set of units held.
+        await expect(countOrders({ userId: user._id })).resolves.toBe(1);
+        const counters = await countersOf(String(product._id));
+        expect(counters.reserved).toBe(3);
     });
 });
 

@@ -69,8 +69,8 @@ export const makeOrder = (
 
 /**
  * The live repository object, for a sibling's `jest.spyOn` — a wrapper function copies the call,
- * not the binding, so it cannot intercept what this module's OWN code (`retractOrder`'s
- * compensation) reaches internally. Every other need below has a named, narrower helper instead;
+ * not the binding, so it cannot intercept what this module's OWN code (`placeOrder`'s
+ * rollback) reaches internally. Every other need below has a named, narrower helper instead;
  * reach for this one only when the assertion is "was this repository method called/failed", not
  * "what does the database now hold".
  */

@@ -44,9 +44,9 @@ flowchart TD
     E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; no billing address<br/>to use"| R
     F -.->|"stock gone"| R
 
-    L["lost the race — retract"]
+    L["lost the race — nothing committed"]
     H -.->|"__v moved"| L
-    L -->|"delete the order,<br/>give the hold back"| M["409"]
+    L -->|"the order's transaction aborts,<br/>the hold is given back"| M["409"]
 
     classDef read fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef write fill:#ede9fe,stroke:#7c3aed,color:#111827;
@@ -115,13 +115,16 @@ conditional, nothing tied the third to the first:
 So the cart is emptied **conditionally, on the `__v` it was read at**, and that write is what
 decides the race — exactly one of the two matches.
 
-The loser has already created an order by then, which is the cost of not using a transaction, so it
-deletes that order, gives the hold back, and answers `409`.
+That clear runs **inside the order's own transaction**, together with the order and its
+`order.created` outbox row: they commit together or not at all. The loser's transaction aborts, so
+there is no order to delete and no event announcing one; only the stock hold (taken before, outside
+the transaction) is given back, and the answer is `409`. A clear that throws aborts the same way, so
+a retry never finds a second order.
 
 ::: warning The ordering is deliberate, in both directions
-The order is written **first** and retracted on failure, rather than the cart being cleared first.
-An order that briefly exists and is removed is recoverable; a cart emptied without an order is a
-customer's basket silently thrown away.
+The clear commits with the order rather than before it: a cart emptied without an order is a
+customer's basket silently thrown away, and an order written without the cart emptied is the
+double charge.
 
 And the `409` is deliberate rather than a retry. The loser's cart is empty and its lines are on the
 winner's order — the request has been **superseded, not defeated**. Re-running it would produce

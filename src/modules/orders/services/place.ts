@@ -14,7 +14,7 @@
  *            row on THIS collection, so a retried place can't mint a second one for the order.
  */
 
-import { Types } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { logger } from '@infrastructure/adapters/logger';
 import { inventoryService, type StockShortfall } from '@modules/inventory';
@@ -80,6 +80,13 @@ export interface PlaceOrderInput {
     billingAddress?: PlaceOrderAddress;
     /** Free-text notes the buyer left at checkout — `undefined` writes no `notes` field at all. */
     notes?: string;
+    /**
+     * A write that must land with the order or not at all — checkout's cart clear. It runs inside
+     * the order's own transaction, after the order is written; resolving `false` (a conditional
+     * write that matched nothing, a lost race) aborts the whole transaction, so no order and no
+     * `order.created` event exist, and the verdict is `superseded`. A rejection aborts it too.
+     */
+    commitWith?: (session: ClientSession) => Promise<boolean>;
 }
 
 /** The verdict `placeOrder` returns — a plain outcome, not an HTTP envelope; see this file's docblock. */
@@ -87,7 +94,11 @@ export type PlaceOrderOutcome =
     | { ok: true; order: OrderDocument }
     | { ok: false; reason: 'no-lines' }
     | { ok: false; reason: 'product-missing' }
-    | { ok: false; reason: 'insufficient-stock'; shortfalls: StockShortfall[] };
+    | { ok: false; reason: 'insufficient-stock'; shortfalls: StockShortfall[] }
+    | { ok: false; reason: 'superseded' };
+
+/** Thrown inside the order's transaction to abort it when `commitWith` reports a lost race. */
+class OrderSuperseded extends Error {}
 
 /**
  * Write a new order: freeze the lines, hold the stock, allocate the order number, then write the
@@ -99,6 +110,9 @@ export type PlaceOrderOutcome =
  * number burned on a sale that never happened. A hold taken and then lost to a failed write is the
  * one case this still has to unwind by hand; a genuine crash between the two leaves only a hold,
  * which expires through the reservation sweep like any other abandoned checkout.
+ *
+ * With `commitWith`, the order, its `order.created` event and that step commit together, so a
+ * checkout that loses a race leaves nothing behind to retract: not an order, not an outbox row.
  *
  * @param input - everything the write needs; see {@link PlaceOrderInput}
  * @returns the written order, or the specific reason nothing was written
@@ -181,7 +195,16 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         // order. The outbox row commits with the order itself, and is delivered after the response
         // path has moved on: a slow or failing listener never delays this function's callers.
         const order = await announceInTransaction(
-            (session) => orderRepository.create(orderData, session),
+            (session) =>
+                orderRepository.create(orderData, session).then((written) =>
+                    // Throwing is what aborts the transaction, taking the order and its event with it.
+                    input.commitWith
+                        ? input.commitWith(session).then((landed) => {
+                              if (!landed) throw new OrderSuperseded();
+                              return written;
+                          })
+                        : written
+                ),
             (written) => createdEvent(String(written._id))
         );
 
@@ -197,6 +220,7 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
                 });
                 // Stryker restore all
             });
+        if (error instanceof OrderSuperseded) return { ok: false, reason: 'superseded' };
         throw error;
     }
 };

@@ -4,8 +4,7 @@
  * into. A folder rather than one file because it passed ~300 lines; see `docs/theory/layers.md`.
  *
  * `place.ts` is the one function that writes a new order; `read.ts`, `crud.ts` and `remove.ts`
- * read, amend and delete one, and `retract.ts` undoes a write `place.ts` or checkout could not keep; `notify.ts` sends the
- * placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
+ * read, amend and delete one; `notify.ts` sends the placed-order email. `cancel.ts` runs the cancellation and the sweep behind its marker,
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  * `availability.ts` answers whether a line is still sellable and cancels an order that no longer
  * is.
@@ -46,7 +45,7 @@ import { unavailableLines } from './availability';
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
  * `cancelById` and `detachUserId` into the events that trigger them, `orders/index.ts` publishes
- * `retractOrder` to `cart`, and the suites drive the operations directly. Publishing fewer names
+ * `placeOrder` to `cart`, and the suites drive the operations directly. Publishing fewer names
  * here would break each of those callers.
  */
 export {
@@ -59,7 +58,6 @@ export {
 } from './read';
 export { create, recordCreated, update, updateById } from './crud';
 export { remove, removeById, restoreById } from './remove';
-export { retractOrder } from './retract';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
 export { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
