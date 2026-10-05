@@ -223,7 +223,13 @@ describe('POST /orders (contract-derived)', () => {
 describe('POST /cart (contract-derived)', () => {
     it('accepts a payload the contract declares legal', async () => {
         const [{ bearer }, product] = await Promise.all([authenticateAs('user'), createProduct()]);
-        const payload = { ...validPayload(AddCartItemBody), productId: String(product._id) };
+        // `quantity` pinned to 1: the generated one is the contract's own hard ceiling (999), which
+        // a shop's per-line cap (default 10) correctly refuses as a business rule, not as a shape.
+        const payload = {
+            ...validPayload(AddCartItemBody),
+            productId: String(product._id),
+            quantity: 1
+        };
 
         const response = await api().post('/cart').set('Authorization', bearer).send(payload);
 
@@ -527,6 +533,8 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         userId: (world) => world.userId,
         productId: (world) => world.productId
     },
+    // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
+    updateCartItemById: { quantity: () => 1 },
     createPaymentIntent: { orderId: (world) => world.orderId },
     createReturn: {
         orderId: (world) => world.orderId,
