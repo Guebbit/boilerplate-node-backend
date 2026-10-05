@@ -1376,6 +1376,8 @@ describe('orderConfirm — paymentMethod', () => {
 
             expect(asReject(result).status).toBe(409);
             expect(asReject(result).errors[0].code).toBe('CART_OPEN_ORDER_LIMIT');
+            // Plain words for a shopper: no API route in the sentence.
+            expect(asReject(result).errors[0].message).not.toMatch(/POST |\/orders\/|\/payments\//);
             // The buyer is told WHICH orders to pay or cancel.
             expect(asReject(result).errors[0].details).toEqual({
                 orderIds: expect.arrayContaining([String(first._id), String(second._id)])

@@ -22,6 +22,6 @@
         "address-not-applicable": "Nothing in this order ships to an address — remove the shipping address and try again.",
         "ship-to-country-not-supported": "This shop does not ship to the selected address's country.",
         "payment-method-not-available": "The chosen payment method is not offered by this shop.",
-        "open-order-limit": "You already have unpaid orders open. Pay one (POST /payments/intent) or cancel one (POST /orders/{id}/cancel) before placing another."
+        "open-order-limit": "You already have unpaid orders open. Pay or cancel one of them before placing another."
     }
 }

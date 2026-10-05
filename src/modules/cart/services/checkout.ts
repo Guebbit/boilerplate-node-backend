@@ -338,7 +338,7 @@ const runCheckout = async (
     const buyerLocale = user.locale ?? getDefaultLocale();
 
     // Both pre-flight steps run before anything is written — an unoffered payment method, an
-    // over-the-cap bank transfer, an unmatched shipping method or an address that isn't the
+    // unpaid-order cap, an unmatched shipping method or an address that isn't the
     // caller's all refuse the checkout while nothing has moved yet.
     const paymentResolution = await resolvePaymentMethod(userId, paymentMethod);
     if (!paymentResolution.ok) return paymentResolution.reject;
