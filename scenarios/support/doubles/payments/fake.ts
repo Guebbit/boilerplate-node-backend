@@ -120,8 +120,8 @@ export const fakePaymentProvider: PaymentProvider = {
 
     // Derived from the payment id rather than generated, which makes it idempotent for free: the
     // double-click case prepares the same reference twice instead of opening a second intent.
-    prepare: (charge, metadata) => {
-        const providerRef = `fake_pi_${metadata.paymentId}`;
+    prepare: (charge, metadata, existingProviderRef) => {
+        const providerRef = existingProviderRef ?? `fake_pi_${metadata.paymentId}`;
         // Stryker disable all
         logger.info(
             `[fake-psp] prepare ${charge.amount} ${charge.currency} for order ${metadata.orderId} → ${providerRef}`

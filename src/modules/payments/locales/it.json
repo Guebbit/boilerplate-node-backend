@@ -6,6 +6,7 @@
         "order-product-unavailable": "Uno o più prodotti di questo ordine non sono più disponibili — vedi `details.lines`.",
         "not-found": "Nessun pagamento trovato",
         "not-confirmable": "Questo pagamento non è in attesa di conferma.",
+        "intent-conflict": "Esiste già un pagamento aperto per questo ordine. Ricarica e riprova.",
         "declined": "Il pagamento è stato rifiutato dall'emittente della carta.",
         "requires_action": "La tua banca deve confermare questo pagamento — segui la richiesta per completarlo.",
         "processing": "Il pagamento è in corso — ti scriveremo appena sarà completato.",

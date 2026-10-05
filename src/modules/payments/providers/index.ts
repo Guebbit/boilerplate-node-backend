@@ -86,14 +86,20 @@ export interface PaymentProvider {
      * Open an intent at the provider for an amount already frozen by this application.
      *
      * Idempotent on `metadata.paymentId`: the double-click case must answer the same intent
-     * rather than opening a second one the customer could also pay.
+     * rather than opening a second one the customer could also pay. When the payment already has
+     * an intent here (`existingProviderRef`), RESUME it: answer that reference with a client
+     * secret for it, as Stripe advises for a checkout that resumes. A different reference back is
+     * refused by the caller, which cancels the stray intent.
+     * https://docs.stripe.com/payments/payment-intents#best-practices
      *
      * @param charge - the frozen amount and its currency
      * @param metadata - what to stamp on the provider's own record, for support and reconciliation
+     * @param existingProviderRef - the reference this payment already holds, when it does
      */
     prepare(
         charge: { amount: number; currency: string },
-        metadata: { orderId: string; paymentId: string }
+        metadata: { orderId: string; paymentId: string },
+        existingProviderRef?: string
     ): Promise<PreparedPayment>;
 
     /**

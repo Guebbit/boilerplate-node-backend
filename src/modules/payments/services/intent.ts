@@ -30,6 +30,46 @@ import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
+ * Refuse an intent the provider opened although the payment already held one: cancel the stray so
+ * nothing is left open that the customer could pay, log it, and answer 409.
+ *
+ * Never rejects: the refusal is already the right answer, and a failed cancel is only logged.
+ *
+ * @param provider - the provider that opened the stray intent
+ * @param strayRef - the reference it returned, which this payment row does not hold
+ * @param orderId - the order being paid
+ * @returns the 409 envelope
+ */
+const rejectStrayIntent = (
+    provider: ReturnType<typeof providerNamed>,
+    strayRef: string,
+    orderId: string
+): Promise<ResponseReject> =>
+    provider
+        .cancel(strayRef, { reason: 'duplicate intent for a payment that already holds one' })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not cancel the stray intent ${strayRef} for order ${orderId}`,
+                error
+            });
+            // Stryker restore all
+        })
+        .then(() => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: the provider opened intent ${strayRef} for order ${orderId}, which already holds another — refused`
+            });
+            // Stryker restore all
+            return generateReject(409, [
+                {
+                    code: ERROR_CODES.PAYMENT_NOT_CONFIRMABLE,
+                    message: t('payments.intent-conflict')
+                }
+            ]);
+        });
+
+/**
  * Who is paying, resolved against `users` rather than copied off the order — a payment history
  * wants an id that pointed at a real account when the money moved, not the order's stale copy.
  * An unresolvable payer does NOT refuse the payment: orders survive account deletion, so the
@@ -110,8 +150,8 @@ export const createIntent = async (
             }
         ]);
 
-    // The provider is asked for an intent only when this payment does not already have one — a
-    // second intent for the same order is a second thing the customer could pay.
+    // A payment that already has an intent resumes it (the stored reference is handed to
+    // `prepare`): a second intent for the same order is a second thing the customer could pay.
     // No provider configured: this deployment takes no card payments, and the order stays unpaid.
     const provider = resolvePaymentProvider();
     if (!provider) return cardNotAvailable();
@@ -130,8 +170,13 @@ export const createIntent = async (
 
     const { providerRef, clientSecret } = await provider.prepare(
         { amount: payment.amount, currency: payment.currency },
-        { orderId, paymentId: String(payment._id) }
+        { orderId, paymentId: String(payment._id) },
+        payment.providerRef
     );
+    // Backstop for an adapter that opened a new intent instead of resuming: the row keeps the
+    // first, so the browser must not be handed the second's secret. The stray is cancelled.
+    if (payment.providerRef && providerRef !== payment.providerRef)
+        return rejectStrayIntent(provider, providerRef, orderId);
     const stored = await paymentRepository.attachProviderRef(String(payment._id), providerRef);
     const prepared = {
         ...presentPayment(stored ?? payment),
