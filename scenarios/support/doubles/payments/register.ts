@@ -25,8 +25,10 @@ const loadFakePaymentProvider = (): Promise<PaymentProvider> =>
  */
 export const lazyFakePaymentProvider: PaymentProvider = {
     name: 'fake',
-    prepare: (charge, metadata) =>
-        loadFakePaymentProvider().then((provider) => provider.prepare(charge, metadata)),
+    prepare: (charge, metadata, existingProviderRef) =>
+        loadFakePaymentProvider().then((provider) =>
+            provider.prepare(charge, metadata, existingProviderRef)
+        ),
     confirm: (providerRef, paymentMethodRef) =>
         loadFakePaymentProvider().then((provider) =>
             provider.confirm(providerRef, paymentMethodRef)
