@@ -60,6 +60,21 @@ const giveBackAndDeleteHold = async (
 };
 
 /**
+ * The lines in the order they are taken: by product id, whatever order the caller listed them in.
+ *
+ * One consistent lock order is what keeps two multi-line checkouts from refusing each other: two
+ * orders listing the same products oppositely would each take their first line, find the other's
+ * unit gone on the second, and both give up. Sorted, they meet on the same product first and one
+ * goes on. https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-DEADLOCKS
+ *
+ * @param lines - the lines as the caller listed them
+ * @returns a copy sorted by product id
+ */
+const inLockOrder = (lines: readonly StockLine[]): StockLine[] =>
+    // Hex ids: any fixed locale orders them the same way on every worker.
+    lines.toSorted((a, b) => a.productId.localeCompare(b.productId, 'en'));
+
+/**
  * Hold every line for an order, or hold none of it.
  *
  * Exactly-once: the hold is written first, and its unique `orderId` means a retried checkout
@@ -95,7 +110,7 @@ export const reserveForOrder = async (
     const taken: StockLine[] = [];
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
     try {
-        for (const line of lines) {
+        for (const line of inLockOrder(lines)) {
             const held = await applyTransition(
                 StockMovementReason.reserve,
                 line.productId,
