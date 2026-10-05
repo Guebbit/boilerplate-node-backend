@@ -9,7 +9,7 @@
  * cart, never a 404.
  */
 
-import { sumLineItems, shopCurrency } from '@modules/orders';
+import { orderTotal, sumLineItems, shopCurrency } from '@modules/orders';
 import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
@@ -171,7 +171,9 @@ export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
                 totalQuantity: quantity,
                 itemsTotal: price,
                 shippingCost,
-                totalPrice: price + shippingCost,
+                // The order and the payment intent total in minor units; adding the two decimals here
+                // would show 5.5600000000000005 for a basket that is charged 5.56.
+                totalPrice: orderTotal({ items: lines, shippingCost, currency }),
                 currency
             },
             shipping: { required, selected, options }
