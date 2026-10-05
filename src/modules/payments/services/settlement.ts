@@ -306,12 +306,20 @@ const findConfirmable = (
  * `retrieve` only re-reads what the provider already decided, it never asks it to take money.
  *
  * @param orderId - the order the payment being confirmed belongs to
- * @returns the refusal when the order can no longer be paid, `null` to let the confirm proceed
+ * @returns the refusal when the order can no longer be paid, or its stock is not held for it;
+ *   `null` to let the confirm proceed
  */
 const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
     orderService
         .getById(orderId)
-        .then((order) => (order && isPayable(order.status) ? null : notPayable()));
+        .then((order) =>
+            order && isPayable(order.status)
+                ? // Money is taken only for units set aside: a hold already released (an expiry whose
+                  // cancellation has not landed yet) means the shelf may be gone.
+                  inventoryService.isHoldReleased(orderId).then((released) => !released)
+                : false
+        )
+        .then((payable) => (payable ? null : notPayable()));
 
 /**
  * Settle an already-fetched, already-scoped payment via the provider, gated on it currently

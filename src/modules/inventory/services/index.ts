@@ -15,7 +15,8 @@ import {
     restockForOrder,
     refreshStockCacheForOrder,
     extendHoldForOrder,
-    isStockBoundToOrder
+    isStockBoundToOrder,
+    isHoldReleased
 } from './holds';
 import { restockReturnedLines, refreshStockCacheForProducts } from './returns';
 import { runReservationSweep } from './sweep';
@@ -58,6 +59,7 @@ export const inventoryService = {
     refreshStockCacheForProducts,
     extendHoldForOrder,
     isStockBoundToOrder,
+    isHoldReleased,
     runReservationSweep,
     ensureLevel,
     removeLevel,

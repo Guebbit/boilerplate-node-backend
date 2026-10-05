@@ -19,6 +19,7 @@ import { inventoryService } from '@modules/inventory';
 import { cartRepository } from '@modules/cart/repository';
 import { logger } from '@infrastructure/adapters/logger';
 import { resetDomainEvents } from '@kernel/events';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
@@ -432,6 +433,8 @@ describe('the expiry sweep', () => {
             const orderId = String(checkout.success && checkout.data?._id);
 
             const expired = await inventoryService.runReservationSweep();
+            // The announcement rides the outbox; wait for `orders` to have heard it.
+            await settleOutboxNudges();
 
             expect(expired).toBe(1);
             expect(await countersOf(product._id)).toEqual({
@@ -447,6 +450,29 @@ describe('the expiry sweep', () => {
              */
             const stored = await readOrder(orderId);
             expect(stored?.status).toBe('cancelled');
+        }));
+
+    it('undoes the release when its announcement cannot be written, so the next sweep finishes the job', async () =>
+        withoutWindow(async () => {
+            const user = await createUser();
+            await giveAddress(user.id);
+            const product = await createProduct({ onHand: 10 });
+            await cartService.cartItemAddById(user.id, String(product._id), 4);
+            await cartRepository.setShippingMethod(user.id, 'pickup');
+            const checkout = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+            const orderId = String(checkout.success && checkout.data?._id);
+            jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('write failed'));
+
+            await expect(inventoryService.runReservationSweep()).rejects.toThrow('write failed');
+
+            // Nothing half done: still held, and the order still waiting for its hold to end.
+            expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 4 });
+            expect((await readOrder(orderId))?.status).toBe('pending');
+
+            await expect(inventoryService.runReservationSweep()).resolves.toBe(1);
+            await settleOutboxNudges();
+            expect((await readOrder(orderId))?.status).toBe('cancelled');
+            expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 0 });
         }));
 
     it('is idempotent — a second sweep releases nothing', async () =>

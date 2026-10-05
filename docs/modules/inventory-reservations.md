@@ -118,8 +118,11 @@ five-minute tick and two drains would only fight over the same claims.
 
 The `status: 1, expiresAt: 1` index exists for exactly that query, and for nothing else.
 
-When a hold is swept, `inventory.reservation_expired` is published — and
-[`orders`](./orders.md) listens for it and cancels the order. That is the one arrow pointing back
+When a hold is swept, `inventory.reservation_expired` is published through the transactional
+outbox, in the same transaction as the release, so the units come back and the announcement exists
+together or not at all; the relay retries until [`orders`](./orders.md) has heard it, and `orders`
+cancels the order. Until it does, a card confirm on that order is refused: its hold is released, so
+taking money would sell stock that may be gone. That is the one arrow pointing back
 from this module, and it is an event rather than an import precisely so the two mutually-aware
 domains stay acyclic.
 

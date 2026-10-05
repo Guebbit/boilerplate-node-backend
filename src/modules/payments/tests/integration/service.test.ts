@@ -967,6 +967,27 @@ describe('in-flight settlement', () => {
             expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
         }));
 
+    // An expiry that released the hold before its cancellation landed leaves the order `pending`
+    // and payable on paper, with nothing set aside for it: taking money then is the oversell the
+    // hold exists to prevent.
+    it('refuses a card confirm once the order has no hold, rather than charging for stock that may be gone', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        const intent = await createIntent(String(order._id), auth(user));
+        await inventoryService.releaseForOrder(String(order._id), 'expire');
+
+        const result = await confirmPayment(
+            String(intent.success && intent.data?.id),
+            'pm_card_visa',
+            auth(user),
+            testCallerContext
+        );
+
+        expect(result.success).toBe(false);
+        expect(!result.success && result.errors[0]?.code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
+        expect((await orderService.getById(String(order._id)))!.status).toBe('pending');
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
+    });
+
     it('does not extend the hold for a mere challenge — only processing does', () =>
         withEnvironment('NODE_RESERVATION_TTL_MINUTES', '0', async () => {
             const { user, product, order } = await placedOrder(10, 3);

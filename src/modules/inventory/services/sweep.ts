@@ -4,14 +4,14 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { StockMovementReason } from '@types';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { reservationRepository } from '../repository';
 import { RESERVATION_EXPIRED } from '../events';
 import { inventoryAuditActions } from '../audit';
-import { releaseForOrder } from './holds';
+import { refreshStockCacheForOrder, releaseForOrder } from './holds';
 
 /** How many holds one batch of a sweep reads and expires. */
 const SWEEP_BATCH_SIZE = 200;
@@ -24,6 +24,34 @@ const SWEEP_BATCH_SIZE = 200;
 const SWEEP_MAX_BATCHES = 50;
 
 /**
+ * Release one stale hold and announce it, as ONE transaction: the units come back and the
+ * `RESERVATION_EXPIRED` event row is written together, or neither is.
+ *
+ * Releasing first and emitting after left a crash window: a hold released with its announcement
+ * lost left the order `pending` with nothing set aside for it, and still payable. Through the
+ * outbox the relay retries the announcement until `orders` has heard it, and a redelivery is safe:
+ * the system actor cancels only an order still `pending`.
+ *
+ * @param orderId - the order whose hold is stale
+ * @returns whether this call was the one that released it
+ */
+const expireOne = (orderId: string): Promise<boolean> =>
+    announceInTransaction(
+        (session) =>
+            releaseForOrder(orderId, StockMovementReason.expire, session).then((released) =>
+                released ? { orderId } : null
+            ),
+        (written) => ({
+            name: RESERVATION_EXPIRED,
+            payload: written,
+            aggregateId: written.orderId
+        })
+    ).then((written) =>
+        // The catalogue's stock cache is written outside the transaction, so only after it commits.
+        written === null ? false : refreshStockCacheForOrder(orderId).then(() => true)
+    );
+
+/**
  * Expire one batch of stale holds: each is released and announced.
  *
  * @param stale - holds past their window, as `findExpired` returned them
@@ -32,14 +60,7 @@ const SWEEP_MAX_BATCHES = 50;
 const expireBatch = async (stale: readonly { orderId: unknown }[]): Promise<number> => {
     let expired = 0;
 
-    for (const hold of stale) {
-        const orderId = String(hold.orderId);
-        const released = await releaseForOrder(orderId, StockMovementReason.expire);
-        if (!released) continue;
-
-        expired += 1;
-        await emitDomainEvent(RESERVATION_EXPIRED, { orderId });
-    }
+    for (const hold of stale) if (await expireOne(String(hold.orderId))) expired += 1;
 
     return expired;
 };

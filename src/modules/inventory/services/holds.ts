@@ -209,6 +209,19 @@ export const extendHoldForOrder = (orderId: string, hours: number): Promise<void
         .then(() => undefined);
 
 /**
+ * Was this order's hold given back without a sale — released by a cancel or an expiry?
+ *
+ * Such an order has nothing set aside for it, whatever its own status still says: an expiry
+ * releases the hold first and cancels the order after. A missing hold is NOT this: only a closed
+ * one names the oversell the payment gate guards against.
+ *
+ * @param orderId - the order being asked about
+ * @returns whether its hold is in the `released` state
+ */
+export const isHoldReleased = (orderId: string): Promise<boolean> =>
+    reservationRepository.findByOrderId(orderId).then((hold) => hold?.status === 'released');
+
+/**
  * Are this order's units bound to the lines it currently holds?
  *
  * The hold freezes its own copy of the basket; `held`/`committed` means the counters answer to

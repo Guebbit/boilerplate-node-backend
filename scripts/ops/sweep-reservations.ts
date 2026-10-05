@@ -5,7 +5,7 @@
  *
  * Shares:    `POST /inventory/reservations/sweep`, the admin route this schedules; nothing else
  *            calls it, so without this schedule an abandoned checkout would hold its units forever.
- * Registers: `registerModules` first — this sweep works by emitting `RESERVATION_EXPIRED`, and
+ * Registers: `registerModules` first — this sweep works by announcing `RESERVATION_EXPIRED`, and
  *            without the modules registered there is no `orders` listener to hear it, the same
  *            trap `sweep-order-effects.ts` guards against.
  * i18n:      `bootI18n` is for the bank-transfer expiry email cancel sends when the expiry, not a
@@ -20,6 +20,7 @@ import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enabledModules, enabledModuleLocales } from '../../src/modules';
 import { inventoryService } from '@modules/inventory';
 import { logger } from '@infrastructure/adapters/logger';
@@ -44,8 +45,10 @@ const main = (): Promise<void> =>
             return bootI18n(enabledModuleLocales());
         })
         .then(() =>
+            // Each expiry's announcement rides the outbox; settled inside the lease so `orders` has
+            // heard every one before the connections close.
             withLease('sweep:reservations', LEASE_TTL_MS, () =>
-                inventoryService.runReservationSweep()
+                inventoryService.runReservationSweep().then(() => settleOutboxNudges())
             )
         )
         .then((ran) => {
