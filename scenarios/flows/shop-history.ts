@@ -210,8 +210,9 @@ const plannedDemand = (): Map<string, number> => {
         for (const [index, quantity] of lines) add({ productId: fillerProductId(index), quantity });
     for (const lines of CUSTOMER_ORDERS) for (const line of lines) add(line);
     // The named rows below, in the order they appear: nine dog-food orders and the one big bed
-    // order. Overstated rather than counted line by line — a shelf with spare units on it is a
-    // shop, and a shelf one unit short is a checkout that fails three hundred requests into a boot.
+    // order (one cart line, so at most `cartLineMax()` units). Overstated rather than counted line
+    // by line — a shelf with spare units on it is a shop, and a shelf one unit short is a checkout
+    // that fails three hundred requests into a boot.
     add({ productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 40 });
     add({ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 30 });
     // The three `current`-image demo rows below, each bought alone once and again inside
@@ -504,7 +505,7 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
      * basket well over the free-above threshold, so what it froze is 0 rather than the rate card.
      */
     subjects['order.shipped'] = dated(
-        await checkout(customer, [{ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 20 }], {
+        await checkout(customer, [{ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 10 }], {
             shippingMethodId: 'standard'
         })
     );
