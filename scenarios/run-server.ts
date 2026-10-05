@@ -74,6 +74,9 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // `orders`' and `products`' own boot-time requirements — `assertModuleConfig` no
     // longer exempts this profile, so it satisfies the gate the ordinary way, with the same
     // values `.env-example` ships for a plain developer checkout.
+    // The mailbox a contact request is notified to falls back to the sender; with none, the
+    // operator's mail is never queued and the e2e that reads it can only fail.
+    NODE_SMTP_SENDER: 'Demo Shop <noreply@example.com>',
     NODE_SHOP_COUNTRY: 'IT',
     NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
     NODE_SHOP_STREET: 'Via Roma 1',
