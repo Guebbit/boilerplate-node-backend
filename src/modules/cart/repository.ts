@@ -92,6 +92,7 @@ const unchangedOrPushed = (
  * longer matches because a concurrent write already changed it — so it costs one more read to
  * settle: still no line, push it; room reappeared since the first attempt, retry the whole call
  * (the same convergence the duplicate-key branch below uses); genuinely no room, QUANTITY_LIMIT.
+ * A line that does not exist yet is refused the same way when `quantity` alone exceeds the ceiling.
  */
 const upsertLine = (
     userId: string,
@@ -151,8 +152,12 @@ const upsertLine = (
                             item.productId.equals(line)
                         )?.quantity;
 
+                        // No line yet: the filter above only guards a line that exists, so a NEW
+                        // line is checked against the ceiling here, before anything is written.
                         if (currentQuantity === undefined)
-                            return pushNewLine(owner, line, quantity);
+                            return quantity > lineMax
+                                ? QUANTITY_LIMIT
+                                : pushNewLine(owner, line, quantity);
                         if (currentQuantity + quantity > lineMax) return QUANTITY_LIMIT;
 
                         // Room exists now, even though the atomic attempt above just missed — read

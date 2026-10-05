@@ -101,6 +101,20 @@ describe('POST /cart', () => {
             expect(response.body.errors[0].code).toBe('CART_QUANTITY_LIMIT');
         }));
 
+    it('422s an add whose new line is already past the per-line ceiling', () =>
+        withEnvironment('NODE_CART_LINE_MAX', '10', async () => {
+            const { bearer } = await authenticateAs('user');
+            const product = await createProduct();
+
+            const response = await api()
+                .post('/cart')
+                .set('Authorization', bearer)
+                .send({ productId: String(product._id), quantity: 11 });
+
+            expect(response.status).toBe(422);
+            expect(response.body.errors[0].code).toBe('CART_QUANTITY_LIMIT');
+        }));
+
     it('matches the error contract for a product that does not exist', async () => {
         const { bearer } = await authenticateAs('user');
         const response = await api()
