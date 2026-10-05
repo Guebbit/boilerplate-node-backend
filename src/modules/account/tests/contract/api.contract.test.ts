@@ -838,6 +838,20 @@ describe('POST /account/export', () => {
     });
 });
 
+describe('POST /account/export for an account that is gone', () => {
+    // A valid session whose account vanished (deleted between the session check and the export):
+    // the contract declares this 404 rather than leaving it undocumented.
+    it('answers 404', async () => {
+        const { bearer } = await loginWithCookie();
+        jest.spyOn(userService, 'getById').mockResolvedValueOnce(undefined);
+
+        const response = await api().post('/account/export').set('Authorization', bearer).send();
+
+        expect(response.status).toBe(404);
+        jest.restoreAllMocks();
+    });
+});
+
 describe('POST /account/export without a session', () => {
     it('answers 401', async () => {
         const response = await api().post('/account/export').send();
