@@ -2,11 +2,9 @@
  * @module
  * The named ids and credentials a consumer that cannot import module code still needs to point at
  * a specific seeded row: a generated API client collection, and `GET /__test/scenario`'s
- * `subjects`. Import-free by construction —
- * `scripts/contracts/client-collections-bundle.ts` runs inside `npm run contracts:bundle`, before
- * `api/` exists, so anything it reads has to resolve without pulling in a module's code (which
- * imports the generated `@api/` client — see `scripts/contracts/openapi-bundle.ts` for the cycle
- * that broke `npm ci` the same way).
+ * `subjects`. It imports `@scenarios/accounts` (the seed passwords come from app config) and
+ * nothing generated: the collections that read it are loaded on demand, and the
+ * bundler itself must never reach `api/` (`.dependency-cruiser.bootstrap.cjs` guards that).
  *
  * ONLY PINNED ROWS LIVE HERE. Orders, payments and shipments are produced by driving the app
  * (`scenarios/flows/`), so their ids are minted at boot and recorded by the runner instead;

@@ -39,7 +39,7 @@ import {
     type Section,
     type ValueSources
 } from '@guebbit/openapi-runnable-collections';
-import { REPO_ROOT, type ContractBundle } from './bundle-kinds';
+import { REPO_ROOT } from './bundle-kinds';
 import { SECTION_ORDER, sectionPaths } from './openapi-bundle';
 import { SEED_PRODUCT_IDS, SUBJECTS } from '../../scenarios/subjects';
 
@@ -238,46 +238,19 @@ const generate = (): Promise<GenerateResult> =>
 export const allProbes = (): Promise<CollectionRequest[]> =>
     generate().then((result) => result.requests.filter((request) => request.probe));
 
-/** What a tool's committed document should contain. */
-const contentFor = (tool: CollectionTool) => (): Promise<string> =>
+/**
+ * What a tool's generated document contains.
+ *
+ * The registry reaches this through a dynamic `import()` (see `bundle-registry.ts`), so loading
+ * the registry never loads the seed values above.
+ *
+ * @param tool - which tool's format to render
+ * @returns the document text
+ */
+export const collectionContent = (tool: CollectionTool): Promise<string> =>
     generate().then((result) => {
         const document = result.bundles[tool];
         if (document === undefined)
             throw new Error(`[collections] the generator emitted no ${tool} document.`);
         return document;
     });
-
-/*
- * Written to the repo root as `contract.<tool>.<ext>`, next to `openapi.yaml` — deliberately not
- * in a dotfolder. They are the contract rendered for each tool, so they land beside the document
- * they are derived from, where whoever asked for one will look. `.gitignore` keeps them out of the
- * repo; the path is about where a generated file is easiest to find, not about tracking it.
- */
-
-/**
- * One tool's collection as a generated contract bundle.
- *
- * @param tool - which tool's format to render
- * @param file - the file name at the repo root
- * @returns the bundle entry the registry builds and checks
- */
-const collectionBundle = (tool: CollectionTool, file: string): ContractBundle => ({
-    name: tool,
-    generated: true,
-    label: file,
-    output: path.join(REPO_ROOT, file),
-    content: contentFor(tool)
-});
-
-/** The Bruno collection bundle. */
-export const brunoBundle = collectionBundle('bruno', 'contract.bruno.yml');
-
-// Named `.json` after the tool's own export convention, and YAML inside — Insomnia's importer
-// accepts either and keys on the content, not the extension.
-export const insomniaBundle = collectionBundle('insomnia', 'contract.insomnia.json');
-
-/** The Mockoon environment bundle. */
-export const mockoonBundle = collectionBundle('mockoon', 'contract.mockoon.json');
-
-/** The Postman collection bundle. */
-export const postmanBundle = collectionBundle('postman', 'contract.postman.json');

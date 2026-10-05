@@ -112,6 +112,19 @@ the generated map at [Modules](../modules/index.md) — see
 [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) for why
 the relationship _kind_ and _reasoning_ stay in `module.ts`'s docblock instead of here.
 
+### The bootstrap chain
+
+`postinstall` bundles the contracts before it generates `api/`, so on a clean checkout the bundler
+may not reach generated code. `.dependency-cruiser.bootstrap.cjs`, the third cruise in
+`check:dependencies`, starts at `scripts/contracts/build-bundles.ts` and fails if its static imports
+reach `api/` (bar `api/permission-actions.ts`, built first on purpose) or
+`src/types/asyncapi.generated.ts`.
+
+It is its own config because it must not follow dynamic `import()`: that is how the client
+collections stay opt-in (`bundle-registry.ts`), and a `reachable` rule cannot filter edge types.
+Locally nobody sees this break, since every checkout already has `api/` from an earlier run; CI on
+a fresh clone does.
+
 ### Cycles
 
 `A → B → A` compiles, lints and runs. It fails only in whichever order the module system happens to
