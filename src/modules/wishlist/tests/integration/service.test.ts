@@ -7,6 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -221,23 +222,25 @@ describe('wishlistMoveToCart', () => {
      * 422 says something the shopper needs to hear, so it passes through rather than becoming
      * this module's 404 — the product is fine, the existing cart line is just already full.
      */
-    it('forwards the cart 422 once the existing line is already at 999, instead of a 404', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartService.cartItemAddById(user.id, String(product._id), 999);
-        await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
+    // A ceiling of one unit fills the line with a single add, whatever the shop's own default.
+    it('forwards the cart 422 once the existing line is already full, instead of a 404', () =>
+        withEnvironment('NODE_CART_LINE_MAX', '1', async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartService.cartItemAddById(user.id, String(product._id), 1);
+            await wishlistService.wishlistAdd(user.id, String(product._id), testCallerContext);
 
-        const result = await wishlistService.wishlistMoveToCart(
-            user.id,
-            String(product._id),
-            testCallerContext
-        );
+            const result = await wishlistService.wishlistMoveToCart(
+                user.id,
+                String(product._id),
+                testCallerContext
+            );
 
-        expect(result.success).toBe(false);
-        expect(result.status).toBe(422);
-        // Still saved, same as the other refusals above — nothing was lost.
-        expect(await savedIds(user.id)).toEqual([String(product._id)]);
-    });
+            expect(result.success).toBe(false);
+            expect(result.status).toBe(422);
+            // Still saved, same as the other refusals above — nothing was lost.
+            expect(await savedIds(user.id)).toEqual([String(product._id)]);
+        }));
 });
 
 describe('the module subscriptions', () => {

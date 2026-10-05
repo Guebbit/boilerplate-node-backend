@@ -8,6 +8,10 @@
  * so this file's writes come before anything that could read.
  *
  * Every line below is a default (`??=`): a real environment variable wins.
+ *
+ * Budgets are raised here; business rules (a cap, a per-line ceiling) never are. The scenario
+ * suites build the demo shop in this environment, so a rule raised here passes a seed that
+ * production refuses. A case that needs a looser rule sets it itself, with `withEnvironment`.
  */
 
 import { tmpdir } from 'node:os';
@@ -103,13 +107,6 @@ process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
  * downloads the same seeded order's invoice repeatedly across many cases.
  */
 process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
-
-/**
- * The per-line cart ceiling is raised to the contract's hard 999: the real default (10) is a shop's
- * own choice, and the suites build baskets of whatever size their case needs. The cases about the
- * knob itself set their own value.
- */
-process.env.NODE_CART_LINE_MAX ??= '999';
 
 /**
  * The per-mailbox mail budget is keyed on the RECIPIENT, and the suites mail the same few seeded

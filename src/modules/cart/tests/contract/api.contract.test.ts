@@ -88,17 +88,18 @@ describe('POST /cart', () => {
         expect(response.body.data.summary.totalQuantity).toBe(5);
     });
 
-    it('422s an add that would push a line past the per-line ceiling', async () => {
-        const { bearer, product } = await authenticateWithCart(999);
+    it('422s an add that would push a line past the per-line ceiling', () =>
+        withEnvironment('NODE_CART_LINE_MAX', '2', async () => {
+            const { bearer, product } = await authenticateWithCart(2);
 
-        const response = await api()
-            .post('/cart')
-            .set('Authorization', bearer)
-            .send({ productId: String(product._id), quantity: 1 });
+            const response = await api()
+                .post('/cart')
+                .set('Authorization', bearer)
+                .send({ productId: String(product._id), quantity: 1 });
 
-        expect(response.status).toBe(422);
-        expect(response.body.errors[0].code).toBe('CART_QUANTITY_LIMIT');
-    });
+            expect(response.status).toBe(422);
+            expect(response.body.errors[0].code).toBe('CART_QUANTITY_LIMIT');
+        }));
 
     it('matches the error contract for a product that does not exist', async () => {
         const { bearer } = await authenticateAs('user');

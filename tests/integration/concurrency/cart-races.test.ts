@@ -23,6 +23,7 @@
 import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
+import { withEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
@@ -38,32 +39,36 @@ describe('R3 — concurrent writes of the SAME product', () => {
      * sum, and exactly one of them — whoever created the line — is answered 201. Two participants
      * both concluding "absent" and both appending is the failure the `$ne`-in-filter guard
      * prevents; a lost increment is the one the filtered `$inc` prevents.
+     *
+     * The line ends at exactly `RACE_SIZE` units, so the per-line ceiling is set to fit it: the race
+     * size is a knob, and a ceiling below it would turn the last adds into refusals.
      */
-    it('leaves one cart holding one line, never the same product twice', async () => {
-        const { user, bearer } = await authenticateAs();
-        const product = await createProduct({ onHand: RACE_SIZE * 5 });
+    it('leaves one cart holding one line, never the same product twice', () =>
+        withEnvironment('NODE_CART_LINE_MAX', String(RACE_SIZE), async () => {
+            const { user, bearer } = await authenticateAs();
+            const product = await createProduct({ onHand: RACE_SIZE * 5 });
 
-        const results = await raceN(RACE_SIZE, () =>
-            api()
-                .post('/cart')
-                .set('Authorization', bearer)
-                .send({ productId: String(product._id), quantity: 1 })
-        );
+            const results = await raceN(RACE_SIZE, () =>
+                api()
+                    .post('/cart')
+                    .set('Authorization', bearer)
+                    .send({ productId: String(product._id), quantity: 1 })
+            );
 
-        expectNoServerErrors(results);
-        // Every participant gets an answer, and only the one that created the line got a 201.
-        expect(countStatus(results, 201)).toBe(1);
-        expect(countStatus(results, 200)).toBe(RACE_SIZE - 1);
+            expectNoServerErrors(results);
+            // Every participant gets an answer, and only the one that created the line got a 201.
+            expect(countStatus(results, 201)).toBe(1);
+            expect(countStatus(results, 200)).toBe(RACE_SIZE - 1);
 
-        // One cart document — the unique `userId` index plus the retry, working together.
-        expect(await cartModel.countDocuments({ userId: user._id })).toBe(1);
+            // One cart document — the unique `userId` index plus the retry, working together.
+            expect(await cartModel.countDocuments({ userId: user._id })).toBe(1);
 
-        const cart = await cartModel.findOne({ userId: user._id });
-        // The line, once. Two participants both concluding "absent" and both appending is the
-        // failure the `$ne`-in-filter guard prevents.
-        expect(cart?.items).toHaveLength(1);
-        expect(cart?.items[0]?.quantity).toBe(RACE_SIZE);
-    });
+            const cart = await cartModel.findOne({ userId: user._id });
+            // The line, once. Two participants both concluding "absent" and both appending is the
+            // failure the `$ne`-in-filter guard prevents.
+            expect(cart?.items).toHaveLength(1);
+            expect(cart?.items[0]?.quantity).toBe(RACE_SIZE);
+        }));
 });
 
 describe('R3 — concurrent adds of DIFFERENT products', () => {

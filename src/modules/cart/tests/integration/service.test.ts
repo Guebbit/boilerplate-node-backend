@@ -80,6 +80,15 @@ const storedQuantity = async (userId: string, productId: string): Promise<number
 };
 
 /**
+ * Runs `body` with the per-line ceiling (`NODE_CART_LINE_MAX`) at the shipped default. Pinned
+ * rather than left to the environment, so a developer's own `.env` value cannot move it.
+ */
+const atDefault = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE_MAX', '10', body);
+
+/** Runs `body` with the per-line ceiling at the contract's hard 999, for the cases about that bound. */
+const atHardCap = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE_MAX', '999', body);
+
+/**
  * Gives a user a default address — the checkout rule requires one for `standard`/`express`
  * (both `requiresAddress`), which most of this file's cases have no reason to set up themselves.
  */
@@ -434,15 +443,16 @@ describe('cartItemSetById', () => {
         await expect(storedQuantity(first.id, String(product._id))).resolves.toBe(1);
     });
 
-    it('sets a line straight to the 999 cap — the set path never goes through the add refusal', async () => {
-        const user = await createUser();
-        const product = await createProduct();
+    it('sets a line straight to the 999 cap — the set path never goes through the add refusal', () =>
+        atHardCap(async () => {
+            const user = await createUser();
+            const product = await createProduct();
 
-        const result = await cartItemSetById(user.id, String(product._id), 999);
+            const result = await cartItemSetById(user.id, String(product._id), 999);
 
-        expect(result.success).toBe(true);
-        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
-    });
+            expect(result.success).toBe(true);
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+        }));
 });
 
 describe('cartItemAddById', () => {
@@ -541,67 +551,66 @@ describe('cartItemAddById', () => {
      * request to 999, but nothing stopped two `'add'`s from clearing that ceiling together until
      * the repository filter carried the cap itself.
      */
-    it('refuses an add that would push a line past 999, and changes nothing', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartItemSetById(user.id, String(product._id), 999);
+    it('refuses an add that would push a line past 999, and changes nothing', () =>
+        atHardCap(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartItemSetById(user.id, String(product._id), 999);
 
-        const result = await cartItemAddById(user.id, String(product._id), 1);
+            const result = await cartItemAddById(user.id, String(product._id), 1);
 
-        expect(result.success).toBe(false);
-        expect(asReject(result).status).toBe(422);
-        const [error] = asReject(result).errors;
-        expect(error.code).toBe('CART_QUANTITY_LIMIT');
-        expect(error.message).toBe(t('cart.quantity-limit'));
-        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
-    });
+            expect(result.success).toBe(false);
+            expect(asReject(result).status).toBe(422);
+            const [error] = asReject(result).errors;
+            expect(error.code).toBe('CART_QUANTITY_LIMIT');
+            expect(error.message).toBe(t('cart.quantity-limit'));
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+        }));
 });
 
 describe('reorderIntoCart', () => {
-    it('clamps a reordered line to 999 instead of pushing it past the cap', async () => {
-        const user = await createUser();
-        const product = await createProduct();
-        await cartItemSetById(user.id, String(product._id), 998);
-        const order = await createOrder(user, [toOrderItem(product, 2)]);
+    it('clamps a reordered line to 999 instead of pushing it past the cap', () =>
+        atHardCap(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+            await cartItemSetById(user.id, String(product._id), 998);
+            const order = await createOrder(user, [toOrderItem(product, 2)]);
 
-        const result = await cartService.reorderIntoCart(
-            asCustomer(user.id),
-            String(order._id),
-            testCallerContext
-        );
+            const result = await cartService.reorderIntoCart(
+                asCustomer(user.id),
+                String(order._id),
+                testCallerContext
+            );
 
-        expect(result.success).toBe(true);
-        // 999, not 1000: the order asked to add 2, only 1 fit.
-        await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
-    });
+            expect(result.success).toBe(true);
+            // 999, not 1000: the order asked to add 2, only 1 fit.
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(999);
+        }));
 
-    it('skips a line already at 999, the same as an unavailable product', async () => {
-        const user = await createUser();
-        const kept = await createProduct({ title: 'Kept' });
-        const full = await createProduct({ title: 'Full' });
-        await cartItemSetById(user.id, String(full._id), 999);
-        const order = await createOrder(user, [toOrderItem(kept, 1), toOrderItem(full, 1)]);
+    it('skips a line already at 999, the same as an unavailable product', () =>
+        atHardCap(async () => {
+            const user = await createUser();
+            const kept = await createProduct({ title: 'Kept' });
+            const full = await createProduct({ title: 'Full' });
+            await cartItemSetById(user.id, String(full._id), 999);
+            const order = await createOrder(user, [toOrderItem(kept, 1), toOrderItem(full, 1)]);
 
-        const result = await cartService.reorderIntoCart(
-            asCustomer(user.id),
-            String(order._id),
-            testCallerContext
-        );
+            const result = await cartService.reorderIntoCart(
+                asCustomer(user.id),
+                String(order._id),
+                testCallerContext
+            );
 
-        expect(result.success).toBe(true);
-        await expect(storedQuantity(user.id, String(kept._id))).resolves.toBe(1);
-        await expect(storedQuantity(user.id, String(full._id))).resolves.toBe(999);
-    });
+            expect(result.success).toBe(true);
+            await expect(storedQuantity(user.id, String(kept._id))).resolves.toBe(1);
+            await expect(storedQuantity(user.id, String(full._id))).resolves.toBe(999);
+        }));
 });
 
 /*
- * The shop's own per-line ceiling (`NODE_CART_LINE_MAX`, default 10). The suite runs with it raised
- * to the contract's 999 (`tests/support/setup-environment.ts`); these cases set it back to what a
- * deployment gets, because it is one of the three knobs on denial of inventory.
+ * The shop's own per-line ceiling (`NODE_CART_LINE_MAX`, default 10): one of the three knobs on
+ * denial of inventory.
  */
-/** Run `body` with the per-line ceiling at the shipped default. */
-const atDefault = (body: () => Promise<void>) => withEnvironment('NODE_CART_LINE_MAX', '10', body);
-
 describe('NODE_CART_LINE_MAX', () => {
     it('refuses a set past the ceiling, and writes nothing', () =>
         atDefault(async () => {
@@ -638,6 +647,18 @@ describe('NODE_CART_LINE_MAX', () => {
             await expect(storedQuantity(user.id, String(product._id))).resolves.toBe(10);
         }));
 
+    it('refuses an add that creates a line past the ceiling, and writes nothing', () =>
+        atDefault(async () => {
+            const user = await createUser();
+            const product = await createProduct();
+
+            const result = await cartItemAddById(user.id, String(product._id), 11);
+
+            expect(asReject(result).status).toBe(422);
+            expect(asReject(result).errors[0].code).toBe('CART_QUANTITY_LIMIT');
+            await expect(storedQuantity(user.id, String(product._id))).resolves.toBeUndefined();
+        }));
+
     it('clamps a reordered line to what room the ceiling leaves', () =>
         atDefault(async () => {
             const user = await createUser();
@@ -660,7 +681,9 @@ describe('NODE_CART_LINE_MAX', () => {
         const user = await createUser();
         await giveUserAnAddress(user.id);
         const product = await createProduct({ onHand: 100 });
-        await cartItemSetById(user.id, String(product._id), 50);
+        await atHardCap(async () => {
+            await cartItemSetById(user.id, String(product._id), 50);
+        });
         await cartRepository.setShippingMethod(user.id, 'pickup');
 
         await atDefault(async () => {
