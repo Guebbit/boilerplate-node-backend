@@ -18,7 +18,6 @@ describe('findShippingMethod', () => {
             id: 'express',
             price: 15,
             tracked: true,
-            maxInsuredValue: 500,
             maxWeight: 5000,
             requiresAddress: true
         });

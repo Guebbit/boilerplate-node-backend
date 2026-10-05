@@ -55,8 +55,8 @@ removal, not a broken build.
 There is no courier simulation any more — a parcel moves only when staff record it, through this
 module's own doors. `unique: true` on `orderId` keeps it to one parcel per order.
 
-Each shipping method (`domain/rates.ts`) says, informationally, whether it is `tracked` and, if so,
-its `maxInsuredValue` — standard is untracked, express is tracked and insured, pickup is untracked.
+Each shipping method (`domain/rates.ts`) says whether it is `tracked` — standard is untracked,
+express is tracked, pickup is untracked.
 `tracked` is what `POST /delivery/order/{orderId}/ship` enforces: a tracking code is required for a
 tracked method, refused with a named 422 otherwise.
 
