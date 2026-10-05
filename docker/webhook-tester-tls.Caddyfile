@@ -9,5 +9,17 @@
 
 :{$WEBHOOK_TLS_PORT:8443} {
 	tls /certs/webhook-sink-cert.pem /certs/webhook-sink-key.pem
-	reverse_proxy {$WEBHOOK_UPSTREAM:webhook-tester:8080}
+
+	# A path containing `dead` answers 503, as the FE's in-process demo sink does. The IN4 e2e
+	# journey relies on it to get a failing delivery; a manual dev delivery to such a path fails too.
+	# `handle` blocks, not bare directives, so the 503 is chosen before the proxy whatever Caddy's
+	# default directive order is: https://caddyserver.com/docs/caddyfile/directives/handle
+	@dead path *dead*
+	handle @dead {
+		respond 503
+	}
+
+	handle {
+		reverse_proxy {$WEBHOOK_UPSTREAM:webhook-tester:8080}
+	}
 }
