@@ -375,7 +375,7 @@ components:
         ExportShipment:
             type: object
             additionalProperties: false
-            required: [id, orderId, trackingCode, status]
+            required: [id, orderId, status]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -383,6 +383,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 trackingCode:
                     type: string
+                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false).
                 status:
                     type: string
                     enum: [shipped, delivered]
