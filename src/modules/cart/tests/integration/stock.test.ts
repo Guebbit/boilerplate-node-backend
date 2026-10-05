@@ -448,3 +448,40 @@ describe('the expiry sweep', () => {
             expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 0 });
         }));
 });
+
+/** A sellable product (the catalogue cache says 10 on hand) whose level row is gone. */
+const productWithoutLevelRow = async () => {
+    const product = await createProduct({ onHand: 10 });
+    await inventoryService.removeLevel(String(product._id));
+    return product;
+};
+
+describe('a product with no stock-level row', () => {
+    it('is refused by checkout, not sold with nothing set aside', async () => {
+        const user = await createUser();
+        await giveAddress(user.id);
+        const product = await productWithoutLevelRow();
+        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(result.success).toBe(false);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+
+    it('is refused by the admin order create, not sold with nothing set aside', async () => {
+        const user = await createUser();
+        const product = await productWithoutLevelRow();
+
+        const result = await orderService.create(
+            user.id,
+            user.email,
+            [{ productId: String(product._id), quantity: 3 }],
+            callerContextAs('admin')
+        );
+
+        expect(result.success).toBe(false);
+        await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+});

@@ -70,6 +70,12 @@ export const applyTransition = async (
     // transition after the first) skips it entirely.
     if (!(await stockLevelRepository.findByProductId(productId, session))) {
         /*
+         * A `reserve` against no row has nothing to set aside: a level that never existed reads as
+         * nothing available (see `reserve.ts`), so the hold is refused, never reported as taken.
+         */
+        if (reason === StockMovementReason.reserve) return false;
+
+        /*
          * `release`/`expire`/`commit` read "no row" as "nothing to move", not a failure: a
          * product's level row is deleted alongside it (see `module.ts`'s `PRODUCT_DELETED`
          * listener), so a hold still open against a since-deleted line has nowhere left to land.
