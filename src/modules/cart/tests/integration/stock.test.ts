@@ -12,6 +12,7 @@ import { withEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
+import { productService } from '@modules/products';
 import { cartService } from '../../services';
 import { orderService } from '@modules/orders';
 import { orderRepository, readOrder, countOrders } from '@modules/orders/tests/factories';
@@ -467,11 +468,13 @@ describe('the expiry sweep', () => {
 
             // Nothing half done: still held, and the order still waiting for its hold to end.
             expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 4 });
-            expect((await readOrder(orderId))?.status).toBe('pending');
+            const pending = await readOrder(orderId);
+            expect(pending?.status).toBe('pending');
 
             await expect(inventoryService.runReservationSweep()).resolves.toBe(1);
             await settleOutboxNudges();
-            expect((await readOrder(orderId))?.status).toBe('cancelled');
+            const cancelled = await readOrder(orderId);
+            expect(cancelled?.status).toBe('cancelled');
             expect(await countersOf(product._id)).toMatchObject({ onHand: 10, reserved: 0 });
         }));
 
@@ -526,5 +529,21 @@ describe('a product with no stock-level row', () => {
 
         expect(result.success).toBe(false);
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
+    });
+});
+
+describe('a catalogue stock cache that sits low', () => {
+    it('does not refuse a sale the ledger covers', async () => {
+        const user = await createUser();
+        await giveAddress(user.id);
+        const product = await createProduct({ onHand: 10 });
+        // The cache lags the ledger (a missed sync): it says nothing is left, the level says 10.
+        await productService.syncStockCache(String(product._id), { onHand: 0, reserved: 0 });
+        await cartService.cartItemAddById(user.id, String(product._id), 3);
+        await cartRepository.setShippingMethod(user.id, 'pickup');
+
+        const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
+
+        expect(result.success).toBe(true);
     });
 });

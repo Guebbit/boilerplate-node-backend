@@ -19,6 +19,7 @@ flowchart LR
     cart["cart<br/><i>this module</i>"]
     addresses["addresses"]
     delivery["delivery"]
+    inventory["inventory"]
     orders["orders"]
     payments["payments"]
     products["products"]
@@ -28,6 +29,7 @@ flowchart LR
     wishlist --> cart
     cart --> addresses
     cart --> delivery
+    cart --> inventory
     cart --> orders
     cart --> payments
     cart --> products
@@ -39,7 +41,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders,products core;
-    class addresses,delivery,payments,wishlist supporting;
+    class addresses,delivery,inventory,payments,wishlist supporting;
     class users generic;
     class cart centre;
 ```

@@ -107,6 +107,7 @@ const toReservationItems = (
  */
 export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLevelDocument>> & {
     ensure: (productId: string, session?: ClientSession) => Promise<StockLevelDocument>;
+    findManyByProductIds: (productIds: readonly string[]) => Promise<StockLevelDocument[]>;
     findByProductId: (
         productId: string,
         session?: ClientSession
@@ -151,6 +152,15 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 { upsert: true, returnDocument: 'after', session }
             )
             .exec(),
+
+    /**
+     * One read for several products' levels.
+     *
+     * @param productIds - the products
+     * @returns the levels that exist; a product with no row is simply absent
+     */
+    findManyByProductIds: (productIds: readonly string[]) =>
+        stockLevelModel.find({ productId: { $in: productIds.map((id) => toObjectId(id)) } }).exec(),
 
     /**
      * @param productId - the product

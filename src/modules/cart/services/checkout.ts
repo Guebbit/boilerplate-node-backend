@@ -21,7 +21,7 @@ import {
     sendOrderPlacedEmail,
     type OrderDocument
 } from '@modules/orders';
-import { availableStock } from '@modules/products';
+import { inventoryService } from '@modules/inventory';
 import { userService } from '@modules/users';
 import { addressForCheckout, type AddressItem } from '@modules/addresses';
 import { findShippingMethod, type StaticShippingMethod } from '@modules/delivery';
@@ -378,6 +378,10 @@ const runCheckout = async (
      * event reports this code, so it must stay stable and locale-independent
      * while `message` is translated for the user.
      */
+    // The ledger decides how much can be sold, never the catalogue's cached copy of it.
+    const availableByProduct = await inventoryService.availableFor(
+        lines.map((line) => line.productId)
+    );
     const verdict = evaluateCheckout(
         lines.map((line) => ({
             ...line,
@@ -385,7 +389,7 @@ const runCheckout = async (
                 title: line.product.title,
                 active: line.product.active,
                 deletedAt: line.product.deletedAt,
-                available: availableStock(line.product.onHand, line.product.reserved)
+                available: availableByProduct.get(line.productId) ?? 0
             }
         }))
     );

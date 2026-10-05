@@ -20,7 +20,14 @@ import {
 } from './holds';
 import { restockReturnedLines, refreshStockCacheForProducts } from './returns';
 import { runReservationSweep } from './sweep';
-import { ensureLevel, removeLevel, listLevels, lowStockCount, listMovements } from './levels';
+import {
+    availableFor,
+    ensureLevel,
+    removeLevel,
+    listLevels,
+    lowStockCount,
+    listMovements
+} from './levels';
 import { receive, adjust } from './admin';
 
 /*
@@ -45,7 +52,14 @@ export {
 } from './holds';
 export { restockReturnedLines, refreshStockCacheForProducts } from './returns';
 export { runReservationSweep } from './sweep';
-export { ensureLevel, removeLevel, listLevels, lowStockCount, listMovements } from './levels';
+export {
+    availableFor,
+    ensureLevel,
+    removeLevel,
+    listLevels,
+    lowStockCount,
+    listMovements
+} from './levels';
 export { receive, adjust } from './admin';
 
 /** The module's one service handle. */
@@ -61,6 +75,7 @@ export const inventoryService = {
     isStockBoundToOrder,
     isHoldReleased,
     runReservationSweep,
+    availableFor,
     ensureLevel,
     removeLevel,
     receive,

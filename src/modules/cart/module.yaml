@@ -4,6 +4,7 @@ group: shop
 dependsOn:
     - addresses # the checkout's delivery address
     - delivery # shipping price, pure functions
+    - inventory # how much can be sold, read from the ledger
     - orders # placeOrder — the one function every order is written through
     - payments # listPaymentMethods, to validate the requested method
     - products # prices and availability

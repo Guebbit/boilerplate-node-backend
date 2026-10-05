@@ -38,6 +38,23 @@ export const removeLevel = (productId: string): Promise<void> =>
     stockLevelRepository.deleteByProductId(productId);
 
 /**
+ * How many units of each product can be sold right now, read from the ledger.
+ *
+ * The checkout pre-flight asks this rather than the catalogue's cached copy: a cache that sits
+ * low (a missed sync) would refuse a sale the shelf covers, and nothing would ever heal it, since
+ * a refused checkout moves no stock. A level that never existed reads as nothing available.
+ *
+ * @param productIds - the products to look up
+ * @returns available units by product id; absent for a product with no level row
+ */
+export const availableFor = (productIds: readonly string[]): Promise<Map<string, number>> =>
+    stockLevelRepository
+        .findManyByProductIds(productIds)
+        .then(
+            (levels) => new Map(levels.map((level) => [String(level.productId), level.available]))
+        );
+
+/**
  * A page of the stock board — every product's counters, scarcest first, sorted by what's left
  * rather than name. Paged and sorted inside mongod on `stocklevels` alone; the title each row
  * needs is asked of `productService` AFTER the page is settled, API composition rather than a
