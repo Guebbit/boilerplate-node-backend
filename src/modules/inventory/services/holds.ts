@@ -7,9 +7,11 @@ import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { StockMovementReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import type { ReservationItem } from '../model';
 import { reservationRepository } from '../repository';
+import type { ReservationStatus } from '../model';
 import { inventoryAuditActions } from '../audit';
 import { applyTransition, syncStockCache } from './transition';
 
@@ -50,6 +52,44 @@ const applyToEveryLine = async (
 };
 
 /**
+ * Claim a hold and move its counters as ONE unit: both land, or neither does.
+ *
+ * Claiming first made the move at-most-once, but a write that threw between the claim and the last
+ * line left the hold closed and the counters untouched; the retry's claim then missed and reported
+ * "already done", so nothing ever finished the job. In one transaction a throw undoes the claim as
+ * well, and the retry starts over.
+ *
+ * @param orderId - the order whose hold is claimed
+ * @param from - the status the hold must be in
+ * @param to - the status it moves to
+ * @param reason - which ledger movement every line records
+ * @param verb - the same word, past tense, for the log line a refused line writes
+ * @param session - the caller's transaction; without one, this opens its own and refreshes the
+ *   catalogue's stock cache once it has committed (see {@link refreshStockCacheForOrder})
+ * @returns whether this call was the one that claimed the hold
+ */
+const claimAndApply = (
+    orderId: string,
+    from: ReservationStatus,
+    to: ReservationStatus,
+    reason: StockMovementReason,
+    verb: string,
+    session?: ClientSession
+): Promise<boolean> => {
+    const claimAndMove = (active: ClientSession): Promise<boolean> =>
+        reservationRepository.claimStatus(orderId, from, to, active).then((hold) => {
+            if (!hold) return false;
+            return applyToEveryLine(reason, verb, orderId, hold.items, active).then(() => true);
+        });
+
+    if (session) return claimAndMove(session);
+
+    return withTransaction(claimAndMove).then((claimed) =>
+        claimed ? refreshStockCacheForOrder(orderId).then(() => true) : false
+    );
+};
+
+/**
  * Turn an order's hold into a sale — the units leave.
  *
  * Claiming `held → committed` first is what makes it at-most-once.
@@ -63,12 +103,8 @@ const applyToEveryLine = async (
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = async (orderId: string): Promise<boolean> => {
-    const hold = await reservationRepository.claimStatus(orderId, 'held', 'committed');
-
-    if (hold) {
-        await applyToEveryLine(StockMovementReason.commit, 'commit', orderId, hold.items);
+    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit, 'commit'))
         return true;
-    }
 
     // The claim missed. Read what the reservation actually is, to tell a benign replay
     // (already `committed`) from the two states meaning the order is paid with nothing held.
@@ -118,13 +154,7 @@ export const releaseForOrder = async (
     // naming the pair stops a caller passing `commit` to a function that would record a sale.
     reason: 'release' | 'expire' = StockMovementReason.release,
     session?: ClientSession
-): Promise<boolean> => {
-    const hold = await reservationRepository.claimStatus(orderId, 'held', 'released', session);
-    if (!hold) return false;
-
-    await applyToEveryLine(reason, reason, orderId, hold.items, session);
-    return true;
-};
+): Promise<boolean> => claimAndApply(orderId, 'held', 'released', reason, reason, session);
 
 /**
  * Give a PAID order's committed units back to the shelf — the customer cancelled after payment,
@@ -140,21 +170,15 @@ export const releaseForOrder = async (
  * @param session - the caller's transaction; see {@link refreshStockCacheForOrder}
  * @returns whether this call was the one that restocked
  */
-export const restockForOrder = async (
-    orderId: string,
-    session?: ClientSession
-): Promise<boolean> => {
-    const hold = await reservationRepository.claimStatus(
+export const restockForOrder = async (orderId: string, session?: ClientSession): Promise<boolean> =>
+    claimAndApply(
         orderId,
         'committed',
         'restocked',
+        StockMovementReason.restock,
+        'restock',
         session
     );
-    if (!hold) return false;
-
-    await applyToEveryLine(StockMovementReason.restock, 'restock', orderId, hold.items, session);
-    return true;
-};
 
 /**
  * Bring the catalogue's stock cache into step for every line of an order's hold — the step a

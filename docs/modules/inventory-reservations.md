@@ -66,8 +66,14 @@ Each transition claims the reservation's status **conditionally** — `held → 
 succeeds if the row is still `held`. So a cancel racing the sweep, or a provider webhook delivered
 twice, resolves to exactly one winner and the loser is a no-op rather than a second counter move.
 
-There is no transaction and no distributed lock holding this up. A single conditional update is the
-whole mechanism, which is why it survives a restart and a second worker.
+There is no distributed lock holding this up. A single conditional update decides the winner, which
+is why it survives a restart and a second worker. The claim and every line's counter move then land
+in **one transaction** (the caller's, or one `commitForOrder` / `releaseForOrder` /
+`restockForOrder` opens itself): a write that throws partway undoes the claim too, so the retry
+finds the hold still open and finishes the job instead of reporting "already done".
+
+Taking a multi-line hold's lines is ordered by product id, so two checkouts listing the same
+products oppositely meet on the same product first, and one goes on rather than both refusing.
 :::
 
 ## A commit with no hold is an incident, not a no-op
