@@ -8,6 +8,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { checkoutAs } from '@tests/checkout-as';
 import { requestAndDownloadExport } from '@tests/account-export';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -88,7 +89,7 @@ describe('the address book at checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'standard' });
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
         expect(response.body.data.shippingAddress).toMatchObject({

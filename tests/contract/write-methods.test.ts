@@ -24,7 +24,7 @@ type WriteCase = readonly [method: 'post' | 'put' | 'patch', url: string, body: 
  * each body is valid, so the empty string is the only reason for the 422.
  */
 const EMPTY_STRING_CASES: readonly WriteCase[] = [
-    ['post', '/cart/checkout', { notes: '' }],
+    ['post', '/cart/checkout', { notes: '', expectedTotal: { amount: 0, currency: 'EUR' } }],
     ['put', '/cart/shipping-method', { shippingMethodId: '' }],
     [
         'post',

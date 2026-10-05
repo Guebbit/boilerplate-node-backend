@@ -7,6 +7,7 @@
  */
 
 import { api, authenticateAs } from '@tests/http';
+import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -34,11 +35,8 @@ describe('the cart total is the amount the order and the intent will carry', () 
             .expect(200);
 
         const cart = await api().get('/cart').set('Authorization', bearer).expect(200);
-        const checkout = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({})
-            .expect(201);
+        const checkout = await checkoutAs(bearer);
+        expect(checkout.status).toBe(201);
 
         expect(checkout.body.data.totalPrice).toBe(total);
         expect(cart.body.data.summary.totalPrice).toBe(total);

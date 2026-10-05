@@ -19,6 +19,7 @@ x-error-codes:
     CART_SHIPPING_METHOD_REQUIRED: { status: 422, description: 'A shipping method is required and none is set on the cart.' }
     CART_SHIPPING_METHOD_WEIGHT: { status: 409, description: 'The cart''s total weight falls outside the chosen shipping method''s configured range.' }
     CART_SHIPPING_NOT_APPLICABLE: { status: 409, description: 'The chosen shipping method does not apply to an all-digital cart.' }
+    CART_TOTAL_CHANGED: { status: 409, description: 'The total the buyer was shown is not the total this checkout would charge — a price, a shipping cost or the cart itself changed. `errors[].details` carries `expected` (what the request named) and `actual` (what the order would cost now), each `{ amount, currency }` in minor units; show the new total and let the buyer confirm.' }
     CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
     EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/verify-email`.' }
     REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
@@ -244,14 +245,14 @@ paths:
         post:
             tags: [Orders]
             summary: Checkout (place order from cart)
-            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as `data` — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
+            description: Converts the authenticated user's current cart into a new order. The cart is cleared upon success. The request names the total the buyer was shown (`expectedTotal`); a checkout that would charge anything else is refused with 409 `CART_TOTAL_CHANGED` and the new total, before any stock is held. Optional order notes can be supplied in the request body. Answers 201 with the created order itself as `data` — the same shape `POST /orders` answers — and its `Location`. The order's email is always the authenticated caller's own — checkout is account-bound; a future guest checkout would bring an `email` field back.
             operationId: checkout
             security:
                 - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
-                required: false
+                required: true
                 content:
                     application/json:
                         schema:
@@ -565,10 +566,34 @@ components:
                         apply to the basket refuses with 409 (`CART_SHIPPING_NOT_APPLICABLE`,
                         `CART_SHIPPING_METHOD_WEIGHT`).
 
+        ExpectedTotal:
+            type: object
+            additionalProperties: false
+            required: [amount, currency]
+            description: >-
+                An order total as the buyer saw it, or as the checkout would charge it. The amount is
+                in minor units (cents), so two totals compare as integers and never as floats.
+            properties:
+                amount:
+                    type: integer
+                    minimum: 0
+                    description: The total in minor units of `currency` (EUR 71.00 is 7100).
+                currency:
+                    type: string
+                    minLength: 3
+                    maxLength: 3
+                    description: The ISO-4217 code the total is priced in.
+
         CheckoutRequest:
             type: object
             additionalProperties: false
+            required: [expectedTotal]
             properties:
+                expectedTotal:
+                    $ref: '#/components/schemas/ExpectedTotal'
+                    # What the screen showed right before the press (EU Directive 2011/83 Art. 8(2)): items
+                    # plus shipping, from `GET /cart`'s `summary`. Required, so a client that did not show
+                    # a total cannot place the order.
                 notes:
                     type: string
                     maxLength: 1000

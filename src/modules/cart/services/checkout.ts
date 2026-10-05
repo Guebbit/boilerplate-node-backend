@@ -17,6 +17,8 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import {
     orderService,
+    orderTotal,
+    toMinorUnits,
     placeOrder,
     sendOrderPlacedEmail,
     type OrderDocument
@@ -43,7 +45,8 @@ import {
     isJoined,
     readCartLines,
     shippingOptionsFor,
-    shippingPriceFor
+    shippingPriceFor,
+    type JoinedCartLine
 } from './view';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -69,12 +72,15 @@ const toOrderAddress = (address: AddressItem) => ({
  *   default entry when nothing ships to an address.
  * - `paymentMethod`: a method id from `GET /payments/methods`; omitted means `card`.
  * - `notes`: free text left for the order.
+ * - `expectedTotal`: the total the buyer was shown, in minor units. A checkout that would charge
+ *   another amount or currency is refused before anything is held (`CART_TOTAL_CHANGED`).
  */
 export interface CheckoutChoices {
     addressId?: string;
     billingAddressId?: string;
     paymentMethod?: string;
     notes?: string;
+    expectedTotal?: ExpectedTotal;
 }
 
 /** Either half of a pre-flight step: what {@link runCheckout} needs to proceed, or why not. */
@@ -310,6 +316,59 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
     ]);
 };
 
+/** An order total in minor units, as the contract's `ExpectedTotal` spells it. */
+interface ExpectedTotal {
+    /** Minor units of `currency` (EUR 71.00 is 7100). */
+    amount: number;
+    /** The ISO-4217 code the amount is priced in. */
+    currency: string;
+}
+
+/**
+ * What this basket would cost right now, in minor units: the items plus the chosen shipping, priced
+ * exactly as `GET /cart`'s summary and the order itself price them, so the three cannot disagree.
+ */
+const totalNow = (
+    joined: JoinedCartLine[],
+    shippingMethod: StaticShippingMethod | undefined
+): ExpectedTotal => {
+    const currency = shopCurrency();
+    const shippingCost = shippingMethod ? shippingPriceFor(shippingMethod, joined, currency) : 0;
+    return {
+        amount: toMinorUnits(orderTotal({ items: joined, shippingCost, currency }), currency),
+        currency
+    };
+};
+
+/**
+ * Refuse a checkout whose total is not the one the buyer was shown (409 `CART_TOTAL_CHANGED`),
+ * answering with both totals so the screen can show the new one. Nothing is written yet, so
+ * nothing needs undoing. A request without `expectedTotal` is not refused here: the HTTP contract
+ * requires the field, and a direct service caller that names none has shown nobody anything.
+ *
+ * @param joined - the basket's lines, product joined
+ * @param shippingMethod - the resolved method, or `undefined` when nothing ships
+ * @param expectedTotal - what the buyer was shown
+ * @returns the refusal, or `undefined` when the totals match
+ */
+const refuseChangedTotal = (
+    joined: JoinedCartLine[],
+    shippingMethod: StaticShippingMethod | undefined,
+    expectedTotal: ExpectedTotal | undefined
+): ResponseReject | undefined => {
+    if (!expectedTotal) return undefined;
+    const actual = totalNow(joined, shippingMethod);
+    if (actual.amount === expectedTotal.amount && actual.currency === expectedTotal.currency)
+        return undefined;
+    return generateReject(409, [
+        {
+            code: ERROR_CODES.CART_TOTAL_CHANGED,
+            message: t('cart.total-changed'),
+            details: { expected: expectedTotal, actual }
+        }
+    ]);
+};
+
 /**
  * The checkout body proper, split out of {@link orderConfirm} for its `.catch` envelope and
  * observability side effects. `async`/`await`, not chained: every step depends on the value
@@ -327,7 +386,7 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
  */
 const runCheckout = async (
     userId: string,
-    { addressId, billingAddressId, paymentMethod, notes }: CheckoutChoices
+    { addressId, billingAddressId, paymentMethod, notes, expectedTotal }: CheckoutChoices
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
     const user = await userService.getById(userId);
     if (!user) return generateReject(404, []);
@@ -444,6 +503,11 @@ const runCheckout = async (
     const billingResolution = await resolveBilling(userId, billingAddressId, address);
     if (!billingResolution.ok) return billingResolution.reject;
     const { billingAddress } = billingResolution;
+
+    // The price check, last of the refusals: every fixable problem above is the buyer's to fix
+    // first, and nothing is held until the total they were shown is the total they would pay.
+    const totalRefusal = refuseChangedTotal(joined, shippingMethod, expectedTotal);
+    if (totalRefusal) return totalRefusal;
 
     /*
      * `bank_transfer`'s hold is `methodInfo.holdHours`, converted to the unit

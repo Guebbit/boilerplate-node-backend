@@ -1,6 +1,7 @@
 {
     "cart": {
         "changed": "Your cart changed while the order was being placed. Check it and try again.",
+        "total-changed": "The total changed since you last saw it. Check the new total and place the order again.",
         "empty": "Your cart is empty.",
         "product-removed": "Product removed from cart.",
         "product-unavailable": "One or more products in your cart are no longer available — see `details.lines`.",

@@ -23,8 +23,9 @@ import type { Order } from '@types';
  */
 export const postCheckout = (request: Request, response: Response) => {
     const userId = request.authContext!.id;
-    // `?? {}` because a checkout without a body is legal and Express 5 leaves `body` undefined.
-    const body = parseBody(CheckoutBody, request.body ?? {}, response);
+    // The body is required (it names `expectedTotal`); a missing one reaches the schema as `undefined`
+    // and answers 422 like any other malformed body.
+    const body = parseBody(CheckoutBody, request.body as unknown, response);
     if (!body) return;
 
     return cartService

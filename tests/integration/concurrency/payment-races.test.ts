@@ -21,6 +21,7 @@
  */
 import type { Response } from 'supertest';
 import { api } from '@tests/http';
+import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -89,7 +90,7 @@ const orderAwaitingPayment = async (productId: string, quantity: number) => {
         .put('/cart/shipping-method')
         .set('Authorization', bearer)
         .send({ shippingMethodId: 'pickup' });
-    const checkout = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+    const checkout = await checkoutAs(bearer);
     if (checkout.status !== 201) throw new Error(`checkout: ${JSON.stringify(checkout.body)}`);
     const orderId = String(checkout.body.data.id);
 
@@ -258,9 +259,7 @@ describe('P4 — more buyers than units, all at once', () => {
             })
         );
 
-        const results = await raceN(RACE_SIZE, (index) =>
-            api().post('/cart/checkout').set('Authorization', buyers[index]).send({})
-        );
+        const results = await raceN(RACE_SIZE, (index) => checkoutAs(buyers[index]));
 
         expectNoServerErrors(results);
         expect(countStatus(results, 201)).toBe(units);

@@ -15,6 +15,7 @@
 
 import fc from 'fast-check';
 import { api, authenticateAs } from '@tests/http';
+import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { PROPERTY_RUNS_WITH_DATABASE } from '@tests/knobs';
@@ -104,11 +105,8 @@ const priceThroughHttp = async (
         .expect(200);
 
     const cart = await api().get('/cart').set('Authorization', bearer).expect(200);
-    const checkout = await api()
-        .post('/cart/checkout')
-        .set('Authorization', bearer)
-        .send({})
-        .expect(201);
+    const checkout = await checkoutAs(bearer);
+    expect(checkout.status).toBe(201);
     const intent = await api()
         .post('/payments/intent')
         .set('Authorization', bearer)

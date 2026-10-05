@@ -11,6 +11,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { checkoutAs, shownTotal } from '@tests/checkout-as';
 import { withEnvironment, withoutEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -633,7 +634,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        const response = await checkoutAs(bearer);
 
         // `data` is the created order itself, as `POST /orders` answers it — not a
         // wrapper — and `Location` names it.
@@ -661,22 +662,19 @@ describe('POST /cart/checkout', () => {
         const before = await api()
             .get(`/products/${String(product._id)}`)
             .set('Authorization', stockReader);
-        const requestBody = {};
+        // Both calls send the same body: a replay is only a replay for an identical request.
+        const requestBody = { expectedTotal: await shownTotal(bearer) };
 
-        const first = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .set('Idempotency-Key', 'checkout-replay-key-1')
-            .send(requestBody);
+        const first = await checkoutAs(bearer, requestBody, {
+            'Idempotency-Key': 'checkout-replay-key-1'
+        });
         expect(first.status).toBe(201);
 
         // Without `idempotencyKey`, this second call would hit the now-empty cart and answer
         // `CART_EMPTY` instead of replaying — see this test's own docblock.
-        const second = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .set('Idempotency-Key', 'checkout-replay-key-1')
-            .send(requestBody);
+        const second = await checkoutAs(bearer, requestBody, {
+            'Idempotency-Key': 'checkout-replay-key-1'
+        });
 
         expect(second.status).toBe(201);
         expect(second.headers['idempotent-replay']).toBe('true');
@@ -703,10 +701,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
-        const response = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({ notes: 'Leave with the concierge' });
+        const response = await checkoutAs(bearer, { notes: 'Leave with the concierge' });
 
         expect(response.status).toBe(201);
         expect(response.body.data.notes).toBe('Leave with the concierge');
@@ -714,10 +709,7 @@ describe('POST /cart/checkout', () => {
 
     it('matches the error contract for an unrecognised payment method value', async () => {
         const { bearer } = await authenticateWithCart();
-        const response = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({ paymentMethod: 'crypto' });
+        const response = await checkoutAs(bearer, { paymentMethod: 'crypto' });
 
         expect(response.status).toBe(422);
     });
@@ -739,10 +731,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
-        const response = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({ addressId });
+        const response = await checkoutAs(bearer, { addressId });
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_ADDRESS_NOT_APPLICABLE');
@@ -765,10 +754,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'standard' });
-        const response = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({ addressId });
+        const response = await checkoutAs(bearer, { addressId });
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0].code).toBe('CART_SHIP_TO_COUNTRY_NOT_SUPPORTED');
@@ -791,7 +777,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
     });
@@ -804,7 +790,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
         expect(response.body.data.billingAddress).toMatchObject({ street: 'Via Roma 1' });
@@ -824,10 +810,9 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'standard' });
-        const response = await api()
-            .post('/cart/checkout')
-            .set('Authorization', bearer)
-            .send({ billingAddressId: office.body.data.id as string });
+        const response = await checkoutAs(bearer, {
+            billingAddressId: office.body.data.id as string
+        });
 
         expect(response.status).toBe(201);
         expect(response.body.data.shippingAddress.street).toBe('Via Roma 1');
@@ -841,7 +826,7 @@ describe('POST /cart/checkout', () => {
             .post('/cart')
             .set('Authorization', bearer)
             .send({ productId: String(digital._id), quantity: 1 });
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0].code).toBe('CART_BILLING_ADDRESS_REQUIRED');
@@ -853,7 +838,7 @@ describe('POST /cart/checkout', () => {
             .put('/cart/shipping-method')
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
-        await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        await checkoutAs(bearer);
         const response = await api().get('/cart').set('Authorization', bearer);
 
         expect(response.body.data.items).toHaveLength(0);
@@ -863,7 +848,7 @@ describe('POST /cart/checkout', () => {
     // declare it until this suite was written — the implementation has answered 409 all along.
     it('matches the error contract for an empty cart', async () => {
         const { bearer } = await authenticateAs('user');
-        const response = await api().post('/cart/checkout').set('Authorization', bearer);
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(409);
     });
@@ -876,7 +861,7 @@ describe('POST /cart/checkout', () => {
             .set('Authorization', bearer)
             .send({ productId: String(scarce._id), quantity: 2 });
 
-        const response = await api().post('/cart/checkout').set('Authorization', bearer);
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_INSUFFICIENT_STOCK');
@@ -903,10 +888,7 @@ describe('POST /cart/checkout', () => {
             async () => {
                 const { bearer } = await authenticateWithCart();
 
-                const response = await api()
-                    .post('/cart/checkout')
-                    .set('Authorization', bearer)
-                    .send({ paymentMethod: 'bank_transfer' });
+                const response = await checkoutAs(bearer, { paymentMethod: 'bank_transfer' });
 
                 expect(response.status).toBe(409);
                 expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
@@ -924,10 +906,7 @@ describe('POST /cart/checkout', () => {
             async () => {
                 const { bearer } = await authenticateWithCart();
 
-                const response = await api()
-                    .post('/cart/checkout')
-                    .set('Authorization', bearer)
-                    .send(body);
+                const response = await checkoutAs(bearer, body);
 
                 expect(response.status).toBe(409);
                 expect(response.body.errors[0].code).toBe('CART_PAYMENT_METHOD_NOT_AVAILABLE');
@@ -944,10 +923,7 @@ describe('POST /cart/checkout', () => {
                     .put('/cart/shipping-method')
                     .set('Authorization', bearer)
                     .send({ shippingMethodId: 'pickup' });
-                const response = await api()
-                    .post('/cart/checkout')
-                    .set('Authorization', bearer)
-                    .send({ paymentMethod: 'bank_transfer' });
+                const response = await checkoutAs(bearer, { paymentMethod: 'bank_transfer' });
 
                 expect(response.status).toBe(201);
                 expect(response.body.data.paymentMethod).toBe('bank_transfer');

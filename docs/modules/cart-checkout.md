@@ -31,9 +31,10 @@ flowchart TD
     B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressForCheckout</i>"]
     C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
     D --> E["7 · evaluate the rules, the method/address<br/>requirement, then resolve the billing address<br/><i>cart/domain — evaluateShippingRequirement;<br/>addresses — addressForCheckout</i>"]
-    E --> F["8 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
-    F --> H["9 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
-    H --> I["10 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
+    E --> T["8 · the price check<br/>the total named in the request is the total now<br/><i>cart — expectedTotal</i>"]
+    T --> F["9 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
+    F --> H["10 · empty the cart, conditionally<br/><i>cart — on the __v it was read at</i>"]
+    H --> I["11 · queue the email<br/><i>orders picks confirmation vs. transfer<br/>instructions off the order's paymentMethod</i>"]
 
     R["refuse — nothing written"]
     A -.->|"no account"| R
@@ -42,6 +43,7 @@ flowchart TD
         C -.->|"not the caller's address;<br/>or an addressId sent when<br/>nothing ships to an address"| R
     D -.->|"product gone"| R
     E -.->|"rule says no; a physical basket<br/>with no method, or an address-requiring<br/>method with none; no billing address<br/>to use"| R
+    T -.->|"the total moved:<br/>409 CART_TOTAL_CHANGED<br/>with both totals"| R
     F -.->|"stock gone"| R
 
     L["lost the race — nothing committed"]
@@ -51,12 +53,12 @@ flowchart TD
     classDef read fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef write fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef bad fill:#fee2e2,stroke:#b91c1c,color:#111827;
-    class A,P,Q,B,C,D,E read;
+    class A,P,Q,B,C,D,E,T read;
     class F,H,I write;
     class R,L,M bad;
 ```
 
-Steps 1–7 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
+Steps 1–8 are reads and refusals — genuinely checkout's own job: deciding whether this basket, this
 account and these addresses are allowed to become an order at all. Step 5 resolves a SHIPPING
 address only when a line ships to one — a physical basket under a method whose `requiresAddress` is
 true. A digital-only basket and `pickup` ship to nobody, so neither even asks the address book for
@@ -102,6 +104,21 @@ possible, and only checkout knows which basket it was clearing.
 checkout's. Mapping the lines rather than passing the whole basket is what keeps `inventory` from
 ever learning what a cart is; checkout itself no longer imports `inventory` at all.
 :::
+
+## The price check
+
+The request names `expectedTotal`, the total the buyer was shown right before the press (EU Directive
+2011/83 Art. 8(2) binds the order to it). The check runs last of the refusals, after stock, shipping
+and billing: a basket with a fixable problem is told that first, and nothing is held until the total is
+settled. It prices the basket exactly as `GET /cart`'s summary and the order do (`orderTotal`, in minor
+units, so two totals compare as integers). A mismatch of amount or currency answers `409`
+`CART_TOTAL_CHANGED` with `details.expected` and `details.actual`; the screen shows the new total and the
+buyer confirms by sending it back. The cart's own version cannot do this job: a catalogue price change
+does not bump it.
+
+The field is required by the contract, so a client that did not show a total cannot place an order. The
+service itself tolerates a call without one (the tests that are not about the price), because only the
+HTTP edge is the buyer's.
 
 ## The race, and why it is a 409
 

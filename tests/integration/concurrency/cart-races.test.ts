@@ -23,6 +23,7 @@
  */
 import type { Response } from 'supertest';
 import { api, authenticateAs } from '@tests/http';
+import { checkoutAs } from '@tests/checkout-as';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { giveAddress } from '@modules/addresses/tests/factories';
@@ -163,9 +164,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        const results = await raceN(RACE_SIZE, () =>
-            api().post('/cart/checkout').set('Authorization', bearer).send({})
-        );
+        const results = await raceN(RACE_SIZE, () => checkoutAs(bearer));
 
         expectNoServerErrors(results);
         expect(await orderModel.countDocuments({ userId: user._id })).toBe(1);
@@ -185,9 +184,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        const results = await raceN(RACE_SIZE, () =>
-            api().post('/cart/checkout').set('Authorization', bearer).send({})
-        );
+        const results = await raceN(RACE_SIZE, () => checkoutAs(bearer));
 
         const successes = countStatus(results, 200) + countStatus(results, 201);
         expect(successes).toBe(1);
@@ -208,9 +205,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        await raceN(RACE_SIZE, () =>
-            api().post('/cart/checkout').set('Authorization', bearer).send({})
-        );
+        await raceN(RACE_SIZE, () => checkoutAs(bearer));
 
         const cart = await cartModel.findOne({ userId: user._id });
         expect(cart?.items).toHaveLength(0);
@@ -233,9 +228,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        await raceN(RACE_SIZE, () =>
-            api().post('/cart/checkout').set('Authorization', bearer).send({})
-        );
+        await raceN(RACE_SIZE, () => checkoutAs(bearer));
 
         const orders = await orderModel.find({ userId: user._id });
         expect(orders).toHaveLength(1);
@@ -261,9 +254,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        const results = await raceN(RACE_SIZE, () =>
-            api().post('/cart/checkout').set('Authorization', bearer).send({})
-        );
+        const results = await raceN(RACE_SIZE, () => checkoutAs(bearer));
 
         expectNoServerErrors(results);
         const losers = results
@@ -296,7 +287,7 @@ describe('R2 — concurrent checkouts of one cart', () => {
             .set('Authorization', bearer)
             .send({ shippingMethodId: 'pickup' });
 
-        const response = await api().post('/cart/checkout').set('Authorization', bearer).send({});
+        const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(201);
     });
