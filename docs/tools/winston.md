@@ -147,6 +147,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                   | `admin.reservations.swept`                   | `reservation`          |
 | `inventory`      | `ADMIN_STOCK_ADJUSTED`                       | `admin.stock.adjusted`                       | —                      |
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |
+| `invoicing`      | `ADMIN_INVOICE_VIEWED`                       | `admin.invoice.viewed`                       | —                      |
 | `locales`        | `ADMIN_LOCALE_CREATED`                       | `admin.locale.created`                       | `locale`               |
 | `locales`        | `ADMIN_LOCALE_DELETED`                       | `admin.locale.deleted`                       | `locale`               |
 | `locales`        | `ADMIN_LOCALE_ENTRY_CREATED`                 | `admin.locale_entry.created`                 | `locale_entry`         |
@@ -155,6 +156,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `locales`        | `ADMIN_LOCALE_ENTRY_UPDATED`                 | `admin.locale_entry.updated`                 | `locale_entry`         |
 | `locales`        | `ADMIN_LOCALE_UPDATED`                       | `admin.locale.updated`                       | `locale`               |
 | `locales`        | `ADMIN_TRANSLATION_UPDATED`                  | `admin.translation.updated`                  | —                      |
+| `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | —                      |
 | `orders`         | `ORDER_CANCELLED`                            | `order.cancelled`                            | `order`                |
 | `orders`         | `ORDER_CREATED`                              | `order.created`                              | `order`                |
 | `orders`         | `ORDER_DELETED`                              | `order.deleted`                              | `order`                |
@@ -173,6 +175,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `returns`        | `ADMIN_RETURN_APPROVED`                      | `admin.return.approved`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_DECLINED`                      | `admin.return.declined`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_RECEIVED`                      | `admin.return.received`                      | `return`               |
+| `returns`        | `ADMIN_RETURN_VIEWED`                        | `admin.return.viewed`                        | —                      |
 | `returns`        | `RETURN_REQUESTED`                           | `return.requested`                           | `return`               |
 | `users`          | `ADMIN_USER_BANNED`                          | `admin.user.banned`                          | —                      |
 | `users`          | `ADMIN_USER_CREATED`                         | `admin.user.created`                         | `user`                 |
@@ -181,6 +184,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `users`          | `ADMIN_USER_SOFT_DELETED`                    | `admin.user.soft_deleted`                    | `user`                 |
 | `users`          | `ADMIN_USER_UNBANNED`                        | `admin.user.unbanned`                        | —                      |
 | `users`          | `ADMIN_USER_UPDATED`                         | `admin.user.updated`                         | —                      |
+| `users`          | `ADMIN_USER_VIEWED`                          | `admin.user.viewed`                          | `user`                 |
 | `users`          | `SYSTEM_USER_ERASED`                         | `system.user.erased`                         | `user`                 |
 | `users`          | `SYSTEM_USER_SOFT_DELETED`                   | `system.user.soft_deleted`                   | `user`                 |
 | `webhooks`       | `ADMIN_WEBHOOK_DELIVERY_REPLAYED`            | `admin.webhook_delivery.replayed`            | `webhook_delivery`     |
