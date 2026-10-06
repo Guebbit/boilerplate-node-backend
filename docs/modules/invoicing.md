@@ -103,20 +103,23 @@ redelivered event issue nothing twice.
 
 Both are idempotent the same way: a unique index on `orderId` (`model.ts`) is what actually
 guarantees "at most one", not the listener's own read-then-insert — a redelivered event, or two
-writers racing the same order, both attempt the insert, and the loser's duplicate-key error reads
-back the row the winner already wrote (`repository.ts`). A listener failure is logged by
-`emitDomainEvent` and never rolls back the write that triggered it: an order that reached `paid`
-stays `paid` whether or not its invoice freeze succeeded — the same "gaps are acceptable" policy
-`orderNumber` (`orders/services/order-numbering.ts`) already documents, now shared by this module's
-own two series.
+writers racing the same order, both attempt the insert. The number is allocated and the document
+inserted in one transaction, so the loser's duplicate-key error aborts it, the number goes back to
+the counter, and the loser reads the row the winner wrote (`services/issue-invoice.ts`). The two
+series therefore have no gaps (VAT Directive Art. 226(2); a credit note is an invoice in law,
+Art. 219), unlike `orderNumber`, which is a label (`orders/services/order-numbering.ts`).
+
+A listener failure is logged by `emitDomainEvent` and never rolls back the write that triggered
+it: an order that reached `paid` stays `paid` whether or not its invoice freeze succeeded, so an
+invoice can be missing, but a number is never skipped.
 
 ## Downloading a document
 
 `GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes/{creditNoteId}` render on the request
 thread and stream the bytes back (`GET /orders/{id}/credit-notes` lists an order's credit notes as
 JSON, so a client can pick one): `200` once the document exists, `404` otherwise (`ORDER_INVOICE_NOT_ISSUED` /
-`ORDER_CREDIT_NOTE_NOT_ISSUED`) — for an order that has not reached the fact yet, or a gap in the
-policy above. Never re-rendered from live config: every render reads the SAME frozen row, byte for
+`ORDER_CREDIT_NOTE_NOT_ISSUED`) — for an order that has not reached the fact yet, or because the
+freeze failed (see above). Never re-rendered from live config: every render reads the SAME frozen row, byte for
 byte, run through the same EJS template (`src/modules/invoicing/templates/documents/invoicing.document.ejs`) every
 time.
 

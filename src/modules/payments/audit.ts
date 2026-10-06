@@ -21,7 +21,13 @@ export const paymentsAuditActions = {
      * A cancel owed a refund on a hand-paid order, and the automatic listener left it alone
      * (B1b) — only an operator's own `refundByOrder` may say the cash actually went back.
      */
-    PAYMENT_REFUND_OWED_BY_HAND: 'payment.refund_owed_by_hand'
+    PAYMENT_REFUND_OWED_BY_HAND: 'payment.refund_owed_by_hand',
+    /**
+     * The provider reported `succeeded` for an amount, currency or payment other than the one
+     * frozen on the payment. Deliberately not under `security.`: the incident view takes that whole
+     * prefix, and this is a money discrepancy to reconcile rather than an attack signal.
+     */
+    PAYMENT_AMOUNT_MISMATCH: 'payment.amount_mismatch'
 } as const;
 
 /** Augments infrastructure's audit action map with this module's own action strings. */

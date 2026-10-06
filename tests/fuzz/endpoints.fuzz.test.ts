@@ -62,7 +62,7 @@ import {
 } from '@tests/spec-walk';
 import { bodyArbitraryFor, queryArbitraryFor } from '@tests/spec-arbitraries';
 import { FUZZ_RUNS_PER_OPERATION } from '@tests/knobs';
-import { seedWorld, buildUrl, type World } from '@tests/spec-world';
+import { seedWorld, buildUrl, requiredHeadersOf, type World } from '@tests/spec-world';
 import { markServerListening } from '@infrastructure/runtime/readiness';
 
 // No real Chromium here, and a missing browser is not what this suite hunts: the invoice route
@@ -192,7 +192,10 @@ const fuzzAs = (
             ),
             async ([body, query]: Draw) => {
                 const target = query ? `${url}?${query}` : url;
-                const request = api()[operation.method](target).set('Accept-Language', 'en');
+                const request = api()
+                    [operation.method](target)
+                    .set('Accept-Language', 'en')
+                    .set(requiredHeadersOf(operation));
                 if (bearer) request.set('Authorization', bearer);
                 if (variant.contentType) request.type(variant.contentType);
 
@@ -320,6 +323,7 @@ describe.each(
                     [operation.method](url)
                     .set('Authorization', bearer)
                     .set('Accept-Language', 'en')
+                    .set(requiredHeadersOf(operation))
                     .type('form')
                     // `probe` keeps the encoded body non-empty: an empty one has no bytes for the guard to judge.
                     .send({ ...(body as Record<string, unknown>), probe: 'x' });

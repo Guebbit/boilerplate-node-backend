@@ -39,6 +39,20 @@ export interface ProviderPaymentState {
      * never sees a card number, so it has no way to derive them itself.
      */
     cardLast4?: string;
+    /**
+     * What the provider actually collected, a decimal in {@link ProviderPaymentState.currency}.
+     * Reported with `succeeded`: settlement compares it with the amount frozen on the payment, and
+     * a `succeeded` without it cannot be verified, so it is treated as a mismatch. A real adapter
+     * converts its minor units here.
+     */
+    amountReceived?: number;
+    /** The currency that was collected, as the payment stores it (ISO-4217, upper case). */
+    currency?: string;
+    /**
+     * The `metadata.paymentId` the intent was prepared with, echoed back by the provider. Ties
+     * the money to THIS payment row, so an intent that belongs to another one is caught.
+     */
+    paymentId?: string;
 }
 
 /** What `prepare` hands back: the reference we persist, and the secret the browser finishes with. */
@@ -58,14 +72,20 @@ export interface RefundedByProvider {
     refundRef: string;
 }
 
-/** A webhook delivery, normalised — the provider owns the translation from its own event shape. */
+/**
+ * A webhook delivery, normalised — the provider owns the translation from its own event shape.
+ *
+ * THIN on purpose: it names an intent and nothing about what happened to it. The body of a
+ * delivery is never trusted for the outcome; `settlement.ts` asks the provider for the state
+ * (`retrieve`). A provider does not guarantee delivery order (Stripe says so), and a thin event
+ * costs one provider call to make that harmless.
+ * https://docs.stripe.com/webhooks#handle-events-asynchronously
+ */
 export interface ProviderWebhookEvent {
     /** The provider's event id, deduplicated so a retried delivery settles nothing twice. */
     id: string;
     /** Which intent it is about; `undefined` for an event this application does not act on. */
     providerRef?: string;
-    /** The state it reports, absent when the event is one we ignore. */
-    state?: ProviderPaymentState;
 }
 
 /**
@@ -160,11 +180,19 @@ export interface PaymentProvider {
      * Takes the UNPARSED body: a signature is computed over exact bytes, and a re-serialised
      * object is not those bytes. `src/app/security.ts` keeps the buffer for this route alone.
      *
+     * Returns only which event it is and which intent it names. The state of the payment is NOT
+     * read from the delivery: the caller asks {@link PaymentProvider.retrieve}.
+     *
+     * Port rule: parse the body against the contract's schema AFTER the signature verifies and
+     * BEFORE any lookup. Nothing downstream may see a value the schema did not accept, such as an
+     * operator object (`{ "$ne": null }`) where a `providerRef` string belongs.
+     *
      * @param rawBody - the request body as received
      * @param signature - the provider's signature header, verbatim
      * @throws {WebhookRejected} when the signature does not verify, the body is not valid JSON, or
-     *   the parsed event carries no id — the caller answers 400 in all three cases, because a
-     *   delivery this application cannot authenticate or make sense of is not an event
+     *   the body does not match the event schema (no id, a wrong type, an unknown or oversized
+     *   field) — the caller answers 400 in every case, because a delivery this application cannot
+     *   authenticate or make sense of is not an event
      */
     parseWebhook(rawBody: Buffer, signature: string): Promise<ProviderWebhookEvent>;
 }

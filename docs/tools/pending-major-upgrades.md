@@ -1,6 +1,7 @@
 # Pending Major Upgrades
 
-Two majors are deliberately not taken yet: `dotenv` 18 and `typescript` 7.
+Two majors and one replacement are deliberately not taken yet: `dotenv` 18, `typescript` 7 and
+`prom-client` → `@prometheus-io/client`.
 Each row below says what breaks, what it costs, and when to move. Measured 2026-09-30 by installing
 the candidate over a clean checkout, type-checking, and running the affected suites — nothing was
 merged.
@@ -10,16 +11,19 @@ flowchart LR
     DE["dotenv 17 → 18"] -->|"nothing gained"| DEW["skip; or drop it for process.loadEnvFile"]
     TS["typescript 6 → 7"] -->|"tsc works, the JS API is gone"| TSW["blocked by typescript-eslint and ts-jest"]
 
+    PC["prom-client → @prometheus-io/client"] -->|"pre-1.0, still churning"| PCW["wait for its 1.0"]
+
     classDef skip fill:#fef9c3,stroke:#ca8a04,color:#111827;
     classDef block fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class DEW skip;
+    class DEW,PCW skip;
     class TSW block;
 ```
 
-| Package      | Now      | Latest   | Verdict                               | Effort |
-| ------------ | -------- | -------- | ------------------------------------- | ------ |
-| `dotenv`     | `17.3.1` | `18.0.4` | **Skip**, or replace with Node itself | S      |
-| `typescript` | `6.0.3`  | `7.0.2`  | **Wait** for 7.1 and the tools above  | M–L    |
+| Package       | Now      | Latest                           | Verdict                               | Effort |
+| ------------- | -------- | -------------------------------- | ------------------------------------- | ------ |
+| `dotenv`      | `17.3.1` | `18.0.4`                         | **Skip**, or replace with Node itself | S      |
+| `typescript`  | `6.0.3`  | `7.0.2`                          | **Wait** for 7.1 and the tools above  | M–L    |
+| `prom-client` | `15.1.3` | `@prometheus-io/client` `0.16.1` | **Wait** for its 1.0                  | S      |
 
 ## dotenv 18
 
@@ -58,12 +62,21 @@ Everything that calls `require('typescript')` breaks:
 | Recommendation | Wait for 7.1. Re-check `npm view typescript-eslint peerDependencies` and `npm view ts-jest peerDependencies` when it lands; the day both accept 7, the upgrade is a bump plus a lint and test run. |
 | Effort         | M–L once unblocked: a `tsconfig` deprecation pass, then every rule in the type-aware lint re-run for changed diagnostics.                                                                          |
 
+## prom-client → @prometheus-io/client
+
+| Question       | Answer                                                                                                                            |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| What it is     | The Prometheus project's own client, the successor to `prom-client` as the library the metrics are written against.               |
+| Why not yet    | It is pre-1.0 and its API still moves between minors, so a move now is paid for again on the next release.                        |
+| Recommendation | Move only at its 1.0. Re-check `npm view @prometheus-io/client version`; the metrics live in `src/infrastructure/observability/`. |
+| Effort         | S: the surface is a registry, counters, gauges and histograms.                                                                    |
+
 ## Try it yourself
 
 ```sh
-npm view nodemailer dist-tags.latest          # is 10 still moving?
 npm view typescript-eslint peerDependencies   # does the range admit 7 yet?
 npm view ts-jest peerDependencies
+npm view @prometheus-io/client version        # has it reached 1.0?
 ```
 
 See also: [Dependency Vetting](./dependency-vetting.md) for what is checked before any upgrade,

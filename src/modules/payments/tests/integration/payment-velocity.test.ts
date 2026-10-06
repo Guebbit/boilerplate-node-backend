@@ -213,3 +213,137 @@ describe('paymentDeclineChallengeGate — rung 3 only once the account has a dec
         expect(response.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
     });
 });
+
+/**
+ * The address-block decline budget, behind both decline limiters and the gate — built the way the
+ * real route chains them. Requests come from `supertest`'s one address, so they share a block;
+ * the account in `x-account` varies.
+ */
+const blockApp = async (accountLimit: number, blockLimit: number) => {
+    setEnvironment({
+        NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX: String(accountLimit),
+        NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX: String(blockLimit)
+    });
+    jest.resetModules();
+
+    const {
+        paymentConfirmDeclineLimiter,
+        paymentConfirmDeclineBlockLimiter,
+        paymentDeclineChallengeGate
+    } = await import('@modules/payments/rate-limits');
+
+    const app = express();
+    app.use(express.json());
+    app.use((request, response, next) =>
+        asAccount(request.header('x-account') ?? 'anonymous')(request, response, next)
+    );
+    app.post(
+        '/confirm',
+        paymentConfirmDeclineLimiter,
+        paymentConfirmDeclineBlockLimiter,
+        paymentDeclineChallengeGate,
+        (request: Request, response: express.Response) => {
+            const outcome = (request.body as { outcome?: string }).outcome ?? 'declined';
+            request.paymentConfirmDeclined = outcome === 'declined';
+            response
+                .status(outcome === 'succeeded' ? 200 : 409)
+                .json({ errors: [{ code: 'PAYMENT_DECLINED' }] });
+        }
+    );
+    return app;
+};
+
+describe('the address-block decline budget — card testing spread over many accounts', () => {
+    afterEach(() => jest.resetModules());
+
+    it('refuses with 429 once a block has spent it, whichever accounts did the declining', async () => {
+        const app = await blockApp(1000, 4);
+        const decline = (account: string) =>
+            supertest(app).post('/confirm').set('x-account', account).send({});
+
+        const statuses: number[] = [];
+        for (let index = 0; index < 6; index++) {
+            const response = await decline(`account-${index}`);
+            statuses.push(response.status);
+        }
+
+        // No account came near its own budget (1000): only the shared block ran out.
+        expect(statuses).toEqual([409, 409, 409, 409, 429, 429]);
+    });
+
+    it('is never spent by a success or by the order-lost 409', async () => {
+        const app = await blockApp(1000, 1);
+
+        for (let index = 0; index < 4; index++) {
+            const success = await supertest(app)
+                .post('/confirm')
+                .set('x-account', `account-${index}`)
+                .send({ outcome: 'succeeded' });
+            const lost = await supertest(app)
+                .post('/confirm')
+                .set('x-account', `account-${index}`)
+                .send({ outcome: 'order-lost' });
+            expect(success.status).toBe(200);
+            expect(lost.status).toBe(409);
+        }
+    });
+
+    it('challenges a first-time account once the block has spent half its budget, then refuses', async () => {
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        const app = await blockApp(1000, 4);
+        const decline = (account: string) =>
+            supertest(app).post('/confirm').set('x-account', account).send({});
+
+        // Two declines from two different accounts: below half (2 of 4 not yet "more than").
+        const first = await decline('account-a');
+        const second = await decline('account-b');
+        // A third account, from the same block, with no decline of its own, meets the challenge.
+        const third = await decline('account-c');
+
+        expect([first.status, second.status]).toEqual([409, 409]);
+        expect(third.status).toBe(401);
+        expect(third.body.errors[0].code).toBe('ANTIBOT_VERIFICATION_FAILED');
+    });
+
+    it('does not challenge below half, so an honest shared network is left alone', async () => {
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        const app = await blockApp(1000, 10);
+
+        const first = await supertest(app).post('/confirm').set('x-account', 'one').send({});
+        const second = await supertest(app).post('/confirm').set('x-account', 'two').send({});
+
+        expect([first.status, second.status]).toEqual([409, 409]);
+    });
+});
+
+describe('payment-velocity: the pooled intent and sync budget', () => {
+    afterEach(() => jest.resetModules());
+
+    it('counts the intents and syncs of one account against the same hourly budget', async () => {
+        setEnvironment({ NODE_PAYMENT_INTENT_RATE_LIMIT_MAX: '3' });
+        jest.resetModules();
+        const { paymentIntentLimiter } = await import('@modules/payments/rate-limits');
+        const app = express();
+        app.use((request, response, next) =>
+            asAccount(request.header('x-account') ?? 'anonymous')(request, response, next)
+        );
+        const ok = (_request: Request, response: express.Response) => {
+            response.status(200).json({ success: true });
+        };
+        app.post('/intent', paymentIntentLimiter, ok);
+        app.post('/:id/sync', paymentIntentLimiter, ok);
+        const call = (path: string, account = 'one') =>
+            supertest(app).post(path).set('x-account', account);
+
+        const statuses: number[] = [];
+        for (const path of ['/intent', '/abc/sync', '/intent', '/abc/sync']) {
+            const response = await call(path);
+            statuses.push(response.status);
+        }
+
+        // Three calls across the two routes spent it; the fourth, on either route, is refused.
+        expect(statuses).toEqual([200, 200, 200, 429]);
+        const other = await call('/intent', 'two');
+        expect(other.status).toBe(200);
+    });
+});

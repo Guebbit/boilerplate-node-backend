@@ -7,6 +7,7 @@
  * in the unit suite.
  */
 
+import { randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -17,6 +18,7 @@ import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/
 import { buildReference } from '@modules/orders';
 import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
+import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import { onDomainEvent } from '@kernel/events';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
 import { MISSING_ID } from '@tests/ids';
@@ -133,11 +135,7 @@ describe('with no card payment provider configured', () => {
     });
 
     it('POST /payments/webhook answers 404, signed or not', async () => {
-        const body = JSON.stringify({
-            id: 'evt_no_provider',
-            providerRef: 'x',
-            status: 'succeeded'
-        });
+        const body = JSON.stringify({ id: 'evt_no_provider', providerRef: 'x' });
 
         const response = await api()
             .post('/payments/webhook')
@@ -390,34 +388,45 @@ describe('the card steps — who may pay', () => {
 });
 
 describe('POST /payments/webhook', () => {
-    it('settles a payment on a signed delivery, with no session of any kind', async () => {
+    it('settles what the provider answers for the named intent, with no session of any kind', async () => {
         const { paymentId, providerRef } = await preparedPayment();
+        // The delivery says nothing about the outcome: the provider's own answer is what lands.
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
 
-        const response = await deliver({
-            id: `evt_${paymentId}`,
-            providerRef,
-            status: 'succeeded',
-            cardLast4: '4242'
-        });
+        const response = await deliver({ id: `evt_${paymentId}`, providerRef });
 
         expect(response.status).toBe(200);
         const settled = await paymentRepository.findById(paymentId);
         expect(settled!.status).toBe('succeeded');
     });
 
-    /*
-     * `parseWebhook` cast the parsed JSON straight to `PaymentWebhookEventBody`, `status`
-     * included — the cast typed the field, it never checked it, so any string reached
-     * `settlePayment` and got written to the row verbatim.
-     */
-    it('refuses a status this provider does not recognise, and leaves the row alone', async () => {
+    it('does not pay an order on the strength of a delivery alone', async () => {
+        // No outcome at the provider for this intent: it answers `processing`, which moves nothing.
         const { paymentId, providerRef } = await preparedPayment();
 
-        const response = await deliver({
-            id: `evt_${paymentId}`,
-            providerRef,
-            status: 'refunded'
-        });
+        const response = await deliver({ id: `evt_${paymentId}`, providerRef });
+
+        expect(response.status).toBe(200);
+        const untouched = await paymentRepository.findById(paymentId);
+        expect(untouched!.status).not.toBe('succeeded');
+    });
+
+    it('refuses a signed delivery whose providerRef is an operator, and settles nothing', async () => {
+        // `{ "$ne": null }` would match EVERY payment if it reached the lookup unparsed.
+        const { paymentId } = await preparedPayment();
+
+        const response = await deliver({ id: 'evt_operator', providerRef: { $ne: null } });
+
+        expect(response.status).toBe(400);
+        const untouched = await paymentRepository.findById(paymentId);
+        expect(untouched!.status).toBe('requires_confirmation');
+    });
+
+    it('refuses a signed delivery carrying a field the contract does not name', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+        setFakeOutcome(providerRef, { status: 'succeeded' });
+
+        const response = await deliver({ id: 'evt_extra', providerRef, status: 'succeeded' });
 
         expect(response.status).toBe(400);
         const untouched = await paymentRepository.findById(paymentId);
@@ -431,11 +440,7 @@ describe('POST /payments/webhook', () => {
         // catch a controller change that started leaking the payment into the webhook's response.
         const { providerRef } = await preparedPayment();
 
-        const response = await deliver({
-            id: 'evt_envelope_shape',
-            providerRef,
-            status: 'succeeded'
-        });
+        const response = await deliver({ id: 'evt_envelope_shape', providerRef });
 
         expect(response.body).not.toHaveProperty('data');
         expect(Object.keys(response.body).toSorted()).toEqual(['message', 'status', 'success']);
@@ -445,7 +450,7 @@ describe('POST /payments/webhook', () => {
         const { providerRef } = await preparedPayment();
 
         const response = await deliver(
-            { id: 'evt_forged', providerRef, status: 'succeeded' },
+            { id: 'evt_forged', providerRef },
             `t=${Math.floor(Date.now() / 1000)},v1=${'0'.repeat(64)}`
         );
 
@@ -454,11 +459,8 @@ describe('POST /payments/webhook', () => {
 
     it('applies a repeated delivery once', async () => {
         const { paymentId, providerRef, order } = await preparedPayment();
-        const event = {
-            id: `evt_replay_${paymentId}`,
-            providerRef,
-            status: 'succeeded' as const
-        };
+        setFakeOutcome(providerRef, { status: 'succeeded' });
+        const event = { id: `evt_replay_${paymentId}`, providerRef };
 
         // What the ledger actually protects: `first`/`replay` alone answer 200 on both branches
         // (dedup vs. fresh apply), so a status-only assertion can never fail on a broken ledger.
@@ -481,11 +483,7 @@ describe('POST /payments/webhook', () => {
     });
 
     it('accepts an event about an intent it does not know, rather than making the provider retry', async () => {
-        const response = await deliver({
-            id: 'evt_unknown',
-            providerRef: 'fake_pi_nobody',
-            status: 'succeeded' as const
-        });
+        const response = await deliver({ id: 'evt_unknown', providerRef: 'fake_pi_nobody' });
 
         expect(response.status).toBe(200);
     });
@@ -514,6 +512,9 @@ describe('GET /payments/order/{orderId}', () => {
     });
 });
 
+/** A fresh `Idempotency-Key` — the refund route refuses a request without one. */
+const freshKey = (): string => randomUUID();
+
 describe('POST /payments/order/{orderId}/refund', () => {
     it('refuses the order`s own owner — the refund is admin-only', async () => {
         // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
@@ -538,7 +539,8 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
 
         const response = await api()
             .post(`/payments/order/${String(order._id)}/refund`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('refunded');
@@ -551,11 +553,13 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         await api()
             .post(`/payments/order/${String(order._id)}/refund`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
 
         const response = await api()
             .post(`/payments/order/${String(order._id)}/refund`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(409);
     });
@@ -565,9 +569,46 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
 
         const response = await api()
             .post(`/payments/order/${MISSING_ID}/refund`)
-            .set('Authorization', bearer);
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(404);
+    });
+
+    it('refuses a refund with no Idempotency-Key, and returns nothing', async () => {
+        const { order, paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(400);
+        expect(response.body.errors[0].code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.status).toBe('succeeded');
+    });
+
+    it('replays the first answer for the same key instead of refunding twice', async () => {
+        const { order, paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const key = freshKey();
+        const refund = () =>
+            api()
+                .post(`/payments/order/${String(order._id)}/refund`)
+                .set('Authorization', adminBearer)
+                .set('Idempotency-Key', key)
+                .send({ amount: 5 });
+
+        const first = await refund();
+        const second = await refund();
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.refunds).toHaveLength(1);
+        expect(payment!.amountRefunded).toBe(5);
     });
 });
 

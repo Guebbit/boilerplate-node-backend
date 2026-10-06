@@ -421,6 +421,25 @@ describe('a return on goods that have shipped', () => {
         expect(third.kind === 'refused' && third.reject.status).toBe(422);
     });
 
+    it('lets exactly one of two parallel full returns through, and announces only that one', async () => {
+        const { user, orderId } = await deliveredOrder();
+        const events: unknown[] = [];
+        onDomainEvent(RETURN_REQUESTED, (payload) => events.push(payload));
+        mockEnqueueEmail.mockClear();
+
+        const outcomes = await Promise.all([
+            createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext),
+            createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext)
+        ]);
+
+        // Snapshot isolation alone would let both read "nothing returned" and both commit.
+        expect(outcomes.filter(({ kind }) => kind === 'created')).toHaveLength(1);
+        const loser = outcomes.find(({ kind }) => kind === 'refused');
+        expect(loser?.kind === 'refused' && loser.reject.status).toBe(422);
+        expect(events).toHaveLength(1);
+        expect(mockEnqueueEmail).toHaveBeenCalledTimes(1);
+    });
+
     it('gives the units of a declined return back', async () => {
         const { user, shirt, orderId } = await deliveredOrder();
         const twoShirts = [{ productId: String(shirt._id), quantity: 2 }];

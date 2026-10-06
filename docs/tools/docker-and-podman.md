@@ -128,7 +128,7 @@ npm run compose -- --profile integrations up -d
 | -------------------- | ------------------------------------------ | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
 | `webhook-tester`     | `ghcr.io/tarampampam/webhook-tester:2.3.0` | none published; reached through the proxy below          | Self-hosted webhook.site. A sink for outbound webhooks in development, showing each captured request with its headers. In-memory, no volume. | [Ports](./pairing-and-ports.md#host-port-map)                 |
 | `webhook-tester-tls` | `caddy:2.10.2-alpine`                      | `WEBHOOK_TESTER_PORT` (default `3070`), loopback         | The TLS door in front of `webhook-tester`: a webhook URL must be `https://`. Serves the committed demo certificate.                          | [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |
-| `mailpit`            | `axllent/mailpit:latest`                   | `MAILPIT_SMTP_PORT` (`1025`), `MAILPIT_UI_PORT` (`8025`) | Local SMTP sink with a web inbox, for live e2e runs. Loopback only, in-memory, no volume.                                                    | [E-mail guard](./email-and-rendering.md#the-e2e-guard)        |
+| `mailpit`            | `axllent/mailpit:v1.31.4`                  | `MAILPIT_SMTP_PORT` (`1025`), `MAILPIT_UI_PORT` (`8025`) | Local SMTP sink with a web inbox, for live e2e runs. Loopback only, in-memory, no volume.                                                    | [E-mail guard](./email-and-rendering.md#the-e2e-guard)        |
 
 Nothing under `src/` imports either of them, names it, or fails when it is absent — it receives, and that is
 all. It is demo furniture in the same sense as the seeded catalogue, which is why it is gated
@@ -202,6 +202,22 @@ font/rendering libraries, and the baked `mongod` all add up. None of it ships in
 fixture. Lint refuses a production import of any `factories` file, which is what makes the deletion
 safe. The test doubles (a fake payment provider, a mail log) are not deleted: they were never in
 `src/` — they live in `scenarios/`, which the image does not copy.
+
+**Who owns the code in the production image**: root, read-only to `node`. The runtime stage copies
+without `--chown`; only `public/images`, `tmp/storage` and `tmp/quarantine` belong to `node`. A write
+primitive gained through a dependency therefore cannot rewrite the code it runs, with or without
+the compose file's `read_only`. `scripts/ops/` is copied file by file — exactly the jobs
+`docker/crontab` runs, so a one-off tool (`demo-remove*`, `refresh-breached-passwords`) never ships;
+a cross-cutting test keeps the two lists equal.
+
+**Boot check**: `docker/boot-check.sh <image>` starts the production image against a throwaway Mongo
+with the fail-closed env set, waits for `/livez`, and fails if `node` can write under `/app/src`. CI's
+`boot` job and a developer run the same script:
+
+```sh
+docker build -f docker/Dockerfile.production -t boot-check .
+docker/boot-check.sh boot-check
+```
 
 ## How to think about the setup
 

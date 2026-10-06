@@ -33,12 +33,10 @@ paths:
         post:
             tags: [Payments]
             summary: Create a payment intent
-            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200 — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200, so a retry needs no `Idempotency-Key` (a stored replay would hand back the first answer's `clientSecret` for as long as the ledger keeps it). The caller's intents and syncs share one budget per hour (429) — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
             operationId: createPaymentIntent
             security:
                 - bearerAuth: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -76,10 +74,11 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
                 # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or the provider opened a second
-                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`), or
-                # `Idempotency-Key` names a request still in flight.
+                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/{id}/sync`.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /payments/order/{orderId}:
@@ -174,6 +173,9 @@ paths:
                 the running total. The reservation of the amount is conditional on the payment
                 still having that much left, so a double submit cannot return the money twice — the
                 second call answers 409 (nothing left) or 422 (asks for more than is left).
+                Requires an `Idempotency-Key` header: a retry that repeats the key replays the first
+                answer instead of returning the money again, and a request without it answers 400
+                `IDEMPOTENCY_KEY_REQUIRED`.
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
@@ -187,7 +189,7 @@ paths:
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The order whose payment is being returned
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
                 required: false
                 content:
@@ -201,6 +203,8 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PaymentEnvelope'
+                # `IDEMPOTENCY_KEY_REQUIRED`: the `Idempotency-Key` header is missing.
+                '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -369,6 +373,8 @@ paths:
                 # (`PAYMENT_NOT_CONFIRMABLE`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/intent`.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /payments/webhook:
@@ -376,8 +382,10 @@ paths:
             tags: [Payments]
             summary: Provider webhook
             description: >-
-                Where the provider reports what actually happened to a payment, and the authority
-                for it — the browser's word never is. **Not session-authenticated**: the caller is
+                Where the provider says a payment changed — a thin event naming the intent. The
+                server then asks the provider for the payment's state and settles that answer, so
+                the authority is the provider's own, never the browser's and never this body's.
+                **Not session-authenticated**: the caller is
                 a machine with no account, and it authenticates by signing the raw body instead,
                 which is stronger than any cookie this API could ask it for. Deliveries are
                 deduplicated by event id, so a provider retrying for days settles once.
@@ -445,7 +453,9 @@ components:
                     minimum: 0
                     description: >-
                         The order's total as the intent froze it. Always two decimal places,
-                        rounded half-up at the point of calculation.
+                        rounded half-up at the point of calculation. If the provider reports a success for
+                        a different amount or currency, the payment reads `succeeded` with what
+                        ARRIVED here, its order is cancelled and the money is returned.
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. EUR)
@@ -627,15 +637,12 @@ components:
             additionalProperties: false
             required: [id]
             description: >-
-                One delivery, in this module's normalised shape. A real provider sends its OWN
-                event shape and its implementation of the provider port translates it into this —
-                the endpoint is documented in the terms the module acts on, not in any one
-                vendor's vocabulary.
-
-                FLAT on purpose. The provider's report could have been nested under a `state`
-                object, mirroring how most vendors wrap theirs, but the adapter is where a vendor's
-                shape is absorbed and nothing downstream reads these fields as a unit — so the
-                nesting would have bought a second level for no reader.
+                One delivery, in this module's normalised shape: which event it is and which intent
+                it names, and nothing about what happened. A real provider sends its OWN event
+                shape and its implementation of the provider port translates it into this. The
+                outcome is never read from the body: once the delivery is authenticated, the
+                server asks the provider for the payment's state, because providers do not
+                guarantee the order events arrive in.
             properties:
                 id:
                     type: string
@@ -645,14 +652,6 @@ components:
                     type: string
                     maxLength: 200
                     description: Which intent the event is about. Absent for an event this API ignores.
-                status:
-                    type: string
-                    enum: [requires_action, processing, succeeded, declined]
-                    description: The provider's own vocabulary — `refunded` is not here, because a refund is a later act of ours. Absent for an event this API ignores.
-                cardLast4:
-                    type: string
-                    maxLength: 4
-                    description: The only card digits a payment system may remember, as the provider reports them.
 
         PaymentEnvelope:
             type: object

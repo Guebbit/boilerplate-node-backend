@@ -135,12 +135,15 @@ held less what earlier non-declined returns already took (`domain/quantities.ts`
 means everything still left — the shape of a withdrawal. The title and the gross unit price are
 frozen onto the line, so a refund of it reads the same later whatever the catalogue does.
 
-::: warning A known gap
-Two returns opened at the same instant for the same units can each pass the quantity check. The
-`Idempotency-Key` covers a double click; two different keys racing is adversarial, and what it
-gains is a second record for units that already have one — money is capped separately, on the
-payment (`amountRefunded`), so it cannot be returned twice.
-:::
+Two returns opened at the same instant for the same units cannot both pass the quantity check.
+Mongo transactions are snapshot isolation, so each would read "nothing returned yet" and both
+would commit. Opening a return therefore first writes the order's lock row (`ReturnOrderLock`, one
+per order, `$inc` in the same transaction); a second opening conflicts on that write, is re-run
+after the first commits, and then sees its return. The mail, the audit row and the order's return
+status follow the commit, so a lost race announces nothing.
+
+The lock is a row of its own because `returns` must not write `orders`' document, and a counter of
+returned quantities would be a second copy of the truth.
 
 ## Goods with no right of withdrawal
 

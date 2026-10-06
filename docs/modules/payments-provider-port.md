@@ -31,7 +31,11 @@ challenged payment has nowhere to live.
 
 **The authoritative answer arrives separately.** It comes as a webhook, possibly after the customer
 has closed the tab. The browser's report is a hint that makes the happy path feel synchronous; the
-webhook is the authority.
+provider is the authority. The webhook is a THIN event: it names an intent, and the server then
+asks the provider (`retrieve`) what became of it. A delivery's own body is never believed for the
+outcome, because a provider does not promise delivery order (Stripe says so) and a stale
+`succeeded` arriving after a `declined` must not un-decline anything. The cost is one provider
+call per accepted event.
 
 ## What the port is
 
@@ -65,7 +69,7 @@ flowchart TD
 | `retrieve(providerRef)`                           | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                                                                                                        |
 | `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}`) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                                                                                            |
 | `cancel(providerRef, { reason })`                 | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-cancelled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel. |
-| `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes.                                                                                                                                                                              |
+| `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes. Parses after the signature and before any lookup, against the contract's schema.                                                                                             |
 
 ::: warning A typo'd env value fails loudly
 `resolvePaymentProvider` throws when the environment names a provider this process does not carry.
@@ -124,8 +128,8 @@ and never more, the same rule the payment document follows.
 ## Going live is one file and one variable
 
 1. Write `stripe.ts` in `providers/`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
-   vendor's own verifier (`stripe.webhooks.constructEvent`) and maps `payment_intent.succeeded` /
-   `.payment_failed` onto this module's state shape.
+   vendor's own verifier (`stripe.webhooks.constructEvent`) and maps any `payment_intent.*` event
+   onto `{ id, providerRef }`: the state is then read back through `retrieve`.
 2. Call `registerPaymentProvider('stripe', …)` (from `providers/registry.ts`) where the module loads.
 3. Set `NODE_PAYMENT_PROVIDER`, `NODE_STRIPE_SECRET_KEY` to the vendor's own secret key, and
    `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
@@ -139,7 +143,7 @@ ledger.
 :::
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
-stops touching card data. The service, the settlement and the contract's shape stay as they are.
+stops touching card data. The service and the contract's shape stay as they are; settlement stays too, with one added input: the adapter reports `amountReceived`, `currency` and `paymentId` with every `succeeded`, converted from its minor units, and echoes the `metadata.paymentId` it was given at `prepare`. A success that disagrees with the frozen payment is refused, see [the final write](./payments.md#the-pre-check-and-the-final-write).
 
 ## Related pages
 

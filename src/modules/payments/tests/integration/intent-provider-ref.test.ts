@@ -69,4 +69,33 @@ describe('a second ask for the same payment', () => {
         const stored = await paymentRepository.findByOrderId(orderId);
         expect(stored?.providerRef).toBe('pi_1');
     });
+
+    it('refuses the loser of two first-time asks racing, and cancels its stray intent', async () => {
+        const { user, orderId } = await anOrder();
+        let opened = 0;
+        jest.spyOn(fakePaymentProvider, 'prepare').mockImplementation(() => {
+            opened += 1;
+            return Promise.resolve({
+                providerRef: `pi_${opened}`,
+                clientSecret: `pi_${opened}_secret`
+            });
+        });
+        const cancel = jest.spyOn(fakePaymentProvider, 'cancel').mockResolvedValue(undefined);
+
+        // No Idempotency-Key serialises these: both see a row with no reference yet.
+        const answers = await Promise.all([
+            createIntent(orderId, asCustomer(user.id)),
+            createIntent(orderId, asCustomer(user.id))
+        ]);
+
+        const refused = answers.filter((answer) => !answer.success);
+        expect(refused).toHaveLength(1);
+        expect(asReject(refused[0]).errors[0].code).toBe('PAYMENT_IN_FLIGHT');
+        expect(cancel).toHaveBeenCalledTimes(1);
+        const stored = await paymentRepository.findByOrderId(orderId);
+        expect(cancel).toHaveBeenCalledWith(
+            stored?.providerRef === 'pi_1' ? 'pi_2' : 'pi_1',
+            expect.anything()
+        );
+    });
 });
