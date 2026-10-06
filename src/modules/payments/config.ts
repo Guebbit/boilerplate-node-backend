@@ -71,8 +71,20 @@ export const validateBankTransferConfig = (): string[] => {
     return problems;
 };
 
-/** Shortest webhook signing secret a deployment may set. */
+/** Shortest webhook signing secret a deployment may set, per ring entry. */
 const WEBHOOK_SECRET_MIN_LENGTH = 16;
+
+/**
+ * Split `NODE_PAYMENT_WEBHOOK_SECRET` into its ring: comma-separated, entries trimmed. A rotation
+ * is the operator putting the new secret first and the old one after it, then dropping the old one
+ * once the provider signs with the new — an env list the operator edits, not a stored one that
+ * expires. Empty entries (a trailing comma) are kept, so they fail the length check instead of
+ * silently shrinking the ring.
+ * @param value - the variable's value
+ * @returns every entry, in order; the first is the one that signs
+ */
+const webhookSecretRing = (value: string): string[] =>
+    value.split(',').map((entry) => entry.trim());
 
 /**
  * What a deployment tunes about payments, and what refuses boot.
@@ -98,7 +110,7 @@ export const paymentsConfig = defineConfig({
             placeholder: 'your-payment-webhook-secret-here',
             productionOnly: true,
             describe:
-                'The secret the provider signs webhook deliveries with. Unset when no provider is configured; 16+ characters once set.'
+                'The secret the provider signs webhook deliveries with, or a comma-separated ring of them: the first signs, every one verifies. Unset when no provider is configured; every entry 16+ characters once set.'
         }),
         NODE_STRIPE_SECRET_KEY: text({
             sensitive: true,
@@ -117,7 +129,9 @@ export const paymentsConfig = defineConfig({
     },
     check: (config, environment) => [
         ...(config.NODE_PAYMENT_WEBHOOK_SECRET !== undefined &&
-        config.NODE_PAYMENT_WEBHOOK_SECRET.length < WEBHOOK_SECRET_MIN_LENGTH
+        webhookSecretRing(config.NODE_PAYMENT_WEBHOOK_SECRET).some(
+            (entry) => entry.length < WEBHOOK_SECRET_MIN_LENGTH
+        )
             ? ['NODE_PAYMENT_WEBHOOK_SECRET']
             : []),
         ...validateBankTransferConfig(),
@@ -144,11 +158,13 @@ export const abandonedPaymentRetentionDays = (): number =>
     paymentsConfig().NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
 
 /**
- * The provider's signing secret, `undefined` when unset.
- * @returns the configured webhook secret
+ * The provider's signing secrets, empty when unset: the first signs, any of them verifies.
+ * @returns the configured webhook secret ring, newest first
  */
-export const paymentWebhookSecret = (): string | undefined =>
-    paymentsConfig().NODE_PAYMENT_WEBHOOK_SECRET;
+export const paymentWebhookSecrets = (): string[] => {
+    const value = paymentsConfig().NODE_PAYMENT_WEBHOOK_SECRET;
+    return value === undefined ? [] : webhookSecretRing(value);
+};
 
 /**
  * Refuse to boot on a deployment (any `NODE_ENV` but development/test) with a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix

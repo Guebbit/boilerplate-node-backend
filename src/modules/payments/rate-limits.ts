@@ -1,9 +1,10 @@
 /**
  * @module
- * Payments' own rate-limit budgets: the webhook's own ceiling (`webhookLimiter`), and the two
+ * Payments' own rate-limit budgets: the webhook's own ceiling (`webhookLimiter`), the pooled one for
+ * intents and syncs (`paymentIntentLimiter`), and the three
  * card-testing budgets on `POST /:id/confirm` (`paymentConfirmAttemptLimiter`,
- * `paymentConfirmDeclineLimiter`) plus the gate built on the latter
- * (`paymentDeclineChallengeGate`). Each is data (`RateLimitBudget`, declared on `./module.ts`'s
+ * `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`) plus the gate built on the
+ * two decline ones (`paymentDeclineChallengeGate`). Each is data (`RateLimitBudget`, declared on `./module.ts`'s
  * `rateLimits`) turned into middleware by `buildRateLimiter`
  * (`@infrastructure/http/middlewares/rate-limit`), the same factory every other module's budgets
  * go through.
@@ -17,7 +18,9 @@ import {
     buildRateLimiter,
     rateLimitInfoOf,
     accountIdOf,
+    addressBlockOf,
     KEYED_BY_ADDRESS,
+    KEYED_BY_ADDRESS_BLOCK,
     KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
@@ -113,6 +116,87 @@ export const paymentConfirmDeclineLimiter: RequestHandler =
     buildRateLimiter(CONFIRM_DECLINE_BUDGET);
 
 /**
+ * Intent creations and syncs allowed per ACCOUNT per hour, ONE counter for both routes: each ends
+ * in a call to the payment provider, which has its own rate limits and costs. Far above what a
+ * shopper retrying a checkout needs, so only a script loops through it. Every request counts.
+ */
+const INTENT_SYNC_BUDGET: RateLimitBudget = {
+    name: 'Payment intents and syncs',
+    namespace: 'payments-intent-sync',
+    environmentVariable: 'NODE_PAYMENT_INTENT_RATE_LIMIT_MAX',
+    defaultMax: 30,
+    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
+    bounds:
+        'Calls to `POST /payments/intent` and `POST /payments/:id/sync`, pooled — each reaches ' +
+        'the payment provider.',
+    audited: true,
+    keyGenerator: accountIdOf
+};
+
+/**
+ * The budget for intents and syncs — see {@link INTENT_SYNC_BUDGET}. ONE middleware instance,
+ * mounted on both routes: two instances of one budget would count separately.
+ */
+export const paymentIntentLimiter: RequestHandler = buildRateLimiter(INTENT_SYNC_BUDGET);
+
+/**
+ * Where the block decline limiter's counter lives on `request` — the gate below reads it, the
+ * same arrangement as {@link PAYMENT_DECLINE_RATE_LIMIT_PROPERTY}.
+ */
+const PAYMENT_DECLINE_BLOCK_RATE_LIMIT_PROPERTY = 'paymentDeclineBlockRateLimit';
+
+/**
+ * Declines against `POST /payments/:id/confirm`, keyed on the caller's address BLOCK: what the
+ * per-account budget cannot see, a card tester rotating through many accounts from one network.
+ * A block, not one address, so a carrier NAT is not locked out by one address and a tester is not
+ * given a fresh budget per address. 10 an hour against the account's 3, because a block is shared
+ * by many honest people. Spent by a genuine decline only, like {@link CONFIRM_DECLINE_BUDGET}.
+ * Card-number fingerprinting (what Stripe Radar does) waits for a real provider adapter.
+ */
+const CONFIRM_DECLINE_BLOCK_BUDGET: RateLimitBudget = {
+    name: 'Payment confirm declines per address block',
+    namespace: 'payments-confirm-declines-block',
+    environmentVariable: 'NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX',
+    defaultMax: 10,
+    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    keyedBy: KEYED_BY_ADDRESS_BLOCK,
+    bounds:
+        'A genuine DECLINE against `POST /payments/:id/confirm` from one address block, whatever ' +
+        'the account — card testing spread over many accounts.',
+    audited: true,
+    keyGenerator: addressBlockOf,
+    skipSuccessfulRequests: true,
+    requestWasSuccessful: (request) => !request.paymentConfirmDeclined,
+    requestPropertyName: PAYMENT_DECLINE_BLOCK_RATE_LIMIT_PROPERTY
+};
+
+/** The budget for confirm declines per address block — see {@link CONFIRM_DECLINE_BLOCK_BUDGET}. */
+export const paymentConfirmDeclineBlockLimiter: RequestHandler = buildRateLimiter(
+    CONFIRM_DECLINE_BLOCK_BUDGET
+);
+
+/**
+ * Fraction of the block's decline budget that must be spent before an otherwise honest confirm
+ * starts carrying the human challenge. Same fraction as account's
+ * `CHALLENGE_AFTER_IDENTITY_BUDGET_SPENT`.
+ */
+const CHALLENGE_AFTER_BLOCK_BUDGET_SPENT = 0.5;
+
+/**
+ * Whether the caller's address block has spent half its decline budget. Missing rate-limit info
+ * (the block limiter didn't run) reads as "not yet".
+ *
+ * `info.remaining` already counts THIS request provisionally, so it is one lower than the prior
+ * declines alone: the comparison is strict (`<`) to cancel that out, arming at exactly half.
+ */
+const blockBudgetMostlySpent = (request: Request): boolean => {
+    const info = rateLimitInfoOf(request, PAYMENT_DECLINE_BLOCK_RATE_LIMIT_PROPERTY);
+    if (!info) return false;
+    return info.remaining < info.limit * (1 - CHALLENGE_AFTER_BLOCK_BUDGET_SPENT);
+};
+
+/**
  * Whether this confirm attempt's account has at least one PRIOR decline already on record this
  * window. Missing rate-limit info (the decline limiter didn't run) reads as "not yet". During a Redis
  * outage the budget counts in memory (`failoverStore`), so the gate reads the fallback's numbers.
@@ -129,16 +213,21 @@ const hasAPriorDecline = (request: Request): boolean => {
 };
 
 /**
- * Mounted after `paymentConfirmDeclineLimiter`: passes an account's first confirm attempt through
+ * Mounted after both decline limiters: passes an account's first confirm attempt through
  * untouched, delegates to `humanChallengeGate` once that account has at least one decline already
- * on record. A no-op until a human-challenge provider is configured, like every other mount of it.
+ * on record, or its address block has spent half its decline budget. A no-op until a
+ * human-challenge provider is configured, like every other mount of it.
  */
 export const paymentDeclineChallengeGate: RequestHandler = (request, response, next) =>
-    hasAPriorDecline(request) ? humanChallengeGate(request, response, next) : next();
+    hasAPriorDecline(request) || blockBudgetMostlySpent(request)
+        ? humanChallengeGate(request, response, next)
+        : next();
 
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */
 export const paymentsRateLimits: readonly RateLimitBudget[] = [
     WEBHOOK_BUDGET,
     CONFIRM_ATTEMPT_BUDGET,
-    CONFIRM_DECLINE_BUDGET
+    CONFIRM_DECLINE_BUDGET,
+    CONFIRM_DECLINE_BLOCK_BUDGET,
+    INTENT_SYNC_BUDGET
 ];

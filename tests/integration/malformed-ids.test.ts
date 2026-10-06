@@ -19,7 +19,7 @@ import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { listOperations, readSpec, type Operation, type SchemaNode } from '@tests/spec-walk';
 import { bodyArbitraryFor } from '@tests/spec-arbitraries';
-import { seedWorld, buildUrl, OBJECT_ID, type World } from '@tests/spec-world';
+import { seedWorld, buildUrl, requiredHeadersOf, OBJECT_ID, type World } from '@tests/spec-world';
 import { roleReaching } from '@tests/shopper-routes';
 import {
     fieldName,
@@ -114,7 +114,8 @@ const send = (
     const request = api()
         [operation.method](url)
         .set('Authorization', bearer)
-        .set('Accept-Language', 'en');
+        .set('Accept-Language', 'en')
+        .set(requiredHeadersOf(operation));
     return (body === undefined ? request : request.send(body as object)).then((response) => ({
         status: response.status,
         body: response.body as unknown

@@ -120,3 +120,30 @@ export const applyReturnTransform = applySerialization(returnSchema);
 
 /** The compiled return model, registered as `Return`. */
 export const returnModel = model<ReturnDocument, ReturnModel>('Return', returnSchema);
+
+/**
+ * One internal row per order, keyed by the order's own id: the lock document two parallel
+ * `POST /returns` fight over. Mongo transactions are snapshot isolation, so two openings that each
+ * read "nothing returned yet" would both commit (write skew). Both `$inc` this row first, which
+ * is a write-write conflict the driver retries, so the second one reads the first one's return.
+ * Never exposed, never read back: only its write conflict matters.
+ */
+export interface ReturnOrderLockDocument extends Document {
+    /** How many returns have been opened against the order. */
+    openings: number;
+}
+
+/** Return-order lock model type. */
+export type ReturnOrderLockModel = Model<ReturnOrderLockDocument>;
+
+/** Schema of the lock row; `_id` is the order's id, so there is one row per order by construction. */
+const returnOrderLockSchema = new Schema<ReturnOrderLockDocument>({
+    _id: { type: Schema.Types.ObjectId },
+    openings: { type: Number, required: true, default: 0 }
+});
+
+/** The compiled lock model, registered as `ReturnOrderLock`. */
+export const returnOrderLockModel = model<ReturnOrderLockDocument, ReturnOrderLockModel>(
+    'ReturnOrderLock',
+    returnOrderLockSchema
+);

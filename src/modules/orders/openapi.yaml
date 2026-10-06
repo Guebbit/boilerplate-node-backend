@@ -401,9 +401,11 @@ paths:
                 shipped email — for a manual correction, never for the ordinary shipping flow
                 (`POST /delivery/order/{orderId}/ship` and `.../deliver` are that door, with their
                 own `forced` option). Only `processing`, `shipped` and `delivered` are legal
-                destinations, and only moving forward from wherever the order currently stands —
-                never into `paid` (that stays system-only in absolute terms) and never `cancelled`
-                (`POST /orders/{id}/cancel` is that door). Requires `orders.any.override`, itself
+                destinations, and only moving forward from wherever the order currently stands,
+                which is `paid` or later: an order still `pending` is refused, since leaving
+                `pending` goes only through the offline-payment door, which records the money and
+                issues the invoice. Never into `paid` (that stays system-only in absolute terms)
+                and never `cancelled` (`POST /orders/{id}/cancel` is that door). Requires `orders.any.override`, itself
                 step-up gated, and a non-empty `reason` recorded on the order's override history.
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus

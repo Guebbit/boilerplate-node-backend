@@ -155,6 +155,10 @@ export const createIntent = async (
     if (payment.providerRef && providerRef !== payment.providerRef)
         return rejectStrayIntent(provider, providerRef, orderId);
     const stored = await paymentRepository.attachProviderRef(String(payment._id), providerRef);
+    // The same backstop for two first-time asks racing: both prepared an intent, the conditional
+    // attach kept the first writer's reference, so this call's own is the stray.
+    if (stored && stored.providerRef !== providerRef)
+        return rejectStrayIntent(provider, providerRef, orderId);
     const prepared = {
         ...presentPayment(stored ?? payment),
         clientSecret

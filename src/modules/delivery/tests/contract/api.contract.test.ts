@@ -190,6 +190,23 @@ describe('POST /delivery/order/{orderId}/ship', () => {
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('ORDER_NOTHING_TO_SHIP');
     });
+
+    it('refuses a forced ship of a pending order — an override cannot leave pending', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.pending
+        });
+
+        const response = await api()
+            .post(`/delivery/order/${String(order._id)}/ship`)
+            .set('Authorization', bearer)
+            .send({ forced: true, reason: 'skipping the payment' });
+
+        expect(response.status).toBe(409);
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.pending);
+    });
 });
 
 describe('POST /delivery/order/{orderId}/fulfill', () => {

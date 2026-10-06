@@ -35,7 +35,11 @@ import {
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { withEnvironment } from '@tests/environment';
-import { FAKE_DECLINE_METHOD, fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
+import {
+    FAKE_DECLINE_METHOD,
+    fakePaymentProvider,
+    setFakeOutcome
+} from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asReject } from '@tests/response';
@@ -546,7 +550,8 @@ describe('refund on cancel', () => {
 
         // The webhook arrives unbidden and late — the browser-driven confirm already settled and
         // the cancel already refunded it by the time the provider's own callback catches up.
-        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '4242' });
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+        await applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('refunded');
@@ -674,7 +679,7 @@ describe('the confirm commits the order’s held units', () => {
             testCallerContext
         );
 
-        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '3155' });
+        await applyWebhookSettlement(providerRef);
         await syncPayment(paymentId, auth(user), testCallerContext);
 
         expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
@@ -701,7 +706,7 @@ describe('the confirm commits the order’s held units', () => {
         );
 
         await syncPayment(paymentId, auth(user), testCallerContext);
-        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '3155' });
+        await applyWebhookSettlement(providerRef);
 
         expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
@@ -1112,21 +1117,30 @@ describe('syncPayment', () => {
     });
 });
 
+/** One unconfirmed intent, and the provider reference its webhook would name. */
+const unconfirmedIntent = async () => {
+    const { user, order } = await orderFor();
+    await createIntent(String(order._id), auth(user));
+    const payment = await paymentRepository.findByOrderId(String(order._id));
+    return { order, providerRef: String(payment!.providerRef) };
+};
+
 /**
  * The provider's own callback — the authority for whether money moved. It reaches the same
  * settlement the browser-driven paths do, and it has no caller to answer, so what these pin is
  * the state it leaves behind.
  */
 describe('applyWebhookSettlement', () => {
-    it('pays the order on a succeeded delivery the browser never reported', async () => {
-        // The tab was closed before the challenge finished. The webhook is what still pays it.
-        const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
-        const providerRef = String(
-            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
-        );
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
 
-        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '4242' });
+    it('pays the order when the provider says it succeeded, though the browser never reported it', async () => {
+        // The tab was closed before the challenge finished. The webhook is what still pays it.
+        const { order, providerRef } = await unconfirmedIntent();
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+
+        await applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
@@ -1135,26 +1149,55 @@ describe('applyWebhookSettlement', () => {
         expect(stored!.status).toBe('paid');
     });
 
-    it('leaves a settled payment alone when the same outcome arrives again', async () => {
-        const { user, order } = await orderFor();
-        await createIntent(String(order._id), auth(user));
-        const providerRef = String(
-            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
-        );
-        await applyWebhookSettlement(providerRef, { status: 'succeeded', cardLast4: '4242' });
+    it('settles what the provider answers, not what a delivery might claim', async () => {
+        // Nobody confirmed: the provider has no outcome for this intent, so it says `processing`,
+        // which settles nothing. A body that claimed `succeeded` would have paid the order.
+        const { order, providerRef } = await unconfirmedIntent();
+        const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
+
+        await applyWebhookSettlement(providerRef);
+
+        expect(retrieve).toHaveBeenCalledWith(providerRef);
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('processing');
+        const stored = await orderService.getById(String(order._id));
+        expect(stored!.status).toBe('pending');
+    });
+
+    it('leaves a settled payment alone, without asking the provider anything', async () => {
+        const { order, providerRef } = await unconfirmedIntent();
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+        await applyWebhookSettlement(providerRef);
+        const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
 
         // A later `declined` for an intent that already succeeded must not un-pay the order —
         // the terminal states are outside `SETTLEABLE_PAYMENT_STATUSES` for exactly this.
-        await applyWebhookSettlement(providerRef, { status: 'declined' });
+        setFakeOutcome(providerRef, { status: 'declined' });
+        await applyWebhookSettlement(providerRef);
 
+        expect(retrieve).not.toHaveBeenCalled();
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
     });
 
     it('does nothing for an intent this application does not know', async () => {
-        await expect(
-            applyWebhookSettlement('fake_pi_nobody', { status: 'succeeded' })
-        ).resolves.toBeUndefined();
+        const retrieve = jest.spyOn(fakePaymentProvider, 'retrieve');
+
+        await expect(applyWebhookSettlement('fake_pi_nobody')).resolves.toBeUndefined();
+
+        expect(retrieve).not.toHaveBeenCalled();
+    });
+
+    it('records a decline the provider reports', async () => {
+        const { order, providerRef } = await unconfirmedIntent();
+        setFakeOutcome(providerRef, { status: 'declined', cardLast4: '0002' });
+
+        await applyWebhookSettlement(providerRef);
+
+        const payment = await paymentRepository.findByOrderId(String(order._id));
+        expect(payment!.status).toBe('declined');
+        const stored = await orderService.getById(String(order._id));
+        expect(stored!.status).toBe('pending');
     });
 });
 
@@ -1169,11 +1212,8 @@ describe('applyWebhookDelivery', () => {
         const providerRef = String(
             (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
         );
-        const event = {
-            id: 'evt_redelivery_test',
-            providerRef,
-            state: { status: 'succeeded' as const, cardLast4: '4242' }
-        };
+        setFakeOutcome(providerRef, { status: 'succeeded', cardLast4: '4242' });
+        const event = { id: 'evt_redelivery_test', providerRef };
 
         // The settlement fails transiently on its first attempt — a DB blip, not a bad event.
         const updateSpy = jest

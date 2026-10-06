@@ -2,8 +2,8 @@
  * @module
  * The invoice and credit-note Mongoose schemas, plus their own yearly numbering counters — the
  * same `{ _id: year, seq }` convention `orders/model.ts`'s `OrderNumberCounterDocument` already
- * uses, one counter per series so a credit note's numbering can never borrow a gap from the
- * invoice's own sequence.
+ * uses, one counter per series so a credit note's numbering can never borrow a number from the
+ * invoice's own sequence. Both series are gap-free: see `services/numbering.ts`.
  *
  * Both documents are FROZEN at issue: every field below is copied from the order (or the invoice,
  * for a credit note) at the moment it is written, never re-read or re-joined afterwards. Neither

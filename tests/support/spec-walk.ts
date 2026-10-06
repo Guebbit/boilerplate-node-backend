@@ -63,6 +63,8 @@ export interface Operation {
     pathParameterSchemas: Record<string, SchemaNode | undefined>;
     /** Query parameters, `$ref`s resolved — the path item's own first, then the operation's. */
     queryParameters: QueryParameter[];
+    /** Names of the `in: header` parameters the operation requires, e.g. `Idempotency-Key`. */
+    requiredHeaders: string[];
     /** Resolved `application/json` request body schema, when the operation takes one. */
     bodySchema?: SchemaNode;
     /** Resolved `application/merge-patch+json` body schema, when the operation declares that variant. */
@@ -199,7 +201,7 @@ export const resolveSchema = (
 const parametersIn = (
     declared: ParameterObject[],
     spec: SpecDocument,
-    location: 'query' | 'path'
+    location: 'query' | 'path' | 'header'
 ): ParameterObject[] =>
     declared
         .map((parameter) =>
@@ -339,6 +341,9 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                     ])
                 ),
                 queryParameters: queryParametersOf(declared, spec),
+                requiredHeaders: parametersIn(declared, spec, 'header')
+                    .filter((parameter) => parameter.required === true)
+                    .map((parameter) => String(parameter.name)),
                 bodySchema: resolveSchema(content?.['application/json']?.schema, spec),
                 mergePatchSchema: resolveSchema(
                     content?.['application/merge-patch+json']?.schema,

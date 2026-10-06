@@ -20,7 +20,10 @@ jest.mock('@infrastructure/http/middlewares/idempotency-model', () => ({
 }));
 
 import { idempotencyRecordModel } from '@infrastructure/http/middlewares/idempotency-model';
-import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+import {
+    idempotencyKey,
+    requireIdempotencyKey
+} from '@infrastructure/http/middlewares/idempotency';
 
 const create = idempotencyRecordModel.create as jest.Mock;
 const updateOne = idempotencyRecordModel.updateOne as jest.Mock;
@@ -309,5 +312,48 @@ describe('idempotencyKey', () => {
             expect(response.status).toHaveBeenCalledWith(409);
             expect(next).not.toHaveBeenCalled();
         });
+    });
+});
+
+describe('requireIdempotencyKey', () => {
+    beforeEach(() => {
+        create.mockReset();
+        create.mockResolvedValue(undefined);
+    });
+
+    it('answers 400 IDEMPOTENCY_KEY_REQUIRED and never reaches the handler without the header', async () => {
+        const next = jest.fn();
+        const response = makeResponseStub();
+
+        requireIdempotencyKey(makeRequest(undefined, { a: 1 }), response, next);
+        await flush();
+
+        expect(response.status).toHaveBeenCalledWith(400);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ code: 'IDEMPOTENCY_KEY_REQUIRED' })]
+            })
+        );
+        expect(next).not.toHaveBeenCalled();
+        expect(create).not.toHaveBeenCalled();
+    });
+
+    it('claims the key and runs the handler when the header is present, like idempotencyKey', async () => {
+        const next = jest.fn();
+
+        requireIdempotencyKey(makeRequest('key-1', { a: 1 }), makeResponseStub(), next);
+        await flush();
+
+        expect(create).toHaveBeenCalledTimes(1);
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('still refuses a malformed key with 422, not 400', async () => {
+        const response = makeResponseStub();
+
+        requireIdempotencyKey(makeRequest('bad key!', {}), response, jest.fn());
+        await flush();
+
+        expect(response.status).toHaveBeenCalledWith(422);
     });
 });

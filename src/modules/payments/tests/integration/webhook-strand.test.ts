@@ -44,11 +44,7 @@ describe('a webhook event id stranded by a crash after its claim', () => {
         await fakePaymentProvider.confirm(providerRef, 'pm_card_visa');
         await claimWebhookEvent('evt_stranded');
 
-        await applyWebhookDelivery({
-            id: 'evt_stranded',
-            providerRef,
-            state: { status: 'succeeded', cardLast4: '4242' }
-        });
+        await applyWebhookDelivery({ id: 'evt_stranded', providerRef });
 
         // The redelivery was treated as a duplicate: nothing applied.
         const strandedPayment = await paymentRepository.findByOrderId(orderId);

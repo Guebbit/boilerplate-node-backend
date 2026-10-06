@@ -10,6 +10,11 @@
  * `../integration/payment-velocity.test.ts`.
  */
 import { paymentsRateLimits } from '@modules/payments/rate-limits';
+import {
+    addressBlockOf,
+    KEYED_BY_ADDRESS_BLOCK,
+    KEYED_BY_AUTHENTICATED_ACCOUNT
+} from '@infrastructure/http/middlewares/rate-limit';
 import { budgetIn } from '@tests/rate-limit-budgets';
 
 /** One of this module's own declared budgets, by its `namespace`. */
@@ -29,8 +34,41 @@ describe('paymentConfirmAttemptLimiter and paymentConfirmDeclineLimiter', () => 
         );
     });
 
+    it('keys the block budget on the address block, looser than the account budget because a block is shared', () => {
+        const block = budget('payments-confirm-declines-block');
+
+        expect(block.keyedBy).toBe(KEYED_BY_ADDRESS_BLOCK);
+        expect(block.keyGenerator).toBe(addressBlockOf);
+        expect(block.defaultMax).toBeGreaterThan(budget('payments-confirm-declines').defaultMax);
+        expect(block.environmentVariable).toBe('NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX');
+        expect(block.windowMs).toBe(budget('payments-confirm-declines').windowMs);
+    });
+
+    it('spends the block budget on a genuine decline only, under its own request property', () => {
+        const block = budget('payments-confirm-declines-block');
+
+        expect(block.skipSuccessfulRequests).toBe(true);
+        expect(block.requestPropertyName).toBeDefined();
+        expect(block.requestPropertyName).not.toBe(
+            budget('payments-confirm-declines').requestPropertyName
+        );
+    });
+
     it('spends the decline budget on a genuine decline only, unlike the attempt budget', () => {
         expect(budget('payments-confirm-declines').skipSuccessfulRequests).toBe(true);
         expect(budget('payments-confirm-attempts').skipSuccessfulRequests).not.toBe(true);
+    });
+});
+
+describe('paymentIntentLimiter', () => {
+    it('pools the intent and the sync in one hourly budget per account', () => {
+        const pooled = budget('payments-intent-sync');
+
+        expect(pooled.keyedBy).toBe(KEYED_BY_AUTHENTICATED_ACCOUNT);
+        expect(pooled.defaultMax).toBe(30);
+        expect(pooled.environmentVariable).toBe('NODE_PAYMENT_INTENT_RATE_LIMIT_MAX');
+        expect(pooled.windowMs).toBe(budget('payments-confirm-attempts').windowMs);
+        // Every request counts: unlike the decline budgets, a success spends it too.
+        expect(pooled.skipSuccessfulRequests).not.toBe(true);
     });
 });

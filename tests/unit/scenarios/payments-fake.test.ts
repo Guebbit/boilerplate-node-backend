@@ -8,7 +8,9 @@
 import {
     FAKE_DECLINE_METHOD,
     FAKE_SUCCESS_METHOD,
-    fakePaymentProvider
+    fakePaymentProvider,
+    setFakeOutcome,
+    setFakeReceipt
 } from '@scenarios/support/doubles/payments/fake';
 import {
     PaymentInFlightError,
@@ -98,6 +100,15 @@ describe('fakePaymentProvider.retrieve', () => {
         });
     });
 
+    it('answers a lever-set outcome nobody confirmed, which is how a webhook finds one', async () => {
+        setFakeOutcome('fake_pi_lever', { status: 'succeeded', cardLast4: '4242' });
+
+        await expect(fakePaymentProvider.retrieve('fake_pi_lever')).resolves.toEqual({
+            status: 'succeeded',
+            cardLast4: '4242'
+        });
+    });
+
     it('settles nothing for an intent it does not know', async () => {
         // `processing` is the only status that moves no money in either direction, which is what
         // an unknown reference — a restarted process, a second worker — must answer.
@@ -163,15 +174,14 @@ describe('fakePaymentProvider.parseWebhook', () => {
         const body = Buffer.from(
             JSON.stringify({
                 id: 'evt_3',
-                providerRef: 'fake_pi_i',
-                status: 'succeeded',
-                cardLast4: '4242'
+                providerRef: 'fake_pi_i'
             })
         );
 
+        // Thin: which event and which intent, and no state. That is `retrieve`'s answer.
         await expect(
             fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
-        ).resolves.toMatchObject({ id: 'evt_3', providerRef: 'fake_pi_i' });
+        ).resolves.toEqual({ id: 'evt_3', providerRef: 'fake_pi_i' });
     });
 
     it('refuses a delivery nobody signed', async () => {
@@ -184,11 +194,116 @@ describe('fakePaymentProvider.parseWebhook', () => {
         ).rejects.toThrow(WebhookRejected);
     });
 
+    it.each([
+        ['an operator object where the providerRef string belongs', { providerRef: { $ne: null } }],
+        ['an operator object as the id', { id: { $gt: '' } }],
+        ['a field the contract does not name', { providerRef: 'fake_pi_k', status: 'succeeded' }],
+        ['an oversize id', { id: 'x'.repeat(201) }],
+        ['an oversize providerRef', { providerRef: 'p'.repeat(201) }],
+        ['a number as the providerRef', { providerRef: 7 }]
+    ])(
+        'refuses a SIGNED body carrying %s, before any lookup could see it',
+        async (_label, extra) => {
+            const body = Buffer.from(JSON.stringify({ id: 'evt_5', ...extra }));
+
+            await expect(
+                fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+            ).rejects.toThrow(WebhookRejected);
+        }
+    );
+
+    it('accepts an event with no providerRef, which the service acknowledges and ignores', async () => {
+        const body = Buffer.from(JSON.stringify({ id: 'evt_6' }));
+
+        await expect(
+            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+        ).resolves.toEqual({ id: 'evt_6', providerRef: undefined });
+    });
+
+    it('refuses a signed body that is not JSON', async () => {
+        const body = Buffer.from('not json at all');
+
+        await expect(
+            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+        ).rejects.toThrow('Body is not valid JSON');
+    });
+
+    it('refuses a signed JSON body that is not an object', async () => {
+        const body = Buffer.from('[1,2,3]');
+
+        await expect(
+            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+        ).rejects.toThrow(WebhookRejected);
+    });
+
     it('refuses a signed body carrying no event id', async () => {
         const body = Buffer.from(JSON.stringify({ providerRef: 'fake_pi_j' }));
 
         await expect(
             fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
         ).rejects.toThrow(WebhookRejected);
+    });
+});
+
+/** Prepares an intent for 50.00 EUR on payment `pay_<suffix>`, and returns its reference. */
+const prepared = async (suffix: string) => {
+    const { providerRef } = await fakePaymentProvider.prepare(
+        { amount: 50, currency: 'EUR' },
+        { orderId: `order_${suffix}`, paymentId: `pay_${suffix}` }
+    );
+    return providerRef;
+};
+
+describe('fakePaymentProvider — what a success reports it collected', () => {
+    it('reports the amount, currency and payment id the intent was prepared with', async () => {
+        const providerRef = await prepared('a');
+
+        await expect(
+            fakePaymentProvider.confirm(providerRef, FAKE_SUCCESS_METHOD)
+        ).resolves.toEqual(
+            expect.objectContaining({
+                status: 'succeeded',
+                amountReceived: 50,
+                currency: 'EUR',
+                paymentId: 'pay_a'
+            })
+        );
+        await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
+            expect.objectContaining({ amountReceived: 50, currency: 'EUR', paymentId: 'pay_a' })
+        );
+    });
+
+    it('reports a receipt override on both confirm and retrieve, keeping the other fields', async () => {
+        const providerRef = await prepared('b');
+        setFakeReceipt(providerRef, { amountReceived: 1 });
+
+        await expect(
+            fakePaymentProvider.confirm(providerRef, FAKE_SUCCESS_METHOD)
+        ).resolves.toEqual(
+            expect.objectContaining({ amountReceived: 1, currency: 'EUR', paymentId: 'pay_b' })
+        );
+        await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
+            expect.objectContaining({ amountReceived: 1, currency: 'EUR', paymentId: 'pay_b' })
+        );
+    });
+
+    it('reports no money for a state that is not a success', async () => {
+        const providerRef = await prepared('c');
+
+        const declined = await fakePaymentProvider.confirm(providerRef, FAKE_DECLINE_METHOD);
+
+        expect(declined).not.toHaveProperty('amountReceived');
+        expect(declined).not.toHaveProperty('paymentId');
+    });
+
+    it('reports nothing for an intent this process never prepared', async () => {
+        const state = await fakePaymentProvider.confirm(
+            'fake_pi_never_prepared',
+            FAKE_SUCCESS_METHOD
+        );
+
+        expect(state.status).toBe('succeeded');
+        expect(state.amountReceived).toBeUndefined();
+        expect(state.paymentId).toBeUndefined();
     });
 });

@@ -47,7 +47,7 @@ export default {
      * Neither listener requests a fact — both react to one `orders`/`payments` already recorded
      * and announced. A failure here is logged by `emitDomainEvent` and never rolls back the write
      * that triggered it: an order that reached `paid` stays `paid` whether or not its invoice
-     * freeze succeeded, the same "gaps are acceptable" policy `orderNumber` already lives under.
+     * freeze succeeded. A missing invoice is possible; a skipped invoice number is not.
      */
     subscribe: () => {
         onDomainEvent(ORDER_STATUS_CHANGED, ({ orderId, to }) => {

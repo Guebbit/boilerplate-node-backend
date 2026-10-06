@@ -19,6 +19,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
+import { creditNoteNumberCounterModel } from '../../model';
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
 
@@ -162,6 +163,36 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
 
         expect(String(again?._id)).toBe(String(note._id));
         expect(await invoicingRepository.findCreditNotesByOrderId(orderId)).toHaveLength(1);
+    });
+
+    it('burns no number when two writers race to credit one refund', async () => {
+        const { orderId } = await paidAndInvoiced();
+        const year = new Date().getUTCFullYear();
+        const input = { orderId, refundId: 'refund-race', amount: 5, full: false };
+
+        const [first, second] = await Promise.all([issueCreditNote(input), issueCreditNote(input)]);
+
+        // One document, one number: the loser's allocation rolled back with its aborted insert.
+        expect(String(first?._id)).toBe(String(second?._id));
+        const notes = await invoicingRepository.findCreditNotesByOrderId(orderId);
+        expect(notes.filter((note) => note.refundId === 'refund-race')).toHaveLength(1);
+        const counter = await creditNoteNumberCounterModel.findById(year).lean().exec();
+        expect(counter?.seq).toBe(notes.length);
+    });
+
+    it('gives the number back when the insert fails for any other reason', async () => {
+        const { orderId } = await paidAndInvoiced();
+        const year = new Date().getUTCFullYear();
+        const insert = jest
+            .spyOn(invoicingRepository, 'insertCreditNote')
+            .mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(
+            issueCreditNote({ orderId, refundId: 'refund-fail', amount: 5, full: false })
+        ).rejects.toThrow('disk full');
+        insert.mockRestore();
+
+        expect(await creditNoteNumberCounterModel.findById(year).lean().exec()).toBeNull();
     });
 
     it('issues nothing when there is no invoice to reverse', async () => {
