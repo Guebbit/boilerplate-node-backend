@@ -36,6 +36,9 @@ certain inputs.
 | Inconsistent validation across channels | the web form validates, the API or import does not  | There is ONE channel: the contract. The frontend, the tests and the fuzzer all generate from the same `openapi.yaml`.                                                                                                                                 |
 | Feature-flag / config exposure          | flags evaluated client-side, toggled by a parameter | Module enablement is server-side config read at boot — `kernel/registry.ts`. No request parameter changes which modules are mounted.                                                                                                                  |
 
+Order numbers are sequential, on purpose. Shopify numbers orders the same way. The number is a label:
+access to an order is guarded by its ObjectId and by ownership, never by guessing a number.
+
 ## Order of operations
 
 | Attack                     | How it works                                                    | This boilerplate                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
