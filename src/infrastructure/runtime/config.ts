@@ -156,6 +156,7 @@ export const tracingConfig = defineConfig({
                 "A trusted proxy in front of the API strips or overwrites traceparent and x-request-id. On: continue the caller's trace and keep its request id. Off: both start fresh here."
         }),
         npm_package_version: text({
+            default: '0.0.0',
             setBy: 'npm',
             describe: 'Set by npm when started through a script; stamped on spans.'
         })

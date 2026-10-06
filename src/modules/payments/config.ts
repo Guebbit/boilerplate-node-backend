@@ -99,7 +99,7 @@ export const paymentsConfig = defineConfig({
     name: 'payments',
     shape: {
         NODE_PAYMENT_PROVIDER: text({
-            lower: true,
+            case: 'lower',
             describe:
                 'The card payment provider a deployment registers. Unset: no card payments, and checkout offers only the other methods.'
         }),

@@ -19,7 +19,7 @@ export const analyticsConfig = defineConfig({
     shape: {
         NODE_ANALYTICS_PROVIDER: text({
             default: 'umami',
-            lower: true,
+            case: 'lower',
             describe: 'Where product events go: umami, posthog or none.'
         }),
         NODE_ANALYTICS_REQUIRE_CONSENT: flag({

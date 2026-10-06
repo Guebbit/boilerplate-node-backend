@@ -2,7 +2,7 @@
  * @module
  * Announcing a settled payment. `PAYMENT_SUCCEEDED` goes through the transactional outbox, so it
  * is durable from the moment the settlement's last owed effect is discharged — a crash after the
- * money moved can no longer leave subscribers never hearing about it. `PAYMENT_FAILED` rides the
+ * money moved cannot leave subscribers never hearing about it. `PAYMENT_FAILED` rides the
  * same outbox, written with the `declined` status move itself.
  *
  * Reached from two places that must agree: `./settlement.ts` (the normal path) and `./effects.ts`

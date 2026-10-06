@@ -31,7 +31,9 @@ import type { Response } from 'express';
  * `infrastructure` names no module (`docs/theory/layers.md`): it exports the shape, a module
  * subclasses it, and the mapping below never spells out which module that was.
  */
-export class ConflictError extends Error {}
+export class ConflictError extends Error {
+    override name = 'ConflictError';
+}
 
 /**
  * Whether a failure means an infrastructure dependency (Mongo, Redis) was unreachable, or a bounded

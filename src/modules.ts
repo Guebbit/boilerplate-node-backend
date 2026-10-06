@@ -60,26 +60,16 @@ export const enabledModules: AppModule[] = [
 ];
 
 /**
- * Every enabled module's own locale directory, in registry order — what `bootI18n` needs to load
- * translations for exactly the modules this build serves. A module carries its own copy or none;
- * this is the one place that turns the registry into the flat list `bootI18n` takes.
- * @returns the locale directories to register, one per module that ships one
+ * Every enabled module's own directory of one kind, in registry order. A module carries its own
+ * copy or none; this is the one place that turns the registry into the flat list the consumer
+ * takes — `bootI18n` for `locales`, `registerTemplateDirectories` (`mailer.ts`) for `templates`.
+ *
+ * @param kind - which manifest field to collect
+ * @returns the directories to register, one per module that ships one
  */
-export const enabledModuleLocales = (): string[] =>
+export const enabledModuleDirectories = (kind: 'locales' | 'templates'): string[] =>
     enabledModules
-        .map((appModule) => appModule.locales)
-        .filter((directory) => directory !== undefined);
-
-/**
- * Every enabled module's own template directory, in registry order — what
- * `registerTemplateDirectories` needs to know which EJS templates this build can render.
- * A module carries its own copy or none; this is the one place that turns the registry into the
- * flat list `mailer.ts` takes, the same shape {@link enabledModuleLocales} gives `bootI18n`.
- * @returns the template directories to register, one per module that ships one
- */
-export const enabledModuleTemplateDirectories = (): string[] =>
-    enabledModules
-        .map((appModule) => appModule.templates)
+        .map((appModule) => appModule[kind])
         .filter((directory) => directory !== undefined);
 
 /**

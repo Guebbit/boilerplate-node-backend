@@ -18,6 +18,7 @@
  */
 
 import { Types, type ClientSession } from 'mongoose';
+import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { t } from '@infrastructure/i18n';
@@ -391,10 +392,7 @@ const sendToProvider = (
                     .failRefund(
                         String(payment._id),
                         String(refund._id),
-                        (error instanceof Error ? error.message : String(error)).slice(
-                            0,
-                            MAX_ERROR_LENGTH
-                        )
+                        extractErrorMessage(error, String(error)).slice(0, MAX_ERROR_LENGTH)
                     )
                     .then(() => {
                         throw error;

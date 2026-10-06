@@ -35,7 +35,9 @@ export interface Precondition {
  * Raised when a write's `If-Match` no longer describes the stored row. The database-error
  * interpreter answers it with 412, so no controller spells that out.
  */
-export class PreconditionFailedError extends Error {}
+export class PreconditionFailedError extends Error {
+    override name = 'PreconditionFailedError';
+}
 
 /**
  * The open precondition for the current request, and whether a write has consumed it yet.
@@ -143,20 +145,22 @@ const accepts = (precondition: Precondition, version: number | undefined): boole
         : version !== undefined && precondition.etags.includes(etagOf(version));
 
 /**
- * Adds the loaded counter to the filter of the document's next write (Mongoose: `Document#$where`,
- * "additional properties to attach to the where clause when saving"), so a write that lost the
- * race matches nothing. `null` stands for a row with no counter, which Mongo's `null` matches.
- */
-const fence = (document: { editRevision?: unknown }): void => {
-    Object.assign(document, { $where: { [EDIT_REVISION]: document.editRevision ?? null } });
-};
-
-/**
- * Takes the fence off once its write has settled. Mongoose keeps `$where` on the document, so a
+ * Runs `write` with the loaded counter added to the filter of the document's write (Mongoose:
+ * `Document#$where`, "additional properties to attach to the where clause when saving"), so a
+ * write that lost the race matches nothing. `null` stands for a row with no counter, which
+ * Mongo's `null` matches.
+ *
+ * The fence comes off once the write has settled: Mongoose keeps `$where` on the document, so a
  * second save of the same object would otherwise still filter on a counter the first one moved.
+ *
+ * @param document - the hydrated document about to be written
+ * @param write - the write itself
  */
-const unfence = (document: object): void => {
-    Reflect.deleteProperty(document, '$where');
+const armed = <T>(document: { editRevision?: unknown }, write: () => Promise<T>): Promise<T> => {
+    Object.assign(document, { $where: { [EDIT_REVISION]: document.editRevision ?? null } });
+    return write().finally(() => {
+        Reflect.deleteProperty(document, '$where');
+    });
 };
 
 /**
@@ -182,14 +186,9 @@ export const fencedSave = <T>(
     if (!accepts(precondition, versionOf(document)))
         return Promise.reject(new PreconditionFailedError());
 
-    fence(document);
-    return write()
-        .catch((error: unknown) => {
-            throw isLostRace(error) ? new PreconditionFailedError() : error;
-        })
-        .finally(() => {
-            unfence(document);
-        });
+    return armed(document, write).catch((error: unknown) => {
+        throw isLostRace(error) ? new PreconditionFailedError() : error;
+    });
 };
 
 /**
@@ -218,12 +217,7 @@ export const checkedDelete = (
     if (!accepts(precondition, versionOf(document)))
         return Promise.reject(new PreconditionFailedError());
 
-    fence(document);
-    return write()
-        .then(({ deletedCount }) => {
-            if (deletedCount === 0) throw new PreconditionFailedError();
-        })
-        .finally(() => {
-            unfence(document);
-        });
+    return armed(document, write).then(({ deletedCount }) => {
+        if (deletedCount === 0) throw new PreconditionFailedError();
+    });
 };

@@ -36,7 +36,7 @@ export interface CatalogueEntry {
 }
 
 /** The groups in the order the docs present them, with what each heading says. */
-export const GROUPS: readonly {
+const GROUPS: readonly {
     group: ModuleDescriptor['group'];
     heading: string;
     blurb: string;

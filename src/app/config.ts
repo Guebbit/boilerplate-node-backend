@@ -53,7 +53,7 @@ import {
     pseudonymConfig
 } from '@infrastructure/security/config';
 import type { SecurityTxtSettings } from '@app/security-txt';
-import { configSlicesOf } from '@kernel/module-config';
+import { moduleConfigSlices } from '@kernel/module-config';
 import { outboxConfig, reauthConfig } from '@kernel/config';
 import type { AppModule } from '@kernel/registry';
 import { enabledModules } from '../modules';
@@ -166,7 +166,7 @@ export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
  */
 export const allConfigSlices = (appModules: readonly AppModule[]): readonly ConfigSlice[] => [
     ...APP_CONFIG_SLICES,
-    ...appModules.flatMap((appModule) => configSlicesOf(appModule))
+    ...moduleConfigSlices(appModules)
 ];
 
 /**
@@ -174,7 +174,7 @@ export const allConfigSlices = (appModules: readonly AppModule[]): readonly Conf
  * `registerModules` does at app boot.
  *
  * For the entry points that never go through `createApp()` — the cluster primary (one clean
- * error, instead of every worker crash-looping on it) and `runScript` (all 11 ops scripts).
+ * error, instead of every worker crash-looping on it) and `runScript` (every ops script).
  *
  * @throws {ConfigError} when anything is wrong
  */

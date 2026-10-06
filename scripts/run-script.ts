@@ -17,6 +17,7 @@
  * `process.exitCode` rather than `process.exit()`: setting the code lets Node drain stdout and
  * finish pending handles, where `exit()` truncates in-flight log writes.
  */
+import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordJobOutcome } from '@infrastructure/persistence/lease';
 
@@ -31,12 +32,18 @@ import { recordJobOutcome } from '@infrastructure/persistence/lease';
 const refuseToRun = (error: unknown, cleanup: () => Promise<unknown>): Promise<void> => {
     logger.error({
         message: 'Script refused to run: invalid configuration.',
-        error: error instanceof Error ? error.message : String(error)
+        error: extractErrorMessage(error, String(error))
     });
     process.exitCode = 1;
     return cleanup().then(
         () => undefined,
-        () => undefined
+        (cleanupError: unknown) => {
+            // Already exiting non-zero for the configuration; a failed teardown is context, not a verdict.
+            logger.warn({
+                message: 'Script cleanup failed.',
+                error: extractErrorMessage(cleanupError, String(cleanupError))
+            });
+        }
     );
 };
 
@@ -58,7 +65,7 @@ const runChecked = async (
     } catch (error: unknown) {
         logger.error({
             message: 'Script failed.',
-            error: error instanceof Error ? error.message : String(error),
+            error: extractErrorMessage(error, String(error)),
             stack: error instanceof Error ? error.stack : undefined
         });
         process.exitCode = 1;
@@ -74,7 +81,7 @@ const runChecked = async (
              */
             logger.warn({
                 message: 'Script cleanup failed.',
-                error: error instanceof Error ? error.message : String(error)
+                error: extractErrorMessage(error, String(error))
             });
         }
     }

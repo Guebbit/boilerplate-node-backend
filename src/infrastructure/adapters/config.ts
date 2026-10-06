@@ -29,7 +29,7 @@ export const mailConfig = defineConfig({
     shape: {
         NODE_MAIL_TRANSPORT: text({
             default: 'smtp',
-            lower: true,
+            case: 'lower',
             describe:
                 'The mail transport. Production has `smtp`; a name this process does not register is refused at boot.'
         }),
@@ -240,13 +240,16 @@ export const exportStoreConfig = defineConfig({
     }
 });
 
+/** The shortest HMAC secret an ALTCHA challenge may be signed with, in characters. */
+export const ALTCHA_SECRET_MIN_LENGTH = 16;
+
 /** The anti-abuse ladder: email policy, and the human-challenge provider with its credentials. */
 export const antibotConfig = defineConfig({
     name: 'antibot',
     shape: {
         NODE_ANTIBOT_PROVIDER: text({
             default: 'none',
-            lower: true,
+            case: 'lower',
             describe: 'The human-challenge provider: none, turnstile or altcha.'
         }),
         NODE_ANTIBOT_EMAIL_POLICY: choice(['off', 'disposable', 'mx'], {
@@ -255,16 +258,16 @@ export const antibotConfig = defineConfig({
                 'What a signup address must pass: nothing, not-disposable, or has an MX record.'
         }),
         NODE_ANTIBOT_EMAIL_ALLOWLIST: csv({
-            lower: true,
+            case: 'lower',
             describe: 'Domains exempt from the email policy.'
         }),
         NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA: csv({
-            lower: true,
+            case: 'lower',
             describe: 'Domains refused on top of the upstream disposable list.'
         }),
         NODE_ANTIBOT_ALTCHA_SECRET: text({
             sensitive: true,
-            describe: 'HMAC secret for altcha challenges (16+ characters).'
+            describe: `HMAC secret for altcha challenges (${String(ALTCHA_SECRET_MIN_LENGTH)}+ characters).`
         }),
         NODE_ANTIBOT_ALTCHA_COST: int({
             default: 100_000,
@@ -279,7 +282,7 @@ export const antibotConfig = defineConfig({
         // Selecting a provider is a choice; selecting one without its secret is not. It would
         // throw on the first guarded request — a signup outage that reads as a bug.
         if (config.NODE_ANTIBOT_PROVIDER === 'altcha')
-            return (config.NODE_ANTIBOT_ALTCHA_SECRET ?? '').length < 16
+            return (config.NODE_ANTIBOT_ALTCHA_SECRET ?? '').length < ALTCHA_SECRET_MIN_LENGTH
                 ? ['NODE_ANTIBOT_ALTCHA_SECRET']
                 : [];
         if (config.NODE_ANTIBOT_PROVIDER === 'turnstile')

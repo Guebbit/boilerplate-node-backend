@@ -17,14 +17,13 @@
 
 import mongoose, { model, Schema } from 'mongoose';
 import type { ClientSession, Document, Model } from 'mongoose';
-import { Gauge } from 'prom-client';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
-import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
 import {
     outboxEventsDeadTotal,
     outboxEventsPublishedTotal,
-    outboxEventsRetriedTotal
+    outboxEventsRetriedTotal,
+    setOutboxPendingReader
 } from '@infrastructure/observability/metrics-outbox';
 import {
     domainEventsWired,
@@ -213,13 +212,20 @@ const claim = (row: OutboxRow): Promise<boolean> => {
         .then((claimed) => claimed !== null);
 };
 
-/** Hand one row to the event bus. A consumer that throws answers `false`, never rejects. */
-const dispatch = (row: OutboxRow): Promise<boolean> =>
+/**
+ * Hand one row to the event bus. Never rejects.
+ *
+ * @returns `undefined` when every consumer succeeded, otherwise what to record as the failure
+ */
+const dispatch = (row: OutboxRow): Promise<string | undefined> =>
     // `name` came from a `DomainEventName` at enqueue time, but a stored string cannot prove that
     // to the compiler; a name nobody subscribes to any more simply has no handlers.
     emitDomainEvent(row.name as DomainEventName, row.payload as never, {
         eventId: String(row._id)
-    }).catch(() => false);
+    }).then(
+        (settled) => (settled ? undefined : 'a consumer failed'),
+        (error: unknown) => extractErrorMessage(error, String(error))
+    );
 
 /** Mark a dispatched row published. Conditional, so a row a peer already finished is left alone. */
 const markPublished = (row: OutboxRow): Promise<unknown> =>
@@ -233,12 +239,13 @@ const markPublished = (row: OutboxRow): Promise<unknown> =>
 /**
  * Record a failed dispatch: reschedule with backoff, or park the row once the attempts are spent.
  *
+ * @param reason - what went wrong, kept in `lastError`
  * @returns `dead` when the row was parked, `retried` otherwise
  */
-const markFailed = (row: OutboxRow): Promise<'retried' | 'dead'> => {
+const markFailed = (row: OutboxRow, reason: string): Promise<'retried' | 'dead'> => {
     const attempts = row.attempts + 1;
     const isDead = attempts >= outboxMaxAttempts();
-    const lastError = `${row.name}: a consumer failed (attempt ${String(attempts)})`;
+    const lastError = `${row.name}: ${reason} (attempt ${String(attempts)})`;
     return outboxEventModel
         .updateOne(
             { _id: row._id, status: 'pending' },
@@ -269,8 +276,10 @@ const markFailed = (row: OutboxRow): Promise<'retried' | 'dead'> => {
 const relayOne = (row: OutboxRow): Promise<keyof RelayResult | 'skipped'> =>
     claim(row).then((won) => {
         if (!won) return 'skipped';
-        return dispatch(row).then((ok) =>
-            ok ? markPublished(row).then(() => 'published' as const) : markFailed(row)
+        return dispatch(row).then((failure) =>
+            failure === undefined
+                ? markPublished(row).then(() => 'published' as const)
+                : markFailed(row, failure)
         );
     });
 
@@ -383,22 +392,7 @@ export const settleOutboxNudges = (): Promise<void> =>
     nudges.size === 0 ? Promise.resolve() : Promise.all(nudges).then(() => settleOutboxNudges());
 
 /**
- * How many rows wait to be published. Reads the database at scrape time, because the writer and
- * the relay may be in different processes from the one being scraped. Skipped while Mongo is down,
- * for the same reason the job gauge is: a scrape must answer fast.
+ * Feeds the `outbox_pending_events` gauge its count. The gauge lives in observability, which may
+ * not import the model, so the model's owner hands it a reader.
  */
-const _outboxPendingGauge = new Gauge({
-    name: 'outbox_pending_events',
-    help: 'Outbox events written but not yet published (includes ones backing off).',
-    registers: [metricsRegistry],
-    collect() {
-        if (mongoose.connection.readyState !== mongoose.ConnectionStates.connected) return;
-        return outboxEventModel
-            .countDocuments({ status: 'pending' })
-            .exec()
-            .then((count) => {
-                this.set(count);
-            })
-            .catch(() => undefined);
-    }
-});
+setOutboxPendingReader(() => outboxEventModel.countDocuments({ status: 'pending' }).exec());

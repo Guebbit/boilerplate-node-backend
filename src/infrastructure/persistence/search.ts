@@ -1,10 +1,11 @@
-import { persistenceConfig } from '@infrastructure/persistence/config';
 /**
  * @module
  * Shared pagination/filter helpers.
  * Extracts common search logic to satisfy OCP — new filter conventions
  * require changes in one place instead of every service.
  */
+
+import { persistenceConfig } from '@infrastructure/persistence/config';
 
 /** Raw page/size as they arrive off a request, before {@link normalizePagination} coerces them. */
 export interface PaginationInput {

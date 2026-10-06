@@ -31,6 +31,15 @@ export const configSlicesOf = (appModule: AppModule): readonly ConfigSlice[] => 
 ];
 
 /**
+ * Every slice a list of modules contributes, flattened in module order.
+ *
+ * @param appModules - the modules
+ * @returns each module's {@link configSlicesOf}, back to back
+ */
+export const moduleConfigSlices = (appModules: readonly AppModule[]): readonly ConfigSlice[] =>
+    appModules.flatMap((appModule) => configSlicesOf(appModule));
+
+/**
  * Refuse to boot on any wrongly-shaped value, missing secret or failed
  * cross-field check, across every slice — thrown ONCE, listing every problem.
  *
@@ -46,5 +55,4 @@ export const configSlicesOf = (appModule: AppModule): readonly ConfigSlice[] => 
 export const assertModuleConfig = (
     appModules: readonly AppModule[],
     appSlices: readonly ConfigSlice[]
-): void =>
-    assertConfig([...appSlices, ...appModules.flatMap((appModule) => configSlicesOf(appModule))]);
+): void => assertConfig([...appSlices, ...moduleConfigSlices(appModules)]);

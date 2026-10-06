@@ -92,15 +92,14 @@ const fanOut = (event: PublicEventProjection, eventId: string = randomUUID()): P
             matches.map((subscription) => deliverToOne(subscription, event, eventId))
         ).then((outcomes) => {
             const failures = outcomes.filter((outcome) => outcome.status === 'rejected');
+            if (failures.length === 0) return;
             // Stryker disable next-line all
-            if (failures.length > 0)
-                logger.error({
-                    message: 'webhooks: failed to fan out to a subscription',
-                    failed: failures.length,
-                    of: matches.length
-                });
-            if (failures.length > 0)
-                throw new Error(`webhooks: ${String(failures.length)} fan-out(s) failed`);
+            logger.error({
+                message: 'webhooks: failed to fan out to a subscription',
+                failed: failures.length,
+                of: matches.length
+            });
+            throw new Error(`webhooks: ${String(failures.length)} fan-out(s) failed`);
         });
     });
 

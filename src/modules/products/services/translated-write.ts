@@ -6,6 +6,7 @@
 import type { z } from 'zod';
 import { getFallbackLocale } from '@infrastructure/i18n';
 import {
+    clearOmittedFields,
     isTranslationPlan,
     planTranslations,
     readAllTranslations,
@@ -202,6 +203,9 @@ export const writeUpdate = async (
     return 'updated' in result ? finishUpdateById(id, result, context) : result;
 };
 
+/** What a stated locale of a product's `translations` may carry: the title is the row's own. */
+const TRANSLATED_FIELDS = ['description'] as const;
+
 /**
  * PUT's `translations` is the whole set (RFC 9110 §9.3.4): every locale the product holds and the
  * body leaves out becomes `null` — the same signal a PATCH sends to delete one — and a description
@@ -221,7 +225,7 @@ export const clearOmittedLocales = (
         const translations = Object.fromEntries(
             Object.entries(changes.translations ?? {}).map(([locale, entry]) => [
                 locale,
-                entry === null ? null : { description: null, ...entry }
+                entry === null ? null : clearOmittedFields(TRANSLATED_FIELDS, entry)
             ])
         );
         for (const locale of stored.keys())

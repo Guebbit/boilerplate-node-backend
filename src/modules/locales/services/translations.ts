@@ -14,6 +14,7 @@ import type {
 } from '@types';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
 import type { TranslatableTarget } from '@kernel/registry';
+import { clearOmittedFields } from '@kernel/translation';
 import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
 import {
     generateReject,
@@ -369,7 +370,7 @@ export const upsertEntityTranslations = (
  * @param declared - every field name the entity's registry entry declares
  * @returns the body with each non-empty locale carrying every declared field
  */
-const clearOmittedFields = (
+const clearOmittedInPayload = (
     payload: UpsertTranslationsRequest,
     declared: readonly string[]
 ): Record<string, LocaleWrite> =>
@@ -378,13 +379,7 @@ const clearOmittedFields = (
             locale,
             entry === null || Object.keys(entry.fields).length === 0
                 ? entry
-                : {
-                      ...entry,
-                      fields: {
-                          ...Object.fromEntries(declared.map((field) => [field, null])),
-                          ...entry.fields
-                      }
-                  }
+                : { ...entry, fields: clearOmittedFields(declared, entry.fields) }
         ])
     );
 
@@ -421,7 +416,7 @@ export const replaceEntityTranslations = async (
     return applyTranslationBatch(
         entityType,
         entityId,
-        { ...clearOmittedFields(payload, target.fields), ...deletions },
+        { ...clearOmittedInPayload(payload, target.fields), ...deletions },
         context
     );
 };

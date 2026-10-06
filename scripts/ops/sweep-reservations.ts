@@ -21,7 +21,7 @@ import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
 import { settleOutboxNudges } from '@kernel/outbox';
-import { enabledModules, enabledModuleLocales } from '../../src/modules';
+import { enabledModules, enabledModuleDirectories } from '../../src/modules';
 import { inventoryService } from '@modules/inventory';
 import { logger } from '@infrastructure/adapters/logger';
 import { withLease } from '@infrastructure/persistence/lease';
@@ -42,7 +42,7 @@ const main = (): Promise<void> =>
     startJob()
         .then(() => {
             registerModules(enabledModules);
-            return bootI18n(enabledModuleLocales());
+            return bootI18n(enabledModuleDirectories('locales'));
         })
         .then(() =>
             // Each expiry's announcement rides the outbox; settled inside the lease so `orders` has

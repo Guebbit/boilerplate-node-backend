@@ -14,7 +14,7 @@ import {
     registeredTemplateNames,
     templateFile
 } from '@infrastructure/adapters/mailer';
-import { enabledModuleTemplateDirectories } from '../../../../src/modules';
+import { enabledModuleDirectories } from '../../../../src/modules';
 import { listSupportedLocales } from '@infrastructure/i18n';
 import {
     verifyRequestEmail,
@@ -50,7 +50,7 @@ import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails
 
 // Every case in this file renders against the real collection, the same one `app.ts` builds at
 // boot — a module's own manifest is what says which directory it owns.
-registerTemplateDirectories(enabledModuleTemplateDirectories());
+registerTemplateDirectories(enabledModuleDirectories('templates'));
 
 describe('the template collection', () => {
     it('collects at least one template', () => {

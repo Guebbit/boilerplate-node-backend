@@ -139,8 +139,8 @@ describe('text and secret', () => {
     });
 
     it('normalises case when asked', () => {
-        expect(text({ upper: true }).schema.parse('it')).toBe('IT');
-        expect(text({ lower: true }).schema.parse('IT')).toBe('it');
+        expect(text({ case: 'upper' }).schema.parse('it')).toBe('IT');
+        expect(text({ case: 'lower' }).schema.parse('IT')).toBe('it');
     });
 
     it('marks a secret sensitive and carries its presence rule', () => {
@@ -172,8 +172,15 @@ describe('csv and key rings', () => {
         expect(csv().schema.parse(undefined)).toEqual([]);
     });
 
+    it('takes its default when unset, and shows it on the page', () => {
+        const field = csv({ default: ['a', 'b'] });
+        expect(field.schema.parse(undefined)).toEqual(['a', 'b']);
+        expect(field.schema.parse('c')).toEqual(['c']);
+        expect(field.doc.default).toBe('a,b');
+    });
+
     it('normalises each member when asked', () => {
-        expect(csv({ upper: true }).schema.parse('it, de')).toEqual(['IT', 'DE']);
+        expect(csv({ case: 'upper' }).schema.parse('it, de')).toEqual(['IT', 'DE']);
     });
 
     it('reads a key ring newest first and marks it sensitive', () => {

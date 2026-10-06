@@ -8,6 +8,7 @@
  */
 
 import type { Request, Response } from 'express';
+import type { ZodType } from 'zod';
 import {
     CreateLocaleEntryBody,
     MergeLocaleEntriesBody,
@@ -89,52 +90,50 @@ export const updateLocaleEntry = (
         .catch(catchAs(response, 'updateLocaleEntry'));
 };
 
-/** The two bulk routes differ by one word, so they are one handler and a mode. */
-const importEntries = (
-    request: Request<{ locale: string; tenant: string }, unknown, { entries?: LocaleEntryInput[] }>,
-    response: Response,
-    mode: 'replace' | 'merge',
-    entries: LocaleEntryInput[]
-) =>
-    localeService
-        .importEntries(
-            request.params.locale,
-            request.params.tenant,
-            entries,
-            mode,
-            callerContextOf(request)
-        )
-        .then((result) => {
-            if (refused(response, result)) return;
+/**
+ * The two bulk routes differ by their schema and one word, so one builder makes both.
+ *
+ * @param mode - `replace` deletes what is not sent, `merge` leaves it alone
+ * @param schema - the operation's generated body schema
+ * @returns the express handler
+ */
+const importEntries =
+    (mode: 'replace' | 'merge', schema: ZodType<{ entries: LocaleEntryInput[] }>) =>
+    (
+        request: Request<
+            { locale: string; tenant: string },
+            unknown,
+            ReplaceLocaleEntriesRequest | MergeLocaleEntriesRequest
+        >,
+        response: Response
+    ) => {
+        const parseResult = schema.safeParse(request.body);
+        if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
-            return successResponse<LocaleImportResult>(response, result.data);
-        })
-        .catch(catchAs(response, `${mode}LocaleEntries`));
+        return localeService
+            .importEntries(
+                request.params.locale,
+                request.params.tenant,
+                parseResult.data.entries,
+                mode,
+                callerContextOf(request)
+            )
+            .then((result) => {
+                if (refused(response, result)) return;
+
+                return successResponse<LocaleImportResult>(response, result.data);
+            })
+            .catch(catchAs(response, `${mode}LocaleEntries`));
+    };
 
 /**
  * PUT /locales/:locale/tenants/:tenant/entries (admin)
  * Replace the tenant's whole set — anything stored under it and not sent is deleted.
  */
-export const replaceLocaleEntries = (
-    request: Request<{ locale: string; tenant: string }, unknown, ReplaceLocaleEntriesRequest>,
-    response: Response
-) => {
-    const parseResult = ReplaceLocaleEntriesBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
-
-    return importEntries(request, response, 'replace', parseResult.data.entries);
-};
+export const replaceLocaleEntries = importEntries('replace', ReplaceLocaleEntriesBody);
 
 /**
  * PATCH /locales/:locale/tenants/:tenant/entries (admin)
  * Upsert what is sent, leave the rest alone. Nothing is ever deleted by this route.
  */
-export const mergeLocaleEntries = (
-    request: Request<{ locale: string; tenant: string }, unknown, MergeLocaleEntriesRequest>,
-    response: Response
-) => {
-    const parseResult = MergeLocaleEntriesBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
-
-    return importEntries(request, response, 'merge', parseResult.data.entries);
-};
+export const mergeLocaleEntries = importEntries('merge', MergeLocaleEntriesBody);

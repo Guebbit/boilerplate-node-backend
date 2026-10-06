@@ -222,3 +222,18 @@ describe('runScript — D9 job-health recording', () => {
         expect(mockRecordJobOutcome).not.toHaveBeenCalled();
     });
 });
+
+describe('runScript on an invalid environment with a failing cleanup', () => {
+    it('logs the cleanup failure as a warning instead of swallowing it', async () => {
+        refuse();
+        mockWarn.mockClear();
+
+        await runScript(
+            undefined,
+            () => Promise.resolve(),
+            () => Promise.reject(new Error('quit failed'))
+        );
+
+        expect(mockWarn).toHaveBeenCalledWith(expect.objectContaining({ error: 'quit failed' }));
+    });
+});

@@ -1,6 +1,6 @@
 /**
  * @module
- * The seeder's and the demo's own variables, as config slices: the thirteen `NODE_SEED_*_PASSWORD`
+ * The seeder's and the demo's own variables, as config slices: the `NODE_SEED_*_PASSWORD`
  * variables, each with its committed, public fallback, and the demo webhook sink's address.
  *
  * Not part of the app's boot gate — the seeder is a script, not the app, and production has none of

@@ -147,35 +147,29 @@ The paired `boilerplate-vue-frontend` repo carries no mock of this API. Its Cypr
 
 The practical implication for changes in this repo: an edit to a module's `scenarios/<name>.ts`, a controller or `openapi.yaml` is exercised by the frontend's suites on their very next run — there is no mock in between to keep an old answer alive. Boot sequences and rationale live in the frontend repo: `boilerplate-vue-frontend/docs/tools/demo-profile.md` (demo) and `boilerplate-vue-frontend/docs/tools/live-e2e.md` (live).
 
-## Test timings
+## The suites
 
-Measured 2026-08-14 on a 16-core / 30 GB machine. They are here so a number that doubles is visible
-as a regression rather than as "tests feel slow lately" — treat them as an order of magnitude, not a
-promise. The paired frontend keeps the same table; its numbers are an order of magnitude larger,
-because Cypress drives a real browser and this suite does not.
+Suite and test counts and wall-clock times are not recorded here: they go stale with every change,
+and a number that is wrong is worse than none. Run the command to see them; the paired frontend's
+Cypress runs are an order of magnitude slower than these, because they drive a real browser.
 
-The suite/test counts below reflect the placement rule every module follows: a `setupTestDb()`-calling
-spec lives in that module's own `tests/integration/`, never its `tests/unit/`, which is why
-`test:integration` carries 36 module files plus the top-level `scripts/db/` specs.
-Timings are not re-measured here — this machine was under concurrent load — so `test:unit` getting
-lighter and `test:integration` getting heavier is the structural fact worth recording; the absolute
-seconds still want a clean re-measurement on the reference machine.
+A `setupTestDb()`-calling spec lives in that module's own `tests/integration/`, never its
+`tests/unit/` — the placement rule every module follows.
 
-| Command                      | Time     | What it runs                                                                         |
-| ---------------------------- | -------- | ------------------------------------------------------------------------------------ |
-| `npm run test:unit`          | **~23s** | 84 suites, 1235 tests                                                                |
-| `npm run test:cross-cutting` | ~3s      | 34 suites, 286 tests — the sweeps                                                    |
-| `npm run test:integration`   | ~14s     | 48 suites, 703 tests, `--runInBand`                                                  |
-| `npm run test:contract`      | ~49s     | 15 suites, 334 tests, `--runInBand`                                                  |
-| `npm run test:fuzz`          | ~34s     | 1 suite, 93 tests, `--runInBand`                                                     |
-| `npm test`                   | **~90s** | all five, in that order                                                              |
-| `npm run mutation:full`      | hours    | whole scope, sharded and weekly in CI, see [Mutation Testing](./mutation-testing.md) |
+| Command                      | What it runs                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------ |
+| `npm run test:unit`          | one function, no database                                                            |
+| `npm run test:cross-cutting` | the sweeps: one rule across every module                                             |
+| `npm run test:integration`   | a real database, or the real app over HTTP, `--runInBand`                            |
+| `npm run test:contract`      | HTTP against the spec, `--runInBand`                                                 |
+| `npm run test:fuzz`          | the spec, hostile, `--runInBand`                                                     |
+| `npm test`                   | all five, in that order                                                              |
+| `npm run mutation:full`      | whole scope, sharded and weekly in CI, see [Mutation Testing](./mutation-testing.md) |
 
-The whole suite under the mutation run's swc transform is **~10s** for the same 1527 tests that take
-~26s under ts-jest — the difference is type-checking, which `npm run ts-check` does once for the
-whole project anyway. See `jest.config.mutation.js`.
+The mutation run's swc transform skips type-checking, which `npm run ts-check` does once for the
+whole project anyway, so the same tests run markedly faster there. See `jest.config.mutation.js`.
 
-**`--runInBand` on two of the four is worth re-examining.** It serialises test FILES, and the
+**`--runInBand` on some of these suites is worth re-examining.** It serialises test FILES, and the
 justification recorded in [Concurrency Testing](./concurrency-testing.md) — that parallel workers
 would share one in-memory Mongo — no longer describes the setup: `tests/support/global-setup.ts`
 starts one server and `database.ts` gives each file its own DATABASE on it, so files are already

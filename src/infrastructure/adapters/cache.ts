@@ -29,19 +29,12 @@ import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/me
 const cachePrefix = (): string => redisConfig().NODE_REDIS_CACHE_PREFIX;
 
 /**
- * Support both a full Redis URI and host/port fragments so deployment config can stay flexible.
- *
- * Returns `undefined` when neither is set — which is the signal that caching is off
- * (see `isCacheEnabled`), not an error.
- */
-const getRedisUrl = (): string | undefined => configuredRedisUrl();
-
-/**
  * Cache usage is on only when Redis is configured and not explicitly disabled — two independent
  * switches, since `NODE_REDIS_CACHE_ENABLED=0` is a kill switch for debugging a stale cache
  * without tearing down Redis itself.
  */
-const isCacheEnabled = () => Boolean(getRedisUrl()) && redisConfig().NODE_REDIS_CACHE_ENABLED;
+const isCacheEnabled = () =>
+    Boolean(configuredRedisUrl()) && redisConfig().NODE_REDIS_CACHE_ENABLED;
 
 /**
  * The one connection this process opens to Redis — a client per request exhausts Redis' limit.
@@ -56,7 +49,7 @@ const cacheConnection = manageConnection<RedisClient>({
     // `false` here and is replaced rather than handed back dead.
     isReady: (client) => client.isReady,
     connect: () => {
-        const redisUrl = getRedisUrl();
+        const redisUrl = configuredRedisUrl();
         // Enablement already implies a URL; this is the type narrowing, and resolving `undefined`
         // is the "cannot be built" signal rather than a failure worth warning about.
         if (!redisUrl) return Promise.resolve(undefined);

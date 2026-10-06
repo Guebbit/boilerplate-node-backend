@@ -11,6 +11,7 @@ import type { ClientSession } from 'mongoose';
 import { asStub } from '@tests/stub';
 import {
     applyTranslations,
+    clearOmittedFields,
     isTranslationAvailable,
     isTranslationPlan,
     planTranslations,
@@ -271,5 +272,21 @@ describe('applyTranslations', () => {
         await runWithLocale('it-CH', () => applyTranslations('product', [{ id: 'p1' }]));
 
         expect(resolve).toHaveBeenCalledWith('product', ['p1'], ['it-CH', 'it', 'en']);
+    });
+});
+
+describe('clearOmittedFields', () => {
+    it('adds a null for each declared field the body left out, and keeps what it stated', () => {
+        expect(clearOmittedFields(['title', 'description'], { title: 'Hi' })).toEqual({
+            title: 'Hi',
+            description: null
+        });
+    });
+
+    it('keeps a key the body stated even when it is not declared', () => {
+        expect(clearOmittedFields(['description'], { other: 'x' })).toEqual({
+            description: null,
+            other: 'x'
+        });
     });
 });

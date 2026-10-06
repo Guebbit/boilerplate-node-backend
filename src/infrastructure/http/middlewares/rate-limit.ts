@@ -101,12 +101,23 @@ const limiterLogger = {
 };
 
 /**
- * The request ceiling a budget's variable configures, or its default.
+ * The typed reader of one budget's variable, built once per namespace: defining a config slice
+ * is not free, and a budget's limit is asked for more than once while its limiter is built.
+ */
+const limitReaders = new Map<string, ReturnType<typeof rateLimitBudgetConfig>>();
+
+/**
+ * The request ceiling a budget's variable configures, or its default. The variable is read at
+ * call time, so an environment changed after the reader was built is honoured.
  *
  * @param budget - the budget to read
  */
-const budgetLimit = (budget: RateLimitBudget): number =>
-    rateLimitBudgetConfig(budget.namespace, [budget])()[budget.environmentVariable];
+const budgetLimit = (budget: RateLimitBudget): number => {
+    const reader =
+        limitReaders.get(budget.namespace) ?? rateLimitBudgetConfig(budget.namespace, [budget]);
+    limitReaders.set(budget.namespace, reader);
+    return reader()[budget.environmentVariable];
+};
 
 /**
  * A {@link RateLimitBudget}'s data, turned into the actual Express middleware — the single place

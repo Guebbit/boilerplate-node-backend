@@ -21,7 +21,7 @@ export type LogFields = Record<string, unknown>;
 
 /**
  * The logging port every other tier depends on instead of winston directly. Narrow on
- * purpose: it states exactly the five calls this codebase makes — `logger.info('text')`,
+ * purpose: it states exactly the calls this codebase makes — `logger.info('text')`,
  * `logger.error('text', error)`, `logger.error({ message, ...meta })`, `logger.log(level, ...)` —
  * so a project swapping winston for another library only has to satisfy this, not winston's own,
  * much wider `Logger` interface.
