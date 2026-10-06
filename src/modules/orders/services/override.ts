@@ -32,7 +32,6 @@ import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
 import { canOverrideTo, statusesOverridableInto, withdrawUntilFrom } from '../domain';
 import { withdrawalPeriodDays } from '../config';
-import { inventoryService } from '@modules/inventory';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -105,21 +104,6 @@ const applyOverride = (
     ).then((updated) => {
         if (!updated) return null;
 
-        /*
-         * The override is the escape hatch for an order paid offline —
-         * `payments/services/settlement.ts` never ran for it, so nothing has claimed its
-         * reservation yet. `commitForOrder` is
-         * idempotent (`held → committed`, a no-op once already committed), so calling it
-         * unconditionally whenever the order started at `pending` is safe even against the race
-         * `observedFrom`'s own docblock describes: worst case this is a harmless replay of a
-         * commit settlement already made. An override starting anywhere past `pending` skips this
-         * — settlement already committed it on the way to `paid`.
-         */
-        const commit =
-            observedFrom === OrderStatus.pending
-                ? inventoryService.commitForOrder(orderId)
-                : Promise.resolve();
-
         recordAudit(context, {
             action: ordersAuditActions.ORDER_STATUS_OVERRIDDEN,
             outcome: 'success',
@@ -128,7 +112,7 @@ const applyOverride = (
             metadata: { mode, from: observedFrom, to, reason }
         });
 
-        return commit.then(() => updated);
+        return updated;
     });
 };
 

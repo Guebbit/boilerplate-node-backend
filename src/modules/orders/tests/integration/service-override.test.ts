@@ -73,6 +73,19 @@ describe('overrideStatus', () => {
         expect(result.success).toBe(false);
     });
 
+    it('refuses to move an order out of pending — only the offline-payment door does that', async () => {
+        const order = await seedOrder(OrderStatus.pending);
+        const context = callerContextAs('admin', 'admin-1');
+
+        for (const to of [OrderStatus.processing, OrderStatus.shipped, OrderStatus.delivered]) {
+            const result = await overrideStatus(String(order._id), to, 'trying anyway', context);
+            expect(result.success).toBe(false);
+        }
+
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.pending);
+    });
+
     it('refuses a backward move', async () => {
         const order = await seedOrder(OrderStatus.shipped);
         const context = callerContextAs('admin', 'admin-1');
@@ -115,6 +128,17 @@ describe('forceMove', () => {
         expect(updated?.status).toBe(OrderStatus.shipped);
         const stored = await readOrder(String(order._id));
         expect(stored?.statusOverrides?.[0]).toMatchObject({ mode: 'forced', to: 'shipped' });
+    });
+
+    it('refuses a forced move out of pending, which a paid order would accept', async () => {
+        const order = await seedOrder(OrderStatus.pending);
+        const context = callerContextAs('admin', 'admin-1');
+
+        const updated = await forceMove(String(order._id), 'shipped', 'skipping payment', context);
+
+        expect(updated).toBeNull();
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.pending);
     });
 
     it('refuses once the order has already moved past the target', async () => {
