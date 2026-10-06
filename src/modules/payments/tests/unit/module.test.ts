@@ -67,6 +67,33 @@ describe('the payment webhook secret', () => {
         );
     });
 
+    it('accepts a ring of secrets, every entry long enough', () => {
+        configure();
+        setEnvironment({
+            NODE_PAYMENT_WEBHOOK_SECRET: 'new-payment-webhook-secret,old-payment-webhook-secret'
+        });
+
+        expect(() => assertModuleConfig([paymentsModule], [])).not.toThrow();
+    });
+
+    it('refuses a ring whose second entry is under 16 characters', () => {
+        configure();
+        setEnvironment({ NODE_PAYMENT_WEBHOOK_SECRET: 'new-payment-webhook-secret,short' });
+
+        expect(() => assertModuleConfig([paymentsModule], [])).toThrow(
+            /NODE_PAYMENT_WEBHOOK_SECRET/
+        );
+    });
+
+    it('refuses a trailing comma: an empty entry is no secret', () => {
+        configure();
+        setEnvironment({ NODE_PAYMENT_WEBHOOK_SECRET: 'new-payment-webhook-secret,' });
+
+        expect(() => assertModuleConfig([paymentsModule], [])).toThrow(
+            /NODE_PAYMENT_WEBHOOK_SECRET/
+        );
+    });
+
     it('refuses the .env-example placeholder in production', () => {
         setEnvironment({ NODE_ENV: 'production' });
         setEnvironment({ NODE_PAYMENT_WEBHOOK_SECRET: 'your-payment-webhook-secret-here' });
