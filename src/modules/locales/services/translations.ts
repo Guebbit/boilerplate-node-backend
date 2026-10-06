@@ -5,6 +5,7 @@
  * entity's own collection except through the derived-index-column write the registry names.
  */
 
+import type { ClientSession } from 'mongoose';
 import type {
     MergeTranslationsRequest,
     Translation,
@@ -197,24 +198,33 @@ const planTranslationWrites = async (
  * that write happens rather than one per caller that could drift.
  *
  * Never validates. A caller that skips {@link planTranslationWrites} first can corrupt data.
+ *
+ * @param session - joins every write to the caller's transaction; omitted, each stands alone
  */
 const writePlannedTranslations = async (
     entityType: string,
     entityId: string,
     fallbackLocale: string,
     planned: readonly PlannedWrite[],
-    translatedBy: string | undefined
+    translatedBy: string | undefined,
+    session?: ClientSession
 ): Promise<void> => {
     const fallbackRow = await translationRepository.findEntityLocale(
         entityType,
         entityId,
-        fallbackLocale
+        fallbackLocale,
+        session
     );
     const fallbackDigest = fallbackRow ? deriveSourceDigest(fallbackRow.fields) : undefined;
 
     for (const slot of planned) {
         if (slot.kind === 'delete') {
-            await translationRepository.removeEntityLocale(entityType, entityId, slot.locale);
+            await translationRepository.removeEntityLocale(
+                entityType,
+                entityId,
+                slot.locale,
+                session
+            );
             continue;
         }
 
@@ -225,7 +235,8 @@ const writePlannedTranslations = async (
             slot.fields,
             slot.origin,
             translatedBy,
-            slot.locale === fallbackLocale ? undefined : fallbackDigest
+            slot.locale === fallbackLocale ? undefined : fallbackDigest,
+            session
         );
     }
 
@@ -234,7 +245,7 @@ const writePlannedTranslations = async (
             slot.kind === 'upsert' && slot.locale === fallbackLocale
     );
     const target = translatableTarget(entityType);
-    if (fallbackWrite && target) await target.writeDerived(entityId, fallbackWrite.fields);
+    if (fallbackWrite && target) await target.writeDerived(entityId, fallbackWrite.fields, session);
 };
 
 /**
@@ -270,7 +281,8 @@ export const writeForPort = (
     entityType: string,
     entityId: string,
     writePlan: TranslationWritePlan,
-    translatedBy: string | undefined
+    translatedBy: string | undefined,
+    session?: ClientSession
 ): Promise<void> =>
     writePlannedTranslations(
         entityType,
@@ -282,7 +294,8 @@ export const writeForPort = (
                     ? { locale: slot.locale, kind: 'upsert', fields: slot.fields, origin: 'human' }
                     : slot
         ),
-        translatedBy
+        translatedBy,
+        session
     );
 
 /**

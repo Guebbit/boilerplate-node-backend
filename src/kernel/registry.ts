@@ -122,9 +122,14 @@ export interface TranslatableTarget {
      * Copies the fallback-locale row's fields onto this entity's own document — the derived,
      * sortable/indexable column a translated write also updates. Supplied by the OWNING module
      * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
-     * target's Mongoose model by collection name to reach it.
+     * target's Mongoose model by collection name to reach it. `session` joins the write to the
+     * caller's transaction (a product write commits its row, its translations and this together).
      */
-    writeDerived: (entityId: string, fields: Record<string, string | null>) => Promise<void>;
+    writeDerived: (
+        entityId: string,
+        fields: Record<string, string | null>,
+        session?: ClientSession
+    ) => Promise<void>;
 
     /**
      * Stamps this entity's own document as edited, so its version (the `ETag`) moves. A translation

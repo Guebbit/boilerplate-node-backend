@@ -18,6 +18,7 @@
  * See: docs/tools/i18n.md
  */
 
+import type { ClientSession } from 'mongoose';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t, getCurrentLocale, getFallbackLocale, localeCandidatesFor } from '@infrastructure/i18n';
 import { carryVersion } from '@infrastructure/persistence/versioning';
@@ -114,12 +115,15 @@ export interface TranslationPort {
      * operation that calls this. The derived index column IS written (see the implementation's own
      * docblock — it is one invariant that must not vary by caller). Never validates; a caller that
      * skips {@link plan} first can corrupt data.
+     *
+     * `session` joins every row it writes, and the derived column, to the caller's transaction.
      */
     write: (
         entityType: string,
         entityId: string,
         writePlan: TranslationWritePlan,
-        translatedBy: string | undefined
+        translatedBy: string | undefined,
+        session?: ClientSession
     ) => Promise<void>;
 
     /**
@@ -260,10 +264,11 @@ export const writeTranslations = (
     entityType: string,
     entityId: string,
     writePlan: TranslationWritePlan,
-    translatedBy: string | undefined
+    translatedBy: string | undefined,
+    session?: ClientSession
 ): Promise<void> =>
     translationPort
-        ? translationPort.write(entityType, entityId, writePlan, translatedBy)
+        ? translationPort.write(entityType, entityId, writePlan, translatedBy, session)
         : Promise.resolve();
 
 /**
