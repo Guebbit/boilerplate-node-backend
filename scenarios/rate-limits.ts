@@ -65,10 +65,11 @@ export const RAISED_RATE_LIMIT_ENV_VARS = [
     'NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX',
     // `shop-history.ts` runs the `customer` account through a dozen `checkoutAndPay`s in one
     // process — well past the human-sized 5-per-hour confirm budget — and one declined card on
-    // top of it. Without these three, the flow throws on its own retried-card case every run.
+    // top of it. Without these four, the flow throws on its own retried-card case every run.
     'NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX',
     'NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX',
     'NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX',
+    'NODE_PAYMENT_INTENT_RATE_LIMIT_MAX',
     'NODE_INVOICING_RATE_LIMIT_MAX',
     'NODE_CHECKOUT_RATE_LIMIT_MAX',
     'NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX',

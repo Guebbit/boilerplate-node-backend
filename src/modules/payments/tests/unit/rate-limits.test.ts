@@ -12,7 +12,8 @@
 import { paymentsRateLimits } from '@modules/payments/rate-limits';
 import {
     addressBlockOf,
-    KEYED_BY_ADDRESS_BLOCK
+    KEYED_BY_ADDRESS_BLOCK,
+    KEYED_BY_AUTHENTICATED_ACCOUNT
 } from '@infrastructure/http/middlewares/rate-limit';
 import { budgetIn } from '@tests/rate-limit-budgets';
 
@@ -56,5 +57,18 @@ describe('paymentConfirmAttemptLimiter and paymentConfirmDeclineLimiter', () => 
     it('spends the decline budget on a genuine decline only, unlike the attempt budget', () => {
         expect(budget('payments-confirm-declines').skipSuccessfulRequests).toBe(true);
         expect(budget('payments-confirm-attempts').skipSuccessfulRequests).not.toBe(true);
+    });
+});
+
+describe('paymentIntentLimiter', () => {
+    it('pools the intent and the sync in one hourly budget per account', () => {
+        const pooled = budget('payments-intent-sync');
+
+        expect(pooled.keyedBy).toBe(KEYED_BY_AUTHENTICATED_ACCOUNT);
+        expect(pooled.defaultMax).toBe(30);
+        expect(pooled.environmentVariable).toBe('NODE_PAYMENT_INTENT_RATE_LIMIT_MAX');
+        expect(pooled.windowMs).toBe(budget('payments-confirm-attempts').windowMs);
+        // Every request counts: unlike the decline budgets, a success spends it too.
+        expect(pooled.skipSuccessfulRequests).not.toBe(true);
     });
 });

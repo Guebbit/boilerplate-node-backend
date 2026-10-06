@@ -76,7 +76,6 @@ source of truth, so — like every other durable, TTL-bound collection in this r
 | Route                                   | Why                                                                                        |
 | --------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `POST /orders`                          | Admin order creation; a retried request must replay the same order, not mint a second one. |
-| `POST /payments/intent`                 | Freezes an order's price into a payment intent.                                            |
 | `POST /payments/{id}/confirm`           | Charges the card.                                                                          |
 | `POST /payments/order/{orderId}/refund` | Returns money — a double submit must refund once. The key is REQUIRED: no header, a 400.   |
 | `POST /account/signup`                  | Sybil accounts aside, a retried signup must not create two.                                |
@@ -90,6 +89,11 @@ those is either harmless or already guarded by the domain.
 
 `POST /payments/{id}/sync` deliberately has no `idempotencyKey`: it is already idempotent by
 construction, keyed on the provider's own payment reference rather than a client-supplied one.
+
+`POST /payments/intent` has none either, and for a second reason: the ledger stores the replayed
+response, and that response carries the `clientSecret`. Asking again already refreshes the same
+intent, so a retry needs no key. The two share one per-account hourly budget instead
+(`NODE_PAYMENT_INTENT_RATE_LIMIT_MAX`, 30).
 
 ## Retention
 

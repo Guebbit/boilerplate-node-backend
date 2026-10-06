@@ -315,3 +315,35 @@ describe('the address-block decline budget — card testing spread over many acc
         expect([first.status, second.status]).toEqual([409, 409]);
     });
 });
+
+describe('payment-velocity: the pooled intent and sync budget', () => {
+    afterEach(() => jest.resetModules());
+
+    it('counts the intents and syncs of one account against the same hourly budget', async () => {
+        setEnvironment({ NODE_PAYMENT_INTENT_RATE_LIMIT_MAX: '3' });
+        jest.resetModules();
+        const { paymentIntentLimiter } = await import('@modules/payments/rate-limits');
+        const app = express();
+        app.use((request, response, next) =>
+            asAccount(request.header('x-account') ?? 'anonymous')(request, response, next)
+        );
+        const ok = (_request: Request, response: express.Response) => {
+            response.status(200).json({ success: true });
+        };
+        app.post('/intent', paymentIntentLimiter, ok);
+        app.post('/:id/sync', paymentIntentLimiter, ok);
+        const call = (path: string, account = 'one') =>
+            supertest(app).post(path).set('x-account', account);
+
+        const statuses: number[] = [];
+        for (const path of ['/intent', '/abc/sync', '/intent', '/abc/sync']) {
+            const response = await call(path);
+            statuses.push(response.status);
+        }
+
+        // Three calls across the two routes spent it; the fourth, on either route, is refused.
+        expect(statuses).toEqual([200, 200, 200, 429]);
+        const other = await call('/intent', 'two');
+        expect(other.status).toBe(200);
+    });
+});

@@ -33,12 +33,10 @@ paths:
         post:
             tags: [Payments]
             summary: Create a payment intent
-            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200 — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
+            description: Freezes one of the caller's `pending` orders into a payment intent — the amount is taken from the order's own lines, so the intent cannot quote a different number than the order shows. Asking again refreshes the same intent (one payment per order is a database fact) and answers 200, so a retry needs no `Idempotency-Key` (a stored replay would hand back the first answer's `clientSecret` for as long as the ledger keeps it). The caller's intents and syncs share one budget per hour (429) — 201 says a payment was created, and a refresh created nothing (RFC 9110 §15.3.2). An order whose money already moved answers 409, and so does a deployment with no card payment provider (`PAYMENT_CARD_NOT_AVAILABLE`). The intent is the thing the card dialog confirms.
             operationId: createPaymentIntent
             security:
                 - bearerAuth: []
-            parameters:
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
                 required: true
                 content:
@@ -76,10 +74,11 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Not `pending`, or already paid (`PAYMENT_ORDER_NOT_PAYABLE`), or no card provider
                 # is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or the provider opened a second
-                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`), or
-                # `Idempotency-Key` names a request still in flight.
+                # intent for a payment that already holds one (`PAYMENT_IN_FLIGHT`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/{id}/sync`.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /payments/order/{orderId}:
@@ -374,6 +373,8 @@ paths:
                 # (`PAYMENT_NOT_CONFIRMABLE`).
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `paymentIntentLimiter`, one budget per account shared with `POST /payments/intent`.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /payments/webhook:

@@ -24,6 +24,9 @@ const WEBHOOK = 'POST /webhook';
 /** The other route in front of the auth wall — public, like `GET /delivery/methods`. */
 const METHODS = 'GET /methods';
 
+/** The namespace of the one budget `POST /intent` and `POST /:id/sync` spend together. */
+const INTENT_BUDGET = 'payments-intent-sync';
+
 /** A route's guards without its handler, so two routes' guard lists can be compared directly. */
 const withoutHandler = (signature: string) => guardsOn(router, signature).slice(0, -1);
 
@@ -104,7 +107,7 @@ describe('payment routes', () => {
         // one by one: `requireFreshAuth(…)` is a closure with no name of its own, and asserting
         // the two lists match survives that.
         expect(withoutHandler('POST /:id/confirm')).toEqual([
-            ...withoutHandler('POST /:id/sync'),
+            ...withoutHandler('POST /:id/sync').filter((guard) => guard !== INTENT_BUDGET),
             'payments-confirm-attempts',
             'payments-confirm-declines',
             'payments-confirm-declines-block',
@@ -112,14 +115,25 @@ describe('payment routes', () => {
             'idempotencyKey'
         ]);
         // And that shared prefix is not trivially empty — the fresh-session closure and the
-        // two shopper-key checks (basket, then checkout) are all in there.
+        // two shopper-key checks (basket, then checkout) are all in there, and the pooled
+        // intent/sync budget closes it.
         expect(withoutHandler('POST /:id/sync')).toEqual([
             'getAuth',
             'isAuth',
             '(anonymous)',
             'requirePermissionGuard',
-            'requirePermissionGuard'
+            'requirePermissionGuard',
+            INTENT_BUDGET
         ]);
+    });
+
+    it('spends one pooled per-account budget on the intent and the sync, and keys neither', () => {
+        // `/intent` has no `idempotencyKey`: the ledger would store the response, the
+        // `clientSecret` included. Asking again already refreshes the same intent.
+        expect(withoutHandler('POST /intent')).toEqual(withoutHandler('POST /:id/sync'));
+        expect(withoutHandler('POST /intent')).not.toContain('idempotencyKey');
+        expect(withoutHandler('POST /:id/sync')).not.toContain('idempotencyKey');
+        expect(withoutHandler('POST /:id/confirm')).not.toContain(INTENT_BUDGET);
     });
 
     it('declares the refund and the offline record before the bare /:id routes', () => {

@@ -35,7 +35,8 @@ import {
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
     paymentConfirmDeclineBlockLimiter,
-    paymentDeclineChallengeGate
+    paymentDeclineChallengeGate,
+    paymentIntentLimiter
 } from './rate-limits';
 import {
     idempotencyKey,
@@ -69,14 +70,15 @@ router.use(getAuth, isAuth);
 // refusal says "confirm your email" (`deniedCode`), which would mislead a staff caller; the shopper
 // key first gives them an honest plain 403.
 
-// POST /payments/intent — freeze an order's price, ready to confirm. idempotencyKey guards a
-// retried freeze the same way it guards every other money-moving write below.
+// POST /payments/intent — freeze an order's price, ready to confirm. No idempotencyKey: asking again
+// already refreshes the same intent, and the idempotency ledger would store the response, the
+// `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
 router.post(
     '/intent',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
-    idempotencyKey,
+    paymentIntentLimiter,
     postPaymentIntent
 );
 
@@ -130,11 +132,12 @@ router.post(
 // POST /payments/:id/sync — the browser reporting it finished at the provider. No idempotencyKey
 // here: it is already idempotent by construction, keyed on the provider's own payment reference
 // rather than a client-supplied one, so a second sync call settles the same outcome, not a
-// second one.
+// second one. It spends the same per-account budget as `/intent`: both end in a provider call.
 router.post(
     '/:id/sync',
     requireFreshAuth(REAUTH_TIME_CRITICAL),
     requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
+    paymentIntentLimiter,
     postPaymentSync
 );

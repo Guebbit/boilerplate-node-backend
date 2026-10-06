@@ -1,6 +1,7 @@
 /**
  * @module
- * Payments' own rate-limit budgets: the webhook's own ceiling (`webhookLimiter`), and the three
+ * Payments' own rate-limit budgets: the webhook's own ceiling (`webhookLimiter`), the pooled one for
+ * intents and syncs (`paymentIntentLimiter`), and the three
  * card-testing budgets on `POST /:id/confirm` (`paymentConfirmAttemptLimiter`,
  * `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`) plus the gate built on the
  * two decline ones (`paymentDeclineChallengeGate`). Each is data (`RateLimitBudget`, declared on `./module.ts`'s
@@ -115,6 +116,31 @@ export const paymentConfirmDeclineLimiter: RequestHandler =
     buildRateLimiter(CONFIRM_DECLINE_BUDGET);
 
 /**
+ * Intent creations and syncs allowed per ACCOUNT per hour, ONE counter for both routes: each ends
+ * in a call to the payment provider, which has its own rate limits and costs. Far above what a
+ * shopper retrying a checkout needs, so only a script loops through it. Every request counts.
+ */
+const INTENT_SYNC_BUDGET: RateLimitBudget = {
+    name: 'Payment intents and syncs',
+    namespace: 'payments-intent-sync',
+    environmentVariable: 'NODE_PAYMENT_INTENT_RATE_LIMIT_MAX',
+    defaultMax: 30,
+    windowMs: PAYMENT_VELOCITY_WINDOW_MS,
+    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
+    bounds:
+        'Calls to `POST /payments/intent` and `POST /payments/:id/sync`, pooled — each reaches ' +
+        'the payment provider.',
+    audited: true,
+    keyGenerator: accountIdOf
+};
+
+/**
+ * The budget for intents and syncs — see {@link INTENT_SYNC_BUDGET}. ONE middleware instance,
+ * mounted on both routes: two instances of one budget would count separately.
+ */
+export const paymentIntentLimiter: RequestHandler = buildRateLimiter(INTENT_SYNC_BUDGET);
+
+/**
  * Where the block decline limiter's counter lives on `request` — the gate below reads it, the
  * same arrangement as {@link PAYMENT_DECLINE_RATE_LIMIT_PROPERTY}.
  */
@@ -202,5 +228,6 @@ export const paymentsRateLimits: readonly RateLimitBudget[] = [
     WEBHOOK_BUDGET,
     CONFIRM_ATTEMPT_BUDGET,
     CONFIRM_DECLINE_BUDGET,
-    CONFIRM_DECLINE_BLOCK_BUDGET
+    CONFIRM_DECLINE_BLOCK_BUDGET,
+    INTENT_SYNC_BUDGET
 ];
