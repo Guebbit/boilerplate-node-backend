@@ -27,7 +27,7 @@ The attacker's best move against a typed API is to make it choose a different ty
 
 | Attack                        | How it works                                          | This boilerplate                                                                                                                                 |
 | ----------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Content negotiation confusion | XML accepted where JSON was expected → XXE            | Express is given exactly three parsers — JSON, urlencoded, multipart — so there is no XML branch to negotiate into — `app/security.ts`           |
+| Content negotiation confusion | XML accepted where JSON was expected → XXE            | Express is given exactly two parsers — JSON and multipart — so there is no XML branch to negotiate into — `app/security.ts`                      |
 | Content-type sniffing         | `text/plain` parsed as JSON to avoid a CORS preflight | A body is parsed only by the parser its declared content type selects, and every one of the three is bounded. There is no "guess the type" path. |
 | Mass assignment on write      | an undeclared field lands on the model                | Every body schema is `.strict()` — see [Injection](injection.md#into-a-path-or-a-model).                                                         |
 
