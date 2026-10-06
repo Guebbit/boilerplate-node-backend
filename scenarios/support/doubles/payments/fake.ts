@@ -18,38 +18,14 @@ import {
     verifyWebhookSignature,
     WebhookRejected,
     type PaymentProvider,
-    type ProviderPaymentState,
-    type ProviderPaymentStatus
+    type ProviderPaymentState
 } from '@modules/payments/providers';
 
-/** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. `status` is
- * unchecked JSON at this point; the cast is `unknown` wearing the union's name until
- * {@link isProviderPaymentStatus} actually proves it. */
+/** The webhook body as it arrives — the contract's `PaymentWebhookEvent`: a thin event. */
 interface PaymentWebhookEventBody {
     id?: string;
     providerRef?: string;
-    status?: string;
-    cardLast4?: string;
 }
-
-/** Every status `ProviderPaymentStatus` actually names — the runtime half of the type. */
-const PROVIDER_PAYMENT_STATUSES: ReadonlySet<ProviderPaymentStatus> = new Set([
-    'requires_action',
-    'processing',
-    'succeeded',
-    'declined'
-]);
-
-/**
- * Whether a JSON body's `status` string is one this provider (or the service reading its output)
- * actually knows — `JSON.parse(...) as PaymentWebhookEventBody` types the field, it does not
- * check it, so an arbitrary string (`'refunded'`, a typo, a future provider status this one has
- * not learned yet) would otherwise reach `settlePayment` and get written to the row verbatim.
- */
-const isProviderPaymentStatus = (status: string): status is ProviderPaymentStatus =>
-    // `Set<T>.has` is typed to `T`; this cast is what the membership check itself is proving —
-    // the return type above is the real guarantee a caller gets.
-    PROVIDER_PAYMENT_STATUSES.has(status as ProviderPaymentStatus);
 
 /**
  * The method references this provider recognises, and what each one does. Anything else succeeds
@@ -89,6 +65,19 @@ export const FAKE_DECLINE_METHOD = 'pm_card_declined';
  * an unknown intent must settle NOTHING, and `processing` is the only state that settles nothing.
  */
 const outcomes = new Map<string, ProviderPaymentState>();
+
+/**
+ * Test lever: what the provider will answer for `providerRef` from now on, as if the customer had
+ * finished it at the provider with no `confirm` ever reaching this server — a 3-D Secure completed
+ * in another tab, a bank debit that cleared. It is the only way to get a webhook to find an
+ * outcome nobody confirmed, since a delivery's own body carries none.
+ *
+ * @param providerRef - the intent the outcome is for
+ * @param state - what `retrieve` answers for it
+ */
+export const setFakeOutcome = (providerRef: string, state: ProviderPaymentState): void => {
+    outcomes.set(providerRef, state);
+};
 
 /**
  * `providerRef`s this stub has already cancelled — so a second `cancel` of the same one is the
@@ -212,17 +201,7 @@ export const fakePaymentProvider: PaymentProvider = {
             })
             .then((event) => {
                 if (!event.id) throw new WebhookRejected('Event carries no id');
-                if (event.status !== undefined && !isProviderPaymentStatus(event.status))
-                    throw new WebhookRejected(`Unrecognised payment status: ${event.status}`);
-                // The wire shape is flat; `ProviderPaymentState` is the shape the SERVICE reads.
-                // Assembling it here is the whole job of an adapter — a real provider builds the
-                // same object out of its own nested event instead.
-                return {
-                    id: event.id,
-                    providerRef: event.providerRef,
-                    state: event.status
-                        ? { status: event.status, cardLast4: event.cardLast4 }
-                        : undefined
-                };
+                // Thin: which event, which intent. What happened to it is `retrieve`'s answer.
+                return { id: event.id, providerRef: event.providerRef };
             })
 };

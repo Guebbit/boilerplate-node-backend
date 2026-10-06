@@ -450,6 +450,11 @@ export const syncPayment = (
 /**
  * Apply a webhook delivery the provider has already been authenticated for.
  *
+ * The delivery names an intent and nothing else is believed from it: the payment's state is
+ * re-read from the provider (`retrieve`) and THAT is settled. A provider does not promise delivery
+ * order, so a body that said `succeeded` after a later `declined` would otherwise un-decline a
+ * payment; asking costs one provider call per accepted event.
+ *
  * Claims the event id first, and stops if somebody already has it: the status writes below are
  * at-most-once by themselves, but committing inventory and emitting `ORDER_STATUS_CHANGED` are
  * not, and a provider retries a delivery for days. A settlement that then fails releases the claim
@@ -469,17 +474,17 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
         // traffic, not an incident.
         if (!claimed) return;
 
-        if (!event.providerRef || !event.state) {
+        if (!event.providerRef) {
             // Stryker disable all
             logger.info({
-                message: 'Payment webhook carried no state to apply.',
+                message: 'Payment webhook named no intent to apply.',
                 eventId: event.id
             });
             // Stryker restore all
             return;
         }
 
-        return applyWebhookSettlement(event.providerRef, event.state).catch((error: unknown) =>
+        return applyWebhookSettlement(event.providerRef).catch((error: unknown) =>
             // The claim is what makes a retry a no-op, so a settlement that failed has to give it
             // back before the rejection leaves: the provider WILL redeliver, and that redelivery
             // is the only thing that can still pay this order.
@@ -490,22 +495,22 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
     });
 
 /**
- * Settle one payment from what the provider reported about it.
+ * Settle one payment from what the PROVIDER says about it now: find the payment the intent names,
+ * ask the provider that payment was made with (`retrieve`), settle the answer.
  *
  * Separate from {@link applyWebhookDelivery} because the tests that pin the SETTLEMENT should not
  * have to mint an event id to reach it, and because the reconciliation job that will eventually
- * sweep unsettled intents has an outcome but no delivery.
+ * sweep unsettled intents has no delivery.
+ *
+ * A payment already past `SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
+ * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
  *
  * Unattended, so outcomes are logged rather than audited — the same rule the cancel listener and
  * the token-cleanup job follow.
  *
  * @param providerRef - the intent the event named
- * @param state - what the provider reported about it
  */
-export const applyWebhookSettlement = (
-    providerRef: string,
-    state: ProviderPaymentState
-): Promise<void> =>
+export const applyWebhookSettlement = (providerRef: string): Promise<void> =>
     paymentRepository.findByProviderRef(providerRef).then((payment) => {
         if (!payment) {
             // Stryker disable all
@@ -517,15 +522,19 @@ export const applyWebhookSettlement = (
             return;
         }
 
-        return settlePayment(payment, state).then(({ payment: settled, orderLost }) => {
-            // Stryker disable all
-            logger.info({
-                message: 'Payment webhook applied.',
-                providerRef,
-                reported: state.status,
-                status: settled.status,
-                orderLost
+        if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status)) return;
+
+        return providerNamed(payment.provider)
+            .retrieve(providerRef)
+            .then((state) => settlePayment(payment, state))
+            .then(({ payment: settled, orderLost }) => {
+                // Stryker disable all
+                logger.info({
+                    message: 'Payment webhook applied.',
+                    providerRef,
+                    status: settled.status,
+                    orderLost
+                });
+                // Stryker restore all
             });
-            // Stryker restore all
-        });
     });

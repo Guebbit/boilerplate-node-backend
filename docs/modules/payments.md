@@ -104,11 +104,13 @@ would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel 
 money is still on its way. `requires_action` gets no such grace: it means the browser has a
 challenge to answer, not the provider a payment to finish.
 
-**`POST /payments/webhook` is the authority**, and the browser never is. It arrives whether or not
+**`POST /payments/webhook` is what makes the server look**, and the browser never is. It arrives whether or not
 the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
 its caller is a machine with no account, authenticating by signing the raw body — a stronger proof
-of origin than any cookie this API could ask it for. Deliveries are deduplicated by event id,
-because a provider retries for days and the inventory commit is not conditional on anything else.
+of origin than any cookie this API could ask it for. The delivery is a thin event: the server
+re-reads the payment's state from the provider and settles that, never the body's own claim.
+Deliveries are deduplicated by event id, because a provider retries for days and the inventory
+commit is not conditional on anything else.
 
 The dependency on [`users`](./users.md) is groundwork rather than a current feature. The order
 already carries a `userId`; resolving it against the account record is what makes the id on a

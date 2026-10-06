@@ -382,8 +382,10 @@ paths:
             tags: [Payments]
             summary: Provider webhook
             description: >-
-                Where the provider reports what actually happened to a payment, and the authority
-                for it — the browser's word never is. **Not session-authenticated**: the caller is
+                Where the provider says a payment changed — a thin event naming the intent. The
+                server then asks the provider for the payment's state and settles that answer, so
+                the authority is the provider's own, never the browser's and never this body's.
+                **Not session-authenticated**: the caller is
                 a machine with no account, and it authenticates by signing the raw body instead,
                 which is stronger than any cookie this API could ask it for. Deliveries are
                 deduplicated by event id, so a provider retrying for days settles once.
@@ -633,15 +635,12 @@ components:
             additionalProperties: false
             required: [id]
             description: >-
-                One delivery, in this module's normalised shape. A real provider sends its OWN
-                event shape and its implementation of the provider port translates it into this —
-                the endpoint is documented in the terms the module acts on, not in any one
-                vendor's vocabulary.
-
-                FLAT on purpose. The provider's report could have been nested under a `state`
-                object, mirroring how most vendors wrap theirs, but the adapter is where a vendor's
-                shape is absorbed and nothing downstream reads these fields as a unit — so the
-                nesting would have bought a second level for no reader.
+                One delivery, in this module's normalised shape: which event it is and which intent
+                it names, and nothing about what happened. A real provider sends its OWN event
+                shape and its implementation of the provider port translates it into this. The
+                outcome is never read from the body: once the delivery is authenticated, the
+                server asks the provider for the payment's state, because providers do not
+                guarantee the order events arrive in.
             properties:
                 id:
                     type: string
@@ -651,14 +650,6 @@ components:
                     type: string
                     maxLength: 200
                     description: Which intent the event is about. Absent for an event this API ignores.
-                status:
-                    type: string
-                    enum: [requires_action, processing, succeeded, declined]
-                    description: The provider's own vocabulary — `refunded` is not here, because a refund is a later act of ours. Absent for an event this API ignores.
-                cardLast4:
-                    type: string
-                    maxLength: 4
-                    description: The only card digits a payment system may remember, as the provider reports them.
 
         PaymentEnvelope:
             type: object

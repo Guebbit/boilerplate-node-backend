@@ -58,14 +58,20 @@ export interface RefundedByProvider {
     refundRef: string;
 }
 
-/** A webhook delivery, normalised — the provider owns the translation from its own event shape. */
+/**
+ * A webhook delivery, normalised — the provider owns the translation from its own event shape.
+ *
+ * THIN on purpose: it names an intent and nothing about what happened to it. The body of a
+ * delivery is never trusted for the outcome; `settlement.ts` asks the provider for the state
+ * (`retrieve`). A provider does not guarantee delivery order (Stripe says so), and a thin event
+ * costs one provider call to make that harmless.
+ * https://docs.stripe.com/webhooks#handle-events-asynchronously
+ */
 export interface ProviderWebhookEvent {
     /** The provider's event id, deduplicated so a retried delivery settles nothing twice. */
     id: string;
     /** Which intent it is about; `undefined` for an event this application does not act on. */
     providerRef?: string;
-    /** The state it reports, absent when the event is one we ignore. */
-    state?: ProviderPaymentState;
 }
 
 /**
@@ -159,6 +165,9 @@ export interface PaymentProvider {
      *
      * Takes the UNPARSED body: a signature is computed over exact bytes, and a re-serialised
      * object is not those bytes. `src/app/security.ts` keeps the buffer for this route alone.
+     *
+     * Returns only which event it is and which intent it names. The state of the payment is NOT
+     * read from the delivery: the caller asks {@link PaymentProvider.retrieve}.
      *
      * @param rawBody - the request body as received
      * @param signature - the provider's signature header, verbatim

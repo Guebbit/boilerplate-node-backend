@@ -8,7 +8,8 @@
 import {
     FAKE_DECLINE_METHOD,
     FAKE_SUCCESS_METHOD,
-    fakePaymentProvider
+    fakePaymentProvider,
+    setFakeOutcome
 } from '@scenarios/support/doubles/payments/fake';
 import {
     PaymentInFlightError,
@@ -98,6 +99,15 @@ describe('fakePaymentProvider.retrieve', () => {
         });
     });
 
+    it('answers a lever-set outcome nobody confirmed, which is how a webhook finds one', async () => {
+        setFakeOutcome('fake_pi_lever', { status: 'succeeded', cardLast4: '4242' });
+
+        await expect(fakePaymentProvider.retrieve('fake_pi_lever')).resolves.toEqual({
+            status: 'succeeded',
+            cardLast4: '4242'
+        });
+    });
+
     it('settles nothing for an intent it does not know', async () => {
         // `processing` is the only status that moves no money in either direction, which is what
         // an unknown reference — a restarted process, a second worker — must answer.
@@ -163,15 +173,14 @@ describe('fakePaymentProvider.parseWebhook', () => {
         const body = Buffer.from(
             JSON.stringify({
                 id: 'evt_3',
-                providerRef: 'fake_pi_i',
-                status: 'succeeded',
-                cardLast4: '4242'
+                providerRef: 'fake_pi_i'
             })
         );
 
+        // Thin: which event and which intent, and no state. That is `retrieve`'s answer.
         await expect(
             fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
-        ).resolves.toMatchObject({ id: 'evt_3', providerRef: 'fake_pi_i' });
+        ).resolves.toEqual({ id: 'evt_3', providerRef: 'fake_pi_i' });
     });
 
     it('refuses a delivery nobody signed', async () => {

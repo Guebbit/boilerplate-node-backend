@@ -31,7 +31,11 @@ challenged payment has nowhere to live.
 
 **The authoritative answer arrives separately.** It comes as a webhook, possibly after the customer
 has closed the tab. The browser's report is a hint that makes the happy path feel synchronous; the
-webhook is the authority.
+provider is the authority. The webhook is a THIN event: it names an intent, and the server then
+asks the provider (`retrieve`) what became of it. A delivery's own body is never believed for the
+outcome, because a provider does not promise delivery order (Stripe says so) and a stale
+`succeeded` arriving after a `declined` must not un-decline anything. The cost is one provider
+call per accepted event.
 
 ## What the port is
 
@@ -124,8 +128,8 @@ and never more, the same rule the payment document follows.
 ## Going live is one file and one variable
 
 1. Write `stripe.ts` in `providers/`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
-   vendor's own verifier (`stripe.webhooks.constructEvent`) and maps `payment_intent.succeeded` /
-   `.payment_failed` onto this module's state shape.
+   vendor's own verifier (`stripe.webhooks.constructEvent`) and maps any `payment_intent.*` event
+   onto `{ id, providerRef }`: the state is then read back through `retrieve`.
 2. Call `registerPaymentProvider('stripe', …)` (from `providers/registry.ts`) where the module loads.
 3. Set `NODE_PAYMENT_PROVIDER`, `NODE_STRIPE_SECRET_KEY` to the vendor's own secret key, and
    `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
