@@ -34,7 +34,7 @@ describe('checkout and the address', () => {
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(result.success).toBe(true);
-        expect(result.success && result.data?.shippingAddress).toMatchObject({
+        expect(result.success && result.data?.toJSON().shippingAddress).toMatchObject({
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });
@@ -54,7 +54,9 @@ describe('checkout and the address', () => {
         });
 
         expect(result.success).toBe(true);
-        expect(result.success && result.data?.shippingAddress?.street).toBe('Via Milano 2');
+        expect(result.success && result.data?.toJSON().shippingAddress?.street).toBe(
+            'Via Milano 2'
+        );
     });
 
     it('ships nothing rather than nowhere: a stale id refuses the checkout untouched', async () => {
@@ -115,8 +117,8 @@ describe('checkout and the address', () => {
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
-        expect(result.success && result.data?.shippingAddress).toBeUndefined();
-        expect(result.success && result.data?.billingAddress).toMatchObject({
+        expect(result.success && result.data?.toJSON().shippingAddress).toBeUndefined();
+        expect(result.success && result.data?.toJSON().billingAddress).toMatchObject({
             street: 'Via Roma 1'
         });
     });
@@ -146,11 +148,11 @@ describe('checkout and the billing address', () => {
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
-        expect(result.success && result.data?.billingAddress).toMatchObject({
+        expect(result.success && result.data?.toJSON().billingAddress).toMatchObject({
             fullName: 'Ada Lovelace',
             street: 'Via Roma 1'
         });
-        expect(result.success && result.data?.shippingAddress).toMatchObject({
+        expect(result.success && result.data?.toJSON().shippingAddress).toMatchObject({
             street: 'Via Roma 1'
         });
     });
@@ -168,8 +170,8 @@ describe('checkout and the billing address', () => {
             billingAddressId: office!.id
         });
 
-        expect(result.success && result.data?.shippingAddress?.street).toBe('Via Roma 1');
-        expect(result.success && result.data?.billingAddress?.street).toBe('Via Milano 2');
+        expect(result.success && result.data?.toJSON().shippingAddress?.street).toBe('Via Roma 1');
+        expect(result.success && result.data?.toJSON().billingAddress?.street).toBe('Via Milano 2');
     });
 
     it('is asked alone for a digital-only basket: no shipping address is frozen', async () => {
@@ -181,8 +183,8 @@ describe('checkout and the billing address', () => {
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
         expect(result.success).toBe(true);
-        expect(result.success && result.data?.shippingAddress).toBeUndefined();
-        expect(result.success && result.data?.billingAddress).toMatchObject({
+        expect(result.success && result.data?.toJSON().shippingAddress).toBeUndefined();
+        expect(result.success && result.data?.toJSON().billingAddress).toMatchObject({
             street: 'Via Roma 1'
         });
     });
@@ -200,7 +202,7 @@ describe('checkout and the billing address', () => {
             billingAddressId: office!.id
         });
 
-        expect(result.success && result.data?.billingAddress?.street).toBe('Via Milano 2');
+        expect(result.success && result.data?.toJSON().billingAddress?.street).toBe('Via Milano 2');
     });
 
     it('refuses a digital-only checkout with no address on file', async () => {
@@ -257,6 +259,6 @@ describe('checkout and the billing address', () => {
 
         const result = await cartService.orderConfirm(user.id, testCallerContext);
 
-        expect(result.success && result.data?.billingAddress?.country).toBe('JP');
+        expect(result.success && result.data?.toJSON().billingAddress?.country).toBe('JP');
     });
 });

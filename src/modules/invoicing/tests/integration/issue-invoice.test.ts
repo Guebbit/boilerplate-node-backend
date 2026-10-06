@@ -19,6 +19,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { invoiceNumberCounterModel } from '../../model';
+import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { issueInvoice } from '../../services';
 
@@ -59,7 +60,11 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const invoice = await waitForInvoice(String(order._id));
 
         expect(invoice.number).toMatch(/^\d{4}-\d{6}$/);
-        expect(invoice.billingAddress?.fullName).toBe('Ada Lovelace');
+        // Stored encrypted under the INVOICE's own id: the order's ciphertext was re-encrypted.
+        expect(invoice.billingAddress?.fullName).not.toBe('Ada Lovelace');
+        expect(decryptInvoiceParty(invoice.billingAddress!, 'invoice', invoice._id).fullName).toBe(
+            'Ada Lovelace'
+        );
         expect(invoice.lines).toHaveLength(1);
         expect(invoice.grandTotal).toBeCloseTo(39.8, 2);
     });
@@ -87,7 +92,9 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         await markPaid(String(order._id));
         const invoice = await waitForInvoice(String(order._id));
 
-        expect(invoice.billingAddress?.fullName).toBe('Ada Lovelace');
+        expect(decryptInvoiceParty(invoice.billingAddress!, 'invoice', invoice._id).fullName).toBe(
+            'Ada Lovelace'
+        );
     });
 
     it('carries no buyer address when the order recorded only a ship-to one', async () => {

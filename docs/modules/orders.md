@@ -164,7 +164,17 @@ and whom it was billed to, not what the address book says today):
 The split is Shopify's: a digital-only order is invoiced to someone but ships nowhere, so it freezes
 no shipping address. Billing is "same as shipping" unless the buyer names another entry
 ([how checkout resolves it](./cart-checkout.md#the-sequence)); the admin's `POST /orders` runs no
-checkout and carries neither. The retention scrub anonymises both.
+checkout and carries neither. The retention scrub unsets both, with the notes.
+
+Both addresses and the notes are stored encrypted (`pii.ts`, AES-256-GCM, the order `_id` in the
+associated data) and decrypted in `applyOrderTransform`'s `after` hook, so no reader sees
+ciphertext and `GET /orders` has no `notes` filter: an encrypted field cannot be searched. The
+write door is `orderRepository.create`, which every writer goes through. `orders.email` stays
+plaintext, because it is filtered and sorted on. Why an explicit codec, not mongoose getters:
+`toJSON` would ship ciphertext, copying a foreign subdocument would double-encrypt, and a setter
+runs on query filters, so an encrypted path in a filter silently matches nothing. The invoicing
+issuers decrypt the order's address (`billingAddressOf`) and re-encrypt it under the invoice's own
+id (`invoicing/pii.ts`); only the PDF render decrypts it again.
 
 `POST /orders` is the OTHER caller — the admin path — and it is deliberately minimal, because it
 exists for manual corrections, not as a second sales channel:

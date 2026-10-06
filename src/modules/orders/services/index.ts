@@ -48,6 +48,7 @@ import { overrideStatus, forceMove } from './override';
 export {
     search,
     getById,
+    billingAddressOf,
     openUnpaidOrderIds,
     getByTransferReference,
     ownOrderIds,

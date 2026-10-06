@@ -8,7 +8,9 @@
 
 import { orderModel, applyOrderTransform, orderNumberCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
+import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
+import { encryptOrderPii } from './pii';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 import {
@@ -45,12 +47,23 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
             productId: 'items.product._id'
         },
         exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
-        // Staff-written text on the order, so the filter is only reachable by someone who sees it.
-        regex: { notes: 'notes' },
         presence: { deleted: 'deletedAt' },
         sortable: ORDER_SORTABLE
     }
 });
+
+/**
+ * Insert an order with its addresses and notes encrypted. The one write path for a new order —
+ * `placeOrder`, the admin create and every factory go through it, so no row reaches the collection
+ * with plaintext PII.
+ *
+ * @param data - the order to write; its `_id` is assigned here when absent, since it is in the AAD
+ * @param session - joins the insert to the caller's own transaction
+ */
+const create = (data: Partial<OrderDocument>, session?: ClientSession): Promise<OrderDocument> => {
+    const _id = data._id ?? new Types.ObjectId();
+    return base.create({ ...encryptOrderPii(data, _id), _id }, session);
+};
 
 /**
  * Run an aggregation pipeline against the Order collection.
@@ -461,76 +474,39 @@ const detachUserId = (
         .then(({ modifiedCount }) => modifiedCount);
 };
 
-/** The scrubbed-in-place values `scrubDueForAnonymization` replaces required PII with. */
+/** The placeholder `scrubDueForAnonymization` writes over `email`, which the schema requires. */
 const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 
-/** Same placeholder for an embedded address's `fullName` and `street` — both required on the schema. */
-const ANONYMIZED_TEXT = 'Anonymized';
-
 /**
- * Replaces the PII of one embedded address on every due order that carries it.
+ * `scripts/ops/reap-orders.ts`'s sweep: every order whose `anonymizeAfter` has elapsed loses its
+ * remaining PII in one write.
  *
- * @param path - which embedded address to scrub
- * @param due - the filter selecting the orders whose anonymization is due
- */
-const scrubEmbeddedAddress = (
-    path: 'shippingAddress' | 'billingAddress',
-    due: { anonymizeAfter: { $lte: Date } }
-): Promise<unknown> =>
-    orderModel
-        .updateMany(
-            { ...due, [path]: { $exists: true } },
-            {
-                $set: {
-                    [`${path}.fullName`]: ANONYMIZED_TEXT,
-                    [`${path}.street`]: ANONYMIZED_TEXT
-                },
-                $unset: { [`${path}.phone`]: 1 }
-            }
-        )
-        .exec();
-
-/**
- * `scripts/ops/reap-orders.ts`'s sweep. Every order whose `anonymizeAfter` has elapsed gets its remaining
- * PII scrubbed.
- *
- * Scrub:      `email` and the required fields (`fullName`, `street`) of BOTH embedded addresses
- *             (`shippingAddress`, `billingAddress`) are REPLACED, since the schema requires them;
- *             each address's optional `phone` and the buyer's free-text `notes` are unset outright. City, country, zip, amounts, line
- *             items and dates survive — none of it is personal data once the name and street are
- *             gone.
- * Separate writes: an order can lack either address (a digital-only order has no
- *             `shippingAddress`, an admin-created one no `billingAddress`), and a single `$set`
- *             on its sub-fields would CREATE a partial one — present but missing the required
- *             `city`/`zip`/`country`, which no validator runs on a bulk update to catch. Each
- *             address gets its own write, scoped to orders that actually have it.
+ * Scrub:      both embedded addresses and `notes` are UNSET; `email` is replaced, since the schema
+ *             requires it. Nothing personal survives on the order.
+ * Why unset:  `required` never fires on a bulk update, and a scrubbed row with no address reads
+ *             as "none" rather than as a placeholder that looks real. City, zip and country go
+ *             too, so no half-address is left to re-identify a buyer.
+ * Invoices:   untouched. An invoice is the legal copy (a tax record), kept whole; its address is
+ *             encrypted at rest like any other PII (GDPR Art. 32).
  * Versioned:  the scrub is an edit, so `updatedAt` moves (no `timestamps: false`) — an open edit
  *             form holding the old ETag is refused instead of putting the email back.
- * Idempotent: `anonymizeAfter` is unset in the same write, so a later run cannot rescrub an
- *             already-scrubbed row — the sparse index this field carries no longer holds it, so
- *             the next sweep's `$lte` filter cannot match it again.
+ * Idempotent: `anonymizeAfter` is unset in the same write, so the sparse index it carries no
+ *             longer holds the row and the next sweep's `$lte` filter cannot match it again.
  *
  * @param cutoff - orders whose `anonymizeAfter` is at or before this instant are due
  * @returns how many orders were scrubbed
  */
-const scrubDueForAnonymization = (cutoff: Date): Promise<number> => {
-    const due = { anonymizeAfter: { $lte: cutoff } };
-
-    // The addresses FIRST, filtered on `due` while `anonymizeAfter` still carries it — the last
-    // write below unsets that field, which would make these filters match nothing run the other
-    // way around.
-    return scrubEmbeddedAddress('shippingAddress', due)
-        .then(() => scrubEmbeddedAddress('billingAddress', due))
-        .then(() =>
-            orderModel
-                .updateMany(due, {
-                    $set: { email: ANONYMIZED_EMAIL },
-                    $unset: { anonymizeAfter: 1, notes: 1 }
-                })
-                .exec()
-                .then(({ modifiedCount }) => modifiedCount)
-        );
-};
+const scrubDueForAnonymization = (cutoff: Date): Promise<number> =>
+    orderModel
+        .updateMany(
+            { anonymizeAfter: { $lte: cutoff } },
+            {
+                $set: { email: ANONYMIZED_EMAIL },
+                $unset: { anonymizeAfter: 1, notes: 1, shippingAddress: 1, billingAddress: 1 }
+            }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount);
 
 /**
  * Atomically bumps the order-number sequence for `year` and returns the new value — one
@@ -617,6 +593,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     incrementOrderNumberCounter: (year: number) => Promise<number>;
 } = {
     ...base,
+    create,
     aggregate,
     search,
     findByIdScoped,

@@ -11,20 +11,29 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { readDocument, writeDocument } from '@infrastructure/adapters/document-store';
 import { invoicingConfig } from '../config';
+import { decryptInvoiceParty } from '../pii';
 import { resolveEInvoicingProvider } from '../providers';
 import type { EInvoicingDocument } from '../providers';
 import type { InvoiceDocument, CreditNoteDocument } from '../model';
 
-/** The fields both documents share, as the provider port needs them — see `FrozenTaxDocument`. */
+/**
+ * The fields both documents share, as the provider port needs them — see `FrozenTaxDocument`.
+ * The one place the stored address is decrypted: a render is the only reader of its plaintext.
+ *
+ * @param kind - which collection holds `document`, for the address's AAD
+ */
 const sharedFields = (
-    document: InvoiceDocument | CreditNoteDocument
+    document: InvoiceDocument | CreditNoteDocument,
+    kind: 'invoice' | 'credit-note'
 ): Omit<EInvoicingDocument, 'kind'> => ({
     number: document.number,
     issuedAt: document.issuedAt,
     currency: document.currency,
     locale: document.locale,
     orderNumber: document.orderNumber,
-    billingAddress: document.billingAddress,
+    billingAddress: document.billingAddress
+        ? decryptInvoiceParty(document.billingAddress, kind, document._id)
+        : undefined,
     seller: document.seller,
     lines: document.lines,
     shippingCost: document.shippingCost,
@@ -91,7 +100,7 @@ const storedOrRendered = (name: string, render: () => Promise<Buffer>): Promise<
 export const renderInvoicePdf = (invoice: InvoiceDocument): Promise<Buffer> =>
     storedOrRendered(`invoice-${String(invoice._id)}.pdf`, () =>
         resolveEInvoicingProvider()
-            .issue({ kind: 'invoice', ...sharedFields(invoice) })
+            .issue({ kind: 'invoice', ...sharedFields(invoice, 'invoice') })
             .then((artifact) => artifact.bytes)
     );
 
@@ -105,7 +114,7 @@ export const renderCreditNotePdf = (creditNote: CreditNoteDocument): Promise<Buf
         resolveEInvoicingProvider()
             .issue({
                 kind: 'creditNote',
-                ...sharedFields(creditNote),
+                ...sharedFields(creditNote, 'credit-note'),
                 reversalOf: { number: creditNote.invoiceNumber }
             })
             .then((artifact) => artifact.bytes)

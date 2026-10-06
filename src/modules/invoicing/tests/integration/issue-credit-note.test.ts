@@ -20,6 +20,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { asCustomer, asAdmin, testCallerContext, callerContextAs } from '@tests/callers';
 import { creditNoteNumberCounterModel } from '../../model';
+import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
 import { issueCreditNote } from '../../services';
 
@@ -53,10 +54,10 @@ const waitUntil = async <T>(read: () => Promise<T | null>, timeoutMs = 2000): Pr
 };
 
 /** A customer who paid 25.00 and whose invoice has been frozen. */
-const paidAndInvoiced = async () => {
+const paidAndInvoiced = async (overrides: Parameters<typeof createOrder>[2] = {}) => {
     const user = await createUser();
     const product = await createProduct({ price: 25 });
-    const order = await createOrder(user, [toOrderItem(product, 1)]);
+    const order = await createOrder(user, [toOrderItem(product, 1)], overrides);
     const orderId = String(order._id);
     const intent = await createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
@@ -110,6 +111,28 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         expect(creditNote.invoiceId.toString()).toBe(invoice._id.toString());
         expect(creditNote.invoiceNumber).toBe(invoice.number);
         expect(creditNote.grandTotal).toBe(invoice.grandTotal);
+    });
+
+    it("re-encrypts the buyer address under the credit note's own id", async () => {
+        const { orderId, invoice } = await paidAndInvoiced({
+            billingAddress: {
+                fullName: 'Ada Lovelace',
+                street: '1 Accounts Office Way',
+                city: 'Leeds',
+                zip: 'LS1',
+                country: 'GB'
+            }
+        });
+
+        await paymentService.refundByOrder(orderId, asAdmin(), callerContextAs('admin'));
+        const [note] = await waitForNotes(orderId, 1);
+
+        expect(note.billingAddress?.fullName).not.toBe('Ada Lovelace');
+        expect(note.billingAddress?.fullName).not.toBe(invoice.billingAddress?.fullName);
+        expect(decryptInvoiceParty(note.billingAddress!, 'credit-note', note._id)).toMatchObject({
+            fullName: 'Ada Lovelace',
+            city: 'Leeds'
+        });
     });
 
     it('mirrors the invoice for a full refund', async () => {

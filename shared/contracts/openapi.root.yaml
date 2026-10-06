@@ -1643,16 +1643,17 @@ components:
                     description: What that method cost at checkout time — a later rate change cannot re-price history.
                 # Where the goods go — present only when a line ships to an address. Absent under
                 # the same conditions as `shippingMethod` above, when the chosen method itself
-                # needs no address (`requiresAddress: false`, e.g. pickup), and on an all-digital
-                # order: nothing travels, so nothing is frozen here. `billingAddress` is the one
-                # every checkout order carries.
+                # needs no address (`requiresAddress: false`, e.g. pickup), on an all-digital
+                # order: nothing travels, so nothing is frozen here, and once the order is
+                # anonymised. `billingAddress` is the one every checkout order carries.
                 shippingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 # Who the order is invoiced to — the address the invoice prints as the buyer's
                 # (EU VAT Directive Art. 226). Present on every order a checkout places: the
                 # shipping address when the buyer chose "same as shipping", otherwise the book
                 # entry they named, otherwise their default. Absent on an admin-created order
-                # (`POST /orders` runs no checkout) and on one placed before this field existed.
+                # (`POST /orders` runs no checkout), on one placed before this field existed, and
+                # once the order is anonymised.
                 billingAddress:
                     $ref: '#/components/schemas/OrderAddress'
                 # Absent on orders placed before this existed, and on order creation that isn't a

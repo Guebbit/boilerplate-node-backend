@@ -162,9 +162,10 @@ holds (`withLease`'s own `ttlMs` argument, typically minutes): it is garbage col
 retired from the crontab entirely, not the lock a running job holds.
 
 `orders` and a SETTLED `payments` row must NOT be removed on a timer — both are invoices, kept for
-tax and commercial-law reasons. `orders` carries PII (shipping name/address, email) that survives
-an account's erasure, so `npm run reap:orders` scrubs it in place past
-`NODE_ORDER_PII_RETENTION_DAYS` (default 3650 days) — see the script's own header. `payments`
+tax and commercial-law reasons. `orders` carries PII (both addresses, notes, email) that survives
+an account's erasure, so `npm run reap:orders` past `NODE_ORDER_PII_RETENTION_DAYS` (default 3650
+days) replaces the email and unsets both addresses and the notes — see the script's own header.
+The invoices keep their own encrypted copy of the buyer address: they are the legal record. `payments`
 carries none: `cardLast4` is not a PAN, and `amount`/`currency`/`provider` were never personal
 data, so a settled payment is never touched by any timer.
 
