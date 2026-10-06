@@ -57,7 +57,7 @@ const readVerifyToken = async (userId: string) => {
  * The PLAINTEXT verify token from the most recently queued mail — what the link in the email
  * actually carries. `tokens[].token` is a `hashToken` digest at rest, so this suite cannot read
  * the usable token back from storage; it has to observe it the same way the account holder
- * would, via `verifyRequestEmail`'s `linkUrl`'s own `?token=` query parameter.
+ * would, via `verifyRequestEmail`'s `linkUrl`'s own `#token=` fragment.
  *
  * Reads `mailerPort.enqueueEmail` directly rather than through `observePort` (`@tests/ports`):
  * that helper CLEARS the mock's history on hand-out, which would erase the very call this reads.
@@ -68,7 +68,7 @@ const verifyTokenFromMail = (): string => {
     >;
     const lastCall = enqueueEmail.mock.calls.at(-1);
     const data = lastCall?.[2] as { linkUrl?: string } | undefined;
-    const token = /[&?]token=([^&]+)/.exec(data?.linkUrl ?? '')?.[1];
+    const token = /#token=([^&]+)/.exec(data?.linkUrl ?? '')?.[1];
     if (!token) throw new Error('no verify token found in the queued mail');
     return decodeURIComponent(token);
 };

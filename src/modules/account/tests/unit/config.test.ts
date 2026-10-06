@@ -19,25 +19,25 @@ const TOKEN = 'a1b2c3d4e5f6';
 describe('accountFrontendLink — the default template per kind', () => {
     it("builds the verify link: locale, then the frontend's verify-email page, token as a query param", () => {
         expect(accountFrontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
+            `http://localhost:8080/en/verify-email/confirm#token=${TOKEN}`
         );
     });
 
     it('builds the reset link', () => {
         expect(accountFrontendLink('reset', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/password-reset/confirm?token=${TOKEN}`
+            `http://localhost:8080/en/password-reset/confirm#token=${TOKEN}`
         );
     });
 
     it('builds the delete link', () => {
         expect(accountFrontendLink('delete', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/account-delete/confirm?token=${TOKEN}`
+            `http://localhost:8080/en/account-delete/confirm#token=${TOKEN}`
         );
     });
 
     it('builds the email-change link', () => {
         expect(accountFrontendLink('email-change', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/email-change/confirm?token=${TOKEN}`
+            `http://localhost:8080/en/email-change/confirm#token=${TOKEN}`
         );
     });
 
@@ -58,7 +58,7 @@ describe('accountFrontendLink — per-kind override', () => {
             `http://localhost:8080/en/change-password?t=${TOKEN}`
         );
         expect(accountFrontendLink('verify', { locale: 'en', token: TOKEN })).toBe(
-            `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
+            `http://localhost:8080/en/verify-email/confirm#token=${TOKEN}`
         );
     });
 });

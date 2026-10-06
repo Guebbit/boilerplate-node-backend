@@ -26,8 +26,8 @@ const withEnv = (overrides: Record<string, string | undefined>, run: () => void)
 
 describe('frontendLink — placeholder substitution', () => {
     it('fills a named placeholder and URL-encodes the value', () => {
-        expect(frontendLink('verify-email/confirm?token={token}', 'en', { token: TOKEN })).toBe(
-            `http://localhost:8080/en/verify-email/confirm?token=${TOKEN}`
+        expect(frontendLink('verify-email/confirm#token={token}', 'en', { token: TOKEN })).toBe(
+            `http://localhost:8080/en/verify-email/confirm#token=${TOKEN}`
         );
     });
 
@@ -58,19 +58,31 @@ describe('frontendLink — placeholder substitution', () => {
 
 describe('frontendLink — the locale segment', () => {
     it('puts the locale first, right after the origin', () => {
-        const url = frontendLink('verify-email/confirm?token={token}', 'it', { token: TOKEN });
+        const url = frontendLink('verify-email/confirm#token={token}', 'it', { token: TOKEN });
 
         expect(new URL(url).pathname).toBe(`/it/verify-email/confirm`);
     });
 
     it('clamps an unsupported locale to the deployment default, rather than 404ing the link', () => {
         withEnv({ NODE_SUPPORTED_LOCALES: 'en,it', NODE_DEFAULT_LOCALE: 'en' }, () => {
-            const url = frontendLink('verify-email/confirm?token={token}', 'kl', {
+            const url = frontendLink('verify-email/confirm#token={token}', 'kl', {
                 token: TOKEN
             });
 
             expect(new URL(url).pathname.startsWith('/en/')).toBe(true);
         });
+    });
+});
+
+describe('frontendLink — a token in the fragment', () => {
+    it('keeps the encoded token out of the path and the query, where a server would see it', () => {
+        const url = new URL(
+            frontendLink('password-reset/confirm#token={token}', 'en', { token: 'a/b&c=d' })
+        );
+
+        expect(url.search).toBe('');
+        expect(url.pathname).toBe('/en/password-reset/confirm');
+        expect(url.hash).toBe('#token=a%2Fb%26c%3Dd');
     });
 });
 
