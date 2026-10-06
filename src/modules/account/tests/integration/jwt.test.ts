@@ -510,6 +510,10 @@ describe('rotateRefreshToken reuse detection', () => {
 
             // The session that was never touched is gone too.
             await expect(createAccessToken(bystander)).rejects.toThrow('Forbidden');
+
+            // And the epoch moved, so an ACCESS token the attacker already holds dies as well.
+            const stored = await userRepository.findByIdWithCredentials(id);
+            expect(stored?.tokensValidAfter).toBeInstanceOf(Date);
         });
     });
 

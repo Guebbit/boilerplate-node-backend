@@ -49,6 +49,7 @@ import {
     type TwoFactorChange
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { revokeAllSessions } from './revocation';
 import { findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
@@ -624,13 +625,16 @@ const armMethod = (
     }
     syncArmedState(user);
 
-    return userService.persistTwoFactorMethods(user).then(() =>
-        generateSuccess({
-            method: entry.method,
-            ...(backupCodes && { backupCodes }),
-            backupCodesRemaining: user.twoFactorBackupCodes.length
-        })
-    );
+    return userService
+        .persistTwoFactorMethods(user)
+        .then(() => revokeAllSessions(user))
+        .then(() =>
+            generateSuccess({
+                method: entry.method,
+                ...(backupCodes && { backupCodes }),
+                backupCodesRemaining: user.twoFactorBackupCodes.length
+            })
+        );
 };
 
 /**
@@ -671,16 +675,19 @@ export const removeTwoFactorMethod = (
         (user) => {
             user.twoFactorMethods.splice(enrolledIndex, 1);
             discardIfDisarmed(user);
-            return userService.persistTwoFactorMethods(user).then(() => {
-                // Removing the last factor is 2FA going off: say that, not just "a method left".
-                notifyChange(
-                    user,
-                    user.twoFactorEnabledAt ? 'removed' : 'disabled',
-                    method,
-                    context
-                );
-                return generateSuccess(undefined);
-            });
+            return userService
+                .persistTwoFactorMethods(user)
+                .then(() => revokeAllSessions(user))
+                .then(() => {
+                    // Removing the last factor is 2FA going off: say that, not just "a method left".
+                    notifyChange(
+                        user,
+                        user.twoFactorEnabledAt ? 'removed' : 'disabled',
+                        method,
+                        context
+                    );
+                    return generateSuccess(undefined);
+                });
         }
     );
 
@@ -711,10 +718,13 @@ export const disableTwoFactor = (
         (user) => {
             user.twoFactorMethods = [];
             discardIfDisarmed(user);
-            return userService.persistTwoFactorMethods(user).then(() => {
-                notifyChange(user, 'disabled', '', context);
-                return generateSuccess(undefined);
-            });
+            return userService
+                .persistTwoFactorMethods(user)
+                .then(() => revokeAllSessions(user))
+                .then(() => {
+                    notifyChange(user, 'disabled', '', context);
+                    return generateSuccess(undefined);
+                });
         }
     );
 

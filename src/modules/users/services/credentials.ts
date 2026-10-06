@@ -115,3 +115,11 @@ export const resetMfaAttempts = (id: string): Promise<void> => userRepository.re
  */
 export const claimTotpStep = (id: string, method: string, step: number): Promise<boolean> =>
     userRepository.claimTotpStep(id, method, step);
+
+/**
+ * Move the account's session epoch to `at` (now by default): every access or refresh token minted
+ * before it stops working. The funnel for every "I may be compromised" event — logout-all, a
+ * password change or reset, a 2FA factor change, an email change, detected refresh reuse.
+ */
+export const bumpSessionEpoch = (id: string, at: Date = new Date()): Promise<void> =>
+    userRepository.bumpSessionEpoch(id, at);

@@ -18,6 +18,7 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { revokeAfterPasswordChange } from './revocation';
 import { mailRecipientRefusal } from '../mail-budget';
 import {
     sendVerificationEmail,
@@ -41,13 +42,7 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
-import {
-    zodUserSchema,
-    userService,
-    TokenType,
-    normalizeEmail,
-    type UserDocument
-} from '@modules/users';
+import { zodUserSchema, userService, normalizeEmail, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -157,9 +152,14 @@ const writePassword = (
     Promise.resolve(beforeSave?.(user))
         .then(() => userService.setPassword(user, password))
         .then((savedUser) =>
-            userService
-                .tokenRemoveAll(savedUser, TokenType.REFRESH)
-                .catch(() => undefined)
+            revokeAfterPasswordChange(savedUser)
+                .catch((error: unknown) => {
+                    logger.warn({
+                        message: 'Password written, but its session revoke failed.',
+                        userId: savedUser.id,
+                        error
+                    });
+                })
                 .then(() => generateSuccess<UserDocument>(savedUser))
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));

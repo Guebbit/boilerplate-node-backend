@@ -39,7 +39,8 @@ import {
     persistReauthCode,
     reserveMfaAttempt,
     resetMfaAttempts,
-    claimTotpStep
+    claimTotpStep,
+    bumpSessionEpoch
 } from './credentials';
 import {
     consumeToken,
@@ -112,6 +113,7 @@ export const userService = {
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
+    bumpSessionEpoch,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,

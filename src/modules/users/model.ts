@@ -163,6 +163,13 @@ export interface UserRecord extends Omit<
      */
     mfaFailures: number;
 
+    /**
+     * The session epoch: a token whose `auth_time` (floored to the second) is older than this is
+     * refused, access and refresh alike. Moved by `bumpSessionEpoch` on every event that means
+     * "I may be compromised"; absent means no event has ever moved it.
+     */
+    tokensValidAfter?: Date;
+
     /** While in the future, no code is compared at all: the account is locked out of 2FA checks. */
     mfaLockedUntil?: Date;
 
@@ -596,6 +603,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             type: Number,
             default: 0
         },
+        /* The session epoch — see the interface field. */
+        tokensValidAfter: {
+            type: Date
+        },
         /* End of the 2FA lock, absent when none is set. */
         mfaLockedUntil: {
             type: Date
@@ -834,6 +845,7 @@ export type UserWire = Omit<
     | 'oauthAccounts'
     | 'mfaFailures'
     | 'mfaLockedUntil'
+    | 'tokensValidAfter'
 >;
 
 /**
@@ -866,7 +878,8 @@ export const applyUserTransform = applySerialization(userSchema, {
         'reauthCode',
         'oauthAccounts',
         'mfaFailures',
-        'mfaLockedUntil'
+        'mfaLockedUntil',
+        'tokensValidAfter'
     ]
 });
 

@@ -22,6 +22,7 @@ import {
 import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
 import { pruneOwnExpiredTokens } from './prune';
+import { predatesSessionEpoch } from './epoch';
 
 /**
  * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
@@ -137,7 +138,8 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
 export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     verifyAgainstRing(token, getRefreshTokenRing()).then((data) =>
         userService.findByTokenValue(token).then((user) => {
-            if (!user) throw new Error('Forbidden');
+            if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
+                throw new Error('Forbidden');
             return data;
         })
     );
@@ -260,10 +262,15 @@ export class TokenReuseError extends Error {
     }
 }
 
-/** Every refresh token this account currently holds, gone — the reuse-detected response. */
+/**
+ * Every refresh token this account currently holds, gone, and every access token with them — the
+ * reuse-detected response. The epoch moves FIRST: if the removal then fails, the tokens are
+ * already dead.
+ */
 const revokeAllRefreshTokens = (userId: string): Promise<void> =>
     userService
-        .findByIdWithCredentials(userId)
+        .bumpSessionEpoch(userId)
+        .then(() => userService.findByIdWithCredentials(userId))
         .then((user) => (user ? userService.tokenRemoveAll(user, TokenType.REFRESH) : undefined));
 
 /**
@@ -280,6 +287,10 @@ const revokeAllRefreshTokens = (userId: string): Promise<void> =>
 const reissueRotated = (claims: TokenData, remainingMs: number): Promise<RotatedSession> =>
     userService.findByIdWithCredentials(claims.id).then((user) => {
         if (!user || !isAuthenticatable(user)) throw new Error('User not found');
+        // The epoch may have moved since the presented token was minted: a rotation must not
+        // carry a revoked session forward.
+        if (predatesSessionEpoch(claims.auth_time, user.tokensValidAfter))
+            throw new Error('Forbidden');
 
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
 

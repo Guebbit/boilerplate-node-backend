@@ -14,6 +14,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { userService } from '@modules/users';
 import type { AuthContext } from '@types';
 import { verifyAccessToken, verifyRefreshToken, type TokenData } from './jwt';
+import { predatesSessionEpoch } from './epoch';
 
 /**
  * Builds a `fromAccessToken`/`fromRefreshToken` resolver from either verifier.
@@ -32,7 +33,17 @@ const resolve =
             // `verify()` outright rather than needing a dedicated rejection; see
             // `account/services/two-factor.ts#buildLoginChallenge`.
             .then((claims) =>
-                userService.findAuthenticatableById(claims.id).then((user) => ({ user, claims }))
+                userService
+                    .findAuthenticatableById(claims.id)
+                    // A token minted before the account's session epoch is a revoked one: refuse it
+                    // exactly like an unknown account, so nothing downstream tells them apart.
+                    .then((user) => ({
+                        user:
+                            user && !predatesSessionEpoch(claims.auth_time, user.tokensValidAfter)
+                                ? user
+                                : null,
+                        claims
+                    }))
             )
             /*
              * The stored memberships, which are what a role assignment actually IS. The user document

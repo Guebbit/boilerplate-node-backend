@@ -11,6 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { api } from '@tests/http';
 import { codeFor } from '@tests/totp';
+import { forgetSessionEpoch } from '@tests/session-epoch';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 /** Every queued two-factor mail's code, newest last — what the recipient would type. */
@@ -63,6 +64,7 @@ const armTotp = async (bearer: string) => {
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
     backupCodesOf.set(secret, confirm.body.data.backupCodes as string[]);
+    await forgetSessionEpoch();
     return secret;
 };
 
@@ -85,6 +87,7 @@ const armEmail = async (bearer: string, proof?: string) => {
         .post('/account/2fa/methods/email/confirm')
         .set('Authorization', bearer)
         .send({ code: String(mail?.data.code) });
+    await forgetSessionEpoch();
 };
 
 describe('GET /account/2fa', () => {

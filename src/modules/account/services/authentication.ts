@@ -23,6 +23,9 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { revokeAllSessions } from './revocation';
+import { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';
+
 import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,
@@ -32,7 +35,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
+import { zodUserSchema, userService, type UserDocument } from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -61,13 +64,6 @@ export const tokenAdd = (
     // exactly the field where two sessions and a reset link routinely collide like that.
     return userService.tokenAdd(user, type, expirationTime ?? 0, token);
 };
-
-/**
- * The `tokens.type` an account-deletion link carries — named for the same reason as
- * {@link PASSWORD_RESET_TOKEN_TYPE}: policy, not detail, and `delete-account-confirm.ts` reads it
- * from here rather than repeating the bare string.
- */
-export const ACCOUNT_DELETE_TOKEN_TYPE = 'delete';
 
 /**
  * Issue a delete-confirmation token, deliver it, and record the request. Wraps `tokenAdd`
@@ -103,15 +99,6 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
  * fast path a timing oracle for enumerating registered addresses.
  */
 const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
-
-/**
- * The `tokens.type` a password-reset link carries.
- *
- * Named here rather than spelled at each call site because it is policy, not detail — and because
- * a bare string in a controller connects to nothing, least of all the TTL it belongs to.
- * `./verification` states its own pair the same way.
- */
-export const PASSWORD_RESET_TOKEN_TYPE = 'password';
 
 /**
  * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
@@ -581,14 +568,14 @@ export const login = (
 };
 
 /**
- * Remove all tokens of a given type for the user (logout-everywhere).
+ * Log the account out everywhere: every refresh token goes and the session epoch moves, so access
+ * tokens already handed out die too. The caller is signed out as well, deliberately.
  * The audit emit fires unconditionally: the caller's next step is "clear cookies, answer
  * success" either way, so it was never actually gated on `result.success` — this preserves
  * that rather than introducing a new condition.
  */
-export const tokenRemoveAll = (
+export const logoutEverywhere = (
     userId: string,
-    type: TokenType,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     userService
@@ -608,9 +595,7 @@ export const tokenRemoveAll = (
                 // rebuilds the array, writing it back whole and erasing anything added between
                 // this function's read and write. That race window is hard to assert in a test —
                 // `$pull` describes a change instead, closing it in the implementation.
-                return userService
-                    .tokenRemoveAll(user, type)
-                    .then(() => generateSuccess<UserDocument>(user));
+                return revokeAllSessions(user).then(() => generateSuccess<UserDocument>(user));
             }
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
@@ -663,3 +648,5 @@ export const verifyOwnPassword = (
                         : generateReject(422, [t(wrongKey)])
                 );
         });
+
+export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';

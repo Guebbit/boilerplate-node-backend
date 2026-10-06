@@ -14,6 +14,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { codeFor } from '@tests/totp';
 import { setCookie } from '@tests/cookies';
+import { forgetSessionEpoch } from '@tests/session-epoch';
 import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { TokenType, hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
@@ -102,6 +103,7 @@ const enrollTotp = async (bearer: string) => {
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
 
+    await forgetSessionEpoch();
     return { secret, backupCodes: (confirm.body.data.backupCodes ?? []) as string[] };
 };
 
@@ -120,6 +122,7 @@ const enrollEmail = async (bearer: string, proof?: string) => {
         .set('Authorization', bearer)
         .send({ code: mailedCode() });
 
+    await forgetSessionEpoch();
     return { backupCodes: (confirm.body.data.backupCodes ?? []) as string[] };
 };
 
@@ -438,6 +441,7 @@ describe('telling the account holder their factors changed', () => {
             .delete('/account/2fa/methods/email')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch();
 
         const [mail] = mailsOf('account.two-factor-changed');
         expect(mail?.data.body).toContain('removed');
@@ -453,6 +457,7 @@ describe('telling the account holder their factors changed', () => {
             .delete('/account/2fa/methods/totp')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch();
 
         expect(mailsOf('account.two-factor-changed')).toHaveLength(1);
         expect(mailsOf('account.two-factor-changed')[0]?.data.body).toContain('turned off');
@@ -467,6 +472,7 @@ describe('telling the account holder their factors changed', () => {
             .delete('/account/2fa')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch();
 
         expect(mailsOf('account.two-factor-changed')[0]?.data.body).toContain('turned off');
     });
@@ -477,6 +483,7 @@ describe('telling the account holder their factors changed', () => {
         mockOutbox.length = 0;
 
         await api().delete('/account/2fa').set('Authorization', bearer).send({ code: '000000' });
+        await forgetSessionEpoch();
 
         expect(mailsOf('account.two-factor-changed')).toEqual([]);
     });
@@ -523,6 +530,7 @@ describe('enrolling the device factor', () => {
             .post('/account/2fa/methods/totp/confirm')
             .set('Authorization', bearer)
             .send({ code: '000000' });
+        await forgetSessionEpoch();
 
         expect(response.status).toBe(422);
     });
@@ -600,6 +608,7 @@ describe('enrolling the email factor', () => {
             .post('/account/2fa/methods/email/confirm')
             .set('Authorization', bearer)
             .send({ code: '000000' });
+        await forgetSessionEpoch();
 
         expect(response.status).toBe(422);
     });
@@ -984,11 +993,13 @@ describe('logging in with the email factor', () => {
                 .post('/account/2fa/methods/email/confirm')
                 .set('Authorization', bearer)
                 .send({ code: '000000' });
+        await forgetSessionEpoch();
 
         const response = await api()
             .post('/account/2fa/methods/email/confirm')
             .set('Authorization', bearer)
             .send({ code });
+        await forgetSessionEpoch();
 
         expect(response.status).toBe(422);
     });
@@ -1024,6 +1035,7 @@ describe('several factors at once', () => {
             .delete('/account/2fa/methods/email')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch();
         expect(removal.status).toBe(200);
 
         const login = await startLogin(user.email);
@@ -1041,6 +1053,7 @@ describe('several factors at once', () => {
             .delete('/account/2fa/methods/totp')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch();
 
         const status = await api().get('/account/2fa').set('Authorization', bearer).send();
         expect(status.body.data.enabled).toBe(false);
@@ -1075,6 +1088,7 @@ describe('several factors at once', () => {
             .post('/account/2fa/methods/email/confirm')
             .set('Authorization', bearer)
             .send({ code: emailCode });
+        await forgetSessionEpoch();
 
         const login = await api()
             .post('/account/login')
@@ -1088,6 +1102,7 @@ describe('several factors at once', () => {
             .delete('/account/2fa/methods/totp')
             .set('Authorization', bearer)
             .send({ code: mailedCode() });
+        await forgetSessionEpoch();
 
         expect(removal.status).toBe(200);
     });
@@ -1102,6 +1117,7 @@ describe('disabling 2FA', () => {
             .delete('/account/2fa')
             .set('Authorization', bearer)
             .send({ code: '000000' });
+        await forgetSessionEpoch();
 
         expect(response.status).toBe(422);
     });
@@ -1115,6 +1131,7 @@ describe('disabling 2FA', () => {
             .delete('/account/2fa')
             .set('Authorization', bearer)
             .send({ code: await codeFor(secret, 1) });
+        await forgetSessionEpoch();
         expect(disable.status).toBe(200);
 
         const login = await startLogin(user.email);
@@ -1314,6 +1331,7 @@ describe('the per-account wrong-code lock', () => {
                 .post('/account/2fa/methods/totp/confirm')
                 .set('Authorization', bearer)
                 .send({ code: '000000' });
+            await forgetSessionEpoch();
             expect(response.status).toBe(422);
         }
 

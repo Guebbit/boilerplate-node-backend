@@ -231,6 +231,27 @@ The refresh tokens hang off the user document in [`users`](./users.md)' `tokens`
 is what makes "log me out of every device" a single write rather than a token blocklist. It is also
 the concrete reason the `account → users` edge is `shared-kernel`: this module writes that array.
 
+### The session epoch
+
+Removing refresh tokens does not touch an access token already handed out (stateless, ten minutes).
+So every "I may be compromised" event also moves `tokensValidAfter` on the user, and a token whose
+`auth_time` (floored to the second) predates it is refused — by the resolver for an access token, by
+`verifyRefreshToken` and the rotation for a refresh one. `auth_time`, not `iat`, because one
+`/refresh` resets `iat` and would walk a stolen session out of the cut.
+
+| Event                                 | Epoch moves                                                    | The caller                                                                              |
+| ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| logout everywhere                     | yes                                                            | signed out too                                                                          |
+| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged | survives: new session in the response                                                   |
+| 2FA factor armed, removed or disabled | yes                                                            | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
+| email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
+| refresh reuse detected                | yes                                                            | n/a                                                                                     |
+| plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
+
+`POST /account/reauth` retires the refresh token it was given when it re-mints, leaving one live
+session rather than two. A token stamped in the very second of a bump is kept, which is what lets
+the caller's re-minted session survive its own bump.
+
 ## Refresh rotation
 
 `GET /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,

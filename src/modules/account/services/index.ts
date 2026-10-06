@@ -75,7 +75,7 @@ export const accountService = {
     tokenAdd: authentication.tokenAdd,
     signup: authentication.signup,
     login: authentication.login,
-    tokenRemoveAll: authentication.tokenRemoveAll,
+    logoutEverywhere: authentication.logoutEverywhere,
     requestAccountDeletion: authentication.requestAccountDeletion,
     requestPasswordReset: authentication.requestPasswordReset,
     requestAccountSetup: authentication.requestAccountSetup,

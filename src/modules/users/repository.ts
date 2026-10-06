@@ -73,6 +73,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<void>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
+    bumpSessionEpoch: (id: string, at: Date) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
     writebackImage: ImageWriteback;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
@@ -437,6 +438,24 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                     $or: [{ mfaFailures: { $gt: 0 } }, { mfaLockedUntil: { $ne: null } }]
                 },
                 { $set: { mfaFailures: 0 }, $unset: { mfaLockedUntil: '' } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Move the account's session epoch forward to `at`: every token minted before it stops
+     * working. A plain `$set` — and never backwards, so a slow earlier bump cannot undo a later
+     * one. `timestamps: false`, since revoking is not an edit of the profile.
+     */
+    bumpSessionEpoch: (id: string, at: Date) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    $or: [{ tokensValidAfter: null }, { tokensValidAfter: { $lt: at } }]
+                },
+                { $set: { tokensValidAfter: at } },
                 { timestamps: false }
             )
             .exec()

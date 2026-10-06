@@ -12,6 +12,7 @@ import { rejectValidation, refused, catchAs } from '@infrastructure/http/control
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
+import { remintRefreshCookie } from '../session/session';
 import { authTwoFactorEnrollTotal } from '../metrics';
 
 /**
@@ -22,7 +23,7 @@ export const post2faConfirm = (
     request: Request<{ method: string }, unknown, TwoFactorConfirmRequest>,
     response: Response
 ) => {
-    const { id } = request.authContext!;
+    const { id, amr } = request.authContext!;
 
     const pathParameters = ConfirmTwoFactorMethodParams.safeParse(request.params);
     if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
@@ -43,12 +44,15 @@ export const post2faConfirm = (
             }
 
             authTwoFactorEnrollTotal.inc({ method, status: 'success' });
-            successResponse<TwoFactorConfirmed>(
-                response,
-                result.data,
-                200,
-                t('account.two-factor.method-added')
-            );
+            // Arming a factor revoked every session, this one included: keep the caller in.
+            return remintRefreshCookie(request, response, id, amr).then(() => {
+                successResponse<TwoFactorConfirmed>(
+                    response,
+                    result.data,
+                    200,
+                    t('account.two-factor.method-added')
+                );
+            });
         })
         .catch(catchAs(response, 'post2faConfirm'));
 };
