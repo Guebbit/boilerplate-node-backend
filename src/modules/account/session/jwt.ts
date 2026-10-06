@@ -85,18 +85,32 @@ const isAuthenticatable = (user: Pick<UserDocument, 'active' | 'deletedAt'>): bo
     user.active !== false && !user.deletedAt;
 
 /**
- * Verify a token against whichever ring member its `kid` header names, HS256 pinned throughout.
+ * The `typ` header each token kind is signed with (RFC 9068 for the access token, the same shape
+ * for the refresh token). A verifier demands its own, so a refresh token presented as a bearer is
+ * refused even when both rings share a secret.
+ * https://www.rfc-editor.org/rfc/rfc8725#section-3.11
+ */
+const TOKEN_TYPE_HEADER = { access: 'at+jwt', refresh: 'rt+jwt' } as const;
+
+/** Which kind of token a verifier accepts — a key of {@link TOKEN_TYPE_HEADER}. */
+type TokenKind = keyof typeof TOKEN_TYPE_HEADER;
+
+/**
+ * Verify a token against whichever ring member its `kid` header names, HS256 pinned throughout,
+ * and its `typ` header pinned to `kind`.
  * A `kid` naming no current ring member — a key this deployment has already retired, or a token
  * that never carried one — rejects before jsonwebtoken ever sees it: that is exactly "log in
  * again", not a signature-mismatch error to report differently.
  *
  * @param token - signed JWT string
  * @param ring - the ordered signing ring, newest first
+ * @param kind - which kind of token this verifier accepts
  * @returns decoded payload
  */
 const verifyAgainstRing = (
     token: string,
-    ring: readonly string[]
+    ring: readonly string[],
+    kind: TokenKind
 ): Promise<TokenData & { exp: number }> =>
     new Promise((resolve, reject) => {
         // jsonwebtoken: `decode` reads the header without checking the signature, which is all a
@@ -109,13 +123,18 @@ const verifyAgainstRing = (
         }
         // `algorithms: ['HS256']` pins the accepted algorithm: without it a token whose header
         // claims `alg: none` or an asymmetric algorithm can pass verification under some library
-        // configurations (the classic JWT "algorithm confusion" attack).
-        verify(token, secret, { algorithms: ['HS256'] }, (error, data) => {
+        // configurations (the classic JWT "algorithm confusion" attack). `complete: true` returns
+        // the header beside the payload, so `typ` can be checked after the signature is.
+        verify(token, secret, { algorithms: ['HS256'], complete: true }, (error, data) => {
             if (error) {
                 reject(error);
                 return;
             }
-            resolve(data as TokenData & { exp: number });
+            if (data?.header.typ !== TOKEN_TYPE_HEADER[kind]) {
+                reject(new Error('Wrong token type'));
+                return;
+            }
+            resolve(data.payload as TokenData & { exp: number });
         });
     });
 
@@ -126,19 +145,27 @@ const verifyAgainstRing = (
  * @returns decoded payload
  */
 export const verifyAccessToken = (token: string): Promise<TokenData> =>
-    verifyAgainstRing(token, getAccessTokenRing());
+    verifyAgainstRing(token, getAccessTokenRing(), 'access');
 
 /**
  * Verify a refresh token — JWT check + DB revocation lookup.
- * Rejects with 'Forbidden' if the token is not in the user document.
+ * Rejects with 'Forbidden' if the token is not in the user document as a LIVE refresh entry: a
+ * rotated-away (superseded) one is refused here, though the rotation itself still reads it.
  *
  * @param token - refresh JWT string
  * @returns decoded payload
  */
 export const verifyRefreshToken = (token: string): Promise<TokenData> =>
-    verifyAgainstRing(token, getRefreshTokenRing()).then((data) =>
+    verifyAgainstRing(token, getRefreshTokenRing(), 'refresh').then((data) =>
         userService.findByTokenValue(token).then((user) => {
             if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
+                throw new Error('Forbidden');
+            // A rotated-away token still matches the unfiltered lookup (reuse detection and the
+            // two-tab grace need that); as a credential for anything but the rotation itself it is
+            // dead. Reuse is only ever DETECTED at the rotation (RFC 9700 §4.14.2), never here.
+            const digest = hashToken(token);
+            const entry = user.tokens.find((stored) => stored.token === digest);
+            if (entry?.type !== (TokenType.REFRESH as string) || entry.supersededAt)
                 throw new Error('Forbidden');
             return data;
         })
@@ -150,7 +177,8 @@ const signAccessToken = (claims: TokenData): string => {
     return sign(claims, key, {
         expiresIn: getAccessExpiryTime(),
         algorithm: 'HS256',
-        keyid: keyId(key)
+        keyid: keyId(key),
+        header: { alg: 'HS256', typ: TOKEN_TYPE_HEADER.access }
     });
 };
 
@@ -166,6 +194,7 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): string =
         expiresIn: expiresInSeconds,
         algorithm: 'HS256',
         keyid: keyId(key),
+        header: { alg: 'HS256', typ: TOKEN_TYPE_HEADER.refresh },
         jwtid: randomUUID()
     });
 };
@@ -376,7 +405,7 @@ const resolveLostRotation = (
  */
 export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
     // Signature/expiry/ring lookup only, no DB round trip yet — same as `verifyAccessToken`.
-    verifyAgainstRing(oldToken, getRefreshTokenRing()).then(({ exp, ...oldClaims }) => {
+    verifyAgainstRing(oldToken, getRefreshTokenRing(), 'refresh').then(({ exp, ...oldClaims }) => {
         const claims = carriedClaims(oldClaims);
         // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
         // verified with almost no time left still signs rather than producing `expiresIn: 0`,
@@ -409,7 +438,7 @@ export const rememberOfRefreshToken = (
     userId: string
 ): Promise<RefreshTokenExpiryTime | undefined> =>
     refreshToken
-        ? verifyAgainstRing(refreshToken, getRefreshTokenRing())
+        ? verifyAgainstRing(refreshToken, getRefreshTokenRing(), 'refresh')
               .then((claims) => (claims.id === userId ? claims.remember : undefined))
               // An unreadable cookie is an answer ("no known persistence"), not a failure.
               .catch(() => undefined)

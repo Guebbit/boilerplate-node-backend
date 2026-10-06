@@ -175,6 +175,7 @@ describe('DELETE /account/2fa', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
+        await forgetSessionEpoch();
         const status = await api().get('/account/2fa').set('Authorization', bearer);
         expect(status.body.data.methods).toEqual([]);
     });
