@@ -327,11 +327,16 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
         for (const to of EVERY_STATUS) expect(canOverrideTo(OrderStatus.cancelled, to)).toBe(false);
     });
 
-    it('allows every forward move within processing/shipped/delivered', () => {
-        for (const from of FULFILMENT_SEQUENCE)
+    it('never moves a pending order anywhere — only the offline-payment door leaves pending', () => {
+        for (const to of EVERY_STATUS) expect(canOverrideTo(OrderStatus.pending, to)).toBe(false);
+    });
+
+    it('allows every forward move within processing/shipped/delivered, from paid onward', () => {
+        const overridable = FULFILMENT_SEQUENCE.filter((status) => status !== OrderStatus.pending);
+        for (const from of overridable)
             for (const to of OVERRIDABLE_DESTINATIONS) {
-                const fromIndex = FULFILMENT_SEQUENCE.indexOf(from);
-                const toIndex = FULFILMENT_SEQUENCE.indexOf(to);
+                const fromIndex = overridable.indexOf(from);
+                const toIndex = overridable.indexOf(to);
                 expect(canOverrideTo(from, to)).toBe(toIndex > fromIndex);
             }
     });
@@ -343,9 +348,8 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
 });
 
 describe("statusesOverridableInto — the conditional write's own `from` set", () => {
-    it('is every status strictly earlier than the destination in the fulfilment sequence', () => {
+    it('is every status strictly earlier than the destination, never pending', () => {
         expect(statusesOverridableInto(OrderStatus.shipped)).toEqual([
-            OrderStatus.pending,
             OrderStatus.paid,
             OrderStatus.processing
         ]);

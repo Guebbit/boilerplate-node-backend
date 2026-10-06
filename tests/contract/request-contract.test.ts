@@ -46,7 +46,7 @@ import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ZodType } from 'zod';
 import { validPayload, invalidPayloads } from '@tests/contract-data';
 import { listOperations, type Operation, type SchemaNode } from '@tests/spec-walk';
-import { seedWorld, buildUrl, OBJECT_ID, type World } from '@tests/spec-world';
+import { seedWorld, buildUrl, requiredHeadersOf, OBJECT_ID, type World } from '@tests/spec-world';
 import * as zodSchemas from '@api/schemas.zod';
 import {
     CreateUserBody,
@@ -610,6 +610,7 @@ const sendWrite = async (
         [operation.method](buildUrl(operation, world))
         .set('Authorization', bearer)
         .set('Accept-Language', 'en')
+        .set(requiredHeadersOf(operation))
         .type(contentType)
         .send(payload);
 };

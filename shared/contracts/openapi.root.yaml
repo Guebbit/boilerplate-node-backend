@@ -117,6 +117,11 @@ x-error-codes:
             status: 429,
             description: 'The caller exceeded a rate-limit budget. Carries a `Retry-After` hint.'
         }
+    IDEMPOTENCY_KEY_REQUIRED:
+        {
+            status: 400,
+            description: 'This route requires an `Idempotency-Key` header and the request carries none.'
+        }
     IDEMPOTENCY_IN_FLIGHT:
         {
             status: 409,
@@ -272,6 +277,25 @@ components:
         # Opt-in per route (see `src/infrastructure/http/middlewares/idempotency.ts`) — never
         # required at the contract level, since a caller not asking for replay protection must
         # still be able to call the route.
+        # The twin for a route where a retry would move money twice: same shape, but absent is a 400
+        # (`IDEMPOTENCY_KEY_REQUIRED`), per the IETF Idempotency-Key header draft.
+        RequiredIdempotencyKeyHeader:
+            name: Idempotency-Key
+            in: header
+            required: true
+            schema:
+                type: string
+                minLength: 1
+                maxLength: 200
+                pattern: '^[A-Za-z0-9_-]+$'
+            description: >
+                An opaque, client-generated value (a UUID by convention) that makes a retried
+                write safe, and that this route REQUIRES: a request without it answers 400
+                (`IDEMPOTENCY_KEY_REQUIRED`) and nothing is written. Repeating the request with the
+                SAME key and the SAME body replays the first response (`Idempotent-Replay: true`, no
+                repeated write); the same key with a DIFFERENT body answers 422; a key still being
+                processed by another in-flight request answers 409.
+
         IdempotencyKeyHeader:
             name: Idempotency-Key
             in: header

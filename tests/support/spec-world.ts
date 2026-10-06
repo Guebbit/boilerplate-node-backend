@@ -4,6 +4,7 @@
  * Shared by the fuzz suite and the write-operation contract walk: both take a templated path from
  * `openapi.yaml` and need `{id}` to mean something that exists, so a handler runs past its 404.
  */
+import { randomUUID } from 'node:crypto';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -66,6 +67,13 @@ const parameterValue = (path: string, name: string, world: World): string => {
     if (path.startsWith('/locales/translations/')) return world.productId;
     return OBJECT_ID;
 };
+
+/**
+ * A legal value for every header the operation requires. A fresh value each call: the only
+ * required header today is `Idempotency-Key`, and a reused one replays or mismatches.
+ */
+export const requiredHeadersOf = (operation: Operation): Record<string, string> =>
+    Object.fromEntries(operation.requiredHeaders.map((name) => [name, randomUUID()]));
 
 /** Fill every path parameter from {@link parameterValue}. */
 export const buildUrl = (operation: Operation, world: World): string => {

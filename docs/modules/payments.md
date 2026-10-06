@@ -104,11 +104,13 @@ would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel 
 money is still on its way. `requires_action` gets no such grace: it means the browser has a
 challenge to answer, not the provider a payment to finish.
 
-**`POST /payments/webhook` is the authority**, and the browser never is. It arrives whether or not
+**`POST /payments/webhook` is what makes the server look**, and the browser never is. It arrives whether or not
 the customer kept the tab open, and it is the one route in the module mounted above the auth wall:
 its caller is a machine with no account, authenticating by signing the raw body — a stronger proof
-of origin than any cookie this API could ask it for. Deliveries are deduplicated by event id,
-because a provider retries for days and the inventory commit is not conditional on anything else.
+of origin than any cookie this API could ask it for. The delivery is a thin event: the server
+re-reads the payment's state from the provider and settles that, never the body's own claim.
+Deliveries are deduplicated by event id, because a provider retries for days and the inventory
+commit is not conditional on anything else.
 
 The dependency on [`users`](./users.md) is groundwork rather than a current feature. The order
 already carries a `userId`; resolving it against the account record is what makes the id on a
@@ -143,6 +145,30 @@ refund then finds nothing `succeeded` to return. So `settlePayment` decides "kee
 put it straight back" on the order's status as read _after_ its own payment write, never on the
 copy `markPaid` answered. Either the cancel's refund sees `succeeded`, or this re-read sees
 `cancelled`; the conditional `succeeded → refunded` write makes sure only one of them refunds.
+
+**Before the final write, the money is compared with what was asked.** A provider's `succeeded`
+carries `amountReceived`, `currency` and `paymentId`, and `settlePayment` checks all three against
+the payment frozen at the intent, in minor units. One that differs, or is missing, is not accepted
+(PayPal IPN, WooCommerce "on hold" and Magento "Suspected Fraud" all make the same comparison). The
+payment is written `succeeded` with what ARRIVED, and then:
+
+```mermaid
+flowchart TD
+    S["provider reports succeeded"] --> C{"amount, currency and<br/>paymentId match?"}
+    C -->|yes| P["markPaid, commit stock,<br/>payment.succeeded"]
+    C -->|no| W["record what arrived<br/>(no pendingEffects)"]
+    W --> A["audit payment.amount_mismatch,<br/>count it, log an error"]
+    A --> X["cancel the order (system actor)"]
+    X --> R["ORDER_REFUND_OWED: the existing<br/>refund path returns the money"]
+    R --> A409["confirm and sync answer 409<br/>PAYMENT_ORDER_NOT_PAYABLE;<br/>the webhook acknowledges"]
+```
+
+No stock is committed, no `payment.succeeded` is announced, no invoice is issued. The 409 is not a
+decline, so it spends no decline budget. A crash after the payment write leaves the order
+`pending`; the reservation expiry then cancels it and the same refund path returns the money. A
+hand-recorded payment (`manual`) is exempt: its amount is the order's own, with no provider
+reporting a different one. The audit action stays out of `security.*`, whose whole prefix the
+incident view takes: this is a reconciliation, not an attack signal.
 
 ## Pending effects
 
@@ -447,19 +473,19 @@ flowchart LR
 
 ## Configuration
 
-| Variable                                  | Default | Meaning                                                                                                                                                                                            |
-| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                   | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                 |
-| `NODE_PAYMENT_WEBHOOK_SECRET`             | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid              |
-| `NODE_DEFAULT_CURRENCY`                   | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency               |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`   | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                               |
-| `NODE_BANK_TRANSFER_BENEFICIARY`          | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                     |
-| `NODE_BANK_TRANSFER_IBAN`                 | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                           |
-| `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                        |
-| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                           |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                  |
-| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`       | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                       |
-| `NODE_STRIPE_SECRET_KEY`                  | —       | Only checked at boot, outside development/test (staging included): refuses to start on a `sk_test_` key, since a real deployment silently running test-mode payments is worse than failing to boot |
+| Variable                                  | Default | Meaning                                                                                                                                                                                                                                                                                                        |
+| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                   | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
+| `NODE_PAYMENT_WEBHOOK_SECRET`             | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
+| `NODE_DEFAULT_CURRENCY`                   | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`   | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                                                                                                                                           |
+| `NODE_BANK_TRANSFER_BENEFICIARY`          | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
+| `NODE_BANK_TRANSFER_IBAN`                 | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
+| `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`       | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
+| `NODE_STRIPE_SECRET_KEY`                  | —       | Only checked at boot, outside development/test (staging included): refuses to start on a `sk_test_` key, since a real deployment silently running test-mode payments is worse than failing to boot                                                                                                             |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion

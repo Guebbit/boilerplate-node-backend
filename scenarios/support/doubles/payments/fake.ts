@@ -13,43 +13,14 @@
 
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
+import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
 import {
     PaymentInFlightError,
     verifyWebhookSignature,
     WebhookRejected,
     type PaymentProvider,
-    type ProviderPaymentState,
-    type ProviderPaymentStatus
+    type ProviderPaymentState
 } from '@modules/payments/providers';
-
-/** The webhook body as it arrives — the contract's `PaymentWebhookEvent`, flat. `status` is
- * unchecked JSON at this point; the cast is `unknown` wearing the union's name until
- * {@link isProviderPaymentStatus} actually proves it. */
-interface PaymentWebhookEventBody {
-    id?: string;
-    providerRef?: string;
-    status?: string;
-    cardLast4?: string;
-}
-
-/** Every status `ProviderPaymentStatus` actually names — the runtime half of the type. */
-const PROVIDER_PAYMENT_STATUSES: ReadonlySet<ProviderPaymentStatus> = new Set([
-    'requires_action',
-    'processing',
-    'succeeded',
-    'declined'
-]);
-
-/**
- * Whether a JSON body's `status` string is one this provider (or the service reading its output)
- * actually knows — `JSON.parse(...) as PaymentWebhookEventBody` types the field, it does not
- * check it, so an arbitrary string (`'refunded'`, a typo, a future provider status this one has
- * not learned yet) would otherwise reach `settlePayment` and get written to the row verbatim.
- */
-const isProviderPaymentStatus = (status: string): status is ProviderPaymentStatus =>
-    // `Set<T>.has` is typed to `T`; this cast is what the membership check itself is proving —
-    // the return type above is the real guarantee a caller gets.
-    PROVIDER_PAYMENT_STATUSES.has(status as ProviderPaymentStatus);
 
 /**
  * The method references this provider recognises, and what each one does. Anything else succeeds
@@ -91,6 +62,63 @@ export const FAKE_DECLINE_METHOD = 'pm_card_declined';
 const outcomes = new Map<string, ProviderPaymentState>();
 
 /**
+ * What each intent was prepared for, so a `succeeded` can report what was "collected": the amount
+ * and currency it was opened with and the payment id it carries — what a real provider echoes back.
+ * Same in-memory trade-off as {@link outcomes}: an intent this process never prepared reports none.
+ */
+const intents = new Map<string, { amount: number; currency: string; paymentId: string }>();
+
+/** What {@link setFakeReceipt} may override in a `succeeded` answer, per intent. */
+type ReceiptOverride = Pick<ProviderPaymentState, 'amountReceived' | 'currency' | 'paymentId'>;
+
+/** Receipts a test has told the provider to report differently from what was prepared. */
+const receiptOverrides = new Map<string, ReceiptOverride>();
+
+/**
+ * A `succeeded` state carries what was collected: the override if a test set one, else what the
+ * intent was prepared for. Any other state reports no money at all.
+ *
+ * @param providerRef - the intent
+ * @param state - the state about to be answered
+ */
+const withReceipt = (providerRef: string, state: ProviderPaymentState): ProviderPaymentState => {
+    if (state.status !== 'succeeded') return state;
+    const prepared = intents.get(providerRef);
+    const override = receiptOverrides.get(providerRef);
+    return {
+        ...state,
+        amountReceived: override?.amountReceived ?? state.amountReceived ?? prepared?.amount,
+        currency: override?.currency ?? state.currency ?? prepared?.currency,
+        paymentId: override?.paymentId ?? state.paymentId ?? prepared?.paymentId
+    };
+};
+
+/**
+ * Test lever: make this intent's `succeeded` report a different amount, currency or payment id
+ * than it was prepared with — what a provider collecting the wrong money looks like. Applies to
+ * both `confirm` and `retrieve`. Fields left out keep what the intent was prepared with.
+ *
+ * @param providerRef - the intent
+ * @param receipt - the fields to report differently
+ */
+export const setFakeReceipt = (providerRef: string, receipt: ReceiptOverride): void => {
+    receiptOverrides.set(providerRef, receipt);
+};
+
+/**
+ * Test lever: what the provider will answer for `providerRef` from now on, as if the customer had
+ * finished it at the provider with no `confirm` ever reaching this server — a 3-D Secure completed
+ * in another tab, a bank debit that cleared. It is the only way to get a webhook to find an
+ * outcome nobody confirmed, since a delivery's own body carries none.
+ *
+ * @param providerRef - the intent the outcome is for
+ * @param state - what `retrieve` answers for it
+ */
+export const setFakeOutcome = (providerRef: string, state: ProviderPaymentState): void => {
+    outcomes.set(providerRef, state);
+};
+
+/**
  * `providerRef`s this stub has already cancelled — so a second `cancel` of the same one is the
  * provider's own idempotent success, never a repeat refusal.
  */
@@ -122,6 +150,7 @@ export const fakePaymentProvider: PaymentProvider = {
     // double-click case prepares the same reference twice instead of opening a second intent.
     prepare: (charge, metadata, existingProviderRef) => {
         const providerRef = existingProviderRef ?? `fake_pi_${metadata.paymentId}`;
+        intents.set(providerRef, { ...charge, paymentId: metadata.paymentId });
         // Stryker disable all
         logger.info(
             `[fake-psp] prepare ${charge.amount} ${charge.currency} for order ${metadata.orderId} → ${providerRef}`
@@ -146,14 +175,14 @@ export const fakePaymentProvider: PaymentProvider = {
             `[fake-psp] confirm ${providerRef} with ****${state.cardLast4} → ${state.status}`
         );
         // Stryker restore all
-        return Promise.resolve(state);
+        return Promise.resolve(withReceipt(providerRef, state));
     },
 
     retrieve: (providerRef) => {
         const state = outcomes.get(providerRef) ?? { status: 'processing' as const };
         // Stryker disable next-line all
         logger.info(`[fake-psp] retrieve ${providerRef} → ${state.status}`);
-        return Promise.resolve(state);
+        return Promise.resolve(withReceipt(providerRef, state));
     },
 
     // This fake never leaves the process, so there is no second network attempt to deduplicate —
@@ -195,6 +224,11 @@ export const fakePaymentProvider: PaymentProvider = {
      * The fake's deliveries carry this module's own normalised event shape — a real provider's
      * implementation is where its native event names are translated into it. The signature is
      * verified exactly as a real one's would be, so the route's defences are exercised for real.
+     *
+     * The body is parsed against the contract's own schema AFTER the signature and BEFORE any
+     * lookup: `strictQuery` drops unknown query paths but does nothing for a JSON body, so the
+     * parse is the only guard against `{ "$ne": null }` standing where a `providerRef` string
+     * belongs, and against a field the contract does not name.
      */
     parseWebhook: (rawBody, signature) =>
         // Inside the chain rather than in front of it: a synchronous throw from a method typed as
@@ -205,24 +239,18 @@ export const fakePaymentProvider: PaymentProvider = {
             // `JSON.parse` throws, and the throw lands in this chain's own rejection — so the
             // `.catch` below is what turns an unparseable body into the 400 it is, rather than
             // letting it read as a fault of ours.
-            .then((text) => JSON.parse(text) as PaymentWebhookEventBody)
+            .then((text): unknown => JSON.parse(text))
             .catch((error: unknown) => {
                 if (error instanceof WebhookRejected) throw error;
                 throw new WebhookRejected('Body is not valid JSON');
             })
-            .then((event) => {
-                if (!event.id) throw new WebhookRejected('Event carries no id');
-                if (event.status !== undefined && !isProviderPaymentStatus(event.status))
-                    throw new WebhookRejected(`Unrecognised payment status: ${event.status}`);
-                // The wire shape is flat; `ProviderPaymentState` is the shape the SERVICE reads.
-                // Assembling it here is the whole job of an adapter — a real provider builds the
-                // same object out of its own nested event instead.
-                return {
-                    id: event.id,
-                    providerRef: event.providerRef,
-                    state: event.status
-                        ? { status: event.status, cardLast4: event.cardLast4 }
-                        : undefined
-                };
+            .then((body) => {
+                // Zod: `safeParse` answers `{ success, data | error }` instead of throwing.
+                // https://zod.dev/api#safeparse
+                const parsed = ReceivePaymentWebhookBody.safeParse(body);
+                if (!parsed.success)
+                    throw new WebhookRejected('Body does not match the event schema');
+                // Thin: which event, which intent. What happened to it is `retrieve`'s answer.
+                return { id: parsed.data.id, providerRef: parsed.data.providerRef };
             })
 };

@@ -10,7 +10,7 @@
 
 import { createHmac } from 'node:crypto';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
-import { paymentWebhookSecret } from '../config';
+import { paymentWebhookSecrets } from '../config';
 
 /** Where the signature travels. Lower-case: Node normalises incoming header names. */
 export const WEBHOOK_SIGNATURE_HEADER = 'x-payment-signature';
@@ -44,20 +44,20 @@ export class WebhookRejected extends Error {
     }
 }
 
-/** The signing secret, read fresh so a rotation needs no restart.
+/** The signing ring, read fresh so a rotation needs no restart. The first entry signs.
  *
  * @throws {Error} when absent — verifying against an empty secret would authenticate every
  *   caller, which is worse than authenticating none.
  */
-const secret = (): string => {
-    const value = paymentWebhookSecret() ?? '';
-    if (!value) throw new Error('NODE_PAYMENT_WEBHOOK_SECRET is not set');
-    return value;
+const secrets = (): string[] => {
+    const ring = paymentWebhookSecrets().filter(Boolean);
+    if (ring.length === 0) throw new Error('NODE_PAYMENT_WEBHOOK_SECRET is not set');
+    return ring;
 };
 
-/** The hex digest of `<timestamp>.<body>` under the shared secret. */
-const digest = (timestamp: number, rawBody: Buffer): string =>
-    createHmac('sha256', secret()).update(`${timestamp}.`).update(rawBody).digest('hex');
+/** The hex digest of `<timestamp>.<body>` under one secret of the ring. */
+const digest = (timestamp: number, rawBody: Buffer, secret: string): string =>
+    createHmac('sha256', secret).update(`${timestamp}.`).update(rawBody).digest('hex');
 
 /**
  * Produce the header a provider would send. Used by the demo's own deliveries and by the tests
@@ -71,7 +71,7 @@ export const signWebhookPayload = (
     timestamp: number = Math.floor(Date.now() / 1000)
 ): string => {
     const buffer = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(rawBody, 'utf8');
-    return `t=${timestamp},v1=${digest(timestamp, buffer)}`;
+    return `t=${timestamp},v1=${digest(timestamp, buffer, secrets()[0])}`;
 };
 
 /**
@@ -82,25 +82,29 @@ export const signWebhookPayload = (
  * @throws {WebhookRejected} when the header is malformed, stale, or does not match
  */
 export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefined): void => {
-    const parts = new Map(
-        (header ?? '').split(',').map((pair) => {
-            const index = pair.indexOf('=');
-            return [pair.slice(0, index).trim(), pair.slice(index + 1).trim()] as const;
-        })
-    );
+    const pairs = (header ?? '').split(',').map((pair) => {
+        const index = pair.indexOf('=');
+        return [pair.slice(0, index).trim(), pair.slice(index + 1).trim()] as const;
+    });
 
-    const timestamp = Number(parts.get('t'));
-    const provided = parts.get('v1') ?? '';
-    if (!Number.isFinite(timestamp) || !provided)
+    const timestamp = Number(pairs.find(([key]) => key === 't')?.[1]);
+    // EVERY `v1`, not the last: a provider rotating its secret signs with the old and the new one
+    // and sends both, and either may be the one this ring still holds.
+    const provided = pairs.filter(([key]) => key === 'v1').map(([, value]) => value);
+    if (!Number.isFinite(timestamp) || provided.length === 0 || provided.includes(''))
         throw new WebhookRejected('Malformed signature header', true);
 
     if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > TOLERANCE_SECONDS)
         throw new WebhookRejected('Signature timestamp outside tolerance', true);
 
-    const expected = digest(timestamp, rawBody);
     // Lower-cased before the compare: a provider may send uppercase hex, and `expected` never is
     // (`.digest('hex')` always lower-cases) — comparing the raw strings would refuse a valid
-    // uppercase delivery instead of matching it byte-for-byte.
-    if (!constantTimeEqual(expected, provided.toLowerCase()))
-        throw new WebhookRejected('Signature does not match', true);
+    // uppercase delivery instead of matching it byte-for-byte. Every pairing is compared, none
+    // short-circuited: which entry of the ring matched is not something to leak through timing.
+    const matches = secrets().flatMap((secret) =>
+        provided.map((value) =>
+            constantTimeEqual(digest(timestamp, rawBody, secret), value.toLowerCase())
+        )
+    );
+    if (!matches.includes(true)) throw new WebhookRejected('Signature does not match', true);
 };

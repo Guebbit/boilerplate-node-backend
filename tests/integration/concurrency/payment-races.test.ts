@@ -26,6 +26,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
+import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { paymentModel } from '@modules/payments/model';
@@ -194,10 +195,12 @@ describe('P2 — one webhook event redelivered in parallel', () => {
         const product = await createProduct({ onHand: 10 });
         const { orderId, paymentId } = await orderAwaitingPayment(String(product._id), 3);
         const providerRef = await providerRefOf(paymentId);
+        // The delivery names the intent only; the provider's own answer is what gets settled.
+        setFakeOutcome(providerRef, { status: 'succeeded' });
         const succeededFor = countSucceededEvents();
 
         const results = await raceN(RACE_SIZE, () =>
-            deliver({ id: `evt_${paymentId}`, providerRef, status: 'succeeded' })
+            deliver({ id: `evt_${paymentId}`, providerRef })
         );
         await settleEvents();
 
@@ -219,6 +222,7 @@ describe('P3 — the webhook racing the browser confirm', () => {
         const product = await createProduct({ onHand: 10 });
         const { bearer, orderId, paymentId } = await orderAwaitingPayment(String(product._id), 1);
         const providerRef = await providerRefOf(paymentId);
+        setFakeOutcome(providerRef, { status: 'succeeded' });
         const succeededFor = countSucceededEvents();
 
         // Half confirms, half distinct webhook events — distinct ids, so the event claim cannot
@@ -229,7 +233,7 @@ describe('P3 — the webhook racing the browser confirm', () => {
                       .post(`/payments/${paymentId}/confirm`)
                       .set('Authorization', bearer)
                       .send({ paymentMethodRef: GOOD_METHOD })
-                : deliver({ id: `evt_${paymentId}_${index}`, providerRef, status: 'succeeded' })
+                : deliver({ id: `evt_${paymentId}_${index}`, providerRef })
         );
         await settleEvents();
 

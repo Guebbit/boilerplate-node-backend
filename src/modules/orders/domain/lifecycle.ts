@@ -96,10 +96,10 @@ export const stockCommitted = (status: OrderStatus): boolean =>
  * stays `system`-only in absolute terms, echo included, see {@link canTransition}) and never
  * `cancelled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
  * this array IS the "forward" rule: an override may only move to a LATER index than the order's
- * current status sits at within it.
+ * current status sits at within it. `pending` is not in it: leaving `pending` goes only through the
+ * offline-payment door, which records the money and issues the invoice.
  */
 const OVERRIDABLE_SEQUENCE: readonly OrderStatus[] = [
-    OrderStatus.pending,
     OrderStatus.paid,
     OrderStatus.processing,
     OrderStatus.shipped,
@@ -121,7 +121,7 @@ export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
 
     const fromIndex = OVERRIDABLE_SEQUENCE.indexOf(from);
     const toIndex = OVERRIDABLE_SEQUENCE.indexOf(to);
-    // `from` not in the sequence at all (already `cancelled`) → no override lands on it.
+    // `from` not in the sequence at all (`pending`, which only the offline-payment door leaves, or `cancelled`) → no override lands on it.
     return fromIndex !== -1 && toIndex > fromIndex;
 };
 
