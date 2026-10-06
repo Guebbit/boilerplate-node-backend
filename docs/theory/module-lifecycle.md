@@ -582,7 +582,7 @@ ones a sweep cannot express:
   collections forever by design. The false-positive rate makes it unusable.
 
 What the suite does cover is the neighbouring ground: `eslint-plugin-boundaries` holds a
-co-located spec to its sibling's barrel, and `request-sources.test.ts` keeps every mounted route in
+co-located spec to its sibling's barrel, and `route-spec-parity.test.ts` keeps every mounted route in
 the spec and every spec operation mounted. Neither is a substitute for actually deleting a folder.
 
 ## Related pages

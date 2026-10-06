@@ -109,6 +109,9 @@ jobs:
             # `--network host`: the app listens directly on the runner, not in a container, so the
             # container needs the runner's own network namespace to reach it on localhost.
             # `--header`: sent on every request, so the whole run acts as that admin.
+            # No metrics token is sent: `GET /observability/metrics` takes `metricsBearer`, a static
+            # scrape credential, but the stateful phase only follows `links` and none leads there, so
+            # it is never called. A phase that walked every operation would need one.
             - name: Run Schemathesis
               run: |
                   mkdir -p tmp/reports/schemathesis

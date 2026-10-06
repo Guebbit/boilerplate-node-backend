@@ -83,7 +83,7 @@ along with it. Only the specs that belong to no domain stayed central.
 | `src/modules/users/tests/contract/…`                     | `/users` — the credential-leak guard, `assertNoCredentials()`                                                        |
 | `src/modules/orders/tests/contract/…`                    | `/orders` — the role-branch guard, unrestricted and scoped caller                                                    |
 | `tests/contract/system.test.ts`                          | `/` — the one route that belongs to no module                                                                        |
-| `tests/contract/request-sources.test.ts`                 | Every mounted route is in the spec, and every spec operation is mounted                                              |
+| `tests/contract/route-spec-parity.test.ts`               | Every mounted route is in the spec, and every spec operation is mounted                                              |
 | `tests/contract/request-contract.test.ts`                | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                                     |
 | `tests/support/http.ts`                                  | `api()`, `authenticateAs()` — shared with [Integration Testing](./integration-testing.md)                            |
 

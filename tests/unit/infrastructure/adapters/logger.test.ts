@@ -17,6 +17,7 @@ import {
     redactSensitiveFields,
     serializeError,
     SENSITIVE_FIELDS,
+    SENSITIVE_KEY_FRAGMENTS,
     PERSONAL_FIELDS,
     redactFormat,
     resolveLogLevel,
@@ -345,16 +346,54 @@ describe('the sensitive-field policy, entry by entry', () => {
         expect(SENSITIVE_FIELDS.size).toBeGreaterThanOrEqual(27);
     });
 
-    it('does not redact an ordinary field that merely contains a sensitive word', () => {
-        // The lookup is exact, not substring. `passwordPolicy` and `tokenCount` are metadata
-        // worth keeping; over-redaction quietly destroys the logs' usefulness.
+    it.each(['resetToken', 'passwordPolicy', 'tokenCount', 'webhookSecret', 'x-hub-signature'])(
+        'redacts %s: a credential word anywhere in the name is enough',
+        (field) => {
+            // Substring on purpose: secrets are named by what they are, and the spellings multiply.
+            const redacted = redactSensitiveFields({ [field]: 'the-secret' }) as Record<
+                string,
+                unknown
+            >;
+
+            expect(redacted[field]).toBe('[REDACTED]');
+        }
+    );
+
+    it.each([...SENSITIVE_KEY_FRAGMENTS])(
+        'redacts a key built around the fragment %s',
+        (fragment) => {
+            const redacted = redactSensitiveFields({ [`my_${fragment}_value`]: 'x' }) as Record<
+                string,
+                unknown
+            >;
+
+            expect(Object.values(redacted)).toEqual(['[REDACTED]']);
+        }
+    );
+
+    it.each(['key', 'linkUrl', 'challenge', 'verifier', 'iban'])(
+        'redacts %s by exact name only',
+        (field) => {
+            const redacted = redactSensitiveFields({
+                [field]: 'x',
+                [`${field}Count`]: 3
+            }) as Record<string, unknown>;
+
+            expect(redacted[field]).toBe('[REDACTED]');
+            expect(redacted[`${field}Count`]).toBe(3);
+        }
+    );
+
+    it('keeps the fields a debugger reads first: code, statusCode, idempotencyKey', () => {
+        // `code` is deliberately not a fragment, and `key`/`link` are exact names, not fragments:
+        // a broad pattern would eat all of these.
         const redacted = redactSensitiveFields({
-            passwordPolicy: 'strong',
-            tokenCount: 3
+            code: 'E11000',
+            statusCode: 409,
+            idempotencyKey: 'abc'
         }) as Record<string, unknown>;
 
-        expect(redacted.passwordPolicy).toBe('strong');
-        expect(redacted.tokenCount).toBe(3);
+        expect(redacted).toEqual({ code: 'E11000', statusCode: 409, idempotencyKey: 'abc' });
     });
 });
 
@@ -469,7 +508,7 @@ describe('the personal-data policy', () => {
     });
 
     it('covers the whole policy, so a shrinking list cannot pass unnoticed', () => {
-        expect(PERSONAL_FIELDS.size).toBeGreaterThanOrEqual(6);
+        expect(PERSONAL_FIELDS.size).toBeGreaterThanOrEqual(7);
     });
 });
 
@@ -518,6 +557,24 @@ describe('redactFormat — the winston wiring', () => {
         const output = transform({ level: 'error', message: 'failed', error });
 
         expect(JSON.stringify(output)).not.toContain('leaked');
+    });
+
+    it('drops the top-level stack winston copies off an Error in production', () => {
+        // `logger.error('text', error)` makes winston spread the Error onto the record, `stack`
+        // included, past `serializeError`'s own production guard.
+        setEnvironment({ NODE_ENV: 'production' });
+        const info = { level: 'error', message: 'failed', stack: 'at /srv/app/secret.js:1' };
+
+        expect(transform(info)).not.toHaveProperty('stack');
+    });
+
+    it('keeps the top-level stack on a developer machine', () => {
+        setEnvironment({ NODE_ENV: 'development' });
+
+        expect(transform({ level: 'error', message: 'failed', stack: 'at x' })).toHaveProperty(
+            'stack',
+            'at x'
+        );
     });
 
     it('leaves a non-Error `error` field alone rather than mangling it', () => {

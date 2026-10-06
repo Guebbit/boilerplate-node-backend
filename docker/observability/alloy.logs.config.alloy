@@ -1,0 +1,90 @@
+// Grafana Alloy — the container-log pipeline for the production `monitoring` profile.
+// Why Alloy and not Promtail: Promtail is deprecated; Alloy is its successor and already ships
+// in this repo for the Faro receiver. This file is the production stack's log shipper.
+//
+// Both container engines are read at once, so nothing needs selecting:
+//   Docker  `json-file` driver   -> <id>/<id>-json.log, wrapped in a JSON envelope
+//   Podman  `k8s-file` driver    -> <id>/userdata/ctr.log, written in the CRI format
+// The host log directory arrives at /var/log/host-containers whichever engine runs
+// (`CONTAINER_LOGS_PATH` in the client's env file); the glob that matches nothing is harmless.
+// Podman's default driver is `journald`, which writes no file: set CONTAINER_LOG_DRIVER=k8s-file.
+//
+// Optional off-host copy of the audit stream: `alloy.audit-forward.example.alloy`.
+
+// Where every line ends up: the Loki of this profile.
+loki.write "local" {
+    endpoint {
+        url = "http://loki:3100/loki/api/v1/push"
+    }
+}
+
+// ── Docker ──────────────────────────────────────────────────────────────────────────────────────
+
+// Discover Docker's json-file logs.
+// https://grafana.com/docs/alloy/latest/reference/components/local/local.file_match/
+local.file_match "docker" {
+    path_targets = [{
+        __path__ = "/var/log/host-containers/*/*-json.log",
+        job      = "docker",
+    }]
+}
+
+// Tail them, and unwrap the Docker envelope first.
+// https://grafana.com/docs/alloy/latest/reference/components/loki/loki.source.file/
+loki.source.file "docker" {
+    targets    = local.file_match.docker.targets
+    forward_to = [loki.process.docker_envelope.receiver]
+}
+
+// `stage.docker` parses the `{"log":...,"stream":...,"time":...}` envelope and keeps the inner line.
+// https://grafana.com/docs/alloy/latest/reference/components/loki/loki.process/#stagedocker-block
+loki.process "docker_envelope" {
+    stage.docker {}
+    forward_to = [loki.process.app.receiver]
+}
+
+// ── Podman ──────────────────────────────────────────────────────────────────────────────────────
+
+local.file_match "podman" {
+    path_targets = [{
+        __path__ = "/var/log/host-containers/*/userdata/*.log",
+        job      = "podman",
+    }]
+}
+
+loki.source.file "podman" {
+    targets    = local.file_match.podman.targets
+    forward_to = [loki.process.podman_envelope.receiver]
+}
+
+// `stage.cri` parses `<RFC3339Nano> <stream> <flag> <message>` and keeps the message.
+// https://grafana.com/docs/alloy/latest/reference/components/loki/loki.process/#stagecri-block
+loki.process "podman_envelope" {
+    stage.cri {}
+    forward_to = [loki.process.app.receiver]
+}
+
+// ── The application's own JSON line ─────────────────────────────────────────────────────────────
+
+// Winston writes one JSON object per line. Three fields become labels, because they are what a
+// LogQL selector filters on first; everything else stays in the line, where `| json` reads it.
+// `log_type` is a label too, so the audit stream can be selected without parsing every line.
+loki.process "app" {
+    stage.json {
+        expressions = {
+            level    = "level",
+            service  = "service",
+            log_type = "log_type",
+        }
+    }
+
+    stage.labels {
+        values = {
+            level    = "",
+            service  = "",
+            log_type = "",
+        }
+    }
+
+    forward_to = [loki.write.local.receiver]
+}

@@ -687,11 +687,11 @@ Some of these rules are relational — what a file may import depends on which m
 | A module's `subscribe` hook registering nothing, or one event twice                   | `module-subscriptions.test.ts`       |
 | A controller reading the caller on a route that does not guarantee one                | `authenticated-controllers.test.ts`  |
 | Every committed bundle is structurally correct — no dangling path, channel or gap     | `contract-bundles.test.ts`           |
-| Every mounted route is in the spec, and every spec operation is mounted               | `request-sources.test.ts`            |
+| Every mounted route is in the spec, and every spec operation is mounted               | `route-spec-parity.test.ts`          |
 | `scenarios/index.ts` names no module `enabledModules` does not also enable            | `scenario-fixtures.test.ts`          |
 
 Each of these was verified by deliberately breaking it and watching it fail. A guard nobody has seen
-fire is a comment. All but the last live in `tests/cross-cutting/`; `request-sources.test.ts` sits
+fire is a comment. All but the last live in `tests/cross-cutting/`; `route-spec-parity.test.ts` sits
 in `tests/contract/`, because it needs the loaded spec the contract harness already registers.
 
 **`module-subscriptions.test.ts` is the least obvious of these**, because the thing it catches never

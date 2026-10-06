@@ -53,7 +53,7 @@ import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories 
 import { APP_CONFIG_SLICES } from '@app/config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
-import { installRequestContext } from '@app/request-context';
+import { installRequestContext, requestIdMiddleware } from '@app/request-context';
 import { installTelemetry } from '@app/telemetry';
 import { installStatic } from '@app/static-assets';
 import { installRoutes } from '@app/routes';
@@ -248,9 +248,10 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
      * The middleware stack, in the order a request travels it.
      *
      * Express applies middleware in registration order, so this sequence IS the behaviour, not a
-     * summary of it. Five dependencies are load-bearing and none of them is visible from a call site:
+     * summary of it. Six dependencies are load-bearing and none of them is visible from a call site:
      *
-     * - security precedes everything, because `trust proxy` decides what `request.ip` means and the
+     * - the request id precedes even security, so a refused request is still correlatable;
+     * - security follows, because `trust proxy` decides what `request.ip` means and the
      *   rate limiter keys its buckets on it;
      * - static files come before the rate limiter, so the images a page loads do not spend the
      *   caller's request budget — and before request context and telemetry, which they do not need;
@@ -262,6 +263,8 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
      *
      * Each install owns the ordering *within* its own group and documents it there.
      */
+    // Before security: the global limiter's 429 must already carry the request id.
+    app.use(requestIdMiddleware);
     installSecurity(app);
     installStatic(app);
     installRequestParsing(app);

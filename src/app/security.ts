@@ -25,7 +25,7 @@ import { appConfig } from './config';
 import { enabledModules } from '../modules';
 
 /**
- * `express.json()`/`express.urlencoded()`'s own default (`100kb`) is already a bound, but an
+ * `express.json()`'s own default (`100kb`) is already a bound, but an
  * implicit one nobody reading this file would find. Explicit and
  * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
  */
@@ -200,13 +200,6 @@ export const installSecurity = (app: Express): void => {
 export const installRequestParsing = (app: Express): void => {
     // First: a request past its budget is refused before its body is read.
     app.use(rateLimiter);
-
-    app.use(
-        express.urlencoded({
-            extended: true,
-            limit: JSON_BODY_LIMIT
-        })
-    );
 
     /*
      * The JSON parser, plus the one exception every webhook-receiving application needs.

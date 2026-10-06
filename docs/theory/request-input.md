@@ -249,8 +249,9 @@ The cheaper first move is a **test**, not a generator, and it exists:
 `module.ts` for the enabled modules and their base paths, `src/app/routes.ts` for the system
 router it still mounts by name, the router files for each mounted path and its controller — reads
 that controller's `readInput` declarations, and asserts they are a subset of what `openapi.yaml`
-allows. It also asserts the two sets of routes match: every mounted route is in the spec, and
-every spec operation is mounted.
+allows. Whether the two sets of routes match is a different test's job —
+`tests/contract/route-spec-parity.test.ts` reads the live routers, not the source text, and
+compares them with the spec both ways.
 
 The comparison is per **controller**, against the union of every route it serves, and that is the
 concession the first obstacle above forces. `getProducts` serves `GET /products` (query) and

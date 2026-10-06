@@ -1,0 +1,76 @@
+// Off-host copy of the audit stream — an EXAMPLE, loaded only when you mount a copy of it.
+//
+// Why a copy of the log and not a protected database: an audit trail the application itself can
+// write is an audit trail an attacker who owns the application can rewrite. A second system the
+// application cannot reach is the only kind that survives it (OWASP ASVS 16.4.3).
+//
+// No target, no copy: the production stack mounts /dev/null here by default, and nothing leaves
+// the host. To enable it:
+//   1. Copy this file into your client directory and fill in the target below.
+//   2. Set ALLOY_AUDIT_FORWARD_CONFIG in the client's env file to that copy's path.
+//   3. Recreate the `alloy` service.
+//
+// Where the stream goes is yours to choose, and this boilerplate picks none. What to look for:
+//   - object storage with object lock / WORM retention, behind a log shipper that writes there;
+//   - a separate log host you do not run the application on;
+//   - a managed log service with its own access control and retention.
+// A hash chain is deliberately absent: a chain kept in the attacker's own database proves little.
+//
+// This file re-reads the container logs on its own, so it works whatever the main pipeline does.
+// https://grafana.com/docs/alloy/latest/reference/components/loki/loki.process/
+
+local.file_match "audit_docker" {
+    path_targets = [{
+        __path__ = "/var/log/host-containers/*/*-json.log",
+        job      = "audit-docker",
+    }]
+}
+
+local.file_match "audit_podman" {
+    path_targets = [{
+        __path__ = "/var/log/host-containers/*/userdata/*.log",
+        job      = "audit-podman",
+    }]
+}
+
+loki.source.file "audit_docker" {
+    targets    = local.file_match.audit_docker.targets
+    forward_to = [loki.process.audit_docker.receiver]
+}
+
+loki.source.file "audit_podman" {
+    targets    = local.file_match.audit_podman.targets
+    forward_to = [loki.process.audit_podman.receiver]
+}
+
+loki.process "audit_docker" {
+    stage.docker {}
+    forward_to = [loki.process.audit_only.receiver]
+}
+
+loki.process "audit_podman" {
+    stage.cri {}
+    forward_to = [loki.process.audit_only.receiver]
+}
+
+// Keep only audit lines. `stage.match` with `drop` removes the lines the selector matches, so the
+// selector asks for everything that is NOT an audit line (`!~` is a LogQL line filter).
+// https://grafana.com/docs/alloy/latest/reference/components/loki/loki.process/#stagematch-block
+loki.process "audit_only" {
+    stage.match {
+        selector = "{job=~\"audit-.*\"} !~ \"\\\"log_type\\\":\\\"audit\\\"\""
+        action   = "drop"
+    }
+
+    forward_to = [loki.write.audit_target.receiver]
+}
+
+// The off-host target. Replace the URL (and add `basic_auth` / `bearer_token` as it needs).
+// Any endpoint that speaks Loki's push API works: a separate Loki, Grafana Cloud Logs, or a
+// collector that exposes it.
+// https://grafana.com/docs/alloy/latest/reference/components/loki/loki.write/
+loki.write "audit_target" {
+    endpoint {
+        url = "https://logs.example.invalid/loki/api/v1/push"
+    }
+}

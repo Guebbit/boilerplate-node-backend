@@ -10,6 +10,9 @@ paths:
             summary: List products (paginated)
             description: Returns a paginated list of products.
             operationId: listProducts
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -187,6 +190,9 @@ paths:
             summary: Product details
             description: Returns the full details of the product identified by `{id}`. Functionally equivalent to `GET /products?id={id}`.
             operationId: getProductById
+            security:
+                - {}
+                - bearerAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -408,6 +414,9 @@ paths:
             summary: Search products (DTO-friendly)
             description: Searches and filters products via a JSON request body. Functionally equivalent to `GET /products` with query parameters.
             operationId: searchProducts
+            security:
+                - {}
+                - bearerAuth: []
             x-alias-of: listProducts
             requestBody:
                 required: true

@@ -6,7 +6,7 @@
  * names the cause instead of an endpoint.
  */
 import fc from 'fast-check';
-import { resolveSchema, type SchemaNode } from '@tests/spec-walk';
+import { resolveSchema, securityRequiresAuth, type SchemaNode } from '@tests/spec-walk';
 import { arbitraryFor } from '@tests/spec-arbitraries';
 
 /** A spec document with just the schemas a case needs. */
@@ -115,5 +115,22 @@ describe('arbitraryFor', () => {
         );
 
         expect(draws.some((value) => Object.keys(value as object).length > 0)).toBe(true);
+    });
+});
+
+describe('securityRequiresAuth', () => {
+    it.each([
+        ['an absent security', undefined, false],
+        ['an empty list', [], false],
+        ['a session that is optional', [{}, { bearerAuth: [] }], false],
+        ['a single required scheme', [{ bearerAuth: [] }], true],
+        [
+            'two alternative schemes, neither optional',
+            [{ bearerAuth: [] }, { apiKeyAuth: [] }],
+            true
+        ],
+        ['a cookie-only scheme', [{ cookieAuth: [] }], true]
+    ])('reads %s', (_label, security, expected) => {
+        expect(securityRequiresAuth(security)).toBe(expected);
     });
 });

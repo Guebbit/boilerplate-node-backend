@@ -165,11 +165,120 @@ groups:
                 summary: 'A 5-minute sweep has not succeeded in 30 minutes'
                 description: '{{ $labels.job }} has not recorded a success in 30 minutes — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
 
-    # Credential attacks the guards audit and count (`security_events_total`, one series per
-    # `security.*` audit action). Thresholds are starting points for a quiet shop: tune to your
-    # traffic before trusting them.
-    - name: security.credentials
+    # Security signals. Every threshold below is a starting point sized for a quiet shop:
+    # "tune to your traffic" before trusting it. A busy deployment raises the rates; a quiet one
+    # may lower them. Label names are the ones the metrics register (see docs/tools/prometheus.md).
+    - name: security.rules
       rules:
+          # Credential stuffing, as a volume: failed logins per second, all accounts together.
+          # Tune to your traffic: 1/s is about a hundred failures a minute, far above typos.
+          - alert: LoginFailureRate
+            expr: sum(rate(auth_login_total{status="failure"}[5m])) > 1
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Failed logins above 1 per second'
+                description: 'auth_login_total{status="failure"} has averaged more than 1/s for 5 minutes — credential stuffing or a broken client.'
+
+          # Credential stuffing, as a share: most attempts failing while there is real traffic.
+          # The second condition keeps one stray failure on a quiet night from reading as 100 %.
+          # Tune to your traffic: both the 50 % and the 0.05/s floor.
+          - alert: LoginFailureShare
+            expr: |
+                (
+                    sum(rate(auth_login_total{status="failure"}[10m]))
+                    /
+                    sum(rate(auth_login_total[10m]))
+                ) > 0.5
+                and
+                sum(rate(auth_login_total[10m])) > 0.05
+            for: 10m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'More than half of login attempts are failing'
+                description: 'Over 50 % of logins failed for 10 minutes while traffic stayed above 3 per minute.'
+
+          # A failed 2FA challenge means the PASSWORD already checked out, so this is the sharpest
+          # sign of a stolen password. Tune to your traffic: 0.1/s is six failures a minute.
+          - alert: TwoFactorChallengeFailures
+            expr: sum(rate(auth_two_factor_challenge_total{status="failure"}[10m])) > 0.1
+            for: 10m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Login-time 2FA challenges are failing'
+                description: 'auth_two_factor_challenge_total{status="failure"} averaged more than 0.1/s for 10 minutes.'
+
+          # A stolen-but-fresh session probing for the second factor before it can strip it off.
+          # A rate above zero is the alert; there is no meaningful threshold above that.
+          - alert: TwoFactorDisableFailures
+            expr: sum(increase(auth_two_factor_disable_total{status="failure"}[15m])) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Someone failed to disable two-factor authentication'
+                description: 'auth_two_factor_disable_total{status="failure"} increased in the last 15 minutes.'
+
+          # The audit trail missed an entry the log still carries. The sink fails open on purpose,
+          # so this counter is the only thing that says the queryable trail has a hole.
+          - alert: AuditSinkFailing
+            expr: increase(audit_sink_failures_total[5m]) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'Audit entries are not being persisted'
+                description: 'audit_sink_failures_total increased in the last 5 minutes — GET /observability/audit is missing entries the log has.'
+
+          # Forced browsing and token probing: 401 and 403 answers per second, all routes together.
+          # Tune to your traffic: a SPA whose sessions expire together produces a short burst of 401.
+          - alert: UnauthorizedForbiddenRate
+            expr: sum(rate(http_requests_total{status_code=~"401|403"}[5m])) > 2
+            for: 10m
+            labels:
+                severity: warning
+            annotations:
+                summary: '401 and 403 answers above 2 per second'
+                description: 'The API has refused more than 2 requests per second for 10 minutes — a scanner, a broken client or an expired deployment secret.'
+
+          # The limits Redis is unreachable, so budgets count per process or fail open. A limit is
+          # weaker than configured for as long as this rises.
+          - alert: RateLimitStoreFallback
+            expr: increase(rate_limit_store_fallback_total[5m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Rate limits are running without the limits Redis'
+                description: 'rate_limit_store_fallback_total increased in the last 5 minutes for namespace {{ $labels.namespace }} — budgets are per process or open.'
+
+          # Callers are hitting a rate limit hard, the global brake included (it writes no audit
+          # entry, so this is its only trace). Tune to your traffic: 1/s is sustained, not a burst.
+          - alert: RateLimitRefusals
+            expr: sum by (budget) (rate(rate_limit_refusals_total[5m])) > 1
+            for: 10m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A rate limit is refusing more than 1 request per second'
+                description: 'Budget {{ $labels.budget }} has refused over 1 request per second for 10 minutes.'
+
+          # A promise nobody handled: an error lost, and whatever the promise was meant to finish.
+          # The process keeps running on purpose, so nothing else says it happened.
+          - alert: UnhandledRejections
+            expr: increase(process_unhandled_rejections_total[15m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A promise rejection went unhandled'
+                description: 'process_unhandled_rejections_total increased in the last 15 minutes — a bug, find it in the logs.'
+
+          # Credential attacks the guards audit and count (`security_events_total`, one series per
+          # `security.*` audit action). Tune to your traffic before trusting these thresholds.
           # A forged or garbled bearer has no customer behind it. A handful is a scanner; a steady
           # stream is someone testing tokens. Tune to your traffic: 10 per 15 minutes.
           - alert: ForgedBearerTokens

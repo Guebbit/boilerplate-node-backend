@@ -101,6 +101,19 @@ describe('handleEmailJob', () => {
         expect(logger.warn).toHaveBeenCalled();
     });
 
+    it('logs the template name of a refused job and nothing else of it', async () => {
+        await handleEmailJob({
+            request: { to: '' },
+            templateName: 'welcome',
+            data: { name: 'Ada' }
+        });
+
+        expect(logger.warn).toHaveBeenCalledWith({
+            message: 'Invalid email job payload, discarding.',
+            templateName: 'welcome'
+        });
+    });
+
     it('lets a failed send reject, so the broker requeues it', async () => {
         const failure = new Error('SMTP refused');
         mockedMailer.mockRejectedValue(failure);

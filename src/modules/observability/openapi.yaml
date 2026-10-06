@@ -13,6 +13,8 @@ paths:
                 Live Server-Sent Events stream for demo dashboards.
                 Sends `metrics.snapshot` on connect, followed by periodic `metrics.updated` and `heartbeat` events.
             operationId: getObservabilityEvents
+            security:
+                - cookieAuth: []
             responses:
                 '200':
                     description: Server-Sent Events stream
@@ -65,6 +67,8 @@ paths:
                 Intended for Prometheus scraping, not for browser clients.
                 Use `GET /observability/metrics/overview` for a JSON summary suitable for dashboards.
             operationId: getObservabilityMetrics
+            security:
+                - metricsBearer: []
             responses:
                 '200':
                     description: Prometheus exposition text

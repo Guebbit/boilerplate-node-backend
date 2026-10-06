@@ -194,6 +194,26 @@ describe('extractRequestContext', () => {
     });
 });
 
+describe("buildAuditEvent — the caller's own request id", () => {
+    it('records it in metadata, beside whatever metadata the call site gave', () => {
+        const event = buildAuditEvent(
+            { ...testCallerContext, clientRequestId: 'client-id-1' },
+            { action: 'auth.login', outcome: 'success', metadata: { route: '/x' } }
+        );
+
+        expect(event.metadata).toEqual({ route: '/x', client_request_id: 'client-id-1' });
+    });
+
+    it('adds no metadata when the caller sent none', () => {
+        const event = buildAuditEvent(testCallerContext, {
+            action: 'auth.login',
+            outcome: 'success'
+        });
+
+        expect(event).not.toHaveProperty('metadata');
+    });
+});
+
 describe('buildAuditEvent — default actor_role', () => {
     it('reports anonymous for a caller with no id', () => {
         const event = buildAuditEvent(testCallerContext, {

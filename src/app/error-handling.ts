@@ -15,6 +15,7 @@ import {
     getActiveSpanContext,
     recordErrorOnActiveSpan
 } from '@infrastructure/observability/tracer';
+import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
@@ -84,6 +85,33 @@ const resolveStatus = (error: Error): number => {
 };
 
 /**
+ * Names of the driver and ODM errors, by `name` rather than `instanceof`: `mongodb` and `bson`
+ * are transitive dependencies and a second copy would make `instanceof` answer false.
+ */
+const DATABASE_ERROR_NAME =
+    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
+
+/**
+ * What of an error may reach the log: the identifying fields, never the message.
+ *
+ * - a body-parser error: `type` only. Its message quotes the request body (`Unexpected token ...
+ *   in JSON`), and a client controls that body.
+ * - a Mongo/Mongoose error: name and code only. Its message carries the offending values (a
+ *   duplicate-key error names the email).
+ * - anything else: unchanged, the logger's own serializer decides.
+ *
+ * @param error - the unhandled error
+ * @param declaredClientError - whether the error declared itself a client error (`expose`, 4xx)
+ */
+const loggableError = (error: Error, declaredClientError: boolean): unknown => {
+    if (declaredClientError && 'type' in error && typeof error.type === 'string')
+        return { type: error.type };
+    if (DATABASE_ERROR_NAME.test(error.name))
+        return { name: error.name, code: 'code' in error ? error.code : undefined };
+    return error;
+};
+
+/**
  * Global error handler — log once, stack in OTel span.
  *
  * Exported so it can be driven directly. Mounted last, after the 404 catch-all, which is what an
@@ -91,11 +119,15 @@ const resolveStatus = (error: Error): number => {
  * — so a test cannot get at it by adding a throwing route to `app`.
  */
 export const handleUncaughtError = (
-    error: Error,
+    thrown: unknown,
     request: Request,
     response: Response,
     next: NextFunction
 ) => {
+    // Anything can be thrown (`throw 'boom'`, a rejected string); a bare non-object has no
+    // `name`, `message` or `status` to read, so wrap it once and treat it like any other error.
+    const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+
     // Too late to answer: the status line is already out. Express's own handler closes the
     // connection, where a bare return would leave a half-sent stream open.
     if (response.headersSent) {
@@ -106,6 +138,9 @@ export const handleUncaughtError = (
     recordErrorOnActiveSpan(error);
 
     const status = resolveStatus(error);
+    const logged = loggableError(error, clientErrorStatus(error) !== undefined);
+    // Same rule for the headline: a stripped error's message is exactly what must not be logged.
+    const headline = logged === error ? `${error.name}: ${error.message}` : error.name;
 
     // The raw `error`, not hand-picked `name`/`message` fields — same reasoning as the
     // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
@@ -114,11 +149,11 @@ export const handleUncaughtError = (
     // A client mistake (409 duplicate, 422 malformed) is the caller's problem, not an incident:
     // logged at `error` it would page someone for every bad request.
     // Stryker disable all
-    logger[status >= 500 ? 'error' : 'warn'](`${error.name}: ${error.message}`, {
+    logger[status >= 500 ? 'error' : 'warn'](headline, {
         request_id: request.requestId,
         trace_id: getActiveSpanContext().traceId,
         status,
-        error
+        error: logged
     });
     // Stryker restore all
 
@@ -167,6 +202,25 @@ export const handleUncaughtError = (
 };
 
 /**
+ * Counts and audit-logs a promise rejection nobody handled, then lets the process keep running.
+ *
+ * Keeping on is a documented choice: one lost promise is not proof the process state is unknown,
+ * unlike an uncaught exception. The counter is what makes it alertable instead of a log line.
+ *
+ * @param reason - whatever the promise was rejected with
+ */
+export const handleUnhandledRejection = (reason: unknown): void => {
+    processUnhandledRejectionsTotal.inc();
+    // The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
+    // (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
+    // output, so passing it whole is what keeps the stack in the log line outside production.
+    auditLogger.error('process.unhandledRejection', {
+        action: 'process.unhandledRejection',
+        error: reason
+    });
+};
+
+/**
  * Mount the global error handler and register the process-level handlers.
  *
  * Must be called after {@link installRoutes}: an express error handler only catches what was
@@ -185,15 +239,7 @@ export const installErrorHandling = (app: Express): void => {
     /*
      * Process-level error handlers — audit unhandled rejections/exceptions
      */
-    process.on('unhandledRejection', (reason) => {
-        // The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
-        // (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
-        // output, so passing it whole is what keeps the stack in the log line outside production.
-        auditLogger.error('process.unhandledRejection', {
-            action: 'process.unhandledRejection',
-            error: reason
-        });
-    });
+    process.on('unhandledRejection', handleUnhandledRejection);
 
     process.on('uncaughtException', (error, origin) => {
         // The raw `error`, not hand-picked `name`/`message` fields — see the unhandledRejection

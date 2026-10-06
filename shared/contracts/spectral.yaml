@@ -6,6 +6,20 @@ rules:
     operation-operationId: error
     operation-tags: error
 
+    # --- Every operation states who may call it ---
+    #
+    # An operation with no `security` is ambiguous: public on purpose, or forgotten? The answer
+    # has to be written down. `[]` is public; `[{}, {bearerAuth: []}]` is an optional session;
+    # anything else names the scheme. A contract lint like `operation-operationId`, not a census:
+    # it asks that the question be answered, never what the answer is.
+    operation-security-declared:
+        description: 'Every operation declares `security` — `[]` when it is public, so a forgotten guard is never mistaken for a deliberate one.'
+        severity: error
+        given: '$.paths[*][get,put,post,patch,delete]'
+        then:
+            field: security
+            function: truthy
+
     # --- Catch the common typo: $refs instead of $ref ---
     no-refs-typo:
         description: "Do not use '$refs' (typo). Use '$ref'."

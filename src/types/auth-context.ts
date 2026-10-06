@@ -202,6 +202,8 @@ export interface CallerContext {
     host?: string;
     /** The request id assigned by the request-id middleware, for correlating with the access log. */
     requestId?: string;
+    /** The caller's own `x-request-id`, when it sent a well-formed one — recorded, never trusted. */
+    clientRequestId?: string;
     /**
      * The language this request was made in, negotiated from `Accept-Language` — the FALLBACK for
      * copy addressed to someone whose own preference is unknown.

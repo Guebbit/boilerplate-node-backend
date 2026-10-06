@@ -7,9 +7,8 @@
  * `docs/theory/request-input.md` lists five contract bugs found by reading them against each
  * other **by hand** — which is not a thing anyone will remember to do twice.
  *
- * This is that comparison, automated. It is also what keeps the module registry honest: a domain
- * mounts itself from its own manifest, so a wrong `basePath` or a module missing from
- * `src/modules.ts` makes real operations unreachable, and this test is the only thing that notices.
+ * This is that comparison, automated. Whether the mounted routes and the spec list the same
+ * operations is a separate question, asked of the live routers in `route-spec-parity.test.ts`.
  *
  * **Direction of the assertion.** Declared sources must be a SUBSET of what the spec allows. A
  * controller reading a source the contract does not declare is undocumented input — the class of
@@ -31,7 +30,6 @@ import { parse } from 'yaml';
 import type { RequestInputSource } from '@infrastructure/http/request';
 
 const ROOT = path.resolve(__dirname, '../..');
-const HTTP_METHODS = new Set(['get', 'post', 'put', 'delete', 'patch']);
 
 interface MountedRoute {
     method: string;
@@ -352,28 +350,6 @@ describe('request sources agree with openapi.yaml', () => {
         const declaring = [...controllerFiles].filter((file) => readDeclaredSources(file).size > 0);
 
         expect(declaring.length).toBeGreaterThan(10);
-    });
-
-    it('every mounted route exists in the spec', () => {
-        const missing = mountedRoutes
-            .filter(({ specPath, method }) => !spec.paths?.[specPath]?.[method])
-            .map(({ method, specPath }) => `${method.toUpperCase()} ${specPath}`);
-
-        expect(missing).toEqual([]);
-    });
-
-    it('every spec operation is mounted', () => {
-        const mounted = new Set(
-            mountedRoutes.map(({ method, specPath }) => `${method} ${specPath}`)
-        );
-        const unmounted: string[] = [];
-
-        for (const [specPath, item] of Object.entries(spec.paths))
-            for (const method of Object.keys(item))
-                if (HTTP_METHODS.has(method) && !mounted.has(`${method} ${specPath}`))
-                    unmounted.push(`${method.toUpperCase()} ${specPath}`);
-
-        expect(unmounted).toEqual([]);
     });
 
     /**

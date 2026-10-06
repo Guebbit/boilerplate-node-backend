@@ -282,6 +282,31 @@ export const requiredResponseHeaders = (
     return byOperation;
 };
 
+/**
+ * Whether one alternative of a `security` list is the empty object `{}`: the "no credential"
+ * alternative.
+ *
+ * @param alternative - one entry of the list
+ */
+const isEmptyRequirement = (alternative: unknown): boolean =>
+    typeof alternative === 'object' &&
+    alternative !== null &&
+    Object.keys(alternative).length === 0;
+
+/**
+ * Whether an operation's `security` demands a credential.
+ *
+ * Absent or `[]` is public. An alternative that is the empty object `{}` makes the whole list
+ * optional (OpenAPI 3.0.3, "Security Requirement Object"): a request with no credential is one of
+ * the accepted shapes, so a session may be present but is not required.
+ *
+ * @param security - the operation's `security` value, as parsed
+ */
+export const securityRequiresAuth = (security: unknown): boolean =>
+    Array.isArray(security) &&
+    security.length > 0 &&
+    security.every((alternative) => !isEmptyRequirement(alternative));
+
 /** Every operation the spec declares, in document order. */
 export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => {
     const operations: Operation[] = [];
@@ -320,7 +345,7 @@ export const listOperations = (spec: SpecDocument = readSpec()): Operation[] => 
                     spec
                 ),
                 isMultipart: Boolean(content?.['multipart/form-data']),
-                requiresAuth: Array.isArray(operation.security) && operation.security.length > 0
+                requiresAuth: securityRequiresAuth(operation.security)
             });
         }
     }

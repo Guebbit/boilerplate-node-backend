@@ -14,6 +14,7 @@ import { trace, SpanStatusCode, type Span, type Attributes } from '@opentelemetr
 // rejection that is not an `Error` still yields its message. `String(error)` is the fallback
 // rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
 import { extractErrorMessage } from '@guebbit/js-toolkit';
+import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 
 /**
  * Single tracer scoped to this service.
@@ -71,7 +72,7 @@ export const withSpan = <T>(
                     });
                     // `recordException` additionally attaches a structured exception *event*
                     // (type, message, stack) — richer than the status message alone.
-                    if (error instanceof Error) span.recordException(error);
+                    if (error instanceof Error) recordSanitisedException(span, error);
                     span.end();
                     // Re-throw: this wrapper observes, it never swallows. Callers keep their
                     // existing error handling unchanged.
@@ -87,6 +88,21 @@ export const withSpan = <T>(
  * meaningless all-zeros id that looks like real data.
  */
 const isValidOtelId = (id: string) => Boolean(id) && !/^0+$/.test(id);
+
+/**
+ * Attach an exception event to a span, without the stack trace outside a relaxed environment.
+ *
+ * `recordException(error)` writes `exception.stacktrace`: absolute paths and dependency internals,
+ * shipped to whichever backend collects traces. Outside development and test only the error's
+ * `name` is recorded, since its message can carry request data (the span status keeps the message).
+ *
+ * @param span - the span to annotate
+ * @param error - what was thrown
+ */
+const recordSanitisedException = (span: Span, error: Error): void => {
+    // https://opentelemetry.io/docs/specs/semconv/exceptions/exceptions-spans/
+    span.recordException(isRelaxedEnvironment() ? error : { name: error.name });
+};
 
 /**
  * Return the trace ID and span ID from the currently active OTel span, if any.
@@ -122,7 +138,7 @@ export const recordErrorOnActiveSpan = (error: unknown): void => {
         code: SpanStatusCode.ERROR,
         message: extractErrorMessage(error, String(error))
     });
-    if (error instanceof Error) span.recordException(error);
+    if (error instanceof Error) recordSanitisedException(span, error);
     // Note: deliberately does NOT call `span.end()`. The span belongs to whoever opened it
     // (usually the auto-instrumentation's request span) and ending it here would truncate it.
 };
