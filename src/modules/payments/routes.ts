@@ -19,7 +19,7 @@
  *                same as `products/routes.ts` mounts `locales`-owned `translations.*`.
  * Card testing:  `POST /:id/confirm` alone additionally carries the payment-velocity budgets — the
  *                confirm is where a card number is actually validated, `/intent` merely freezes a
- *                price. See `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter`.
+ *                price. See `paymentConfirmAttemptLimiter`/`paymentConfirmDeclineLimiter`/`paymentConfirmDeclineBlockLimiter`.
  */
 
 import { Router } from 'express';
@@ -34,6 +34,7 @@ import {
     webhookLimiter,
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
+    paymentConfirmDeclineBlockLimiter,
     paymentDeclineChallengeGate
 } from './rate-limits';
 import {
@@ -110,7 +111,7 @@ router.post(
     postPaymentOffline
 );
 
-// POST /payments/:id/confirm — the payment form's submit. The two velocity limiters and the
+// POST /payments/:id/confirm — the payment form's submit. The three velocity limiters and the
 // challenge gate sit between the identity guards and idempotencyKey, mirroring where
 // `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`.
 router.post(
@@ -120,6 +121,7 @@ router.post(
     requirePermission('cart.self.checkout'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
+    paymentConfirmDeclineBlockLimiter,
     paymentDeclineChallengeGate,
     idempotencyKey,
     postPaymentConfirm

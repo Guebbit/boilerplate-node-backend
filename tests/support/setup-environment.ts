@@ -102,6 +102,7 @@ process.env.NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX ??= '1000';
  */
 process.env.NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX ??= '1000';
+process.env.NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX ??= '1000';
 
 /**
  * `invoicingLimiter` needs the same treatment: keyed on the ACCOUNT, and a contract suite

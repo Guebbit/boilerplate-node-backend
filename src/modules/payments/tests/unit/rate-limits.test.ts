@@ -10,6 +10,10 @@
  * `../integration/payment-velocity.test.ts`.
  */
 import { paymentsRateLimits } from '@modules/payments/rate-limits';
+import {
+    addressBlockOf,
+    KEYED_BY_ADDRESS_BLOCK
+} from '@infrastructure/http/middlewares/rate-limit';
 import { budgetIn } from '@tests/rate-limit-budgets';
 
 /** One of this module's own declared budgets, by its `namespace`. */
@@ -26,6 +30,26 @@ describe('paymentConfirmAttemptLimiter and paymentConfirmDeclineLimiter', () => 
         expect(budget('payments-confirm-attempts').windowMs).not.toBe('shared');
         expect(budget('payments-confirm-attempts').windowMs).toBe(
             budget('payments-confirm-declines').windowMs
+        );
+    });
+
+    it('keys the block budget on the address block, looser than the account budget because a block is shared', () => {
+        const block = budget('payments-confirm-declines-block');
+
+        expect(block.keyedBy).toBe(KEYED_BY_ADDRESS_BLOCK);
+        expect(block.keyGenerator).toBe(addressBlockOf);
+        expect(block.defaultMax).toBeGreaterThan(budget('payments-confirm-declines').defaultMax);
+        expect(block.environmentVariable).toBe('NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX');
+        expect(block.windowMs).toBe(budget('payments-confirm-declines').windowMs);
+    });
+
+    it('spends the block budget on a genuine decline only, under its own request property', () => {
+        const block = budget('payments-confirm-declines-block');
+
+        expect(block.skipSuccessfulRequests).toBe(true);
+        expect(block.requestPropertyName).toBeDefined();
+        expect(block.requestPropertyName).not.toBe(
+            budget('payments-confirm-declines').requestPropertyName
         );
     });
 

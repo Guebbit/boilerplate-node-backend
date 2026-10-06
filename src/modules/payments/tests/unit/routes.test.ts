@@ -97,7 +97,7 @@ describe('payment routes', () => {
     it('guards the sync exactly as it guards the confirm, plus the velocity budgets and idempotency key confirm alone carries', () => {
         // `sync` settles money just as `confirm` does — from the provider's answer rather than
         // from a method the caller supplied — so it carries every guard `confirm` does, not
-        // fewer. The deliberate exceptions are the two payment-velocity limiters, the decline
+        // fewer. The deliberate exceptions are the three payment-velocity limiters, the decline
         // challenge gate and `idempotencyKey`: card testing validates a card at CONFIRM, `sync`
         // never accepts a `paymentMethodRef`, and `sync` is already idempotent by construction,
         // keyed on the provider's own payment reference. Compared as a whole rather than named
@@ -107,6 +107,7 @@ describe('payment routes', () => {
             ...withoutHandler('POST /:id/sync'),
             'payments-confirm-attempts',
             'payments-confirm-declines',
+            'payments-confirm-declines-block',
             'paymentDeclineChallengeGate',
             'idempotencyKey'
         ]);
