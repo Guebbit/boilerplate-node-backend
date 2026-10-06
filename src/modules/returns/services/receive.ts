@@ -38,7 +38,7 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { RETURN_RECEIVED } from '../events';
-import { RECEIVABLE_RETURN_STATUSES } from '../domain';
+import { RECEIVABLE_RETURN_STATUSES, wireLines } from '../domain';
 import { closeReturn } from './close';
 import { syncReturnStatus } from './projection';
 import { refundAmountFor, type RefundBreakdown } from './refund-amount';
@@ -116,10 +116,7 @@ const claimAndRestock = (
         if (!received) return null;
 
         await inventoryService.restockReturnedLines(
-            received.lines.map(({ productId, quantity }) => ({
-                productId: String(productId),
-                quantity
-            })),
+            wireLines(received.lines),
             { reference: String(received.orderId), note: `return ${String(received._id)}` },
             session
         );

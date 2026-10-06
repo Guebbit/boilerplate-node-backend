@@ -41,7 +41,9 @@ import {
     QUANTITY_HOLDING_RETURN_STATUSES,
     checkRequestedLines,
     initialStatusFor,
-    returnableQuantities
+    returnableLinesOf,
+    returnableQuantities,
+    wireLines
 } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { mailReturnNotice } from './notify';
@@ -211,16 +213,13 @@ const withdrawBeforeDispatch = (
  * @param session - the opening's transaction, so the read happens under the order's lock
  */
 const alreadyReturned = (orderId: string, session: ClientSession): Promise<ProductQuantity[]> =>
-    returnRepository.findByOrderId(orderId, session).then((returns) =>
-        returns
-            .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
-            .flatMap(({ lines }) =>
-                lines.map(({ productId, quantity }) => ({
-                    productId: String(productId),
-                    quantity
-                }))
-            )
-    );
+    returnRepository
+        .findByOrderId(orderId, session)
+        .then((returns) =>
+            returns
+                .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
+                .flatMap(({ lines }) => wireLines(lines))
+        );
 
 /**
  * Write the return once its lines are decided: freeze what is coming back. Announcing it is the
@@ -285,12 +284,7 @@ const openUnderLock = (
             .then((earlier) => {
                 const verdict = checkRequestedLines(
                     returnableQuantities(
-                        order.items
-                            .filter((item) => !isExcludedFromWithdrawal(item))
-                            .map((item) => ({
-                                productId: String(item.product._id),
-                                quantity: item.quantity
-                            })),
+                        returnableLinesOf(order.items, isExcludedFromWithdrawal),
                         earlier
                     ),
                     input.lines

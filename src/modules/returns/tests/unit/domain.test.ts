@@ -9,7 +9,9 @@ import {
     RECEIVABLE_RETURN_STATUSES,
     checkRequestedLines,
     initialStatusFor,
-    returnableQuantities
+    returnableLinesOf,
+    returnableQuantities,
+    wireLines
 } from '../../domain';
 
 describe('initialStatusFor', () => {
@@ -39,6 +41,33 @@ describe('the lifecycle sets', () => {
         expect(QUANTITY_HOLDING_RETURN_STATUSES).toEqual(
             expect.arrayContaining(['requested', 'approved', 'received', 'closed'])
         );
+    });
+});
+
+describe('wireLines', () => {
+    it('keys each line by the id as a string and keeps the quantity', () => {
+        const id = { toString: () => 'abc123' };
+
+        expect(wireLines([{ productId: id, quantity: 2 }])).toEqual([
+            { productId: 'abc123', quantity: 2 }
+        ]);
+    });
+});
+
+describe('returnableLinesOf', () => {
+    const items = [
+        { product: { _id: { toString: () => 'a' } }, quantity: 1, digital: false },
+        { product: { _id: { toString: () => 'b' } }, quantity: 3, digital: true }
+    ];
+
+    it('drops the goods the predicate excludes and keys the rest by string id', () => {
+        expect(returnableLinesOf(items, (item) => item.digital)).toEqual([
+            { productId: 'a', quantity: 1 }
+        ]);
+    });
+
+    it('keeps everything when nothing is excluded', () => {
+        expect(returnableLinesOf(items, () => false)).toHaveLength(2);
     });
 });
 
