@@ -201,7 +201,7 @@ export const startTracing = (): void => {
         [ATTR_SERVICE_NAME]: loggingConfig().NODE_SERVICE_NAME,
         // `service.version` — npm injects `npm_package_version` when started via an npm script,
         // which lets you correlate a latency/error regression with a specific release.
-        [ATTR_SERVICE_VERSION]: tracingConfig().npm_package_version ?? '0.0.0'
+        [ATTR_SERVICE_VERSION]: tracingConfig().npm_package_version
     });
 
     // Instantiate the SDK. Nothing is patched or exported yet — that happens in `start()` below.

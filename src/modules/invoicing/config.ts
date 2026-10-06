@@ -14,7 +14,7 @@ export const invoicingConfig = defineConfig({
     shape: {
         NODE_EINVOICING_PROVIDER: text({
             default: 'pdf',
-            lower: true,
+            case: 'lower',
             describe: 'The e-invoicing implementation. Only `pdf` ships.'
         }),
         NODE_INVOICE_PDF_RETENTION_DAYS: int({

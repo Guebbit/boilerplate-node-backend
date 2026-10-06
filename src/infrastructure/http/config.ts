@@ -17,6 +17,7 @@ export const siteConfig = defineConfig({
     name: 'site',
     shape: {
         NODE_URL: text({
+            default: 'http://localhost:3000',
             required: { minLength: 1 },
             describe:
                 'This API’s public origin. OAuth redirect URIs and security.txt are built from it.'
@@ -32,6 +33,7 @@ export const siteConfig = defineConfig({
                 'The paired frontend’s origin. Links in mail and the OAuth callback point here. Unset allows `http://localhost:8080` in development and test only.'
         }),
         NODE_CORS_ORIGIN: csv({
+            default: ['http://localhost:8080'],
             required: { minLength: 1, productionOnly: true },
             describe:
                 'Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`.'

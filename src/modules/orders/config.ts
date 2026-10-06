@@ -69,7 +69,7 @@ export const ordersConfig = defineConfig({
         NODE_RETURN_ADDRESS_CITY: text({ describe: 'Return address city.' }),
         NODE_RETURN_ADDRESS_ZIP: text({ describe: 'Return address postal code.' }),
         NODE_RETURN_ADDRESS_COUNTRY: text({
-            upper: true,
+            case: 'upper',
             describe: 'Return address country, ISO-3166 alpha-2.'
         }),
         NODE_RETURN_POSTAGE_PAYER: choice(RETURN_POSTAGE_PAYERS, {
@@ -77,7 +77,7 @@ export const ordersConfig = defineConfig({
             describe: 'Who bears the direct cost of returning goods. Drives the withdrawal wording.'
         }),
         NODE_SHIP_TO_COUNTRIES: csv({
-            upper: true,
+            case: 'upper',
             describe:
                 'Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own.'
         }),

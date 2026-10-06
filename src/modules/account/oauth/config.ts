@@ -93,14 +93,12 @@ export const isOAuthProviderConfigured = (name: string): boolean => {
  * `redirect_uri`, and so does `new URL()` in anything that parses our own `Location` back.
  * Concatenation made that depend on `NODE_URL` carrying a trailing slash:
  * `https://api.example.com` with no slash produced `https://api.example.comaccount/oauth/…`, and
- * `NODE_URL` unset produced a path with no leading slash. `URL` resolves both. The localhost
- * fallback only ever applies where the boot-time `NODE_URL` check is skipped — which is
- * `NODE_ENV=test`, and nothing else (`infrastructure/config/define.ts`).
+ * `NODE_URL` unset produced a path with no leading slash. `URL` resolves both. An unset `NODE_URL`
+ * reads as the localhost default, which only a skipped boot check (`NODE_ENV=test`) lets through.
  *
  * @param path - relative to `NODE_URL`, no leading slash
  */
-const backendUrl = (path: string): string =>
-    new URL(path, siteConfig().NODE_URL ?? 'http://localhost:3000/').href;
+const backendUrl = (path: string): string => new URL(path, siteConfig().NODE_URL).href;
 
 /**
  * The redirect URI this app presents to every provider for `provider` — always derived from

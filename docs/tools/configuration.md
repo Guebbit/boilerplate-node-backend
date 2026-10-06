@@ -270,7 +270,7 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `OTEL_EXPORTER_OTLP_ENDPOINT`        | text   | —       | —     | OTLP collector for every signal. Unset drops spans.                                                                                                                         |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | text   | —       | —     | OTLP collector for traces only; wins over the endpoint above.                                                                                                               |
 | `NODE_TRUSTED_INGRESS`               | switch | `off`   | —     | A trusted proxy in front of the API strips or overwrites traceparent and x-request-id. On: continue the caller's trace and keep its request id. Off: both start fresh here. |
-| `npm_package_version`                | text   | —       | —     | Set by npm when started through a script; stamped on spans.                                                                                                                 |
+| `npm_package_version`                | text   | `0.0.0` | —     | Set by npm when started through a script; stamped on spans.                                                                                                                 |
 
 ### pseudonymisation
 
@@ -384,9 +384,9 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 | Variable            | Type                 | Default                 | Rules                                             | What it does                                                                                                                                      |
 | ------------------- | -------------------- | ----------------------- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_URL`          | text                 | —                       | required, 1+ characters                           | This API’s public origin. OAuth redirect URIs and security.txt are built from it.                                                                 |
+| `NODE_URL`          | text                 | `http://localhost:3000` | required, 1+ characters                           | This API’s public origin. OAuth redirect URIs and security.txt are built from it.                                                                 |
 | `NODE_FRONTEND_URL` | text                 | `http://localhost:8080` | required, 1+ characters, outside development/test | The paired frontend’s origin. Links in mail and the OAuth callback point here. Unset allows `http://localhost:8080` in development and test only. |
-| `NODE_CORS_ORIGIN`  | comma-separated list | `empty`                 | required, 1+ characters, outside development/test | Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`.                                         |
+| `NODE_CORS_ORIGIN`  | comma-separated list | `http://localhost:8080` | required, 1+ characters, outside development/test | Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`.                                         |
 
 ### rate-limit
 

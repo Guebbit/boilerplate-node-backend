@@ -13,7 +13,7 @@ import type { HumanChallengeProvider, IssuedChallenge } from './index';
 import type { RungVerdict } from '../antibot-verdict';
 import { claim, isSpent } from './altcha-store';
 import { isPlainObject } from '@infrastructure/object-guards';
-import { antibotConfig } from '@infrastructure/adapters/config';
+import { ALTCHA_SECRET_MIN_LENGTH, antibotConfig } from '@infrastructure/adapters/config';
 
 /**
  * PBKDF2 rather than Argon2id: it runs on WebCrypto everywhere, while Argon2 is native only on
@@ -34,7 +34,7 @@ const TTL_SECONDS = 300;
  */
 const signatureSecret = (): string => {
     const secret = antibotConfig().NODE_ANTIBOT_ALTCHA_SECRET ?? '';
-    if (secret.length < 16)
+    if (secret.length < ALTCHA_SECRET_MIN_LENGTH)
         throw new Error('NODE_ANTIBOT_PROVIDER is altcha but its secret is unset or too short.');
     return secret;
 };

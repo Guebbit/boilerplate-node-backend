@@ -4,7 +4,7 @@
  * `text`, `email`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
- * "empty string is not a value" rule t3-environment calls `emptyStringAsUndefined`). A value that is set
+ * "empty string is not a value" rule t3-env calls `emptyStringAsUndefined`). A value that is set
  * and wrong is an ISSUE, never a silent fallback — that is the whole point of moving off the old
  * `environmentNumber(key, fallback)` readers.
  *
@@ -290,12 +290,24 @@ export function choice<const T extends string>(
     );
 }
 
+/** Which way a text value is normalised: every character lower- or upper-cased. */
+export type TextCase = 'lower' | 'upper';
+
+/**
+ * Apply a {@link TextCase}; no case leaves the value as written.
+ *
+ * @param value - a trimmed value
+ * @param mode - the case to normalise to, if any
+ */
+const applyCase = (value: string, mode: TextCase | undefined): string => {
+    if (mode === 'lower') return value.toLowerCase();
+    return mode === 'upper' ? value.toUpperCase() : value;
+};
+
 /** Options for {@link text}. */
 export interface TextOptions extends CommonOptions {
-    /** Lower-case the value. */
-    lower?: boolean;
-    /** Upper-case the value. */
-    upper?: boolean;
+    /** Normalise the value's case. */
+    case?: TextCase;
     /** Keep the value exactly as written: no trim, and a blank one stays blank. */
     verbatim?: boolean;
 }
@@ -308,12 +320,12 @@ export interface TextOptions extends CommonOptions {
 export function text(options: TextOptions & { default: string }): Field<string>;
 export function text(options?: TextOptions): Field<string | undefined>;
 export function text(options: TextOptions & { default?: string } = {}): Field<string | undefined> {
-    const normalise = (value: string): string => {
-        if (options.lower) return value.toLowerCase();
-        return options.upper ? value.toUpperCase() : value;
-    };
-    // Zod: `.transform` maps the validated string through `normalise`. https://zod.dev/api#transform
-    return build(z.string().transform(normalise), 'text', options);
+    // Zod: `.transform` maps the validated string through `applyCase`. https://zod.dev/api#transform
+    return build(
+        z.string().transform((value) => applyCase(value, options.case)),
+        'text',
+        options
+    );
 }
 
 /**
@@ -351,10 +363,10 @@ export const secret = (options: CommonOptions & Presence): Field<string | undefi
 
 /** Options for {@link csv}. */
 export interface CsvOptions extends CommonOptions {
-    /** Upper-case every member. */
-    upper?: boolean;
-    /** Lower-case every member. */
-    lower?: boolean;
+    /** Normalise every member's case. */
+    case?: TextCase;
+    /** The members an unset variable takes; the empty list when absent. */
+    default?: readonly string[];
 }
 
 /**
@@ -373,18 +385,19 @@ const listRule = (normalise: (member: string) => string): z.ZodType<string[]> =>
     );
 
 /**
- * A comma-separated list. Unset is the empty list.
+ * A comma-separated list. Unset is the empty list, unless a `default` says otherwise.
  *
- * @param options - `describe`, and `upper`/`lower` to normalise each member
+ * @param options - `describe`, `case` to normalise each member, `default` for an unset value
  */
 export const csv = (options: CsvOptions = {}): Field<string[]> =>
     build(
-        listRule((member) => {
-            if (options.lower) return member.toLowerCase();
-            return options.upper ? member.toUpperCase() : member;
-        }),
+        listRule((member) => applyCase(member, options.case)),
         'comma-separated list',
-        { ...options, default: [], renderDefault: () => 'empty' }
+        {
+            ...options,
+            default: [...(options.default ?? [])],
+            renderDefault: (members) => (members.length > 0 ? members.join(',') : 'empty')
+        }
     );
 
 /**
