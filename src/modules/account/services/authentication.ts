@@ -109,7 +109,7 @@ const DUMMY_PASSWORD_HASH = hashPasswordSync(randomBytes(32).toString('hex'));
  * direction is SHORTER, and that trade against a user who reads mail on a delay is a
  * deployment's call, not this file's.
  */
-const PASSWORD_RESET_TOKEN_TTL_MS = accountConfig().NODE_PASSWORD_RESET_TTL_MS;
+const passwordResetTokenTtlMs = (): number => accountConfig().NODE_PASSWORD_RESET_TTL_MS;
 
 /**
  * Seconds between two reset mails for one account. A second request inside the window is skipped
@@ -144,7 +144,7 @@ const resetRecentlySent = (user: UserDocument): boolean =>
 const issueResetToken = (user: UserDocument): Promise<string> =>
     userService
         .tokenRemoveAll(user, PASSWORD_RESET_TOKEN_TYPE)
-        .then(() => tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, PASSWORD_RESET_TOKEN_TTL_MS));
+        .then(() => tokenAdd(user, PASSWORD_RESET_TOKEN_TYPE, passwordResetTokenTtlMs()));
 
 /**
  * Issue a password-reset token and deliver it — or silently do nothing for an unregistered
