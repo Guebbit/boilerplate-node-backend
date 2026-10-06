@@ -107,11 +107,11 @@ preference on the account still wins, exactly as it does for a password login.
 flowchart TD
     E["exchangeCode → OAuthIdentity"] --> Q1{"(provider, providerId)<br/>already on file?"}
     Q1 -->|"yes"| L["log in<br/><i>case 1</i>"]
-    Q1 -->|"no"| Q2{"an account with<br/>this email?"}
-    Q2 -->|"no"| S["sign up, password-less<br/><i>case 3</i>"]
-    Q2 -->|"yes"| Q3{"provider vouches<br/>for the address?"}
-    Q3 -->|"yes"| K["link the identity<br/><i>case 2</i>"]
+    Q1 -->|"no"| Q3{"provider vouches<br/>for the address?"}
     Q3 -->|"no"| X["refuse —<br/>?error=email_unverified"]
+    Q3 -->|"yes"| Q2{"an account with<br/>this email?"}
+    Q2 -->|"no"| S["sign up, password-less<br/><i>case 3</i>"]
+    Q2 -->|"yes"| K["link the identity<br/><i>case 2</i>"]
 
     classDef ok fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef bad fill:#fee2e2,stroke:#dc2626,color:#111827;
@@ -123,8 +123,9 @@ flowchart TD
 An email match is consulted **only** when no identity is on file, and it only ever **links** — it
 never logs anyone in on its own. A provider's email can change while its subject id cannot, and
 anyone able to register an OAuth app under a victim's address must not be able to walk into that
-account. `emailVerified` is the provider's own claim, and an unverified match is refused rather
-than linked.
+account. `emailVerified` is the provider's own claim, and an unverified address is refused outright:
+it neither links to an account nor creates one, since a signup stamps the address as verified and
+would pre-hijack it.
 :::
 
 Two identities minting the **same** never-before-seen account at once is the race the
@@ -146,13 +147,13 @@ Only two failures answer with a body. Everything past the state check redirects 
 with `?error=<code>`, because by then the browser is mid-navigation and a JSON body has nowhere to
 be read:
 
-| Failure                                  | Answer                        |
-| ---------------------------------------- | ----------------------------- |
-| provider never configured                | `404`                         |
-| `state` missing or mismatched            | `400`                         |
-| consent declined                         | `302 ?error=access_denied`    |
-| no `code`, or the exchange failed        | `302 ?error=provider_error`   |
-| email match the provider won't vouch for | `302 ?error=email_unverified` |
+| Failure                            | Answer                        |
+| ---------------------------------- | ----------------------------- |
+| provider never configured          | `404`                         |
+| `state` missing or mismatched      | `400`                         |
+| consent declined                   | `302 ?error=access_denied`    |
+| no `code`, or the exchange failed  | `302 ?error=provider_error`   |
+| email the provider won't vouch for | `302 ?error=email_unverified` |
 
 The success path calls the same `issueSession` [`postLogin`](./account-sessions.md) does, with
 `amr: [provider.name]` — so a Google login records **how** it was proved, and the freshness guards

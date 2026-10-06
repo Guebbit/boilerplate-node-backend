@@ -91,6 +91,11 @@ describe('isSameOriginPath', () => {
         expect(isSameOriginPath('//evil.example/phish')).toBe(false);
     });
 
+    it('rejects a backslash that a browser reads as a second slash', () => {
+        expect(isSameOriginPath(String.raw`/\evil.example`)).toBe(false);
+        expect(isSameOriginPath('/\t/evil.example')).toBe(false);
+    });
+
     it('rejects an absolute URL', () => {
         expect(isSameOriginPath('https://evil.example/phish')).toBe(false);
     });

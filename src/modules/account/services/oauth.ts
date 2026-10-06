@@ -206,8 +206,8 @@ export type OAuthOutcome = 'login' | 'link' | 'signup';
  * @param identity - what the provider's token exchange resolved
  * @param context - for the link/signup audit and analytics emitted here
  * @returns the resolved user, tagged with which branch produced it — see {@link OAuthOutcome}
- * @throws {@link OAuthEmailUnverifiedError} when an existing account matches by email but the
- *   provider does not vouch for it
+ * @throws {@link OAuthEmailUnverifiedError} when the provider does not vouch for the address, whether or not an
+ *   account already holds it
  * @throws {@link OAuthAccountUnverifiedError} when it matches an account that never proved that
  *   address itself
  */
@@ -227,13 +227,15 @@ export const loginOrCreateFromOAuth = (
             // Same reason as the lookup above: `linkToExistingAccount` below may hand this
             // account straight to a 2FA challenge too.
             return userService.findByEmail(identity.email).then((byEmail) => {
+                // Unverified is refused on BOTH branches: a signup would stamp `verifiedAt` on an
+                // address nobody proved, which pre-hijacks it (Sudhodanan & Paverd 2022).
+                if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
+
                 if (!byEmail)
                     return signupFromOAuth(provider, identity, context).then((user) => ({
                         user,
                         outcome: 'signup' as const
                     }));
-
-                if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
 
                 // Both sides must have proved the address, not just the provider — see
                 // `OAuthAccountUnverifiedError`.

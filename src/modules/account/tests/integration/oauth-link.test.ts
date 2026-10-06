@@ -199,6 +199,14 @@ describe('loginOrCreateFromOAuth — case 3: a never-seen identity and email', (
         );
     });
 
+    it('refuses an unverified email and creates no user', async () => {
+        await expect(
+            loginOrCreateFromOAuth('google', identity({ emailVerified: false }), testCallerContext)
+        ).rejects.toBeInstanceOf(OAuthEmailUnverifiedError);
+
+        expect(await userRepository.count({})).toBe(0);
+    });
+
     it('lets the SAME identity sign up with either provider independently', async () => {
         const google = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
         const github = await loginOrCreateFromOAuth(

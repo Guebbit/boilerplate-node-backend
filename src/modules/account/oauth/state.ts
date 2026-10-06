@@ -109,16 +109,29 @@ export const stateMatches = (cookieValue: unknown, queryValue: unknown): boolean
     cookieValue === queryValue;
 
 /**
+ * A stand-in origin to resolve a relative value against; any path that resolves elsewhere left it.
+ */
+const PLACEHOLDER_ORIGIN = 'http://same-origin.invalid';
+
+/**
  * Whether `value` is a same-origin, relative path — the one shape a `continue` target is ever
  * allowed to take, matching the password-login flow's own guard
  * (`usePostLoginRedirect#isSameOriginPath` on the frontend) exactly rather than inventing a
- * second rule: one leading `/` rules out both an absolute URL and `//evil.example`, a
- * protocol-relative address a browser follows off-site. Applied twice — once at the start
+ * second rule: the value must resolve to the same origin, which rules out an absolute URL,
+ * `//evil.example` and `/\evil.example`, addresses a browser follows off-site. Applied twice — once at the start
  * controller, against the query param, and again at the callback, against the cookie it was
  * saved into, since a cookie is client-writable and never trusted on its value alone.
  */
-export const isSameOriginPath = (value: unknown): value is string =>
-    typeof value === 'string' && value.startsWith('/') && !value.startsWith('//');
+export const isSameOriginPath = (value: unknown): value is string => {
+    if (typeof value !== 'string' || !value.startsWith('/')) return false;
+    // WHATWG URL parsing is what a browser does: it reads `/\evil.example` (backslash as slash)
+    // and strips tabs/newlines, so the resolved origin is the truth a prefix check cannot see.
+    // https://url.spec.whatwg.org/#concept-basic-url-parser
+    return (
+        URL.canParse(value, PLACEHOLDER_ORIGIN) &&
+        new URL(value, PLACEHOLDER_ORIGIN).origin === PLACEHOLDER_ORIGIN
+    );
+};
 
 /**
  * Language subtags of a BCP 47 tag, `it`, `pt-BR`, `zh-Hant-TW`: 2-3 letters, then up to three
