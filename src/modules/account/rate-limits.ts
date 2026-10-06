@@ -63,7 +63,7 @@ const KEYED_BY_ACCOUNT_OR_SUBMITTED_EMAIL =
  * The id is prefixed so it can never collide with a pseudonymised email. It is already an opaque
  * id, the same value `payments` keys its per-account budgets on.
  */
-export const credentialIdentityOf = (request: Request): string =>
+const credentialIdentityOf = (request: Request): string =>
     request.authContext ? `account:${request.authContext.id}` : identityOf(request);
 
 /** Failed attempts against ONE account — the smallest of the three credential budgets. */
