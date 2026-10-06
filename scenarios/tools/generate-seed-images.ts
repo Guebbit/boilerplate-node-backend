@@ -39,7 +39,7 @@ interface ImageEntry {
 }
 
 /** The five named product roles that keep an image — `barebones` deliberately has none, since
- * its whole point is exercising the schema's own `imageUrl` default. The filler roles are a
+ * its whole point is a product with no image field at all. The filler roles are a
  * fixed pool (`FILLER_IMAGE_ROLE_KEYS`), independent of how large the generated catalogue grid
  * is — `scenarios/products.ts` cycles through them, so growing the grid never needs a new
  * download. */

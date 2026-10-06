@@ -9,6 +9,7 @@
 import type { Response } from 'express';
 import { REFRESH_COOKIE } from '@kernel/cookies';
 import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
+
 /**
  * Flags shared by every cookie this module treats as a credential — `createRefreshCookie`,
  * `destroyRefreshCookie`, and (via `../oauth/state.ts` and `../oauth/mfa-redirect.ts`) the
