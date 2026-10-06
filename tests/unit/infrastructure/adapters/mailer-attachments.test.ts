@@ -49,7 +49,7 @@ afterEach(async () => {
 });
 
 describe('resolveAttachments — resolving attachments', () => {
-    it('hands nodemailer a resolved path, never the spool key', async () => {
+    it('hands nodemailer the file bytes, never a path or the spool key', async () => {
         const key = await spoolAttachment(Buffer.from('pdf-bytes'), 'pdf');
 
         await sendTemplatedEmail(
@@ -60,8 +60,30 @@ describe('resolveAttachments — resolving attachments', () => {
 
         const [sent] = sendMailMock.mock.calls[0] as [{ attachments?: unknown }];
         expect(sent.attachments).toEqual([
-            { filename: 'invoice-2026-000041.pdf', path: path.join(spoolRoot, key) }
+            { filename: 'invoice-2026-000041.pdf', content: Buffer.from('pdf-bytes') }
         ]);
+    });
+
+    it('builds the message from named fields, so a forged job cannot set from, cc or headers', async () => {
+        // A job the schema let through with keys it does not name — held in a variable, so the
+        // extra keys are not an excess-property error.
+        const forged = {
+            to: 'ada@example.com',
+            subject: 'Hello',
+            from: 'attacker@example.com',
+            cc: 'victim@example.com',
+            bcc: 'victim@example.com',
+            headers: { 'x-forged': '1' },
+            envelope: { from: 'a@b.c', to: 'd@e.f' }
+        };
+
+        await sendTemplatedEmail(forged, 'account.reset-confirm', DATA);
+
+        const [sent] = sendMailMock.mock.calls[0] as [Record<string, unknown>];
+        expect(sent.from).not.toBe('attacker@example.com');
+        expect(sent).toMatchObject({ to: 'ada@example.com', subject: 'Hello' });
+        for (const key of ['cc', 'bcc', 'headers', 'envelope'])
+            expect(sent).not.toHaveProperty(key);
     });
 
     it('carries no attachments key at all when the request names none', async () => {

@@ -69,10 +69,10 @@ export interface ModuleConsumer {
 
     /**
      * The contract schema this queue's messages must satisfy, from `@types`'s generated
-     * validators — see `infrastructure/adapters/queue.ts`'s `ConsumeOptions.schema` for what
-     * supplying it buys over leaving the handler to defend itself.
+     * validators — see `infrastructure/adapters/queue.ts`'s `ConsumeOptions.schema`. Required: the
+     * handler is given the parsed output, never the raw message.
      */
-    schema?: ZodType;
+    schema: ZodType;
 
     /** Number of unacknowledged messages allowed at once. Default: 1 — see `ConsumeOptions.prefetch`. */
     prefetch?: number;

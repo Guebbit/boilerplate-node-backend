@@ -715,10 +715,11 @@ export interface ConsumeOptions<TPayload = unknown> {
      * `@types`' generated validators.
      *
      * A payload crosses a process boundary, which is where its TypeScript type stops being a fact
-     * and becomes a claim. Supplying this turns the claim back into a check; omitting it leaves
-     * the handler to defend itself.
+     * and becomes a claim. This turns the claim back into a check, and the handler receives the
+     * schema's PARSED output, never the raw JSON: a key the schema does not name is stripped, so a
+     * forged job cannot smuggle a field the handler never expected.
      */
-    schema?: ZodType;
+    schema: ZodType<TPayload>;
     /** Number of unacknowledged messages allowed at once. Default: 1. */
     prefetch?: number;
 }
@@ -863,7 +864,7 @@ const handleDelivery = <TPayload>(
     handler: ConsumeOptions<TPayload>['handler'],
     incoming: ConsumeMessage,
     maxAttempts: number,
-    schema?: ZodType
+    schema: ZodType<TPayload>
 ): void => {
     const parsed = parseMessageBody(incoming);
     if (parsed === undefined) {
@@ -879,8 +880,8 @@ const handleDelivery = <TPayload>(
      * match the contract will not start matching it on a retry. Logged at `warn` with the reason,
      * because the interesting case is not this one message — it is a producer that has drifted.
      */
-    const verdict = schema?.safeParse(parsed);
-    if (verdict && !verdict.success) {
+    const verdict = schema.safeParse(parsed);
+    if (!verdict.success) {
         // Stryker disable all
         logger.warn({
             message: 'Queue message failed contract validation, parking.',
@@ -907,17 +908,14 @@ const handleDelivery = <TPayload>(
     }
 
     /*
-     * The one assertion in this pipeline: this is where bytes become a value, and `JSON.parse`
-     * can't know `TPayload` — no generic makes it. The handler still checks the fields it needs
-     * before using them, which is why workers narrow with a predicate and declare their payload
-     * `Partial<…>` rather than fully-formed. Keeping it here means it happens once, at the
-     * boundary, instead of once per worker.
+     * The handler gets `verdict.data`, the schema's output: the assertion that used to cast the raw
+     * JSON to `TPayload` is gone, because the schema is what makes the type true.
      */
     // The handler's boolean *is* the ack decision — see the policy above. Started inside a
     // `.then` so a handler that throws synchronously lands in the `.catch` below instead of
     // escaping into amqplib's frame handling.
     const settled = Promise.resolve()
-        .then(() => handler(parsed as TPayload, incoming))
+        .then(() => handler(verdict.data, incoming))
         .then((ack) => {
             // `ack` removes the message from the queue permanently.
             if (ack) safeAck(ch, incoming);

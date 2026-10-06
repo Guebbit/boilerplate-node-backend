@@ -72,7 +72,20 @@ describe('the test environment uses a transport that sends nothing', () => {
         // (`tests/support/setup-environment.ts`) is the log double, which opens no socket.
         const options = await transportOptions({ NODE_MAIL_TRANSPORT: 'log' });
 
-        expect(options).toEqual({ jsonTransport: true });
+        expect(options).toEqual({
+            jsonTransport: true,
+            disableFileAccess: true,
+            disableUrlAccess: true
+        });
+    });
+});
+
+describe('message data can never read a file or fetch a URL', () => {
+    it('turns file and URL access off at the transport, where a message cannot turn it on', async () => {
+        const options = await transportOptions(SMTP_ENVIRONMENT);
+
+        expect(options.disableFileAccess).toBe(true);
+        expect(options.disableUrlAccess).toBe(true);
     });
 });
 
