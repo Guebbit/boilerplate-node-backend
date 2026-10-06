@@ -45,6 +45,8 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
+import { authPasswordResetTotal } from '../metrics';
+import { logger } from '@infrastructure/adapters/logger';
 import { rotateRefreshToken, TokenReuseError, type RotatedSession } from '../session/jwt';
 import { assignDefaultRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -152,7 +154,8 @@ const issueResetToken = (user: UserDocument): Promise<string> =>
  * the same fact the response is built to hide, and a DB failure below still counts as an attempt.
  * A request within {@link RESET_REQUEST_SECONDS} of the last mail to the same account is skipped
  * the same way: same 200, no mail, no new token (and `false` for the metric).
- * The boolean return is for the caller's metric only, never a client-visible refusal.
+ * The metric is counted here, since the controller no longer waits for the outcome; the boolean
+ * return serves tests and is never a client-visible refusal.
  * Like {@link requestAccountDeletion}, the token value never leaves this file.
  * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
  */
@@ -192,8 +195,14 @@ export const requestPasswordReset = (
     // neither the response nor the trail can be used to tell "no such account" from "something
     // broke" apart.
     return attempt
-        .catch(() => false)
+        .catch((error: unknown) => {
+            // Swallowed from the CLIENT's side on purpose, never from the operator's: this runs
+            // detached from the response, so a log line is the only place a broken reset path shows.
+            logger.error({ message: 'A password reset request failed.', error });
+            return false;
+        })
         .then((sent) => {
+            authPasswordResetTotal.inc({ status: sent ? 'success' : 'failure' });
             recordAudit(context, {
                 action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
                 actor_user_id: 'anonymous',
