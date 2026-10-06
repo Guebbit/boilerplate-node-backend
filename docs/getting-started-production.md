@@ -137,6 +137,14 @@ this way (`MONGO_APP_USER`, created by `docker/mongo-init.js`); a managed cluste
 user created by hand. `readWrite` is enough for everything the app does, `setup`'s `db:sync`
 index builds included.
 
+**You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens. The
+`security.rules` and `api.rules` groups end at Alertmanager, whose shipped receiver is `null`:
+it logs and notifies no one. Wire a real one before relying on any alert, in
+`docker/observability/alertmanager.config.yaml`: an email (SMTP) receiver, a chat webhook
+(Slack, Mattermost, Teams), or a pager (PagerDuty, Opsgenie). This boilerplate picks none, because
+the right one is whatever your team already watches.
+[Alertmanager receivers](https://prometheus.io/docs/alerting/latest/configuration/#receiver-integration-settings)
+
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d

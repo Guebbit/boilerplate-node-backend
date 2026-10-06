@@ -45,7 +45,7 @@ derived from the URL grows the registry for the life of the process.
 
 ## Alert rules
 
-Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
+Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
 
 | Alert                                | Condition                                                                     | Severity |
 | ------------------------------------ | ----------------------------------------------------------------------------- | -------- |
@@ -59,6 +59,15 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`:
 | `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                           | warning  |
 | `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h           | warning  |
 | `FrequentSweepStale`                 | `sweep:payment-effects` or `sweep:reservations` has not succeeded in > 30 min | warning  |
+| `LoginFailureRate`                   | failed logins above 1 per second for 5 min                                    | warning  |
+| `LoginFailureShare`                  | over half of logins failing for 10 min, with real traffic                     | warning  |
+| `TwoFactorChallengeFailures`         | login-time 2FA failures above 0.1 per second for 10 min                       | warning  |
+| `TwoFactorDisableFailures`           | any failed attempt to disable 2FA in 15 min                                   | warning  |
+| `AuditSinkFailing`                   | any audit entry not persisted in 5 min                                        | critical |
+| `UnauthorizedForbiddenRate`          | 401 and 403 answers above 2 per second for 10 min                             | warning  |
+| `RateLimitStoreFallback`             | any limiter operation served without the `limits` Redis in 5 min              | warning  |
+| `RateLimitRefusals`                  | one budget refusing over 1 request per second for 10 min                      | warning  |
+| `UnhandledRejections`                | any unhandled promise rejection in 15 min                                     | warning  |
 
 ## Alertmanager
 
@@ -69,12 +78,12 @@ In local dev it uses a `null` receiver (logs only). Replace it with Slack, Pager
 
 See [Observability Endpoints](../api/observability.md) for the full list. Key routes:
 
-| Route                                 | Auth  | Returns                                                                                   |
-| ------------------------------------- | ----- | ----------------------------------------------------------------------------------------- |
-| `GET /observability/metrics`          | none  | Raw Prometheus exposition (text/plain) — scrape target                                    |
-| `GET /observability/health`           | admin | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
-| `GET /observability/metrics/overview` | admin | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
-| `GET /observability/audit`            | admin | Recent incidents from the persisted audit trail, newest first                             |
+| Route                                 | Auth          | Returns                                                                                   |
+| ------------------------------------- | ------------- | ----------------------------------------------------------------------------------------- |
+| `GET /observability/metrics`          | metrics token | Raw Prometheus exposition (text/plain) — scrape target                                    |
+| `GET /observability/health`           | admin         | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
+| `GET /observability/metrics/overview` | admin         | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
+| `GET /observability/audit`            | admin         | Recent incidents from the persisted audit trail, newest first                             |
 
 These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
 
