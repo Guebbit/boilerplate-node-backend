@@ -477,7 +477,7 @@ services:
 
     database:
         logging: *logging
-        image: docker.io/library/mongo:8
+        image: docker.io/library/mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -587,7 +587,7 @@ services:
     # access:bootstrap both need a set that can take writes.
     mongo-rs-init:
         logging: *logging
-        image: docker.io/library/mongo:8
+        image: docker.io/library/mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc
         restart: 'no'
         profiles: [bundled]
         <<: *data-hardening
@@ -608,7 +608,7 @@ services:
 
     cache:
         logging: *logging
-        image: docker.io/library/redis:8-alpine
+        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -666,7 +666,7 @@ services:
     # `--save 60 1`: a restart keeps the counters, so a Redis bounce is not a free budget reset.
     limits:
         logging: *logging
-        image: docker.io/library/redis:8-alpine
+        image: docker.io/library/redis:8-alpine@sha256:3811787313eba226a2ef38658c6ccb91cd5e110edc89c37767de373120a0e5a0
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]
@@ -696,7 +696,7 @@ services:
 
     queue:
         logging: *logging
-        image: docker.io/library/rabbitmq:4-alpine
+        image: docker.io/library/rabbitmq:4-alpine@sha256:2cb43283d8bbd3caa6c0f0dc00e96c8de772df33df7fd8af6aee4d605aeb8ada
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
         profiles: [bundled]

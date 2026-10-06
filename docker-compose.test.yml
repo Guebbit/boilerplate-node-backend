@@ -27,7 +27,7 @@ name: boilerplate-node-backend-gate
 
 services:
     mongo:
-        image: mongo:8
+        image: mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc
         # No named volume: this stack is scratch space for one gate run, never a database anyone
         # comes back to. `docker-compose.yml`'s `database` service is the persistent one.
         #
@@ -55,7 +55,7 @@ services:
             start_period: 30s
 
     redis:
-        image: redis:7-alpine
+        image: redis:7-alpine@sha256:858f009f9709ce576febc734aa78b8f6d624b82571f9ddb6bda4377c833b3499
         healthcheck:
             test: ['CMD', 'redis-cli', 'ping']
             interval: 5s
