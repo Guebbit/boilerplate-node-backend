@@ -14,6 +14,7 @@ import { successResponse } from '@infrastructure/http/response';
 import type { PasswordResetConfirmRequest } from '@types';
 import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { authPasswordResetConfirmTotal } from '../metrics';
 
 /**
  * The contract's field list with the password rules dropped — same reason as
@@ -45,11 +46,18 @@ export const postResetConfirm = (
     return accountService
         .completePasswordReset(token, password, passwordConfirm, callerContextOf(request))
         .then((result) => {
-            if (refused(response, result)) return;
+            if (refused(response, result)) {
+                authPasswordResetConfirmTotal.inc({ status: 'failure' });
+                return;
+            }
 
+            authPasswordResetConfirmTotal.inc({ status: 'success' });
             destroyRefreshCookie(response);
             destroyLoggedCookie(response);
             successResponse(response, undefined, 200, t('account.reset.success'));
         })
-        .catch(catchAs(response, 'postResetConfirm'));
+        .catch((error: unknown) => {
+            authPasswordResetConfirmTotal.inc({ status: 'failure' });
+            catchAs(response, 'postResetConfirm')(error);
+        });
 };

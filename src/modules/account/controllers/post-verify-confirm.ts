@@ -38,6 +38,7 @@ export const postVerifyConfirm = (
         .then((user) => {
             if (!user) {
                 authEmailVerifyTotal.inc({ status: 'failure' });
+                accountService.recordOneTimeTokenRejected(callerContextOf(request), 'email_verify');
                 rejectResponse(response, 422, [t('account.verify.token-not-found')]);
                 return;
             }

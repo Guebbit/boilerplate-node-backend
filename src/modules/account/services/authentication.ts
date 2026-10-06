@@ -45,7 +45,7 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
-import { authPasswordResetTotal } from '../metrics';
+import { authPasswordResetTotal, authRefreshReuseTotal } from '../metrics';
 import { logger } from '@infrastructure/adapters/logger';
 import { rotateRefreshToken, TokenReuseError, type RotatedSession } from '../session/jwt';
 import { assignDefaultRole } from '@modules/access';
@@ -318,6 +318,7 @@ export const refreshAccessToken = (
         })
         .catch((error: unknown) => {
             const reuseDetected = error instanceof TokenReuseError;
+            if (reuseDetected) authRefreshReuseTotal.inc();
 
             recordAudit(context, {
                 action: reuseDetected

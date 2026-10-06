@@ -106,6 +106,7 @@ export const accountService = {
     findLiveToken: tokens.findLiveToken,
     spendLiveToken: tokens.spendLiveToken,
     redeemLiveToken: tokens.redeemLiveToken,
+    recordOneTimeTokenRejected: tokens.recordOneTimeTokenRejected,
     sessionsList: tokens.sessionsList,
     reapExpiredTokens: tokenCleanup.reapExpiredTokens,
     reapExpiredExports: exportRows.reapExpiredExports,

@@ -41,6 +41,7 @@ export const postEmailChangeConfirm = (
         .then((user) => {
             if (!user) {
                 authEmailChangeConfirmTotal.inc({ status: 'failure' });
+                accountService.recordOneTimeTokenRejected(callerContextOf(request), 'email_change');
                 rejectResponse(response, 422, [t('account.email-change.token-not-found')]);
                 return;
             }

@@ -103,10 +103,11 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_EMAIL_VERIFY_REQUESTED`                | `auth.email_verify.requested`                | —                      |
 | `account`        | `AUTH_LOGGED_OUT`                            | `auth.logout`                                | —                      |
 | `account`        | `AUTH_LOGGED_OUT_EVERYWHERE`                 | `auth.logout_all`                            | —                      |
-| `account`        | `AUTH_LOGIN`                                 | `auth.login`                                 | —                      |
+| `account`        | `AUTH_LOGIN`                                 | `auth.login`                                 | `login_identifier`     |
 | `account`        | `AUTH_OAUTH_FAILED`                          | `auth.oauth.failed`                          | —                      |
 | `account`        | `AUTH_OAUTH_LINKED`                          | `auth.oauth.linked`                          | —                      |
 | `account`        | `AUTH_OAUTH_UNLINKED`                        | `auth.oauth.unlinked`                        | —                      |
+| `account`        | `AUTH_ONE_TIME_TOKEN_REJECTED`               | `auth.one_time_token.rejected`               | —                      |
 | `account`        | `AUTH_PASSWORD_CHANGED`                      | `auth.password.changed`                      | —                      |
 | `account`        | `AUTH_PASSWORD_RESET_COMPLETED`              | `auth.password_reset.completed`              | —                      |
 | `account`        | `AUTH_PASSWORD_RESET_REQUESTED`              | `auth.password_reset.requested`              | —                      |
