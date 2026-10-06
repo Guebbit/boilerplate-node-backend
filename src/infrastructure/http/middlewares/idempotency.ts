@@ -70,7 +70,7 @@ const hasPrototypeKey = (value: unknown): boolean => {
  *
  * Keyed, never a bare hash: the body of `POST /signup` carries the plaintext password, and this
  * lands in Mongo for the retention window. A bare `sha256` of it would let anyone with a dump
- * guess passwords at hash speed and skip the bcrypt cost entirely.
+ * guess passwords at hash speed and skip the hash cost entirely.
  *
  * @param request - the incoming request, already matched to its route
  */

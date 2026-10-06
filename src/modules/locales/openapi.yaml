@@ -302,6 +302,8 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/LocaleMessagesEnvelope'
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                # A malformed `tenant`: repeated, empty, or not a tenant id.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /locales/{locale}/entries:
@@ -702,6 +704,8 @@ components:
             description: >-
                 Which frontend tenant's dictionary to build. Omitted, the deployment's default
                 frontend tenant — a client paired one-to-one with this API never needs to say.
+                Given, it must be a tenant id: an empty value, or the parameter repeated, is
+                refused with 422 rather than read as "the default" (omit it to ask for that).
 
         TenantPathParam:
             name: tenant

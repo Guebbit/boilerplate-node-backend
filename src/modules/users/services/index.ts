@@ -33,10 +33,15 @@ import {
     setPassword,
     markEmailVerified,
     applyEmailChange,
+    restorePreviousEmail,
     cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
-    persistReauthCode
+    persistReauthCode,
+    reserveMfaAttempt,
+    resetMfaAttempts,
+    claimTotpStep,
+    bumpSessionEpoch
 } from './credentials';
 import {
     consumeToken,
@@ -53,7 +58,8 @@ import {
     registerFromOAuth,
     buildSignupDecoy,
     discardFailedSignup,
-    linkOAuthAccount
+    linkOAuthAccount,
+    unlinkOAuthAccount
 } from './signup';
 import {
     findInactiveUnwarned,
@@ -72,6 +78,7 @@ export { create } from './create';
 export { update, updateById } from './update';
 export { remove, restoreById, removeById } from './remove';
 export { consumeToken } from './tokens';
+export { MFA_MAX_FAILURES, MFA_LOCK_MS } from './credentials';
 
 /** The service's public surface — the controllers call through this, never the bare functions. */
 export const userService = {
@@ -101,10 +108,15 @@ export const userService = {
     setPassword,
     markEmailVerified,
     applyEmailChange,
+    restorePreviousEmail,
     cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
     persistReauthCode,
+    reserveMfaAttempt,
+    resetMfaAttempts,
+    claimTotpStep,
+    bumpSessionEpoch,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,
@@ -113,6 +125,7 @@ export const userService = {
     tokenSupersede,
     tokenTouch,
     linkOAuthAccount,
+    unlinkOAuthAccount,
     findInactiveUnwarned,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,

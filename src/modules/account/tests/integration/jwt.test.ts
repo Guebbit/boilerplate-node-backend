@@ -50,6 +50,9 @@ const REFRESH_SECRET = 'test-refresh-secret';
  */
 const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
     sign({ auth_time: Math.floor(Date.now() / 1000), amr: ['pwd'], ...payload }, secret, {
+        // The `typ` a real token of that ring carries (RFC 9068); `options.header` overrides it for
+        // the cases that are about a wrong one.
+        header: { alg: 'HS256', typ: secret === REFRESH_SECRET ? 'rt+jwt' : 'at+jwt' },
         ...options,
         keyid: keyId(secret)
     });
@@ -94,6 +97,72 @@ describe('verifyAccessToken', () => {
         await expect(
             verifyAccessToken(`${header}.${forgedPayload}.${signature}`)
         ).rejects.toThrow();
+    });
+});
+
+describe('token types (`typ` header)', () => {
+    it('refuses a refresh token presented as a bearer, even when both rings share a secret', async () => {
+        await withEnvironmentOverrides(
+            { NODE_TOKEN_ACCESS: 'shared-secret', NODE_TOKEN_REFRESH: 'shared-secret' },
+            async () => {
+                const user = await createUser();
+                const refresh = await createRefreshToken(String(user._id));
+
+                await expect(verifyAccessToken(refresh)).rejects.toThrow('Wrong token type');
+            }
+        );
+    });
+
+    it('refuses an access token presented as a refresh token', async () => {
+        await withEnvironmentOverrides(
+            { NODE_TOKEN_ACCESS: 'shared-secret', NODE_TOKEN_REFRESH: 'shared-secret' },
+            async () => {
+                const user = await createUser();
+                const refresh = await createRefreshToken(String(user._id));
+                const access = await createAccessToken(refresh);
+
+                await expect(verifyRefreshToken(access)).rejects.toThrow('Wrong token type');
+            }
+        );
+    });
+
+    it('refuses a token carrying no `typ` at all', async () => {
+        const unTyped = sign({ id: 'user-1', auth_time: 1, amr: ['pwd'] }, ACCESS_SECRET, {
+            keyid: keyId(ACCESS_SECRET),
+            expiresIn: 900
+        });
+
+        await expect(verifyAccessToken(unTyped)).rejects.toThrow('Wrong token type');
+    });
+
+    it('stamps the RFC 9068 `at+jwt` and a matching `rt+jwt` on what it signs', async () => {
+        const user = await createUser();
+        const refresh = await createRefreshToken(String(user._id));
+        const access = await createAccessToken(refresh);
+
+        expect(decode(refresh, { complete: true })?.header.typ).toBe('rt+jwt');
+        expect(decode(access, { complete: true })?.header.typ).toBe('at+jwt');
+    });
+});
+
+describe('verifyRefreshToken after a rotation', () => {
+    it('refuses a rotated-away token without revoking the family, and still rotates inside the grace window', async () => {
+        const user = await createUser();
+        const id = String(user._id);
+        const original = await createRefreshToken(id);
+        const sibling = await createRefreshToken(id);
+
+        const rotated = await rotateRefreshToken(original);
+
+        // The rotated-away token is no longer a credential for anything but the rotation itself...
+        await expect(verifyRefreshToken(original)).rejects.toThrow('Forbidden');
+        // ...and refusing it here is NOT reuse detection: the family is untouched.
+        await expect(verifyRefreshToken(sibling)).resolves.toMatchObject({ id });
+        await expect(verifyRefreshToken(rotated.refreshToken)).resolves.toMatchObject({ id });
+        // The two-tab grace (a rotation inside the window) is the rotation's own path, unchanged.
+        await expect(rotateRefreshToken(original)).resolves.toMatchObject({
+            accessToken: expect.any(String)
+        });
     });
 });
 
@@ -510,6 +579,10 @@ describe('rotateRefreshToken reuse detection', () => {
 
             // The session that was never touched is gone too.
             await expect(createAccessToken(bystander)).rejects.toThrow('Forbidden');
+
+            // And the epoch moved, so an ACCESS token the attacker already holds dies as well.
+            const stored = await userRepository.findByIdWithCredentials(id);
+            expect(stored?.tokensValidAfter).toBeInstanceOf(Date);
         });
     });
 

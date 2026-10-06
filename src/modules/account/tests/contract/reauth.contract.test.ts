@@ -70,7 +70,7 @@ const sessionFor = async (amr: string[], withPassword: boolean) => {
     return {
         user,
         bearer: `Bearer ${token}` as const,
-        jwtCookie: `jwt=${refreshToken}`
+        jwtCookie: `__Host-jwt=${refreshToken}`
     };
 };
 
@@ -174,13 +174,13 @@ describe('POST /account/reauth/methods/email/send', () => {
 });
 
 describe('POST /account/reauth with a mailed code', () => {
-    it('re-mints the session and adds `email` to what it proved', async () => {
+    it('re-mints the session claiming only `email`, not what the login proved', async () => {
         const { bearer } = await sessionFor(['google'], false);
 
         const response = await reauthByEmail(bearer);
 
         expect(response.status).toBe(200);
-        expect(amrOf(response.body.data.token as string)).toEqual(['google', 'email']);
+        expect(amrOf(response.body.data.token as string)).toEqual(['email']);
     });
 
     it('spends the code: the same one cannot pass twice', async () => {
@@ -251,7 +251,7 @@ describe('POST /account/reauth with a mailed code', () => {
         freezeDate();
         const { bearer, jwtCookie } = await sessionFor(['google'], false);
         advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
-        const stale = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
         const staleBearer = `Bearer ${stale.body.data.token as string}`;
         expect(bearer).not.toBe(staleBearer);
         const blocked = await api()
@@ -275,7 +275,7 @@ describe('POST /account/reauth with a mailed code', () => {
         freezeDate();
         const { jwtCookie } = await sessionFor(['pwd'], true);
         advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
-        const stale = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
 
         const response = await api()
             .get(`/account/export/${'0'.repeat(24)}`)
@@ -298,7 +298,7 @@ describe('POST /account/reauth with a password', () => {
         expect(JSON.stringify(response.body)).toMatch(/no password/i);
     });
 
-    it('keeps the second factor the login proved', async () => {
+    it('does NOT keep the second factor the login proved: a password-only re-auth earns `pwd` alone', async () => {
         const { bearer } = await sessionFor(['pwd', 'otp'], true);
 
         const response = await api()
@@ -306,7 +306,7 @@ describe('POST /account/reauth with a password', () => {
             .set('Authorization', bearer)
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
-        expect(amrOf(response.body.data.token as string)).toEqual(['pwd', 'otp']);
+        expect(amrOf(response.body.data.token as string)).toEqual(['pwd']);
     });
 
     it('rejects the untagged body the endpoint used to take', async () => {

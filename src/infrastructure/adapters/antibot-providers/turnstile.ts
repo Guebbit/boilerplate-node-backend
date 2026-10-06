@@ -9,6 +9,7 @@
 import type { HumanChallengeProvider } from './index';
 import type { RungVerdict } from '../antibot-verdict';
 import { antibotConfig } from '@infrastructure/adapters/config';
+import { readCappedJson, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 
 /** Where a token is exchanged for a verdict. */
 const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
@@ -44,9 +45,13 @@ const siteverify = (token: string, remoteAddress?: string): Promise<RungVerdict>
             ...(remoteAddress ? { remoteip: remoteAddress } : {})
         }),
         // Node: abort the request rather than hold a signup open on a slow dependency.
-        signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS)
+        signal: AbortSignal.timeout(VERIFY_TIMEOUT_MS),
+        // fetch: a redirect is an error, not something to follow to a host nobody chose.
+        redirect: 'error'
     })
-        .then((response) => (response.ok ? response.json() : undefined))
+        .then((response) =>
+            response.ok ? readCappedJson(response, DEFAULT_BODY_CAP_BYTES) : undefined
+        )
         .then((body) =>
             (body as { success?: boolean } | undefined)?.success === true ? 'ok' : 'refused'
         );

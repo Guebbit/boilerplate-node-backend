@@ -7,7 +7,7 @@
  */
 
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
-import type { UserDocument, Token, OAuthAccount, UserWire } from './model';
+import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
 import {
     createRepository,
@@ -23,7 +23,7 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
  * `.select('+password')` calls.
  */
 const CREDENTIAL_FIELDS =
-    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +reauthCode +oauthAccounts +pendingEmail';
+    '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +reauthCode +oauthAccounts +pendingEmail +previousEmail';
 
 /**
  * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a
@@ -71,6 +71,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
     linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<void>;
+    unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
+    reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
+    resetMfaAttempts: (id: string) => Promise<void>;
+    bumpSessionEpoch: (id: string, at: Date) => Promise<void>;
+    claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
     writebackImage: ImageWriteback;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (cutoff: Date) => Promise<UserDocument[]>;
@@ -355,6 +360,151 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Remove the link to one provider — atomic `$pull`, the mirror of {@link linkOAuthAccount} and
+     * for the same reason: `oauthAccounts` is `select: false`, so there is no loaded array to
+     * filter. `timestamps: false`: disconnecting a provider is not an edit of the profile.
+     *
+     * @param provider - the registry name to disconnect
+     * @returns whether a link was actually removed (false: it was never linked)
+     */
+    unlinkOAuthAccount: (userId: string, provider: string) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(userId) },
+                { $pull: { oauthAccounts: { provider } } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Reserve one wrong-code attempt BEFORE the code is compared, in a single atomic write.
+     *
+     * Reserve-then-check, not check-then-`$inc`: with a read in between, N parallel guesses all read
+     * "under the cap" and all get compared. Here the filter refuses a locked account outright (no
+     * matching document: the caller must not compare anything), and the pipeline `$set`s count and
+     * lock together, so the 10th reservation is the last one any window can hand out.
+     * An expired lock restarts the count from zero in the same write.
+     * A right code gives its reservation back through `resetMfaAttempts`.
+     * `timestamps: false` — a guess is not an edit.
+     *
+     * @param id - the account
+     * @param maxFailures - reservations a window may hand out before it locks
+     * @param lockMs - how long the lock lasts
+     */
+    reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => {
+        const now = new Date();
+        return (
+            userModel
+                // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+                .findOneAndUpdate(
+                    {
+                        _id: toObjectId(id),
+                        $or: [{ mfaLockedUntil: null }, { mfaLockedUntil: { $lte: now } }]
+                    },
+                    [
+                        {
+                            $set: {
+                                mfaFailures: {
+                                    $add: [
+                                        {
+                                            // A date here is an EXPIRED lock (the filter admits no other).
+                                            $cond: [
+                                                { $eq: [{ $type: '$mfaLockedUntil' }, 'date'] },
+                                                0,
+                                                { $ifNull: ['$mfaFailures', 0] }
+                                            ]
+                                        },
+                                        1
+                                    ]
+                                }
+                            }
+                        },
+                        {
+                            $set: {
+                                mfaLockedUntil: {
+                                    $cond: [
+                                        { $gte: ['$mfaFailures', maxFailures] },
+                                        new Date(now.getTime() + lockMs),
+                                        '$$REMOVE'
+                                    ]
+                                }
+                            }
+                        }
+                    ],
+                    // `updatePipeline`: Mongoose refuses an array update without it.
+                    { returnDocument: 'after', timestamps: false, updatePipeline: true }
+                )
+                .exec()
+                .then((document) => ({
+                    reserved: document !== null,
+                    lockedNow: (document?.mfaFailures ?? 0) >= maxFailures
+                }))
+        );
+    },
+
+    /**
+     * Clear the counter and any lock — a right code, or a completed password reset. Conditional,
+     * so the overwhelmingly common clean login writes nothing. `timestamps: false`.
+     */
+    resetMfaAttempts: (id: string) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    $or: [{ mfaFailures: { $gt: 0 } }, { mfaLockedUntil: { $ne: null } }]
+                },
+                { $set: { mfaFailures: 0 }, $unset: { mfaLockedUntil: '' } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Move the account's session epoch forward to `at`: every token minted before it stops
+     * working. A plain `$set` — and never backwards, so a slow earlier bump cannot undo a later
+     * one. `timestamps: false`, since revoking is not an edit of the profile.
+     */
+    bumpSessionEpoch: (id: string, at: Date) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    $or: [{ tokensValidAfter: null }, { tokensValidAfter: { $lt: at } }]
+                },
+                { $set: { tokensValidAfter: at } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Claim a TOTP time step, atomically: only a step LATER than the last accepted one is taken,
+     * so two concurrent requests carrying one code cannot both pass. `$elemMatch` keeps both
+     * conditions on the same method entry. `timestamps: false`.
+     *
+     * @param step - the RFC 6238 step the code matched
+     * @returns whether THIS call took the step
+     */
+    claimTotpStep: (id: string, method: string, step: number) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    twoFactorMethods: {
+                        $elemMatch: {
+                            method,
+                            $or: [{ lastUsedStep: null }, { lastUsedStep: { $lt: step } }]
+                        }
+                    }
+                },
+                { $set: { 'twoFactorMethods.$.lastUsedStep': step } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in

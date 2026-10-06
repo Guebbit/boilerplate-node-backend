@@ -165,6 +165,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
                     amr: user.amr,
+                    twoFactorArmed: user.twoFactorArmed,
                     analyticsConsent: user.analyticsConsent
                 };
                 // Resolved once, here, so nothing below turns two role names into keys again.
@@ -299,7 +300,11 @@ const provedRecentlyEnough = (request: Request, tier: StepUpTier): boolean =>
  * OAuth, and this app's own `errors[].code` envelope for its own clients, which read the code and
  * never the header.
  */
-const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void => {
+const challengeForFreshAuth = (
+    response: Response,
+    maxAgeSeconds: number,
+    methods: readonly string[] = []
+): void => {
     response.setHeader(
         'WWW-Authenticate',
         `Bearer error="insufficient_user_authentication", max_age=${maxAgeSeconds}`
@@ -308,7 +313,9 @@ const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void 
         {
             code: ERROR_CODES.REAUTH_REQUIRED,
             message: t('generic.error-reauth-required'),
-            details: { maxAge: maxAgeSeconds }
+            // `methods` names what the re-authentication must PROVE beyond recency (RFC 9470 asks
+            // the same of `acr_values`); absent when the route asks for nothing but a fresh login.
+            details: { maxAge: maxAgeSeconds, ...(methods.length > 0 && { methods }) }
         }
     ]);
 };
@@ -444,7 +451,7 @@ export const requirePermission = (key: string) => {
  * to an already-open stream that cannot be told apart from a revoked one), so only they may decide.
  *
  * @param request - only for the audit trail; never re-authenticated from it
- * @param refreshToken - the `jwt` cookie value
+ * @param refreshToken - the `__Host-jwt` cookie value
  * @param key - the permission key to check
  * @returns the resolved user when they hold `key`, otherwise `undefined`
  */
@@ -466,7 +473,7 @@ const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: 
 /**
  * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
  * SSE, via `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential,
- * verified as `GET /account/refresh` verifies it: signature *and* presence on the user document,
+ * verified as `POST /account/refresh` verifies it: signature *and* presence on the user document,
  * so a revoked token is rejected rather than merely an expired one.
  *
  * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
@@ -521,7 +528,7 @@ export const requirePermissionViaCookie = (key: string) => {
  * stops.
  *
  * @param request - the request that opened the stream, kept only for the audit trail
- * @param refreshToken - the `jwt` cookie value captured when the stream connected
+ * @param refreshToken - the `__Host-jwt` cookie value captured when the stream connected
  * @param key - the permission key to re-check
  * @returns whether the caller still holds `key`
  */
@@ -599,7 +606,7 @@ export const requireFreshAuth =
             action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
             metadata: { reason: 'fresh_auth_required', maxAgeSeconds }
         });
-        challengeForFreshAuth(response, maxAgeSeconds);
+        challengeForFreshAuth(response, maxAgeSeconds, options.methods);
     };
 
 /**
@@ -616,13 +623,18 @@ export const requireFreshAuth =
  *
  * @param predicate - reads the request and decides whether THIS one needs a fresh session
  * @param maxAgeSeconds - passed through to {@link requireFreshAuth} when the predicate is true
+ * @param options - passed through too: what the fresh session must additionally have proved
  */
 export const requireFreshAuthWhen =
-    (predicate: (request: Request) => boolean, maxAgeSeconds: number) =>
+    (
+        predicate: (request: Request) => boolean,
+        maxAgeSeconds: number,
+        options: FreshAuthOptions = {}
+    ) =>
     (request: Request, response: Response, next: NextFunction) => {
         if (!predicate(request)) {
             next();
             return;
         }
-        requireFreshAuth(maxAgeSeconds)(request, response, next);
+        requireFreshAuth(maxAgeSeconds, options)(request, response, next);
     };

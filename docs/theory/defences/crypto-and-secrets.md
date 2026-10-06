@@ -5,7 +5,7 @@ authorization throws a 403 someone notices; a fixed IV, a fast password hash or 
 compare all work perfectly, pass every test, and cost you everything on the day of a dump.
 
 The rule this codebase follows, and the reason most rows below are one line: **never implement a
-primitive.** `node:crypto`, `bcrypt`, `jsonwebtoken` — and where a choice exists, the boring one.
+primitive.** `node:crypto`, `jsonwebtoken` — and where a choice exists, the boring one.
 
 ## Transport
 
@@ -20,17 +20,19 @@ primitive.** `node:crypto`, `bcrypt`, `jsonwebtoken` — and where a choice exis
 
 ## Hashing passwords
 
-| Attack                   | How it works                                       | This boilerplate                                                                                                                                                                                                                                            |
-| ------------------------ | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Weak password hashing    | MD5/SHA-1, unsalted, fast hashes; rainbow tables   | bcrypt, salted by construction, applied in a pre-save hook so a plaintext value never reaches storage — `users/model.ts`                                                                                                                                    |
-| Insufficient work factor | bcrypt cost too low, PBKDF2 iterations too few     | Cost factor 12, with the rationale written at the call site rather than left as a magic number — `users/model.ts`                                                                                                                                           |
-| Timing side channel      | a non-constant-time compare, or an early-exit loop | A login miss compares against a dummy bcrypt hash, so an unknown email costs the same as a wrong password — `account/services/authentication.ts#DUMMY_PASSWORD_HASH`. The metrics credential uses `timingSafeEqual` — `metrics-scraper.ts#isMetricsScraper` |
+| Attack                   | How it works                                               | This boilerplate                                                                                                                                                                                                                                              |
+| ------------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Weak password hashing    | MD5/SHA-1, unsalted, fast hashes; rainbow tables           | argon2id from `node:crypto`, salted per hash, applied in a pre-save hook so a plaintext value never reaches storage — `users/model.ts`, `infrastructure/security/password-hash.ts`                                                                            |
+| Insufficient work factor | argon2 memory or passes too low, PBKDF2 iterations too few | m = 19 MiB, t = 2, p = 1 (OWASP's second argon2id profile), written once as named constants; a stored hash carries its own parameters, so raising them later never strands an account — `infrastructure/security/password-hash.ts`                            |
+| Timing side channel      | a non-constant-time compare, or an early-exit loop         | A login miss compares against a dummy argon2id hash, so an unknown email costs the same as a wrong password — `account/services/authentication.ts#DUMMY_PASSWORD_HASH`. The metrics credential uses `timingSafeEqual` — `metrics-scraper.ts#isMetricsScraper` |
 
-**Why bcrypt and not argon2id.** Argon2id is the better primitive and the current OWASP first
-choice. bcrypt at cost 12 is well above the threshold where offline cracking is the cheap attack,
-and it ships without a native build step that breaks on every Node major. That is a deliberate
-trade for a boilerplate, not an oversight — a deployment with a hardware budget should reach for
-argon2id.
+**Why argon2id, and why from `node:crypto`.** It is OWASP's first choice, and unlike bcrypt it has no
+72-byte input limit: bcrypt silently ignored everything after byte 72, so two long passwords sharing
+that prefix were the same password. Node 24.7 added `crypto.argon2`, so there is no native addon to
+rebuild on every Node major and no package to patch; the boilerplate's `engines.node` is `>=24.7`
+for it. Node supplies the primitive; the PHC string and the constant-time compare are the small
+part this repository still writes, tested for the cases that matter (a 100-byte password, a foreign
+hash, a hash made at another cost).
 
 ## Randomness and keys
 
@@ -75,8 +77,8 @@ code's. They are kept apart from what that would make worse: private (never unde
 directory), regenerable (the frozen rows in Mongo are the record, so they are not backed up), and
 reaped after a retention window.
 
-**Why sha256 and not bcrypt for tokens.** A refresh token is 16 random bytes — high-entropy and
-one-time. There is no low-entropy secret to stretch, and bcrypt would add a real per-request cost
+**Why sha256 and not argon2id for tokens.** A refresh token is 16 random bytes — high-entropy and
+one-time. There is no low-entropy secret to stretch, and argon2id would add a real per-request cost
 to every token check for no gain against an offline attacker who cannot guess 128 bits anyway. The
 reasoning is written at `users/model.ts:33` rather than left to be re-derived.
 

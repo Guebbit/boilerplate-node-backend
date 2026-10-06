@@ -9,6 +9,7 @@ import type { TwoFactorCodeRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { twoFactorService } from '../services';
+import { remintRefreshCookie } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
 import { t } from '@infrastructure/i18n';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -22,7 +23,7 @@ export const delete2fa = (
     request: Request<unknown, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
-    const { id } = request.authContext!;
+    const { id, amr } = request.authContext!;
 
     const parseResult = DisableTwoFactorBody.safeParse(request.body);
     if (!parseResult.success) {
@@ -38,7 +39,15 @@ export const delete2fa = (
                 return;
             }
             authTwoFactorDisableTotal.inc({ method: 'all', status: 'success' });
-            successResponse<undefined>(response, undefined, 200, t('account.two-factor.disabled'));
+            // Disabling revoked every session, this one included: keep the caller in.
+            return remintRefreshCookie(request, response, id, amr).then(() => {
+                successResponse<undefined>(
+                    response,
+                    undefined,
+                    200,
+                    t('account.two-factor.disabled')
+                );
+            });
         })
         .catch(catchAs(response, 'delete2fa'));
 };

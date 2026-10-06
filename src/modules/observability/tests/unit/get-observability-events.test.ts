@@ -27,7 +27,7 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
 }));
 
 /** The cookie `requirePermissionViaCookie` already validated before this handler ran. */
-const cookieRequest = () => asStub<Request>({ cookies: { jwt: 'cookie.jwt' } });
+const cookieRequest = () => asStub<Request>({ cookies: { '__Host-jwt': 'cookie.jwt' } });
 
 beforeEach(() => jest.clearAllMocks());
 

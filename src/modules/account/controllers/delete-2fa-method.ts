@@ -12,6 +12,7 @@ import { rejectValidation, refused, catchAs } from '@infrastructure/http/control
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
+import { remintRefreshCookie } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
 
 /**
@@ -23,7 +24,7 @@ export const delete2faMethod = (
     request: Request<{ method: string }, unknown, TwoFactorCodeRequest>,
     response: Response
 ) => {
-    const { id } = request.authContext!;
+    const { id, amr } = request.authContext!;
 
     const pathParameters = RemoveTwoFactorMethodParams.safeParse(request.params);
     if (!pathParameters.success) return rejectValidation(response, pathParameters.error);
@@ -43,12 +44,15 @@ export const delete2faMethod = (
                 return;
             }
             authTwoFactorDisableTotal.inc({ method, status: 'success' });
-            successResponse<undefined>(
-                response,
-                undefined,
-                200,
-                t('account.two-factor.method-removed')
-            );
+            // Removing a factor revoked every session, this one included: keep the caller in.
+            return remintRefreshCookie(request, response, id, amr).then(() => {
+                successResponse<undefined>(
+                    response,
+                    undefined,
+                    200,
+                    t('account.two-factor.method-removed')
+                );
+            });
         })
         .catch(catchAs(response, 'delete2faMethod'));
 };

@@ -35,6 +35,12 @@ paths:
                 currently-held tenant permissions: a key can never reach further than the person
                 who minted it, and that floor is re-checked on every request the key later makes,
                 not just at mint time — see `docs/tools/security.md#machine-to-machine-credentials`.
+
+                Minting needs a critically fresh session (`401 REAUTH_REQUIRED`): a key outlives the
+                session that made it. `expiresAt` is required and at most one year ahead, or the
+                request is refused with 422. The minter is mailed that a key was created, and every
+                key a person minted is revoked (and listed to them by mail) when they log out
+                everywhere or reset their password.
             operationId: mintApiKey
             security:
                 - bearerAuth: []
@@ -85,7 +91,7 @@ components:
         ApiKey:
             type: object
             additionalProperties: false
-            required: [id, name, publicPrefix, permissions, createdAt, updatedAt]
+            required: [id, name, publicPrefix, permissions, expiresAt, createdAt, updatedAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -123,7 +129,7 @@ components:
             # branch owns reads as "additional" and the whole document fails. Restated flat instead.
             type: object
             additionalProperties: false
-            required: [id, name, publicPrefix, permissions, secret, createdAt, updatedAt]
+            required: [id, name, publicPrefix, permissions, expiresAt, secret, createdAt, updatedAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -157,7 +163,7 @@ components:
         MintApiKeyRequest:
             type: object
             additionalProperties: false
-            required: [name, permissions]
+            required: [name, permissions, expiresAt]
             properties:
                 name:
                     type: string
@@ -172,7 +178,7 @@ components:
                 expiresAt:
                     type: string
                     format: date-time
-                    description: Optional. Once past, the credential is refused exactly like a revoked one.
+                    description: Required, and at most one year from now (422 beyond it). Once past, the credential is refused exactly like a revoked one.
 
         ApiKeysResponse:
             type: object

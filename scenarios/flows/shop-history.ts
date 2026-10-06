@@ -251,7 +251,7 @@ const openEveryShelf = async (owner: Caller): Promise<void> => {
 /**
  * Sign in every filler shopper at once.
  *
- * Concurrent, unlike everything else here: each login is a bcrypt cost-12 comparison, and ten of
+ * Concurrent, unlike everything else here: each login is an argon2id comparison, and ten of
  * them in series is most of what this runner costs. Nothing they do afterwards is concurrent —
  * the story's order is the point.
  */

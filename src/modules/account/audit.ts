@@ -25,6 +25,8 @@ export const accountAuditActions = {
     AUTH_EMAIL_CHANGE_COMPLETED: 'auth.email_change.completed',
     /** `DELETE /account/pending-email` discarded a pending change without proving it. */
     AUTH_EMAIL_CHANGE_CANCELLED: 'auth.email_change.cancelled',
+    /** `POST /account/email-change-undo` reverted (or cancelled) a change from the old address's link. */
+    AUTH_EMAIL_CHANGE_UNDONE: 'auth.email_change.undone',
     /** `POST /account/pending-email/resend` mailed the pending address a fresh link. */
     AUTH_EMAIL_CHANGE_RESENT: 'auth.email_change.resent',
     AUTH_TOKEN_REFRESHED: 'auth.token.refreshed',
@@ -66,6 +68,8 @@ export const accountAuditActions = {
     AUTH_2FA_BACKUP_CODES_REGENERATED: 'auth.two_factor.backup_codes_regenerated',
     /** A new provider identity was linked onto an already-existing, verified-match account. */
     AUTH_OAUTH_LINKED: 'auth.oauth.linked',
+    /** `DELETE /account/oauth/links/{provider}` disconnected a sign-in provider. */
+    AUTH_OAUTH_UNLINKED: 'auth.oauth.unlinked',
     /** An OAuth login/callback did not complete — bad state, a declined consent, a refused link. */
     AUTH_OAUTH_FAILED: 'auth.oauth.failed'
 } as const;

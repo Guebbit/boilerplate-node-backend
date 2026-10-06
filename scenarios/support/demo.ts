@@ -68,7 +68,7 @@ let demoApp: Express | undefined;
  * Build `name` from scratch into the currently empty database, and keep a copy of the result.
  *
  * This is the expensive half of a restore, and the reason the copy exists at all: building `shop`
- * means fourteen bcrypt cost-12 hashes and then several hundred HTTP requests driving the real
+ * means fourteen password hashes and then several hundred HTTP requests driving the real
  * checkout, payment, shipping and refund flows (`scenarios/flows/`). None of that is idempotent —
  * checking out twice makes two orders — so it happens once and every later restore replays the
  * rows it produced.

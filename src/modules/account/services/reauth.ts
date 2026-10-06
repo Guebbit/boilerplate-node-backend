@@ -11,7 +11,7 @@
  * Re-minting the session stays the controller's job (`../session/session.ts`); this only decides.
  */
 
-import bcrypt from 'bcrypt';
+import { verifyPassword } from '@infrastructure/security/password-hash';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES } from '@api/error-codes';
 import {
@@ -43,6 +43,7 @@ import {
 } from '../two-factor';
 import { maskEmail } from '../two-factor/methods/email';
 import { sendAccountMail } from './mail';
+import { proveSecondFactor } from './two-factor';
 
 /**
  * The RFC 8176 `amr` value each method earns the session. `email` is this app's own value, not a
@@ -52,16 +53,23 @@ import { sendAccountMail } from './mail';
 const AMR_OF_METHOD: Record<ReauthMethod, string> = { password: 'pwd', email: 'email' };
 
 /**
- * The session's `amr` after a re-authentication: what it already proved, plus this method. Kept,
- * not replaced, so a session that passed a second factor at login still counts as second-factored
- * once its `auth_time` is refreshed.
+ * The session's `amr` after a re-authentication: ONLY what this re-authentication proved. Proofs
+ * from the login are not carried over: `auth_time` is refreshed, and a refreshed `auth_time` must
+ * not vouch for a second factor nobody typed this time (a password-only re-auth used to keep `otp`
+ * and so passed a route that demands one).
  *
- * @param current - the `amr` of the session being re-minted
  * @param method - the method just proved
+ * @param otpProven - whether a second-factor code was verified in the same call
  */
-export const amrAfterReauth = (current: readonly string[], method: ReauthMethod): string[] => [
-    ...new Set([...current, AMR_OF_METHOD[method]])
+export const amrAfterReauth = (method: ReauthMethod, otpProven: boolean): string[] => [
+    AMR_OF_METHOD[method],
+    ...(otpProven ? ['otp'] : [])
 ];
+
+/** What a verified re-authentication hands the controller: the `amr` its new session earns. */
+export interface ReauthProven {
+    amr: string[];
+}
 
 /**
  * Which methods this account can use right now, in the order to offer them.
@@ -174,9 +182,8 @@ export const sendReauthCode = (
 
 /** Whether the typed password matches; an account with none never does. */
 const passwordMatches = (user: UserDocument, password: string): Promise<boolean> =>
-    // bcrypt: compares a plaintext against the stored hash, salt and cost read from the hash itself.
-    // https://github.com/kelektiv/node.bcrypt.js#to-check-a-password
-    user.password ? bcrypt.compare(password, user.password) : Promise.resolve(false);
+    // argon2id: compares a plaintext against the stored hash, salt and cost read from the hash itself.
+    user.password ? verifyPassword(password, user.password) : Promise.resolve(false);
 
 /**
  * Check a typed code against the one in flight. A wrong guess spends an attempt, so the entry is
@@ -227,8 +234,26 @@ const proveMethod = (
 };
 
 /**
+ * The `otp` half of a re-authentication, run only once the primary method passed: a caller without
+ * the password never gets to spend an attempt on the second factor. No `otp` in the body is not a
+ * failure: the session simply earns no `otp`, and a route that demands one asks again.
+ */
+const proveOtp = (
+    user: UserDocument,
+    proof: ReauthRequest,
+    context: CallerContext
+): Promise<ResponseSuccess<ReauthProven> | ResponseReject> => {
+    if (proof.otp === undefined)
+        return Promise.resolve(generateSuccess({ amr: amrAfterReauth(proof.method, false) }));
+
+    return proveSecondFactor(user, proof.otp, context).then((proved) =>
+        proved.success ? generateSuccess({ amr: amrAfterReauth(proof.method, true) }) : proved
+    );
+};
+
+/**
  * Re-authenticate an already-signed-in caller — the verification half of `POST /account/reauth`.
- * Proves the method and audits the attempt; re-minting the session (a fresh `auth_time`) is the
+ * Proves the method, then the second-factor code when one was sent, and audits the attempt; re-minting the session (a fresh `auth_time`) is the
  * CONTROLLER's job, the same split `passwordChange` keeps from `postPasswordChange`.
  *
  * Not `login`'s path: its dummy-compare exists to stop an ANONYMOUS caller telling "no such
@@ -243,8 +268,12 @@ export const reauth = (
     userId: string,
     proof: ReauthRequest,
     context: CallerContext
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    withCaller(userId, (user) => proveMethod(user, proof)).then((result) => {
+): Promise<ResponseSuccess<ReauthProven> | ResponseReject> =>
+    withCaller(userId, (user) =>
+        proveMethod(user, proof).then((proved) =>
+            proved.success ? proveOtp(user, proof, context) : proved
+        )
+    ).then((result) => {
         recordAudit(context, {
             action: accountAuditActions.AUTH_REAUTHENTICATED,
             outcome: result.success ? 'success' : 'failure',

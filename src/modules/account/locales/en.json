@@ -47,6 +47,7 @@
             "disabled": "Two-factor authentication is now off.",
             "backup-codes-regenerated": "Your backup codes have been regenerated. The old ones no longer work.",
             "code-sent": "We've sent you a code.",
+            "locked": "Too many wrong codes. Two-factor checks on this account are paused for a while; try again later.",
             "challenge-invalid": "This login attempt has expired. Please sign in again."
         },
         "logout": {
@@ -71,6 +72,7 @@
             "too-soon": "An email change was just requested. Please wait a moment before requesting another.",
             "token-not-found": "Invalid or expired token, please try again.",
             "success": "Email address changed.",
+            "undone": "The email change was undone and every device was signed out.",
             "cancelled": "The pending email change was cancelled.",
             "resent": "A new confirmation link was sent to the new address.",
             "nothing-pending": "There is no pending email change."
@@ -105,7 +107,9 @@
                 "subject": "Your password was changed",
                 "meta-title": "Password reset",
                 "greeting": "Hello, {{name}}!",
-                "body": "Your password has been reset."
+                "body": "Your password has been reset.",
+                "providers": "These sign-in methods are still connected to your account: {{providers}}. A password reset does not disconnect them; if you do not recognise one, remove it from your profile.",
+                "providers-none": "No Google or GitHub sign-in is connected to your account."
             },
             "delete-request": {
                 "subject": "Confirm account deletion",
@@ -149,7 +153,8 @@
                 "subject": "Your email address is changing",
                 "meta-title": "Email change requested",
                 "greeting": "Hello, {{name}}!",
-                "body": "Someone asked to change the email address on this account to {{newEmail}}. If this was you, no action is needed — it takes effect once the new address is confirmed. If it wasn't, change your password and sign out of every device right away."
+                "body": "Someone asked to change the email address on this account to {{newEmail}}. If this was you, no action is needed — it takes effect once the new address is confirmed. If it wasn't, undo the change with the link below: it works for 7 days, even after the new address is confirmed, and signs every device out.",
+                "link-label": "Undo this change"
             },
             "two-factor-changed": {
                 "subject": "Your two-factor settings changed",
@@ -159,6 +164,13 @@
                 "body-removed": "The second sign-in step ({{method}}) was removed from your account.",
                 "body-disabled": "Two-factor authentication was turned off on your account.",
                 "advice": "If this was not you, change your password and sign out everywhere now."
+            },
+            "two-factor-locked": {
+                "subject": "Your two-factor checks are locked",
+                "meta-title": "Two-factor checks locked",
+                "greeting": "Hello, {{name}}!",
+                "body": "Too many wrong two-factor codes were entered on your account, so code checks are paused for {{minutes}} minutes.",
+                "advice": "If this was not you, someone knows your password: change it now. Resetting your password also lifts the lock."
             },
             "reauth-code": {
                 "subject": "Your confirmation code",
@@ -172,7 +184,9 @@
         "oauth": {
             "unknown-provider": "This sign-in method isn't available.",
             "invalid-state": "This sign-in attempt has expired. Please try again.",
-            "invalid-verifier": "This sign-in attempt has expired. Please try again."
+            "invalid-verifier": "This sign-in attempt has expired. Please try again.",
+            "link-removed": "That sign-in method was disconnected.",
+            "link-not-found": "That sign-in method is not connected to your account."
         }
     }
 }

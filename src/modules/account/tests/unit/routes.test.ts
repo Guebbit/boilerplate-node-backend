@@ -27,7 +27,8 @@ const TOKEN_BEARING = [
     'POST /reset-confirm',
     'POST /verify-confirm',
     'POST /email-change-confirm',
-    'GET /refresh',
+    'POST /email-change-undo',
+    'POST /refresh',
     'POST /logout'
 ];
 
@@ -45,6 +46,7 @@ const RATE_LIMITED = [
     'POST /pending-email/resend',
     'POST /verify-confirm',
     'POST /email-change-confirm',
+    'POST /email-change-undo',
     'POST /login/2fa',
     'POST /login/2fa/send',
     'GET /oauth/:provider',
@@ -97,7 +99,7 @@ describe('account routes — what is mounted', () => {
             'POST /reauth',
             'POST /reauth/methods/:method/send',
             'GET /abilities',
-            'GET /refresh',
+            'POST /refresh',
             'POST /logout',
             'POST /logout-all',
             'GET /sessions',
@@ -105,6 +107,7 @@ describe('account routes — what is mounted', () => {
             'POST /verify-request',
             'POST /verify-confirm',
             'POST /email-change-confirm',
+            'POST /email-change-undo',
             'POST /export',
             'GET /export/:id',
             'POST /login/2fa/send',
@@ -117,6 +120,8 @@ describe('account routes — what is mounted', () => {
             'DELETE /2fa/methods/:method',
             'POST /2fa/backup-codes',
             'GET /oauth/providers',
+            'GET /oauth/links',
+            'DELETE /oauth/links/:provider',
             'GET /oauth/:provider',
             'GET /oauth/:provider/callback'
         ]);
@@ -170,15 +175,16 @@ describe('account routes — authorization', () => {
 });
 
 describe('account routes — credential rate limiting', () => {
-    it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
+    it.each(RATE_LIMITED)('%s carries ALL the credential budgets', (signature) => {
         const limiters = chainOf(router, signature).filter((entry) =>
             entry.startsWith('credentials-')
         );
 
-        // Identity, address AND address-block: each is keyed differently and defends an attack
-        // the other two miss. Any one missing reads as protected and is not.
+        // Identity, a forged device cookie, address AND address-block: each is keyed differently
+        // and defends an attack the others miss. Any one missing reads as protected and is not.
         expect(limiters).toEqual([
             'credentials-identity',
+            'credentials-device',
             'credentials-address',
             'credentials-block'
         ]);
@@ -209,35 +215,6 @@ describe('account routes — credential rate limiting', () => {
         );
 
         expect(unexpected).toEqual([]);
-    });
-});
-
-describe('account routes — two-factor code guessing', () => {
-    /** Every signed-in call that verifies a code to change the caller's own factors. */
-    const CODE_TAKING = [
-        'DELETE /2fa',
-        'POST /2fa/methods/:method/setup',
-        'DELETE /2fa/methods/:method',
-        'POST /2fa/backup-codes'
-    ];
-
-    it.each(CODE_TAKING)(
-        '%s carries the per-account guess budget, after the session',
-        (signature) => {
-            const chain = chainOf(router, signature);
-
-            expect(chain).toContain('mfa-account-guess');
-            // Keyed on the account, so the session must be read first.
-            expect(chain.indexOf('isAuth')).toBeLessThan(chain.indexOf('mfa-account-guess'));
-        }
-    );
-
-    it('puts it on no other route', () => {
-        const carrying = routeSignatures(router).filter((signature) =>
-            chainOf(router, signature).includes('mfa-account-guess')
-        );
-
-        expect(carrying).toEqual(CODE_TAKING);
     });
 });
 

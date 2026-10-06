@@ -12,6 +12,7 @@ describe('apiKeySchema', () => {
     it('requires everything a credential needs to be looked up and floored', () => {
         expect(requiredPaths(apiKeySchema)).toEqual([
             'createdByUserId',
+            'expiresAt',
             'hash',
             'name',
             'permissions',
@@ -21,10 +22,10 @@ describe('apiKeySchema', () => {
     });
 
     it('leaves lifecycle fields absent until they apply', () => {
-        // `lastUsedAt` (never presented yet), `expiresAt` (no expiry set) and `revokedAt` (never
-        // revoked) all mean something specific by their absence — a `default` on any would
-        // misreport a fresh credential as already used, expiring or revoked.
-        for (const path of ['lastUsedAt', 'expiresAt', 'revokedAt'])
+        // `lastUsedAt` (never presented yet) and `revokedAt` (never revoked) mean something
+        // specific by their absence — a `default` on either would misreport a fresh credential as
+        // already used or revoked. (`expiresAt` is required: every credential expires.)
+        for (const path of ['lastUsedAt', 'revokedAt'])
             expect(requiredPaths(apiKeySchema)).not.toContain(path);
     });
 

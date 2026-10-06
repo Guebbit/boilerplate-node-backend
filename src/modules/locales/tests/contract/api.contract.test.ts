@@ -1000,4 +1000,26 @@ describe('GET /locales/:locale/messages?tenant=', () => {
         const stranger = await api().get('/locales/pt/messages?tenant=nobody');
         expect(stranger.status).toBe(404);
     });
+
+    it.each([
+        ['a repeated parameter', '?tenant=demo-fe&tenant=demo-be'],
+        ['an empty value, which is not "the default"', '?tenant='],
+        ['a value that is not a tenant id', '?tenant=NOT%20AN%20ID']
+    ])('answers 422 for %s, never 500', async (_label, query) => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api().get(`/locales/pt/messages${query}`);
+
+        expect(response.status).toBe(422);
+    });
+
+    it('still serves the default tenant when the parameter is omitted', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api().get('/locales/pt/messages');
+
+        expect(response.status).toBe(200);
+    });
 });

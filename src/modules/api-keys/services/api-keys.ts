@@ -15,11 +15,15 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { logger } from '@infrastructure/adapters/logger';
+import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import { getDefaultLocale } from '@infrastructure/i18n';
+import { userService } from '@modules/users';
 import type { TenantCallerContext } from '@types';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
 import { readAll, MAX_CONFIGURED_PAGE_SIZE } from '@infrastructure/persistence/search';
 import { heldKeys } from '@kernel/ability';
-import { findKey } from '@kernel/permissions';
+import { findKey, systemCallerContext } from '@kernel/permissions';
 import type { Caller } from '@types';
 import type { MintApiKeyRequest, ApiKeyCreated, ApiKey } from '@types';
 import { apiKeyRepository } from '../repository';
@@ -27,6 +31,8 @@ import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
 import { presentApiKey } from '../presenter';
+import { apiKeyMintedEmail, apiKeysRevokedEmail, type RevocationReason } from '../emails';
+import type { ApiKeyDocument } from '../model';
 
 /**
  * Is `key` something `caller` may hand out on a credential?
@@ -40,6 +46,54 @@ import { presentApiKey } from '../presenter';
  */
 const isMintable = (key: string, caller: Caller): boolean =>
     findKey(key)?.scope === 'tenant' && heldKeys(caller).has(key);
+
+/**
+ * The latest moment a credential may expire at: one year from `now`. A calendar year, not a count
+ * of days, so "one year" means what a person reading the contract thinks it means.
+ *
+ * @param now - the clock, injectable for tests
+ */
+export const latestExpiry = (now: Date = new Date()): Date => {
+    const limit = new Date(now);
+    limit.setFullYear(limit.getFullYear() + 1);
+    return limit;
+};
+
+/**
+ * Tell the minter, out of band, that a credential now exists. Fire-and-forget: the key already
+ * exists, and a queue that is briefly down must not turn a mint into an error. The address is
+ * resolved fresh from the minter's id, never stored on the key.
+ *
+ * @param minterId - who minted it
+ * @param apiKey - the stored credential
+ */
+const notifyMinted = (minterId: string, apiKey: ApiKeyDocument): void => {
+    void userService
+        .getById(minterId)
+        .then((minter) => {
+            if (!minter) return;
+            const locale = minter.locale ?? getDefaultLocale();
+            // Intl: a long, locale-aware date, so the mail reads the way the recipient's own does.
+            // https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+            const expires = new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(
+                apiKey.expiresAt
+            );
+            const mail = apiKeyMintedEmail(
+                locale,
+                apiKey.name,
+                displayIdOf(apiKey.publicPrefix),
+                expires
+            );
+            return enqueueEmail(
+                { to: minter.email, subject: mail.subject },
+                mail.template,
+                mail.data
+            );
+        })
+        .catch((error: unknown) => {
+            logger.warn({ message: 'Could not mail the minter of a new API key.', error });
+        });
+};
 
 /**
  * Every credential this account minted, newest first — for the account's own data export.
@@ -94,6 +148,18 @@ export const mint = (
     body: MintApiKeyRequest,
     context: TenantCallerContext
 ): Promise<ResponseSuccess<ApiKeyCreated> | ResponseReject> => {
+    // A credential that never expires is one that is never rotated: bounded at mint, not at use.
+    if (new Date(body.expiresAt) > latestExpiry())
+        return Promise.resolve(
+            generateReject(422, [
+                {
+                    code: ERROR_CODES.VALIDATION_ERROR,
+                    message: t('api-keys.expiry-too-far'),
+                    details: { expiresAt: body.expiresAt }
+                }
+            ])
+        );
+
     const invalid = body.permissions.filter((key) => !isMintable(key, context.caller));
     if (invalid.length > 0)
         return Promise.resolve(
@@ -118,9 +184,10 @@ export const mint = (
             // `router.use(getAuth, isAuth)` demands a live session before any route here is
             // reached, so `id` is never the stranger case `Caller` otherwise allows for.
             createdByUserId: context.caller.id!,
-            expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined
+            expiresAt: new Date(body.expiresAt)
         })
         .then((apiKey) => {
+            notifyMinted(context.caller.id!, apiKey);
             recordAudit(context, {
                 action: apiKeysAuditActions.ADMIN_API_KEY_MINTED,
                 outcome: 'success',
@@ -165,4 +232,70 @@ export const revoke = (
             });
             return generateSuccess(undefined);
         });
+    });
+
+/**
+ * Tell the owner which credentials just stopped working, and why. Fire-and-forget like
+ * {@link notifyMinted}: the revocation already holds.
+ *
+ * @param userId - the minter
+ * @param reason - which event revoked them
+ * @param revoked - the credentials that were live and are now revoked
+ */
+const notifyRevoked = (
+    userId: string,
+    reason: RevocationReason,
+    revoked: readonly ApiKeyDocument[]
+): Promise<void> =>
+    userService
+        .getById(userId)
+        .then((owner) => {
+            if (!owner) return;
+            const mail = apiKeysRevokedEmail(
+                owner.locale ?? getDefaultLocale(),
+                reason,
+                revoked.map((key) => `${key.name} (${displayIdOf(key.publicPrefix)})`)
+            );
+            return enqueueEmail(
+                { to: owner.email, subject: mail.subject },
+                mail.template,
+                mail.data
+            );
+        })
+        .catch((error: unknown) => {
+            logger.warn({
+                message: 'Could not mail the owner of revoked API keys.',
+                userId,
+                error
+            });
+        });
+
+/**
+ * Revoke every live credential a person minted — what `account` asks for when their sessions are
+ * ended wholesale (logout everywhere, a password reset): both mean "I may be compromised", and a
+ * key outlives every session. Audited as the system's act, then the owner is mailed the list.
+ * A person with nothing live gets neither.
+ *
+ * @param userId - the minter
+ * @param reason - which `account` event asked for this
+ */
+export const revokeAllMintedBy = (userId: string, reason: RevocationReason): Promise<void> =>
+    apiKeyRepository.findActiveByMinter(userId).then((live) => {
+        if (live.length === 0) return undefined;
+
+        return apiKeyRepository
+            .revokeMany(
+                live.map((key) => String(key._id)),
+                new Date()
+            )
+            .then(() => {
+                recordAudit(systemCallerContext('ApiKey'), {
+                    action: apiKeysAuditActions.SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE,
+                    outcome: 'success',
+                    target_type: 'user',
+                    target_id: userId,
+                    metadata: { count: live.length, reason }
+                });
+                return notifyRevoked(userId, reason, live);
+            });
     });

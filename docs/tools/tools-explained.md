@@ -27,7 +27,7 @@ flowchart TD
         HELMET["helmet"]
         CORS["cors"]
         RATE["express-rate-limit"]
-        JWT["jsonwebtoken · bcrypt"]
+        JWT["jsonwebtoken · argon2id"]
         ZOD["Zod"]
         MULTER["multer"]
     end
@@ -130,13 +130,13 @@ prevent.
 
 ---
 
-### JWT (jsonwebtoken + bcrypt)
+### JWT (jsonwebtoken) and password hashing (argon2id)
 
-**What it is.** JSON Web Tokens (JWT) are signed, compact tokens that carry claims (user ID, role, expiry) without a server-side session store. `bcrypt` is a password hashing algorithm designed to be slow — which makes brute-force attacks expensive.
+**What it is.** JSON Web Tokens (JWT) are signed, compact tokens that carry claims (user ID, role, expiry) without a server-side session store. argon2id (from `node:crypto`) is a password hashing algorithm designed to be slow and memory-hungry — which makes brute-force attacks expensive.
 
-**Problem it solves.** Sessions stored in a database require a lookup on every request and create shared state that complicates horizontal scaling. JWTs are stateless: the server verifies the signature without a database round-trip. `bcrypt` prevents a leaked password hash from being reversed quickly.
+**Problem it solves.** Sessions stored in a database require a lookup on every request and create shared state that complicates horizontal scaling. JWTs are stateless: the server verifies the signature without a database round-trip. argon2id prevents a leaked password hash from being reversed quickly.
 
-**In this repo.** Short-lived access token (Bearer header) + long-lived refresh token (HttpOnly cookie). Refresh tokens are also stored server-side so they can be revoked. `bcrypt` hashes passwords at user creation and verifies them at login.
+**In this repo.** Short-lived access token (Bearer header) + long-lived refresh token (HttpOnly cookie). Refresh tokens are also stored server-side so they can be revoked. argon2id hashes passwords at user creation and verifies them at login.
 
 → [Security](./security.md)
 

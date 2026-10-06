@@ -10,11 +10,15 @@
  */
 
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import { accountConfig } from '../config';
-import { userService, TokenType, type UserDocument } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
+import { revokeAllSessions } from './revocation';
+import { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types';
+
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
 import { mailRecipientRefusal } from '../mail-budget';
@@ -28,25 +32,6 @@ import { accountAuditActions } from '../audit';
 import { isUnrestrictedCaller } from '../roles';
 import { promoteVerifiedCustomer } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-
-/**
- * The `tokens.type` under which a signup/re-send verification token is stored — proves the
- * address the account ALREADY has.
- *
- * A string like `'password'` and `'delete'`, not an `TokenType` member: the enum names the two
- * types the JWT layer knows about, and this one belongs to the account endpoints alone — see the
- * note on `UserMethods.tokenAdd`.
- */
-export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
-
-/**
- * The `tokens.type` under which an email-CHANGE token is stored — proves the address a
- * `PUT/PATCH /account` change has ASKED FOR (`user.pendingEmail`), never the one it already has. A
- * distinct type from {@link EMAIL_VERIFY_TOKEN_TYPE}, not a reuse: spending one must not do the
- * other's work, since a signup-verify token swapping in a `pendingEmail` would be a bug with an
- * account takeover on the end of it.
- */
-export const EMAIL_CHANGE_TOKEN_TYPE = 'email-change';
 
 /**
  * How long a verification link works, shared by both token kinds. Tunable because the safe
@@ -359,12 +344,51 @@ export const completeEmailChange = (
             promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
         )
         .then((saved) =>
-            userService
-                .tokenRemoveAll(saved, TokenType.REFRESH)
-                .catch(() => undefined)
+            revokeAllSessions(saved)
+                .catch((error: unknown) => {
+                    logger.warn({
+                        message: 'Email changed, but its session revoke failed.',
+                        userId: saved.id,
+                        error
+                    });
+                })
                 .then(() => saved)
         )
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)
         );
 };
+
+export { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types';
+
+/**
+ * Spend an undo link's work: put the account back as it was before the change. While the change is
+ * still pending it is cancelled and its confirmation link dies; once the new address was confirmed
+ * the previous one is restored. Either way every session ends — the owner is saying "this was not
+ * me", so what a thief holds must stop working. Nothing to undo (the change was already cancelled)
+ * is not an error: the account is as the caller wants it.
+ *
+ * `postEmailChangeUndo` already found and spent the token, the same split as
+ * {@link completeEmailChange}.
+ *
+ * @param user - the token's holder, loaded with credentials (`pendingEmail`, `previousEmail`, `tokens`)
+ * @param context - the caller context, for the audit record
+ * @throws a duplicate-key error when another account took the previous address since
+ */
+export const undoEmailChange = (
+    user: UserDocument,
+    context: CallerContext
+): Promise<UserDocument> =>
+    (user.pendingEmail === undefined
+        ? userService.restorePreviousEmail(user)
+        : userService.cancelPendingEmail(user)
+    )
+        .then((saved) =>
+            // The confirmation link is dead whichever way this went: it would swap back in the
+            // address the owner just refused.
+            userService.tokenRemoveAll(saved, EMAIL_CHANGE_TOKEN_TYPE).then(() => saved)
+        )
+        .then((saved) => revokeAllSessions(saved).then(() => saved))
+        .then((saved) =>
+            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
+        );

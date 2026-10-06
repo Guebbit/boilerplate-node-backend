@@ -57,10 +57,17 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // The sync settles money just as the confirm does, from the provider's answer rather than
     // from a method the caller supplied — so it sits at the same tier, not a lower one.
     'payments POST /:id/sync': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account DELETE /': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    // The first guard recorded is the conditional one: an account with a second factor must also
+    // have proved an `otp`. The unconditional critical guard follows it on the same route.
+    'account DELETE /': `requireFreshAuthWhen(${REAUTH_TIME_CRITICAL})`,
+    // Only for an account with a second factor armed (the otp demand): the plain password change
+    // of an account without one is gated by the current password alone, as before.
+    'account POST /password': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
     'account PUT /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
     'account PATCH /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
     'account POST /logout-all': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
+    'account DELETE /oauth/links/:provider': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     'account DELETE /sessions/:sessionId': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     // The data export adopts this same guard in place of a bespoke password check — see the
     // route's own comment in `account/routes.ts`.

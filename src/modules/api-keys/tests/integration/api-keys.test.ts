@@ -21,7 +21,9 @@ import { apiKeyRepository } from '@modules/api-keys/repository';
 import { mintApiKey } from '@modules/api-keys/credentials';
 import { logger } from '@infrastructure/adapters/logger';
 import { registerModules } from '@kernel/registry';
-import { resetDomainEvents } from '@kernel/events';
+import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
+import * as mailer from '@infrastructure/adapters/mailer';
+import { ACCOUNT_SESSIONS_REVOKED } from '@modules/account';
 import { enabledModules } from '../../../../modules';
 
 setupTestDb();
@@ -29,6 +31,9 @@ setupTestDb();
 // `onRegistered`'s `registerCredentialResolver` call is what makes `resolveCredential` answer
 // anything at all — running it here is what a real boot does once this module is enabled (D15).
 apiKeysModule.onRegistered?.();
+
+/** A valid expiry for a mint: a week out, well inside the one-year ceiling. */
+const IN_A_WEEK = new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
 
 /** A real, persisted user this suite can change the ROLE of between mint and use. */
 const createRealUser = (id: string) =>
@@ -57,7 +62,11 @@ describe('mint — the subset boundary', () => {
         const context = contextFor(String(user._id), ['apikeys.any.read']);
 
         const result = await mint(
-            { name: 'partner integration', permissions: ['apikeys.any.read', 'orders.any.read'] },
+            {
+                name: 'partner integration',
+                permissions: ['apikeys.any.read', 'orders.any.read'],
+                expiresAt: IN_A_WEEK
+            },
             context
         );
 
@@ -71,7 +80,11 @@ describe('mint — the subset boundary', () => {
         const context = contextFor(String(user._id), ['apikeys.any.read', 'apikeys.any.create']);
 
         const result = await mint(
-            { name: 'partner integration', permissions: ['apikeys.any.read'] },
+            {
+                name: 'partner integration',
+                permissions: ['apikeys.any.read'],
+                expiresAt: IN_A_WEEK
+            },
             context
         );
 
@@ -86,7 +99,7 @@ describe('mint — the subset boundary', () => {
         const context = contextFor(String(user._id), permissionsOfRole('admin'));
 
         const result = await mint(
-            { name: 'from owner', permissions: ['orders.self.read'] },
+            { name: 'from owner', permissions: ['orders.self.read'], expiresAt: IN_A_WEEK },
             context
         );
 
@@ -101,7 +114,10 @@ describe('a self key is not an any key', () => {
         const user = await createRealUser('self-minter');
         const context = contextFor(String(user._id), permissionsOfRole('customer'));
 
-        const result = await mint({ name: 'wide read', permissions: ['orders.any.read'] }, context);
+        const result = await mint(
+            { name: 'wide read', permissions: ['orders.any.read'], expiresAt: IN_A_WEEK },
+            context
+        );
 
         expect(result.success).toBe(false);
     });
@@ -111,7 +127,7 @@ describe('a self key is not an any key', () => {
         const userId = String(user._id);
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
-            { name: 'wide read', permissions: ['orders.any.read'] },
+            { name: 'wide read', permissions: ['orders.any.read'], expiresAt: IN_A_WEEK },
             contextFor(userId, permissionsOfRole('admin'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -131,7 +147,11 @@ describe('the credential-resolve path — re-floored at every use, not just at m
 
         const mintContext = contextFor(userId, permissionsOfRole('admin'));
         const minted = await mint(
-            { name: 'about to be demoted', permissions: ['apikeys.any.read'] },
+            {
+                name: 'about to be demoted',
+                permissions: ['apikeys.any.read'],
+                expiresAt: IN_A_WEEK
+            },
             mintContext
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -160,7 +180,11 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         const userId = String(user._id);
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
-            { name: 'about to lose its minter', permissions: ['apikeys.any.read'] },
+            {
+                name: 'about to lose its minter',
+                permissions: ['apikeys.any.read'],
+                expiresAt: IN_A_WEEK
+            },
             contextFor(userId, permissionsOfRole('admin'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -180,7 +204,10 @@ describe('the credential-resolve path — re-floored at every use, not just at m
     it('carries the credential id for the audit trail, display-shaped, never the secret', async () => {
         const user = await createRealUser('display-id');
         const context = contextFor(String(user._id), ['apikeys.any.read']);
-        const minted = await mint({ name: 'named', permissions: ['apikeys.any.read'] }, context);
+        const minted = await mint(
+            { name: 'named', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
+            context
+        );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
         const resolved = await resolveCredential(minted.data.secret);
@@ -195,7 +222,7 @@ describe('revoke', () => {
         const user = await createRealUser('to-revoke');
         const context = contextFor(String(user._id), ['apikeys.any.read']);
         const minted = await mint(
-            { name: 'short-lived', permissions: ['apikeys.any.read'] },
+            { name: 'short-lived', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
             context
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -209,7 +236,7 @@ describe('revoke', () => {
         const user = await createRealUser('double-revoke');
         const context = contextFor(String(user._id), ['apikeys.any.read']);
         const minted = await mint(
-            { name: 'short-lived', permissions: ['apikeys.any.read'] },
+            { name: 'short-lived', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
             context
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -227,7 +254,7 @@ describe('revoke across administrators', () => {
         const minterId = String(minter._id);
         await assignRole(minterId, TEST_TENANT_ID, 'tenant', 'admin');
         const minted = await mint(
-            { name: 'leaked', permissions: ['apikeys.any.read'] },
+            { name: 'leaked', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
             contextFor(minterId, permissionsOfRole('admin'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -275,8 +302,14 @@ describe('a hard-deleted user takes their credentials with them', () => {
     it('erases every credential the user minted', async () => {
         const user = await createRealUser('erased-owner');
         const context = contextFor(String(user._id), ['apikeys.any.read', 'apikeys.any.create']);
-        const first = await mint({ name: 'first', permissions: ['apikeys.any.read'] }, context);
-        const second = await mint({ name: 'second', permissions: ['apikeys.any.read'] }, context);
+        const first = await mint(
+            { name: 'first', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
+            context
+        );
+        const second = await mint(
+            { name: 'second', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
+            context
+        );
         if (!first.data || !second.data) throw new Error('setup failed: mint was refused');
 
         await userService.removeById(String(user._id), true);
@@ -292,9 +325,12 @@ describe('a hard-deleted user takes their credentials with them', () => {
         const kept = await createRealUser('kept-bob');
         const doomedContext = contextFor(String(doomed._id), ['apikeys.any.read']);
         const keptContext = contextFor(String(kept._id), ['apikeys.any.read']);
-        await mint({ name: 'about to go', permissions: ['apikeys.any.read'] }, doomedContext);
+        await mint(
+            { name: 'about to go', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
+            doomedContext
+        );
         const survivor = await mint(
-            { name: 'stays', permissions: ['apikeys.any.read'] },
+            { name: 'stays', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
             keptContext
         );
         if (!survivor.data) throw new Error('setup failed: mint was refused');
@@ -314,7 +350,8 @@ describe('touchLastUsed', () => {
             publicPrefix,
             hash,
             permissions: ['apikeys.any.read'],
-            createdByUserId: 'irrelevant-for-this-check'
+            createdByUserId: 'irrelevant-for-this-check',
+            expiresAt: new Date(IN_A_WEEK)
         });
         expect(apiKey.lastUsedAt).toBeUndefined();
 
@@ -339,7 +376,11 @@ describe('touchLastUsed', () => {
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'admin');
         const context = contextFor(userId, ['apikeys.any.read']);
         const minted = await mint(
-            { name: 'about to fail its touch', permissions: ['apikeys.any.read'] },
+            {
+                name: 'about to fail its touch',
+                permissions: ['apikeys.any.read'],
+                expiresAt: IN_A_WEEK
+            },
             context
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -356,5 +397,96 @@ describe('touchLastUsed', () => {
         expect(loggedWarn).toHaveBeenCalledWith(
             expect.objectContaining({ apiKeyId: minted.data.id })
         );
+    });
+});
+
+/** Polls until `done` holds, up to two seconds — for a side effect the code under test does not await. */
+const eventually = async (done: () => boolean): Promise<void> => {
+    for (let attempt = 0; attempt < 40 && !done(); attempt++)
+        await new Promise((resolve) => setTimeout(resolve, 50));
+};
+
+/** Mint two keys for a real user, return the id and the context. */
+const mintTwo = async (id: string) => {
+    const user = await createRealUser(id);
+    const context = contextFor(String(user._id), ['apikeys.any.read']);
+    for (const name of ['first', 'second'])
+        await mint({ name, permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK }, context);
+    return { userId: String(user._id), context };
+};
+
+/** How many of this user's credentials are still live. */
+const liveCount = (userId: string): Promise<number> =>
+    apiKeyRepository.findActiveByMinter(userId).then((keys) => keys.length);
+
+describe('a credential outlives a session, so ending sessions wholesale ends credentials', () => {
+    /** Every queued mail, newest last. */
+    const outbox: { to?: string; template: string; data: Record<string, unknown> }[] = [];
+
+    beforeEach(() => {
+        outbox.length = 0;
+        resetDomainEvents();
+        registerModules(enabledModules);
+        jest.spyOn(mailer, 'enqueueEmail').mockImplementation((envelope, template, data = {}) => {
+            outbox.push({ to: envelope.to, template, data });
+            return Promise.resolve();
+        });
+    });
+
+    afterEach(() => jest.restoreAllMocks());
+
+    it('mails the minter when a credential is created, without the secret', async () => {
+        const user = await createRealUser('minter-mail');
+
+        const minted = await mint(
+            { name: 'ci', permissions: ['apikeys.any.read'], expiresAt: IN_A_WEEK },
+            contextFor(String(user._id), ['apikeys.any.read'])
+        );
+        // The mail is fire-and-forget: wait for the user lookup and the enqueue to settle.
+        await eventually(() => outbox.some((mail) => mail.template === 'api-keys.minted'));
+
+        const mails = outbox.filter((mail) => mail.template === 'api-keys.minted');
+        expect(mails).toHaveLength(1);
+        expect(mails[0].to).toBe('minter-mail@example.com');
+        expect(JSON.stringify(mails[0].data)).not.toContain(minted.data?.secret ?? 'missing');
+    });
+
+    it('revokes every live key a person minted when they log out everywhere, and mails the list', async () => {
+        const { userId } = await mintTwo('logout-all-keys');
+        outbox.length = 0;
+
+        await emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, { userId, reason: 'logout-all' });
+
+        expect(await liveCount(userId)).toBe(0);
+        const mails = outbox.filter((mail) => mail.template === 'api-keys.revoked');
+        expect(mails).toHaveLength(1);
+        expect(String(mails[0].data.list).split(', ')).toHaveLength(2);
+    });
+
+    it('does the same for a password reset', async () => {
+        const { userId } = await mintTwo('reset-keys');
+
+        await emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, { userId, reason: 'password-reset' });
+
+        expect(await liveCount(userId)).toBe(0);
+    });
+
+    it('leaves another person’s keys alone, and mails nobody who has nothing live', async () => {
+        const mine = await mintTwo('mine-revoked');
+        const theirs = await mintTwo('theirs-kept');
+        const nobody = await createRealUser('no-keys');
+        outbox.length = 0;
+
+        await emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
+            userId: String(nobody._id),
+            reason: 'logout-all'
+        });
+        await emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
+            userId: mine.userId,
+            reason: 'logout-all'
+        });
+
+        expect(await liveCount(theirs.userId)).toBe(2);
+        expect(outbox.filter((mail) => mail.template === 'api-keys.revoked')).toHaveLength(1);
     });
 });

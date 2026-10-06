@@ -22,16 +22,19 @@ graph cannot see._
 flowchart LR
     api_keys["api-keys<br/><i>this module</i>"]
     access["access"]
+    account["account"]
     users["users"]
 
     api_keys --> access
+    api_keys --> account
     api_keys --> users
+    account -. "account.sessions-revoked" .-> api_keys
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
-    class access,users generic;
+    class access,account,users generic;
     class api_keys centre;
 ```
 
@@ -70,6 +73,27 @@ flowchart LR
     FLOOR --> INTERSECT["stored permissions ∩ current permissions"]
     INTERSECT --> CALLER["Caller, tenant-scoped"]
 ```
+
+**A key outlives its session, so three rules bound it.**
+
+```mermaid
+flowchart LR
+    M["POST /api-keys"] --> F{"fresh critical session?"}
+    F -->|no| R["401 REAUTH_REQUIRED"]
+    F -->|yes| E{"expiresAt ≤ 1 year ahead?"}
+    E -->|no| U["422"]
+    E -->|yes| K["key minted · minter mailed"]
+    L["logout everywhere /<br/>password reset"] --> V["account.sessions-revoked"]
+    V --> X["every live key the person minted revoked · list mailed"]
+```
+
+- **Minting needs a fresh session** (`stepUp: critical` on `apikeys.any.create`): a stolen access
+  token must not turn ten minutes into a long-lived key. GitHub's sudo mode asks the same.
+- **Every key expires**, at most one year out. A key that never expires never gets rotated.
+- **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere
+  or a password reset revoked them. `account` only announces the event; this module owns what it
+  means for keys. An ordinary password change, where the owner typed the current password, leaves
+  keys alone.
 
 **Tenant-scoped only, by design.** This repo's own deployment model is a silo — one organisation
 per stack, never pooled multi-tenancy — so every real use case for a machine credential (a partner,

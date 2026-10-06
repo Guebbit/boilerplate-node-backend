@@ -52,8 +52,10 @@ export {
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     VERIFY_RESEND_SECONDS,
-    completeEmailChange
+    completeEmailChange,
+    undoEmailChange
 } from './verification';
+export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from './token-types';
 export { reapExpiredTokens } from './token-cleanup';
 export { reapExpiredExports } from './export-rows';
 export { pruneOwnExpiredTokens } from '../session/prune';
@@ -75,7 +77,7 @@ export const accountService = {
     tokenAdd: authentication.tokenAdd,
     signup: authentication.signup,
     login: authentication.login,
-    tokenRemoveAll: authentication.tokenRemoveAll,
+    logoutEverywhere: authentication.logoutEverywhere,
     requestAccountDeletion: authentication.requestAccountDeletion,
     requestPasswordReset: authentication.requestPasswordReset,
     requestAccountSetup: authentication.requestAccountSetup,
@@ -100,6 +102,7 @@ export const accountService = {
     resendPendingEmailVerificationFor: verification.resendPendingEmailVerificationFor,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
+    undoEmailChange: verification.undoEmailChange,
     findLiveToken: tokens.findLiveToken,
     spendLiveToken: tokens.spendLiveToken,
     redeemLiveToken: tokens.redeemLiveToken,
@@ -108,7 +111,9 @@ export const accountService = {
     reapExpiredExports: exportRows.reapExpiredExports,
     pruneOwnExpiredTokens,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
-    recordOAuthFailure: oauth.recordOAuthFailure
+    recordOAuthFailure: oauth.recordOAuthFailure,
+    listOAuthLinks: oauth.listOAuthLinks,
+    unlinkOAuthProvider: oauth.unlinkOAuthProvider
 };
 
 /**

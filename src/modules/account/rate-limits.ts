@@ -30,6 +30,15 @@ import {
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
 import { MAIL_RECIPIENT_BUDGET } from './mail-budget';
+import { readMfaChallengeCookie } from './oauth/mfa-redirect';
+import { holdsDeviceCookie, presentsFailingDeviceCookie } from './session/device-cookie';
+
+/**
+ * The window of every credential-guess budget: 15 minutes, its own rather than the shared browsing
+ * window (a minute by default), since a guess budget that refills each minute bounds nothing.
+ * The per-account budget's lockouts also double on a repeat — see {@link CREDENTIAL_IDENTITY_BUDGET}.
+ */
+const CREDENTIAL_WINDOW_MS = 15 * 60_000;
 
 /**
  * Where express-rate-limit stores the identity limiter's counter on `request` — a distinct name
@@ -63,16 +72,40 @@ const CREDENTIAL_IDENTITY_BUDGET: RateLimitBudget = {
     namespace: 'credentials-identity',
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_MAX',
     defaultMax: 10,
-    windowMs: 'shared',
+    windowMs: CREDENTIAL_WINDOW_MS,
     keyedBy: KEYED_BY_ACCOUNT_OR_SUBMITTED_EMAIL,
     bounds:
         'Failed attempts against ONE account — defeats a botnet spreading guesses. The smallest ' +
         'of the three, since guessing at one account is the attack and someone signing in on ' +
-        'several devices is not.',
+        'several devices is not. A repeated lockout of the same account lasts twice as long as ' +
+        "the last (up to 8x), and a browser carrying the account's familiar-device cookie skips " +
+        'this budget, so spending it cannot lock the owner out.',
     audited: true,
     keyGenerator: credentialIdentityOf,
     skipSuccessfulRequests: true,
-    requestPropertyName: IDENTITY_RATE_LIMIT_PROPERTY
+    requestPropertyName: IDENTITY_RATE_LIMIT_PROPERTY,
+    escalation: { doublings: 3 },
+    skip: holdsDeviceCookie
+};
+
+/**
+ * Failed attempts that carried a familiar-device cookie which does not vouch for the account they
+ * name — a forged or stale one. Bounds guessing the cookie itself separately from the password it
+ * would excuse; a request without a cookie, or with a valid one, is never counted here.
+ */
+const CREDENTIAL_DEVICE_BUDGET: RateLimitBudget = {
+    name: 'Credential guesses — failing device cookie',
+    namespace: 'credentials-device',
+    environmentVariable: 'NODE_AUTH_RATE_LIMIT_DEVICE_MAX',
+    defaultMax: 10,
+    windowMs: CREDENTIAL_WINDOW_MS,
+    keyedBy: KEYED_BY_ADDRESS,
+    bounds:
+        'Failed attempts from ONE address that presented a device cookie not valid for the ' +
+        'account they named — a forged token gets its own, small budget.',
+    audited: true,
+    skipSuccessfulRequests: true,
+    skip: (request) => !presentsFailingDeviceCookie(request)
 };
 
 /** Failed attempts from ONE address — defeats spraying a user list. */
@@ -81,7 +114,7 @@ const CREDENTIAL_ADDRESS_BUDGET: RateLimitBudget = {
     namespace: 'credentials-address',
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_ADDRESS_MAX',
     defaultMax: 30,
-    windowMs: 'shared',
+    windowMs: CREDENTIAL_WINDOW_MS,
     keyedBy: KEYED_BY_ADDRESS,
     bounds: 'Failed attempts from ONE address — defeats spraying a user list.',
     audited: true,
@@ -94,7 +127,7 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
     namespace: 'credentials-block',
     environmentVariable: 'NODE_AUTH_RATE_LIMIT_BLOCK_MAX',
     defaultMax: 100,
-    windowMs: 'shared',
+    windowMs: CREDENTIAL_WINDOW_MS,
     keyedBy: KEYED_BY_ADDRESS_BLOCK,
     bounds:
         'Failed attempts from ONE address block — the largest and coarsest of the three, sized ' +
@@ -108,7 +141,8 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
 /**
  * The credential budgets, for the routes that accept a password or mint a token.
  *
- * THREE independent limiters: one bounds failed attempts against ONE account, one bounds attempts
+ * Four independent limiters: one bounds failed attempts against ONE account, one bounds a forged
+ * device cookie, one bounds attempts
  * from ONE address, one bounds attempts from ONE address BLOCK. Keying on any pair instead is
  * weaker still — a bucket refreshes the moment any one key of the tuple changes.
  *
@@ -120,6 +154,7 @@ const CREDENTIAL_BLOCK_BUDGET: RateLimitBudget = {
  */
 export const credentialLimiters: RequestHandler[] = [
     buildRateLimiter(CREDENTIAL_IDENTITY_BUDGET),
+    buildRateLimiter(CREDENTIAL_DEVICE_BUDGET),
     buildRateLimiter(CREDENTIAL_ADDRESS_BUDGET),
     buildRateLimiter(CREDENTIAL_BLOCK_BUDGET)
 ];
@@ -288,14 +323,17 @@ export const resetRequestLimiters: RequestHandler[] = [
 const MFA_CHALLENGE_WINDOW_MS = MFA_CHALLENGE_DELIVERED_TTL_MS;
 
 /**
- * The bucket key both challenge limiters use: the challenge string itself, hashed so a credential
+ * The bucket key both challenge limiters use: the challenge string itself (from the body, else the
+ * OAuth continuation's cookie), hashed so a credential
  * never becomes a store key. A request naming no challenge at all — a forged or malformed body —
  * has nothing to hash, so it falls back to the caller's address BLOCK (`addressBlockOf`) rather
  * than one shared key: a shared key let any two such callers exhaust the same budget, which
  * bounds neither of them against a live challenge the way this limiter exists to.
  */
 const challengeKey = (request: Request): string => {
-    const challenge = readBodyField(request, 'challenge');
+    // An OAuth continuation never sends the challenge in the body: it rides in a cookie.
+    const fromBody = readBodyField(request, 'challenge');
+    const challenge = fromBody ? fromBody : readMfaChallengeCookie(request);
     return challenge
         ? createHash('sha256').update(challenge).digest('hex')
         : `block:${addressBlockOf(request)}`;
@@ -380,37 +418,11 @@ const ACCOUNT_CODE_SEND_BUDGET: RateLimitBudget = {
 /** The budget for both signed-in code sends — see {@link ACCOUNT_CODE_SEND_BUDGET}. */
 export const accountCodeSendLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_SEND_BUDGET);
 
-/**
- * WRONG codes a signed-in account may type into the calls that change its own second factors.
- * Those calls take a TOTP or backup code from a session that already passed fresh auth, so a
- * stolen session plus password would otherwise guess six digits behind the global brake alone.
- *
- * Failures only: a right code spends nothing, so changing factors is never itself rationed.
- * Keyed on the account, like the delivery budget above: an address key would reset per IP.
- */
-const ACCOUNT_CODE_GUESS_BUDGET: RateLimitBudget = {
-    name: 'Two-factor code guesses — per account',
-    namespace: 'mfa-account-guess',
-    environmentVariable: 'NODE_MFA_ACCOUNT_GUESS_MAX',
-    defaultMax: 5,
-    windowMs: ACCOUNT_CODE_WINDOW_MS,
-    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Wrong codes a signed-in account types to change its factors (`DELETE /account/2fa`, ' +
-        '`POST /account/2fa/methods/{method}/setup`, `DELETE /account/2fa/methods/{method}`, ' +
-        '`POST /account/2fa/backup-codes`).',
-    audited: true,
-    keyGenerator: accountIdOf,
-    skipSuccessfulRequests: true
-};
-
-/** The budget for the factor-changing calls — see {@link ACCOUNT_CODE_GUESS_BUDGET}. */
-export const accountCodeGuessLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_GUESS_BUDGET);
-
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */
 export const accountRateLimits: readonly RateLimitBudget[] = [
     MAIL_RECIPIENT_BUDGET,
     CREDENTIAL_IDENTITY_BUDGET,
+    CREDENTIAL_DEVICE_BUDGET,
     CREDENTIAL_ADDRESS_BUDGET,
     CREDENTIAL_BLOCK_BUDGET,
     PASSWORD_CHECK_BUDGET,
@@ -422,6 +434,5 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     RESET_BLOCK_BUDGET,
     MFA_CHALLENGE_BUDGET,
     MFA_SEND_BUDGET,
-    ACCOUNT_CODE_SEND_BUDGET,
-    ACCOUNT_CODE_GUESS_BUDGET
+    ACCOUNT_CODE_SEND_BUDGET
 ];

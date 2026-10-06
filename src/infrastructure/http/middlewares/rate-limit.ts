@@ -114,7 +114,11 @@ const budgetLimit = (budget: RateLimitBudget): number =>
  */
 export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
     rateLimit({
-        store: rateLimitStore(budget.namespace, budget.onStoreError ?? 'memory'),
+        store: rateLimitStore(
+            budget.namespace,
+            budget.onStoreError ?? 'memory',
+            budget.escalation && { limit: budgetLimit(budget), ...budget.escalation }
+        ),
         windowMs:
             budget.windowMs === 'shared'
                 ? rateLimitConfig().NODE_RATE_LIMIT_WINDOW_MS

@@ -20,7 +20,7 @@ export interface ApiKeyDocument extends Document {
     permissions: string[];
     createdByUserId: string;
     lastUsedAt?: Date;
-    expiresAt?: Date;
+    expiresAt: Date;
     revokedAt?: Date;
     createdAt: Date;
     updatedAt: Date;
@@ -72,8 +72,10 @@ export const apiKeySchema = new Schema<ApiKeyDocument, ApiKeyModel>(
         lastUsedAt: {
             type: Date
         },
+        // Every credential expires: required at mint, bounded to a year by the service.
         expiresAt: {
-            type: Date
+            type: Date,
+            required: true
         },
         revokedAt: {
             type: Date

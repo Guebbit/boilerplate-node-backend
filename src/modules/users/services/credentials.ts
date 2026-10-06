@@ -3,7 +3,7 @@
  * The `account` end of the shared kernel, write side: one narrow mutation per operation.
  */
 
-import type { UserDocument } from '../model';
+import type { MfaReservation, UserDocument } from '../model';
 import { userRepository } from '../repository';
 
 /**
@@ -40,9 +40,26 @@ export const markEmailVerified = (user: UserDocument): Promise<UserDocument> => 
  * this operation's — `save` here answers with the document a token-revoke call needs, nothing more.
  */
 export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDocument> => {
+    // Kept for the undo link: the only copy of the address the account is being moved away from.
+    user.previousEmail = user.email;
     user.email = newEmail;
     user.pendingEmail = undefined;
     user.verifiedAt = new Date();
+    return userRepository.save(user);
+};
+
+/**
+ * Put back the address held before the last confirmed change — the undo link's action. The old
+ * address was proven when it was first verified, so `verifiedAt` stays. Document-only, like
+ * {@link applyEmailChange}: ending the sessions is the caller's job. Rejects with a duplicate-key
+ * error when another account has taken the old address since, which the caller answers as 409.
+ *
+ * @param user - the account, loaded with `previousEmail`
+ */
+export const restorePreviousEmail = (user: UserDocument): Promise<UserDocument> => {
+    if (user.previousEmail) user.email = user.previousEmail;
+    user.previousEmail = undefined;
+    user.pendingEmail = undefined;
     return userRepository.save(user);
 };
 
@@ -88,3 +105,38 @@ export const persistReauthCode = (user: UserDocument): Promise<UserDocument> => 
     user.markModified('reauthCode');
     return userRepository.save(user);
 };
+
+/**
+ * Wrong codes an account may have reserved against its armed 2FA before it locks. NIST SP 800-63B
+ * allows at most 100; ten is what a person mistyping can plausibly reach.
+ */
+export const MFA_MAX_FAILURES = 10;
+
+/** How long the lock lasts once {@link MFA_MAX_FAILURES} is reached. */
+export const MFA_LOCK_MS = 15 * 60_000;
+
+/**
+ * Reserve one wrong-code attempt against the account's armed 2FA, before any code is compared.
+ * `reserved: false` means locked: the caller must refuse without comparing. `lockedNow` is true
+ * for exactly the reservation that tripped the lock.
+ */
+export const reserveMfaAttempt = (id: string): Promise<MfaReservation> =>
+    userRepository.reserveMfaAttempt(id, MFA_MAX_FAILURES, MFA_LOCK_MS);
+
+/** Clear the 2FA attempt counter and lock — after a right code, or a completed password reset. */
+export const resetMfaAttempts = (id: string): Promise<void> => userRepository.resetMfaAttempts(id);
+
+/**
+ * Take a TOTP time step for one method, atomically. `false` means a concurrent request (or a
+ * replay) already holds that step or a later one.
+ */
+export const claimTotpStep = (id: string, method: string, step: number): Promise<boolean> =>
+    userRepository.claimTotpStep(id, method, step);
+
+/**
+ * Move the account's session epoch to `at` (now by default): every access or refresh token minted
+ * before it stops working. The funnel for every "I may be compromised" event — logout-all, a
+ * password change or reset, a 2FA factor change, an email change, detected refresh reuse.
+ */
+export const bumpSessionEpoch = (id: string, at: Date = new Date()): Promise<void> =>
+    userRepository.bumpSessionEpoch(id, at);

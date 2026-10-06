@@ -22,6 +22,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { breachedPasswordsConfig } from '@infrastructure/security/config';
 import type { ResponseErrorItem } from '@infrastructure/http/response';
 import { ERROR_CODES } from '@api/error-codes';
+import { readCappedText, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 
 /**
  * The bundled list, loaded once at import time. Exact match, case-sensitive — breach corpora are,
@@ -70,12 +71,14 @@ export const checkHibpRange = (
         headers: { 'Add-Padding': 'true' },
         // Bounds the call so a slow HIBP never becomes a slow signup.
         // https://developer.mozilla.org/en-US/docs/Web/API/AbortSignal/timeout_static
-        signal: AbortSignal.timeout(timeoutMs)
+        signal: AbortSignal.timeout(timeoutMs),
+        // fetch: a redirect is an error, not something to follow to a host nobody chose.
+        redirect: 'error'
     })
         .then((response) => {
             if (!response.ok)
                 throw new Error(`HIBP range lookup -> HTTP ${String(response.status)}`);
-            return response.text();
+            return readCappedText(response, DEFAULT_BODY_CAP_BYTES);
         })
         .then((body) => {
             const match = body

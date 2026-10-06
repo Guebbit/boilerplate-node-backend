@@ -45,7 +45,7 @@ import {
     createAccessToken,
     recordRefreshTokenUse
 } from '@modules/account/session/jwt';
-import { userService, TokenType } from '@modules/users';
+import { userService, TokenType, hashToken } from '@modules/users';
 import { setEnvironment } from '@tests/environment';
 
 const USER_ID = '507f1f77bcf86cd799439011';
@@ -55,6 +55,19 @@ const mockedUsers = asStub<{
     findByIdWithCredentials: jest.Mock;
     tokenTouch: jest.Mock;
 }>(userService);
+
+/**
+ * Makes `findByTokenValue` answer a holder whose stored entry for the presented token is a LIVE
+ * refresh one — what `verifyRefreshToken` now reads off the document.
+ */
+const holdingLive = () => {
+    mockedUsers.findByTokenValue.mockImplementation((value: string) =>
+        Promise.resolve({
+            _id: USER_ID,
+            tokens: [{ token: hashToken(value), type: TokenType.REFRESH }]
+        })
+    );
+};
 
 /** A user document double, carrying only the one method `createRefreshToken` calls. */
 const userDouble = () => {
@@ -79,6 +92,9 @@ const findByIdReturning = (user: unknown) => {
  */
 const signAs = (secret: string, payload: object, options: SignOptions = {}) =>
     sign({ auth_time: Math.floor(Date.now() / 1000), amr: ['pwd'], ...payload }, secret, {
+        // The `typ` a real token of that ring carries (RFC 9068); `options.header` overrides it for
+        // the cases that are about a wrong one.
+        header: { alg: 'HS256', typ: secret === 'refresh-secret' ? 'rt+jwt' : 'at+jwt' },
         ...options,
         keyid: keyId(secret)
     });
@@ -162,7 +178,7 @@ describe('verifyAccessToken', () => {
 describe('verifyRefreshToken', () => {
     it('resolves when the signature verifies AND the token is still stored', async () => {
         const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
         // Looked up BY THE TOKEN, not by the id in its payload: the stored list is the authority
@@ -217,7 +233,7 @@ describe('the signing-key ring', () => {
         // The property rotation depends on: a token signed moments before a new key is
         // prepended must not be invalidated by that deploy.
         const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
 
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret,refresh-secret' });
 
@@ -253,7 +269,7 @@ describe('the signing-key ring', () => {
 
         await createRefreshToken(USER_ID);
         const token = user.tokenAdd.mock.calls[0][2] as string;
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
     });
@@ -290,7 +306,7 @@ describe('createRefreshToken', () => {
         const token = user.tokenAdd.mock.calls[0][2] as string;
 
         // Verifies against the refresh secret...
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
         // ...and is not accepted as a bearer token.
         await expect(verifyAccessToken(token)).rejects.toThrow();
@@ -376,7 +392,7 @@ describe('createRefreshToken', () => {
 describe('createAccessToken', () => {
     it('mints an access token from a refresh token that is still stored', async () => {
         const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
 
         const access = await createAccessToken(refresh);
 
@@ -394,7 +410,7 @@ describe('createAccessToken', () => {
 
     it('signs the access token with the access secret and pins HS256', async () => {
         const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
 
         const access = await createAccessToken(refresh);
 
@@ -406,7 +422,7 @@ describe('createAccessToken', () => {
         // The whole point of the pair: the credential sent on every request is the short-lived
         // one. Signing it with the refresh window would make revocation irrelevant for a month.
         const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
 
         const { iat, exp } = decode(await createAccessToken(refresh)) as {
             iat: number;
@@ -419,7 +435,7 @@ describe('createAccessToken', () => {
 
 describe('createAccessToken carrying the tier', () => {
     it("copies the refresh token's tier onto the access token, and omits it when there is none", async () => {
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
         const remembered = signAs(
             'refresh-secret',
             { id: USER_ID, remember: 'medium' },
@@ -432,7 +448,7 @@ describe('createAccessToken carrying the tier', () => {
     });
 
     it('keeps the access window even for a long-tier session', async () => {
-        mockedUsers.findByTokenValue.mockResolvedValue({ _id: USER_ID });
+        holdingLive();
         const refresh = signAs(
             'refresh-secret',
             { id: USER_ID, remember: 'long' },

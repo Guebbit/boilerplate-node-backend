@@ -16,7 +16,8 @@ const REDIRECT_URI = 'https://api.test/account/oauth/github/callback';
 
 /** One mocked `fetch` result. `ok = false` is how a case makes GitHub answer a 400. */
 const jsonResponse = (body: unknown, ok = true): Response =>
-    ({ ok, status: ok ? 200 : 400, json: () => Promise.resolve(body) }) as Response;
+    // A real `Response`: the provider reads the body through a stream with a byte cap.
+    Response.json(body, { status: ok ? 200 : 400 });
 
 beforeEach(() => {
     setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_ID: CLIENT_ID });
@@ -122,6 +123,29 @@ describe('githubOAuthProvider.exchangeCode', () => {
         await expect(
             githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).rejects.toThrow(/primary/);
+    });
+
+    it('never follows a redirect, on any of the three calls', async () => {
+        const fetchSpy = jest
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(user))
+            .mockResolvedValueOnce(jsonResponse(emails));
+
+        await githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
+
+        for (const [, options] of fetchSpy.mock.calls)
+            expect(options).toMatchObject({ redirect: 'error' });
+        expect(fetchSpy).toHaveBeenCalledTimes(3);
+    });
+
+    it('refuses an answer longer than the byte cap instead of buffering it', async () => {
+        const oversized = new Response('x'.repeat(1_048_577));
+        jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(oversized);
+
+        await expect(
+            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/longer than/);
     });
 
     it('rejects when the token exchange carries an error instead of a token', async () => {

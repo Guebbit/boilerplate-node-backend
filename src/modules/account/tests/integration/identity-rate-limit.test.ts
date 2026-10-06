@@ -212,6 +212,28 @@ describe('mfaChallengeLimiter', () => {
         expect(await statusOf(guess())).toBe(429);
     });
 
+    it('keys an OAuth continuation on its challenge cookie, one budget per cookie', async () => {
+        // The OAuth callback never sends the challenge in a body: it rides in a cookie. Without
+        // reading it, every such caller would share its address block's single bucket.
+        const mfaChallengeLimiter = await withAccountRateLimits(
+            { NODE_MFA_CHALLENGE_MAX: '1' },
+            (module) => module.mfaChallengeLimiter
+        );
+
+        const app = appAnswering(200, true, mfaChallengeLimiter);
+        const guessWith = (cookie: string) =>
+            supertest(app)
+                .post('/route')
+                .set('X-Forwarded-For', '203.0.113.5')
+                .set('Cookie', `oauth_mfa_challenge=${cookie}`)
+                .send({});
+
+        expect(await statusOf(guessWith('first-challenge'))).toBe(200);
+        expect(await statusOf(guessWith('first-challenge'))).toBe(429);
+        // Same address block, a different challenge cookie: its own untouched budget.
+        expect(await statusOf(guessWith('second-challenge'))).toBe(200);
+    });
+
     it('does not let two callers with no challenge exhaust the same bucket', async () => {
         // A request naming no `challenge` must key on the caller's address BLOCK, not one shared
         // key — a shared key would let any two such callers spend the same budget. See
@@ -230,40 +252,6 @@ describe('mfaChallengeLimiter', () => {
         expect(await statusOf(guessFrom('203.0.113.9'))).toBe(429);
         // A different block entirely has its own, untouched budget.
         expect(await statusOf(guessFrom('198.51.100.5'))).toBe(200);
-    });
-});
-
-describe('accountCodeGuessLimiter', () => {
-    afterEach(() => jest.resetModules());
-
-    it('refuses the 6th wrong code from one account, wherever it comes from', async () => {
-        const accountCodeGuessLimiter = await withAccountRateLimits(
-            { NODE_MFA_ACCOUNT_GUESS_MAX: '5' },
-            (module) => module.accountCodeGuessLimiter
-        );
-
-        // 422: a wrong code, which the budget spends; a right one answers 2xx and spends nothing.
-        const app = appAnswering(422, true, asAccount, accountCodeGuessLimiter);
-        const guess = (account: string, ip: string) =>
-            supertest(app).post('/route').set('X-Forwarded-For', ip).set('x-test-account', account);
-
-        for (let attempt = 0; attempt < 5; attempt++)
-            expect(await statusOf(guess('account-a', `203.0.113.${String(attempt)}`))).toBe(422);
-        expect(await statusOf(guess('account-a', '198.51.100.5'))).toBe(429);
-        expect(await statusOf(guess('account-b', '198.51.100.5'))).toBe(422);
-    });
-
-    it('spends nothing on a right code', async () => {
-        const accountCodeGuessLimiter = await withAccountRateLimits(
-            { NODE_MFA_ACCOUNT_GUESS_MAX: '1' },
-            (module) => module.accountCodeGuessLimiter
-        );
-
-        const app = appAnswering(200, true, asAccount, accountCodeGuessLimiter);
-        const change = () => supertest(app).post('/route').set('x-test-account', 'account-a');
-
-        expect(await statusOf(change())).toBe(200);
-        expect(await statusOf(change())).toBe(200);
     });
 });
 

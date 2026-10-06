@@ -198,7 +198,10 @@ const sessionCookie = async (identity: { email: string; username: string }) => {
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
-    return { user, cookie: `jwt=${/^jwt=([^;]+)/.exec(setCookie(login, 'jwt') ?? '')?.[1] ?? ''}` };
+    return {
+        user,
+        cookie: `__Host-jwt=${/^__Host-jwt=([^;]+)/.exec(setCookie(login, '__Host-jwt') ?? '')?.[1] ?? ''}`
+    };
 };
 
 describe('GET /notifications/stream', () => {

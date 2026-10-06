@@ -84,6 +84,14 @@ export interface RateLimitBudget {
     onStoreError?: 'memory' | 'pass';
 
     /**
+     * After the cap, each repeated lockout of the same key lasts twice as long as the last, up to
+     * `doublings` doublings (Entra's smart lockout and Okta's lockout both escalate the same way).
+     * The first lockout lasts `windowMs`, the next `2 × windowMs`, and so on. Absent means a flat
+     * window. Only the per-account credential budget asks for it — see `escalatingStore`.
+     */
+    escalation?: { doublings: number };
+
+    /**
      * Why this budget's env var is deliberately NOT raised in `tests/support/setup-environment.ts`, when it
      * isn't. Absent means `tests/cross-cutting/rate-limit-budgets.test.ts` requires it raised;
      * present is that test's exemption, and the reason it prints on failure.

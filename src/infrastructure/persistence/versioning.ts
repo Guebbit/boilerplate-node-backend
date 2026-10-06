@@ -115,7 +115,7 @@ export const rearmPrecondition = (): void => {
  * matched nothing (`DocumentNotFoundError`), or an array edit's own version filter did
  * (`VersionError`). Compared by name, like the driver errors in `mongo-errors.ts`.
  */
-const isLostRace = (error: unknown): boolean =>
+export const isLostRace = (error: unknown): boolean =>
     error instanceof Error &&
     (error.name === 'DocumentNotFoundError' || error.name === 'VersionError');
 

@@ -8,7 +8,7 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
-import bcrypt from 'bcrypt';
+import { hashPassword } from '@infrastructure/security/password-hash';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
@@ -18,7 +18,8 @@ import {
     createUserBodyEmailMax,
     createUserBodyUsernameMax,
     createUserBodyUsernameMin,
-    signupBodyPasswordMin
+    signupBodyPasswordMin,
+    signupBodyPasswordMax
 } from '@api/schemas.zod';
 import { type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
@@ -157,6 +158,22 @@ export interface UserRecord extends Omit<
      */
     reauthCode?: DeliveredCodeState;
 
+    /**
+     * Wrong-code reservations against an ARMED second factor in the current window — one counter for
+     * every place a code is typed. Written only by `reserveMfaAttempt` and `resetMfaAttempts`.
+     */
+    mfaFailures: number;
+
+    /**
+     * The session epoch: a token whose `auth_time` (floored to the second) is older than this is
+     * refused, access and refresh alike. Moved by `bumpSessionEpoch` on every event that means
+     * "I may be compromised"; absent means no event has ever moved it.
+     */
+    tokensValidAfter?: Date;
+
+    /** While in the future, no code is compared at all: the account is locked out of 2FA checks. */
+    mfaLockedUntil?: Date;
+
     /** Salted-scrypt digests of unused backup codes — see `account/two-factor/backup-codes.ts`. */
     twoFactorBackupCodes: string[];
 
@@ -193,6 +210,13 @@ export interface UserRecord extends Omit<
      * means no change is pending. See `docs/modules/users.md`.
      */
     pendingEmail?: string;
+
+    /**
+     * The address this account held before its last confirmed email change — `select: false`, like
+     * `pendingEmail`. What the undo link restores; written by `applyEmailChange`, cleared by the
+     * undo, and useless without the one-time undo token that names this account.
+     */
+    previousEmail?: string;
 }
 
 /**
@@ -237,6 +261,18 @@ export interface TwoFactorMethodRecord extends DeliveredCodeState {
 
     /** The RFC 6238 time step of the last code accepted by a device method — replay protection. */
     lastUsedStep?: number;
+}
+
+/**
+ * What `reserveMfaAttempt` answers: whether a code may be compared at all, and whether THIS
+ * reservation is the one that tripped the lock (so exactly one caller mails the owner).
+ */
+export interface MfaReservation {
+    /** False while the account is locked: refuse without comparing anything. */
+    reserved: boolean;
+
+    /** True for the single reservation that reached the cap. */
+    lockedNow: boolean;
 }
 
 /**
@@ -317,27 +353,16 @@ export const zodUserSchema = CreateUserBody.extend({
         // greetings and lists, so an unbounded one is text of the caller's choosing in many places.
         .max(createUserBodyUsernameMax, { error: () => t('users.field-username-max') }),
 
-    // Complexity beyond length duplicates `PasswordNew`'s contract pattern in translated form —
-    // the generated schema (`SignupBody`) would answer first in English, same reason as the
-    // length check above. The length floor is `SignupBody`'s: `/users` carries no password.
-    // One `.refine()` per rule so each gets its own message, matching the paired frontend's
-    // `usersPasswordSchema` rule-for-rule (`schemas.ts`).
+    // Length only (NIST SP 800-63B-4: no composition rules); the breached-password check does the
+    // rest. The floor is `SignupBody`'s (`/users` carries no password), restated here only to give
+    // the failure a translated message, like the username's above.
     password: z
         .string()
         .min(1, { error: () => t('users.field-password-required') })
         .min(signupBodyPasswordMin, { error: () => t('users.field-password-min') })
-        .refine((password) => /[a-z]/.test(password), {
-            error: () => t('users.field-password-lowercase')
-        })
-        .refine((password) => /[A-Z]/.test(password), {
-            error: () => t('users.field-password-uppercase')
-        })
-        .refine((password) => /\d/.test(password), {
-            error: () => t('users.field-password-digit')
-        })
-        .refine((password) => /[^\dA-Za-z]/.test(password), {
-            error: () => t('users.field-password-symbol')
-        })
+        // The generated ceiling (128), restated like the others: this `.extend()` replaces the
+        // generated field outright, and a replaced field drops its bound.
+        .max(signupBodyPasswordMax, { error: () => t('users.field-password-max') })
 });
 
 /**
@@ -478,6 +503,13 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             lowercase: true,
             trim: true
         },
+        /* The address before the last confirmed change — see the interface field. */
+        previousEmail: {
+            type: String,
+            select: false,
+            lowercase: true,
+            trim: true
+        },
         // sub documents always have _id
         // `select: false` for the same reason as `password` — live refresh tokens are as good as
         // a password to anyone who reads them.
@@ -569,6 +601,19 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             ],
             select: false,
             default: []
+        },
+        /* Wrong 2FA codes reserved in this window; `reserveMfaAttempt` is the only incrementer. */
+        mfaFailures: {
+            type: Number,
+            default: 0
+        },
+        /* The session epoch — see the interface field. */
+        tokensValidAfter: {
+            type: Date
+        },
+        /* End of the 2FA lock, absent when none is set. */
+        mfaLockedUntil: {
+            type: Date
         },
         /*
          * The step-up code in flight for an account with no password. `select: false` like the
@@ -712,8 +757,8 @@ userSchema.index(
  */
 
 /**
- * Pre-save hook: hashes the password with bcrypt whenever it changes, so a plaintext value never
- * reaches storage. See the bcrypt call below for the cost-factor rationale.
+ * Pre-save hook: hashes the password with argon2id whenever it changes, so a plaintext value never
+ * reaches storage. The cost factors and why are in `src/infrastructure/security/password-hash.ts`.
  */
 userSchema.pre('save', function (this: UserDocument) {
     // The second half is only reachable in principle (`isModified` true, value falsy) — an
@@ -721,9 +766,7 @@ userSchema.pre('save', function (this: UserDocument) {
     // what lets TypeScript see `this.password` as a `string` below, now that it is optional.
     if (!this.isModified('password') || !this.password) return;
 
-    // bcrypt cost factor — 12 rounds. Higher is slower to brute-force and slower to hash; 12 is
-    // the library's own recommended floor for a production login path.
-    return bcrypt.hash(this.password, 12).then((hashedPassword) => {
+    return hashPassword(this.password).then((hashedPassword) => {
         this.password = hashedPassword;
     });
 });
@@ -802,6 +845,10 @@ export type UserWire = Omit<
     | 'twoFactorBackupCodeSalt'
     | 'reauthCode'
     | 'oauthAccounts'
+    | 'mfaFailures'
+    | 'mfaLockedUntil'
+    | 'tokensValidAfter'
+    | 'previousEmail'
 >;
 
 /**
@@ -832,7 +879,11 @@ export const applyUserTransform = applySerialization(userSchema, {
         'twoFactorBackupCodes',
         'twoFactorBackupCodeSalt',
         'reauthCode',
-        'oauthAccounts'
+        'oauthAccounts',
+        'mfaFailures',
+        'mfaLockedUntil',
+        'tokensValidAfter',
+        'previousEmail'
     ]
 });
 

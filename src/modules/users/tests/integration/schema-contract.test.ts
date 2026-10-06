@@ -39,8 +39,8 @@ describe('user schema', () => {
         const found = await userRepository.findByIdWithCredentials(created.id);
 
         expect(found!.password).not.toBe(PLAIN_PASSWORD);
-        // bcrypt output, not a plain string that merely differs.
-        expect(found!.password).toMatch(/^\$2[aby]\$/);
+        // argon2id output, not a plain string that merely differs.
+        expect(found!.password).toMatch(/^\$argon2id\$/);
     });
 
     it('serialises to id, never _id, __v, password or tokens', async () => {

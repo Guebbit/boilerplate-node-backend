@@ -59,10 +59,10 @@ describe('googleOAuthProvider.authorizeUrl', () => {
 
 /** Stubs the token endpoint to answer with the given `id_token` (or none at all). */
 const mockTokenResponse = (idTokenValue: string | undefined) =>
-    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({ id_token: idTokenValue })
-    } as Response);
+    // A real `Response`: the provider reads the body through a stream with a byte cap.
+    jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(() => Promise.resolve(Response.json({ id_token: idTokenValue })));
 
 describe('googleOAuthProvider.exchangeCode', () => {
     const validClaims = {
@@ -116,6 +116,22 @@ describe('googleOAuthProvider.exchangeCode', () => {
         await expect(
             googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
         ).rejects.toThrow(/issuer/);
+    });
+
+    it('never follows a redirect from the token endpoint', async () => {
+        const fetchSpy = mockTokenResponse(idToken(validClaims));
+
+        await googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
+
+        expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
+    });
+
+    it('refuses an answer longer than the byte cap instead of buffering it', async () => {
+        jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('x'.repeat(1_048_577)));
+
+        await expect(
+            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
+        ).rejects.toThrow(/longer than/);
     });
 
     it('rejects an expired token', async () => {

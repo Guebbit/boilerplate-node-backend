@@ -78,13 +78,17 @@ export const verifyRequestEmail = (
 /**
  * Email-change notice: sent to the OLD address the moment a change is REQUESTED, not when it
  * completes — a warning that arrives before a takeover is a warning, one that arrives after is a
- * receipt. Carries no token and no link that acts: "this wasn't me" is a password change and a
- * logout-everywhere, both of which already exist (docs/modules/account.md#proving-an-address).
+ * receipt. Carries the one-time undo link, valid for 7 days and kept through a password change:
+ * the one thing the old mailbox can do about a change it did not ask for
+ * (docs/modules/account.md#proving-an-address).
+ *
+ * @param undoToken - the plaintext `email-change-undo` token, for the link only
  */
 export const emailChangeNoticeEmail = (
     locale: string,
     name: string,
-    newEmail: string
+    newEmail: string,
+    undoToken: string
 ): EmailContent => {
     const t = translator(locale);
     return {
@@ -96,6 +100,8 @@ export const emailChangeNoticeEmail = (
             pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.email-change-notice.greeting', name),
             body: t('account.email.email-change-notice.body', { newEmail }),
+            linkLabel: t('account.email.email-change-notice.link-label'),
+            linkUrl: accountFrontendLink('email-undo', { locale, token: undoToken }),
             footer: t('email.footer')
         }
     };
@@ -247,8 +253,46 @@ export const twoFactorChangedEmail = (
     };
 };
 
-/** Password reset: the confirmation, after the password actually changed. */
-export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
+/**
+ * Two-factor lock notice: sent once, when too many wrong codes lock the account's 2FA checks.
+ * Someone is guessing codes; the owner is the one person who can tell whether it was them.
+ * Carries no link that acts.
+ *
+ * @param minutes - how long the lock lasts, so the copy and the server never disagree
+ */
+export const twoFactorLockedEmail = (
+    locale: string,
+    name: string,
+    minutes: number
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.two-factor-locked',
+        subject: t('account.email.two-factor-locked.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.two-factor-locked.meta-title'),
+            pageMetaLinks: [],
+            greeting: greetingFor(t, 'account.email.two-factor-locked.greeting', name),
+            body: t('account.email.two-factor-locked.body', { minutes }),
+            advice: t('account.email.two-factor-locked.advice'),
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * Password reset: the confirmation, after the password actually changed. Names the sign-in
+ * providers still connected to the account: a reset changes the password, not what Google or
+ * GitHub can still do, and the owner can only act on a connection they were told about.
+ *
+ * @param providers - registry names of the linked providers; empty says none are connected
+ */
+export const resetConfirmEmail = (
+    locale: string,
+    name: string,
+    providers: readonly string[] = []
+): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.reset-confirm',
@@ -259,6 +303,17 @@ export const resetConfirmEmail = (locale: string, name: string): EmailContent =>
             pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.reset-confirm.greeting', name),
             body: t('account.email.reset-confirm.body'),
+            // Always a sentence: "none connected" is as useful to the owner as the list.
+            providers:
+                providers.length > 0
+                    ? t('account.email.reset-confirm.providers', {
+                          providers: providers
+                              .map(
+                                  (provider) => provider.charAt(0).toUpperCase() + provider.slice(1)
+                              )
+                              .join(', ')
+                      })
+                    : t('account.email.reset-confirm.providers-none'),
             footer: t('email.footer')
         }
     };

@@ -160,6 +160,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "regenerating the caller's own backup codes"
     },
+    'account POST /refresh': {
+        requiresAuth: false,
+        reason: 'minting an access token — the refresh-token cookie is the credential, not a login'
+    },
     'account POST /logout': {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'
@@ -171,6 +175,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'account DELETE /sessions/:sessionId': {
         requiresAuth: true,
         reason: "revoking one of the caller's own sessions"
+    },
+    'account DELETE /oauth/links/:provider': {
+        requiresAuth: true,
+        reason: "disconnecting one of the caller's own sign-in providers"
     },
     'addresses POST /addresses': {
         requiresAuth: true,
@@ -203,6 +211,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
     'account POST /email-change-confirm': {
         requiresAuth: false,
         reason: 'the emailed email-change token is the credential'
+    },
+    'account POST /email-change-undo': {
+        requiresAuth: false,
+        reason: 'the undo token mailed to the old address is the credential'
     },
     'wishlist PUT /:productId': {
         requiresAuth: true,

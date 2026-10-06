@@ -111,7 +111,7 @@ const makeRequest = (options: { authorization?: string; authContext?: AuthContex
 /** Request stub carrying a refresh cookie, for the cookie-authenticated middleware. */
 const makeCookieRequest = (jwt?: string) =>
     asStub<Request>({
-        cookies: jwt === undefined ? {} : { jwt },
+        cookies: jwt === undefined ? {} : { '__Host-jwt': jwt },
         header: jest.fn(),
         path: '/orders/1/invoice',
         method: 'GET',

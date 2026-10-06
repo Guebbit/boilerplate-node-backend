@@ -47,6 +47,7 @@
             "disabled": "L'autenticazione a due fattori è ora disattivata.",
             "backup-codes-regenerated": "I codici di backup sono stati rigenerati. Quelli vecchi non sono più validi.",
             "code-sent": "Ti abbiamo inviato un codice.",
+            "locked": "Troppi codici errati. I controlli in due passaggi su questo account sono sospesi per un po': riprova più tardi.",
             "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
         },
         "logout": {
@@ -71,6 +72,7 @@
             "too-soon": "Una modifica dell'email è appena stata richiesta. Attendi un momento prima di richiederne un'altra.",
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Indirizzo email modificato.",
+            "undone": "La modifica dell'email è stata annullata e tutti i dispositivi sono stati disconnessi.",
             "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata.",
             "resent": "Un nuovo link di conferma è stato inviato al nuovo indirizzo.",
             "nothing-pending": "Non c'è nessuna modifica dell'indirizzo email in sospeso."
@@ -105,7 +107,9 @@
                 "subject": "La tua password è stata cambiata",
                 "meta-title": "Password reimpostata",
                 "greeting": "Ciao, {{name}}!",
-                "body": "La tua password è stata reimpostata."
+                "body": "La tua password è stata reimpostata.",
+                "providers": "Questi metodi di accesso sono ancora collegati al tuo account: {{providers}}. Reimpostare la password non li scollega; se non ne riconosci uno, rimuovilo dal tuo profilo.",
+                "providers-none": "Nessun accesso con Google o GitHub è collegato al tuo account."
             },
             "delete-request": {
                 "subject": "Conferma l'eliminazione dell'account",
@@ -149,7 +153,8 @@
                 "subject": "Il tuo indirizzo email sta per cambiare",
                 "meta-title": "Modifica email richiesta",
                 "greeting": "Ciao, {{name}}!",
-                "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, cambia subito la password e disconnetti tutti i dispositivi."
+                "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, annulla la modifica con il link qui sotto: funziona per 7 giorni, anche dopo la conferma del nuovo indirizzo, e disconnette tutti i dispositivi.",
+                "link-label": "Annulla questa modifica"
             },
             "two-factor-changed": {
                 "subject": "Le tue impostazioni di verifica in due passaggi sono cambiate",
@@ -159,6 +164,13 @@
                 "body-removed": "Il secondo passaggio di accesso ({{method}}) è stato rimosso dal tuo account.",
                 "body-disabled": "La verifica in due passaggi è stata disattivata sul tuo account.",
                 "advice": "Se non sei stato tu, cambia la password ed esci da tutti i dispositivi adesso."
+            },
+            "two-factor-locked": {
+                "subject": "I controlli in due passaggi sono bloccati",
+                "meta-title": "Verifica in due passaggi bloccata",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Sono stati inseriti troppi codici errati sul tuo account, quindi i controlli dei codici sono sospesi per {{minutes}} minuti.",
+                "advice": "Se non sei stato tu, qualcuno conosce la tua password: cambiala subito. Reimpostare la password toglie anche il blocco."
             },
             "reauth-code": {
                 "subject": "Il tuo codice di conferma",
@@ -172,7 +184,9 @@
         "oauth": {
             "unknown-provider": "Questo metodo di accesso non è disponibile.",
             "invalid-state": "Questo tentativo di accesso è scaduto. Riprova.",
-            "invalid-verifier": "Questo tentativo di accesso è scaduto. Riprova."
+            "invalid-verifier": "Questo tentativo di accesso è scaduto. Riprova.",
+            "link-removed": "Quel metodo di accesso è stato scollegato.",
+            "link-not-found": "Quel metodo di accesso non è collegato al tuo account."
         }
     }
 }

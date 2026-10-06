@@ -131,10 +131,9 @@ A failing step is logged and never turns a committed erasure into an error.
 
 ## Libraries
 
-`bcrypt` is shared with [`account`](./account.md) — the only package on the generated
-[Package Dependencies](../tools/package-dependencies.md) page that two modules import, rather than
-one. Not module-owned per the ownership rule, so it stays a hand-kept row on that page instead of
-a `## Libraries` table naming alternatives here: nothing about the choice is specific to `users`.
+None. Passwords are hashed with argon2id from `node:crypto` (`infrastructure/security/password-hash.ts`),
+which `account` verifies against as well: no package to choose, keep patched or list on the
+[Package Dependencies](../tools/package-dependencies.md) page.
 
 ## Related pages
 

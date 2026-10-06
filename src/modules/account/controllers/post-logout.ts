@@ -14,7 +14,7 @@ import { readRefreshCookie } from '@kernel/cookies';
 
 /**
  * POST /account/logout — logs out the CURRENT session only.
- * The refresh cookie is both credential and address (like `GET /account/refresh`), so no bearer
+ * The refresh cookie is both credential and address (like `POST /account/refresh`), so no bearer
  * token is needed: the stored token is revoked and cookies cleared, other devices stay signed in.
  * Always 200 — a missing or already-revoked cookie just means "not logged in here", not an error.
  */

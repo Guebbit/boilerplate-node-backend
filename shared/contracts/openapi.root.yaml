@@ -130,7 +130,7 @@ x-error-codes:
     REAUTH_REQUIRED:
         {
             status: 401,
-            description: "This action requires a session fresher than the caller's current one — see `POST /account/reauth`."
+            description: "This action requires a session fresher than the caller's current one — see `POST /account/reauth`. `details.maxAge` is the freshness asked for; `details.methods`, when present, lists what the re-authentication must also prove (`otp`: a code from an armed second factor)."
         }
 
 servers:
@@ -529,25 +529,19 @@ components:
             minLength: 8
             description: >-
                 An EXISTING password, being proved rather than set — login, the current-password
-                leg of a change, and re-auth. No complexity pattern: a password created before
-                `PasswordNew` existed must still be provable, and a login attempt is not the place
-                to also announce the site's password policy to whoever is guessing it.
+                leg of a change, and re-auth. Length bounds only, like `PasswordNew`: a login
+                attempt is not the place to also announce the site's password policy to whoever is
+                guessing it.
         PasswordNew:
             type: string
             maxLength: 128
             minLength: 8
-            # Lookahead, so every generator that walks this file needs a sample rather than a
-            # generated string — registered once in `tests/support/pattern-samples.ts`, which both
-            # the fuzz and the request generators read. The rule is ALSO enforced in translated
-            # form by `zodUserSchema` (`src/modules/users/model.ts`) and the paired frontend's
-            # `usersPasswordSchema`: this pattern is what every other reader of the contract sees,
-            # those are what a person reads when they get it wrong.
-            pattern: '^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^\dA-Za-z]).{8,}$'
             description: >-
                 A password being SET by its owner — signup, reset (or the setup link) and change.
-                Must contain a lowercase letter, an uppercase letter, a digit and a
-                symbol, on top of `Password`'s length floor — enforced server-side, not just by
-                the paired frontend's form.
+                Length only, 8 to 128 characters (NIST SP 800-63B-4: no composition rules, no
+                forced mix of classes); what keeps a weak one out is the breached-password check
+                on every set path, not a pattern. Hashed with argon2id, which has no 72-byte
+                limit, so every character counts.
         Locale:
             type: string
             maxLength: 35
@@ -2011,6 +2005,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-confirm'
     /account/email-change-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-confirm'
+    /account/email-change-undo:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-undo'
     /account/delete-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
     /account/login:
@@ -2047,6 +2043,10 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
     /account/oauth/providers:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
+    /account/oauth/links:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1links'
+    /account/oauth/links/{provider}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1links~1{provider}'
     /account/oauth/{provider}:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1{provider}'
     /account/oauth/{provider}/callback:

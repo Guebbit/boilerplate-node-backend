@@ -18,6 +18,9 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { emitDomainEvent } from '@kernel/events';
+import { ACCOUNT_SESSIONS_REVOKED } from '../events';
+import { revokeAfterPasswordChange } from './revocation';
 import { mailRecipientRefusal } from '../mail-budget';
 import {
     sendVerificationEmail,
@@ -27,7 +30,8 @@ import {
 } from './verification';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
-import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
+import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE, tokenAdd } from './authentication';
+import { EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS } from './token-types';
 import { findLiveToken, spendLiveToken } from './tokens';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -41,19 +45,24 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
-import {
-    zodUserSchema,
-    userService,
-    TokenType,
-    normalizeEmail,
-    type UserDocument
-} from '@modules/users';
+import { zodUserSchema, userService, normalizeEmail, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedCaller } from '../roles';
+
+/**
+ * The write a completed reset rides along on: the proven mailbox verifies the address, and the
+ * 2FA wrong-code counter and lock clear. Someone who can read the mailbox has the account's own
+ * recovery path, so the lock holds nothing back from them.
+ */
+const markResetCompleted = (user: UserDocument): Promise<void> => {
+    user.mfaFailures = 0;
+    user.mfaLockedUntil = undefined;
+    return markVerified(user);
+};
 
 /**
  * Validate a new-password pair without touching the user.
@@ -146,9 +155,14 @@ const writePassword = (
     Promise.resolve(beforeSave?.(user))
         .then(() => userService.setPassword(user, password))
         .then((savedUser) =>
-            userService
-                .tokenRemoveAll(savedUser, TokenType.REFRESH)
-                .catch(() => undefined)
+            revokeAfterPasswordChange(savedUser)
+                .catch((error: unknown) => {
+                    logger.warn({
+                        message: 'Password written, but its session revoke failed.',
+                        userId: savedUser.id,
+                        error
+                    });
+                })
                 .then(() => generateSuccess<UserDocument>(savedUser))
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
@@ -196,12 +210,13 @@ export const passwordResetChange = (
     passwordConfirm: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    passwordChange(user, password, passwordConfirm, markVerified).then((result) =>
+    passwordChange(user, password, passwordConfirm, markResetCompleted).then((result) =>
         afterReset(result, user, context)
     );
 
 /**
- * What follows a finished reset: on success, the audit row and the confirmation mail. Shared by
+ * What follows a finished reset: on success, the audit row, the confirmation mail and the
+ * `account.sessions-revoked` event. Shared by
  * {@link passwordResetChange} and {@link completePasswordReset}, which differ only in how the
  * password was checked.
  *
@@ -213,48 +228,58 @@ const afterReset = (
     result: ResponseSuccess<UserDocument> | ResponseReject,
     user: UserDocument,
     context: CallerContext
-): ResponseSuccess<UserDocument> | ResponseReject => {
-    if (result.success) {
-        // Read fresh, after `markVerified` may have just promoted it — the document carries
-        // no role of its own to read synchronously. Same fire-and-forget shape as the
-        // mail below: the password change already succeeded, so a lookup hiccup here must not
-        // turn a successful reset into an error — worst case, this one audit row is missing.
-        void isUnrestrictedCaller(String(user._id))
-            .then((unrestricted) => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                    actor_user_id: String(user._id),
-                    actor_role: unrestricted ? 'admin' : 'user',
-                    outcome: 'success'
-                });
-            })
-            .catch((error: unknown) => {
-                // Still just a missing audit row, not a reset failure — see the comment
-                // above — but a swallowed lookup failure had no trail at all before this.
-                logger.warn({
-                    message: 'Could not audit a completed password reset.',
-                    userId: String(user._id),
-                    error
-                });
-            });
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    if (!result.success) return Promise.resolve(result);
 
-        /*
-         * The recipient's OWN language first. These links are clicked from an email client,
-         * possibly on a shared or borrowed device, so the request's `Accept-Language` says
-         * very little about who the message is for — it is the fallback, not the answer. The
-         * copy is finished before the job is published, so the worker needs no locale at all.
-         *
-         * Fire-and-forget: the password has already changed, and a queue that is briefly
-         * unavailable must not turn a successful reset into an error.
-         */
-        const mail = resetConfirmEmail(
-            recipientLocale(user.locale, context),
-            greetableName(user, user.email)
-        );
-        // Normal priority: a confirmation, not a link or code anyone is blocked on.
-        void sendAccountMail(user.email, mail, 'normal');
-    }
-    return result;
+    // Read fresh, after `markVerified` may have just promoted it — the document carries
+    // no role of its own to read synchronously. Same fire-and-forget shape as the
+    // mail below: the password change already succeeded, so a lookup hiccup here must not
+    // turn a successful reset into an error — worst case, this one audit row is missing.
+    void isUnrestrictedCaller(String(user._id))
+        .then((unrestricted) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                actor_user_id: String(user._id),
+                actor_role: unrestricted ? 'admin' : 'user',
+                outcome: 'success'
+            });
+        })
+        .catch((error: unknown) => {
+            // Still just a missing audit row, not a reset failure — see the comment
+            // above — but a swallowed lookup failure had no trail at all before this.
+            logger.warn({
+                message: 'Could not audit a completed password reset.',
+                userId: String(user._id),
+                error
+            });
+        });
+
+    /*
+     * The recipient's OWN language first. These links are clicked from an email client,
+     * possibly on a shared or borrowed device, so the request's `Accept-Language` says
+     * very little about who the message is for — it is the fallback, not the answer. The
+     * copy is finished before the job is published, so the worker needs no locale at all.
+     *
+     * Fire-and-forget: the password has already changed, and a queue that is briefly
+     * unavailable must not turn a successful reset into an error.
+     */
+    const mail = resetConfirmEmail(
+        recipientLocale(user.locale, context),
+        greetableName(user, user.email),
+        // `oauthAccounts` is `select: false`: present on a holder loaded for the reset, absent on
+        // one that was not, which is then simply "no providers to name".
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `oauthAccounts` is always loaded; `select: false` makes that a lie
+        (user.oauthAccounts ?? []).map(({ provider }) => provider)
+    );
+    // Normal priority: a confirmation, not a link or code anyone is blocked on.
+    void sendAccountMail(user.email, mail, 'normal');
+
+    // Awaited, unlike the mail: a subscriber (`api-keys`) revokes what outlives a session, and a
+    // reset that answered before that was done would leave a window the owner believes is shut.
+    return emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
+        userId: user.id,
+        reason: 'password-reset'
+    }).then(() => result);
 };
 
 /**
@@ -292,7 +317,7 @@ export const completePasswordReset = (
 
                 return spendLiveToken(user, token).then((spentByThisRequest) =>
                     spentByThisRequest
-                        ? writePassword(user, password, markVerified).then((result) =>
+                        ? writePassword(user, password, markResetCompleted).then((result) =>
                               afterReset(result, user, context)
                           )
                         : linkRefused()
@@ -476,23 +501,31 @@ const revokeCancelledChange = (
 };
 
 /**
- * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address — no token,
- * no link, see {@link emailChangeNoticeEmail} — and the verification link to the new one.
+ * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address carrying a
+ * 7-day undo link, see {@link emailChangeNoticeEmail}, and the verification link to the new one.
+ * Only the newest request's undo link lives: an older one is pulled first, since it would restore
+ * an address this change no longer leaves behind.
  * AWAITED, unlike most account mail: the verification half pushes a token onto this same
  * document first (`sendVerificationEmail`'s own `tokenAdd`), matching `requestEmailVerificationFor`'s
  * treatment of the identical function — responding before either finishes would race the token
  * with whatever the client does next.
  */
-const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> => {
-    const mail = emailChangeNoticeEmail(
-        recipientLocale(user.locale, context),
-        greetableName(user, user.email),
-        user.pendingEmail ?? ''
-    );
-    return sendAccountMail(user.email, mail).then(() =>
-        sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE)
-    );
-};
+const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> =>
+    userService
+        .tokenRemoveAll(user, EMAIL_CHANGE_UNDO_TOKEN_TYPE)
+        .then(() => tokenAdd(user, EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS))
+        .then((undoToken) =>
+            sendAccountMail(
+                user.email,
+                emailChangeNoticeEmail(
+                    recipientLocale(user.locale, context),
+                    greetableName(user, user.email),
+                    user.pendingEmail ?? '',
+                    undoToken
+                )
+            )
+        )
+        .then(() => sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE));
 
 /**
  * The fields `PUT/PATCH /account` accepts, after parsing — the input half of {@link writeProfile}.

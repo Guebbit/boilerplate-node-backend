@@ -46,7 +46,7 @@ const assertNoCredentials = (payload: unknown) => {
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain('password');
     expect(serialized).not.toContain('tokens');
-    expect(serialized).not.toContain('$2b$'); // a bcrypt hash, however it got there
+    expect(serialized).not.toContain('$argon2'); // a password hash, however it got there
 };
 
 describe('GET /users', () => {

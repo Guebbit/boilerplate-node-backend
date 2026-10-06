@@ -81,8 +81,8 @@ describe('signup', () => {
 
         expect(stored?.password).toBeDefined();
         expect(stored?.password).not.toBe(PLAIN_PASSWORD);
-        // bcrypt's modular-crypt prefix, so this asserts "hashed with bcrypt", not merely "differs".
-        expect(stored?.password).toMatch(/^\$2[aby]\$/);
+        // The PHC prefix, so this asserts "hashed with argon2id", not merely "differs".
+        expect(stored?.password).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
     });
 
     it('rejects a mismatched confirmation with 422 and says so', async () => {
@@ -383,7 +383,7 @@ describe('passwordChange', () => {
         expect(response.status).toBe(200);
 
         const stored = await userRepository.findOneWithCredentials({ email: 'change@example.com' });
-        expect(stored?.password).toMatch(/^\$2[aby]\$/);
+        expect(stored?.password).toMatch(/^\$argon2id\$/);
         // And it is the NEW one: the login flow is the honest way to assert that.
         const loggedIn = await accountService.login('change@example.com', PLAIN_PASSWORD);
         expect(loggedIn.success).toBe(true);
@@ -500,17 +500,11 @@ const createUserWithBothTokenTypes = () =>
         ] as Token[]
     });
 
-describe('tokenRemoveAll', () => {
-    it('removes every token of the given type', async () => {
+describe('logoutEverywhere', () => {
+    it('removes every refresh token', async () => {
         const user = await createUserWithBothTokenTypes();
 
-        asSuccess(
-            await accountService.tokenRemoveAll(
-                String(user._id),
-                TokenType.REFRESH,
-                testCallerContext
-            )
-        );
+        asSuccess(await accountService.logoutEverywhere(String(user._id), testCallerContext));
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
         expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
@@ -522,7 +516,7 @@ describe('tokenRemoveAll', () => {
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUserWithBothTokenTypes();
 
-        await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH, testCallerContext);
+        await accountService.logoutEverywhere(String(user._id), testCallerContext);
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -532,31 +526,30 @@ describe('tokenRemoveAll', () => {
         );
     });
 
-    it('leaves the other types alone', async () => {
-        // "Log out everywhere" must not also burn a password-reset link the user is midway
-        // through using. The filter keeps everything whose type differs, and a mutation that
-        // inverts or drops the comparison empties the array instead — which no assertion on the
-        // removed type alone would catch.
+    it('leaves a pending password-reset link alone', async () => {
+        // "Log out everywhere" must not also burn a link the user is midway through using; only
+        // a changed password purges those.
         const user = await createUserWithBothTokenTypes();
 
-        await accountService.tokenRemoveAll(
-            String(user._id),
-            TokenType.PASSWORD_RESET,
-            testCallerContext
-        );
+        await accountService.logoutEverywhere(String(user._id), testCallerContext);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored?.tokens.map(({ token }) => token)).toEqual(['refresh-a', 'refresh-b']);
+        expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
+    });
+
+    it('moves the session epoch, so access tokens already handed out stop working', async () => {
+        const user = await createUserWithBothTokenTypes();
+
+        await accountService.logoutEverywhere(String(user._id), testCallerContext);
+
+        const stored = await userRepository.findByIdWithCredentials(String(user._id));
+        expect(stored?.tokensValidAfter).toBeInstanceOf(Date);
     });
 
     it('answers 401, not 404, for a user that does not exist', async () => {
         // `openapi.yaml` declares no 404 for `logoutAll` — a gone user is unauthenticated.
         const response = asReject(
-            await accountService.tokenRemoveAll(
-                '64b7f2a1c2d3e4f5a6b7c8d9',
-                TokenType.REFRESH,
-                testCallerContext
-            )
+            await accountService.logoutEverywhere('64b7f2a1c2d3e4f5a6b7c8d9', testCallerContext)
         );
 
         expect(response.status).toBe(401);
@@ -576,7 +569,7 @@ describe('tokenRemoveAll', () => {
         const user = await createUserWithBothTokenTypes();
         const staleCopy = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
-        await accountService.tokenRemoveAll(String(user._id), TokenType.REFRESH, testCallerContext);
+        await accountService.logoutEverywhere(String(user._id), testCallerContext);
         await accountService.tokenAdd(staleCopy, 'delete', 3600);
 
         const stored = await userRepository.findByIdWithCredentials(String(user._id));
@@ -588,7 +581,7 @@ describe('tokenRemoveAll', () => {
         // not as the 500 an uncaught cast produces — the same failure `databaseErrorInterpreter`
         // was fixed for elsewhere.
         const response = asReject(
-            await accountService.tokenRemoveAll('not-an-id', TokenType.REFRESH, testCallerContext)
+            await accountService.logoutEverywhere('not-an-id', testCallerContext)
         );
 
         expect(response.status).toBe(422);

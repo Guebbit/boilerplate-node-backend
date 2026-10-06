@@ -1,5 +1,21 @@
 {
     "api-keys": {
-        "permission-not-mintable": "One or more requested permissions are not yours to grant."
+        "permission-not-mintable": "One or more requested permissions are not yours to grant.",
+        "expiry-too-far": "A credential may expire at most one year from now.",
+        "email-minted": {
+            "subject": "An API key was created on your account",
+            "meta-title": "API key created",
+            "greeting": "Hello!",
+            "body": "An API key named \"{{name}}\" ({{credential}}) was created on your account. It stops working on {{expires}}.",
+            "advice": "If this was not you, revoke it from your API keys and change your password now."
+        },
+        "email-revoked": {
+            "subject": "Your API keys were revoked",
+            "meta-title": "API keys revoked",
+            "greeting": "Hello!",
+            "body-logout-all": "You signed out of every device, so the API keys you created were revoked:",
+            "body-password-reset": "Your password was reset, so the API keys you created were revoked:",
+            "advice": "Create new keys once you are sure the account is yours."
+        }
     }
 }

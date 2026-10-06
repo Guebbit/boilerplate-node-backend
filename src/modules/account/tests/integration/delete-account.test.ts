@@ -115,7 +115,7 @@ describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
         // The two flags/expiry mechanics of a clear are `cookies.test.ts`'s own unit coverage;
         // this only asks whether the confirm route actually reaches them.
         const cookies = response.get('Set-Cookie') ?? [];
-        expect(cookies.some((cookie) => cookie.startsWith('jwt='))).toBe(true);
+        expect(cookies.some((cookie) => cookie.startsWith('__Host-jwt='))).toBe(true);
         expect(cookies.some((cookie) => cookie.startsWith('isAuth='))).toBe(true);
     });
 

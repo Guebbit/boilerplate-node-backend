@@ -44,7 +44,6 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
             'cors',
             'express-rate-limit',
             'cookie-parser',
-            'bcrypt',
             '@casl/ability',
             '@casl/mongoose',
             'altcha-lib',

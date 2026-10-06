@@ -193,7 +193,7 @@ Why once, and why a copy:
 
 - **A flow is not idempotent.** Checking out twice makes two orders. Running the flows per restore
   would grow the shop every time a spec started.
-- **A restore has to be cheap.** Replaying rows skips the fourteen bcrypt cost-12 hashes a reseed
+- **A restore has to be cheap.** Replaying rows skips the fourteen password hashes a reseed
   pays for and the three hundred requests the flows make. A `shop` restore is around 10 ms.
 - **The flows need a listening app.** They get a throwaway loopback listener of their own
   (`scenarios/flows/loopback.ts`), opened before `NODE_PORT` is bound and closed after — so the

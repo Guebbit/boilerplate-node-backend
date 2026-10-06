@@ -135,10 +135,17 @@ backup code is the route for someone who lost their phone. Without the rule a st
 session could disarm the factor it would otherwise have to pass (OWASP MFA Cheat Sheet, "Changing
 MFA Factors"; NIST SP 800-63B).
 
-Every call that takes such a code — `setup`, removing one method, disabling 2FA, regenerating backup
-codes — shares one per-account budget of **wrong** codes (`NODE_MFA_ACCOUNT_GUESS_MAX`, 5 an hour). A
-right code spends nothing. Without it, six digits behind a stolen session sit only behind the global
-brake; login's own guesses are capped per challenge instead (`NODE_MFA_CHALLENGE_MAX`).
+Every check of an **armed** factor — those calls, and the login challenge's code step — shares one
+per-account cap of **wrong** codes: ten lock the account's 2FA checks for 15 minutes, answering
+`429` before any code is compared, and the owner is mailed once (`account.two-factor-locked`). The
+counter is a Mongo field on the user, not a Redis budget: the write is free, it survives a cache
+outage, and one count covers every place a code is typed (NIST SP 800-63B allows up to 100). The
+attempt is **reserved before it is compared** — one atomic `findOneAndUpdate` — because a
+check-then-increment races: parallel guesses would all read "under the cap". A right code hands the
+counter back, and so does a completed password reset (the mailbox is the account's own recovery).
+Enrolment `/confirm` never counts: no factor is armed there yet. Login's own guesses are also capped
+per challenge (`NODE_MFA_CHALLENGE_MAX`), keyed on the challenge cookie when an OAuth login carries
+it there.
 
 An account whose only factor is **delivered** has nothing to read a code from, so
 `POST /account/2fa/methods/:method/send` mails one to the signed-in caller — armed delivered methods

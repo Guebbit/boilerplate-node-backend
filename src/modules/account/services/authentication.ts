@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { cooldownRemaining } from '../cooldown';
-import bcrypt from 'bcrypt';
+import { hashPasswordSync, verifyPassword } from '@infrastructure/security/password-hash';
 import { randomBytes } from 'node:crypto';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
@@ -23,6 +23,11 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { revokeAllSessions } from './revocation';
+import { emitDomainEvent } from '@kernel/events';
+import { ACCOUNT_SESSIONS_REVOKED } from '../events';
+import { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';
+
 import { LoginBody } from '@api/schemas.zod';
 import {
     generateSuccess,
@@ -32,7 +37,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userService, type TokenType, type UserDocument } from '@modules/users';
+import { zodUserSchema, userService, type UserDocument } from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -40,6 +45,8 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
+import { authPasswordResetTotal } from '../metrics';
+import { logger } from '@infrastructure/adapters/logger';
 import { rotateRefreshToken, TokenReuseError, type RotatedSession } from '../session/jwt';
 import { assignDefaultRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -61,13 +68,6 @@ export const tokenAdd = (
     // exactly the field where two sessions and a reset link routinely collide like that.
     return userService.tokenAdd(user, type, expirationTime ?? 0, token);
 };
-
-/**
- * The `tokens.type` an account-deletion link carries — named for the same reason as
- * {@link PASSWORD_RESET_TOKEN_TYPE}: policy, not detail, and `delete-account-confirm.ts` reads it
- * from here rather than repeating the bare string.
- */
-export const ACCOUNT_DELETE_TOKEN_TYPE = 'delete';
 
 /**
  * Issue a delete-confirmation token, deliver it, and record the request. Wraps `tokenAdd`
@@ -97,21 +97,12 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
     });
 
 /**
- * A bcrypt hash of no real password, computed once at import time (a one-time boot cost, not a
+ * An argon2id hash of no real password, computed once at import time (a one-time boot cost, not a
  * per-request one). `login` compares against this on an unknown email, so "no such account"
- * costs the same as "wrong password" — without it, bcrypt's own cost is exactly what makes the
+ * costs the same as "wrong password" — without it, the hash's own cost is exactly what makes the
  * fast path a timing oracle for enumerating registered addresses.
  */
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
-
-/**
- * The `tokens.type` a password-reset link carries.
- *
- * Named here rather than spelled at each call site because it is policy, not detail — and because
- * a bare string in a controller connects to nothing, least of all the TTL it belongs to.
- * `./verification` states its own pair the same way.
- */
-export const PASSWORD_RESET_TOKEN_TYPE = 'password';
+const DUMMY_PASSWORD_HASH = hashPasswordSync(randomBytes(32).toString('hex'));
 
 /**
  * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
@@ -163,7 +154,8 @@ const issueResetToken = (user: UserDocument): Promise<string> =>
  * the same fact the response is built to hide, and a DB failure below still counts as an attempt.
  * A request within {@link RESET_REQUEST_SECONDS} of the last mail to the same account is skipped
  * the same way: same 200, no mail, no new token (and `false` for the metric).
- * The boolean return is for the caller's metric only, never a client-visible refusal.
+ * The metric is counted here, since the controller no longer waits for the outcome; the boolean
+ * return serves tests and is never a client-visible refusal.
  * Like {@link requestAccountDeletion}, the token value never leaves this file.
  * @returns `true` when a mail was queued, `false` when the address has no account or the lookup failed
  */
@@ -203,8 +195,14 @@ export const requestPasswordReset = (
     // neither the response nor the trail can be used to tell "no such account" from "something
     // broke" apart.
     return attempt
-        .catch(() => false)
+        .catch((error: unknown) => {
+            // Swallowed from the CLIENT's side on purpose, never from the operator's: this runs
+            // detached from the response, so a log line is the only place a broken reset path shows.
+            logger.error({ message: 'A password reset request failed.', error });
+            return false;
+        })
         .then((sent) => {
+            authPasswordResetTotal.inc({ status: sent ? 'success' : 'failure' });
             recordAudit(context, {
                 action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
                 actor_user_id: 'anonymous',
@@ -566,29 +564,29 @@ export const login = (
             .then((user) => {
                 // Compare against DUMMY_PASSWORD_HASH on a miss, so an
                 // unknown email costs the same as a wrong password — an unconditional `return`
-                // here would answer 401 before bcrypt's own cost, the timing gap that lets an
+                // here would answer 401 before the hash's own cost, the timing gap that lets an
                 // attacker tell "no such account" from "wrong password" by response time alone.
-                return bcrypt
-                    .compare(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH)
-                    .then((doMatch) => {
+                return verifyPassword(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH).then(
+                    (doMatch) => {
                         if (!user || !doMatch)
                             return generateReject(401, [t('account.login.wrong-data')]);
                         return generateSuccess<UserDocument>(user);
-                    });
+                    }
+                );
             })
             .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
     );
 };
 
 /**
- * Remove all tokens of a given type for the user (logout-everywhere).
+ * Log the account out everywhere: every refresh token goes and the session epoch moves, so access
+ * tokens already handed out die too. The caller is signed out as well, deliberately.
  * The audit emit fires unconditionally: the caller's next step is "clear cookies, answer
  * success" either way, so it was never actually gated on `result.success` — this preserves
  * that rather than introducing a new condition.
  */
-export const tokenRemoveAll = (
+export const logoutEverywhere = (
     userId: string,
-    type: TokenType,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     userService
@@ -608,8 +606,13 @@ export const tokenRemoveAll = (
                 // rebuilds the array, writing it back whole and erasing anything added between
                 // this function's read and write. That race window is hard to assert in a test —
                 // `$pull` describes a change instead, closing it in the implementation.
-                return userService
-                    .tokenRemoveAll(user, type)
+                return revokeAllSessions(user)
+                    .then(() =>
+                        emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
+                            userId: user.id,
+                            reason: 'logout-all'
+                        })
+                    )
                     .then(() => generateSuccess<UserDocument>(user));
             }
         )
@@ -655,11 +658,9 @@ export const verifyOwnPassword = (
             if (!user) return generateReject(401, []);
             if (!user.password) return generateReject(422, [t(wrongKey)]);
 
-            return bcrypt
-                .compare(password, user.password)
-                .then((doMatch) =>
-                    doMatch
-                        ? generateSuccess<UserDocument>(user)
-                        : generateReject(422, [t(wrongKey)])
-                );
+            return verifyPassword(password, user.password).then((doMatch) =>
+                doMatch ? generateSuccess<UserDocument>(user) : generateReject(422, [t(wrongKey)])
+            );
         });
+
+export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';

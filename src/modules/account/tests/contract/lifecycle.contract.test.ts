@@ -8,6 +8,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
+import { eventually } from '@tests/eventually';
 import { api, authenticateAs } from '@tests/http';
 import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
@@ -25,6 +26,17 @@ setupTestDb();
 beforeEach(() => {
     (mailerPort.enqueueEmail as jest.Mock).mockClear();
 });
+
+/**
+ * Wait until a mail of this template is queued: `POST /account/reset` answers before it is, on
+ * purpose, so the response time cannot tell a registered address from a stranger's.
+ *
+ * @param template - the mail template the flow sends
+ */
+const queued = (template: string): Promise<void> =>
+    eventually(() =>
+        (mailerPort.enqueueEmail as jest.Mock).mock.calls.some(([, name]) => name === template)
+    );
 
 /**
  * The one-time token from the newest queued mail of a template — what the recipient's link says.
@@ -78,6 +90,7 @@ describe('POST /account/reset', () => {
         const user = await createUser({ email: 'forgetful@example.com' });
 
         const response = await api().post('/account/reset').send({ email: user.email });
+        await queued('account.reset-request');
 
         expect(response.status).toBe(200);
         expect(mailedToken('account.reset-request')).toEqual(expect.any(String));
@@ -85,6 +98,8 @@ describe('POST /account/reset', () => {
 
     it('answers an unknown address exactly like a known one — no account enumeration', async () => {
         const response = await api().post('/account/reset').send({ email: 'nobody@example.com' });
+        // Detached work: give it its whole window, so "nothing was queued" is a finding, not a race.
+        await eventually(() => false, 200);
 
         expect(response.status).toBe(200);
         expect(mailerPort.enqueueEmail).not.toHaveBeenCalled();
@@ -121,6 +136,7 @@ describe('the name in a mailed greeting', () => {
         });
 
         await api().post('/account/reset').send({ email: user.email });
+        await queued('account.reset-request');
 
         expect(mailedGreeting('account.reset-request')).toContain('Ada Proven');
     });
@@ -133,6 +149,7 @@ describe('the name in a mailed greeting', () => {
         });
 
         await api().post('/account/reset').send({ email: user.email });
+        await queued('account.reset-request');
 
         expect(mailedGreeting('account.reset-request')).toBe('Hello!');
     });

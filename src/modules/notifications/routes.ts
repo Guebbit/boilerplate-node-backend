@@ -20,6 +20,7 @@ import {
     requirePermission,
     requirePermissionViaCookie
 } from '@kernel/middlewares/authorizations';
+import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import { getNotifications } from './controllers/get-notifications';
 import {
     getNotificationsStream,
@@ -33,7 +34,13 @@ import { deleteNotification } from './controllers/delete-notification';
 export const router = Router();
 
 // GET /notifications/stream — the live SSE stream, opened by the browser's `EventSource`.
-router.get('/stream', requirePermissionViaCookie(NOTIFICATIONS_READ_KEY), getNotificationsStream);
+// The cookie alone authenticates this stream, so a page on another origin must not open it.
+router.get(
+    '/stream',
+    requireAllowedOrigin,
+    requirePermissionViaCookie(NOTIFICATIONS_READ_KEY),
+    getNotificationsStream
+);
 
 // Everything below is an ordinary bearer-authenticated call.
 router.use(getAuth, isAuth);

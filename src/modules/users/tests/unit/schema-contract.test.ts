@@ -5,7 +5,7 @@
  * reads, `omit` on the transform repeats the guarantee at serialization, and the `pre('save')`
  * hook hashes only when `password` is modified so a profile update can't re-hash an existing hash.
  */
-import bcrypt from 'bcrypt';
+import { hashPassword, verifyPassword } from '@infrastructure/security/password-hash';
 import { userSchema, applyUserTransform, TokenType } from '@modules/users/model';
 import { asStub } from '@tests/stub';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
@@ -273,16 +273,15 @@ describe('userSchema — the pre-save password hook', () => {
         await preSaveHook().call(document);
 
         expect(document.password).not.toBe(PLAIN_PASSWORD);
-        // A real bcrypt hash, at the cost factor the module chose — not merely "something else".
-        expect(document.password.startsWith('$2')).toBe(true);
-        expect(await bcrypt.compare(PLAIN_PASSWORD, document.password)).toBe(true);
+        // A real argon2id hash, at the cost the helper chose — not merely "something else".
+        expect(document.password.startsWith('$argon2id$')).toBe(true);
+        expect(await verifyPassword(PLAIN_PASSWORD, document.password)).toBe(true);
     });
 
     it('leaves an untouched password alone', async () => {
         // The guard that matters: without it, every profile update re-hashes the stored HASH,
         // and the account becomes unloggable-into with no error anywhere.
-        // Cost factor 4 (bcrypt's minimum) — fast is fine here, this isn't the real hashing path.
-        const stored = await bcrypt.hash(PLAIN_PASSWORD, 4);
+        const stored = await hashPassword(PLAIN_PASSWORD);
         const document = { password: stored, isModified: jest.fn().mockReturnValue(false) };
 
         await preSaveHook().call(document);

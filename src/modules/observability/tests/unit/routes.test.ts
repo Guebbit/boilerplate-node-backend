@@ -34,7 +34,11 @@ describe('observability routes — the two guard styles', () => {
     it('guards the SSE stream by cookie, because EventSource cannot send a header', () => {
         const guards = guardsOn(router, 'GET /events');
 
-        expect(guards).toEqual(['requirePermissionViaCookieGuard', 'getObservabilityEvents']);
+        expect(guards).toEqual([
+            'requireAllowedOrigin',
+            'requirePermissionViaCookieGuard',
+            'getObservabilityEvents'
+        ]);
         // The ordinary chain here would lock out the only client this route exists for.
         expect(guards).not.toContain('isAuth');
     });

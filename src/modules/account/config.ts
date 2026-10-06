@@ -11,8 +11,8 @@ import { defineConfig } from '@infrastructure/config/define';
 import { int, text } from '@infrastructure/config/fields';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 
-/** The four token-bearing account links — one per kind of proof a link can carry. */
-export type AccountLinkKind = 'verify' | 'reset' | 'delete' | 'email-change';
+/** The five token-bearing account links — one per kind of proof a link can carry. */
+export type AccountLinkKind = 'verify' | 'reset' | 'delete' | 'email-change' | 'email-undo';
 
 /**
  * The frontend link templates, the two mail-link lifetimes and how long a data export is kept.
@@ -39,6 +39,10 @@ export const accountConfig = defineConfig({
         NODE_FRONTEND_LINK_EMAIL_CHANGE: text({
             default: 'email-change/confirm?token={token}',
             describe: 'Template of the email-change link.'
+        }),
+        NODE_FRONTEND_LINK_EMAIL_UNDO: text({
+            default: 'email-change/undo?token={token}',
+            describe: 'Template of the link in the old-address notice that undoes an email change.'
         }),
         NODE_FRONTEND_LINK_EXPORT: text({
             default: 'account-export/{id}',
@@ -74,12 +78,13 @@ const LINK_ENV_VAR = {
     verify: 'NODE_FRONTEND_LINK_VERIFY',
     reset: 'NODE_FRONTEND_LINK_RESET',
     delete: 'NODE_FRONTEND_LINK_DELETE',
-    'email-change': 'NODE_FRONTEND_LINK_EMAIL_CHANGE'
+    'email-change': 'NODE_FRONTEND_LINK_EMAIL_CHANGE',
+    'email-undo': 'NODE_FRONTEND_LINK_EMAIL_UNDO'
 } as const satisfies Record<AccountLinkKind, string>;
 
 /**
- * A link into the paired frontend for one of the four token-bearing kinds — signup, reset,
- * delete, email-change.
+ * A link into the paired frontend for one of the five token-bearing kinds — signup, reset,
+ * delete, email-change, email-undo.
  *
  * @param kind - which link — picks both the env var and the default template
  * @param parameters - `locale` the email is written in; `token` the link must carry

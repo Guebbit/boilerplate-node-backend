@@ -1,12 +1,13 @@
 /**
  * @module
  * Cookie service — HTTP cookie creation and destruction, decoupled from JWT logic. Two cookies,
- * two jobs: `jwt` carries the refresh token and is the credential, `isAuth` is a non-secret UI
+ * two jobs: `__Host-jwt` carries the refresh token and is the credential, `isAuth` is a non-secret UI
  * hint so the client shell can render the right chrome before its first request answers. See
  * docs/modules/account-sessions.md for the flag-by-flag rationale.
  */
 
 import type { Response } from 'express';
+import { REFRESH_COOKIE } from '@kernel/cookies';
 import { isRelaxedEnvironment } from '@infrastructure/runtime/config';
 /**
  * Flags shared by every cookie this module treats as a credential — `createRefreshCookie`,
@@ -25,6 +26,14 @@ export const secureCookieOptions = () => ({
 });
 
 /**
+ * The refresh cookie's flags: {@link secureCookieOptions} with `Secure` forced on in every
+ * environment, which the `__Host-` prefix requires. Browsers accept `Secure` cookies from
+ * `http://localhost`, so a developer machine is unaffected; a LAN-IP dev over plain HTTP is not,
+ * and would need HTTPS or a hostname that is not an address.
+ */
+const hostCookieOptions = () => ({ ...secureCookieOptions(), secure: true });
+
+/**
  * Set a secure httpOnly cookie containing the refresh token.
  *
  * @param maxAgeMs - how long the cookie persists, in milliseconds. `undefined` sets a
@@ -33,8 +42,8 @@ export const secureCookieOptions = () => ({
  *   lifetime, copied forward from the token it replaced rather than any configured tier.
  */
 export const createRefreshCookie = (response: Response, token: string, maxAgeMs?: number) => {
-    response.cookie('jwt', token, {
-        ...secureCookieOptions(),
+    response.cookie(REFRESH_COOKIE, token, {
+        ...hostCookieOptions(),
         // Express: `maxAge` undefined emits no `Max-Age`/`Expires`, i.e. a session cookie.
         // https://expressjs.com/en/api.html#res.cookie
         maxAge: maxAgeMs
@@ -46,7 +55,7 @@ export const createRefreshCookie = (response: Response, token: string, maxAgeMs?
  * matches a clear by path/domain/attributes, not by name alone.
  */
 export const destroyRefreshCookie = (response: Response) => {
-    response.clearCookie('jwt', secureCookieOptions());
+    response.clearCookie(REFRESH_COOKIE, hostCookieOptions());
 };
 
 /**

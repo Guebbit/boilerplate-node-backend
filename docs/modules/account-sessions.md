@@ -46,7 +46,7 @@ account exists.
 
 |                | Access token               | Refresh token             |
 | -------------- | -------------------------- | ------------------------- |
-| Travels in     | the `Authorization` header | the `jwt` cookie          |
+| Travels in     | the `Authorization` header | the `__Host-jwt` cookie   |
 | Lifetime from  | `NODE_TOKEN_ACCESS_TIME`   | one of three tiers, below |
 | Readable by JS | yes — the client holds it  | no — `httpOnly`           |
 
@@ -100,7 +100,7 @@ flowchart LR
   ASP.NET Core Identity carries it the same way. An OAuth-originated challenge has no earlier
   password step, so the 2FA request is the only place it can be said.
 - **Reauth and password change.** Both replace the session, so `reissueSession` reads the tier off
-  the request's own `jwt` cookie (signature only — a password change has already revoked the row)
+  the request's own `__Host-jwt` cookie (signature only — a password change has already revoked the row)
   and keeps it. No cookie, a stranger's cookie or an expired one all read as "no tier": a session
   cookie, never a persistent one granted by accident.
 
@@ -171,22 +171,46 @@ flowchart TD
   five-guess ceiling are `two-factor/delivered-codes.ts`'s, shared.
 - **Budget.** The send spends the same per-account hourly budget as
   `POST /account/2fa/methods/{method}/send`, since both fill the same mailbox.
-- **`amr`.** The re-minted session keeps what it had and adds the method: `pwd` or the new `email`
-  (not `otp`, which means a second factor here). A session that passed 2FA at login keeps `otp` after
-  a re-auth, so a route that requires it still opens.
+- **`amr`.** The re-minted session claims ONLY what that call proved: `pwd` or the new `email`, plus
+  `otp` when the body carried a verified second-factor code (`otp` means a second factor here, and a
+  mailed code is not one). Proofs from the login are not carried over, so a password-only re-auth
+  no longer passes a route that demands `otp`.
+
+## Step-up for an account with a second factor
+
+An account with a factor armed (`AuthContext.twoFactorArmed`, read fresh on every request) must have
+proved a code in the fresh session before the identity routes: changing the email, changing the
+password, and starting an account deletion. Checkout, payments, logout-everywhere, session
+management and the data export stay password-only (ASVS 5.0 §7.5.1).
+
+- **The challenge.** The same `401 REAUTH_REQUIRED`, with `details.methods: ['otp']` beside
+  `details.maxAge` (RFC 9470's "which proof is missing"). No new error code.
+- **The answer.** `POST /account/reauth` takes the password (or the mailed code) AND an optional
+  `otp`. The code is checked only after the first proof passed, behind the per-account
+  [wrong-code cap](./account-two-factor.md#changing-factors-needs-a-factor), and earns `otp`.
+- **Unchanged without 2FA.** An account with no factor is asked nothing new; the password change
+  still proves the current password and nothing more.
+- **The undo.** An email change can be undone from the old address's link for 7 days, through
+  a password change — see [Proving an address](./account.md#proving-an-address).
 - **Boot.** An enabled OAuth provider with no deliverable mail (`smtp` with a host) refuses to boot
   outside `development` and `test`: those accounts would be locked out of checkout, payment and
   self-deletion. The demo registers its fake provider in code, not through these variables.
 
 ## The cookie, flag by flag
 
-| Flag       | Value           | Why                                                                                 |
-| ---------- | --------------- | ----------------------------------------------------------------------------------- |
-| `httpOnly` | `true`          | The refresh token is the long-lived credential; script must not be able to read it. |
-| `secure`   | production only | So local development over http still works, without weakening the deployed cookie.  |
-| `sameSite` | `lax`           | Survives a top-level navigation back into the app; refuses cross-site form posts.   |
-| `path`     | `/`             | The refresh endpoint and the logout endpoint are on different paths.                |
-| `maxAge`   | the chosen tier | The cookie expires when the token does, rather than outliving it.                   |
+The name is `__Host-jwt`: the prefix makes a browser refuse the cookie unless it is `Secure`, `Path=/`
+and Domain-less. Refresh is a `POST`, and refresh, logout and the SSE streams answer 403 to a request
+naming an `Origin` that is not an allowed frontend origin (the same list CORS uses), so a request from
+someone else's page cannot act on the cookie.
+
+| Flag       | Value           | Why                                                                                      |
+| ---------- | --------------- | ---------------------------------------------------------------------------------------- |
+| `httpOnly` | `true`          | The refresh token is the long-lived credential; script must not be able to read it.      |
+| `secure`   | `true`, always  | The `__Host-` name requires it; browsers accept `Secure` cookies from `localhost`.       |
+| `sameSite` | `lax`           | Survives a top-level navigation back into the app; refuses cross-site form posts.        |
+| `path`     | `/`             | The refresh endpoint and the logout endpoint are on different paths; `__Host-` needs it. |
+| `domain`   | none            | Host-locked: a sibling subdomain cannot set or overwrite the cookie.                     |
+| `maxAge`   | the chosen tier | The cookie expires when the token does, rather than outliving it.                        |
 
 There is a second, deliberately **non-secure** cookie carrying nothing but a logged-in hint, so the
 client shell can render the right chrome before its first request answers. It holds no credential
@@ -231,9 +255,30 @@ The refresh tokens hang off the user document in [`users`](./users.md)' `tokens`
 is what makes "log me out of every device" a single write rather than a token blocklist. It is also
 the concrete reason the `account → users` edge is `shared-kernel`: this module writes that array.
 
+### The session epoch
+
+Removing refresh tokens does not touch an access token already handed out (stateless, ten minutes).
+So every "I may be compromised" event also moves `tokensValidAfter` on the user, and a token whose
+`auth_time` (floored to the second) predates it is refused — by the resolver for an access token, by
+`verifyRefreshToken` and the rotation for a refresh one. `auth_time`, not `iat`, because one
+`/refresh` resets `iat` and would walk a stolen session out of the cut.
+
+| Event                                 | Epoch moves                                                    | The caller                                                                              |
+| ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| logout everywhere                     | yes                                                            | signed out too                                                                          |
+| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged | survives: new session in the response                                                   |
+| 2FA factor armed, removed or disabled | yes                                                            | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
+| email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
+| refresh reuse detected                | yes                                                            | n/a                                                                                     |
+| plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
+
+`POST /account/reauth` retires the refresh token it was given when it re-mints, leaving one live
+session rather than two. A token stamped in the very second of a bump is kept, which is what lets
+the caller's re-minted session survive its own bump.
+
 ## Refresh rotation
 
-`GET /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
+`POST /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
 every time. Without that, a stolen cookie would stay valid, silently, for as long as it had left to
 live (up to a year, `remember: long`); rotation turns "a value that never changes" into "a value
 that changes on every use", so a copy presented after the original has moved is detectable.
