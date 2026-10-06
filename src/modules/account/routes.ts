@@ -93,8 +93,10 @@ import { normalizeEmail } from '@modules/users';
  * a stale session is challenged or not — never by calling this directly.
  */
 const isChangingEmail = (request: Request): boolean => {
-    const email = (request.body as { email?: string } | undefined)?.email;
-    if (email === undefined) return false;
+    const { email } = (request.body ?? {}) as { email?: unknown };
+    // Anything but a string is not an address and not this guard's to judge: the controller's own
+    // validation refuses it with a 422, where `normalizeEmail` below would throw on a number.
+    if (typeof email !== 'string') return false;
     const currentEmail = request.authContext?.email;
     return currentEmail === undefined || normalizeEmail(email) !== normalizeEmail(currentEmail);
 };

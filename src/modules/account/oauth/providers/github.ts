@@ -7,6 +7,7 @@
 
 import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
+import { readCappedJson, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 
 /** This registry's key — lands on `OAuthAccount.provider`. */
 const PROVIDER_NAME = 'github';
@@ -37,10 +38,13 @@ const githubApiGet = <T>(path: string, accessToken: string): Promise<T> =>
             Accept: 'application/vnd.github+json'
         },
         // Node: abort rather than hold an OAuth callback open on a slow/hung GitHub.
-        signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS)
+        signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
+        // fetch: a redirect is an error, not something to follow to a host nobody chose.
+        redirect: 'error'
     }).then((response) => {
         if (!response.ok) throw new Error(`GitHub API ${path} failed: ${response.status}`);
-        return response.json() as Promise<T>;
+        // The type argument is an annotation, not a check: callers narrow what they read.
+        return readCappedJson(response, DEFAULT_BODY_CAP_BYTES) as Promise<T>;
     });
 
 /**
@@ -86,12 +90,17 @@ export const githubOAuthProvider: OAuthProvider = {
                 code_verifier: codeVerifier
             }),
             // Node: abort rather than hold an OAuth callback open on a slow/hung GitHub.
-            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS)
+            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
+            // fetch: a redirect is an error, not something to follow to a host nobody chose.
+            redirect: 'error'
         })
             .then((response) => {
                 if (!response.ok)
                     throw new Error(`GitHub token exchange failed: ${response.status}`);
-                return response.json() as Promise<{ access_token?: string; error?: string }>;
+                return readCappedJson(response, DEFAULT_BODY_CAP_BYTES) as Promise<{
+                    access_token?: string;
+                    error?: string;
+                }>;
             })
             .then(({ access_token: accessToken, error }) => {
                 if (!accessToken || error)

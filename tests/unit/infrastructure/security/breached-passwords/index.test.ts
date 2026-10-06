@@ -22,7 +22,8 @@ const NOT_IN_LIST_PASSWORD = 'Xk9$mQzR7pL2!';
 
 /** One mocked `fetch` text response. `ok = false` is how a case makes HIBP answer a non-200. */
 const textResponse = (body: string, ok = true): Response =>
-    ({ ok, status: ok ? 200 : 503, text: () => Promise.resolve(body) }) as Response;
+    // A real `Response`: the lookup reads the body through a stream with a byte cap.
+    new Response(body, { status: ok ? 200 : 503 });
 
 /** The saved switches, restored after every case — the same pattern `antibot-providers` uses. */
 
@@ -63,6 +64,20 @@ describe('checkHibpRange', () => {
             breached: true,
             count: 584_516
         });
+    });
+
+    it('never follows a redirect', async () => {
+        const fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(textResponse(''));
+
+        await checkHibpRange(NOT_IN_LIST_PASSWORD);
+
+        expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
+    });
+
+    it('accepts (fails open) on an answer longer than the byte cap, without buffering it', async () => {
+        jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(textResponse('x'.repeat(1_048_577)));
+
+        await expect(checkHibpRange(NOT_IN_LIST_PASSWORD)).resolves.toEqual({ breached: false });
     });
 
     it('accepts (fails open) when fetch rejects outright', async () => {

@@ -64,6 +64,26 @@ describe('humanChallengeGate', () => {
         expect(next).toHaveBeenCalledTimes(1);
     });
 
+    it('asks Cloudflare without following a redirect, and refuses an oversized answer', async () => {
+        setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
+        setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: 'secret' });
+        const fetchSpy = jest
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValue(new Response(`{"success":true,"pad":"${'x'.repeat(1_048_577)}"}`));
+        const response = makeResponseStub();
+        const next = jest.fn();
+
+        humanChallengeGate(makeRequest('a-token'), response, next);
+        await new Promise((resolve) => {
+            setTimeout(resolve, 50);
+        });
+
+        expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
+        // Too long to read: a refusal, never a pass — even though the body said `success: true`.
+        expect(next).not.toHaveBeenCalled();
+        expect(response.status).toHaveBeenCalledWith(401);
+    });
+
     it('refuses when the provider throws rather than answering — never a pass', async () => {
         setEnvironment({ NODE_ANTIBOT_PROVIDER: 'turnstile' });
         setEnvironment({ NODE_ANTIBOT_TURNSTILE_SECRET: 'secret' });

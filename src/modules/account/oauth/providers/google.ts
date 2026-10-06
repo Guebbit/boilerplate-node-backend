@@ -7,6 +7,7 @@
 import { decode } from 'jsonwebtoken';
 import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
+import { readCappedJson, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 
 /** This registry's key — also the value Google's docs use, and what lands on `OAuthAccount.provider`. */
 const PROVIDER_NAME = 'google';
@@ -91,12 +92,16 @@ export const googleOAuthProvider: OAuthProvider = {
                 code_verifier: codeVerifier
             }),
             // Node: abort rather than hold an OAuth callback open on a slow/hung Google.
-            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS)
+            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
+            // fetch: a redirect is an error, not something to follow to a host nobody chose.
+            redirect: 'error'
         })
             .then((response) => {
                 if (!response.ok)
                     throw new Error(`Google token exchange failed: ${response.status}`);
-                return response.json() as Promise<{ id_token?: string }>;
+                return readCappedJson(response, DEFAULT_BODY_CAP_BYTES) as Promise<{
+                    id_token?: string;
+                }>;
             })
             .then(({ id_token: idToken }): OAuthIdentity => {
                 if (!idToken) throw new Error('Google token exchange: no id_token in response');
