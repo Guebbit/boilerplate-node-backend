@@ -15,6 +15,7 @@ import {
     getActiveSpanContext,
     recordErrorOnActiveSpan
 } from '@infrastructure/observability/tracer';
+import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
@@ -91,11 +92,15 @@ const resolveStatus = (error: Error): number => {
  * — so a test cannot get at it by adding a throwing route to `app`.
  */
 export const handleUncaughtError = (
-    error: Error,
+    thrown: unknown,
     request: Request,
     response: Response,
     next: NextFunction
 ) => {
+    // Anything can be thrown (`throw 'boom'`, a rejected string); a bare non-object has no
+    // `name`, `message` or `status` to read, so wrap it once and treat it like any other error.
+    const error = thrown instanceof Error ? thrown : new Error(String(thrown));
+
     // Too late to answer: the status line is already out. Express's own handler closes the
     // connection, where a bare return would leave a half-sent stream open.
     if (response.headersSent) {
@@ -167,6 +172,25 @@ export const handleUncaughtError = (
 };
 
 /**
+ * Counts and audit-logs a promise rejection nobody handled, then lets the process keep running.
+ *
+ * Keeping on is a documented choice: one lost promise is not proof the process state is unknown,
+ * unlike an uncaught exception. The counter is what makes it alertable instead of a log line.
+ *
+ * @param reason - whatever the promise was rejected with
+ */
+export const handleUnhandledRejection = (reason: unknown): void => {
+    processUnhandledRejectionsTotal.inc();
+    // The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
+    // (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
+    // output, so passing it whole is what keeps the stack in the log line outside production.
+    auditLogger.error('process.unhandledRejection', {
+        action: 'process.unhandledRejection',
+        error: reason
+    });
+};
+
+/**
  * Mount the global error handler and register the process-level handlers.
  *
  * Must be called after {@link installRoutes}: an express error handler only catches what was
@@ -185,15 +209,7 @@ export const installErrorHandling = (app: Express): void => {
     /*
      * Process-level error handlers — audit unhandled rejections/exceptions
      */
-    process.on('unhandledRejection', (reason) => {
-        // The raw `reason`, not a hand-flattened `{name, message}` — `redactFormat`
-        // (`adapters/logger.ts`) serializes an `Error` into `{name, message, stack}` before JSON
-        // output, so passing it whole is what keeps the stack in the log line outside production.
-        auditLogger.error('process.unhandledRejection', {
-            action: 'process.unhandledRejection',
-            error: reason
-        });
-    });
+    process.on('unhandledRejection', handleUnhandledRejection);
 
     process.on('uncaughtException', (error, origin) => {
         // The raw `error`, not hand-picked `name`/`message` fields — see the unhandledRejection

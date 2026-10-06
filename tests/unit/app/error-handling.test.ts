@@ -13,7 +13,8 @@ import type { NextFunction, Request } from 'express';
 import { asStub } from '@tests/stub';
 import { makeResponseStub } from '@tests/express';
 import { logger } from '@infrastructure/adapters/logger';
-import { handleUncaughtError } from '@app/error-handling';
+import { handleUncaughtError, handleUnhandledRejection } from '@app/error-handling';
+import { processUnhandledRejectionsTotal } from '@infrastructure/observability/metrics-process';
 
 /** Enough of a `Request` for the one field the handler reads: `requestId`, for the log line. */
 const requestStub = () => asStub<Request>({ requestId: 'req-1', path: '/x', method: 'GET' });
@@ -55,6 +56,15 @@ describe('handleUncaughtError', () => {
         handleUncaughtError(error, requestStub(), response, NEXT);
 
         expect(response.status).toHaveBeenCalledWith(500);
+    });
+
+    it('answers the generic 500 for a thrown non-Error, instead of throwing itself', () => {
+        const response = makeResponseStub();
+
+        handleUncaughtError('boom', requestStub(), response, NEXT);
+
+        expect(response.status).toHaveBeenCalledWith(500);
+        expect(JSON.stringify(response.json.mock.calls[0]![0])).not.toContain('boom');
     });
 
     it('hands a mid-stream error to Express, which closes the connection', () => {
@@ -136,5 +146,30 @@ describe('handleUncaughtError log level', () => {
 
         expect(error).toHaveBeenCalledTimes(1);
         expect(warn).not.toHaveBeenCalled();
+    });
+});
+
+/** The counter's current value, read from the registry. */
+const rejectionsCounted = () =>
+    processUnhandledRejectionsTotal.get().then((metric) => metric.values[0]?.value ?? 0);
+
+describe('handleUnhandledRejection', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('counts every rejection it sees', async () => {
+        const before = await rejectionsCounted();
+
+        handleUnhandledRejection(new Error('lost'));
+        handleUnhandledRejection('also lost');
+
+        expect(await rejectionsCounted()).toBe(before + 2);
+    });
+
+    it('returns, so the process keeps running', () => {
+        expect(() => {
+            handleUnhandledRejection(new Error('lost'));
+        }).not.toThrow();
     });
 });
