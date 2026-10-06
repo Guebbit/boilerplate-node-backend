@@ -14,6 +14,10 @@ keys:
       description: >-
           Mint a credential. Carries its own floor on top of this key: a credential can never hold
           a permission the minter lacks.
+      # A minted credential outlives the session that made it, so a stolen access token that
+      # could mint one would turn ten minutes of access into a long-lived key. GitHub's sudo mode
+      # asks for the same before creating a token.
+      stepUp: critical
     - key: apikeys.any.delete
       module: api-keys
       subject: ApiKey

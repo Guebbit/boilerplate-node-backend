@@ -59,14 +59,46 @@ const deleteByUserId = (userId: string, session?: ClientSession): Promise<void> 
             // explicit void return
         });
 
+/**
+ * Every credential this user minted that is still live — not revoked. An expired one is left out:
+ * it is already dead, and listing it in a "these were revoked" notice would be untrue.
+ *
+ * @param userId - the minter
+ */
+const findActiveByMinter = (userId: string): Promise<ApiKeyDocument[]> =>
+    apiKeyModel
+        .find({
+            createdByUserId: userId,
+            revokedAt: null,
+            $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }]
+        })
+        .exec();
+
+/**
+ * Revoke these credentials at `at`, skipping any a concurrent request already revoked, so a key's
+ * `revokedAt` is the first moment it died and never moves.
+ *
+ * @param ids - the credentials' ids
+ * @param at - the revocation time
+ */
+const revokeMany = (ids: readonly string[], at: Date): Promise<void> =>
+    apiKeyModel
+        .updateMany({ _id: { $in: ids }, revokedAt: null }, { $set: { revokedAt: at } })
+        .exec()
+        .then(() => undefined);
+
 /** Explicit annotation: same TS7056 reason as every other module's repository — see `webhooks/repository.ts`. */
 export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
     findActiveByPrefix: typeof findActiveByPrefix;
     touchLastUsed: typeof touchLastUsed;
     deleteByUserId: typeof deleteByUserId;
+    findActiveByMinter: typeof findActiveByMinter;
+    revokeMany: typeof revokeMany;
 } = {
     ...base,
     findActiveByPrefix,
     touchLastUsed,
-    deleteByUserId
+    deleteByUserId,
+    findActiveByMinter,
+    revokeMany
 };

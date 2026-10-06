@@ -46,6 +46,7 @@ import { buildDocumentView } from '@modules/invoicing/emails';
 import { shipmentShippedEmail } from '@modules/delivery/emails';
 import { returnNoticeEmail } from '@modules/returns';
 import { subscriptionDisabledEmail } from '@modules/webhooks';
+import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
 
 // Every case in this file renders against the real collection, the same one `app.ts` builds at
 // boot — a module's own manifest is what says which directory it owns.
@@ -101,6 +102,8 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     ),
     'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
     'account.two-factor-locked': twoFactorLockedEmail(locale, 'Ada', 15),
+    'api-keys.minted': apiKeyMintedEmail(locale, 'ci', 'sk_abcd1234', 'October 13, 2026'),
+    'api-keys.revoked': apiKeysRevokedEmail(locale, 'logout-all', ['ci (sk_abcd1234)']),
     'account.export-ready': exportReadyEmail(locale, 'Ada', '64b0c0ffee64b0c0ffee64b0', 7),
     'orders.order-confirm': orderConfirmEmail(
         locale,

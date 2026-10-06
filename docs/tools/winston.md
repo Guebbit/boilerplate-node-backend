@@ -118,6 +118,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_TOKEN_REFRESHED`                      | `auth.token.refreshed`                      | —                      |
 | `api-keys`       | `ADMIN_API_KEY_MINTED`                      | `admin.api_key.minted`                      | `api_key`              |
 | `api-keys`       | `ADMIN_API_KEY_REVOKED`                     | `admin.api_key.revoked`                     | `api_key`              |
+| `api-keys`       | `SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE`     | `system.api_keys.revoked_on_compromise`     | `user`                 |
 | `cart`           | `USER_CART_ITEM_REMOVED`                    | `user.cart.item_removed`                    | `product`              |
 | `cart`           | `USER_CART_REORDERED`                       | `user.cart.reordered`                       | —                      |
 | `delivery`       | `ADMIN_ORDER_DELIVERED`                     | `admin.order.delivered`                     | —                      |

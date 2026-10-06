@@ -1,5 +1,21 @@
 {
     "api-keys": {
-        "permission-not-mintable": "Uno o più permessi richiesti non sono nella tua disponibilità."
+        "permission-not-mintable": "Uno o più permessi richiesti non sono nella tua disponibilità.",
+        "expiry-too-far": "Una credenziale può scadere al massimo tra un anno.",
+        "email-minted": {
+            "subject": "È stata creata una chiave API sul tuo account",
+            "meta-title": "Chiave API creata",
+            "greeting": "Ciao!",
+            "body": "Sul tuo account è stata creata una chiave API chiamata \"{{name}}\" ({{credential}}). Smette di funzionare il {{expires}}.",
+            "advice": "Se non sei stato tu, revocala dalle tue chiavi API e cambia subito la password."
+        },
+        "email-revoked": {
+            "subject": "Le tue chiavi API sono state revocate",
+            "meta-title": "Chiavi API revocate",
+            "greeting": "Ciao!",
+            "body-logout-all": "Ti sei disconnesso da ogni dispositivo, quindi le chiavi API che hai creato sono state revocate:",
+            "body-password-reset": "La tua password è stata reimpostata, quindi le chiavi API che hai creato sono state revocate:",
+            "advice": "Crea nuove chiavi quando sei sicuro che l'account sia tuo."
+        }
     }
 }

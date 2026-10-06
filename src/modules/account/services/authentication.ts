@@ -24,6 +24,8 @@ import {
 } from '../emails';
 import { sendAccountMail } from './mail';
 import { revokeAllSessions } from './revocation';
+import { emitDomainEvent } from '@kernel/events';
+import { ACCOUNT_SESSIONS_REVOKED } from '../events';
 import { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';
 
 import { LoginBody } from '@api/schemas.zod';
@@ -595,7 +597,14 @@ export const logoutEverywhere = (
                 // rebuilds the array, writing it back whole and erasing anything added between
                 // this function's read and write. That race window is hard to assert in a test —
                 // `$pull` describes a change instead, closing it in the implementation.
-                return revokeAllSessions(user).then(() => generateSuccess<UserDocument>(user));
+                return revokeAllSessions(user)
+                    .then(() =>
+                        emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
+                            userId: user.id,
+                            reason: 'logout-all'
+                        })
+                    )
+                    .then(() => generateSuccess<UserDocument>(user));
             }
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))

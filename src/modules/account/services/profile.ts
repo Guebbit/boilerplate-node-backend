@@ -18,6 +18,8 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { emitDomainEvent } from '@kernel/events';
+import { ACCOUNT_SESSIONS_REVOKED } from '../events';
 import { revokeAfterPasswordChange } from './revocation';
 import { mailRecipientRefusal } from '../mail-budget';
 import {
@@ -213,7 +215,8 @@ export const passwordResetChange = (
     );
 
 /**
- * What follows a finished reset: on success, the audit row and the confirmation mail. Shared by
+ * What follows a finished reset: on success, the audit row, the confirmation mail and the
+ * `account.sessions-revoked` event. Shared by
  * {@link passwordResetChange} and {@link completePasswordReset}, which differ only in how the
  * password was checked.
  *
@@ -225,48 +228,54 @@ const afterReset = (
     result: ResponseSuccess<UserDocument> | ResponseReject,
     user: UserDocument,
     context: CallerContext
-): ResponseSuccess<UserDocument> | ResponseReject => {
-    if (result.success) {
-        // Read fresh, after `markVerified` may have just promoted it — the document carries
-        // no role of its own to read synchronously. Same fire-and-forget shape as the
-        // mail below: the password change already succeeded, so a lookup hiccup here must not
-        // turn a successful reset into an error — worst case, this one audit row is missing.
-        void isUnrestrictedCaller(String(user._id))
-            .then((unrestricted) => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                    actor_user_id: String(user._id),
-                    actor_role: unrestricted ? 'admin' : 'user',
-                    outcome: 'success'
-                });
-            })
-            .catch((error: unknown) => {
-                // Still just a missing audit row, not a reset failure — see the comment
-                // above — but a swallowed lookup failure had no trail at all before this.
-                logger.warn({
-                    message: 'Could not audit a completed password reset.',
-                    userId: String(user._id),
-                    error
-                });
-            });
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    if (!result.success) return Promise.resolve(result);
 
-        /*
-         * The recipient's OWN language first. These links are clicked from an email client,
-         * possibly on a shared or borrowed device, so the request's `Accept-Language` says
-         * very little about who the message is for — it is the fallback, not the answer. The
-         * copy is finished before the job is published, so the worker needs no locale at all.
-         *
-         * Fire-and-forget: the password has already changed, and a queue that is briefly
-         * unavailable must not turn a successful reset into an error.
-         */
-        const mail = resetConfirmEmail(
-            recipientLocale(user.locale, context),
-            greetableName(user, user.email)
-        );
-        // Normal priority: a confirmation, not a link or code anyone is blocked on.
-        void sendAccountMail(user.email, mail, 'normal');
-    }
-    return result;
+    // Read fresh, after `markVerified` may have just promoted it — the document carries
+    // no role of its own to read synchronously. Same fire-and-forget shape as the
+    // mail below: the password change already succeeded, so a lookup hiccup here must not
+    // turn a successful reset into an error — worst case, this one audit row is missing.
+    void isUnrestrictedCaller(String(user._id))
+        .then((unrestricted) => {
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
+                actor_user_id: String(user._id),
+                actor_role: unrestricted ? 'admin' : 'user',
+                outcome: 'success'
+            });
+        })
+        .catch((error: unknown) => {
+            // Still just a missing audit row, not a reset failure — see the comment
+            // above — but a swallowed lookup failure had no trail at all before this.
+            logger.warn({
+                message: 'Could not audit a completed password reset.',
+                userId: String(user._id),
+                error
+            });
+        });
+
+    /*
+     * The recipient's OWN language first. These links are clicked from an email client,
+     * possibly on a shared or borrowed device, so the request's `Accept-Language` says
+     * very little about who the message is for — it is the fallback, not the answer. The
+     * copy is finished before the job is published, so the worker needs no locale at all.
+     *
+     * Fire-and-forget: the password has already changed, and a queue that is briefly
+     * unavailable must not turn a successful reset into an error.
+     */
+    const mail = resetConfirmEmail(
+        recipientLocale(user.locale, context),
+        greetableName(user, user.email)
+    );
+    // Normal priority: a confirmation, not a link or code anyone is blocked on.
+    void sendAccountMail(user.email, mail, 'normal');
+
+    // Awaited, unlike the mail: a subscriber (`api-keys`) revokes what outlives a session, and a
+    // reset that answered before that was done would leave a window the owner believes is shut.
+    return emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
+        userId: user.id,
+        reason: 'password-reset'
+    }).then(() => result);
 };
 
 /**

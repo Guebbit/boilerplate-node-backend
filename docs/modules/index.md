@@ -66,6 +66,7 @@ flowchart TD
     account --> access
     account --> users
     api_keys --> access
+    api_keys --> account
     api_keys --> users
     cart --> addresses
     cart --> delivery
@@ -119,10 +120,10 @@ flowchart TD
 | `inventory`     | products                                                          | cart, orders, payments, returns                              |
 | `products`      | —                                                                 | cart, inventory, orders, wishlist                            |
 | `returns`       | delivery, inventory, orders, payments                             | —                                                            |
+| `account`       | access, users                                                     | api-keys                                                     |
+| `api-keys`      | access, account, users                                            | —                                                            |
 | `delivery`      | orders                                                            | cart, returns                                                |
 | `wishlist`      | cart, products                                                    | notifications                                                |
-| `account`       | access, users                                                     | —                                                            |
-| `api-keys`      | access, users                                                     | —                                                            |
 | `example`       | access, users                                                     | —                                                            |
 | `invoicing`     | orders, payments                                                  | —                                                            |
 | `notifications` | cart, wishlist                                                    | —                                                            |

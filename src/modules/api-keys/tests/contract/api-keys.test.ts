@@ -9,8 +9,18 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { ensureTenant, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
+import { freezeDate, advanceDate } from '@tests/clock';
+import { REAUTH_TIME_CRITICAL } from '@kernel/middlewares/authorizations';
 
 setupTestDb();
+
+afterEach(() => jest.useRealTimers());
+
+/** An expiry this many days from now. */
+const ahead = (days: number): string => new Date(Date.now() + days * 24 * 3_600_000).toISOString();
+
+/** A valid expiry for a mint: a week out, well inside the one-year ceiling. */
+const IN_A_WEEK = (): string => new Date(Date.now() + 7 * 24 * 3_600_000).toISOString();
 
 /**
  * A credential's `tenant` field is `context.caller.tenantId`, proven a `string` by
@@ -42,7 +52,11 @@ describe('GET /api-keys', () => {
         await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
+            .send({
+                name: 'partner integration',
+                permissions: ['orders.self.read'],
+                expiresAt: IN_A_WEEK()
+            });
 
         const response = await api().get('/api-keys').set('Authorization', bearer);
 
@@ -61,7 +75,11 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
+            .send({
+                name: 'partner integration',
+                permissions: ['orders.self.read'],
+                expiresAt: IN_A_WEEK()
+            });
 
         expect(response.status).toBe(201);
         expect(typeof response.body.data.secret).toBe('string');
@@ -75,7 +93,11 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
+            .send({
+                name: 'partner integration',
+                permissions: ['orders.self.read'],
+                expiresAt: IN_A_WEEK()
+            });
 
         expect(response.headers['cache-control']).toBe('no-store');
     });
@@ -88,7 +110,11 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'over-reaching', permissions: ['platform.observability.any.read'] });
+            .send({
+                name: 'over-reaching',
+                permissions: ['platform.observability.any.read'],
+                expiresAt: IN_A_WEEK()
+            });
 
         expect(response.status).toBe(422);
     });
@@ -99,9 +125,53 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'no permissions', permissions: [] });
+            .send({ name: 'no permissions', permissions: [], expiresAt: IN_A_WEEK() });
 
         expect(response.status).toBe(422);
+    });
+
+    it('401s REAUTH_REQUIRED for a session that has not proved itself lately: a key outlives it', async () => {
+        freezeDate();
+        const { bearer } = await authenticateAsRole('admin');
+        advanceDate((REAUTH_TIME_CRITICAL + 1) * 1000);
+
+        const response = await api()
+            .post('/api-keys')
+            .set('Authorization', bearer)
+            .send({
+                name: 'partner integration',
+                permissions: ['orders.self.read'],
+                expiresAt: IN_A_WEEK()
+            });
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].code).toBe('REAUTH_REQUIRED');
+    });
+
+    it('422s a mint with no expiry', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+
+        const response = await api()
+            .post('/api-keys')
+            .set('Authorization', bearer)
+            .send({ name: 'forever', permissions: ['orders.self.read'] });
+
+        expect(response.status).toBe(422);
+    });
+
+    it('422s an expiry more than a year ahead, and accepts one a little under', async () => {
+        const { bearer } = await authenticateAsRole('admin');
+        const mint = (expiresAt: string) =>
+            api()
+                .post('/api-keys')
+                .set('Authorization', bearer)
+                .send({ name: 'bounded', permissions: ['orders.self.read'], expiresAt });
+
+        const tooFar = await mint(ahead(367));
+        const fine = await mint(ahead(360));
+
+        expect(tooFar.status).toBe(422);
+        expect(fine.status).toBe(201);
     });
 
     it('403s a role holding no apikeys key at all', async () => {
@@ -110,7 +180,11 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'partner integration', permissions: ['orders.self.read'] });
+            .send({
+                name: 'partner integration',
+                permissions: ['orders.self.read'],
+                expiresAt: IN_A_WEEK()
+            });
 
         expect(response.status).toBe(403);
     });
@@ -122,7 +196,11 @@ describe('DELETE /api-keys/:id', () => {
         const created = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'short-lived', permissions: ['orders.self.read'] });
+            .send({
+                name: 'short-lived',
+                permissions: ['orders.self.read'],
+                expiresAt: IN_A_WEEK()
+            });
 
         const response = await api()
             .delete(`/api-keys/${String(created.body.data.id)}`)

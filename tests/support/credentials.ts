@@ -36,7 +36,14 @@ export const credentialHolding = async (permissions: string[]): Promise<string> 
         analyticsConsent: false
     };
 
-    const result = await mint({ name: 'partner integration', permissions }, context);
+    const result = await mint(
+        {
+            name: 'partner integration',
+            permissions,
+            expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
+        },
+        context
+    );
     if (!result.success || !result.data) throw new Error('mint failed in test setup');
 
     return result.data.secret;

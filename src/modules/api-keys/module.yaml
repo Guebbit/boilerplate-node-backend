@@ -3,4 +3,5 @@ subdomain: generic
 group: foundation
 dependsOn:
     - access # rolesOf, to re-derive the minter's current role at check time
+    - account # the sessions-revoked event it listens to, never anything else
     - users # hashToken, and the minter's current permissions at check time; also runs the erase hook
