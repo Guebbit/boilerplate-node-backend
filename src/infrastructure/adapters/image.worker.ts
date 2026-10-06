@@ -41,7 +41,9 @@ const isReencodableMime = (mime: string | undefined): mime is ReencodableImageMi
  * TRANSIENT and left as a plain throw, so {@link handleImageDigestJob} can tell the two apart and
  * `consumeFromQueue` retries the second kind instead of discarding it.
  */
-export class UnsupportedImageFormatError extends Error {}
+export class UnsupportedImageFormatError extends Error {
+    override name = 'UnsupportedImageFormatError';
+}
 
 /**
  * The shared identity a digest run's promoted original AND its thumbnail are filed under.

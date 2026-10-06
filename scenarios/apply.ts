@@ -229,5 +229,5 @@ if (isRelaxedEnvironment()) {
     logger.warn(
         `scenario:apply refused to run: NODE_ENV is ${nodeEnvironment() || 'unset'}, not development or test.`
     );
-    process.exit(0);
+    process.exit(1);
 }

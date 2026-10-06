@@ -32,7 +32,7 @@ import {
     restoreDatabaseCopy,
     type DatabaseCopy
 } from './database-snapshot';
-import { getDemoClock } from './demo-clock';
+import { getDemoClock, type DemoClock } from './demo-clock';
 import { clearDemoOutbox, readDemoOutbox } from './doubles/mail-outbox';
 
 /**
@@ -169,6 +169,19 @@ const describeScenario = (): Record<string, unknown> => ({
     subjects: currentScenario ? (copies.get(currentScenario)?.subjects ?? {}) : {}
 });
 
+/**
+ * The demo clock, or the 501 a profile without one answers — in which case the caller stops.
+ *
+ * @param response - the response to refuse on
+ * @returns the clock, or `undefined` after the refusal was sent
+ */
+const requireClock = (response: Response): DemoClock | undefined => {
+    const clock = getDemoClock();
+    if (!clock)
+        response.status(501).json({ success: false, message: 'this profile has no demo clock' });
+    return clock;
+};
+
 /** Mount the demo profile's routes — `createApp`'s `extension.install`, called by `run-server.ts` alone. */
 export const installDemo = (app: Express): void => {
     // Kept for `buildOnce`: the flow runner drives the real application over real HTTP, on a
@@ -203,24 +216,14 @@ export const installDemo = (app: Express): void => {
     });
 
     app.get('/__test/clock', (_request: Request, response: Response) => {
-        const clock = getDemoClock();
-        if (!clock) {
-            response
-                .status(501)
-                .json({ success: false, message: 'this profile has no demo clock' });
-            return;
-        }
+        const clock = requireClock(response);
+        if (!clock) return;
         response.json({ now: clock.now().toISOString(), offsetMs: clock.offsetMs() });
     });
 
     app.post('/__test/clock', (request: Request, response: Response) => {
-        const clock = getDemoClock();
-        if (!clock) {
-            response
-                .status(501)
-                .json({ success: false, message: 'this profile has no demo clock' });
-            return;
-        }
+        const clock = requireClock(response);
+        if (!clock) return;
 
         const advanceMs: unknown = (request.body as { advanceMs?: unknown } | undefined)?.advanceMs;
         if (typeof advanceMs !== 'number' || !Number.isFinite(advanceMs) || advanceMs < 0) {

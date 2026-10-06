@@ -34,7 +34,7 @@ export const SHARD_LINES = 200;
 export const SPLIT_FACTOR = 4;
 
 /** A slice shorter than this is not split again — it is retried as it is, once. */
-export const MIN_SLICE_LINES = 8;
+const MIN_SLICE_LINES = 8;
 
 /** How often the same work may fail for a reason other than time before it is given up on. */
 export const MAX_ERROR_RETRIES = 1;
