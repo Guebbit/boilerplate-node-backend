@@ -43,6 +43,7 @@ interface ComposeFile {
             entrypoint?: string | string[];
             secrets?: string[];
             healthcheck?: { test?: string[] };
+            profiles?: string[];
             logging?: { driver?: string; options?: Record<string, string> };
         }
     >;
@@ -86,13 +87,23 @@ const dockerfile = readFileSync(path.join(ROOT, 'docker', 'Dockerfile.production
 const OWN_CODE_SERVICES = ['app', 'cron', 'setup'] as const;
 
 /**
- * The bundled backing services, which hold the data.
+ * The services that hold data or expose an unauthenticated UI: the bundled stores (`profiles:
+ * [bundled]`, which a deployment may replace with managed instances but which are the crown
+ * jewels while they are here) and the `monitoring` profile's four, whose Prometheus and
+ * Alertmanager web UIs have no login.
  *
- * They are reachable on the compose network by design and must not be reachable from anywhere
- * else — `profiles: [bundled]` means a deployment may replace them with managed instances, but
- * while they are here they are the crown jewels.
+ * Reachable on the compose network by design, and from nowhere else.
  */
-const BACKING_SERVICES = ['database', 'cache', 'limits', 'queue'] as const;
+const BACKING_SERVICES = [
+    'database',
+    'cache',
+    'limits',
+    'queue',
+    'prometheus',
+    'alertmanager',
+    'loki',
+    'alloy'
+] as const;
 
 /**
  * The host interface a port mapping binds, or `undefined` when it names none — which is compose's
@@ -290,6 +301,42 @@ const environmentOf = (name: string): Record<string, string> => {
         );
     return environment ?? {};
 };
+
+describe('the monitoring profile', () => {
+    const MONITORING = ['prometheus', 'alertmanager', 'loki', 'alloy'];
+
+    /** Off by default: a plain `up` must not start four more services. */
+    it.each(MONITORING)('%s starts only under the monitoring profile', (name) => {
+        expect(compose.services[name].profiles).toEqual(['monitoring']);
+    });
+
+    it.each(MONITORING)('%s drops every capability and gains no privilege', (name) => {
+        expect(compose.services[name].cap_drop).toEqual(['ALL']);
+        expect(compose.services[name].security_opt).toContain('no-new-privileges:true');
+    });
+
+    /**
+     * No target, no off-host copy: the optional audit-forward file defaults to /dev/null (a valid,
+     * do-nothing Alloy config), so nothing leaves the host until an operator names a file.
+     */
+    it('mounts no audit target by default', () => {
+        const volumes = (compose.services.alloy as { volumes?: string[] }).volumes ?? [];
+        const auditMount = volumes.find((volume) => volume.endsWith('/audit-forward.alloy:ro'));
+
+        expect(auditMount).toBe(
+            '${ALLOY_AUDIT_FORWARD_CONFIG:-/dev/null}:/etc/alloy/conf.d/audit-forward.alloy:ro'
+        );
+    });
+
+    /** One credential, one rotation: Prometheus reads the file the app reads its own token from. */
+    it('hands the metrics token to Prometheus and to no other monitoring service', () => {
+        const holders = Object.entries(mountedSecrets())
+            .filter(([name, secrets]) => MONITORING.includes(name) && secrets.length > 0)
+            .map(([name, secrets]) => [name, secrets]);
+
+        expect(holders).toEqual([['prometheus', ['metrics_token']]]);
+    });
+});
 
 describe('each service gets only its own secrets', () => {
     /*

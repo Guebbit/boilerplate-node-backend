@@ -137,14 +137,6 @@ this way (`MONGO_APP_USER`, created by `docker/mongo-init.js`); a managed cluste
 user created by hand. `readWrite` is enough for everything the app does, `setup`'s `db:sync`
 index builds included.
 
-**You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens. The
-`security.rules` and `api.rules` groups end at Alertmanager, whose shipped receiver is `null`:
-it logs and notifies no one. Wire a real one before relying on any alert, in
-`docker/observability/alertmanager.config.yaml`: an email (SMTP) receiver, a chat webhook
-(Slack, Mattermost, Teams), or a pager (PagerDuty, Opsgenie). This boilerplate picks none, because
-the right one is whatever your team already watches.
-[Alertmanager receivers](https://prometheus.io/docs/alerting/latest/configuration/#receiver-integration-settings)
-
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d
@@ -248,17 +240,55 @@ loses every uploaded image. The volume still pins the deployment to one host, an
 not share what they store. The durable answer is an S3-compatible `ImageStore` implementation;
 nothing selects a backend yet, on purpose.
 
-## Observability in production
+## Monitoring and alerts
 
-The dev stack's Prometheus, Loki, Tempo, Grafana and OTel Collector are **not** in the production
-file, because a real deployment usually points at a collector it already runs rather than hosting
-one next to the API. Set `OTEL_EXPORTER_OTLP_ENDPOINT` to that collector; an empty value is a valid
-choice and simply means no traces leave the process.
+The `monitoring` profile adds four services, **off by default**: Prometheus (scrapes `app` and
+evaluates the alert rules), Alertmanager (routes what fires), Loki (stores container logs) and Alloy
+(ships them). Turn it on with `COMPOSE_PROFILES=bundled,monitoring`. There is no Grafana: it costs
+about a gigabyte of memory and the alerts do not need a screen.
 
-To run the same observability estate here anyway, the service definitions already exist — copy the
-ones you want from `docker-compose.yml` into your own override file rather than layering the two
-compose files directly (`-f docker-compose.production.yml -f docker-compose.yml` drags the dev
-bind-mounts back in).
+```mermaid
+flowchart LR
+    app["app"] -- "/observability/metrics<br/>(metrics_token)" --> prom["prometheus"]
+    prom -- "rules: api + security" --> am["alertmanager"]
+    am -- "your receiver" --> you(["mail / chat / pager"])
+    logs[("container log files")] --> alloy["alloy"]
+    alloy --> loki["loki"]
+    alloy -. "audit lines only,<br/>if you configure it" .-> offhost[("off-host store")]
+```
+
+- **No host ports.** Prometheus and Alertmanager have web UIs with no login, so none of the four
+  publishes a port; they reach each other and `app` over the compose network. Reach a UI with
+  `docker compose exec` or an SSH tunnel, not a published port.
+- **One credential.** Prometheus scrapes with the `metrics_token` secret file the app reads its own
+  `NODE_METRICS_TOKEN` from, so rotating the token is one edit.
+- **The rules** are the files the local stack loads: `docker/observability/prometheus.alert-rules.yaml`.
+  The `security` group carries a "tune to your traffic" comment on every threshold.
+- **You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens.
+  Alertmanager ships the `null` receiver, which notifies no one. Wire a real one in
+  `docker/observability/alertmanager.config.yaml` before relying on any alert: an email (SMTP)
+  receiver, a chat webhook (Slack, Mattermost, Teams) or a pager (PagerDuty, Opsgenie). This
+  boilerplate picks none, because the right one is whatever your team already watches.
+  [Receiver settings](https://prometheus.io/docs/alerting/latest/configuration/#receiver-integration-settings)
+- **Logs.** Alloy tails the engine's container log files (Docker: `/var/lib/docker/containers`; set
+  `CONTAINER_LOGS_PATH` for Podman, together with `CONTAINER_LOG_DRIVER=k8s-file`, because Podman's
+  default driver writes no file). It reads the Docker and the Podman format at once.
+- **The audit stream, off the host.** An audit trail the application can write is one an attacker
+  who owns the application can rewrite, so the strongest copy lives on a system the application
+  cannot reach. The pipeline can forward the lines tagged `log_type=audit` to a target you choose:
+  copy `docker/observability/alloy.audit-forward.example.alloy`, fill in the target, and point
+  `ALLOY_AUDIT_FORWARD_CONFIG` at the copy. Where it goes is yours to pick; the options worth
+  weighing are object storage with object lock (WORM retention), a separate log host, or a managed
+  log service with its own access control. This boilerplate picks none: **with no target there is
+  no off-host copy**, and the audit entries live only in the host's logs and the application's
+  database. Why not a protected database instead: its role needs `createIndex`, so a compromised
+  app could plant a TTL index with `expireAfterSeconds: 0` and wipe the trail.
+
+Traces are not in the profile: set `OTEL_EXPORTER_OTLP_ENDPOINT` to a collector you already run (an
+empty value is a valid choice and means no traces leave the process). To run Tempo and Grafana here
+anyway, copy their definitions from `docker-compose.yml` into your own override file rather than
+layering the two compose files (`-f docker-compose.production.yml -f docker-compose.yml` drags the
+dev bind-mounts back in).
 
 See [Docker & Podman](./tools/docker-and-podman.md) for what each of those containers does and
 [Observability Reference](./tools/observability-reference.md) for how the app talks to them.

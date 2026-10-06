@@ -1,0 +1,38 @@
+# Prometheus for the production `monitoring` profile: the API, its alert rules, Alertmanager.
+# Why a second file: `prometheus.config.yaml` also scrapes the OTel collector, which the
+# production stack does not run, so every one of those targets would read as DOWN.
+# The rule files are the same ones the local stack loads (`prometheus.alert-rules.yaml`).
+
+global:
+    # How often Prometheus pulls metrics from each target.
+    scrape_interval: 15s
+    # How often alert rules are evaluated.
+    evaluation_interval: 15s
+
+# The rules file is mounted at /etc/prometheus/rules/alerts.yml by `docker-compose.production.yml`.
+rule_files:
+    - /etc/prometheus/rules/*.yml
+
+alerting:
+    alertmanagers:
+        - static_configs:
+              - targets: ['alertmanager:9093']
+
+scrape_configs:
+    - job_name: api
+      metrics_path: /observability/metrics
+      # The scrape credential is the `metrics_token` compose secret, the same file the app reads
+      # its own `NODE_METRICS_TOKEN` from. Prometheus re-reads it on every scrape, so rotating the
+      # token needs no restart on this side.
+      authorization:
+          type: Bearer
+          credentials_file: /run/secrets/metrics_token
+      # A literal, as in the local file: Prometheus does no variable substitution. Keep it equal
+      # to NODE_PORT. The production service is named `app`.
+      static_configs:
+          - targets: ['app:3000']
+      relabel_configs:
+          # A stable instance label, so alerts and dashboards do not carry a container address.
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: api
