@@ -5,7 +5,9 @@
  * See: docs/modules/users.md
  */
 
+import { recordStaffRead } from '@kernel/staff-read';
 import { userService } from '../services';
+import { usersAuditActions } from '../audit';
 import { createItemController } from '@infrastructure/surfaces/create-item-controller';
 
 /**
@@ -20,7 +22,15 @@ export const getUserItem = createItemController({
     entity: 'user',
     notFoundKey: 'users.not-found',
     fetch: (id, request) =>
-        userService
-            .getById(id)
-            .then((user) => (user ? userService.toUserContract(user, request.caller) : undefined))
+        userService.getById(id).then((user) => {
+            if (!user) return undefined;
+            recordStaffRead(request, {
+                key: 'users.any.read',
+                action: usersAuditActions.ADMIN_USER_VIEWED,
+                targetType: 'user',
+                targetId: id,
+                ownerId: id
+            });
+            return userService.toUserContract(user, request.caller);
+        })
 });

@@ -21,6 +21,8 @@ name: CI
 #   - architecture    dependency-graph, docs
 #   - container       container-gate — the same correctness gate again, but inside the image
 #                     `docker/Dockerfile` actually ships, with no services and no network
+#                     `boot` — the PRODUCTION image starts against a real Mongo, answers `/livez`, and
+#                     its runtime user cannot write under `src/`
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
 #   - adoption        demo-strip-measure — report-only, like audit
@@ -757,6 +759,30 @@ jobs:
             - name: Run the gate inside it — no services, no network
               run: docker run --rm --network=none boilerplate-api-gate:${{ github.sha }} npm run complete
 
+    boot:
+        # Proves the image we SHIP starts: `docker/Dockerfile.production` against a real Mongo (queue
+        # and cache are left out, they degrade), with the fail-closed env set, `/livez` answering, and
+        # the `node` user unable to write under `src/`. `container-gate` above builds the dev/test
+        # image, so nothing else here ever boots the production one.
+        #
+        # Not in `image-scan.yml`: that workflow is path-filtered and Monday-only, and a boot
+        # check that skips most pushes proves little. The same script runs on a laptop:
+        # `docker build -f docker/Dockerfile.production -t boot-check . && docker/boot-check.sh boot-check`.
+        # Not in the `ci` job's `needs:` until its first real run on GitHub has passed.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+            - name: Build the production image
+              run: docker build -f docker/Dockerfile.production -t boot-check:${{ github.sha }} .
+
+            - name: Boot it and check the runtime user
+              run: docker/boot-check.sh boot-check:${{ github.sha }}
+
     audit:
         # Reports known moderate-and-above vulnerabilities in production dependencies.
         #
@@ -844,7 +870,7 @@ jobs:
             - test-contract
             - container-gate
             - frontend-e2e
-            # `audit`, `demo-strip-measure` and `coverage-floors` are deliberately excluded — see their
+            # `boot`, `audit`, `demo-strip-measure` and `coverage-floors` are deliberately excluded — see their
             # own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5

@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Builder — install deps & build VitePress
 # ============================================
-FROM docker.io/library/node:24-alpine AS builder
+FROM docker.io/library/node:24-alpine@sha256:ebfe2f90462722a7a4de65e91990e97fe0d401c70e0e762c5b53302f905ec1c1 AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ RUN npm run docs:build
 # ============================================
 # Stage 2: Server — serve static files with Nginx
 # ============================================
-FROM docker.io/library/nginx:alpine
+FROM docker.io/library/nginx:alpine@sha256:df221db836e1754089190208cee7eeda94f233197056426eda74a43ab1abeac2
 
 # Remove default nginx static assets
 RUN rm -rf /usr/share/nginx/html/*

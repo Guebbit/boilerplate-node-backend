@@ -4,8 +4,61 @@ updates:
       directory: /
       schedule:
           interval: weekly
+      # A release must be a week old before Dependabot proposes it: a hijacked or yanked version is
+      # usually caught inside that window.
+      # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
+      cooldown:
+          default-days: 7
+      # One weekly PR for every minor/patch bump together. A major stays OUT of the group on purpose:
+      # a breaking bump gets its own PR, reviewed on its own.
+      # https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/grouping-pull-requests
+      groups:
+          minor-and-patch:
+              applies-to: version-updates
+              update-types:
+                  - minor
+                  - patch
 
     - package-ecosystem: github-actions
+      # The workflows live under /.github/workflows; `directories` adds each composite action.
+      directories:
+          - /
+          - /.github/actions/*
+      schedule:
+          interval: weekly
+      cooldown:
+          default-days: 7
+      groups:
+          minor-and-patch:
+              applies-to: version-updates
+              update-types:
+                  - minor
+                  - patch
+
+    # Base images in the Dockerfiles (`tag@sha256:digest`): Dependabot moves the tag and digest together.
+    - package-ecosystem: docker
+      directory: /docker
+      schedule:
+          interval: weekly
+      cooldown:
+          default-days: 7
+      groups:
+          base-images:
+              applies-to: version-updates
+              update-types:
+                  - minor
+                  - patch
+
+    # Images in the compose files, one group so a routine bump is one PR.
+    - package-ecosystem: docker-compose
       directory: /
       schedule:
           interval: weekly
+      cooldown:
+          default-days: 7
+      groups:
+          dev-images:
+              applies-to: version-updates
+              update-types:
+                  - minor
+                  - patch

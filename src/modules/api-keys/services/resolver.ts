@@ -9,7 +9,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import type { ResolvedCredential } from '@kernel/authentication';
+import type { Resolution, ResolvedCredential } from '@kernel/authentication';
 import { keysInScope, assembleCaller, levelOfRoles } from '@kernel/permissions';
 import { heldKeys } from '@kernel/ability';
 import { rolesOf } from '@modules/access';
@@ -52,17 +52,29 @@ const currentCallerOf = (apiKey: ApiKeyDocument): Promise<Caller | undefined> =>
     });
 
 /**
+ * Why an active lookup found nothing usable. A key that no longer exists, or whose secret is wrong,
+ * is `invalid_signature`; only a presented secret that DOES match a retired row is `revoked` or
+ * `expired`, so a guessed prefix can never be told apart from a never-minted one.
+ */
+const missFor = (token: string, publicPrefix: string): Promise<Resolution<ResolvedCredential>> =>
+    apiKeyRepository.findAnyByPrefix(publicPrefix).then((apiKey) => {
+        if (!apiKey || !verifyApiKey(token, apiKey.hash)) return { miss: 'invalid_signature' };
+        return { miss: apiKey.revokedAt ? 'revoked' : 'expired' };
+    });
+
+/**
  * This module's `sk_...` verify path: parse, prefix lookup, hash compare, then re-floor against
- * the minter's current caller. Every failure mode — malformed token, unknown prefix, wrong secret,
- * revoked, expired, minter gone — resolves `undefined` alike, the same "no caller" outcome
+ * the minter's current caller. Every refusal — malformed token, unknown prefix, wrong secret,
+ * revoked, expired, minter gone — resolves a `{ miss }`, the same "no caller" outcome
  * `kernel/authentication.ts#resolveCredential` expects; none of them throws.
  */
-export const fromBearerToken = (token: string): Promise<ResolvedCredential | undefined> => {
+export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCredential>> => {
     const parsed = parseApiKeyToken(token);
-    if (!parsed) return Promise.resolve(undefined);
+    if (!parsed) return Promise.resolve({ miss: 'malformed' });
 
     return apiKeyRepository.findActiveByPrefix(parsed.publicPrefix).then((apiKey) => {
-        if (!apiKey || !verifyApiKey(token, apiKey.hash)) return undefined;
+        if (!apiKey) return missFor(token, parsed.publicPrefix);
+        if (!verifyApiKey(token, apiKey.hash)) return { miss: 'invalid_signature' as const };
 
         return currentCallerOf(apiKey).then((currentCaller) => {
             // Fire-and-forget — see `repository.ts#touchLastUsed`'s own doc comment for why this
@@ -91,7 +103,7 @@ export const fromBearerToken = (token: string): Promise<ResolvedCredential | und
             // baseline, the same one a signed-in session is unioned with.
             const permissions = [...new Set([...held, ...keysInScope(null, 'tenant')])];
 
-            return {
+            const resolved: ResolvedCredential = {
                 caller: assembleCaller(
                     apiKey.createdByUserId,
                     apiKey.tenant,
@@ -103,6 +115,8 @@ export const fromBearerToken = (token: string): Promise<ResolvedCredential | und
                 ),
                 credentialId: displayIdOf(apiKey.publicPrefix)
             };
+
+            return { ok: resolved };
         });
     });
 };

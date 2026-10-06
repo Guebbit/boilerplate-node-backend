@@ -14,6 +14,8 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { ERROR_CODES } from '@api/error-codes';
+import { recordStaffRead } from '@kernel/staff-read';
+import { invoicingAuditActions } from '../audit';
 
 /** GET /orders/:id/invoice — the invoice PDF; non-admin callers see only their own order's. */
 export const getOrderInvoice = (request: Request<{ id?: string }>, response: Response) => {
@@ -39,6 +41,14 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                     ]);
                     return undefined;
                 }
+
+                recordStaffRead(request, {
+                    key: 'orders.any.read',
+                    action: invoicingAuditActions.ADMIN_INVOICE_VIEWED,
+                    targetType: 'invoice',
+                    targetId: invoice.number,
+                    ownerId: String(order.userId)
+                });
 
                 return invoicingService.renderInvoicePdf(invoice).then((pdf) =>
                     response

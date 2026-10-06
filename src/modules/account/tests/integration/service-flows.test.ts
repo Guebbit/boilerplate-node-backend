@@ -18,6 +18,7 @@ import { userRepository } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { observePort } from '@tests/ports';
+import { authRefreshReuseTotal } from '@modules/account/metrics';
 import { setEnvironment } from '@tests/environment';
 
 /*
@@ -371,6 +372,7 @@ describe('accountService.refreshAccessToken', () => {
 
     it('treats a token replayed after its rotation grace window as reuse, and revokes every session', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
+        authRefreshReuseTotal.reset();
         const user = await createUser({ email: 'reuse@example.com' });
         // A second, unrelated live session — this is what proves the revoke is account-wide, not
         // just the one token.
@@ -394,6 +396,9 @@ describe('accountService.refreshAccessToken', () => {
                 outcome: 'failure'
             })
         );
+
+        const reuseCount = await authRefreshReuseTotal.get();
+        expect(reuseCount.values[0]?.value).toBe(1);
 
         // The unrelated session from before is gone too — the WHOLE refresh set, not just the one.
         await expect(accountService.refreshAccessToken(other, testCallerContext)).rejects.toThrow();

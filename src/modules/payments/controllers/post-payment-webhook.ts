@@ -23,6 +23,9 @@ import { t } from '@infrastructure/i18n';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { logger } from '@infrastructure/adapters/logger';
 import { catchAs } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
+import { coreAuditActions } from '@infrastructure/observability/audit';
+import { recordSecurityEvent } from '@infrastructure/observability/security-events';
 import { resolvePaymentProvider, WebhookRejected, WEBHOOK_SIGNATURE_HEADER } from '../providers';
 import { paymentService } from '../services';
 
@@ -64,6 +67,14 @@ export const postPaymentWebhook = (request: Request, response: Response) => {
                 // those and a guess for the other four.
                 // Stryker disable next-line all
                 logger.warn({ message: `Payment webhook rejected: ${error.message}` });
+                // Only a signature that fails to verify is an attack; a provider's own malformed
+                // event is a fault on their side and stays a log line.
+                if (error.signatureFailure)
+                    recordSecurityEvent(
+                        callerContextOf(request),
+                        coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
+                        { reason: error.message }
+                    );
                 rejectResponse(response, 400, [t('payments.webhook-unverified')]);
                 return;
             }

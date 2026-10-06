@@ -11,7 +11,7 @@
 # Node 25 — its `engines` field is `^22||^24||>=26`, deliberately skipping Current/non-LTS lines.
 # 24 is Active LTS, and CI (`NODE_VERSION` in `.github/workflows/ci.yml`) and
 # `docker/Dockerfile.production` both match it now.
-FROM docker.io/library/node:24-trixie-slim
+FROM docker.io/library/node:24-trixie-slim@sha256:173f125896c3b47ddf056734c7ea789d04595a6a08769a8f78e0df642781fb66
 
 # Sets the working directory inside the image to /app in the container
 WORKDIR /app

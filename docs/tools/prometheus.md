@@ -35,6 +35,10 @@ Grafana reads Prometheus for all metric charts and dashboards.
 | `webhook_delivery_attempts_total`            | outbound webhook delivery attempts, by outcome                |
 | `webhook_subscriptions_auto_disabled_total`  | subscriptions auto-disabled for sustained failure             |
 | `webhook_deliveries_overdue`                 | pending deliveries more than 10 min past due                  |
+| `security_events_total`                      | forged or guessed credentials, by `security.*` action         |
+| `auth_stale_credentials_total`               | expired or revoked credentials presented, by kind             |
+| `auth_one_time_token_rejected_total`         | refused reset/verify/email-change/delete links, by flow       |
+| `auth_refresh_token_reuse_detected_total`    | refresh tokens replayed after rotation                        |
 | `auth_login_total`, `cart_checkout_total`, … | business counters                                             |
 | `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics                         |
 
@@ -68,6 +72,12 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `RateLimitStoreFallback`             | any limiter operation served without the `limits` Redis in 5 min              | warning  |
 | `RateLimitRefusals`                  | one budget refusing over 1 request per second for 10 min                      | warning  |
 | `UnhandledRejections`                | any unhandled promise rejection in 15 min                                     | warning  |
+| `ForgedBearerTokens`                 | more than 10 bad-signature or malformed bearer tokens in 15 min               | warning  |
+| `RevokedApiKeyUsed`                  | a revoked `sk_` key presented with its real secret                            | warning  |
+| `PaymentWebhookSignatureFailures`    | a payment webhook failed its signature check                                  | critical |
+| `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                              | warning  |
+| `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min               | warning  |
+| `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                   | warning  |
 
 ## Alertmanager
 

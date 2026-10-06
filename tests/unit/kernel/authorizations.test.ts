@@ -30,6 +30,10 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { registerAuthResolver, registerCredentialResolver } from '@kernel/authentication';
 import { emitAuditEvent, coreAuditActions } from '@infrastructure/observability/audit';
+import {
+    securityEventsTotal,
+    staleCredentialsTotal
+} from '@infrastructure/observability/security-events';
 import { makeResponseStub } from '@tests/express';
 import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
@@ -63,8 +67,9 @@ jest.mock('@infrastructure/observability/audit', () => {
  * `account` supplies the implementation at boot. So the fake here is the RESOLVER, which is also
  * the whole contract these guards depend on:
  *
- *   - a rejection means the token is bad;
- *   - resolving `undefined` means the token was fine but names nobody.
+ *   - resolving `{ miss }` means the token is bad;
+ *   - resolving `{ ok: undefined }` means the token was fine but names nobody;
+ *   - a rejection is an outage.
  *
  * `requirePermissionViaCookie(ADMIN_ONLY_KEY)` turns the first into 401 and the second into 403, so the two must stay
  * distinguishable in the fake exactly as they are in production.
@@ -196,7 +201,7 @@ describe('getAuth', () => {
 
     it('attaches the identity of the user the token names', async () => {
         const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
-        mockedVerifyAccessToken.mockResolvedValue(resolved);
+        mockedVerifyAccessToken.mockResolvedValue({ ok: resolved });
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         await runUntilNext(getAuth, request, makeResponseStub());
@@ -210,7 +215,7 @@ describe('getAuth', () => {
     it('proceeds anonymously when the token is invalid or expired', async () => {
         // Fails open on purpose: this middleware also runs on public routes, where a stale token
         // in a browser must not turn a public page into an error.
-        mockedVerifyAccessToken.mockRejectedValue(new Error('jwt expired'));
+        mockedVerifyAccessToken.mockResolvedValue({ miss: 'expired' });
 
         const request = makeRequest({ authorization: 'Bearer expired.token' });
         const next = await runUntilNext(getAuth, request, makeResponseStub());
@@ -221,7 +226,7 @@ describe('getAuth', () => {
 
     it('proceeds anonymously when the token is valid but the user no longer exists', async () => {
         // A deleted account holding a still-valid JWT must not be granted an identity.
-        mockedVerifyAccessToken.mockResolvedValue(undefined);
+        mockedVerifyAccessToken.mockResolvedValue({ ok: undefined });
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         const next = await runUntilNext(getAuth, request, makeResponseStub());
@@ -261,7 +266,7 @@ describe('getAuth', () => {
 
     it('never sends a response of its own', async () => {
         // It identifies; it does not authorize. Any status set here would pre-empt the route.
-        mockedVerifyAccessToken.mockRejectedValue(new Error('nope'));
+        mockedVerifyAccessToken.mockResolvedValue({ miss: 'malformed' });
         const response = makeResponseStub();
 
         await runUntilNext(getAuth, makeRequest({ authorization: 'Bearer x' }), response);
@@ -270,12 +275,91 @@ describe('getAuth', () => {
         expect(response.json).not.toHaveBeenCalled();
     });
 
+    // A forged or garbled bearer has no customer behind it: it is audited and counted. A stale
+    // one (expired, or a revoked session) is only a metric — the FE token expires every few minutes.
+    it.each([
+        ['invalid_signature', coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE],
+        ['malformed', coreAuditActions.SECURITY_TOKEN_MALFORMED]
+    ] as const)('audits a %s bearer JWT as a security event', async (reason, action) => {
+        mockedVerifyAccessToken.mockResolvedValue({ miss: reason });
+        securityEventsTotal.reset();
+
+        const request = makeRequest({ authorization: 'Bearer forged.token' });
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action,
+                outcome: 'failure',
+                actor_user_id: 'anonymous',
+                metadata: expect.objectContaining({ kind: 'jwt', route: '/protected' })
+            })
+        );
+        const counted = await securityEventsTotal.get();
+        expect(counted.values).toEqual([
+            expect.objectContaining({ labels: { event: action }, value: 1 })
+        ]);
+    });
+
+    it.each(['expired', 'revoked'] as const)(
+        'only counts a %s bearer JWT, without an audit entry',
+        async (reason) => {
+            mockedVerifyAccessToken.mockResolvedValue({ miss: reason });
+            staleCredentialsTotal.reset();
+
+            await runUntilNext(
+                getAuth,
+                makeRequest({ authorization: 'Bearer stale.token' }),
+                makeResponseStub()
+            );
+
+            expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+            const counted = await staleCredentialsTotal.get();
+            expect(counted.values).toEqual([
+                expect.objectContaining({ labels: { kind: 'jwt', reason }, value: 1 })
+            ]);
+        }
+    );
+
+    it.each([
+        ['invalid_signature', coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE],
+        ['malformed', coreAuditActions.SECURITY_TOKEN_MALFORMED],
+        ['revoked', coreAuditActions.SECURITY_API_KEY_REVOKED]
+    ] as const)('audits a %s sk_ credential as a security event', async (reason, action) => {
+        mockedResolveCredential.mockResolvedValue({ miss: reason });
+
+        await runUntilNext(
+            getAuth,
+            makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }),
+            makeResponseStub()
+        );
+
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action,
+                metadata: expect.objectContaining({ kind: 'api_key' })
+            })
+        );
+    });
+
+    it('only counts an expired sk_ credential, without an audit entry', async () => {
+        mockedResolveCredential.mockResolvedValue({ miss: 'expired' });
+
+        await runUntilNext(
+            getAuth,
+            makeRequest({ authorization: 'Bearer sk_abcdefgh_secret' }),
+            makeResponseStub()
+        );
+
+        expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+    });
+
     it('resolves once when two mounted routers both apply it to the same request', async () => {
         // Two modules sharing a URL prefix (`account`, `addresses`) both mount this guard on
         // their own router; an unmatched request in the first falls through Express to the
         // second. The JWT boundary must be hit once, not twice.
         const resolved = { ...asAdmin('user-1'), username: 'tester', imageUrl: '/images/a.png' };
-        mockedVerifyAccessToken.mockResolvedValue(resolved);
+        mockedVerifyAccessToken.mockResolvedValue({ ok: resolved });
 
         const request = makeRequest({ authorization: 'Bearer valid.token' });
         await runUntilNext(getAuth, request, makeResponseStub());
@@ -594,7 +678,7 @@ describe('requirePermissionViaCookie', () => {
     it('verifies the REFRESH token, not the access token', async () => {
         // The whole design decision: the cookie holds a refresh token, and verifying it against
         // the access-token secret would either always fail or, worse, accept the wrong audience.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         await runUntilNext(
             requirePermissionViaCookie(ADMIN_ONLY_KEY),
@@ -607,7 +691,7 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('admits an unrestricted caller and calls next exactly once', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         const next = await runUntilNext(
             requirePermissionViaCookie(ADMIN_ONLY_KEY),
@@ -621,7 +705,7 @@ describe('requirePermissionViaCookie', () => {
     it('populates authContext with the resolved caller', async () => {
         // Downstream handlers read the caller's keys; a context that arrives without them turns
         // an authorized request into a confusing 403 further down.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
         const request = makeCookieRequest('cookie.jwt');
 
         await runUntilNext(requirePermissionViaCookie(ADMIN_ONLY_KEY), request, makeResponseStub());
@@ -633,7 +717,7 @@ describe('requirePermissionViaCookie', () => {
     it('rejects a valid session without the wildcard with 403', async () => {
         // The mutant that matters most: a key check forced to `true` would hand every logged-in
         // customer a document only the shop's staff may see.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -650,7 +734,7 @@ describe('requirePermissionViaCookie', () => {
 
     it('rejects with 403 when the token is valid but the user is gone', async () => {
         // The resolver answers `undefined` — a deleted account holding a still-signed cookie.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
         const response = makeResponseStub();
 
         requirePermissionViaCookie(ADMIN_ONLY_KEY)(
@@ -664,7 +748,7 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('records a forbidden attempt in the audit trail', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
         requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
@@ -684,7 +768,7 @@ describe('requirePermissionViaCookie', () => {
 
     it('names the anonymous actor when the user could not be loaded', async () => {
         // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
-        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
 
         requirePermissionViaCookie(ADMIN_ONLY_KEY)(
             makeCookieRequest('cookie.jwt'),
@@ -701,7 +785,7 @@ describe('requirePermissionViaCookie', () => {
     it('rejects a cookie whose signature does not verify, with 401 not 403', async () => {
         // 401 and 403 are different statements: "I do not know who you are" versus "I know, and
         // no". A forged cookie is the first.
-        mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('invalid signature'));
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ miss: 'invalid_signature' });
         const response = makeResponseStub();
         const next = jest.fn();
 
@@ -714,6 +798,9 @@ describe('requirePermissionViaCookie', () => {
 
         expect(response.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
+        expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ action: coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE })
+        );
     });
 
     it('audits a request that arrives with no cookie at all', async () => {
@@ -756,7 +843,7 @@ describe('stillHoldsKeyViaCookie', () => {
     const adminUser = { ...asAdmin('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
     it('resolves true for a caller who still holds the key', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         await expect(
             stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
@@ -764,7 +851,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('resolves false when the caller no longer holds the key', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
         await expect(
             stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
@@ -772,7 +859,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('resolves false when the token no longer names anyone', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(undefined);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
 
         await expect(
             stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
@@ -790,7 +877,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('audits the refusal the same way the connect-time guard does', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(asCustomer('user-1'));
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
         await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
 
@@ -804,7 +891,7 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('does not audit a passing recheck', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce(adminUser);
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
 

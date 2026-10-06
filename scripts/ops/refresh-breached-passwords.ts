@@ -22,10 +22,22 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { logger } from '@infrastructure/adapters/logger';
 import { runScript } from '../run-script';
+import { assertCorpusDigest } from './corpus-digest';
 
-/** Source corpus: real breached passwords, largest list SecLists publishes. */
-const SOURCE_URL =
-    'https://raw.githubusercontent.com/danielmiessler/SecLists/master/Passwords/Common-Credentials/Pwdb_top-10000000.txt';
+/**
+ * The SecLists commit the corpus is read from. A commit SHA, not `master`: the bytes behind this
+ * URL can never change, so a moved or poisoned branch cannot reach the committed list.
+ */
+const SOURCE_COMMIT = '12274c98fdebe98c7a7284914436a472ed469aed';
+
+/** Source corpus: real breached passwords, largest list SecLists publishes, at `SOURCE_COMMIT`. */
+const SOURCE_URL = `https://raw.githubusercontent.com/danielmiessler/SecLists/${SOURCE_COMMIT}/Passwords/Common-Credentials/Pwdb_top-10000000.txt`;
+
+/**
+ * SHA-256 of the corpus at `SOURCE_COMMIT`, checked before anything is filtered.
+ * Bumping the commit means re-computing this: `curl -sL <url> | sha256sum`.
+ */
+const SOURCE_SHA256 = '18dc49ca32b62455a61e3398f4ab9f93eb700ff142fa0d4b9fd11a727f3b80e4';
 
 /** Where the filtered, committable list lives — loaded once at boot into a `Set`. */
 const OUTPUT_PATH = path.resolve(
@@ -55,13 +67,15 @@ const passwordPatternFromContract = (): RegExp => {
 /**
  * Downloads the source corpus and returns it as a list of lines.
  *
- * @throws {Error} on a non-200 response — a partial or missing corpus must fail loudly, never
- *   silently ship a truncated list
+ * @throws {Error} on a non-200 response or a digest mismatch — a partial, missing or altered corpus
+ *   must fail loudly, never silently ship a truncated or poisoned list
  */
 const downloadCorpus = async (): Promise<string[]> => {
     const response = await fetch(SOURCE_URL);
     if (!response.ok) throw new Error(`${SOURCE_URL} -> HTTP ${String(response.status)}`);
-    const text = await response.text();
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    assertCorpusDigest(bytes, SOURCE_SHA256, SOURCE_URL);
+    const text = new TextDecoder().decode(bytes);
     return text.split('\n').map((line) => line.trimEnd());
 };
 

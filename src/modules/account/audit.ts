@@ -41,6 +41,11 @@ export const accountAuditActions = {
     AUTH_REAUTHENTICATED: 'auth.reauth',
     /** A step-up code was mailed to an account with no password. */
     AUTH_REAUTH_CODE_SENT: 'auth.reauth.code_sent',
+    /**
+     * A one-time link token (reset, verify, email change, account delete) was unknown, expired or
+     * already used — `metadata.flow` names which. Unknown and expired read alike on purpose.
+     */
+    AUTH_ONE_TIME_TOKEN_REJECTED: 'auth.one_time_token.rejected',
     AUTH_LOGGED_OUT: 'auth.logout',
     AUTH_LOGGED_OUT_EVERYWHERE: 'auth.logout_all',
     AUTH_SESSION_REVOKED: 'auth.session.revoked',

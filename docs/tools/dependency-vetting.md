@@ -54,6 +54,37 @@ Rule 4 is the one worth remembering for its own sake: an early pass at this inve
 `@asyncapi/modelina` abandoned and recommended ripping it out. It was shipping prereleases monthly.
 **Getting the diagnosis right included correcting the alarm, not just raising one.**
 
+## Install scripts: `allowScripts` and `strict-allow-scripts`
+
+A package's `postinstall` runs on every machine that installs it, so the list of packages allowed to
+run one is committed, not remembered. Both repos carry it:
+
+| Where                           | What it does                                                                      |
+| ------------------------------- | --------------------------------------------------------------------------------- |
+| `.npmrc` `strict-allow-scripts` | a script runs only if `package.json` `allowScripts` names the package             |
+| `.npmrc` `engine-strict`        | refuses to install on an npm older than `engines.npm` (`>=11.16.0`)               |
+| `package.json` `allowScripts`   | `name@version: true` allows one version; `name: false` denies every version of it |
+
+`engine-strict` is what makes the first row true: an older npm does not know
+`strict-allow-scripts`, ignores it without a word, and runs every script.
+
+`@scarf/scarf` is a name-only `false`, so a version bump stays denied. A pinned `true` goes stale on
+the next bump and then silently stops allowing anything.
+
+### When an install reports a blocked script
+
+1. Read what the script does (`npm view <pkg>@<version> scripts`, then the file in the tarball).
+   Telemetry or a download of an unpinned binary is a no (rule 3 above).
+2. `npm approve-scripts <pkg>` writes `<pkg>@<version>: true` into `allowScripts`. Never `--all`.
+3. Commit the `package.json` change with the lockfile it came from.
+
+### The sibling checkout token
+
+`ci.yml` checks out the paired frontend with `SPEC_SIBLING_TOKEN` when the sibling is private. That
+token only ever reads the sibling's contents, so mint it read-only (fine-grained, `Contents: read` on
+that one repository). It sits next to `npm ci` in the same job, and a write-capable token there is a
+push credential in reach of every install script.
+
 ## What is in `overrides`, and why
 
 Rule 7's worked example. Every entry pins a **transitive** package — a direct dependency gets its

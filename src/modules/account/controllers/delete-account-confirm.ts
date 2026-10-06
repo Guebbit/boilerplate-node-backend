@@ -32,6 +32,10 @@ export const deleteAccountConfirm = (
         .redeemLiveToken(ACCOUNT_DELETE_TOKEN_TYPE, token)
         .then((user) => {
             if (!user) {
+                accountService.recordOneTimeTokenRejected(
+                    callerContextOf(request),
+                    'account_delete'
+                );
                 rejectResponse(response, 422, [t('account.delete.token-not-found')]);
                 return;
             }

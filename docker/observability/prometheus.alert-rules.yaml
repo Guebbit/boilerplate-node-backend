@@ -276,3 +276,69 @@ groups:
             annotations:
                 summary: 'A promise rejection went unhandled'
                 description: 'process_unhandled_rejections_total increased in the last 15 minutes — a bug, find it in the logs.'
+
+          # Credential attacks the guards audit and count (`security_events_total`, one series per
+          # `security.*` audit action). Tune to your traffic before trusting these thresholds.
+          # A forged or garbled bearer has no customer behind it. A handful is a scanner; a steady
+          # stream is someone testing tokens. Tune to your traffic: 10 per 15 minutes.
+          - alert: ForgedBearerTokens
+            expr: sum(increase(security_events_total{event=~"security.token.(invalid_signature|malformed)"}[15m])) > 10
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Bearer tokens with a bad signature or no JWT shape are arriving'
+                description: 'security_events_total for security.token.* rose by more than 10 in 15 minutes — see the audit trail for the route and address.'
+
+          # A retired secret is still in circulation, or a key leaked and was revoked too late.
+          # A rate above zero is the alert: the secret was CORRECT, so someone holds it.
+          - alert: RevokedApiKeyUsed
+            expr: sum(increase(security_events_total{event="security.api_key.revoked"}[15m])) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A revoked API key was presented with its real secret'
+                description: 'security.api_key.revoked fired in the last 15 minutes — whoever holds the key was not told it was revoked.'
+
+          # Nothing legitimate sends a bad signature: the provider signs every delivery.
+          - alert: PaymentWebhookSignatureFailures
+            expr: sum(increase(security_events_total{event="security.payment_webhook.invalid_signature"}[15m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'A payment webhook failed its signature check'
+                description: 'Someone is posting to the payment webhook without the signing secret, or the secret was rotated on one side only.'
+
+          # Prometheus holds the token; anyone else sending one is guessing it.
+          - alert: MetricsTokenGuessed
+            expr: sum(increase(security_events_total{event="security.metrics_token.invalid"}[15m])) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'The metrics endpoint received a wrong bearer token'
+                description: 'security.metrics_token.invalid fired in the last 15 minutes. If it is your own scraper, its token is stale.'
+
+          # One-time links (reset, verify, email change, delete) refused as unknown or expired.
+          # Stale links are normal; a burst on one flow is link guessing. Tune to your traffic.
+          - alert: OneTimeTokenGuessing
+            expr: sum by (flow) (increase(auth_one_time_token_rejected_total[15m])) > 20
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Many one-time link tokens were refused on one flow'
+                description: 'auth_one_time_token_rejected_total for {{ $labels.flow }} rose by more than 20 in 15 minutes.'
+
+          # A refresh token was replayed after its rotation: the value leaked. The account's whole
+          # refresh set was revoked in the same breath, so this is the signal that someone had it.
+          - alert: RefreshTokenReuse
+            expr: increase(auth_refresh_token_reuse_detected_total[15m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A refresh token was replayed after rotation'
+                description: 'auth_refresh_token_reuse_detected_total increased — a session token leaked; the account was signed out everywhere.'

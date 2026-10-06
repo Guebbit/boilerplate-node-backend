@@ -664,7 +664,7 @@ services:
     mailpit:
         logging: *container-logging
         profiles: ['integrations']
-        image: axllent/mailpit:latest
+        image: axllent/mailpit:v1.31.4
         restart: unless-stopped
         environment:
             # Accept any login: the app sends NODE_SMTP_USER/PASS, and a sink has no accounts.
