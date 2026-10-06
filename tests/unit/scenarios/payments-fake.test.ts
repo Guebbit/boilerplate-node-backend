@@ -193,6 +193,48 @@ describe('fakePaymentProvider.parseWebhook', () => {
         ).rejects.toThrow(WebhookRejected);
     });
 
+    it.each([
+        ['an operator object where the providerRef string belongs', { providerRef: { $ne: null } }],
+        ['an operator object as the id', { id: { $gt: '' } }],
+        ['a field the contract does not name', { providerRef: 'fake_pi_k', status: 'succeeded' }],
+        ['an oversize id', { id: 'x'.repeat(201) }],
+        ['an oversize providerRef', { providerRef: 'p'.repeat(201) }],
+        ['a number as the providerRef', { providerRef: 7 }]
+    ])(
+        'refuses a SIGNED body carrying %s, before any lookup could see it',
+        async (_label, extra) => {
+            const body = Buffer.from(JSON.stringify({ id: 'evt_5', ...extra }));
+
+            await expect(
+                fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+            ).rejects.toThrow(WebhookRejected);
+        }
+    );
+
+    it('accepts an event with no providerRef, which the service acknowledges and ignores', async () => {
+        const body = Buffer.from(JSON.stringify({ id: 'evt_6' }));
+
+        await expect(
+            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+        ).resolves.toEqual({ id: 'evt_6', providerRef: undefined });
+    });
+
+    it('refuses a signed body that is not JSON', async () => {
+        const body = Buffer.from('not json at all');
+
+        await expect(
+            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+        ).rejects.toThrow('Body is not valid JSON');
+    });
+
+    it('refuses a signed JSON body that is not an object', async () => {
+        const body = Buffer.from('[1,2,3]');
+
+        await expect(
+            fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
+        ).rejects.toThrow(WebhookRejected);
+    });
+
     it('refuses a signed body carrying no event id', async () => {
         const body = Buffer.from(JSON.stringify({ providerRef: 'fake_pi_j' }));
 

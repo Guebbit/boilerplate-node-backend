@@ -13,6 +13,7 @@
 
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
+import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
 import {
     PaymentInFlightError,
     verifyWebhookSignature,
@@ -20,12 +21,6 @@ import {
     type PaymentProvider,
     type ProviderPaymentState
 } from '@modules/payments/providers';
-
-/** The webhook body as it arrives — the contract's `PaymentWebhookEvent`: a thin event. */
-interface PaymentWebhookEventBody {
-    id?: string;
-    providerRef?: string;
-}
 
 /**
  * The method references this provider recognises, and what each one does. Anything else succeeds
@@ -184,6 +179,11 @@ export const fakePaymentProvider: PaymentProvider = {
      * The fake's deliveries carry this module's own normalised event shape — a real provider's
      * implementation is where its native event names are translated into it. The signature is
      * verified exactly as a real one's would be, so the route's defences are exercised for real.
+     *
+     * The body is parsed against the contract's own schema AFTER the signature and BEFORE any
+     * lookup: `strictQuery` drops unknown query paths but does nothing for a JSON body, so the
+     * parse is the only guard against `{ "$ne": null }` standing where a `providerRef` string
+     * belongs, and against a field the contract does not name.
      */
     parseWebhook: (rawBody, signature) =>
         // Inside the chain rather than in front of it: a synchronous throw from a method typed as
@@ -194,14 +194,18 @@ export const fakePaymentProvider: PaymentProvider = {
             // `JSON.parse` throws, and the throw lands in this chain's own rejection — so the
             // `.catch` below is what turns an unparseable body into the 400 it is, rather than
             // letting it read as a fault of ours.
-            .then((text) => JSON.parse(text) as PaymentWebhookEventBody)
+            .then((text): unknown => JSON.parse(text))
             .catch((error: unknown) => {
                 if (error instanceof WebhookRejected) throw error;
                 throw new WebhookRejected('Body is not valid JSON');
             })
-            .then((event) => {
-                if (!event.id) throw new WebhookRejected('Event carries no id');
+            .then((body) => {
+                // Zod: `safeParse` answers `{ success, data | error }` instead of throwing.
+                // https://zod.dev/api#safeparse
+                const parsed = ReceivePaymentWebhookBody.safeParse(body);
+                if (!parsed.success)
+                    throw new WebhookRejected('Body does not match the event schema');
                 // Thin: which event, which intent. What happened to it is `retrieve`'s answer.
-                return { id: event.id, providerRef: event.providerRef };
+                return { id: parsed.data.id, providerRef: parsed.data.providerRef };
             })
 };

@@ -411,6 +411,28 @@ describe('POST /payments/webhook', () => {
         expect(untouched!.status).not.toBe('succeeded');
     });
 
+    it('refuses a signed delivery whose providerRef is an operator, and settles nothing', async () => {
+        // `{ "$ne": null }` would match EVERY payment if it reached the lookup unparsed.
+        const { paymentId } = await preparedPayment();
+
+        const response = await deliver({ id: 'evt_operator', providerRef: { $ne: null } });
+
+        expect(response.status).toBe(400);
+        const untouched = await paymentRepository.findById(paymentId);
+        expect(untouched!.status).toBe('requires_confirmation');
+    });
+
+    it('refuses a signed delivery carrying a field the contract does not name', async () => {
+        const { paymentId, providerRef } = await preparedPayment();
+        setFakeOutcome(providerRef, { status: 'succeeded' });
+
+        const response = await deliver({ id: 'evt_extra', providerRef, status: 'succeeded' });
+
+        expect(response.status).toBe(400);
+        const untouched = await paymentRepository.findById(paymentId);
+        expect(untouched!.status).toBe('requires_confirmation');
+    });
+
     it('answers a MessageResponse, not the PaymentEnvelope every other route answers', async () => {
         // A deliberate shape difference: the caller is a machine with no use for the payment back,
         // and the automatic contract check alone would pass a `PaymentEnvelope` here too, since
