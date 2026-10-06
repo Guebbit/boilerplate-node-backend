@@ -6,7 +6,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { returnModel, applyReturnTransform } from './model';
+import { returnModel, returnOrderLockModel, applyReturnTransform } from './model';
 import type { ReturnDocument } from './model';
 import type { ReturnStatus } from './domain';
 import {
@@ -38,7 +38,8 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
         stamp?: ReturnStamp,
         session?: ClientSession
     ) => Promise<ReturnDocument | null>;
-    findByOrderId: (orderId: string) => Promise<ReturnDocument[]>;
+    findByOrderId: (orderId: string, session?: ClientSession) => Promise<ReturnDocument[]>;
+    lockOrder: (orderId: string, session: ClientSession) => Promise<void>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<ReturnDocument[]>;
 } = {
     ...createRepository<ReturnDocument, Return>(returnModel, {
@@ -74,12 +75,31 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
     /**
      * Every return on one order, oldest first.
      * @param orderId - the order
+     * @param session - the caller's transaction, when the read belongs to one
      */
-    findByOrderId: (orderId) =>
+    findByOrderId: (orderId, session) =>
         returnModel
             .find({ orderId: toObjectId(orderId) })
             .sort({ createdAt: 1, _id: 1 })
+            .session(session ?? null)
             .exec(),
+
+    /**
+     * Take the order's lock row: two transactions that both call this for one order conflict on the
+     * write, and the driver re-runs the loser after the winner commits. Upserted, so the first
+     * opening creates the row.
+     * @param orderId - the order whose returns are about to be read and written
+     * @param session - the opening's transaction; a lock outside one would lock nothing
+     */
+    lockOrder: (orderId, session) =>
+        returnOrderLockModel
+            .findOneAndUpdate(
+                { _id: toObjectId(orderId) },
+                { $inc: { openings: 1 } },
+                { upsert: true, session }
+            )
+            .exec()
+            .then(() => undefined),
 
     /**
      * Every return on any of these orders, oldest first — the account export's read.

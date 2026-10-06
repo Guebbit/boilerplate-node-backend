@@ -17,6 +17,8 @@ import { Types } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import type { ClientSession } from 'mongoose';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { emitDomainEvent } from '@kernel/events';
 import {
     orderService,
@@ -216,9 +218,10 @@ const withdrawBeforeDispatch = (
 /**
  * The lines already coming back on an order — what a new return's quantities are checked against.
  * @param orderId - the order
+ * @param session - the opening's transaction, so the read happens under the order's lock
  */
-const alreadyReturned = (orderId: string): Promise<ProductQuantity[]> =>
-    returnRepository.findByOrderId(orderId).then((returns) =>
+const alreadyReturned = (orderId: string, session: ClientSession): Promise<ProductQuantity[]> =>
+    returnRepository.findByOrderId(orderId, session).then((returns) =>
         returns
             .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
             .flatMap(({ lines }) =>
@@ -230,23 +233,24 @@ const alreadyReturned = (orderId: string): Promise<ProductQuantity[]> =>
     );
 
 /**
- * Write the return once its lines are decided: freeze what is coming back, then announce it.
+ * Write the return once its lines are decided: freeze what is coming back. Announcing it is the
+ * caller's job, after the transaction commits.
  *
  * @param order - the order the goods came from
  * @param input - the customer's request
  * @param lines - the lines {@link checkRequestedLines} accepted
- * @param context - for audit
+ * @param session - the opening's transaction
  */
 const writeReturn = (
     order: OrderDocument,
     input: CreateReturnInput,
     lines: readonly ProductQuantity[],
-    context: CallerContext
-): Promise<CreateReturnOutcome> => {
+    session: ClientSession
+): Promise<ReturnDocument> => {
     const byProduct = new Map(order.items.map((item) => [String(item.product._id), item]));
 
-    return returnRepository
-        .create({
+    return returnRepository.create(
+        {
             orderId: order._id,
             ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
             currency: orderCurrency(order),
@@ -266,9 +270,48 @@ const writeReturn = (
             returnPostage: returnPostagePayer(),
             // A withdrawal is opened already decided — there is nothing for staff to decide.
             ...(input.reason === 'withdrawal' ? { decidedAt: new Date() } : {})
-        })
-        .then((created) => announceOpened(order, created, context));
+        },
+        session
+    );
 };
+
+/**
+ * Check the request against what is already coming back, and write the return — all under the
+ * order's lock row, in one transaction. Two parallel openings would otherwise both read "nothing
+ * returned yet" (snapshot isolation) and both commit a full return.
+ *
+ * @param order - the order the goods came from
+ * @param input - the customer's request
+ * @returns the outcome; nothing is announced yet, the transaction has to commit first
+ */
+const openUnderLock = (
+    order: OrderDocument,
+    input: CreateReturnInput
+): Promise<CreateReturnOutcome> =>
+    withTransaction((session) =>
+        returnRepository
+            .lockOrder(input.orderId, session)
+            .then(() => alreadyReturned(input.orderId, session))
+            .then((earlier) => {
+                const verdict = checkRequestedLines(
+                    returnableQuantities(
+                        order.items
+                            .filter((item) => !isExcludedFromWithdrawal(item))
+                            .map((item) => ({
+                                productId: String(item.product._id),
+                                quantity: item.quantity
+                            })),
+                        earlier
+                    ),
+                    input.lines
+                );
+                if (!verdict.ok) return badLines(verdict.reason);
+
+                return writeReturn(order, input, verdict.lines, session).then(
+                    (created): CreateReturnOutcome => ({ kind: 'created', created })
+                );
+            })
+    );
 
 /**
  * Everything opening a return unlocks: the acknowledgement mail — the Art. 11a one for a
@@ -344,21 +387,9 @@ export const createReturn = (
         if (input.lines?.some(({ productId }) => excluded.has(productId)))
             return badLines('excluded');
 
-        return alreadyReturned(input.orderId).then((earlier) => {
-            const verdict = checkRequestedLines(
-                returnableQuantities(
-                    order.items
-                        .filter((item) => !isExcludedFromWithdrawal(item))
-                        .map((item) => ({
-                            productId: String(item.product._id),
-                            quantity: item.quantity
-                        })),
-                    earlier
-                ),
-                input.lines
-            );
-            return verdict.ok
-                ? writeReturn(order, input, verdict.lines, context)
-                : badLines(verdict.reason);
-        });
+        // The mail, the audit row and the order's return status follow the commit: they must not
+        // describe a return a lost race never wrote.
+        return openUnderLock(order, input).then((outcome) =>
+            outcome.kind === 'created' ? announceOpened(order, outcome.created, context) : outcome
+        );
     });
