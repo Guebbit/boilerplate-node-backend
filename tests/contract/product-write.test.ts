@@ -6,6 +6,7 @@
  */
 
 import '@tests/contract';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
@@ -97,7 +98,12 @@ describe('POST /products', () => {
             });
 
         expect(response.status).toBe(201);
-        expect(response.body.data.onHand).toBe(7);
+        // The opening stock arrives through the outbox, so it is read once the relay has run.
+        await settleOutboxNudges();
+        const read = await api()
+            .get(`/products/${String(response.body.data.id)}`)
+            .set('Authorization', bearer);
+        expect(read.body.data.onHand).toBe(7);
 
         const movements = await api()
             .get(`/inventory/movements?productId=${String(response.body.data.id)}`)
@@ -552,9 +558,18 @@ describe('the stock counters on the product writes follow inventory.any.read', (
 
         expect(byEditor.status).toBe(201);
         expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
-        expect(byEditor.body.data.inStock).toBe(true);
         expect(byAdmin.status).toBe(201);
-        expect(byAdmin.body.data).toMatchObject({ onHand: 7, available: 7 });
+
+        // The opening stock arrives through the outbox, so both are read once the relay has run.
+        await settleOutboxNudges();
+        const editorRead = await api()
+            .get(`/products/${String(byEditor.body.data.id)}`)
+            .set('Authorization', editor.bearer);
+        const adminRead = await api()
+            .get(`/products/${String(byAdmin.body.data.id)}`)
+            .set('Authorization', admin.bearer);
+        expect(editorRead.body.data.inStock).toBe(true);
+        expect(adminRead.body.data).toMatchObject({ onHand: 7, available: 7 });
     });
 
     it('hides them on the editor’s all-languages read, and shows them to a stock reader', async () => {

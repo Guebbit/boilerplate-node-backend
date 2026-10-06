@@ -12,7 +12,7 @@ import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { parseBody } from '@infrastructure/http/controller';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { readUploadedImage } from '@infrastructure/http/uploads';
+import { claimUpload, readUploadedImage } from '@infrastructure/http/uploads';
 import { CreateUserBody } from '@api/schemas.zod';
 import type { CreateUserRequest, CreateUserRequestMultipart, User } from '@types';
 
@@ -34,7 +34,7 @@ export const createUser = (
     // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined` already means "no change" to `zodUserSchema`'s
     // `.optional()` field the same way an absent key does — a defaulted empty string would
     // reach the validator as a rejected value instead of the no-op it is meant to be.
-    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
+    const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
 
     /*
      * The contract's own strict schema, and from here on ONLY its output: an undeclared key is a
@@ -48,7 +48,8 @@ export const createUser = (
         readInput(request, { surface: 'create', booleans: ['active'] }),
         response
     );
-    if (!body) return deleteUpload();
+    // `parseBody` has already answered 422: the close hook deletes the upload.
+    if (!body) return;
     const { role, active } = body;
 
     /**
@@ -65,10 +66,7 @@ export const createUser = (
     );
     if (errors.length > 0) {
         rejectResponse(response, 422, errors);
-        // `deleteUpload` never rejects (imageStore.remove/removeQuarantined both resolve on
-        // failure — see image-store.ts), so the response need not wait on it, and no catch is
-        // needed to keep a storage hiccup from becoming a second, different failure.
-        return deleteUpload();
+        return;
     }
 
     // Past the guard above, these have been checked against zodUserSchema — the assertion
@@ -91,12 +89,11 @@ export const createUser = (
             callerContextOf(request)
         )
         .then((result) => {
-            if (!result.success)
-                return deleteUpload()
-                    .catch(() => undefined)
-                    .then(() => {
-                        rejectResponse(response, result.status, result.errors);
-                    });
+            if (!result.success) {
+                rejectResponse(response, result.status, result.errors);
+                return;
+            }
+            claimUpload(request);
             // `toUserContract` picks only the `User` contract's own fields, so the hashed
             // password and tokens on the document never reach `res.json`. The role is read
             // fresh from the membership just written — never off the document, which holds none.
@@ -104,11 +101,7 @@ export const createUser = (
                 createdResponse<User>(response, contract, `/users/${contract.id}`);
             });
         })
-        .catch((error: unknown) =>
-            deleteUpload()
-                .catch(() => undefined)
-                .then(() => {
-                    rejectDatabaseError(response, 'createUser', error);
-                })
-        );
+        .catch((error: unknown) => {
+            rejectDatabaseError(response, 'createUser', error);
+        });
 };

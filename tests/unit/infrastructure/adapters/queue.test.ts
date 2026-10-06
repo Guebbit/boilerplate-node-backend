@@ -1,4 +1,4 @@
-import type { ZodType } from 'zod';
+import { z, type ZodType } from 'zod';
 import { EmailJobPayloadSchema, WORKER_CHANNELS } from '@types';
 import {
     isQueueEnabled,
@@ -21,6 +21,9 @@ import { setEnvironment } from '@tests/environment';
  * change these `assertQueue` expectations must catch, not silently agree with.
  */
 const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' };
+
+/** A parking queue also expires its messages after 7 days. */
+const DEAD_LETTER_ARGUMENTS = { ...QUORUM_QUEUE_TYPE, 'x-message-ttl': 604_800_000 };
 const AT_LEAST_ONCE_DEAD_LETTERING = {
     'x-dead-letter-strategy': 'at-least-once',
     'x-overflow': 'reject-publish'
@@ -320,7 +323,7 @@ describe('publishToQueue()', () => {
         });
         expect(mockAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf('emails'), {
             durable: true,
-            arguments: QUORUM_QUEUE_TYPE
+            arguments: DEAD_LETTER_ARGUMENTS
         });
         expect(mockAssertQueue).toHaveBeenCalledWith('emails.retry', {
             durable: true,
@@ -402,7 +405,7 @@ describe('the channel is supervised, not only the connection', () => {
         try {
             await ensureConnected();
             const handler = jest.fn().mockResolvedValue(true);
-            await consumeFromQueue({ queue: 'emails', handler });
+            await consumeFromQueue({ queue: 'emails', handler, schema: anyPayload });
 
             const closeHandler = mockChannelOn.mock.calls.find(([event]) => event === 'close')?.[1];
             expect(closeHandler).toBeDefined();
@@ -452,7 +455,7 @@ describe('consumeFromQueue()', () => {
     it('does nothing when queue is not enabled', async () => {
         disableRabbitMQ();
         const handler = jest.fn().mockResolvedValue(true);
-        await consumeFromQueue({ queue: 'test', handler });
+        await consumeFromQueue({ queue: 'test', handler, schema: anyPayload });
         expect(mockConsume).not.toHaveBeenCalled();
     });
 
@@ -460,7 +463,7 @@ describe('consumeFromQueue()', () => {
         await ensureConnected();
 
         const handler = jest.fn().mockResolvedValue(true);
-        await consumeFromQueue({ queue: 'pdfs', handler });
+        await consumeFromQueue({ queue: 'pdfs', handler, schema: anyPayload });
 
         expect(mockAssertQueue).toHaveBeenCalledWith('pdfs', {
             durable: true,
@@ -489,7 +492,7 @@ describe('consumeFromQueue()', () => {
         // `getChannel()` kicks off the connection but never waits on it (rule 2), so a caller
         // that reaches `consumeFromQueue` before it settles gets a resolved promise with nothing
         // bound — the pending connect above is what guarantees that stays true through the assertion.
-        await consumeFromQueue({ queue: 'still-connecting', handler });
+        await consumeFromQueue({ queue: 'still-connecting', handler, schema: anyPayload });
 
         expect(mockConsume).not.toHaveBeenCalled();
     });
@@ -610,8 +613,11 @@ describe('redactedBrokerTarget()', () => {
  * own DLX, which now always means "retry") and only acks the original once that publish itself
  * confirms — see the module's own docblock for why a nack alone can no longer express "done".
  */
+/** A schema that accepts any JSON — for the cases that are not about the contract. */
+const anyPayload = z.unknown();
+
 /** Register a consumer and hand back the callback the broker would invoke per delivery. */
-const captureConsumerCallback = async (handler: jest.Mock, schema?: ZodType) => {
+const captureConsumerCallback = async (handler: jest.Mock, schema: ZodType = anyPayload) => {
     mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
     mockPrefetch.mockImplementation(() => Promise.resolve());
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
@@ -690,6 +696,15 @@ describe('consumeFromQueue acknowledgement policy', () => {
             { jobId: 7, to: 'a@example.com' },
             expect.objectContaining({ content: expect.anything() })
         );
+    });
+
+    it("hands the handler the schema's output, so a key the contract does not name is dropped", async () => {
+        const handler = jest.fn().mockResolvedValue(true);
+        const onMessage = await captureConsumerCallback(handler, z.object({ jobId: z.number() }));
+
+        await onMessage(delivery({ jobId: 7, from: 'attacker@example.com' }));
+
+        expect(handler).toHaveBeenCalledWith({ jobId: 7 }, expect.anything());
     });
 
     it('parks without retrying when the handler refuses the message', async () => {
@@ -924,7 +939,7 @@ describe('a reconnect gets its consumers back', () => {
         await ensureConnected();
 
         const handler = jest.fn().mockResolvedValue(true);
-        await consumeFromQueue({ queue: 'reconnect-jobs', handler });
+        await consumeFromQueue({ queue: 'reconnect-jobs', handler, schema: anyPayload });
         expect(mockConsume).toHaveBeenCalledWith('reconnect-jobs', expect.any(Function));
 
         // The broker drops and the library reconnects on its own — `setup` runs again on a fresh
@@ -988,7 +1003,7 @@ describe('parkedCounts()', () => {
         for (const queue of Object.values(WORKER_CHANNELS))
             expect(mockPlainAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf(queue), {
                 durable: true,
-                arguments: QUORUM_QUEUE_TYPE
+                arguments: DEAD_LETTER_ARGUMENTS
             });
         expect(result).toHaveLength(Object.keys(WORKER_CHANNELS).length);
         expect(result.every(({ parked }) => parked === 3)).toBe(true);

@@ -225,13 +225,16 @@ describe('resolveSafeOutboundTarget — a registered exempt origin', () => {
     it('still refuses the same host on another port', async () => {
         await expect(
             resolveSafeOutboundTarget('https://127.0.0.1:9443/hook')
-        ).rejects.toMatchObject({ reason: 'unsafe-address' });
+        ).rejects.toMatchObject({ reason: 'unsafe-port' });
     });
 
     it('still refuses a host other than the one exempted', async () => {
         await expect(resolveSafeOutboundTarget('https://10.0.0.5:8443/hook')).rejects.toMatchObject(
-            { reason: 'unsafe-address' }
+            { reason: 'unsafe-port' }
         );
+        await expect(resolveSafeOutboundTarget('https://10.0.0.5/hook')).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
     });
 
     it('still refuses http:, even for the exempted host', async () => {
@@ -251,6 +254,6 @@ describe('resolveSafeOutboundTarget — a registered exempt origin', () => {
 
         await expect(
             resolveSafeOutboundTarget('https://127.0.0.1:8443/hook')
-        ).rejects.toMatchObject({ reason: 'unsafe-address' });
+        ).rejects.toMatchObject({ reason: 'unsafe-port' });
     });
 });

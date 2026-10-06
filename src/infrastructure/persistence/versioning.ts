@@ -98,6 +98,19 @@ export const runWithPrecondition = <T>(
     precondition ? scopeStorage.run({ precondition, consumed: false }, work) : work();
 
 /**
+ * Makes the open precondition (if any) checkable again.
+ *
+ * A write inside `withTransaction` that hits a transient conflict is re-run by the driver, and the
+ * first run already consumed the precondition: without this the retry would write unchecked over
+ * the very edit that caused the conflict. Call it at the start of the transactional work, so each
+ * attempt compares the caller's tag with the row it just loaded.
+ */
+export const rearmPrecondition = (): void => {
+    const scope = scopeStorage.getStore();
+    if (scope) scope.consumed = false;
+};
+
+/**
  * The two ways Mongoose says "the row moved under this write": the fence in {@link fencedSave}
  * matched nothing (`DocumentNotFoundError`), or an array edit's own version filter did
  * (`VersionError`). Compared by name, like the driver errors in `mongo-errors.ts`.

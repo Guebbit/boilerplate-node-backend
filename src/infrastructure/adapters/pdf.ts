@@ -10,7 +10,7 @@
 // container images, where the base image installs chromium via the package manager.
 import puppeteer from 'puppeteer-core';
 // Page-geometry options for `page.pdf()` (format, margins, landscape, printBackground, ...).
-import type { Browser, PDFOptions } from 'puppeteer-core';
+import type { Browser, HTTPRequest, PDFOptions } from 'puppeteer-core';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { pdfConfig } from '@infrastructure/adapters/config';
@@ -202,6 +202,22 @@ const withDeadline = (browser: Browser, work: Promise<Uint8Array>): Promise<Uint
 };
 
 /**
+ * Refuses every request the page makes except an inline `data:` URL.
+ *
+ * The templates fetch nothing from the network, so a template injection that plants an
+ * `<img src>` or `<link>` cannot turn the renderer into an SSRF probe of the host's network.
+ *
+ * @param request - the intercepted puppeteer request
+ */
+export const refuseNonDataRequest = (
+    request: Pick<HTTPRequest, 'url' | 'abort' | 'continue'>
+): void => {
+    const answer = request.url().startsWith('data:') ? request.continue() : request.abort();
+    // A request answered after the page closed rejects; nothing is left to protect then.
+    answer.catch(() => undefined);
+};
+
+/**
  * Open a tab on `browser`, load the HTML and print it.
  *
  * @param browser - the launched browser
@@ -219,6 +235,12 @@ const printIn = (browser: Browser, html: string, pdfOptions: PDFOptions): Promis
                     // `launchOptions`): turning JavaScript off takes away what a template
                     // injection could do with that. https://pptr.dev/api/puppeteer.page.setjavascriptenabled
                     .setJavaScriptEnabled(false)
+                    // Every request now waits for `refuseNonDataRequest` to answer it.
+                    // https://pptr.dev/api/puppeteer.page.setrequestinterception
+                    .then(() => page.setRequestInterception(true))
+                    .then(() => {
+                        page.on('request', refuseNonDataRequest);
+                    })
                     // `setContent` writes the HTML directly instead of navigating to a URL —
                     // no local web server needed.
                     .then(() =>

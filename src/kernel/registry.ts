@@ -69,10 +69,10 @@ export interface ModuleConsumer {
 
     /**
      * The contract schema this queue's messages must satisfy, from `@types`'s generated
-     * validators — see `infrastructure/adapters/queue.ts`'s `ConsumeOptions.schema` for what
-     * supplying it buys over leaving the handler to defend itself.
+     * validators — see `infrastructure/adapters/queue.ts`'s `ConsumeOptions.schema`. Required: the
+     * handler is given the parsed output, never the raw message.
      */
-    schema?: ZodType;
+    schema: ZodType;
 
     /** Number of unacknowledged messages allowed at once. Default: 1 — see `ConsumeOptions.prefetch`. */
     prefetch?: number;
@@ -122,9 +122,14 @@ export interface TranslatableTarget {
      * Copies the fallback-locale row's fields onto this entity's own document — the derived,
      * sortable/indexable column a translated write also updates. Supplied by the OWNING module
      * (see {@link ImageTarget.writeback} for the same shape), so `locales` never has to find the
-     * target's Mongoose model by collection name to reach it.
+     * target's Mongoose model by collection name to reach it. `session` joins the write to the
+     * caller's transaction (a product write commits its row, its translations and this together).
      */
-    writeDerived: (entityId: string, fields: Record<string, string | null>) => Promise<void>;
+    writeDerived: (
+        entityId: string,
+        fields: Record<string, string | null>,
+        session?: ClientSession
+    ) => Promise<void>;
 
     /**
      * Stamps this entity's own document as edited, so its version (the `ETag`) moves. A translation
@@ -421,7 +426,9 @@ export interface AppModule {
  * @throws {Error} when two entries share a key
  */
 const uniqueEntries = <T>(entries: [string, T][], label: string): Record<string, T> => {
-    const merged: Record<string, T> = {};
+    // No prototype: a lookup by an attacker-chosen key (`constructor`, `__proto__`) finds nothing
+    // instead of an inherited function.
+    const merged: Record<string, T> = Object.create(null) as Record<string, T>;
     for (const [key, value] of entries) {
         if (Object.hasOwn(merged, key))
             throw new Error(`Two modules declare the same ${label}: "${key}".`);

@@ -156,15 +156,21 @@ export const reapDirectory = (root: string, cutoffMs: number, label: string): Pr
 /**
  * Deletes every FILE directly under `root` whose basename is not in `keep` — a subdirectory is
  * left alone unconditionally, same as {@link reapDirectory}. Reference-based rather than
- * age-based: `scripts/ops/clean-orphaned-images.ts` is the one caller, for a store (a promoted
+ * age-based: `scripts/ops/reap-orphaned-images.ts` is the one caller, for a store (a promoted
  * image, its thumbnail) meant to outlive the process, where age says nothing about whether it is
- * still wanted — only "does something still name it" can.
+ * still wanted — only "does something still name it" can. Age only protects the newest files: one
+ * promoted a moment ago may not be saved on its row yet.
  *
  * @param root - the flat directory to sweep; missing is not a failure, just nothing to do
  * @param keep - basenames that must survive this sweep
+ * @param minAgeMs - an unreferenced file younger than this (by `mtime`) is left for the next sweep
  * @returns how many entries were checked and how many files were removed
  */
-export const pruneUnreferenced = (root: string, keep: ReadonlySet<string>): Promise<ReapResult> =>
+export const pruneUnreferenced = (
+    root: string,
+    keep: ReadonlySet<string>,
+    minAgeMs = 0
+): Promise<ReapResult> =>
     readdir(root, { withFileTypes: true })
         .catch((error: NodeJS.ErrnoException) => {
             if (error.code === 'ENOENT') return [];
@@ -174,14 +180,21 @@ export const pruneUnreferenced = (root: string, keep: ReadonlySet<string>): Prom
             const orphaned = entries.filter((entry) => entry.isFile() && !keep.has(entry.name));
 
             return Promise.all(
-                orphaned.map((entry) =>
-                    unlinkIfPresent(
-                        path.join(root, entry.name),
-                        'Could not delete an orphaned file.',
-                        {
-                            file: entry.name
-                        }
-                    )
-                )
-            ).then(() => ({ checked: entries.length, reaped: orphaned.length }));
+                orphaned.map((entry) => {
+                    const filePath = path.join(root, entry.name);
+                    return stat(filePath).then(
+                        (info) =>
+                            Date.now() - info.mtimeMs < minAgeMs
+                                ? false
+                                : unlinkIfPresent(filePath, 'Could not delete an orphaned file.', {
+                                      file: entry.name
+                                  }),
+                        // Gone between the listing and here: nothing left to delete.
+                        () => false
+                    );
+                })
+            ).then((deleted) => ({
+                checked: entries.length,
+                reaped: deleted.filter(Boolean).length
+            }));
         });

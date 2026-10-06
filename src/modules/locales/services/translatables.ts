@@ -24,4 +24,5 @@ export const setTranslatables = (
 
 /** The declared target for one `entityType`, or `undefined` when nothing registered it. */
 export const translatableTarget = (entityType: string): TranslatableTarget | undefined =>
-    translatables[entityType];
+    // Own-property only: `entityType` comes off the URL, and `constructor` is inherited by every object.
+    Object.hasOwn(translatables, entityType) ? translatables[entityType] : undefined;

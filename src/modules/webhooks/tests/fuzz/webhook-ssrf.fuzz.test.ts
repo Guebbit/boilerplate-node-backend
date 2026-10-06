@@ -166,6 +166,23 @@ describe('deliverWebhook — the exempted demo host is still https-only', () => 
 
         expect(mockedHttpsRequest).not.toHaveBeenCalled();
         expect(result.success).toBe(false);
-        expect(result.error).toMatch(/https/);
+        expect(result.error).toBe('This URL cannot receive webhooks.');
+    });
+});
+
+describe('deliverWebhook — a port other than 443 is refused before any connection', () => {
+    it.each([22, 5432, 6379])('opens no connection to port %i', async (port) => {
+        mockDns(['93.184.215.9']);
+        (httpsRequest as jest.Mock).mockClear();
+
+        const result = await deliverWebhook({
+            url: `https://port-probe.example.test:${port}/hook`,
+            secrets: ['whsec_test-secret'],
+            eventId: `evt_port_${port}`,
+            payload: { a: 1 }
+        });
+
+        expect(httpsRequest).not.toHaveBeenCalled();
+        expect(result.success).toBe(false);
     });
 });

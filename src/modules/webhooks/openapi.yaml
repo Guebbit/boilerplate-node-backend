@@ -43,7 +43,8 @@ paths:
                 Mints the ring's first secret and returns it in plaintext, once — the only
                 response that ever carries it. `url` must be `https://` and must not resolve to a
                 private, loopback or link-local address. The host is resolved here, so a refusal is a
-                422 naming the field (`errors[].details` `{ field: url, reason }`) instead of a
+                422 naming the field (`errors[].details` `{ field: url }`, no reason: the refusal does not
+                say which internal address it hit) instead of a
                 delivery that fails later; `PUT` and `PATCH` run the same check when the `url`
                 changes. It runs again on every delivery, since a subscription's DNS can change
                 after it is created.
@@ -158,7 +159,10 @@ paths:
                 Adds a new secret to the ring and returns its plaintext once, in `newSecret` — the
                 ring then carries two active secrets, and deliveries sign with both (two
                 space-separated `v1,` values in `webhook-signature`) until the old one is dropped
-                through `DELETE .../secrets/{secretId}`. Its own route rather than a flag on
+                through `DELETE .../secrets/{secretId}` or its overlap window ends (24 hours by
+                default, `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`), after which it stops signing and
+                disappears from `secretIds`. A ring holds at most two: rotating again drops the
+                oldest. Its own route rather than a flag on
                 `PATCH`'s body: a command, not state, so it does not share a route with
                 url/description/eventTypes/enabled.
             operationId: rotateWebhookSubscriptionSecret

@@ -108,7 +108,8 @@ describe('digestQuarantinedImage', () => {
 
         expect(mockedReadQuarantined).toHaveBeenCalledWith('abc123.png');
         expect(mockedDigestImage).toHaveBeenCalledWith(Buffer.from('raw bytes'), 'image/png');
-        expect(mockedThumbnailImage).toHaveBeenCalledWith(Buffer.from('raw bytes'));
+        // The thumbnail is cut from the digested bytes, so the upload is decoded only once.
+        expect(mockedThumbnailImage).toHaveBeenCalledWith(Buffer.from('digested'));
         const stem = contentStemOf('doc1', Buffer.from('digested'));
         expect(mockedPromote).toHaveBeenCalledWith(stem, Buffer.from('digested'), 'image/png');
         expect(mockedPutDerivative).toHaveBeenCalledWith(stem, Buffer.from('thumbnail'));

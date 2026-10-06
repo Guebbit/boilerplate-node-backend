@@ -3,18 +3,14 @@
  * @module
  * Delete quarantined uploads older than the retention window — `npm run reap:quarantine`.
  *
- * A quarantine file outlives its job only when something went wrong: the process crashed after
- * `imageStore.quarantine()` but before the job ran, a payload named an unregistered collection, or
- * a delivery was lost outright. No normal run of the pipeline leaves one behind — every success
- * and every handled failure calls `removeQuarantined` itself (see `image.worker.ts`). This is the
- * backstop for whatever still gets through, meant to run as a periodic job (cron, a scheduled
- * container task) rather than by hand.
- *
- * Filesystem-only and safe to run repeatedly: `NODE_QUARANTINE_PATH` is never served and never
- * read by anything but the digest pipeline, so there is nothing here a concurrent request could
- * be relying on past the retention window. It still connects to Mongo, briefly: `runScript`
- * records this job's outcome in the same `leases` collection every other crontab job does (D9,
- * `docs/reference/ops.md#scheduled-jobs`), and that collection has no other home.
+ * Runs:      nightly from `docker/crontab`.
+ * Deletes:   a file in `NODE_QUARANTINE_PATH` older than `NODE_QUARANTINE_RETENTION_HOURS`.
+ * Why:       a quarantine file outlives its job only when something went wrong (a crash after
+ *            `imageStore.quarantine()`, a lost delivery). Every normal run removes its own.
+ * Safe:      filesystem-only; nothing but the digest pipeline reads that directory, so nothing
+ *            can be relying on a file past the window.
+ * Mongo:     connected only afterwards, so `runScript` can record the outcome in `leases`
+ *            (`docs/reference/ops.md#scheduled-jobs`).
  *
  * See: docs/tools/image-processing.md
  */

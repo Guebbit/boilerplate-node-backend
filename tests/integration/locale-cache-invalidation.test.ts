@@ -72,6 +72,7 @@ jest.mock('@infrastructure/adapters/cache', () => {
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -159,5 +160,28 @@ describe('an admin write invalidates the cached public dictionary', () => {
 
         const stillCached = await api().get('/locales/pt/messages');
         expect(stillCached.headers['x-cache']).toBe('HIT');
+    });
+});
+
+describe('the cached dictionary is per tenant', () => {
+    it("answers ?tenant=b with b's dictionary after a warm read of a", async () => {
+        // A second frontend tenant, so the query parameter has something to choose between.
+        setEnvironment({ NODE_LOCALE_TENANTS_EXTRA: 'kiosk=Kiosk' });
+        const { bearer } = await authenticateAs('admin');
+        await givenPublishedLanguage(bearer);
+        await api()
+            .post('/locales/pt/tenants/kiosk/entries')
+            .set('Authorization', bearer)
+            .send({ key: 'cart.title', value: 'Quiosque' });
+
+        const warm = await api().get('/locales/pt/messages?tenant=demo-fe');
+        expect(warm.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
+        const again = await api().get('/locales/pt/messages?tenant=demo-fe');
+        expect(again.headers['x-cache']).toBe('HIT');
+
+        const other = await api().get('/locales/pt/messages?tenant=kiosk');
+
+        expect(other.headers['x-cache']).toBe('MISS');
+        expect(other.body.data.messages).toEqual({ cart: { title: 'Quiosque' } });
     });
 });

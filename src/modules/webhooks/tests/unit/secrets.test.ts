@@ -10,6 +10,7 @@ import {
     decryptRingSecret,
     mintRingSecret,
     activeRingSecrets,
+    liveRingEntries,
     removeRingSecret
 } from '@modules/webhooks/secrets';
 import type { WebhookSecretRingEntry } from '@modules/webhooks/model';
@@ -52,6 +53,45 @@ describe('activeRingSecrets', () => {
 
     it('is empty for an empty ring', () => {
         expect(activeRingSecrets([])).toEqual([]);
+    });
+});
+
+/** A minted entry stamped at a chosen instant, so expiry can be tested without waiting. */
+const mintedAt = (at: Date) => {
+    const minted = mintRingSecret();
+    return { ...minted, entry: { ...minted.entry, createdAt: at } };
+};
+
+describe('the overlap window', () => {
+    const hour = 3_600_000;
+    const t0 = new Date('2026-10-06T00:00:00.000Z');
+
+    it('keeps a superseded secret signing inside the 24-hour default', () => {
+        const old = mintedAt(t0);
+        const fresh = mintedAt(new Date(t0.getTime() + hour));
+        const now = new Date(t0.getTime() + 24 * hour);
+
+        expect(activeRingSecrets([old.entry, fresh.entry], now)).toEqual([
+            old.plaintext,
+            fresh.plaintext
+        ]);
+    });
+
+    it('stops signing with it once its successor has been live for the window', () => {
+        const old = mintedAt(t0);
+        const fresh = mintedAt(new Date(t0.getTime() + hour));
+        const now = new Date(t0.getTime() + 25 * hour);
+
+        expect(activeRingSecrets([old.entry, fresh.entry], now)).toEqual([fresh.plaintext]);
+        expect(liveRingEntries([old.entry, fresh.entry], now)).toEqual([fresh.entry]);
+    });
+
+    it('never expires the newest secret, however old', () => {
+        const only = mintedAt(t0);
+
+        expect(liveRingEntries([only.entry], new Date(t0.getTime() + 1000 * hour))).toEqual([
+            only.entry
+        ]);
     });
 });
 

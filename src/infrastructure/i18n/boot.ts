@@ -39,11 +39,14 @@ export const bootI18n = (
 
     // i18next `init`: `lng` is the active language, `fallbackLng` answers a missing key,
     // `supportedLngs` rejects any other tag, `resources` is the in-memory dictionaries (no backend).
+    // `interpolation.escapeValue: false` — values are escaped once, at the sink (the HTML
+    // template), so a name is not escaped twice and a plain-text subject stays plain.
     // https://www.i18next.com/overview/configuration-options
     return i18next.init({
         lng,
         fallbackLng: getFallbackLocale(),
         supportedLngs: listSupportedLocales(),
-        resources: loadLocaleResources()
+        resources: loadLocaleResources(),
+        interpolation: { escapeValue: false }
     });
 };

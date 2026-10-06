@@ -45,6 +45,9 @@ and anything but `unicast` is refused.
 | Transition forms that embed an IPv4 address | 6to4 `2002::/16`, Teredo `2001::/32`, NAT64 `64:ff9b::/96` and `64:ff9b:1::/48`, the deprecated IPv4-compatible `::/96` |
 | Deprecated                                  | IPv6 site-local `fec0::/10`                                                                                             |
 
+Ports: only 443 (the https default) and the ones listed in `NODE_OUTBOUND_ALLOWED_PORTS` are dialled, so a
+URL cannot probe 22, 6379 or 5432. A registered exempt origin (the demo sink) keeps its own port only.
+
 Why an allowlist: a list of known-bad ranges misses the ones nobody thought to list — a literal
 encoding `169.254.169.254` inside a 6to4 or Teredo address reads as an ordinary global address to
 a check that only knows the plain ranges. The IPv4-mapped form (`::ffff:a.b.c.d`) is the one

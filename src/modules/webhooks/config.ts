@@ -30,6 +30,12 @@ export const webhooksConfig = defineConfig({
             min: 1,
             describe: 'Subscriptions one tenant may hold — the fan-out guard.'
         }),
+        NODE_WEBHOOK_SECRET_OVERLAP_HOURS: int({
+            default: 24,
+            min: 1,
+            describe:
+                'Hours a superseded secret keeps signing after a rotation. A ring holds at most two.'
+        }),
         NODE_WEBHOOK_DELIVERY_RETENTION_DAYS: int({
             default: 30,
             min: 1,
@@ -54,6 +60,13 @@ export const getWebhookEncryptionKeyRing = (): VersionedKey[] =>
  */
 export const getWebhookSubscriptionCap = (): number =>
     webhooksConfig().NODE_WEBHOOK_SUBSCRIPTION_CAP;
+
+/**
+ * How long, in milliseconds, a superseded ring secret keeps signing after the secret that replaced
+ * it was minted — the Standard Webhooks bounded overlap.
+ */
+export const getWebhookSecretOverlapMs = (): number =>
+    webhooksConfig().NODE_WEBHOOK_SECRET_OVERLAP_HOURS * 3_600_000;
 
 /**
  * How long a delivery row survives, in days, before Mongo's TTL index removes it. Read at import

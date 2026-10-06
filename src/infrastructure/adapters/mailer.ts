@@ -8,6 +8,7 @@
 
 // EJS = the HTML templating engine used for email bodies. `Data` is its type for the
 // variables interpolated into a template (`<%= user.name %>`).
+import { readFile } from 'node:fs/promises';
 import ejs, { type Data } from 'ejs';
 // nodemailer: `SendMailOptions` is `sendMail`'s own envelope shape — https://nodemailer.com/message/
 // The sending itself is a transport's job (`./mail-transports`); `smtp` is `./smtp-transport`.
@@ -36,42 +37,49 @@ export {
     registeredTemplateNames
 } from '@infrastructure/adapters/template-registry';
 
-/** What `resolveSpooled` turns one spooled attachment into — nodemailer's own `{filename, path}` shape. */
+/** What `resolveAttachments` turns one spooled attachment into: its bytes, never a path. */
 interface ResolvedAttachment {
     filename: string;
-    path: string;
+    content: Buffer;
 }
 
 /**
- * Resolves a request's `{ filename, key }` attachments off the mail spool into nodemailer's own
- * `{ filename, path }` shape.
+ * Resolves a request's `{ filename, key }` attachments off the mail spool into nodemailer's
+ * `{ filename, content }` shape, reading each file here.
  *
  * Each key is resolved inside the spool root — one that fails to resolve (malformed; should not
- * happen, since only `spoolAttachment` ever mints one) is logged and dropped rather than handed to
- * nodemailer as a broken path.
+ * happen, since only `spoolAttachment` ever mints one) is logged and dropped.
+ *
+ * `content` is a Buffer, not a `path`: the transports run with `disableFileAccess`, which refuses
+ * every `path`. Not a stream either — a retried send would leak one open file per attempt.
  *
  * @param attachments - a request's own `attachments`, absent for one that names none
  */
 const resolveAttachments = (
     attachments: EmailJobPayload['request']['attachments'] = []
-): ResolvedAttachment[] =>
-    attachments.flatMap(({ filename, key }) => {
-        const target = resolveSpooled(key);
-        if (target) return [{ filename, path: target }];
-        // Stryker disable all
-        logger.warn({
-            message: 'Email attachment named an unresolvable spool key, skipping it.',
-            key
-        });
-        // Stryker restore all
-        return [];
-    });
+): Promise<ResolvedAttachment[]> =>
+    Promise.all(
+        attachments.map(({ filename, key }) => {
+            const target = resolveSpooled(key);
+            if (target) return readFile(target).then((content) => [{ filename, content }]);
+            // Stryker disable all
+            logger.warn({
+                message: 'Email attachment named an unresolvable spool key, skipping it.',
+                key
+            });
+            // Stryker restore all
+            return Promise.resolve([]);
+        })
+    ).then((resolved) => resolved.flat());
 
 /**
  * Renders one email into the complete envelope nodemailer takes: the EJS template becomes the HTML
- * body, the sender defaults in, and the spooled attachments resolve to paths.
+ * body, the sender is the configured one, and the spooled attachments resolve to their bytes.
  *
- * @param envelope - the request without its attachments; its fields override the defaults
+ * The message is built from NAMED fields, never by spreading the job's request: a forged job
+ * cannot add `from`, `cc`, `bcc`, `headers`, `list`, `envelope` or anything else nodemailer reads.
+ *
+ * @param envelope - the request without its attachments
  * @param attachments - the request's `{ filename, key }` spool references
  * @param templateName - the outbox name, without extension
  * @param data - variables interpolated into the EJS template
@@ -81,42 +89,34 @@ const renderMessage = (
     attachments: EmailJobPayload['request']['attachments'],
     templateName: string,
     data: Data
-): Promise<SendMailOptions> => {
-    const resolvedAttachments = resolveAttachments(attachments);
-
-    return (
-        ejs
-            // `renderFile` reads the template from disk and returns the interpolated HTML.
-            // EJS caches compiled templates internally, so repeat sends skip recompilation.
-            /*
-             * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
-             * ambient. Every string a template prints was translated by the producer while
-             * the request that asked for the email was still alive, so this function (and
-             * the worker that calls it, possibly in another process, hours later) does not
-             * need to know what a locale is.
-             */
-            // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
-            // include is root-relative (EJS: a leading `/` resolves against `root`, not
-            // against the including file's own directory), so this stays correct however
-            // deep under `src/modules/<name>/templates` the file itself now lives.
-            // https://ejs.co/#docs (Includes)
-            .renderFile(templateFile(templateName), { ...data }, { root: process.cwd() })
-            .then((html) => ({
-                // Default sender; spread below lets a caller override it.
-                from: mailConfig().NODE_SMTP_SENDER,
-                // The rendered template becomes the HTML body.
-                html,
-                // Spread last, so caller-supplied fields (to/subject, and even
-                // `from`/`html`) take precedence over the defaults above.
-                ...envelope,
-                // Resolved separately, after the spread: nothing in `envelope` ever
-                // carries a raw `attachments` field (destructured out by the caller), and a
-                // caller must never be able to hand nodemailer anything but a path this
-                // adapter resolved itself.
-                ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {})
-            }))
-    );
-};
+): Promise<SendMailOptions> =>
+    Promise.all([
+        // `renderFile` reads the template from disk and returns the interpolated HTML.
+        // EJS caches compiled templates internally, so repeat sends skip recompilation.
+        /*
+         * `data` is the WHOLE render context — no `t`, no locale lookup, nothing
+         * ambient. Every string a template prints was translated by the producer while
+         * the request that asked for the email was still alive, so this function (and
+         * the worker that calls it, possibly in another process, hours later) does not
+         * need to know what a locale is.
+         */
+        // `root: process.cwd()` — a template's own `/shared/templates/layouts/...`
+        // include is root-relative (EJS: a leading `/` resolves against `root`, not
+        // against the including file's own directory), so this stays correct however
+        // deep under `src/modules/<name>/templates` the file itself now lives.
+        // https://ejs.co/#docs (Includes)
+        ejs.renderFile(templateFile(templateName), { ...data }, { root: process.cwd() }),
+        resolveAttachments(attachments)
+    ]).then(([html, resolvedAttachments]) => ({
+        // Always the configured sender: the job's own `from` is never read.
+        from: mailConfig().NODE_SMTP_SENDER,
+        to: envelope.to,
+        subject: envelope.subject,
+        text: envelope.text,
+        // A producer that supplied its own HTML keeps it; otherwise the rendered template.
+        html: envelope.html ?? html,
+        ...(resolvedAttachments.length > 0 ? { attachments: resolvedAttachments } : {})
+    }));
 
 /**
  * Send an email through the configured transport for the requested template and options.

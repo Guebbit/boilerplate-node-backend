@@ -15,11 +15,15 @@
  * `docs/tools/broker-testing.md` for the shape of the whole suite.
  */
 
+import { z } from 'zod';
 import amqplib, { type Channel, type ChannelModel, type ConsumeMessage } from 'amqplib';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { startRabbitMq, type TestRabbitMq } from './support/rabbitmq';
 
 /** The adapter under test, as a fresh copy of its module (each copy owns one connection). */
+/** A schema that accepts any JSON — these cases are about delivery, not the contract. */
+const anyPayload = z.unknown();
+
 type QueueAdapter = typeof import('@infrastructure/adapters/queue');
 
 /** Short knobs: a retry that takes seconds, and two attempts, keep each case under a few seconds. */
@@ -218,7 +222,7 @@ describe('the topology on a real broker', () => {
             expect(await first.publishToQueue({ queue, payload: { n: 1 } })).toBe(true);
             // The second copy declares the same queue again: a differing argument would answer
             // PRECONDITION_FAILED and close its channel, so a delivery proves the re-declare took.
-            await second.consumeFromQueue({ queue, handler });
+            await second.consumeFromQueue({ queue, handler, schema: anyPayload });
             await waitUntil(() => seen.length === 1, 'the second copy to receive the job');
 
             const work = await broker.management.queue(queue);
@@ -254,7 +258,7 @@ describe('retry and parking', () => {
                 call === 0 ? Promise.reject(new Error('transient')) : Promise.resolve(true)
             );
 
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             await adapter.publishToQueue({ queue, payload: { job: 'retry-me' } });
             await waitUntil(() => seen.length === 2, 'the redelivery');
 
@@ -277,7 +281,7 @@ describe('retry and parking', () => {
             const queue = adapter.EMAIL_QUEUE;
             const { handler, seen } = recorder(() => Promise.reject(new Error('always')));
 
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             await adapter.publishToQueue({ queue, payload: { job: 'doomed' } });
             await waitUntil(
                 async () => (await depth(adapter.deadLetterQueueOf(queue))) === 1,
@@ -300,7 +304,7 @@ describe('retry and parking', () => {
             const adapter = await bootAdapter();
             const { handler, seen } = recorder(() => Promise.resolve(false));
 
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             await adapter.publishToQueue({ queue, payload: { job: 'refused' } });
             await waitUntil(
                 async () => (await depth(adapter.deadLetterQueueOf(queue))) === 1,
@@ -325,7 +329,7 @@ describe('a consumer that dies without answering', () => {
             expect(await crashRepeatedly(queue, 2)).toEqual([0, 1]);
 
             const { handler, seen } = recorder();
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             await waitUntil(() => seen.length === 1, 'the survivor to be processed');
 
             expect(seen[0]?.raw.properties.headers?.['x-delivery-count']).toBe(2);
@@ -357,7 +361,7 @@ describe('a consumer that dies without answering', () => {
 
             // Only now is a real consumer attached, so it sees only what the broker still holds.
             const { handler, seen } = recorder();
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             // Past the retry TTL plus the hop back, which is when a retry would reappear.
             await quiet(RETRY_DELAY_SECONDS * 4000);
 
@@ -386,7 +390,7 @@ describe('delivery order and flow control', () => {
             ).toBe(true);
 
             const { handler, seen } = recorder();
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             await waitUntil(() => seen.length === 4, 'all four jobs');
 
             expect(seen.map(({ payload }) => (payload as { label: string }).label)).toEqual([
@@ -407,7 +411,7 @@ describe('delivery order and flow control', () => {
                 waitUntil(() => gateOpen, 'the gate').then(() => true)
             );
 
-            await adapter.consumeFromQueue({ queue, handler, prefetch });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload, prefetch });
             for (const n of [1, 2, 3]) await adapter.publishToQueue({ queue, payload: { n } });
             await waitUntil(() => seen.length === prefetch, 'the first deliveries');
             // Long enough for a third delivery to arrive if the limit were not applied.
@@ -432,7 +436,7 @@ describe('a connection dropped by the broker', () => {
             const adapter = await bootAdapter({ NODE_ENV: 'development' });
             const { handler, seen } = recorder();
 
-            await adapter.consumeFromQueue({ queue, handler });
+            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
             expect(await adapter.publishToQueue({ queue, payload: { n: 1 } })).toBe(true);
             await waitUntil(() => seen.length === 1, 'the first job');
 

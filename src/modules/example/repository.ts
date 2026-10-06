@@ -29,7 +29,11 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
     findScoped: (id: string, scope: Record<string, unknown>) => Promise<ExampleDocument | null>;
     deleteAllOf: (userId: string, session: ClientSession) => Promise<string[]>;
     existsById: (id: string) => Promise<boolean>;
-    writeTranslatedFields: (id: string, fields: Record<string, string | null>) => Promise<void>;
+    writeTranslatedFields: (
+        id: string,
+        fields: Record<string, string | null>,
+        session?: ClientSession
+    ) => Promise<void>;
     markEdited: (id: string) => Promise<void>;
     writebackImage: ImageWriteback;
 } = {
@@ -90,7 +94,7 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
      * @param id - the example
      * @param fields - the fallback locale's fields; `null` clears one
      */
-    writeTranslatedFields: (id, fields) =>
+    writeTranslatedFields: (id, fields, session) =>
         exampleModel
             .updateOne(
                 { _id: toObjectId(id) },
@@ -99,7 +103,8 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
                         Object.entries(fields).map(([key, value]) => [key, value ?? ''])
                     )
                 },
-                { timestamps: false }
+                // `session` joins the caller's transaction; `undefined` stands alone.
+                { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),

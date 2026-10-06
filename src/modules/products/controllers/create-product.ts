@@ -11,7 +11,7 @@ import { productService } from '../services';
 import { rejectResponse, createdResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { readInput, callerContextOf } from '@infrastructure/http/request';
-import { readUploadedImage } from '@infrastructure/http/uploads';
+import { claimUpload, readUploadedImage } from '@infrastructure/http/uploads';
 import type { CreateProductRequest, CreateProductRequestMultipart, Product } from '@types';
 
 /**
@@ -48,7 +48,7 @@ export const createProduct = (
 
     // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`) — `undefined` is what "no image" means to `zodProductCreateSchema`'s
     // `.optional()` field.
-    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
+    const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
 
     return productService
         .writeCreate(
@@ -69,20 +69,17 @@ export const createProduct = (
             { imageUrl, thumbnailUrl, pendingImageKey }
         )
         .then((result) => {
-            if (!result.success)
-                return deleteUpload()
-                    .catch(() => undefined)
-                    .then(() => {
-                        rejectResponse(response, result.status, result.errors);
-                    });
+            // A refusal is left unclaimed: the upload middleware's close hook deletes the upload
+            // once the 4xx/5xx has gone out.
+            if (!result.success) {
+                rejectResponse(response, result.status, result.errors);
+                return;
+            }
+            claimUpload(request);
             const product = productService.toProduct(result.data, request.caller);
             createdResponse<Product>(response, product, `/products/${product.id}`);
         })
-        .catch((error: unknown) =>
-            deleteUpload()
-                .catch(() => undefined)
-                .then(() => {
-                    rejectDatabaseError(response, 'createProduct', error);
-                })
-        );
+        .catch((error: unknown) => {
+            rejectDatabaseError(response, 'createProduct', error);
+        });
 };

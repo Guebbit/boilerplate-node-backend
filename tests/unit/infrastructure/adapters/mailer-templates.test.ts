@@ -257,3 +257,20 @@ describe('email templates render in every supported locale', () => {
         expect(english).not.toBe(italian);
     });
 });
+
+/**
+ * A name is escaped once, by the template (the HTML sink). i18next must not escape it first, or
+ * `O'Brien` arrives as `O&amp;#39;Brien` in the HTML and `O&#39;Brien` in a plain-text subject.
+ */
+describe('a name with an apostrophe in a mail', () => {
+    it('reaches the template raw and leaves it as HTML-escaped exactly once', async () => {
+        const content = resetRequestEmail('en', "O'Brien", 'a-token');
+        const html = await ejs.renderFile(templateFile(content.template), content.data, {
+            root: process.cwd()
+        });
+
+        expect(content.data.greeting).toContain("O'Brien");
+        expect(html).toContain('O&#39;Brien');
+        expect(html).not.toContain('&amp;#39;');
+    });
+});

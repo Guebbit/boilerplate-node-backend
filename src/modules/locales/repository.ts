@@ -7,6 +7,7 @@
  * between them only makes a client under-fetch once, never cache a stale dictionary as current.
  */
 
+import type { ClientSession } from 'mongoose';
 import { createHash } from 'node:crypto';
 import {
     localeModel,
@@ -326,9 +327,14 @@ const findEntityTranslations = (
 const findEntityLocale = (
     entityType: string,
     entityId: string,
-    locale: string
+    locale: string,
+    session?: ClientSession
 ): Promise<TranslationDocument | null> =>
-    translationModel.findOne({ entityType, entityId, locale }).exec();
+    // Mongoose: `.session(null)` is "no transaction".
+    translationModel
+        .findOne({ entityType, entityId, locale })
+        .session(session ?? null)
+        .exec();
 
 /**
  * A page's translated fields, one indexed `$in` query resolving every entity at once — the query
@@ -431,7 +437,8 @@ const upsertEntityLocale = (
     fields: Record<string, string | null>,
     origin: TranslationOrigin,
     translatedBy: string | undefined,
-    sourceDigest: string | undefined
+    sourceDigest: string | undefined,
+    session?: ClientSession
 ): Promise<TranslationDocument> => {
     // `fields.<name>` paths: the field is a `Mixed` map, so a dotted `$set` touches one key only.
     const entries = Object.entries(fields);
@@ -450,15 +457,21 @@ const upsertEntityLocale = (
                 ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
                 $setOnInsert: { entityType, entityId, locale }
             },
-            { upsert: true, returnDocument: 'after' }
+            { upsert: true, returnDocument: 'after', session }
         )
         .exec();
 };
 
 /** Delete one entity's one-locale row — a `null` in a PATCH. A no-op if it never existed. */
-const removeEntityLocale = (entityType: string, entityId: string, locale: string): Promise<void> =>
+const removeEntityLocale = (
+    entityType: string,
+    entityId: string,
+    locale: string,
+    session?: ClientSession
+): Promise<void> =>
     translationModel
         .deleteOne({ entityType, entityId, locale })
+        .session(session ?? null)
         .exec()
         .then(() => undefined);
 
@@ -538,7 +551,8 @@ export const translationRepository: Repository<TranslationDocument, Translation>
     findEntityLocale: (
         entityType: string,
         entityId: string,
-        locale: string
+        locale: string,
+        session?: ClientSession
     ) => Promise<TranslationDocument | null>;
     resolveEntityFields: (
         entityType: string,
@@ -558,9 +572,15 @@ export const translationRepository: Repository<TranslationDocument, Translation>
         fields: Record<string, string | null>,
         origin: TranslationOrigin,
         translatedBy: string | undefined,
-        sourceDigest: string | undefined
+        sourceDigest: string | undefined,
+        session?: ClientSession
     ) => Promise<TranslationDocument>;
-    removeEntityLocale: (entityType: string, entityId: string, locale: string) => Promise<void>;
+    removeEntityLocale: (
+        entityType: string,
+        entityId: string,
+        locale: string,
+        session?: ClientSession
+    ) => Promise<void>;
     removeEntityTranslations: (entityType: string, entityId: string) => Promise<number>;
 } = {
     ...translationBase,

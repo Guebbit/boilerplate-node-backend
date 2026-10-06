@@ -56,6 +56,20 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         expect(response.status).toBe(422);
     });
 
+    it.each(['constructor', 'toString', '__proto__'])(
+        '422s %s as an entityType: an inherited property is not a registered type',
+        async (entityType) => {
+            const { bearer } = await authenticateAs('admin');
+
+            const response = await api()
+                .patch(`/locales/translations/${entityType}/000000000000000000000000`)
+                .set('Authorization', bearer)
+                .send({ translations: {} });
+
+            expect(response.status).toBe(422);
+        }
+    );
+
     it('422s a null on the fallback locale, matching the spec', async () => {
         const { bearer } = await authenticateAs('admin');
         const product = await createProduct();
