@@ -11,7 +11,8 @@
 
 // `NodeSDK` = the all-in-one OTel entry point for Node: it wires resource, span processors,
 // instrumentations and context propagation together, so we do not configure a TracerProvider by hand.
-import { NodeSDK } from '@opentelemetry/sdk-node';
+// `core` is `@opentelemetry/core` re-exported, so the propagators below need no dependency of their own.
+import { NodeSDK, core } from '@opentelemetry/sdk-node';
 // `resourceFromAttributes` builds the immutable "who is emitting this telemetry" descriptor
 // (service name/version/host) that gets attached to every exported span.
 import { resourceFromAttributes } from '@opentelemetry/resources';
@@ -37,7 +38,13 @@ import { loggingConfig, tracingConfig } from './config';
 // which keeps startup cost lower than the `@opentelemetry/auto-instrumentations-node` bundle.
 import { HttpInstrumentation } from '@opentelemetry/instrumentation-http';
 import { IncomingMessage, type ClientRequest } from 'node:http';
-import type { Span } from '@opentelemetry/api';
+import {
+    ROOT_CONTEXT,
+    defaultTextMapGetter,
+    trace,
+    type Span,
+    type TextMapPropagator
+} from '@opentelemetry/api';
 import { ExpressInstrumentation } from '@opentelemetry/instrumentation-express';
 import { MongooseInstrumentation } from '@opentelemetry/instrumentation-mongoose';
 import { RedisInstrumentation } from '@opentelemetry/instrumentation-redis';
@@ -78,6 +85,71 @@ const redactIncomingUrl = (span: Span, request: ClientRequest | IncomingMessage)
         'http.url': `http://${request.headers.host ?? 'localhost'}${target}`,
         'url.query': target.split('?', 2)[1] ?? ''
     });
+};
+
+/**
+ * The propagator for an API reachable by anyone: it injects `traceparent` on outgoing calls but
+ * never ADOPTS an inbound one, and never reads `baggage`.
+ *
+ * A caller-chosen trace id would let anyone graft requests onto another trace, force sampling
+ * with a `-01` flag, or fill our baggage. The inbound id is kept as a span link instead — see
+ * {@link linkInboundTrace}. Same idea as `WithPublicEndpoint` in the Go SDK.
+ * https://opentelemetry.io/docs/specs/otel/trace/api/#specifying-parent-span
+ */
+export const publicEndpointPropagator = (): TextMapPropagator => {
+    const traceContext = new core.W3CTraceContextPropagator();
+    return {
+        inject: (context, carrier, setter) => {
+            traceContext.inject(context, carrier, setter);
+        },
+        // The context comes back as it arrived: no remote parent, so the HTTP span is a root.
+        extract: (context) => context,
+        fields: () => traceContext.fields()
+    };
+};
+
+/**
+ * The propagator behind a trusted ingress (`NODE_TRUSTED_INGRESS`): the standard pair, so the
+ * caller's trace continues here.
+ */
+const trustedIngressPropagator = (): TextMapPropagator =>
+    new core.CompositePropagator({
+        propagators: [new core.W3CTraceContextPropagator(), new core.W3CBaggagePropagator()]
+    });
+
+/**
+ * Link an incoming span to the trace the caller named, when it sent a valid `traceparent`.
+ *
+ * A link keeps the correlation (a browser span and the request it caused are findable from each
+ * other) without handing the caller control over this trace.
+ *
+ * @param span - the span the instrumentation just started
+ * @param request - the incoming request; outgoing ones are left alone
+ */
+export const linkInboundTrace = (span: Span, request: ClientRequest | IncomingMessage): void => {
+    if (!(request instanceof IncomingMessage)) return;
+    // Parsed by the SDK's own W3C propagator against an empty context, so the result is only
+    // what the header says — never mixed into the active context.
+    const remote = trace.getSpanContext(
+        new core.W3CTraceContextPropagator().extract(
+            ROOT_CONTEXT,
+            request.headers,
+            defaultTextMapGetter
+        )
+    );
+    if (remote && trace.isSpanContextValid(remote)) span.addLink({ context: remote });
+};
+
+/**
+ * The hook run on every incoming request span: redact URL secrets, then link the caller's trace
+ * unless an ingress already vouches for it (then it is the parent, not a link).
+ *
+ * @param span - the span the instrumentation just started
+ * @param request - the incoming request; outgoing ones are left alone
+ */
+const onIncomingRequest = (span: Span, request: ClientRequest | IncomingMessage): void => {
+    redactIncomingUrl(span, request);
+    if (!tracingConfig().NODE_TRUSTED_INGRESS) linkInboundTrace(span, request);
 };
 
 /** The single SDK instance. Kept at module scope so `shutdownTracing()` can flush the same object. */
@@ -136,16 +208,22 @@ export const startTracing = (): void => {
     sdk = new NodeSDK({
         // Attributes merged into every span produced by this process (see `resource` above).
         resource,
+        // Who may name our trace — see `publicEndpointPropagator`. `textMapPropagator` replaces the
+        // SDK default (W3C trace context + baggage).
+        textMapPropagator: tracingConfig().NODE_TRUSTED_INGRESS
+            ? trustedIngressPropagator()
+            : publicEndpointPropagator(),
         // Export pipeline — see `buildProcessors` for the no-endpoint case.
         spanProcessors: buildProcessors(),
         // Libraries to auto-instrument. Order is irrelevant; each patches a different module.
         instrumentations: [
             // Inbound/outbound HTTP: creates the root SERVER span per request and
-            // injects/extracts the W3C `traceparent` header so traces span services.
+            // injects the W3C `traceparent` header on outgoing calls.
             // `requestHook` rewrites the URL attributes of an incoming span whose query carries
-            // a secret — see `redactUrlSecrets`. (`redactedQueryParams` covers outgoing requests
-            // only.) https://www.npmjs.com/package/@opentelemetry/instrumentation-http
-            new HttpInstrumentation({ requestHook: redactIncomingUrl }),
+            // a secret — see `redactUrlSecrets` — and links the caller's trace (`onIncomingRequest`).
+            // (`redactedQueryParams` covers outgoing requests only.)
+            // https://www.npmjs.com/package/@opentelemetry/instrumentation-http
+            new HttpInstrumentation({ requestHook: onIncomingRequest }),
             // Express: adds child spans per middleware and per route handler, and supplies
             // the route template (`/products/:id`) that keeps span names low-cardinality.
             new ExpressInstrumentation(),

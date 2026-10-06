@@ -10,7 +10,7 @@
  * `tests/unit/metrics-scraper.test.ts`.
  */
 import { createHash } from 'node:crypto';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { rateLimitConfig } from '@infrastructure/http/config';
 import { withoutEnvironment } from '@tests/environment';
@@ -20,8 +20,10 @@ import {
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
     DEFAULT_UPLOAD_RATE_LIMIT_MAX,
-    INFRASTRUCTURE_RATE_LIMITS
+    INFRASTRUCTURE_RATE_LIMITS,
+    refuseRateLimited
 } from '@infrastructure/http/middlewares/rate-limit';
+import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
 
 describe('rate limit defaults', () => {
     it('measures the browsing budget per minute', () =>
@@ -137,5 +139,43 @@ describe('identityOf', () => {
 
         expect(first).toBe(identityOf(requestWith(undefined, '1.2.3.200')));
         expect(first).not.toBe(identityOf(requestWith({}, '9.9.9.9')));
+    });
+});
+
+/** Reads `rate_limit_refusals_total` for one budget namespace. */
+const refusalsOf = (namespace: string) =>
+    rateLimitRefusalsTotal
+        .get()
+        .then(
+            (metric) => metric.values.find((value) => value.labels.budget === namespace)?.value ?? 0
+        );
+
+/** A response stub whose `status().json()` chain answers, enough for the shared envelope. */
+const responseStub = () => {
+    const json = jest.fn();
+    const status = jest.fn(() => ({ json }));
+    return asStub<Response>({ status });
+};
+
+describe('refuseRateLimited', () => {
+    it('counts every refusal against its budget, audited or not', async () => {
+        const before = await refusalsOf('metric-test-global');
+        const handler = refuseRateLimited({ namespace: 'metric-test-global', audited: false });
+
+        handler(requestFor('GET', '/x'), responseStub());
+        handler(requestFor('GET', '/x'), responseStub());
+
+        expect(await refusalsOf('metric-test-global')).toBe(before + 2);
+    });
+
+    it("keeps one budget's refusals out of another's count", async () => {
+        const before = await refusalsOf('metric-test-other');
+
+        refuseRateLimited({ namespace: 'metric-test-global', audited: false })(
+            requestFor('GET', '/x'),
+            responseStub()
+        );
+
+        expect(await refusalsOf('metric-test-other')).toBe(before);
     });
 });

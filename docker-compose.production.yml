@@ -50,6 +50,7 @@
 #   the app's keys       app, cron, setup           token_access, token_refresh, totp_encryption_key,
 #                                                   pii_encryption_key, webhook_secret_encryption_key,
 #                                                   pseudonym_key, metrics_token
+#   metrics_token        prometheus (monitoring profile)   Its scrape credential, the same file the app reads.
 #
 # `cron` and `setup` hold the app's keys although they use few of them: every script validates the
 # whole configuration before it runs, and that gate refuses a missing key.
@@ -75,6 +76,23 @@
 # `initContainer`/one-off Job in an orchestrator that isn't Compose. `app` and `cron` wait for it to
 # finish successfully before they start, so a fresh deployment gets its indexes and its shop's row
 # before anything serves a request.
+
+# ── CONTAINER LOGS, ONCE ────────────────────────────────────────────────────────────────────────
+# Merged into EVERY service with `logging: *logging`. Without `max-size` the default `json-file`
+# driver writes forever, and a busy API fills the host's disk with its own log. Ten megabytes times
+# five files bounds each container at 50 MB.
+#
+#   driver  `json-file`, because every shipper can tail it (Alloy, Promtail, Fluent Bit, a file
+#           agent) and `local` is a binary format only Docker reads. The variable exists because
+#           Podman runs production too: its default is `journald`, which writes no file at all, and
+#           `k8s-file` is the file-based driver there.
+#
+# CIS Docker Benchmark 2.12 / 5.x.
+x-logging: &logging
+    driver: ${CONTAINER_LOG_DRIVER:-json-file}
+    options:
+        max-size: 10m
+        max-file: '5'
 
 # ── CONTAINER HARDENING, ONCE ───────────────────────────────────────────────────────────────────
 # Merged into `app`, `cron` and `setup` with `<<: *hardening` — all three run the SAME image, so
@@ -126,6 +144,33 @@ x-hardening: &hardening
 x-data-hardening: &data-hardening
     cap_drop: [ALL]
     cap_add: [CHOWN, SETUID, SETGID, DAC_OVERRIDE, FOWNER]
+    security_opt: [no-new-privileges:true]
+
+# ── MONITORING, OFF BY DEFAULT ──────────────────────────────────────────────────────────────────
+# `profiles: [monitoring]` services start only when `COMPOSE_PROFILES` includes `monitoring`:
+#   COMPOSE_PROFILES=bundled,monitoring
+# Prometheus (scrape + the alert rules), Alertmanager (routing), Loki (log store) and Alloy (the
+# container-log shipper). The rule files are the SAME ones the local stack loads. No Grafana: it
+# costs about a gigabyte of memory and the alerts do not need a screen — point your own at Loki and
+# Prometheus if you want one.
+#
+#   no host ports   nothing here publishes a port: they reach each other (and `app`) over the
+#                   compose network and nothing else reaches them. Prometheus and Alertmanager
+#                   have web UIs with no login, which is the reason.
+#   the secret      Prometheus scrapes with the `metrics_token` secret file the app reads its own
+#                   `NODE_METRICS_TOKEN` from, so there is one credential and one rotation.
+#   a receiver      Alertmanager ships with the `null` receiver, which notifies no one. Wire a
+#                   real one in `docker/observability/alertmanager.config.yaml` before relying on
+#                   any alert — see docs/getting-started-production.md#monitoring-and-alerts.
+#   the logs        Alloy tails the container log files under `CONTAINER_LOGS_PATH` (Docker's
+#                   `/var/lib/docker/containers` by default; Podman needs its own path and
+#                   `CONTAINER_LOG_DRIVER=k8s-file`). It reads both engines' formats.
+#   the audit copy  `ALLOY_AUDIT_FORWARD_CONFIG` names an Alloy file that forwards the audit
+#                   lines off the host. Unset, /dev/null is mounted and nothing leaves.
+#
+# Same hardening as the data services: every capability dropped, no privilege gain.
+x-monitoring-hardening: &monitoring-hardening
+    cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
 x-app-env: &app-env
@@ -193,6 +238,7 @@ x-service-secrets: &service-secrets
 
 services:
     app:
+        logging: *logging
         # `image:` alongside `build:`: the image this build produces is tagged once, and `cron`/
         # `setup` reference that same tag by `image:` alone — one build, three containers running
         # it, never three separate builds of the same Dockerfile drifting apart.
@@ -313,6 +359,7 @@ services:
     # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease
     # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
     cron:
+        logging: *logging
         image: '${APP_IMAGE:-boilerplate-api:latest}'
         restart: unless-stopped
         deploy:
@@ -389,6 +436,7 @@ services:
     # `image:`, not `build:` — same image `app` built, never a separate build of the same
     # Dockerfile. Build `app` first (`docker compose ... build app`) on a stack's first deploy.
     setup:
+        logging: *logging
         image: '${APP_IMAGE:-boilerplate-api:latest}'
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
@@ -428,6 +476,7 @@ services:
                 required: false
 
     database:
+        logging: *logging
         image: docker.io/library/mongo:8
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -537,6 +586,7 @@ services:
     # docker-entrypoint-initdb.d. `setup` depends on this finishing successfully, since db:sync and
     # access:bootstrap both need a set that can take writes.
     mongo-rs-init:
+        logging: *logging
         image: docker.io/library/mongo:8
         restart: 'no'
         profiles: [bundled]
@@ -557,6 +607,7 @@ services:
                 condition: service_healthy
 
     cache:
+        logging: *logging
         image: docker.io/library/redis:8-alpine
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -614,6 +665,7 @@ services:
     # about a hundred bytes. Same password-file mechanism as `cache` (see its comment).
     # `--save 60 1`: a restart keeps the counters, so a Redis bounce is not a free budget reset.
     limits:
+        logging: *logging
         image: docker.io/library/redis:8-alpine
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -643,6 +695,7 @@ services:
             retries: 5
 
     queue:
+        logging: *logging
         image: docker.io/library/rabbitmq:4-alpine
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -680,6 +733,76 @@ services:
             retries: 5
             start_period: 30s
 
+    # ── monitoring profile (see "MONITORING, OFF BY DEFAULT" above) ──────────────────────────────
+
+    # Prometheus: scrapes the API with the shared metrics token and evaluates the alert rules.
+    prometheus:
+        logging: *logging
+        image: docker.io/prom/prometheus:v2.55.1
+        restart: unless-stopped
+        profiles: [monitoring]
+        <<: *monitoring-hardening
+        command:
+            - '--config.file=/etc/prometheus/prometheus.yml'
+            - '--storage.tsdb.retention.time=15d'
+        secrets:
+            - metrics_token
+        volumes:
+            - ./docker/observability/prometheus.production.config.yaml:/etc/prometheus/prometheus.yml:ro
+            - ./docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:ro
+            - prometheus-data:/prometheus
+        depends_on:
+            - alertmanager
+
+    # Alertmanager: groups and routes what Prometheus fires. Ships the `null` receiver.
+    alertmanager:
+        logging: *logging
+        image: docker.io/prom/alertmanager:v0.27.0
+        restart: unless-stopped
+        profiles: [monitoring]
+        <<: *monitoring-hardening
+        command: ['--config.file=/etc/alertmanager/alertmanager.yml']
+        volumes:
+            - ./docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:ro
+
+    # Loki: stores the container logs Alloy ships. Its config is the local stack's.
+    loki:
+        logging: *logging
+        image: docker.io/grafana/loki:3.3.2
+        restart: unless-stopped
+        profiles: [monitoring]
+        <<: *monitoring-hardening
+        command: ['-config.file=/etc/loki/loki-config.yaml']
+        volumes:
+            - ./docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:ro
+            - loki-data:/var/loki
+
+    # Alloy: tails the container log files and ships them to Loki. Replaces Promtail, which is
+    # deprecated. Runs as root because the engine's log files are root-owned; the capability set is
+    # empty, so it can read them (as their owner) and do nothing else.
+    alloy:
+        logging: *logging
+        image: docker.io/grafana/alloy:v1.5.1
+        restart: unless-stopped
+        profiles: [monitoring]
+        <<: *monitoring-hardening
+        user: root
+        command:
+            - 'run'
+            - '--server.http.listen-addr=127.0.0.1:12345'
+            - '--storage.path=/var/lib/alloy/data'
+            # A directory: every `.alloy` file in it is one configuration.
+            - '/etc/alloy/conf.d'
+        volumes:
+            - ./docker/observability/alloy.logs.config.alloy:/etc/alloy/conf.d/logs.alloy:ro
+            # The optional off-host copy of the audit stream. Empty (a valid, do-nothing config)
+            # until ALLOY_AUDIT_FORWARD_CONFIG names a file — see alloy.audit-forward.example.alloy.
+            - ${ALLOY_AUDIT_FORWARD_CONFIG:-/dev/null}:/etc/alloy/conf.d/audit-forward.alloy:ro
+            - ${CONTAINER_LOGS_PATH:-/var/lib/docker/containers}:/var/log/host-containers:ro
+            - alloy-data:/var/lib/alloy/data
+        depends_on:
+            - loki
+
 # One file per secret, under the client's own directory — see "SECRETS ARE FILES" in the header.
 # `COMPOSE_PROJECT_NAME` selects the client, the same way it selects `env_file:` above.
 # https://docs.docker.com/reference/compose-file/secrets/
@@ -716,23 +839,25 @@ volumes:
     redis-data:
     limits-data:
     rabbitmq-data:
+    # The monitoring profile's stores.
+    prometheus-data:
+    loki-data:
+    alloy-data:
     uploads:
     # Both exist because `app` runs with a read-only root — see `app`'s own `volumes:` for why
     # neither may be a tmpfs.
     storage:
     quarantine:
-# ── OBSERVABILITY IS NOT IN THIS FILE, ON PURPOSE ───────────────────────────────────────────────
-# The development stack runs Prometheus, Loki, Tempo, Grafana and an OTel collector next to the
-# API because a developer wants the whole estate on one machine with one command.
+# ── TRACES AND DASHBOARDS ARE NOT IN THIS FILE, ON PURPOSE ──────────────────────────────────────
+# The `monitoring` profile above covers metrics, alerts and container logs. Traces and dashboards
+# are left out: the API exports OTLP to whatever `OTEL_EXPORTER_OTLP_ENDPOINT` names — a collector
+# you already run, a managed backend, or nothing at all, which is what an empty value means and is
+# a valid choice.
 #
-# A deployment usually does not: telemetry outlives any single service and belongs to a collector
-# the application merely points at. So the API exports OTLP to whatever
-# `OTEL_EXPORTER_OTLP_ENDPOINT` names — a collector you already run, a managed backend, or nothing
-# at all, which is what an empty value means and is a valid choice.
-#
-# To run the estate here anyway, the definitions are already written: the observability services in
-# `docker-compose.yml` and their configuration under `docker/observability/` work unchanged.
-# Compose merges files left to right, so
+# The development stack in `docker-compose.yml` runs Tempo, Grafana and an OTel collector next to
+# the API for a developer who wants the whole estate on one machine; their definitions and the
+# configuration under `docker/observability/` work unchanged if you want them here. Compose merges
+# files left to right, so
 #   docker compose -f docker-compose.production.yml -f docker-compose.yml up -d
 # is the wrong way to do it — it drags the bind-mounts and dev commands back in. Copy the services
 # you want into an override file instead.

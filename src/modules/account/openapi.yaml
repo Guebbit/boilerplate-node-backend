@@ -38,6 +38,9 @@ paths:
                 a value in the model rather than an absence, and a shop front that greys nothing
                 out for a visitor is a shop front that lies twice.
             operationId: getMyAbilities
+            security:
+                - {}
+                - bearerAuth: []
             responses:
                 '200':
                     description: The caller's packed rules.

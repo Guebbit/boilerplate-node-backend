@@ -15,6 +15,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { markServerListening, markServerDraining } from '@infrastructure/runtime/readiness';
 import { currentEnvironment } from '@infrastructure/config/store';
+import { logger } from '@infrastructure/adapters/logger';
+import { setEnvironment } from '@tests/environment';
 
 setupTestDb();
 
@@ -33,13 +35,30 @@ describe('System routes', () => {
         expect(response.status).toBe(404);
     });
 
-    // Only a well-formed UUID from the client is trusted and reflected
-    // back — see request-context.ts.
-    it('echoes a well-formed x-request-id back to the caller', async () => {
-        const requestId = '4f9c9a10-2b3e-4d5c-8f1a-0e6b7c8d9e10';
-        const response = await api().get('/').set('x-request-id', requestId);
+    // The id this service answers with is always one it chose: a client-supplied value is kept
+    // beside it as `client_request_id`, never adopted — see request-context.ts.
+    it('answers with its own request id and logs the client one beside it', async () => {
+        const clientId = '4f9c9a10-2b3e-4d5c-8f1a-0e6b7c8d9e10';
+        const log = jest.spyOn(logger, 'log').mockImplementation(() => logger);
 
-        expect(response.headers['x-request-id']).toBe(requestId);
+        const response = await api().get('/').set('x-request-id', clientId);
+        const accessLog = log.mock.calls.find(([, message]) => message.startsWith('GET /'));
+        log.mockRestore();
+
+        expect(response.headers['x-request-id']).not.toBe(clientId);
+        expect(accessLog?.[2]).toMatchObject({
+            request_id: response.headers['x-request-id'],
+            client_request_id: clientId
+        });
+    });
+
+    it('adopts the client request id behind a trusted ingress', async () => {
+        setEnvironment({ NODE_TRUSTED_INGRESS: 'true' });
+        const clientId = '4f9c9a10-2b3e-4d5c-8f1a-0e6b7c8d9e10';
+
+        const response = await api().get('/').set('x-request-id', clientId);
+
+        expect(response.headers['x-request-id']).toBe(clientId);
     });
 
     it('replaces a malformed x-request-id rather than reflecting it', async () => {

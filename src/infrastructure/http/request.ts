@@ -304,6 +304,7 @@ export const callerContextOf = (request: {
         'x-analytics-consent'?: string | string[];
     };
     requestId?: string;
+    clientRequestId?: string;
     locale?: string;
 }): CallerContext => {
     const rawUserAgent = request.headers?.['user-agent'];
@@ -321,6 +322,7 @@ export const callerContextOf = (request: {
         userAgent: Array.isArray(rawUserAgent) ? rawUserAgent[0] : rawUserAgent,
         host: request.headers?.host,
         requestId: request.requestId,
+        clientRequestId: request.clientRequestId,
         // Absent until the locale middleware has run. Left absent rather than defaulted here: the
         // default belongs at the point of use, where `getDefaultLocale()` is the last term of a
         // precedence chain whose first term is the recipient's own stored preference.

@@ -110,6 +110,18 @@ npm run test:prism        # smoke-test Prism mock server against the spec
 
 The full "I changed X, run Y" table is [Regenerating After a Change](./regenerating.md).
 
+## Who may call an operation
+
+Every operation declares `security`, and the `operation-security-declared` Spectral rule fails the lint when one does not: silence is ambiguous (public on purpose, or forgotten?).
+
+| `security` | Meaning |
+| --- | --- |
+| `[]` | public, no credential read |
+| `[{}, {bearerAuth: []}]` | a session is optional; one changes the answer (an admin sees inactive rows) |
+| `[{bearerAuth: []}]` | a session token is required |
+| `[{cookieAuth: []}]` | the refresh cookie is required: the two SSE streams, since `EventSource` cannot set a header |
+| `[{metricsBearer: []}]` | the static scrape credential, for `GET /observability/metrics` |
+
 ## Orval configuration
 
 `orval.config.ts` at the project root controls code generation:

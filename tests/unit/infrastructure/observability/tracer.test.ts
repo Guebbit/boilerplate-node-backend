@@ -11,6 +11,7 @@
  */
 
 import { trace, context, ROOT_CONTEXT } from '@opentelemetry/api';
+import { setEnvironment } from '@tests/environment';
 import {
     InMemorySpanExporter,
     SimpleSpanProcessor,
@@ -143,6 +144,30 @@ describe('withSpan — error', () => {
         expect(exceptionEvent).toBeDefined();
         expect(exceptionEvent?.attributes?.['exception.message']).toBe('exception message');
     });
+
+    it('keeps the stack trace in a relaxed environment', async () => {
+        setEnvironment({ NODE_ENV: 'development' });
+        await withSpan('dev-span', () => Promise.reject(new Error('x'))).catch(() => {});
+
+        const event = exporter
+            .getFinishedSpans()
+            .find((s) => s.name === 'dev-span')
+            ?.events.find((e) => e.name === 'exception');
+        expect(event?.attributes?.['exception.stacktrace']).toEqual(expect.any(String));
+    });
+
+    it('records no stack trace and no message in production', async () => {
+        setEnvironment({ NODE_ENV: 'production' });
+        await withSpan('prod-span', () =>
+            Promise.reject(new TypeError('dup key {email: "a@b.c"}'))
+        ).catch(() => {});
+
+        const event = exporter
+            .getFinishedSpans()
+            .find((s) => s.name === 'prod-span')
+            ?.events.find((e) => e.name === 'exception');
+        expect(event?.attributes).toEqual({ 'exception.type': 'TypeError' });
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -194,6 +219,21 @@ describe('recordErrorOnActiveSpan', () => {
 
     it('does not throw when no span is active', () => {
         expect(() => recordErrorOnActiveSpan(new Error('no span'))).not.toThrow();
+    });
+
+    it('records no stack trace in production', () => {
+        setEnvironment({ NODE_ENV: 'production' });
+        const tracer = getTracer();
+        tracer.startActiveSpan('prod-active', (span) => {
+            recordErrorOnActiveSpan(new Error('x'));
+            span.end();
+        });
+
+        const event = exporter
+            .getFinishedSpans()
+            .find((s) => s.name === 'prod-active')
+            ?.events.find((e) => e.name === 'exception');
+        expect(event?.attributes).not.toHaveProperty('exception.stacktrace');
     });
 
     it('records the exception event on the active span', () => {

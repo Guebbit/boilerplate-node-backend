@@ -43,6 +43,8 @@ paths:
                 `notifications.read`). Per process, like the observability stream: a message
                 written by another worker process arrives at the next `GET /notifications` instead.
             operationId: getNotificationsStream
+            security:
+                - cookieAuth: []
             responses:
                 '200':
                     description: Server-Sent Events stream

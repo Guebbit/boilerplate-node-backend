@@ -268,6 +268,11 @@ export const buildAuditEvent = (
     actor_scope: fields.actor_scope ?? context.caller.scope,
     // Spread after the defaults so caller values replace them.
     ...fields,
+    // The caller's own request id rides in `metadata`, not a column of its own: it is a hint for
+    // correlation, and the audit schema stays as it is.
+    ...(context.clientRequestId && {
+        metadata: { ...fields.metadata, client_request_id: context.clientRequestId }
+    }),
     // Spread last, deliberately: context-derived fields (ip, trace_id, ...) are not
     // caller-overridable, so an audit entry cannot misreport where it came from.
     ...extractRequestContext(context)

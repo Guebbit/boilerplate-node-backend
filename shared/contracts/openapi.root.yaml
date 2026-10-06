@@ -220,6 +220,15 @@ components:
             # prefix alone (a JWT always begins `eyJ`). See
             # docs/tools/security.md#machine-to-machine-credentials.
             description: An opaque `sk_...` machine-to-machine credential, minted via `POST /api-keys`.
+        cookieAuth:
+            type: apiKey
+            in: cookie
+            name: jwt
+            description: The HttpOnly refresh cookie. Only the two Server-Sent Events streams take it, because a browser `EventSource` cannot set an `Authorization` header.
+        metricsBearer:
+            type: http
+            scheme: bearer
+            description: The static scrape credential (`NODE_METRICS_TOKEN`) Prometheus sends to `GET /observability/metrics`. Not a session token and not an `sk_...` key.
 
     parameters:
         # `Accept-Language` is honoured by every operation and is documented in
@@ -1857,6 +1866,7 @@ paths:
                 Public ping for clients (the frontend's API-down banner), rate-limited like any
                 browser call. Not an orchestrator probe: `/livez` is liveness, `/readyz` readiness.
             operationId: getHealth
+            security: []
             responses:
                 '200':
                     description: API is running
@@ -1875,6 +1885,7 @@ paths:
                 nothing else, on purpose. A failing dependency must never fail liveness, because
                 a restart does not bring a downed database back.
             operationId: getLivez
+            security: []
             responses:
                 '200':
                     description: The process is up.
@@ -1893,6 +1904,7 @@ paths:
                 it as liveness, so a database blip would restart or replace healthy containers.
                 `GET /livez` is that probe.
             operationId: getReadyz
+            security: []
             responses:
                 '200':
                     description: Ready to receive traffic.
@@ -1909,6 +1921,7 @@ paths:
                 `NODE_SECURITY_EXPIRES`; a fork that has not opted in answers 404 and publishes
                 nothing. Plain text, not the JSON envelope, because the format is fixed by the RFC.
             operationId: getSecurityTxt
+            security: []
             responses:
                 '200':
                     description: The policy file.

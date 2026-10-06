@@ -140,7 +140,7 @@ export const databaseConfig = defineConfig({
     }
 });
 
-/** Trace export and the version stamped on it. */
+/** Trace export, whether inbound trace context is trusted, and the version stamped on it. */
 export const tracingConfig = defineConfig({
     name: 'tracing',
     shape: {
@@ -149,6 +149,11 @@ export const tracingConfig = defineConfig({
         }),
         OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: text({
             describe: 'OTLP collector for traces only; wins over the endpoint above.'
+        }),
+        NODE_TRUSTED_INGRESS: flag({
+            default: false,
+            describe:
+                "A trusted proxy in front of the API strips or overwrites traceparent and x-request-id. On: continue the caller's trace and keep its request id. Off: both start fresh here."
         }),
         npm_package_version: text({
             setBy: 'npm',
