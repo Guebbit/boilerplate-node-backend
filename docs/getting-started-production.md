@@ -23,7 +23,7 @@ flowchart TD
     Secrets --> Up["docker compose build app, then up -d\n(-f docker-compose.production.yml)"]
     Up --> Setup["setup runs once:\nindexes + the shop's row"]
     Setup --> Running(["app, cron, database, cache, queue\npublished to 127.0.0.1 only"])
-    Running --> Proxy["reverse proxy terminates TLS\nin front — nothing in this repo does"]
+    Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not;\nthe docker-compose.proxy.yml Traefik overlay does"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef done fill:#dcfce7,stroke:#16a34a,color:#111827;
@@ -218,9 +218,9 @@ rolling deploy.
 
 ## Putting a reverse proxy in front
 
-Nothing in this repo terminates TLS. The API is bound to loopback specifically so that publishing
+The app itself never terminates TLS; the `docker-compose.proxy.yml` Traefik overlay does, with Let's Encrypt certificates. The API is bound to loopback specifically so that publishing
 it on a public interface — plain HTTP, carrying the auth cookies this application sets — is not the
-easy path. Put nginx, Caddy, Traefik or a managed load balancer in front, terminate TLS there, and
+easy path. Use that overlay, or put nginx, Caddy or a managed load balancer in front, terminate TLS there, and
 proxy to `127.0.0.1:${NODE_PORT}`.
 
 Then set `NODE_TRUST_PROXY_HOPS` to the number of proxies in front (usually `1`; the Traefik overlay

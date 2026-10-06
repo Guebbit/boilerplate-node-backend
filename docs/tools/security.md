@@ -356,7 +356,7 @@ which is exactly the signal worth limiting.
 The test suites raise the budget tenfold — see `tests/support/setup.ts`.
 
 **A third budget, the same shape as neither.** `submissionLimiter` guards `feedback`'s
-`POST /contact` — the one public write that causes an outbound email — and it inverts the rule
+`POST /contact` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
 above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
 FAILS (a wrong guess); a contact-form submission is abusive when it SUCCEEDS (a bot posts a
 well-formed body, gets a `201`, and an operator gets an email). Mounting `credentialLimiters` on

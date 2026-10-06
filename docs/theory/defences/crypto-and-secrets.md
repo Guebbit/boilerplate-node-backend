@@ -15,7 +15,7 @@ primitive.** `node:crypto`, `jsonwebtoken` — and where a choice exists, the bo
 | SSL stripping / downgrade       | no HSTS, no preload; an on-path attacker rewrites links | `helmet()` sets `Strict-Transport-Security` on every response this app sends — `app/security.ts`. Preload registration is the domain owner's: [TLS termination](../../tools/deployment-hardening.md#tls-termination).                                 |
 | Weak TLS configuration          | TLS 1.0/1.1, RC4, export ciphers, no forward secrecy    | The terminating proxy's — see [TLS termination](../../tools/deployment-hardening.md#tls-termination).                                                                                                                                                 |
 | Certificate validation disabled | `rejectUnauthorized: false`, ignored hostname mismatch  | Nothing in `src/` disables it. Outbound calls use Node's `fetch` with defaults — `account/oauth/providers/`.                                                                                                                                          |
-| Certificate / key exposure      | a private key in the repo, in the image, or in backups  | No key material is in the repo; `.dockerignore` keeps `.env` out of the image. The boot gate refuses a still-placeholder secret — `infrastructure/config/define.ts`                                                                                   |
+| Certificate / key exposure      | a private key in the repo, in the image, or in backups  | No key material is in the repo, bar a test-only key at `tests/support/fixtures/localhost-test-key.pem`; `.dockerignore` keeps `.env` out of the image. The boot gate refuses a still-placeholder secret — `infrastructure/config/define.ts`           |
 | Mixed content                   | an HTTPS page loading HTTP subresources                 | The frontend's row — this API serves JSON and its own static files and loads no remote resource.                                                                                                                                                      |
 
 ## Hashing passwords
@@ -77,10 +77,10 @@ code's. They are kept apart from what that would make worse: private (never unde
 directory), regenerable (the frozen rows in Mongo are the record, so they are not backed up), and
 reaped after a retention window.
 
-**Why sha256 and not argon2id for tokens.** A refresh token is 16 random bytes — high-entropy and
-one-time. There is no low-entropy secret to stretch, and argon2id would add a real per-request cost
-to every token check for no gain against an offline attacker who cannot guess 128 bits anyway. The
-reasoning is written at `users/model.ts:33` rather than left to be re-derived.
+**Why sha256 and not argon2id for tokens.** A refresh token is an HS256 JWT whose UUID `jti` carries 122 random bits —
+high-entropy and one-time. There is no low-entropy secret to stretch, and argon2id would add a real per-request cost
+to every token check for no gain against an offline attacker who cannot guess those bits anyway. The
+reasoning is written at `users/model.ts#hashToken` rather than left to be re-derived.
 
 ## Related
 

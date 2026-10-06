@@ -8,8 +8,8 @@ the attacker's side: the crypto at rest, the controls, and what is honestly not 
 **The shape** — `registry.ts` declares the port, `methods/*.ts` implement it one channel per file,
 `totp.ts` / `delivered-codes.ts` / `backup-codes.ts` hold the crypto behind them, `index.ts` is the
 module-internal barrel.
-**Published** — nothing. No sibling imports it, including the admin recovery path in
-[`users`](./users.md).
+**Published** — nothing. No sibling imports it. There is no admin recovery path: a lost factor is
+a technician's hand edit in the database.
 **Breaks if you change** — `TwoFactorMethodRecord`. One shape serves every method, so a new field
 is a schema change in `users`, not here.
 :::
@@ -191,5 +191,5 @@ where it sits among everything else this repo depends on.
 - [`account`](./account.md) — the module this belongs to
 - [Sessions](./account-sessions.md) — the tokens a completed 2FA login mints, and `amr`
 - [Security](../tools/security.md#two-factor-authentication) — the crypto, the controls, the gaps
-- [`users`](./users.md) — where the factors are stored, and the admin recovery path
-- [OAuth](./account-oauth.md) — the other way in, and the one that does **not** consult 2FA
+- [`users`](./users.md) — where the factors are stored
+- [OAuth](./account-oauth.md) — the other way in, and it consults 2FA like the password login
