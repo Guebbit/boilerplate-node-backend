@@ -360,6 +360,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | -------------------------------- | ---- | --------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NODE_ACCOUNT_EXPORT_STORE_PATH` | text | `tmp/storage/exports` | —     | Where a built personal-data export is kept until it is downloaded or expires. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up. |
 
+### outbound
+
+| Variable                      | Type                 | Default | Rules | What it does                                                                                                                                                |
+| ----------------------------- | -------------------- | ------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_OUTBOUND_ALLOWED_PORTS` | comma-separated list | `empty` | —     | Ports besides 443 an outbound URL may name. 443 is always allowed; every other port is refused, so a URL cannot probe an internal service (22, 6379, 5432). |
+
 ### antibot
 
 | Variable                            | Type                       | Default  | Rules                                                         | What it does                                                                   |

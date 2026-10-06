@@ -15,6 +15,7 @@ import { resolve4, resolve6 } from 'node:dns/promises';
 import net, { type LookupFunction } from 'node:net';
 import ipaddr from 'ipaddr.js';
 import { isSsrfExemptOrigin } from './ssrf-exemptions';
+import { outboundConfig } from './config';
 
 /** Why {@link resolveSafeOutboundTarget} refused a URL — so a caller and a test can branch on why. */
 export type SsrfRefusalReason =
@@ -22,7 +23,8 @@ export type SsrfRefusalReason =
     | 'insecure-scheme'
     | 'credentials-in-url'
     | 'dns-resolution-failed'
-    | 'unsafe-address';
+    | 'unsafe-address'
+    | 'unsafe-port';
 
 /** A URL this guard will not open a connection to, and the specific reason it refused. */
 export class SsrfRefusedError extends Error {
@@ -98,6 +100,23 @@ const parseOutboundUrl = (rawUrl: string): URL => {
         throw new SsrfRefusedError('credentials-in-url', 'URL must not embed credentials');
 
     return parsed;
+};
+
+/** The port every https URL without an explicit one uses; always allowed. */
+const DEFAULT_HTTPS_PORT = 443;
+
+/**
+ * Whether a URL's port may be dialled: 443 (also what an omitted port means), or one the operator
+ * listed in `NODE_OUTBOUND_ALLOWED_PORTS`. Stops a caller-supplied URL probing 22, 6379, 5432…
+ *
+ * @param url - the parsed URL; `url.port` is empty when it is the scheme's default
+ */
+const isPortAllowed = (url: URL): boolean => {
+    const port = url.port === '' ? DEFAULT_HTTPS_PORT : Number(url.port);
+    return (
+        port === DEFAULT_HTTPS_PORT ||
+        outboundConfig().NODE_OUTBOUND_ALLOWED_PORTS.map(Number).includes(port)
+    );
 };
 
 /**
@@ -245,10 +264,17 @@ export const resolveSafeOutboundTarget = (
 ): Promise<SafeOutboundTarget> =>
     Promise.resolve()
         .then(() => parseOutboundUrl(rawUrl))
-        .then((url) => ({
-            hostname: stripBrackets(url.hostname),
-            isExempt: isSsrfExemptOrigin(url.origin)
-        }))
+        .then((url) => {
+            // An exempt origin is exempt on its own port only (the origin includes it), and the
+            // port rule never needs to refuse it.
+            const isExempt = isSsrfExemptOrigin(url.origin);
+            if (!isExempt && !isPortAllowed(url))
+                throw new SsrfRefusedError(
+                    'unsafe-port',
+                    `Port ${url.port} is not an allowed outbound port`
+                );
+            return { hostname: stripBrackets(url.hostname), isExempt };
+        })
         .then(({ hostname, isExempt }) =>
             resolveAllAddresses(hostname, signal).then((addresses) => {
                 // Wrapped rather than passed by reference: `Array.prototype.find` calls its
