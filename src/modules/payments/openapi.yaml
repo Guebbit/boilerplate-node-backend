@@ -174,6 +174,9 @@ paths:
                 the running total. The reservation of the amount is conditional on the payment
                 still having that much left, so a double submit cannot return the money twice — the
                 second call answers 409 (nothing left) or 422 (asks for more than is left).
+                Requires an `Idempotency-Key` header: a retry that repeats the key replays the first
+                answer instead of returning the money again, and a request without it answers 400
+                `IDEMPOTENCY_KEY_REQUIRED`.
                 Requires a session that has re-proved itself within the last few minutes — a
                 valid-but-stale token answers 401 with `errors[].code` `REAUTH_REQUIRED`, and the
                 caller re-authenticates and retries the same request.
@@ -187,7 +190,7 @@ paths:
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                   description: The order whose payment is being returned
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
                 required: false
                 content:
@@ -201,6 +204,8 @@ paths:
                         application/json:
                             schema:
                                 $ref: '#/components/schemas/PaymentEnvelope'
+                # `IDEMPOTENCY_KEY_REQUIRED`: the `Idempotency-Key` header is missing.
+                '400': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/BadRequest' }
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }

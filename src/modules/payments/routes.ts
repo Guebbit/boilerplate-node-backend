@@ -36,7 +36,10 @@ import {
     paymentConfirmDeclineLimiter,
     paymentDeclineChallengeGate
 } from './rate-limits';
-import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
+import {
+    idempotencyKey,
+    requireIdempotencyKey
+} from '@infrastructure/http/middlewares/idempotency';
 import { postPaymentIntent } from './controllers/post-payment-intent';
 import { postPaymentConfirm } from './controllers/post-payment-confirm';
 import { postPaymentSync } from './controllers/post-payment-sync';
@@ -83,7 +86,8 @@ router.get('/order/:orderId', getPaymentByOrder);
 // A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
 router.get('/order-by-reference', requirePermission('payments.any.create'), getOrderByReference);
 
-// POST /payments/order/:orderId/refund — the operator returns the money, order untouched.
+// POST /payments/order/:orderId/refund — the operator returns the money, order untouched. The key
+// is REQUIRED: a retried refund would otherwise return the money twice.
 /*
  * No `requireFreshAuth` here: `payments.any.update` carries `stepUp: critical` in
  * `shared/authorization-keys.yaml`, so the guard demands the fresh session and audits that it did.
@@ -93,7 +97,7 @@ router.get('/order-by-reference', requirePermission('payments.any.create'), getO
 router.post(
     '/order/:orderId/refund',
     requirePermission('payments.any.update'),
-    idempotencyKey,
+    requireIdempotencyKey,
     postPaymentRefund
 );
 

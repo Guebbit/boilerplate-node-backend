@@ -7,6 +7,7 @@
  * in the unit suite.
  */
 
+import { randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -514,6 +515,9 @@ describe('GET /payments/order/{orderId}', () => {
     });
 });
 
+/** A fresh `Idempotency-Key` — the refund route refuses a request without one. */
+const freshKey = (): string => randomUUID();
+
 describe('POST /payments/order/{orderId}/refund', () => {
     it('refuses the order`s own owner — the refund is admin-only', async () => {
         // "Own order" matters here specifically: a mis-ordered guard that checked ownership before
@@ -538,7 +542,8 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
 
         const response = await api()
             .post(`/payments/order/${String(order._id)}/refund`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(200);
         expect(response.body.data.status).toBe('refunded');
@@ -551,11 +556,13 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
         const { bearer: adminBearer } = await authenticateAs('admin');
         await api()
             .post(`/payments/order/${String(order._id)}/refund`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
 
         const response = await api()
             .post(`/payments/order/${String(order._id)}/refund`)
-            .set('Authorization', adminBearer);
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(409);
     });
@@ -565,9 +572,46 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
 
         const response = await api()
             .post(`/payments/order/${MISSING_ID}/refund`)
-            .set('Authorization', bearer);
+            .set('Authorization', bearer)
+            .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(404);
+    });
+
+    it('refuses a refund with no Idempotency-Key, and returns nothing', async () => {
+        const { order, paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(400);
+        expect(response.body.errors[0].code).toBe('IDEMPOTENCY_KEY_REQUIRED');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.status).toBe('succeeded');
+    });
+
+    it('replays the first answer for the same key instead of refunding twice', async () => {
+        const { order, paymentId } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const key = freshKey();
+        const refund = () =>
+            api()
+                .post(`/payments/order/${String(order._id)}/refund`)
+                .set('Authorization', adminBearer)
+                .set('Idempotency-Key', key)
+                .send({ amount: 5 });
+
+        const first = await refund();
+        const second = await refund();
+
+        expect(first.status).toBe(200);
+        expect(second.status).toBe(200);
+        expect(second.headers['idempotent-replay']).toBe('true');
+        const payment = await paymentRepository.findById(paymentId);
+        expect(payment!.refunds).toHaveLength(1);
+        expect(payment!.amountRefunded).toBe(5);
     });
 });
 

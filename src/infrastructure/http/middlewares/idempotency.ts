@@ -361,3 +361,27 @@ export const idempotencyKey: RequestHandler = (
 
     claimIdempotencyKey(raw, callerKeyOf(request), fingerprintOf(request), response, next, 1);
 };
+
+/**
+ * {@link idempotencyKey}, but the header is mandatory: a request without it answers 400 and never
+ * reaches the handler. For a route where one repeated request moves money twice. A key that is
+ * present goes through exactly the same claim, replay and mismatch rules.
+ * https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/
+ */
+export const requireIdempotencyKey: RequestHandler = (
+    request: Request,
+    response: Response,
+    next: NextFunction
+) => {
+    if (!request.header(IDEMPOTENCY_KEY_HEADER)) {
+        rejectResponse(response, 400, [
+            {
+                code: ERROR_CODES.IDEMPOTENCY_KEY_REQUIRED,
+                message: t('generic.error-idempotency-key-required')
+            }
+        ]);
+        return;
+    }
+
+    idempotencyKey(request, response, next);
+};
