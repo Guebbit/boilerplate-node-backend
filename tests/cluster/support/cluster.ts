@@ -167,8 +167,10 @@ const startCluster = ({
                         NODE_PORT: String(port),
                         PORT: String(port),
                         NODE_DB_URI: mongo.uri,
-                        NODE_TOKEN_ACCESS: 'cluster-suite-access-secret',
-                        NODE_TOKEN_REFRESH: 'cluster-suite-refresh-secret',
+                        NODE_TOKEN_ACCESS:
+                            '84860f6e3faa80b96e22593ea147c55d721af62475d82804a40610b892e84f80',
+                        NODE_TOKEN_REFRESH:
+                            '7097d82e55f0e74f39c83dbaab4b2197dc63b4a560559ffa9c104c7aee5ef290',
                         /*
                          * `NODE_ENV: 'development'` above means `assertModuleConfig` runs for real —
                          * unlike every other suite, which sets `NODE_ENV=test` and skips it. A local
@@ -177,10 +179,12 @@ const startCluster = ({
                          * (`src/kernel/module-config.ts`).
                          */
                         NODE_URL: `http://127.0.0.1:${String(port)}`,
-                        NODE_TOTP_ENCRYPTION_KEY: 'cluster-suite-totp-encryption-key',
+                        NODE_TOTP_ENCRYPTION_KEY:
+                            '92f71a95c55be9af2dace04afc34b7b8da824f58b7225bc8e289da7f6677581a',
                         NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
-                            'cluster-suite-webhook-secret-encryption-key',
-                        NODE_PII_ENCRYPTION_KEY: 'cluster-suite-pii-encryption-key',
+                            'd31c29a41dec73b1cb2a6c16030c377e997176fee0fa4a2101a623f6093a44a7',
+                        NODE_PII_ENCRYPTION_KEY:
+                            'bdb9857044f9d079163b02211f0c7415a971033780165f3e37667a0a2fe01359',
                         /*
                          * The shop's identity and VAT rates are required at boot too
                          * (`orders/config.ts`) — the invoice and the withdrawal notice print them. Same

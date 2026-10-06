@@ -19,6 +19,7 @@ export const observabilityConfig = defineConfig({
     shape: {
         NODE_METRICS_TOKEN: secret({
             minLength: 0,
+            minBytes: 32,
             placeholder: 'change-me-dev-metrics-token',
             describe: 'Bearer token a Prometheus scraper presents. Unset refuses every scrape.'
         }),

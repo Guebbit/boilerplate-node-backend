@@ -103,6 +103,30 @@ const parseField = (
     return { ok: false, issue: `${name}: expected ${expected}${got}` };
 };
 
+/** A ring entry's `vN:` version prefix. `:` is in neither hex nor base64, so stripping it is safe. */
+const VERSION_PREFIX = /^v\d+:/;
+
+/** What an operator generates a key with: `openssl rand -hex 32`. Even length, hex digits only. */
+const HEX_KEY = /^(?:[\da-f]{2})+$/i;
+
+/** Standard or URL-safe base64, `=` padding optional: `openssl rand -base64 32`. */
+const BASE64_KEY = /^[\w+/-]+={0,2}$/;
+
+/**
+ * The size in bytes a key value decodes to, or `0` when it is neither hex nor base64.
+ *
+ * The alphabet is checked FIRST: `Buffer.from(x, 'base64')` silently skips bad characters, so a
+ * value full of punctuation would "decode" to something long enough. Hex is tried before base64
+ * because every hex string is also valid base64, which would overcount it by a third.
+ *
+ * @param member - one ring entry, version prefix included
+ */
+const decodedBytes = (member: string): number => {
+    const key = member.replace(VERSION_PREFIX, '');
+    if (HEX_KEY.test(key)) return key.length / 2;
+    return BASE64_KEY.test(key) ? Buffer.from(key, 'base64').length : 0;
+};
+
 /**
  * Whether a presence rule is broken: a comma-separated value is checked member by member, so a
  * placeholder or a truncated key anywhere in a ring still refuses.
@@ -115,7 +139,12 @@ const presenceBroken = (rule: Presence, raw: string | undefined): boolean => {
     const members = (raw ?? '').split(',').filter((member) => member.trim() !== '');
     return (
         (members.length === 0 && rule.minLength > 0) ||
-        members.some((member) => member.length < rule.minLength || member === rule.placeholder)
+        members.some(
+            (member) =>
+                member.length < rule.minLength ||
+                member === rule.placeholder ||
+                (rule.minBytes !== undefined && decodedBytes(member) < rule.minBytes)
+        )
     );
 };
 

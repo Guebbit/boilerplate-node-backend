@@ -18,6 +18,7 @@ export const pseudonymConfig = defineConfig({
     shape: {
         NODE_PSEUDONYM_KEY: secret({
             minLength: 16,
+            minBytes: 32,
             placeholder: 'your-pseudonym-key-here',
             productionOnly: true,
             describe:

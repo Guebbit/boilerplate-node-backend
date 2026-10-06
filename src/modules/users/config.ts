@@ -23,6 +23,7 @@ export const usersConfig = defineConfig({
     shape: {
         NODE_PII_ENCRYPTION_KEY: withPresence(PII_ENCRYPTION_KEY_FIELD, {
             minLength: 16,
+            minBytes: 32,
             placeholder: 'your-pii-encryption-key-here'
         })
     }

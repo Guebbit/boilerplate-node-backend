@@ -27,6 +27,14 @@ export interface Presence {
     minLength: number;
     /** The `.env-example` stand-in this value must never still equal. */
     placeholder?: string;
+    /**
+     * Smallest DECODED size, in bytes, of a key the operator generates (`openssl rand -hex 32`).
+     * Every member, minus a ring's `vN:` prefix, must be hex or base64 and decode to at least this
+     * many bytes: a weak HS256 key lets anyone forge a session (RFC 7518 §3.2), and HKDF does not
+     * stretch a weak one (RFC 5869). Leave it off for a value a third party issues, such as a
+     * provider's `whsec_` signing secret.
+     */
+    minBytes?: number;
     /** Check only outside development/test — the code-side default is right for a developer. */
     productionOnly?: boolean;
 }
@@ -337,14 +345,15 @@ export function email(
  * @param options - the presence rule, and `describe`
  */
 export const secret = (options: CommonOptions & Presence): Field<string | undefined> => {
-    const { minLength, placeholder, productionOnly, ...rest } = options;
+    const { minLength, placeholder, productionOnly, minBytes, ...rest } = options;
     return text({
         ...rest,
         sensitive: true,
         required: {
             minLength,
             ...(placeholder !== undefined && { placeholder }),
-            ...(productionOnly !== undefined && { productionOnly })
+            ...(productionOnly !== undefined && { productionOnly }),
+            ...(minBytes !== undefined && { minBytes })
         }
     });
 };

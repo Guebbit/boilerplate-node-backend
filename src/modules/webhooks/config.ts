@@ -21,6 +21,7 @@ export const webhooksConfig = defineConfig({
         NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: versionedKeyRing({
             required: {
                 minLength: 16,
+                minBytes: 32,
                 placeholder: 'your-webhook-secret-encryption-key-here'
             },
             describe: 'Ring encrypting stored subscription secrets, `version:key`, newest first.'

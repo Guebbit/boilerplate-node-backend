@@ -51,9 +51,13 @@ const rules = (field: FieldInfo): string => {
     const parts: string[] = [];
     if (presence) {
         const length = presence.minLength > 0 ? `, ${String(presence.minLength)}+ characters` : '';
+        const bytes =
+            presence.minBytes === undefined
+                ? ''
+                : `, hex or base64 of ${String(presence.minBytes)}+ bytes`;
         const placeholder = presence.placeholder ? ', never the `.env-example` placeholder' : '';
         const scope = presence.productionOnly ? ', outside development/test' : '';
-        parts.push(`required${length}${placeholder}${scope}`);
+        parts.push(`required${length}${bytes}${placeholder}${scope}`);
     }
     if (field.sensitive) {
         const fileForm = fileFormOf(field.name);
