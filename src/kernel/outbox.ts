@@ -224,7 +224,7 @@ const dispatch = (row: OutboxRow): Promise<string | undefined> =>
         eventId: String(row._id)
     }).then(
         (settled) => (settled ? undefined : 'a consumer failed'),
-        (error: unknown) => extractErrorMessage(error)
+        (error: unknown) => extractErrorMessage(error, String(error))
     );
 
 /** Mark a dispatched row published. Conditional, so a row a peer already finished is left alone. */

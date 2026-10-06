@@ -15,6 +15,7 @@ startTracing();
 
 import os from 'node:os';
 import cluster from 'node:cluster';
+import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { clusterConfig } from '@infrastructure/runtime/config';
 import { crashVerdict, workerTarget } from '@infrastructure/runtime/cluster-policy';
@@ -177,7 +178,7 @@ if (cluster.isPrimary && CLUSTER_ENABLED) {
         .catch((error: unknown) => {
             logger.error({
                 message: 'Refusing to start: invalid configuration.',
-                error: error instanceof Error ? error.message : String(error)
+                error: extractErrorMessage(error, String(error))
             });
             process.exitCode = 1;
         });
