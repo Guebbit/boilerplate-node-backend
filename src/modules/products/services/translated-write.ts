@@ -26,7 +26,8 @@ import {
 } from '@infrastructure/http/response';
 import { zodProductCreateSchema, zodProductUpdateSchema } from '../model';
 import type { ProductDocument } from '../model';
-import { create, updateById } from './crud';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { finishCreate, finishUpdateById, insertProduct, updateByIdInTransaction } from './crud';
 
 /**
  * `ProductTranslationsWrite` (this module's own flat write shape, `{ title, description? } | null`
@@ -82,18 +83,19 @@ export interface ProductImageExtras {
 }
 
 /**
- * Create a product and its translation rows in one operation — the create door of the
- * multilingual product write surface. Two validations run before anything is WRITTEN: the product
- * fields' shape (`zodProductCreateSchema`, which also refuses a missing/`null` fallback locale)
- * and the translations batch's locale/field-name legality (`planTranslations`, the
- * `kernel/translation.ts` port, validates without writing). This write does not run in a
- * transaction, so the achievable guarantee stops there: nothing is written until
- * both validations have already passed, not that the product write and the translations write
- * that follow are atomic with each other.
+ * Create a product and its translation rows in ONE transaction — the create door of the
+ * multilingual product write surface.
  *
- * `imageExtras` (`imageUrl`/`thumbnailUrl`/`pendingImageKey`) is server-derived, never part of the
- * contract body's string values, so it never passes through `zodProductCreateSchema` — merged in only once validation has
- * already succeeded, the same order the controller keeps for its own merge.
+ * Before:  validation, nothing written yet (a bad body costs no transaction).
+ *            1. the product fields' shape — `zodProductCreateSchema`, which also refuses a
+ *               missing or `null` fallback locale
+ *            2. the translations batch's locales and field names — `planTranslations`
+ * Inside:  the row, its `PRODUCT_CREATED` outbox event, every translation row, the derived column.
+ *          All commit together or none does.
+ * After:   the relay wake-up, the audit entry, the image enqueue — each catching its own failure.
+ *
+ * `imageExtras` is server-derived, never part of the contract body, so it joins only once
+ * validation has passed — the same order the controller keeps for its own merge.
  */
 export const writeCreate = async (
     data: Record<string, unknown>,
@@ -116,34 +118,42 @@ export const writeCreate = async (
     ] as ProductTranslationFieldsWrite;
     const { translations: _translations, ...productFields } = parsed.data;
 
-    const product = await create(
-        {
-            ...productFields,
-            ...imageExtras,
-            // `null` on a create means no image: the schema default applies to `undefined` only.
-            imageUrl: imageExtras.imageUrl ?? undefined,
-            title: fallbackEntry.title,
-            description: fallbackEntry.description ?? ''
-        },
-        context
+    const product = await withTransaction((session) =>
+        insertProduct(
+            {
+                ...productFields,
+                ...imageExtras,
+                // `null` on a create means no image: the schema default applies to `undefined` only.
+                imageUrl: imageExtras.imageUrl ?? undefined,
+                title: fallbackEntry.title,
+                description: fallbackEntry.description ?? ''
+            },
+            session
+        ).then((inserted) =>
+            writeTranslations(
+                'product',
+                inserted.id,
+                plan,
+                context.caller.id ?? undefined,
+                session
+            ).then(() => inserted)
+        )
     );
 
-    await writeTranslations('product', product.id, plan, context.caller.id ?? undefined);
-
-    return generateSuccess(product, 201);
+    return generateSuccess(await finishCreate(product, context), 201);
 };
 
 /**
- * Update a product and write its translation rows in one operation — the PUT/PATCH door of the
+ * Update a product and write its translation rows in ONE transaction — the PUT/PATCH door of the
  * multilingual product write surface. A PUT arrives here with every omitted locale already `null`
- * ({@link clearOmittedLocales}), so this one path serves both verbs. Delegates the product write
- * itself to {@link updateById}, which already owns the 404 check and the audit emit; this only
- * adds the translations half
- * around it, so there is exactly one path deciding what "the product was updated" means.
+ * ({@link clearOmittedLocales}), so this one path serves both verbs.
+ *
+ * Inside:  the 404 check, the row, `PRODUCT_DEACTIVATED` on a flip to inactive, the translation
+ *          rows and the derived column. After: the audit entry, the old-image delete, the image
+ *          enqueue — see {@link updateByIdInTransaction} and {@link finishUpdateById}.
  *
  * `data` arrives already validated: `update-product.ts` hands `createUpdateController` the same
- * `zodProductUpdateSchema`, so a bad price 422s with its field-named message at the factory —
- * there is exactly one place this body is checked, not a second, redundant one here.
+ * `zodProductUpdateSchema`, so a bad price 422s with its field-named message at the factory.
  * `imageExtras` — see {@link writeCreate}.
  */
 export const writeUpdate = async (
@@ -171,16 +181,25 @@ export const writeUpdate = async (
           }
         : {};
 
-    const result = await updateById(
-        id,
-        { ...productFields, ...imageExtras, ...derivedFields, touch: plan !== undefined },
-        context
+    const result = await withTransaction((session) =>
+        updateByIdInTransaction(
+            id,
+            { ...productFields, ...imageExtras, ...derivedFields, touch: plan !== undefined },
+            session
+        ).then((outcome) =>
+            plan && 'updated' in outcome
+                ? writeTranslations(
+                      'product',
+                      id,
+                      plan,
+                      context.caller.id ?? undefined,
+                      session
+                  ).then(() => outcome)
+                : outcome
+        )
     );
-    if (!result.success) return result;
 
-    if (plan) await writeTranslations('product', id, plan, context.caller.id ?? undefined);
-
-    return result;
+    return 'updated' in result ? finishUpdateById(id, result, context) : result;
 };
 
 /**

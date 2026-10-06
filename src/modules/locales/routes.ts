@@ -41,6 +41,18 @@ import {
 export const router = Router();
 
 /**
+ * `/:locale/messages` answers per `?tenant=` — a dictionary is a tenant's own — so the tenant
+ * is part of its cache key where the other public reads have none.
+ */
+const messagesCache = setCache(3600, {
+    tags: ['locales'],
+    keyParameters: ['tenant'],
+    browserRevalidate: true,
+    scopeKey: (request: Request) =>
+        hasAnonymousReadScope(localeService.callerScope, request.authContext)
+});
+
+/**
  * The four public reads, all `browserRevalidate`: Redis still holds them for the hour, but the
  * flag tells the BROWSER to revalidate rather than answer from its own store. Without it, an
  * editor's save clears Redis but not the browser's copy, and reads as "saving is broken" — the
@@ -69,7 +81,7 @@ router.get('/', getAuth, publicLocaleCache, getLocales);
 router.get('/tenants', publicLocaleCache, getLocaleTenants);
 
 // GET /locales/:locale/messages — the client's dictionary, out of the database
-router.get('/:locale/messages', publicLocaleCache, getLocaleMessages);
+router.get('/:locale/messages', messagesCache, getLocaleMessages);
 
 // GET /locales/:locale — the API's own dictionary, off the filesystem
 router.get('/:locale', publicLocaleCache, getLocaleDictionary);

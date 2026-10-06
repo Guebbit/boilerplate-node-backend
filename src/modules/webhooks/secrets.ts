@@ -17,7 +17,7 @@ import {
     encryptVersionedSecret,
     decryptVersionedSecret
 } from '@infrastructure/security/versioned-secret';
-import { getWebhookEncryptionKeyRing } from './config';
+import { getWebhookEncryptionKeyRing, getWebhookSecretOverlapMs } from './config';
 import type { WebhookSecretRingEntry } from './model';
 
 /**
@@ -54,13 +54,38 @@ export const mintRingSecret = (): { entry: WebhookSecretRingEntry; plaintext: st
 };
 
 /**
- * Every active secret in a ring, decrypted — what a delivery attempt signs with. Ring order is
+ * The ring entries still in force at `now`. The newest never expires; an older one stops counting
+ * once its successor has been live for the overlap window (`NODE_WEBHOOK_SECRET_OVERLAP_HOURS`),
+ * which is what bounds how long a leaked, superseded secret can sign.
+ *
+ * @param ring - the stored ring, oldest first
+ * @param now - the instant to judge against
+ */
+export const liveRingEntries = (
+    ring: readonly WebhookSecretRingEntry[],
+    now: Date = new Date()
+): WebhookSecretRingEntry[] => {
+    const overlapMs = getWebhookSecretOverlapMs();
+    return ring.filter(
+        (_entry, index) =>
+            index === ring.length - 1 ||
+            now.getTime() < ring[index + 1].createdAt.getTime() + overlapMs
+    );
+};
+
+/**
+ * Every live secret in a ring, decrypted — what a delivery attempt signs with. Ring order is
  * preserved (oldest first), which is also the header's own order: `webhook-signature` lists the
  * newest-minted signature last, so a consumer reading left-to-right sees the secret it is about
- * to retire first and the one it should switch to last.
+ * to retire first and the one it should switch to last. An expired entry is not signed with.
+ *
+ * @param ring - the stored ring, oldest first
+ * @param now - the instant to judge expiry against
  */
-export const activeRingSecrets = (ring: readonly WebhookSecretRingEntry[]): string[] =>
-    ring.map((entry) => decryptRingSecret(entry.ciphertext));
+export const activeRingSecrets = (
+    ring: readonly WebhookSecretRingEntry[],
+    now: Date = new Date()
+): string[] => liveRingEntries(ring, now).map((entry) => decryptRingSecret(entry.ciphertext));
 
 /** Drop one entry from a ring by its id — the second half of a rotation, once every consumer has switched. */
 export const removeRingSecret = (

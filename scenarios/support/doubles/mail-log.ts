@@ -23,6 +23,13 @@ export const logMailTransport: MailTransportAdapter = {
         Promise.all([mail.render(), import('nodemailer')]).then(([message, nodemailer]) =>
             // nodemailer: `jsonTransport: true` builds a transport that renders the message to a
             // JSON string and returns it, with no network. https://nodemailer.com/transports/
-            nodemailer.createTransport({ jsonTransport: true }).sendMail(message)
+            nodemailer
+                .createTransport({
+                    jsonTransport: true,
+                    // Same switches as the SMTP transport: a path or URL in a message is refused.
+                    disableFileAccess: true,
+                    disableUrlAccess: true
+                })
+                .sendMail(message)
         )
 };

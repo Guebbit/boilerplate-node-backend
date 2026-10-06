@@ -197,6 +197,21 @@ export const imageConfig = defineConfig({
     }
 });
 
+/** Outbound requests this server makes on a caller-supplied URL (webhooks, remote images). */
+export const outboundConfig = defineConfig({
+    name: 'outbound',
+    shape: {
+        NODE_OUTBOUND_ALLOWED_PORTS: csv({
+            describe:
+                'Ports besides 443 an outbound URL may name. 443 is always allowed; every other port is refused, so a URL cannot probe an internal service (22, 6379, 5432).'
+        })
+    },
+    check: (config) =>
+        config.NODE_OUTBOUND_ALLOWED_PORTS.filter(
+            (port) => !/^\d+$/.test(port) || Number(port) < 1 || Number(port) > 65_535
+        ).map((port) => `NODE_OUTBOUND_ALLOWED_PORTS has ${port}, which is not a port number`)
+});
+
 /** PDF rendering. */
 export const pdfConfig = defineConfig({
     name: 'pdf',

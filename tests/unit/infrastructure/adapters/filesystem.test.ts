@@ -217,6 +217,20 @@ describe('pruneUnreferenced', () => {
         ).resolves.toEqual({ checked: 0, reaped: 0 });
     });
 
+    it('leaves an unreferenced file younger than the minimum age for the next sweep', async () => {
+        const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
+        const young = await stage('just-promoted.jpg');
+        const old = await stage('long-orphaned.jpg');
+        const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
+        await utimes(old, twoHoursAgo, twoHoursAgo);
+
+        const result = await pruneUnreferenced(root, new Set(), 60 * 60 * 1000);
+
+        expect(result).toEqual({ checked: 2, reaped: 1 });
+        expect(existsSync(young)).toBe(true);
+        expect(existsSync(old)).toBe(false);
+    });
+
     it('deletes nothing when every file on disk is still referenced', async () => {
         const { pruneUnreferenced } = await import('@infrastructure/adapters/filesystem');
         const kept = await stage('still-used.jpg');

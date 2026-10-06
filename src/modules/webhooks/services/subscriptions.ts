@@ -8,6 +8,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import {
     generateReject,
     generateSuccess,
@@ -24,7 +25,7 @@ import type {
 } from '@types';
 import type { WebhookSubscriptionDocument } from '../model';
 import { webhookSubscriptionRepository } from '../repository';
-import { mintRingSecret, removeRingSecret } from '../secrets';
+import { liveRingEntries, mintRingSecret, removeRingSecret } from '../secrets';
 import { getWebhookSubscriptionCap } from '../config';
 import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { ERROR_CODES } from '@api/error-codes';
@@ -54,20 +55,24 @@ const URL_CHECK_TIMEOUT_MS = 5000;
 const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
     resolveSafeOutboundTarget(url, AbortSignal.timeout(URL_CHECK_TIMEOUT_MS))
         .then((): undefined => undefined)
-        .catch((error: unknown) =>
-            generateReject(422, [
+        .catch((error: unknown) => {
+            // The caller learns only that the URL was refused: a reason or a resolved address
+            // would map the internal network for whoever is probing it. The operator reads both here.
+            logger.warn({
+                message: 'A webhook URL was refused.',
+                reason: error instanceof SsrfRefusedError ? error.reason : 'unverifiable',
+                detail: error instanceof Error ? error.message : String(error)
+            });
+            // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
+            // verified the target, so nothing is subscribed to it.
+            return generateReject(422, [
                 {
                     code: ERROR_CODES.VALIDATION_ERROR,
                     message: t('webhooks.url-refused'),
-                    // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
-                    // verified the target, so nothing is subscribed to it.
-                    details: {
-                        field: 'url',
-                        reason: error instanceof SsrfRefusedError ? error.reason : 'unverifiable'
-                    }
+                    details: { field: 'url' }
                 }
-            ])
-        );
+            ]);
+        });
 
 /** List this tenant's subscriptions, newest first, optionally filtered by `enabled`. */
 export const list = (
@@ -229,8 +234,9 @@ export const update = (
         });
 
 /**
- * Add a new secret to the ring, alongside whatever is already active — the ring then carries both
- * until {@link removeSecret} drops the old one.
+ * Add a new secret to the ring, alongside the newest existing one — the ring then carries both
+ * until {@link removeSecret} drops the old one, or the overlap window ends. A ring holds at most
+ * two: rotating again drops the oldest.
  *
  * @returns a 404 outside this tenant's subscriptions
  */
@@ -244,7 +250,12 @@ export const rotateSecret = (
             if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
 
             const minted = mintRingSecret();
-            subscription.secrets.push(minted.entry);
+            // Prune what has expired, and keep only the newest survivor beside the new secret:
+            // the ring never holds more than two, however often it is rotated.
+            subscription.secrets = [
+                ...liveRingEntries(subscription.secrets).slice(-1),
+                minted.entry
+            ];
 
             return webhookSubscriptionRepository.save(subscription).then((saved) => {
                 recordAudit(context, {
@@ -284,7 +295,7 @@ export const removeSecret = (
             // the one that answers 422 instead of a save-time throw.
             if (remaining.length === 0)
                 return generateReject(422, [t('webhooks.ring-cannot-be-empty')]);
-            subscription.secrets = remaining;
+            subscription.secrets = liveRingEntries(remaining);
 
             return webhookSubscriptionRepository.save(subscription).then((saved) => {
                 recordAudit(context, {

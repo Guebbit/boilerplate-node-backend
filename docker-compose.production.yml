@@ -148,6 +148,9 @@ x-app-env: &app-env
     # `command:` below) under a self-signed CA `mongo-entrypoint.sh` mints — `/ca-dir` is the
     # volume that CA's public cert is shared into, mounted read-only on this container too.
     NODE_DB_URI: '${NODE_DB_URI:-mongodb://${MONGO_APP_USER:-api}@database:27017/${MONGO_DB:-api}?replicaSet=rs0&tls=true&tlsCAFile=/ca-dir/mongo-ca.crt}'
+    # Redis and RabbitMQ are plaintext on purpose: one host, the compose network, no published port
+    # (docs/tools/security.md#redis-and-rabbitmq-stay-plaintext). A deployment that crosses a
+    # network supplies `rediss://` / `amqps://` URLs itself.
     NODE_REDIS_URL: '${NODE_REDIS_URL:-redis://cache:6379}'
     # A SECOND Redis, on purpose: rate-limit counters and single-use claims must never be evicted,
     # and eviction is per instance. There is no fallback from this to `NODE_REDIS_URL`.

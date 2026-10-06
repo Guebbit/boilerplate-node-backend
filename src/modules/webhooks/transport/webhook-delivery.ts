@@ -23,7 +23,11 @@ import {
     SsrfRefusedError,
     type SafeOutboundTarget
 } from '@infrastructure/adapters/ssrf-guard';
+import { logger } from '@infrastructure/adapters/logger';
 import { signWebhookPayload, type WebhookSignatureHeaders } from './webhook-signing';
+
+/** What a tenant reads when the SSRF guard refused its URL; the reason goes to the log only. */
+const SSRF_REFUSED_TEXT = 'This URL cannot receive webhooks.';
 
 /** Hard total budget for one attempt — DNS resolution through the last response byte. */
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -133,7 +137,16 @@ const errorName = (error: unknown): string | undefined =>
  * @param error - the chain's rejection: an {@link SsrfRefusedError}, an abort, or a network error
  */
 const describeDeliveryError = (error: unknown): string => {
-    if (error instanceof SsrfRefusedError) return `Refused (${error.reason}): ${error.message}`;
+    // The delivery log is shown to the tenant: it gets a fixed line, never the reason or the
+    // resolved address. Network errors below stay detailed — a tenant debugs its own endpoint.
+    if (error instanceof SsrfRefusedError) {
+        logger.warn({
+            message: 'A webhook delivery was refused by the SSRF guard.',
+            reason: error.reason,
+            detail: error.message
+        });
+        return SSRF_REFUSED_TEXT;
+    }
     // 'AbortError' is the POST phase (`postSignedPayload`'s `signal` option, Node's own naming);
     // 'TimeoutError' is the DNS phase (`ssrf-guard.ts`'s `rejectOnAbort`, `signal.reason` itself,
     // a `DOMException` — `AbortSignal.timeout`'s own name for its reason). Read via `errorName`,

@@ -168,12 +168,21 @@ a record with no image at all, which has no `imageUrl` and is drawn with the fro
 - **`npm run reap:quarantine`** — deletes quarantine files older than
   `NODE_QUARANTINE_RETENTION_HOURS`. Meant to run periodically (cron, a scheduled container task);
   a normal run of the pipeline never leaves a file behind for it to find.
-- **`npm run clean:orphaned-images`** — deletes a promoted image or thumbnail no current document
-  references. A manual dev-hygiene tool, not a scheduled job: a repeated `npm run
-demo`/scenario-apply/e2e cycle reseeds an EPHEMERAL Mongo every time while every upload still
-  lands on the host's persistent `public/images/`, so files accumulate there across runs.
-  Reference-based rather than age-based — see the script's own docblock for why a promoted image
-  cannot be swept the way quarantine is.
+- **`npm run reap:orphaned-images`** — deletes a promoted image or thumbnail no current document
+  references and that is over an hour old. Scheduled nightly. Two things leave orphans: a refused
+  upload whose request died before the close hook ran (a refused one is deleted by that hook, see
+  below), and a repeated `npm run demo`/e2e cycle that reseeds an EPHEMERAL Mongo under files on a
+  persistent `public/images/`. Reference-based rather than age-based — see the script's own
+  docblock for why a promoted image cannot be swept the way quarantine is.
+
+## Who owns an upload
+
+A refused write must not leave its image behind, and no controller should have to remember that.
+The upload middleware installs a close hook: when the response ends 4xx/5xx and no write has
+claimed the upload (`claimUpload`, `@infrastructure/http/uploads`), the hook deletes it. A write
+that succeeds claims it. `writeWithUploadedImage` claims for the update controllers; the three
+controllers that read the upload by hand (create product, create user, replace an example cover)
+claim themselves. The hour of grace in the reaper covers an upload promoted but not yet saved.
 
 ## Operational notes
 

@@ -13,6 +13,7 @@ import type { Document, Model, Types } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { WebhookDeliveryStatus } from '@types';
 import { getWebhookDeliveryRetentionDays } from './config';
+import { liveRingEntries } from './secrets';
 
 /**
  * One secret in a subscription's ring — see `./secrets` for encryption at rest and rotation.
@@ -137,7 +138,7 @@ webhookSubscriptionSchema.index({ tenant: 1, createdAt: -1 });
 webhookSubscriptionSchema.index({ enabled: 1, eventTypes: 1 });
 
 /**
- * Wire shape: `_id` → `id`, `secrets` collapses to `secretIds` (the ring's ids, never its
+ * Wire shape: `_id` → `id`, `secrets` collapses to `secretIds` (the live ring's ids, never its
  * ciphertext or plaintext) — a subscription response must never be the thing an attacker reads to
  * forge a delivery.
  *
@@ -149,7 +150,7 @@ export const applyWebhookSubscriptionTransform = applySerialization(webhookSubsc
     omit: ['tenant', 'ownerUserId', 'failingSince'],
     after: (serialized) => {
         const secrets = serialized.secrets as WebhookSecretRingEntry[] | undefined;
-        serialized.secretIds = (secrets ?? []).map((entry) => entry.id);
+        serialized.secretIds = liveRingEntries(secrets ?? []).map((entry) => entry.id);
         delete serialized.secrets;
     }
 });

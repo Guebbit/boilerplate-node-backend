@@ -57,6 +57,11 @@ const getTransporter = (): Transporter => {
         // gets the AUTH credentials in cleartext.
         // https://nodemailer.com/smtp/#tls-options
         requireTLS: port === 587,
+        // Transport-level switches: message data can never turn them off. A `path` or `href` in
+        // any attachment or part is refused, so a forged job cannot read a local file or fetch a URL.
+        // https://nodemailer.com/message/attachments/ (security note on `path`)
+        disableFileAccess: true,
+        disableUrlAccess: true,
         // SMTP AUTH credentials. Empty strings when unset, in which case nodemailer
         // attempts an unauthenticated send and the server rejects it — the failure
         // surfaces at send time, not at boot, because email is not a hard startup

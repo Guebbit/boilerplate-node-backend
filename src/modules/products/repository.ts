@@ -6,6 +6,7 @@
  * one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 
+import type { ClientSession } from 'mongoose';
 import type { FacetCount, Product } from '@types';
 import { productModel, applyProductTransform } from './model';
 import type { ProductDocument } from './model';
@@ -43,7 +44,8 @@ export const productRepository: Repository<ProductDocument, Product> & {
     ) => Promise<void>;
     writeTranslatedFields: (
         productId: string,
-        fields: Record<string, string | null>
+        fields: Record<string, string | null>,
+        session?: ClientSession
     ) => Promise<void>;
     markEdited: (productId: string) => Promise<void>;
     existsById: (productId: string) => Promise<boolean>;
@@ -155,7 +157,11 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * product's own row is already in. Same shape as {@link syncStockCache}: another module's
      * derived write, narrowed to the fields it names, never an edit an admin made.
      */
-    writeTranslatedFields: (productId: string, fields: Record<string, string | null>) =>
+    writeTranslatedFields: (
+        productId: string,
+        fields: Record<string, string | null>,
+        session?: ClientSession
+    ) =>
         productModel
             .updateOne(
                 { _id: toObjectId(productId) },
@@ -166,7 +172,8 @@ export const productRepository: Repository<ProductDocument, Product> & {
                         Object.entries(fields).map(([name, value]) => [name, value ?? ''])
                     )
                 },
-                { timestamps: false }
+                // `session` joins the caller's transaction; `undefined` stands alone.
+                { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),

@@ -7,6 +7,8 @@
  * Mirrors `overrides.test.ts` in spirit — unregistered has to be a safe, ordinary state, since a
  * unit test that never imports `modules/locales` must not throw resolving a product's title.
  */
+import type { ClientSession } from 'mongoose';
+import { asStub } from '@tests/stub';
 import {
     applyTranslations,
     isTranslationAvailable,
@@ -191,7 +193,18 @@ describe('writeTranslations', () => {
         };
         await writeTranslations('product', 'p1', plan, 'translator-1');
 
-        expect(write).toHaveBeenCalledWith('product', 'p1', plan, 'translator-1');
+        expect(write).toHaveBeenCalledWith('product', 'p1', plan, 'translator-1', undefined);
+    });
+
+    it("hands the caller's transaction session on, so the rows join it", async () => {
+        const write = jest.fn().mockResolvedValue(undefined);
+        registerTranslationPort(fakePort({ write }));
+        const session = asStub<ClientSession>({});
+        const plan = { fallbackLocale: 'en', planned: [] };
+
+        await writeTranslations('product', 'p1', plan, undefined, session);
+
+        expect(write).toHaveBeenCalledWith('product', 'p1', plan, undefined, session);
     });
 });
 

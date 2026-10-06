@@ -27,6 +27,8 @@ interface ImageFormat {
     bytes: readonly number[];
     /** The file extension this format is stored under. */
     extension: string;
+    /** Further markers that must also match (WebP: `RIFF` at 0 as well as `WEBP` at 8). */
+    alsoRequires?: readonly { offset: number; bytes: readonly number[] }[];
 }
 
 /**
@@ -54,12 +56,14 @@ const SUPPORTED_IMAGE_FORMATS: readonly ImageFormat[] = [
         extension: 'jpg'
     },
     // 'WEBP', at offset 8, inside a RIFF container. The RIFF magic alone would also match WAV
-    // and AVI, so the check has to reach past it.
+    // and AVI, so the check reaches past it; 'WEBP' alone would match any bytes 0-7, so it
+    // also demands 'RIFF' at offset 0.
     {
         mime: 'image/webp',
         offset: 8,
         bytes: [0x57, 0x45, 0x42, 0x50],
-        extension: 'webp'
+        extension: 'webp',
+        alsoRequires: [{ offset: 0, bytes: [0x52, 0x49, 0x46, 0x46] }]
     }
 ];
 
@@ -77,8 +81,22 @@ const CANONICAL_MIME_BY_ALIAS = new Map(
 
 /** Enough bytes for the longest signature plus its offset. */
 const HEADER_LENGTH = Math.max(
-    ...SUPPORTED_IMAGE_FORMATS.map((format) => format.offset + format.bytes.length)
+    ...SUPPORTED_IMAGE_FORMATS.flatMap((format) =>
+        [format, ...(format.alsoRequires ?? [])].map(
+            (marker) => marker.offset + marker.bytes.length
+        )
+    )
 );
+
+/**
+ * Whether a header carries a marker's bytes at the marker's offset.
+ *
+ * @param header - The first bytes of a file.
+ * @param marker - The offset and bytes to look for.
+ */
+const hasMarker = (header: Buffer, marker: { offset: number; bytes: readonly number[] }): boolean =>
+    header.length >= marker.offset + marker.bytes.length &&
+    marker.bytes.every((byte, index) => header[marker.offset + index] === byte);
 
 /**
  * The MIME type a buffer's leading bytes actually declare.
@@ -89,8 +107,8 @@ const HEADER_LENGTH = Math.max(
 export const identifyImage = (header: Buffer): string | undefined =>
     SUPPORTED_IMAGE_FORMATS.find(
         (format) =>
-            header.length >= format.offset + format.bytes.length &&
-            format.bytes.every((byte, index) => header[format.offset + index] === byte)
+            hasMarker(header, format) &&
+            (format.alsoRequires ?? []).every((marker) => hasMarker(header, marker))
     )?.mime;
 
 /**

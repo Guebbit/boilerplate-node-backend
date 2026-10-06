@@ -1,25 +1,21 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Delete a stored image (and its thumbnail) that no current document references — `npm run
- * clean:orphaned-images`. A manual dev-hygiene tool, not a scheduled job.
+ * Delete a stored image (and its thumbnail) that no current document references —
+ * `npm run reap:orphaned-images`.
  *
- * Why it exists: a repeated `npm run demo`/scenario-apply/e2e cycle re-seeds an EPHEMERAL, in-memory
- * Mongo every time, but every upload still lands on the host's persistent `public/images/` —
- * `imageStore.remove()` only runs when a record's OWN update/delete replaces its image, never
- * when the database underneath it is simply thrown away and restarted. Nothing else ever cleans
- * these up, and 280 of them were sitting there at once by 2026-09-28.
+ * Runs:        nightly from `docker/crontab`; by hand after a demo or e2e cycle.
+ * Deletes:     a file under `public/images/` and `thumbs/` that no document names.
+ * Spares:      anything younger than one hour. An upload is promoted a moment before its row is
+ *              saved, and a sweep must not take it from under that write.
+ * Why by name: a promoted image is durable, so age says nothing about whether it is wanted
+ *              (unlike `reap-quarantine.ts`). Only "does a document still name it" can.
+ * Collections: every `imageTargets` entry (`kernel/registry.ts#resolveImageTargets`), so a new
+ *              module with an image needs no change here.
  *
- * Reference-based, not age-based, unlike `reap-quarantine.ts`: a quarantine file is inherently
- * transient (a digest job should claim it within seconds), so age alone means abandoned. A
- * PROMOTED image is the opposite — durable, uploaded once, meant to outlive the process — so the
- * only safe test is "does a document still name it", never "is it old". Safe against a real,
- * persistent deployment too (`NODE_TEST_MONGO_URI` pointed at a compose Mongo, or production
- * itself): it only ever deletes a file this run's own database does not reference right now.
- *
- * Generic over which collections carry an image, the same way the digest worker itself is
- * (`kernel/registry.ts#resolveImageTargets`) — a module adding a third `imageTargets` entry needs
- * no change here.
+ * Orphans come from two places:
+ *   - a refused upload that never reached its close hook (a dropped connection)
+ *   - a throwaway Mongo (`npm run demo`, e2e) that was reseeded under files on a persistent disk
  */
 import '@infrastructure/config/dotenv';
 import path from 'node:path';
@@ -35,6 +31,9 @@ import {
 import { resolveImageTargets } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';
 import { runScript } from '../run-script';
+
+/** A file younger than this is never swept: it may be promoted but not yet saved on its row. */
+const MIN_AGE_MS = 60 * 60 * 1000;
 
 /**
  * Every `imageUrl`/`thumbnailUrl` basename a live document currently names, across every
@@ -78,8 +77,12 @@ const main = (): Promise<void> =>
         const root = publicRoot();
         const keep = await referencedFilenames();
 
-        const originals = await pruneUnreferenced(path.join(root, IMAGES_SEGMENT), keep);
-        const thumbnails = await pruneUnreferenced(thumbnailsDirectory(root), keep);
+        const originals = await pruneUnreferenced(
+            path.join(root, IMAGES_SEGMENT),
+            keep,
+            MIN_AGE_MS
+        );
+        const thumbnails = await pruneUnreferenced(thumbnailsDirectory(root), keep, MIN_AGE_MS);
 
         // Stryker disable next-line all
         logger.info({
@@ -91,6 +94,6 @@ const main = (): Promise<void> =>
         });
     });
 
-// Entry point: run `main` and close the database on both paths. Records no job outcome (`undefined`):
-// a manual tool, not a scheduled job. See `scripts/run-script.ts`.
-void runScript(undefined, main, stopDatabase);
+// Entry point: run `main`, record the outcome under `reap:orphaned-images` for `/observability/health`,
+// and close the database on both paths. See `scripts/run-script.ts`.
+void runScript('reap:orphaned-images', main, stopDatabase);

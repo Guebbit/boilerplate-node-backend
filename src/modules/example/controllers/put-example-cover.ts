@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
-import { readUploadedImage } from '@infrastructure/http/uploads';
+import { claimUpload, readUploadedImage } from '@infrastructure/http/uploads';
 import { t } from '@infrastructure/i18n';
 import { catchAs, namedHandler, refused } from '@infrastructure/http/controller';
 import { exampleService } from '../services';
@@ -22,8 +22,7 @@ export const putExampleCover = namedHandler(
         const id = requireId(request, response, { notFound: 'example.not-found' });
         if (!id) return Promise.resolve();
 
-        const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } =
-            readUploadedImage(request);
+        const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
 
         // No file means nothing to set: a body-only `imageUrl: null` is not a way to clear a cover here.
         if (typeof imageUrl !== 'string') {
@@ -31,19 +30,15 @@ export const putExampleCover = namedHandler(
             return Promise.resolve();
         }
 
-        // An upload nothing references is an orphan, so every way out but success deletes it.
-        const discard = (): Promise<unknown> => deleteUpload().catch(() => undefined);
-
+        // Unclaimed unless the write succeeds: the upload middleware's close hook deletes an
+        // upload whose request ended 4xx/5xx, so no branch here has to.
         return exampleService
             .setCover(id, { imageUrl, thumbnailUrl, pendingImageKey }, callerContextOf(request))
             .then((result) => {
-                if (refused(response, result)) return discard();
+                if (refused(response, result)) return;
+                claimUpload(request);
                 successResponse(response, result.data, 200, result.message);
             })
-            .catch((error: unknown) =>
-                discard().then(() => {
-                    catchAs(response, 'putExampleCover')(error);
-                })
-            );
+            .catch(catchAs(response, 'putExampleCover'));
     }
 );

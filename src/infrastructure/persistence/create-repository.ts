@@ -245,8 +245,13 @@ export interface Repository<TDocument extends Document, TWire> {
      * @param session - joins the insert to the caller's own transaction; omitted, it stands alone
      */
     create: (data: Partial<TDocument>, session?: ClientSession) => Promise<TDocument>;
-    /** Persist in-memory changes to an already-fetched document. */
-    save: (document: TDocument) => Promise<TDocument>;
+    /**
+     * Persist in-memory changes to an already-fetched document.
+     *
+     * @param document - the hydrated document to save
+     * @param session - joins the save to the caller's own transaction; omitted, it stands alone
+     */
+    save: (document: TDocument, session?: ClientSession) => Promise<TDocument>;
     /**
      * Construct a document WITHOUT persisting it — `isNew` stays `true` until something calls
      * `save()`. For a caller that needs the real hydrated shape (defaults included) to hand back
@@ -379,8 +384,10 @@ export function createRepository<TDocument extends Document, TWire>(
      * Persist in-memory changes to an already-fetched document — checked and fenced against the
      * request's `If-Match` when one names this row (`./versioning`), a plain `save()` otherwise.
      */
-    const save = (document: TDocument): Promise<TDocument> =>
-        fencedSave(document, () => document.save());
+    const save = (document: TDocument, session?: ClientSession): Promise<TDocument> =>
+        // Mongoose: `save({ session })` joins the write to that transaction.
+        // https://mongoosejs.com/docs/transactions.html
+        fencedSave(document, () => document.save(session ? { session } : undefined));
 
     /**
      * Mongoose: `new Model(doc)` hydrates a document without writing it — defaults, casting and

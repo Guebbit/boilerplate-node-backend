@@ -194,7 +194,9 @@ verifies with no custom code — the format is the interoperable part; the ~30 l
 around it are not worth a dependency. A subscription's secret ring is a list, not one value, so
 `POST .../subscriptions/:id/rotate-secret` can rotate without downtime: two active secrets sign
 two space-separated `v1,...` values in one header during the overlap, until
-`DELETE .../secrets/:secretId` drops the old one. Split from `PUT`/`PATCH .../subscriptions/:id`
+`DELETE .../secrets/:secretId` drops the old one or `NODE_WEBHOOK_SECRET_OVERLAP_HOURS` (default 24)
+has passed — the Standard Webhooks bounded overlap. A ring holds at most two, and an expired entry
+stops signing and is pruned on the next rotate or remove. Split from `PUT`/`PATCH .../subscriptions/:id`
 on purpose — a command, not state, gets its own route rather than a flag on the update body.
 
 **The body is the Standard Webhooks envelope too.** `{ type, timestamp, data }` — `type` is the
