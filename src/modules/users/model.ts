@@ -209,6 +209,13 @@ export interface UserRecord extends Omit<
      * means no change is pending. See `docs/modules/users.md`.
      */
     pendingEmail?: string;
+
+    /**
+     * The address this account held before its last confirmed email change — `select: false`, like
+     * `pendingEmail`. What the undo link restores; written by `applyEmailChange`, cleared by the
+     * undo, and useless without the one-time undo token that names this account.
+     */
+    previousEmail?: string;
 }
 
 /**
@@ -503,6 +510,13 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             // Same casters as `email` above — a pending change must compare and collide the same
             // way the live address does, or a case-only re-send of the current address would look
             // like a real change (see `normalizeEmail`, re-exported below).
+            lowercase: true,
+            trim: true
+        },
+        /* The address before the last confirmed change — see the interface field. */
+        previousEmail: {
+            type: String,
+            select: false,
             lowercase: true,
             trim: true
         },
@@ -846,6 +860,7 @@ export type UserWire = Omit<
     | 'mfaFailures'
     | 'mfaLockedUntil'
     | 'tokensValidAfter'
+    | 'previousEmail'
 >;
 
 /**
@@ -879,7 +894,8 @@ export const applyUserTransform = applySerialization(userSchema, {
         'oauthAccounts',
         'mfaFailures',
         'mfaLockedUntil',
-        'tokensValidAfter'
+        'tokensValidAfter',
+        'previousEmail'
     ]
 });
 

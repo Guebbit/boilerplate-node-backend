@@ -89,6 +89,9 @@ const resolve =
                           // for why no token this app verifies can be missing either.
                           authTime: claims.auth_time,
                           amr: claims.amr,
+                          // Read fresh like `analyticsConsent`: arming or removing a factor applies to
+                          // the very next request, whatever the token carries.
+                          twoFactorArmed: user.twoFactorEnabledAt !== undefined,
                           // Read fresh off the document every request, unlike `authTime`/`amr`: a
                           // consent WITHDRAWAL has to apply to the very next event, not wait for the
                           // caller to log in again. `?? false` for the same reason as `admin` above —

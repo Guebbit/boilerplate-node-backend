@@ -52,8 +52,10 @@ export {
     EMAIL_VERIFY_TOKEN_TYPE,
     EMAIL_CHANGE_TOKEN_TYPE,
     VERIFY_RESEND_SECONDS,
-    completeEmailChange
+    completeEmailChange,
+    undoEmailChange
 } from './verification';
+export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from './token-types';
 export { reapExpiredTokens } from './token-cleanup';
 export { reapExpiredExports } from './export-rows';
 export { pruneOwnExpiredTokens } from '../session/prune';
@@ -100,6 +102,7 @@ export const accountService = {
     resendPendingEmailVerificationFor: verification.resendPendingEmailVerificationFor,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
+    undoEmailChange: verification.undoEmailChange,
     findLiveToken: tokens.findLiveToken,
     spendLiveToken: tokens.spendLiveToken,
     redeemLiveToken: tokens.redeemLiveToken,

@@ -204,6 +204,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the emailed email-change token is the credential'
     },
+    'account POST /email-change-undo': {
+        requiresAuth: false,
+        reason: 'the undo token mailed to the old address is the credential'
+    },
     'wishlist PUT /:productId': {
         requiresAuth: true,
         reason: "saving a product to the caller's own wishlist"

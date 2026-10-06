@@ -72,6 +72,7 @@
             "too-soon": "An email change was just requested. Please wait a moment before requesting another.",
             "token-not-found": "Invalid or expired token, please try again.",
             "success": "Email address changed.",
+            "undone": "The email change was undone and every device was signed out.",
             "cancelled": "The pending email change was cancelled.",
             "resent": "A new confirmation link was sent to the new address.",
             "nothing-pending": "There is no pending email change."
@@ -150,7 +151,8 @@
                 "subject": "Your email address is changing",
                 "meta-title": "Email change requested",
                 "greeting": "Hello, {{name}}!",
-                "body": "Someone asked to change the email address on this account to {{newEmail}}. If this was you, no action is needed — it takes effect once the new address is confirmed. If it wasn't, change your password and sign out of every device right away."
+                "body": "Someone asked to change the email address on this account to {{newEmail}}. If this was you, no action is needed — it takes effect once the new address is confirmed. If it wasn't, undo the change with the link below: it works for 7 days, even after the new address is confirmed, and signs every device out.",
+                "link-label": "Undo this change"
             },
             "two-factor-changed": {
                 "subject": "Your two-factor settings changed",

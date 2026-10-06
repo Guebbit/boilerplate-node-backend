@@ -27,6 +27,7 @@ const TOKEN_BEARING = [
     'POST /reset-confirm',
     'POST /verify-confirm',
     'POST /email-change-confirm',
+    'POST /email-change-undo',
     'GET /refresh',
     'POST /logout'
 ];
@@ -45,6 +46,7 @@ const RATE_LIMITED = [
     'POST /pending-email/resend',
     'POST /verify-confirm',
     'POST /email-change-confirm',
+    'POST /email-change-undo',
     'POST /login/2fa',
     'POST /login/2fa/send',
     'GET /oauth/:provider',
@@ -105,6 +107,7 @@ describe('account routes — what is mounted', () => {
             'POST /verify-request',
             'POST /verify-confirm',
             'POST /email-change-confirm',
+            'POST /email-change-undo',
             'POST /export',
             'GET /export/:id',
             'POST /login/2fa/send',

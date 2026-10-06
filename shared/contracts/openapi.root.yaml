@@ -130,7 +130,7 @@ x-error-codes:
     REAUTH_REQUIRED:
         {
             status: 401,
-            description: "This action requires a session fresher than the caller's current one — see `POST /account/reauth`."
+            description: "This action requires a session fresher than the caller's current one — see `POST /account/reauth`. `details.maxAge` is the freshness asked for; `details.methods`, when present, lists what the re-authentication must also prove (`otp`: a code from an armed second factor)."
         }
 
 servers:
@@ -1998,6 +1998,8 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1verify-confirm'
     /account/email-change-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-confirm'
+    /account/email-change-undo:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1email-change-undo'
     /account/delete-confirm:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1delete-confirm'
     /account/login:

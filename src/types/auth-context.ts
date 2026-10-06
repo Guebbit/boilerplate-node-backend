@@ -71,6 +71,12 @@ export interface AuthContext {
     /** How `authTime` was proved — RFC 8176 values, `['pwd']` today. Same source as `authTime`. */
     amr: readonly string[];
     /**
+     * Whether the account has a second factor armed, read fresh off the document on every request
+     * (the resolver already loads it). The identity routes demand an `otp` proof only of a caller
+     * for whom this is true; a non-2FA account is asked nothing new.
+     */
+    twoFactorArmed: boolean;
+    /**
      * The account's analytics consent choice, read fresh from the document on every request.
      * Carried through to `CallerContext` for `emitAnalyticsEvent`'s own gate; nothing else should
      * need to read it.

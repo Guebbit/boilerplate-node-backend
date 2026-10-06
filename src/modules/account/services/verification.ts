@@ -360,3 +360,35 @@ export const completeEmailChange = (
 };
 
 export { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types';
+
+/**
+ * Spend an undo link's work: put the account back as it was before the change. While the change is
+ * still pending it is cancelled and its confirmation link dies; once the new address was confirmed
+ * the previous one is restored. Either way every session ends — the owner is saying "this was not
+ * me", so what a thief holds must stop working. Nothing to undo (the change was already cancelled)
+ * is not an error: the account is as the caller wants it.
+ *
+ * `postEmailChangeUndo` already found and spent the token, the same split as
+ * {@link completeEmailChange}.
+ *
+ * @param user - the token's holder, loaded with credentials (`pendingEmail`, `previousEmail`, `tokens`)
+ * @param context - the caller context, for the audit record
+ * @throws a duplicate-key error when another account took the previous address since
+ */
+export const undoEmailChange = (
+    user: UserDocument,
+    context: CallerContext
+): Promise<UserDocument> =>
+    (user.pendingEmail === undefined
+        ? userService.restorePreviousEmail(user)
+        : userService.cancelPendingEmail(user)
+    )
+        .then((saved) =>
+            // The confirmation link is dead whichever way this went: it would swap back in the
+            // address the owner just refused.
+            userService.tokenRemoveAll(saved, EMAIL_CHANGE_TOKEN_TYPE).then(() => saved)
+        )
+        .then((saved) => revokeAllSessions(saved).then(() => saved))
+        .then((saved) =>
+            auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
+        );

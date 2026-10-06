@@ -63,6 +63,7 @@ import { deleteSession } from './controllers/delete-session';
 import { postVerifyRequest } from './controllers/post-verify-request';
 import { postVerifyConfirm } from './controllers/post-verify-confirm';
 import { postEmailChangeConfirm } from './controllers/post-email-change-confirm';
+import { postEmailChangeUndo } from './controllers/post-email-change-undo';
 import { postAccountExport } from './controllers/post-account-export';
 import { getAccountExport } from './controllers/get-account-export';
 import { deleteAccountRequest } from './controllers/delete-account-request';
@@ -95,6 +96,24 @@ const isChangingEmail = (request: Request): boolean => {
     return currentEmail === undefined || normalizeEmail(email) !== normalizeEmail(currentEmail);
 };
 
+/**
+ * Whether the caller's account has a second factor armed — the condition under which the identity
+ * routes (email, password, delete) demand an `otp` proof as well as a fresh session.
+ */
+const callerHasTwoFactor = (request: Request): boolean =>
+    request.authContext?.twoFactorArmed === true;
+
+/** {@link isChangingEmail} for a caller who has a second factor armed. */
+const isChangingEmailWithTwoFactor = (request: Request): boolean =>
+    callerHasTwoFactor(request) && isChangingEmail(request);
+
+/**
+ * What an armed account must have proved to pass an identity route: a second-factor code, in the
+ * re-authentication that earned the fresh session. A password-only re-auth no longer carries one
+ * over from login — see `amrAfterReauth`.
+ */
+const OTP_PROOF = { methods: ['otp'] } as const;
+
 /** Express router for account/auth endpoints (login, signup, password reset, token refresh). */
 export const router = Router();
 
@@ -124,6 +143,9 @@ router.put(
     uploadLimiter,
     isAuth,
     upload.image(),
+    // The otp guard first: a stale armed session is challenged ONCE, with `details.methods`, and
+    // the plain recency guard below it only ever sees accounts without a second factor.
+    requireFreshAuthWhen(isChangingEmailWithTwoFactor, REAUTH_TIME_SENSITIVE, OTP_PROOF),
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     replaceAccount
 );
@@ -134,6 +156,7 @@ router.patch(
     uploadLimiter,
     isAuth,
     upload.image(),
+    requireFreshAuthWhen(isChangingEmailWithTwoFactor, REAUTH_TIME_SENSITIVE, OTP_PROOF),
     requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
     updateAccount
 );
@@ -148,8 +171,15 @@ router.delete('/pending-email', isAuth, cancelPendingEmail);
 // reason: each success publishes mail. `isAuth` runs first so the identity budget is per account.
 router.post('/pending-email/resend', isAuth, credentialLimiters, postPendingEmailResend);
 
-// DELETE /account — request account deletion (requires auth). Critical: destruction.
-router.delete('/', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), deleteAccountRequest);
+// DELETE /account — request account deletion (requires auth). Critical: destruction. An account
+// with a second factor must also have proved a code in that fresh session.
+router.delete(
+    '/',
+    isAuth,
+    requireFreshAuthWhen(callerHasTwoFactor, REAUTH_TIME_CRITICAL, OTP_PROOF),
+    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    deleteAccountRequest
+);
 
 // DELETE /account/delete-confirm — confirm account deletion with token
 router.delete('/delete-confirm', deleteAccountConfirm);
@@ -186,10 +216,18 @@ router.post(
 // POST /account/reset-confirm — complete password reset with token
 router.post('/reset-confirm', credentialLimiters, postResetConfirm);
 
-// POST /account/password — change password by proving the current one (requires auth).
+// POST /account/password — change password by proving the current one (requires auth). An account
+// with a second factor must also have a fresh session that proved a code; one without is asked
+// nothing new.
 // `isAuth` runs BEFORE `credentialLimiters` here, on /reauth and on /verify-request: the body
 // names no account, so the identity budget can only be per account if it reads the session's.
-router.post('/password', isAuth, credentialLimiters, postPasswordChange);
+router.post(
+    '/password',
+    isAuth,
+    requireFreshAuthWhen(callerHasTwoFactor, REAUTH_TIME_SENSITIVE, OTP_PROOF),
+    credentialLimiters,
+    postPasswordChange
+);
 
 // POST /account/password/check — advisory breach check, unauthenticated (signup needs it before
 // an account exists). `passwordCheckLimiter`, not `credentialLimiters`: this body carries no
@@ -251,6 +289,10 @@ router.post('/verify-confirm', credentialLimiters, postVerifyConfirm);
 // POST /account/email-change-confirm — spend the emailed `email-change` token; public, same
 // reasoning as verify-confirm. A DIFFERENT token type — see `services/verification.ts`.
 router.post('/email-change-confirm', credentialLimiters, postEmailChangeConfirm);
+
+// POST /account/email-change-undo — spend the `email-change-undo` token mailed to the OLD address;
+// public, the token is the credential. Survives a password change on purpose: see `revocation.ts`.
+router.post('/email-change-undo', credentialLimiters, postEmailChangeUndo);
 
 // POST /account/export — ask for the caller's full data export; 202, built in the background.
 // Sensitive tier: requireFreshAuth is the identity proof here, not a bespoke password check in the

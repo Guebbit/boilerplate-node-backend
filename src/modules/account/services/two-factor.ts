@@ -279,6 +279,33 @@ const settleVerdict = <T>(
 };
 
 /**
+ * Prove a second-factor code for a signed-in caller who is re-authenticating — the `otp` half of
+ * `POST /account/reauth`. Behind the same per-account cap as every other check of an armed factor.
+ * A right code is persisted here (a spent backup code, a TOTP step), so the caller has nothing
+ * left to write.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param code - a code from any armed method, or an unused backup code
+ * @param context - the caller, whose locale is the fallback for the lock notice
+ * @returns success when the code verified; 422 for a wrong code or an account with no factor armed,
+ *   429 when the account is locked
+ */
+export const proveSecondFactor = (
+    user: UserDocument,
+    code: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> => {
+    if (!user.twoFactorEnabledAt)
+        return Promise.resolve(generateReject(422, [t('account.two-factor.not-enabled')]));
+
+    return verifyArmedFactor(user, code, context).then((verdict) =>
+        settleVerdict(verdict, user, () =>
+            userService.persistTwoFactorMethods(user).then(() => generateSuccess(undefined))
+        )
+    );
+};
+
+/**
  * Load the caller, run a caller-specific `precondition` against them, then verify `code` against
  * any armed factor. `precondition` returns a rejection to short-circuit before spending a verify
  * attempt, or `undefined` to proceed; `onMatch` runs only once `code` actually verifies. The

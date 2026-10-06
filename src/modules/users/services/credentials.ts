@@ -40,9 +40,26 @@ export const markEmailVerified = (user: UserDocument): Promise<UserDocument> => 
  * this operation's — `save` here answers with the document a token-revoke call needs, nothing more.
  */
 export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<UserDocument> => {
+    // Kept for the undo link: the only copy of the address the account is being moved away from.
+    user.previousEmail = user.email;
     user.email = newEmail;
     user.pendingEmail = undefined;
     user.verifiedAt = new Date();
+    return userRepository.save(user);
+};
+
+/**
+ * Put back the address held before the last confirmed change — the undo link's action. The old
+ * address was proven when it was first verified, so `verifiedAt` stays. Document-only, like
+ * {@link applyEmailChange}: ending the sessions is the caller's job. Rejects with a duplicate-key
+ * error when another account has taken the old address since, which the caller answers as 409.
+ *
+ * @param user - the account, loaded with `previousEmail`
+ */
+export const restorePreviousEmail = (user: UserDocument): Promise<UserDocument> => {
+    if (user.previousEmail) user.email = user.previousEmail;
+    user.previousEmail = undefined;
+    user.pendingEmail = undefined;
     return userRepository.save(user);
 };
 

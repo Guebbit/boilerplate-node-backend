@@ -38,3 +38,13 @@ export const EMAIL_VERIFY_TOKEN_TYPE = 'verify';
  * account takeover on the end of it.
  */
 export const EMAIL_CHANGE_TOKEN_TYPE = 'email-change';
+
+/**
+ * The `tokens.type` of the one-time link that undoes an email change, mailed to the OLD address
+ * when the change is requested. Absent from `revocation.ts`'s purge list on purpose: a password
+ * change must not take away the link a person who reads mail weekly still needs.
+ */
+export const EMAIL_CHANGE_UNDO_TOKEN_TYPE = 'email-change-undo';
+
+/** How long the undo link works — 7 days, long enough for someone who reads their mail weekly. */
+export const EMAIL_CHANGE_UNDO_TTL_MS = 7 * 24 * 60 * 60 * 1000;

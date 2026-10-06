@@ -120,6 +120,12 @@ proved itself RECENTLY.
 step-up existed reads as infinitely old and is asked to re-prove itself, rather than sliding
 through a guard that was not there when it was issued.
 
+For an account with a second factor armed, the identity routes (email, password, delete) demand
+more than recency: an `otp` in the fresh session's `amr`. A re-authentication claims only what it
+proved, so a password-only one does not carry the login's `otp` over; the `401 REAUTH_REQUIRED`
+names the missing proof in `details.methods`. An email change can also be undone for 7 days from the
+old address's link, through a password change — `account/services/verification.ts#undoEmailChange`.
+
 Mounted per-route in `account/routes.ts`, `cart/routes.ts` and `payments/routes.ts`; enumerated by
 `tests/cross-cutting/step-up-auth-routes.test.ts` so a new sensitive route cannot quietly skip it.
 

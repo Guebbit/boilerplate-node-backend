@@ -28,7 +28,8 @@ import {
 } from './verification';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
-import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE } from './authentication';
+import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE, tokenAdd } from './authentication';
+import { EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS } from './token-types';
 import { findLiveToken, spendLiveToken } from './tokens';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -487,23 +488,31 @@ const revokeCancelledChange = (
 };
 
 /**
- * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address — no token,
- * no link, see {@link emailChangeNoticeEmail} — and the verification link to the new one.
+ * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address carrying a
+ * 7-day undo link, see {@link emailChangeNoticeEmail}, and the verification link to the new one.
+ * Only the newest request's undo link lives: an older one is pulled first, since it would restore
+ * an address this change no longer leaves behind.
  * AWAITED, unlike most account mail: the verification half pushes a token onto this same
  * document first (`sendVerificationEmail`'s own `tokenAdd`), matching `requestEmailVerificationFor`'s
  * treatment of the identical function — responding before either finishes would race the token
  * with whatever the client does next.
  */
-const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> => {
-    const mail = emailChangeNoticeEmail(
-        recipientLocale(user.locale, context),
-        greetableName(user, user.email),
-        user.pendingEmail ?? ''
-    );
-    return sendAccountMail(user.email, mail).then(() =>
-        sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE)
-    );
-};
+const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> =>
+    userService
+        .tokenRemoveAll(user, EMAIL_CHANGE_UNDO_TOKEN_TYPE)
+        .then(() => tokenAdd(user, EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS))
+        .then((undoToken) =>
+            sendAccountMail(
+                user.email,
+                emailChangeNoticeEmail(
+                    recipientLocale(user.locale, context),
+                    greetableName(user, user.email),
+                    user.pendingEmail ?? '',
+                    undoToken
+                )
+            )
+        )
+        .then(() => sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE));
 
 /**
  * The fields `PUT/PATCH /account` accepts, after parsing — the input half of {@link writeProfile}.

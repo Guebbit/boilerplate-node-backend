@@ -78,13 +78,17 @@ export const verifyRequestEmail = (
 /**
  * Email-change notice: sent to the OLD address the moment a change is REQUESTED, not when it
  * completes — a warning that arrives before a takeover is a warning, one that arrives after is a
- * receipt. Carries no token and no link that acts: "this wasn't me" is a password change and a
- * logout-everywhere, both of which already exist (docs/modules/account.md#proving-an-address).
+ * receipt. Carries the one-time undo link, valid for 7 days and kept through a password change:
+ * the one thing the old mailbox can do about a change it did not ask for
+ * (docs/modules/account.md#proving-an-address).
+ *
+ * @param undoToken - the plaintext `email-change-undo` token, for the link only
  */
 export const emailChangeNoticeEmail = (
     locale: string,
     name: string,
-    newEmail: string
+    newEmail: string,
+    undoToken: string
 ): EmailContent => {
     const t = translator(locale);
     return {
@@ -96,6 +100,8 @@ export const emailChangeNoticeEmail = (
             pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.email-change-notice.greeting', name),
             body: t('account.email.email-change-notice.body', { newEmail }),
+            linkLabel: t('account.email.email-change-notice.link-label'),
+            linkUrl: accountFrontendLink('email-undo', { locale, token: undoToken }),
             footer: t('email.footer')
         }
     };

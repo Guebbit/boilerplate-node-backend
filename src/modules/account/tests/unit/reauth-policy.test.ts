@@ -8,16 +8,18 @@ import { amrAfterReauth } from '../../services/reauth';
 import { oauthConfig } from '../../oauth/config';
 
 describe('amrAfterReauth', () => {
-    it('adds the method just proved to what the session already had', () => {
-        expect(amrAfterReauth(['google'], 'email')).toEqual(['google', 'email']);
+    it('claims only the method just proved', () => {
+        expect(amrAfterReauth('password', false)).toEqual(['pwd']);
+        expect(amrAfterReauth('email', false)).toEqual(['email']);
     });
 
-    it('keeps a second factor the login proved', () => {
-        expect(amrAfterReauth(['pwd', 'otp'], 'password')).toEqual(['pwd', 'otp']);
+    it('adds otp only when a second-factor code was verified in the same call', () => {
+        expect(amrAfterReauth('password', true)).toEqual(['pwd', 'otp']);
     });
 
-    it('does not repeat a value', () => {
-        expect(amrAfterReauth(['pwd', 'email'], 'email')).toEqual(['pwd', 'email']);
+    it('carries nothing over from the login: there is no input for it', () => {
+        // A password-only re-auth after a 2FA login must NOT read as second-factored.
+        expect(amrAfterReauth('password', false)).not.toContain('otp');
     });
 });
 

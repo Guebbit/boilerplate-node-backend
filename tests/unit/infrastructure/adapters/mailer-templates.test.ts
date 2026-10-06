@@ -93,7 +93,12 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'account.inactivity-warning': inactivityWarningEmail(locale, 'Ada', 30),
     'account.two-factor-code': twoFactorCodeEmail(locale, 'Ada', '492013', 10),
     'account.reauth-code': reauthCodeEmail(locale, 'Ada', '492013', 10),
-    'account.email-change-notice': emailChangeNoticeEmail(locale, 'Ada', 'new@example.com'),
+    'account.email-change-notice': emailChangeNoticeEmail(
+        locale,
+        'Ada',
+        'new@example.com',
+        'undo-token'
+    ),
     'account.two-factor-changed': twoFactorChangedEmail(locale, 'Ada', 'enrolled', 'email'),
     'account.two-factor-locked': twoFactorLockedEmail(locale, 'Ada', 15),
     'account.export-ready': exportReadyEmail(locale, 'Ada', '64b0c0ffee64b0c0ffee64b0', 7),

@@ -98,6 +98,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_EMAIL_CHANGE_COMPLETED`               | `auth.email_change.completed`               | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_REQUESTED`               | `auth.email_change.requested`               | —                      |
 | `account`        | `AUTH_EMAIL_CHANGE_RESENT`                  | `auth.email_change.resent`                  | —                      |
+| `account`        | `AUTH_EMAIL_CHANGE_UNDONE`                  | `auth.email_change.undone`                  | —                      |
 | `account`        | `AUTH_EMAIL_VERIFY_COMPLETED`               | `auth.email_verify.completed`               | —                      |
 | `account`        | `AUTH_EMAIL_VERIFY_REQUESTED`               | `auth.email_verify.requested`               | —                      |
 | `account`        | `AUTH_LOGGED_OUT`                           | `auth.logout`                               | —                      |

@@ -635,6 +635,7 @@ export const SYSTEM_ACTOR: AuthContext = {
     tenantId: DEPLOYMENT_TENANT_ID,
     authTime: 0,
     amr: [],
+    twoFactorArmed: false,
     analyticsConsent: false
 };
 

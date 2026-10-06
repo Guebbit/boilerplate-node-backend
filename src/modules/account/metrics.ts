@@ -112,6 +112,18 @@ export const authEmailChangeConfirmTotal = new Counter({
 });
 
 /**
+ * Email-change undo attempts, from the old address's link. Its own series for the same reason as
+ * the confirmation one above: spending an undo token and a confirmation token answer different
+ * questions, and mixing them would hide an attacker confirming while the owner undoes.
+ */
+export const authEmailChangeUndoTotal = new Counter({
+    name: 'auth_email_change_undo_total',
+    help: 'Total email-change undo attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
  * Expired-token cleanup runs (admin endpoint).
  * Note: no `labelNames` — a maintenance job either ran or did not, so there is no outcome
  * dimension worth slicing by. Useful mainly to confirm the job is still running at all.

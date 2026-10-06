@@ -165,6 +165,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
                     imageUrl: user.imageUrl,
                     authTime: user.authTime,
                     amr: user.amr,
+                    twoFactorArmed: user.twoFactorArmed,
                     analyticsConsent: user.analyticsConsent
                 };
                 // Resolved once, here, so nothing below turns two role names into keys again.
@@ -299,7 +300,11 @@ const provedRecentlyEnough = (request: Request, tier: StepUpTier): boolean =>
  * OAuth, and this app's own `errors[].code` envelope for its own clients, which read the code and
  * never the header.
  */
-const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void => {
+const challengeForFreshAuth = (
+    response: Response,
+    maxAgeSeconds: number,
+    methods: readonly string[] = []
+): void => {
     response.setHeader(
         'WWW-Authenticate',
         `Bearer error="insufficient_user_authentication", max_age=${maxAgeSeconds}`
@@ -308,7 +313,9 @@ const challengeForFreshAuth = (response: Response, maxAgeSeconds: number): void 
         {
             code: ERROR_CODES.REAUTH_REQUIRED,
             message: t('generic.error-reauth-required'),
-            details: { maxAge: maxAgeSeconds }
+            // `methods` names what the re-authentication must PROVE beyond recency (RFC 9470 asks
+            // the same of `acr_values`); absent when the route asks for nothing but a fresh login.
+            details: { maxAge: maxAgeSeconds, ...(methods.length > 0 && { methods }) }
         }
     ]);
 };
@@ -599,7 +606,7 @@ export const requireFreshAuth =
             action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
             metadata: { reason: 'fresh_auth_required', maxAgeSeconds }
         });
-        challengeForFreshAuth(response, maxAgeSeconds);
+        challengeForFreshAuth(response, maxAgeSeconds, options.methods);
     };
 
 /**
@@ -616,13 +623,18 @@ export const requireFreshAuth =
  *
  * @param predicate - reads the request and decides whether THIS one needs a fresh session
  * @param maxAgeSeconds - passed through to {@link requireFreshAuth} when the predicate is true
+ * @param options - passed through too: what the fresh session must additionally have proved
  */
 export const requireFreshAuthWhen =
-    (predicate: (request: Request) => boolean, maxAgeSeconds: number) =>
+    (
+        predicate: (request: Request) => boolean,
+        maxAgeSeconds: number,
+        options: FreshAuthOptions = {}
+    ) =>
     (request: Request, response: Response, next: NextFunction) => {
         if (!predicate(request)) {
             next();
             return;
         }
-        requireFreshAuth(maxAgeSeconds)(request, response, next);
+        requireFreshAuth(maxAgeSeconds, options)(request, response, next);
     };

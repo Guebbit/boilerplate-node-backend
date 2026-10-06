@@ -498,6 +498,7 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
     confirmEmailVerification: 'the token is issued by the verification mail',
     confirmPasswordReset: 'the token is issued by the reset mail',
     confirmEmailChange: 'the token is issued by the change-confirmation mail',
+    undoEmailChange: 'the token is issued by the change notice mailed to the old address',
     confirmTwoFactorMethod: 'a setup for that method must be under way',
     regenerateBackupCodes: 'two-factor must already be enabled on the account',
     receivePaymentWebhook:
@@ -547,7 +548,9 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
         passwordConfirm: (_world, payload) => payload.password
     },
     confirmPasswordReset: { passwordConfirm: (_world, payload) => payload.password },
-    reauth: { password: () => PLAIN_PASSWORD },
+    // `otp` is optional and only legal for an account with a second factor armed; the generated
+    // account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
+    reauth: { password: () => PLAIN_PASSWORD, otp: () => undefined },
     mintApiKey: { permissions: () => ['users.any.read'] },
     replaceProductById: { translations: () => ({ en: { title: 'Generated Product Title' } }) },
     updateProductById: { translations: () => ({ en: { title: 'Generated Product Title' } }) }

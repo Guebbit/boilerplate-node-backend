@@ -171,9 +171,27 @@ flowchart TD
   five-guess ceiling are `two-factor/delivered-codes.ts`'s, shared.
 - **Budget.** The send spends the same per-account hourly budget as
   `POST /account/2fa/methods/{method}/send`, since both fill the same mailbox.
-- **`amr`.** The re-minted session keeps what it had and adds the method: `pwd` or the new `email`
-  (not `otp`, which means a second factor here). A session that passed 2FA at login keeps `otp` after
-  a re-auth, so a route that requires it still opens.
+- **`amr`.** The re-minted session claims ONLY what that call proved: `pwd` or the new `email`, plus
+  `otp` when the body carried a verified second-factor code (`otp` means a second factor here, and a
+  mailed code is not one). Proofs from the login are not carried over, so a password-only re-auth
+  no longer passes a route that demands `otp`.
+
+## Step-up for an account with a second factor
+
+An account with a factor armed (`AuthContext.twoFactorArmed`, read fresh on every request) must have
+proved a code in the fresh session before the identity routes: changing the email, changing the
+password, and starting an account deletion. Checkout, payments, logout-everywhere, session
+management and the data export stay password-only (ASVS 5.0 §7.5.1).
+
+- **The challenge.** The same `401 REAUTH_REQUIRED`, with `details.methods: ['otp']` beside
+  `details.maxAge` (RFC 9470's "which proof is missing"). No new error code.
+- **The answer.** `POST /account/reauth` takes the password (or the mailed code) AND an optional
+  `otp`. The code is checked only after the first proof passed, behind the per-account
+  [wrong-code cap](./account-two-factor.md#changing-factors-needs-a-factor), and earns `otp`.
+- **Unchanged without 2FA.** An account with no factor is asked nothing new; the password change
+  still proves the current password and nothing more.
+- **The undo.** An email change can be undone from the old address's link for 7 days, through
+  a password change — see [Proving an address](./account.md#proving-an-address).
 - **Boot.** An enabled OAuth provider with no deliverable mail (`smtp` with a host) refuses to boot
   outside `development` and `test`: those accounts would be locked out of checkout, payment and
   self-deletion. The demo registers its fake provider in code, not through these variables.

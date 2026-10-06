@@ -107,6 +107,13 @@ proves the address a `PUT`/`PATCH /account` change has **asked for**. They are s
 `tokens.type` values (`verify` and `email-change`), and neither can do the other's work: a signup
 token that could swap in a `pendingEmail` would be an account takeover with an extra step.
 
+The old address gets a one-time **undo link** in its notice, valid for 7 days from the request and
+kept through a password change (a password change purges every other pending one-time token, not
+this one). Only the newest request's link lives. While the change is pending the undo cancels it;
+once the new address was confirmed it restores `previousEmail`, a field written at the swap. Either
+way every session ends, since the owner is saying the change was not theirs. The link is the
+credential, so the route is public like the confirm one.
+
 A change never writes `user.email` directly. It parks the requested address in `pendingEmail`, so
 the account keeps its current, proven address — and its `verified` flag, which describes that
 proven address — until the new one is confirmed.
@@ -118,17 +125,18 @@ flowchart TB
     C -->|"the current one"| O["no-op<br/><i>a pending change, if any, is untouched</i>"]
     C -->|"taken by another account"| R["409<br/><i>email or pendingEmail</i>"]
     C -->|"any other"| W["pendingEmail set"]
-    W --> N["notice → OLD address<br/><i>no token, no link that acts</i>"]
+    W --> N["notice → OLD address<br/><i>carries the 7-day undo link</i>"]
     W --> V["verification link → NEW address<br/><i>email-change token · 24h</i>"]
     V --> F["POST /account/email-change-confirm"]
     F --> S["pendingEmail → email<br/>verified = true<br/>refresh tokens revoked"]
+    N --> U["POST /account/email-change-undo<br/><i>cancels, or restores the old address and ends every session</i>"]
     D["DELETE /account/pending-email"] --> X["pendingEmail cleared<br/><i>no mail, no token</i>"]
     Q["POST /account/pending-email/resend"] --> V2["fresh link → NEW address only<br/><i>the old link dies · 60 s cooldown</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
-    class P,F,D,Q entry;
+    class P,F,D,Q,U entry;
     class R,N warn;
     class O,W,V,V2,S,X done;
 ```

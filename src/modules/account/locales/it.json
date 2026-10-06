@@ -72,6 +72,7 @@
             "too-soon": "Una modifica dell'email è appena stata richiesta. Attendi un momento prima di richiederne un'altra.",
             "token-not-found": "Token non valido o scaduto, riprova.",
             "success": "Indirizzo email modificato.",
+            "undone": "La modifica dell'email è stata annullata e tutti i dispositivi sono stati disconnessi.",
             "cancelled": "La modifica dell'indirizzo email in sospeso è stata annullata.",
             "resent": "Un nuovo link di conferma è stato inviato al nuovo indirizzo.",
             "nothing-pending": "Non c'è nessuna modifica dell'indirizzo email in sospeso."
@@ -150,7 +151,8 @@
                 "subject": "Il tuo indirizzo email sta per cambiare",
                 "meta-title": "Modifica email richiesta",
                 "greeting": "Ciao, {{name}}!",
-                "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, cambia subito la password e disconnetti tutti i dispositivi."
+                "body": "Qualcuno ha richiesto di modificare l'indirizzo email di questo account in {{newEmail}}. Se sei stato tu, non devi fare nulla — la modifica avrà effetto una volta confermato il nuovo indirizzo. Se non sei stato tu, annulla la modifica con il link qui sotto: funziona per 7 giorni, anche dopo la conferma del nuovo indirizzo, e disconnette tutti i dispositivi.",
+                "link-label": "Annulla questa modifica"
             },
             "two-factor-changed": {
                 "subject": "Le tue impostazioni di verifica in due passaggi sono cambiate",
