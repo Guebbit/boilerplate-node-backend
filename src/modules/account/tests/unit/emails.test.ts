@@ -14,6 +14,7 @@ import {
     deleteRequestEmail,
     deleteConfirmEmail,
     twoFactorChangedEmail,
+    twoFactorLockedEmail,
     exportReadyEmail,
     greetableName
 } from '@modules/account/emails';
@@ -196,6 +197,25 @@ describe('account emails — the data export link', () => {
             expect(typeof value).toBe('string');
             expect(value).not.toBe('');
             expect(value).not.toMatch(/^account\.email\./);
+        }
+    });
+});
+
+describe('account emails — the two-factor lock notice', () => {
+    it('renders its own template, in real copy in both shipped languages, naming the minutes', () => {
+        expect(twoFactorLockedEmail('en', NAME, 15).template).toBe('account.two-factor-locked');
+
+        for (const locale of ['en', 'it']) {
+            const { data, subject } = twoFactorLockedEmail(locale, NAME, 15);
+
+            for (const value of [subject, data.greeting, data.body, data.advice]) {
+                expect(typeof value).toBe('string');
+                expect(value).not.toBe('');
+                expect(value).not.toMatch(/^account\.email\./);
+                expect(value).not.toContain('{{');
+            }
+            expect(data.greeting).toContain(NAME);
+            expect(data.body).toContain('15');
         }
     });
 });

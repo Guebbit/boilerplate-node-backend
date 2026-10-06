@@ -30,6 +30,7 @@ import {
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
 import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
 import { MAIL_RECIPIENT_BUDGET } from './mail-budget';
+import { readMfaChallengeCookie } from './oauth/mfa-redirect';
 
 /**
  * Where express-rate-limit stores the identity limiter's counter on `request` — a distinct name
@@ -288,14 +289,17 @@ export const resetRequestLimiters: RequestHandler[] = [
 const MFA_CHALLENGE_WINDOW_MS = MFA_CHALLENGE_DELIVERED_TTL_MS;
 
 /**
- * The bucket key both challenge limiters use: the challenge string itself, hashed so a credential
+ * The bucket key both challenge limiters use: the challenge string itself (from the body, else the
+ * OAuth continuation's cookie), hashed so a credential
  * never becomes a store key. A request naming no challenge at all — a forged or malformed body —
  * has nothing to hash, so it falls back to the caller's address BLOCK (`addressBlockOf`) rather
  * than one shared key: a shared key let any two such callers exhaust the same budget, which
  * bounds neither of them against a live challenge the way this limiter exists to.
  */
 const challengeKey = (request: Request): string => {
-    const challenge = readBodyField(request, 'challenge');
+    // An OAuth continuation never sends the challenge in the body: it rides in a cookie.
+    const fromBody = readBodyField(request, 'challenge');
+    const challenge = fromBody ? fromBody : readMfaChallengeCookie(request);
     return challenge
         ? createHash('sha256').update(challenge).digest('hex')
         : `block:${addressBlockOf(request)}`;
@@ -380,33 +384,6 @@ const ACCOUNT_CODE_SEND_BUDGET: RateLimitBudget = {
 /** The budget for both signed-in code sends — see {@link ACCOUNT_CODE_SEND_BUDGET}. */
 export const accountCodeSendLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_SEND_BUDGET);
 
-/**
- * WRONG codes a signed-in account may type into the calls that change its own second factors.
- * Those calls take a TOTP or backup code from a session that already passed fresh auth, so a
- * stolen session plus password would otherwise guess six digits behind the global brake alone.
- *
- * Failures only: a right code spends nothing, so changing factors is never itself rationed.
- * Keyed on the account, like the delivery budget above: an address key would reset per IP.
- */
-const ACCOUNT_CODE_GUESS_BUDGET: RateLimitBudget = {
-    name: 'Two-factor code guesses — per account',
-    namespace: 'mfa-account-guess',
-    environmentVariable: 'NODE_MFA_ACCOUNT_GUESS_MAX',
-    defaultMax: 5,
-    windowMs: ACCOUNT_CODE_WINDOW_MS,
-    keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT,
-    bounds:
-        'Wrong codes a signed-in account types to change its factors (`DELETE /account/2fa`, ' +
-        '`POST /account/2fa/methods/{method}/setup`, `DELETE /account/2fa/methods/{method}`, ' +
-        '`POST /account/2fa/backup-codes`).',
-    audited: true,
-    keyGenerator: accountIdOf,
-    skipSuccessfulRequests: true
-};
-
-/** The budget for the factor-changing calls — see {@link ACCOUNT_CODE_GUESS_BUDGET}. */
-export const accountCodeGuessLimiter: RequestHandler = buildRateLimiter(ACCOUNT_CODE_GUESS_BUDGET);
-
 /** This module's declared budgets — listed on `./module.ts`'s `rateLimits`. */
 export const accountRateLimits: readonly RateLimitBudget[] = [
     MAIL_RECIPIENT_BUDGET,
@@ -422,6 +399,5 @@ export const accountRateLimits: readonly RateLimitBudget[] = [
     RESET_BLOCK_BUDGET,
     MFA_CHALLENGE_BUDGET,
     MFA_SEND_BUDGET,
-    ACCOUNT_CODE_SEND_BUDGET,
-    ACCOUNT_CODE_GUESS_BUDGET
+    ACCOUNT_CODE_SEND_BUDGET
 ];

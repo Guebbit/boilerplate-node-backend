@@ -36,7 +36,10 @@ import {
     cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
-    persistReauthCode
+    persistReauthCode,
+    reserveMfaAttempt,
+    resetMfaAttempts,
+    claimTotpStep
 } from './credentials';
 import {
     consumeToken,
@@ -72,6 +75,7 @@ export { create } from './create';
 export { update, updateById } from './update';
 export { remove, restoreById, removeById } from './remove';
 export { consumeToken } from './tokens';
+export { MFA_MAX_FAILURES, MFA_LOCK_MS } from './credentials';
 
 /** The service's public surface — the controllers call through this, never the bare functions. */
 export const userService = {
@@ -105,6 +109,9 @@ export const userService = {
     markInactivityWarned,
     persistTwoFactorMethods,
     persistReauthCode,
+    reserveMfaAttempt,
+    resetMfaAttempts,
+    claimTotpStep,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,

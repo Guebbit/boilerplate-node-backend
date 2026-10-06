@@ -157,6 +157,15 @@ export interface UserRecord extends Omit<
      */
     reauthCode?: DeliveredCodeState;
 
+    /**
+     * Wrong-code reservations against an ARMED second factor in the current window — one counter for
+     * every place a code is typed. Written only by `reserveMfaAttempt` and `resetMfaAttempts`.
+     */
+    mfaFailures: number;
+
+    /** While in the future, no code is compared at all: the account is locked out of 2FA checks. */
+    mfaLockedUntil?: Date;
+
     /** Salted-scrypt digests of unused backup codes — see `account/two-factor/backup-codes.ts`. */
     twoFactorBackupCodes: string[];
 
@@ -237,6 +246,18 @@ export interface TwoFactorMethodRecord extends DeliveredCodeState {
 
     /** The RFC 6238 time step of the last code accepted by a device method — replay protection. */
     lastUsedStep?: number;
+}
+
+/**
+ * What `reserveMfaAttempt` answers: whether a code may be compared at all, and whether THIS
+ * reservation is the one that tripped the lock (so exactly one caller mails the owner).
+ */
+export interface MfaReservation {
+    /** False while the account is locked: refuse without comparing anything. */
+    reserved: boolean;
+
+    /** True for the single reservation that reached the cap. */
+    lockedNow: boolean;
 }
 
 /**
@@ -570,6 +591,15 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             select: false,
             default: []
         },
+        /* Wrong 2FA codes reserved in this window; `reserveMfaAttempt` is the only incrementer. */
+        mfaFailures: {
+            type: Number,
+            default: 0
+        },
+        /* End of the 2FA lock, absent when none is set. */
+        mfaLockedUntil: {
+            type: Date
+        },
         /*
          * The step-up code in flight for an account with no password. `select: false` like the
          * 2FA fields: it is credential material, and only the re-auth flow reads it.
@@ -802,6 +832,8 @@ export type UserWire = Omit<
     | 'twoFactorBackupCodeSalt'
     | 'reauthCode'
     | 'oauthAccounts'
+    | 'mfaFailures'
+    | 'mfaLockedUntil'
 >;
 
 /**
@@ -832,7 +864,9 @@ export const applyUserTransform = applySerialization(userSchema, {
         'twoFactorBackupCodes',
         'twoFactorBackupCodeSalt',
         'reauthCode',
-        'oauthAccounts'
+        'oauthAccounts',
+        'mfaFailures',
+        'mfaLockedUntil'
     ]
 });
 

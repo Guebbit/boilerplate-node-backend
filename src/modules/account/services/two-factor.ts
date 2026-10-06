@@ -15,6 +15,7 @@ import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     userService,
+    MFA_LOCK_MS,
     TokenType,
     type TwoFactorMethodRecord,
     type UserDocument
@@ -26,6 +27,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
+import { isLostRace } from '@infrastructure/persistence/versioning';
 import type { CallerContext } from '@types';
 import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
@@ -41,6 +43,7 @@ import type {
 import { accountAuditActions } from '../audit';
 import {
     twoFactorChangedEmail,
+    twoFactorLockedEmail,
     recipientLocale,
     greetableName,
     type TwoFactorChange
@@ -119,14 +122,50 @@ const audited = <T>(
     });
 
 /**
- * The rejection a wrong code earns, SAVED rather than discarded: a miss spends something — a
- * delivered code's attempt budget — and dropping that write is how an attempt ceiling silently
- * becomes no ceiling at all.
+ * The rejection a wrong code earns, SAVED when it spent something: a miss can burn a delivered
+ * code's attempt budget, and dropping that write is how an attempt ceiling silently becomes no
+ * ceiling at all. A miss that changed nothing (a wrong or replayed TOTP) writes nothing, so a
+ * burst of them cannot collide with each other or with the one right code among them.
+ * A save that loses a race to a concurrent write is logged, not failed: the per-account
+ * reservation, not this write, is what bounds the guessing.
  */
 const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
-    userService
-        .persistTwoFactorMethods(user)
+    (user.isModified()
+        ? userService.persistTwoFactorMethods(user).then(() => undefined)
+        : Promise.resolve()
+    )
+        .catch((error: unknown) => {
+            if (!isLostRace(error)) throw error;
+            logger.warn({ message: 'A wrong-code write lost a race to a concurrent one.', error });
+        })
         .then(() => generateReject(422, [t('account.two-factor.wrong-code')]));
+
+/** The lock's length in minutes, for the notice's copy. */
+const MFA_LOCK_MINUTES = MFA_LOCK_MS / 60_000;
+
+/**
+ * The rejection a locked account earns: 429, before any code was compared. The lock is the same
+ * brake a login's own budgets use, so a client already renders it.
+ */
+const rejectLocked = (): ResponseReject => generateReject(429, [t('account.two-factor.locked')]);
+
+/**
+ * Tell the account holder, out of band, that wrong codes just locked their 2FA checks. Fire-and-
+ * forget, like {@link notifyChange}: the lock already holds.
+ */
+const notifyLocked = (user: UserDocument, context: CallerContext): void => {
+    void sendAccountMail(
+        user.email,
+        twoFactorLockedEmail(
+            recipientLocale(user.locale, context),
+            greetableName(user, user.email),
+            MFA_LOCK_MINUTES
+        ),
+        'normal'
+    ).catch((error: unknown) => {
+        logger.warn({ message: 'Could not queue a two-factor lock notice.', error });
+    });
+};
 
 /** The account's armed factors, in the registry's own order rather than enrollment order. */
 const armedEntries = (user: UserDocument) =>
@@ -192,6 +231,53 @@ const verifyAnyFactor = (user: UserDocument, code: string): Promise<boolean> =>
     );
 
 /**
+ * What checking a code against an ARMED factor answered: it matched, it did not, or the account
+ * is locked and nothing was compared.
+ */
+type FactorVerdict = 'matched' | 'wrong' | 'locked';
+
+/**
+ * Check `code` against the account's armed factors, behind the per-account wrong-code cap.
+ *
+ * The attempt is RESERVED first (one atomic write), then compared: a parallel burst cannot read
+ * "under the cap" together. No reservation means locked, and nothing is compared. A right code
+ * hands the counter back. Enrolment `/confirm` never comes through here: it checks a factor that
+ * is not armed yet, so a miss there guards nothing.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param code - a code from any armed method, or an unused backup code
+ * @param context - the caller, whose locale is the fallback for the lock notice
+ */
+const verifyArmedFactor = (
+    user: UserDocument,
+    code: string,
+    context: CallerContext
+): Promise<FactorVerdict> =>
+    userService.reserveMfaAttempt(user.id).then(({ reserved, lockedNow }) => {
+        if (!reserved) return 'locked' as const;
+        if (lockedNow) notifyLocked(user, context);
+
+        return verifyAnyFactor(user, code).then((matched) =>
+            matched
+                ? userService.resetMfaAttempts(user.id).then(() => 'matched' as const)
+                : ('wrong' as const)
+        );
+    });
+
+/**
+ * Turn a {@link FactorVerdict} into the response: run `onMatch` for a right code, refuse a locked
+ * account without comparing, and save what a miss spent for a wrong one.
+ */
+const settleVerdict = <T>(
+    verdict: FactorVerdict,
+    user: UserDocument,
+    onMatch: () => Promise<ResponseSuccess<T> | ResponseReject>
+): Promise<ResponseSuccess<T> | ResponseReject> => {
+    if (verdict === 'matched') return onMatch();
+    return verdict === 'locked' ? Promise.resolve(rejectLocked()) : rejectWrongCode(user);
+};
+
+/**
  * Load the caller, run a caller-specific `precondition` against them, then verify `code` against
  * any armed factor. `precondition` returns a rejection to short-circuit before spending a verify
  * attempt, or `undefined` to proceed; `onMatch` runs only once `code` actually verifies. The
@@ -200,12 +286,14 @@ const verifyAnyFactor = (user: UserDocument, code: string): Promise<boolean> =>
  *
  * @param userId - the caller
  * @param code - a code from any armed method, or an unused backup code
+ * @param context - the caller, for the lock notice
  * @param precondition - a check specific to the caller, run before spending a verify attempt
  * @param onMatch - the mutation to run once `code` verifies
  */
 const withVerifiedCode = <T>(
     userId: string,
     code: string,
+    context: CallerContext,
     precondition: (user: UserDocument) => ResponseReject | undefined,
     onMatch: (user: UserDocument) => Promise<ResponseSuccess<T> | ResponseReject>
 ): Promise<ResponseSuccess<T> | ResponseReject> =>
@@ -217,8 +305,8 @@ const withVerifiedCode = <T>(
             const rejection = precondition(user);
             if (rejection) return rejection;
 
-            return verifyAnyFactor(user, code).then((matched) =>
-                matched ? onMatch(user) : rejectWrongCode(user)
+            return verifyArmedFactor(user, code, context).then((verdict) =>
+                settleVerdict(verdict, user, () => onMatch(user))
             );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
@@ -393,8 +481,8 @@ export const setupTwoFactorMethod = (
             // Once anything is armed, changing the factors needs a factor (or a backup code), so
             // a stolen-but-fresh session cannot swap out the very thing it would have to pass.
             if (!code) return generateReject(422, [t('account.two-factor.code-required')]);
-            return verifyAnyFactor(user, code).then((matched) =>
-                matched ? beginSetup(user, handler, context) : rejectWrongCode(user)
+            return verifyArmedFactor(user, code, context).then((verdict) =>
+                settleVerdict(verdict, user, () => beginSetup(user, handler, context))
             );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
@@ -571,6 +659,7 @@ export const removeTwoFactorMethod = (
     const outcome = withVerifiedCode(
         userId,
         code,
+        context,
         (user) => {
             enrolledIndex = user.twoFactorMethods.findIndex(
                 (candidate) => candidate.method === method && candidate.enrolledAt
@@ -614,6 +703,7 @@ export const disableTwoFactor = (
     const outcome = withVerifiedCode(
         userId,
         code,
+        context,
         (user) =>
             user.twoFactorEnabledAt
                 ? undefined
@@ -648,6 +738,7 @@ export const regenerateBackupCodes = (
     const outcome = withVerifiedCode(
         userId,
         code,
+        context,
         (user) =>
             user.twoFactorEnabledAt
                 ? undefined
@@ -734,19 +825,23 @@ export const verifyLoginChallenge = (
             const { user, entry } = found;
             if (!user.twoFactorEnabledAt) return generateReject(401, []);
 
-            return verifyAnyFactor(user, code).then((matched) => {
-                if (!matched) return rejectWrongCode(user);
-
-                // Right code: spend the challenge before minting anything. A wrong code leaves
-                // it live — `mfaChallengeLimiter` is what bounds how many times it can be tried.
-                return spendLiveToken(user, challenge).then(() =>
-                    userService
-                        .persistTwoFactorMethods(user)
-                        .then((saved) =>
-                            generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
-                        )
-                );
-            });
+            return verifyArmedFactor(user, code, context).then((verdict) =>
+                settleVerdict(verdict, user, () =>
+                    // Right code: spend the challenge before minting anything. A wrong code leaves
+                    // it live — `mfaChallengeLimiter` bounds how often it can be tried. Only the
+                    // request whose own write removed it may mint: a concurrent twin is refused
+                    // like a challenge that never existed.
+                    spendLiveToken(user, challenge).then((spentByThisRequest) =>
+                        spentByThisRequest
+                            ? userService
+                                  .persistTwoFactorMethods(user)
+                                  .then((saved) =>
+                                      generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
+                                  )
+                            : generateReject(401, [t('account.two-factor.challenge-invalid')])
+                    )
+                )
+            );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 

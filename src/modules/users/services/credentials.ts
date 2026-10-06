@@ -3,7 +3,7 @@
  * The `account` end of the shared kernel, write side: one narrow mutation per operation.
  */
 
-import type { UserDocument } from '../model';
+import type { MfaReservation, UserDocument } from '../model';
 import { userRepository } from '../repository';
 
 /**
@@ -88,3 +88,30 @@ export const persistReauthCode = (user: UserDocument): Promise<UserDocument> => 
     user.markModified('reauthCode');
     return userRepository.save(user);
 };
+
+/**
+ * Wrong codes an account may have reserved against its armed 2FA before it locks. NIST SP 800-63B
+ * allows at most 100; ten is what a person mistyping can plausibly reach.
+ */
+export const MFA_MAX_FAILURES = 10;
+
+/** How long the lock lasts once {@link MFA_MAX_FAILURES} is reached. */
+export const MFA_LOCK_MS = 15 * 60_000;
+
+/**
+ * Reserve one wrong-code attempt against the account's armed 2FA, before any code is compared.
+ * `reserved: false` means locked: the caller must refuse without comparing. `lockedNow` is true
+ * for exactly the reservation that tripped the lock.
+ */
+export const reserveMfaAttempt = (id: string): Promise<MfaReservation> =>
+    userRepository.reserveMfaAttempt(id, MFA_MAX_FAILURES, MFA_LOCK_MS);
+
+/** Clear the 2FA attempt counter and lock — after a right code, or a completed password reset. */
+export const resetMfaAttempts = (id: string): Promise<void> => userRepository.resetMfaAttempts(id);
+
+/**
+ * Take a TOTP time step for one method, atomically. `false` means a concurrent request (or a
+ * replay) already holds that step or a later one.
+ */
+export const claimTotpStep = (id: string, method: string, step: number): Promise<boolean> =>
+    userRepository.claimTotpStep(id, method, step);

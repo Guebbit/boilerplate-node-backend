@@ -17,7 +17,7 @@ import { setCookie } from '@tests/cookies';
 import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
 import { TokenType, hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
 import { testCallerContext } from '@tests/callers';
@@ -793,7 +793,7 @@ describe('logging in with a device factor', () => {
         // TOTP's own replay guard, which the earlier "replay protection" test already covers.
         const second = await api()
             .post('/account/login/2fa')
-            .send({ challenge, code: await codeFor(secret, 2) });
+            .send({ challenge, code: await codeFor(secret, 1) });
         expect(second.status).toBe(401);
     });
 
@@ -1219,5 +1219,156 @@ describe('the bypass — a challenge token must never authenticate a request on 
             .send();
 
         expect(response.status).toBe(401);
+    });
+});
+
+/** Types one wrong code into a call that checks an ARMED factor (replacing the TOTP factor). */
+const wrongCode = (bearer: string) =>
+    api()
+        .post('/account/2fa/methods/totp/setup')
+        .set('Authorization', bearer)
+        .send({ code: '000000' });
+
+/** The account's stored counter and lock, read straight from the database. */
+const lockStateOf = (userId: string) =>
+    userRepository.findByIdWithCredentials(userId).then((stored) => ({
+        failures: stored?.mfaFailures ?? 0,
+        lockedUntil: stored?.mfaLockedUntil
+    }));
+
+describe('the per-account wrong-code lock', () => {
+    it('locks after 10 wrong codes, refuses the 11th even when it is right, and mails the owner once', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        mockOutbox.length = 0;
+
+        for (let attempt = 0; attempt < 10; attempt++) {
+            const response = await wrongCode(bearer);
+            expect(response.status).toBe(422);
+        }
+
+        const refused = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(refused.status).toBe(429);
+        expect(await lockStateOf(user.id)).toEqual({
+            failures: 10,
+            lockedUntil: expect.any(Date)
+        });
+        expect(mailsOf('account.two-factor-locked')).toHaveLength(1);
+        // The armed factor survived: a refused check disarms nothing.
+        const status = await api().get('/account/2fa').set('Authorization', bearer).send();
+        expect(status.body.data.enabled).toBe(true);
+    });
+
+    it('lets a right code through once the lock has expired, and clears the counter', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { mfaFailures: 10, mfaLockedUntil: new Date(Date.now() - 1000) } }
+        );
+
+        const response = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(response.status).toBe(200);
+        expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
+    });
+
+    it('hands a right code its reservation back, so mistypes never pile up across sessions', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        for (let attempt = 0; attempt < 4; attempt++) await wrongCode(bearer);
+
+        await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
+    });
+
+    it('cannot be outrun by parallel wrong codes: exactly 10 are compared', async () => {
+        const { user, bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+
+        const responses = await Promise.all(Array.from({ length: 25 }, () => wrongCode(bearer)));
+
+        const statuses = responses.map((response) => response.status);
+        expect(statuses.filter((status) => status === 422)).toHaveLength(10);
+        expect(statuses.filter((status) => status === 429)).toHaveLength(15);
+        expect(await lockStateOf(user.id)).toMatchObject({ failures: 10 });
+    });
+
+    it('does not count a wrong code at enrolment confirm, where no factor is armed yet', async () => {
+        const { user, bearer } = await authenticateVerified();
+        await api().post('/account/2fa/methods/totp/setup').set('Authorization', bearer).send();
+
+        for (let attempt = 0; attempt < 12; attempt++) {
+            const response = await api()
+                .post('/account/2fa/methods/totp/confirm')
+                .set('Authorization', bearer)
+                .send({ code: '000000' });
+            expect(response.status).toBe(422);
+        }
+
+        expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
+    });
+
+    it('counts wrong codes typed at the login challenge too, and refuses a locked login', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { mfaFailures: 10, mfaLockedUntil: new Date(Date.now() + 60_000) } }
+        );
+        const challenge = await mintChallenge(user.id);
+
+        const response = await api()
+            .post('/account/login/2fa')
+            .send({ challenge, code: await codeFor(secret, 1) });
+
+        expect(response.status).toBe(429);
+        expect(response.headers['set-cookie']).toBeUndefined();
+    });
+
+    it('is cleared by a completed password reset', async () => {
+        const { user, bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { mfaFailures: 10, mfaLockedUntil: new Date(Date.now() + 60_000) } }
+        );
+        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'reset-clears-the-lock');
+
+        const response = await api().post('/account/reset-confirm').send({
+            token: 'reset-clears-the-lock',
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
+        });
+
+        expect(response.status).toBe(200);
+        expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
+    });
+
+    it('lets exactly one of two concurrent right codes mint a session', async () => {
+        const { user, bearer } = await authenticateVerified();
+        const { secret } = await enrollTotp(bearer);
+        const challenge = await mintChallenge(user.id);
+        const code = await codeFor(secret, 1);
+
+        const responses = await Promise.all(
+            Array.from({ length: 2 }, () =>
+                api().post('/account/login/2fa').send({ challenge, code })
+            )
+        );
+
+        expect(responses.filter((response) => response.status === 200)).toHaveLength(1);
+        expect(responses.filter((response) => response.status >= 500)).toEqual([]);
     });
 });

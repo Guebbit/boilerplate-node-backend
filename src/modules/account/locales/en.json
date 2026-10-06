@@ -47,6 +47,7 @@
             "disabled": "Two-factor authentication is now off.",
             "backup-codes-regenerated": "Your backup codes have been regenerated. The old ones no longer work.",
             "code-sent": "We've sent you a code.",
+            "locked": "Too many wrong codes. Two-factor checks on this account are paused for a while; try again later.",
             "challenge-invalid": "This login attempt has expired. Please sign in again."
         },
         "logout": {
@@ -159,6 +160,13 @@
                 "body-removed": "The second sign-in step ({{method}}) was removed from your account.",
                 "body-disabled": "Two-factor authentication was turned off on your account.",
                 "advice": "If this was not you, change your password and sign out everywhere now."
+            },
+            "two-factor-locked": {
+                "subject": "Your two-factor checks are locked",
+                "meta-title": "Two-factor checks locked",
+                "greeting": "Hello, {{name}}!",
+                "body": "Too many wrong two-factor codes were entered on your account, so code checks are paused for {{minutes}} minutes.",
+                "advice": "If this was not you, someone knows your password: change it now. Resetting your password also lifts the lock."
             },
             "reauth-code": {
                 "subject": "Your confirmation code",

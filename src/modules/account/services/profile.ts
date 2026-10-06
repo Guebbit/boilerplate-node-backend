@@ -56,6 +56,17 @@ import { accountAuditActions } from '../audit';
 import { isUnrestrictedCaller } from '../roles';
 
 /**
+ * The write a completed reset rides along on: the proven mailbox verifies the address, and the
+ * 2FA wrong-code counter and lock clear. Someone who can read the mailbox has the account's own
+ * recovery path, so the lock holds nothing back from them.
+ */
+const markResetCompleted = (user: UserDocument): Promise<void> => {
+    user.mfaFailures = 0;
+    user.mfaLockedUntil = undefined;
+    return markVerified(user);
+};
+
+/**
  * Validate a new-password pair without touching the user.
  * Split out of {@link passwordChange} so `reset-confirm` can validate BEFORE spending the
  * one-time token — consuming it is what resolves two simultaneous uses of one reset link, so
@@ -196,7 +207,7 @@ export const passwordResetChange = (
     passwordConfirm: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    passwordChange(user, password, passwordConfirm, markVerified).then((result) =>
+    passwordChange(user, password, passwordConfirm, markResetCompleted).then((result) =>
         afterReset(result, user, context)
     );
 
@@ -292,7 +303,7 @@ export const completePasswordReset = (
 
                 return spendLiveToken(user, token).then((spentByThisRequest) =>
                     spentByThisRequest
-                        ? writePassword(user, password, markVerified).then((result) =>
+                        ? writePassword(user, password, markResetCompleted).then((result) =>
                               afterReset(result, user, context)
                           )
                         : linkRefused()

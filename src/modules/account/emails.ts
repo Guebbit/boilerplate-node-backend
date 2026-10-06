@@ -247,6 +247,34 @@ export const twoFactorChangedEmail = (
     };
 };
 
+/**
+ * Two-factor lock notice: sent once, when too many wrong codes lock the account's 2FA checks.
+ * Someone is guessing codes; the owner is the one person who can tell whether it was them.
+ * Carries no link that acts.
+ *
+ * @param minutes - how long the lock lasts, so the copy and the server never disagree
+ */
+export const twoFactorLockedEmail = (
+    locale: string,
+    name: string,
+    minutes: number
+): EmailContent => {
+    const t = translator(locale);
+    return {
+        template: 'account.two-factor-locked',
+        subject: t('account.email.two-factor-locked.subject'),
+        data: {
+            locale,
+            pageMetaTitle: t('account.email.two-factor-locked.meta-title'),
+            pageMetaLinks: [],
+            greeting: greetingFor(t, 'account.email.two-factor-locked.greeting', name),
+            body: t('account.email.two-factor-locked.body', { minutes }),
+            advice: t('account.email.two-factor-locked.advice'),
+            footer: t('email.footer')
+        }
+    };
+};
+
 /** Password reset: the confirmation, after the password actually changed. */
 export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
     const t = translator(locale);

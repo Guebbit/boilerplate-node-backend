@@ -10,6 +10,7 @@
  */
 
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import type { RequestHandler } from 'express';
 import type supertest from 'supertest';
 import { withEnvironmentOverrides } from './environment';
@@ -57,6 +58,8 @@ export const appAnswering = (
     const app = express();
     if (trustProxyHop) app.set('trust proxy', 1);
     app.use(express.json());
+    // Fills `request.cookies`, which a key generator reading a cookie needs, as in the real app.
+    app.use(cookieParser());
     app.post('/route', ...limiters, (_request, response) => {
         response.status(status).json({});
     });
