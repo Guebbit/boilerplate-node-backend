@@ -17,10 +17,10 @@ import type { InvoiceParty } from './model';
 export type InvoiceDocumentKind = 'invoice' | 'credit-note';
 
 /** The party's fields, walked by both directions. */
-const PARTY_FIELDS = ['fullName', 'street', 'city', 'zip', 'country'] as const;
+export const PARTY_FIELDS = ['fullName', 'street', 'city', 'zip', 'country'] as const;
 
 /** The associated data binding one field of one document's address. */
-const partyAad = (
+export const partyAad = (
     kind: InvoiceDocumentKind,
     field: (typeof PARTY_FIELDS)[number],
     documentId: string

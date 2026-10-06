@@ -97,6 +97,13 @@ export const encryptVersionedSecret = (
 };
 
 /**
+ * The key version a stored ciphertext was written under — what a rotation job counts by.
+ *
+ * @param stored - a value written by {@link encryptVersionedSecret}
+ */
+export const versionOf = (stored: string): string => stored.split(':', 1)[0];
+
+/**
  * Decrypt a stored secret, against whichever ring entry wrote it.
  *
  * @param ring - every key this deployment still holds, in any order — lookup is by the
@@ -133,3 +140,28 @@ export const decryptVersionedSecret = (
         decipher.final()
     ]).toString('utf8');
 };
+
+/**
+ * Moves a stored secret onto the ring's newest key, under the same binding. A value already on
+ * `ring[0]` comes back unchanged — byte for byte, since a fresh IV would make a no-op look like a
+ * write — which is what makes a re-encryption job idempotent.
+ *
+ * @param stored - the value to move
+ * @param ring - every key this deployment holds; the newest is the target
+ * @param binding - the one `stored` was written under, and the one the result is written under
+ * @param label - what to name the secret in an error, as for {@link decryptVersionedSecret}
+ * @throws as {@link decryptVersionedSecret} does, so a corrupt row stops the job instead of being skipped
+ */
+export const rewrapVersionedSecret = (
+    stored: string,
+    ring: readonly VersionedKey[],
+    binding: SecretBinding,
+    label: string
+): string =>
+    versionOf(stored) === ring[0].version
+        ? stored
+        : encryptVersionedSecret(
+              decryptVersionedSecret(stored, ring, binding, label),
+              ring,
+              binding
+          );

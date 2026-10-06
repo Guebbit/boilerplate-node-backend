@@ -8,7 +8,8 @@
 import { generateURI, verify } from 'otplib';
 import {
     encryptVersionedSecret,
-    decryptVersionedSecret
+    decryptVersionedSecret,
+    type SecretBinding
 } from '@infrastructure/security/versioned-secret';
 import { mailConfig } from '@infrastructure/adapters/config';
 import { getTotpEncryptionKeyRing } from '../session/config';
@@ -23,8 +24,14 @@ const TOTP_STEP_SECONDS = 30;
  */
 const TOTP_EPOCH_TOLERANCE_SECONDS = TOTP_STEP_SECONDS;
 
-/** The AAD binding a TOTP secret to its method entry. */
-const totpAad = (methodId: string): string => `users:twoFactorMethods.secret:${methodId}`;
+/**
+ * The binding of a TOTP secret to its method entry: the `totp` HKDF label and the entry's `_id`
+ * as associated data. Also what a re-encryption job rewraps under.
+ */
+export const totpBinding = (methodId: string): SecretBinding => ({
+    purpose: 'totp',
+    aad: `users:twoFactorMethods.secret:${methodId}`
+});
 
 /**
  * Encrypt a TOTP secret for storage. See `encryptVersionedSecret` for the wire format.
@@ -35,10 +42,7 @@ const totpAad = (methodId: string): string => `users:twoFactorMethods.secret:${m
  * @returns the versioned ciphertext to store in the method entry's `secret`
  */
 export const encryptTotpSecret = (plaintext: string, methodId: string): string =>
-    encryptVersionedSecret(plaintext, getTotpEncryptionKeyRing(), {
-        purpose: 'totp',
-        aad: totpAad(methodId)
-    });
+    encryptVersionedSecret(plaintext, getTotpEncryptionKeyRing(), totpBinding(methodId));
 
 /**
  * Decrypt a stored TOTP secret.
@@ -50,12 +54,7 @@ export const encryptTotpSecret = (plaintext: string, methodId: string): string =
  *   (tampering, or the wrong key version)
  */
 export const decryptTotpSecret = (stored: string, methodId: string): string =>
-    decryptVersionedSecret(
-        stored,
-        getTotpEncryptionKeyRing(),
-        { purpose: 'totp', aad: totpAad(methodId) },
-        'TOTP'
-    );
+    decryptVersionedSecret(stored, getTotpEncryptionKeyRing(), totpBinding(methodId), 'TOTP');
 
 /**
  * The `otpauth://` URI an authenticator app scans to enroll — the frontend renders it as a QR

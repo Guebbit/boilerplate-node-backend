@@ -6,6 +6,11 @@
  * below.
  */
 
+import {
+    reencryptOf,
+    type ReencryptSpec,
+    type ReencryptReport
+} from '@infrastructure/security/reencrypt';
 import { orderModel, applyOrderTransform, orderNumberCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
 import { Types } from 'mongoose';
@@ -539,6 +544,7 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
  */
 export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> & {
     aggregate: <T = OrderDocument>(pipeline: PipelineStage[]) => Promise<T[]>;
+    reencrypt: (spec: ReencryptSpec<OrderDocument>, dryRun?: boolean) => Promise<ReencryptReport>;
     search: (
         filters?: object,
         scope?: Record<string, unknown>
@@ -593,6 +599,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     incrementOrderNumberCounter: (year: number) => Promise<number>;
 } = {
     ...base,
+    reencrypt: reencryptOf(orderModel),
     create,
     aggregate,
     search,

@@ -22,6 +22,7 @@ export {
     type RefundedInput
 } from './issue-credit-note';
 export { renderInvoicePdf, renderCreditNotePdf } from './render';
+export { reencryptInvoices } from './reencrypt';
 export { allocateInvoiceNumber, allocateCreditNoteNumber } from './numbering';
 
 /** The service's public surface — every controller and event listener goes through this. */

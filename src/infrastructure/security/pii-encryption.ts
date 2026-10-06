@@ -11,12 +11,20 @@
 import {
     encryptVersionedSecret,
     decryptVersionedSecret,
+    type SecretBinding,
     type VersionedKey
 } from './versioned-secret';
 import { piiConfig } from './config';
 
 /** `NODE_PII_ENCRYPTION_KEY`'s ring — see `parseVersionedKeyRing` for the env var's wire format. */
-const getPiiEncryptionKeyRing = (): VersionedKey[] => piiConfig().NODE_PII_ENCRYPTION_KEY;
+export const getPiiEncryptionKeyRing = (): VersionedKey[] => piiConfig().NODE_PII_ENCRYPTION_KEY;
+
+/**
+ * The binding a PII field is written under — what a re-encryption job needs to rewrap one.
+ *
+ * @param aad - where the value lives, as for {@link encryptPii}
+ */
+export const piiBinding = (aad: string): SecretBinding => ({ purpose: 'pii', aad });
 
 /**
  * Encrypt one PII field for storage. See `encryptVersionedSecret` for the wire format.

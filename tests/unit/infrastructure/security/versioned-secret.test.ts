@@ -9,6 +9,8 @@ import {
     encryptVersionedSecret,
     decryptVersionedSecret,
     parseVersionedKeyRing,
+    rewrapVersionedSecret,
+    versionOf,
     type SecretBinding,
     type VersionedKey
 } from '@infrastructure/security/versioned-secret';
@@ -129,5 +131,35 @@ describe('parseVersionedKeyRing', () => {
         const otherRing: SecretBinding = { purpose: 'totp', aad: BIND.aad };
 
         expect(() => decryptVersionedSecret(ciphertext, RING, otherRing, 'test')).toThrow();
+    });
+});
+
+describe('versionOf / rewrapVersionedSecret', () => {
+    const rotated: VersionedKey[] = [{ version: 'v2', key: 'rotated-key-material' }, KEY];
+
+    it('reads the stamped version', () => {
+        expect(versionOf(encryptVersionedSecret('x', RING, BIND))).toBe('v1');
+    });
+
+    it('moves a value onto the newest key, same plaintext, same binding', () => {
+        const old = encryptVersionedSecret('keep-me', RING, BIND);
+
+        const moved = rewrapVersionedSecret(old, rotated, BIND, 'test');
+
+        expect(versionOf(moved)).toBe('v2');
+        expect(decryptVersionedSecret(moved, rotated, BIND, 'test')).toBe('keep-me');
+    });
+
+    it('returns a value already on the newest key untouched, byte for byte', () => {
+        const current = encryptVersionedSecret('keep-me', rotated, BIND);
+
+        expect(rewrapVersionedSecret(current, rotated, BIND, 'test')).toBe(current);
+    });
+
+    it('refuses a value whose binding is wrong instead of re-encrypting it under the right one', () => {
+        const old = encryptVersionedSecret('keep-me', RING, BIND);
+        const elsewhere: SecretBinding = { purpose: 'pii', aad: 'tests:field:2' };
+
+        expect(() => rewrapVersionedSecret(old, rotated, elsewhere, 'test')).toThrow();
     });
 });

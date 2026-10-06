@@ -18,7 +18,7 @@ import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption'
 export type OrderAddressPath = 'shippingAddress' | 'billingAddress';
 
 /** The paths walked on every order; both are optional on the row. */
-const ADDRESS_PATHS: readonly OrderAddressPath[] = ['shippingAddress', 'billingAddress'];
+export const ADDRESS_PATHS: readonly OrderAddressPath[] = ['shippingAddress', 'billingAddress'];
 
 /** The text fields of one embedded address; `phone` alone is optional. */
 interface AddressText {
@@ -38,17 +38,17 @@ interface OrderPiiFields {
 }
 
 /** The address fields, in one place so encrypt and decrypt walk the same list. */
-const ADDRESS_FIELDS = ['fullName', 'street', 'city', 'zip', 'country', 'phone'] as const;
+export const ADDRESS_FIELDS = ['fullName', 'street', 'city', 'zip', 'country', 'phone'] as const;
 
 /** The associated data binding one address field to one order. */
-const addressAad = (
+export const addressAad = (
     path: OrderAddressPath,
     field: (typeof ADDRESS_FIELDS)[number],
     orderId: string
 ): string => `orders:${path}.${field}:${orderId}`;
 
 /** The associated data binding the notes to one order. */
-const notesAad = (orderId: string): string => `orders:notes:${orderId}`;
+export const notesAad = (orderId: string): string => `orders:notes:${orderId}`;
 
 /**
  * Rewrites every present field of one address with `convert`. Absent fields stay absent — the

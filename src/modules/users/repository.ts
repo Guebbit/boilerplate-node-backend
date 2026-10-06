@@ -6,6 +6,11 @@
  * See: docs/modules/users.md
  */
 
+import {
+    reencryptOf,
+    type ReencryptSpec,
+    type ReencryptReport
+} from '@infrastructure/security/reencrypt';
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
@@ -52,6 +57,7 @@ const LAST_ACTIVE_EXPR = {
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 export const userRepository: Repository<UserDocument, UserWire> & {
+    reencrypt: (spec: ReencryptSpec<UserDocument>, dryRun?: boolean) => Promise<ReencryptReport>;
     updateMany: (
         filter: QueryFilter<UserDocument>,
         update: UpdateQuery<UserDocument>
@@ -81,6 +87,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findWarnedStillInactive: (cutoff: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
 } = {
+    reencrypt: reencryptOf(userModel),
     ...createRepository<UserDocument, UserWire>(userModel, {
         transform: applyUserTransform,
         searchable: {

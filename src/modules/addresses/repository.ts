@@ -4,6 +4,11 @@
  * the export's own JSDoc below for why.
  */
 
+import {
+    reencryptOf,
+    type ReencryptSpec,
+    type ReencryptReport
+} from '@infrastructure/security/reencrypt';
 import { Types, type ClientSession } from 'mongoose';
 import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
@@ -98,6 +103,10 @@ const decryptBook = (book: AddressBookDocument): AddressBookDocument => {
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 export const addressBookRepository: Repository<AddressBookDocument, Wire<AddressBookDocument>> & {
+    reencrypt: (
+        spec: ReencryptSpec<AddressBookDocument>,
+        dryRun?: boolean
+    ) => Promise<ReencryptReport>;
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
     addEntry: (
         userId: string,
@@ -113,6 +122,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
 } = {
+    reencrypt: reencryptOf(addressBookModel),
     ...createRepository<AddressBookDocument, Wire<AddressBookDocument>>(addressBookModel, {
         transform: applyAddressBookTransform
     }),

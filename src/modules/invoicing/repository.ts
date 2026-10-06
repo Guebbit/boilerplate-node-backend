@@ -6,6 +6,7 @@
  * the generic factory would buy nothing this module needs.
  */
 
+import { reencryptOf } from '@infrastructure/security/reencrypt';
 import { Types } from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import {
@@ -124,6 +125,8 @@ const incrementCounter = (
 
 /** Invoicing's own repository — no generic CRUD, see the module docblock. */
 export const invoicingRepository = {
+    reencryptInvoices: reencryptOf(invoiceModel),
+    reencryptCreditNotes: reencryptOf(creditNoteModel),
     findInvoiceByOrderId,
     insertInvoice,
     findCreditNotesByOrderId,

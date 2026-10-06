@@ -86,6 +86,7 @@ export {
     withActions
 } from './scope';
 export { freezeOrderLines } from './snapshot';
+export { reencryptOrders } from './reencrypt';
 export { allocateOrderNumber } from './order-numbering';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.

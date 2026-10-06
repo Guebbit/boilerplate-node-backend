@@ -26,8 +26,10 @@ type AddressPiiFields = Pick<
  * The associated data binding one field of one entry: a ciphertext copied to another entry or
  * another field fails its auth tag.
  */
-const addressAad = (field: keyof AddressPiiFields, entryId: Types.ObjectId | string): string =>
-    `addressbooks:items.${field}:${String(entryId)}`;
+export const addressAad = (
+    field: keyof AddressPiiFields,
+    entryId: Types.ObjectId | string
+): string => `addressbooks:items.${field}:${String(entryId)}`;
 
 /**
  * One entry, its PII fields encrypted — a new object, everything else on `item` (label, default)

@@ -15,7 +15,8 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import {
     encryptVersionedSecret,
-    decryptVersionedSecret
+    decryptVersionedSecret,
+    type SecretBinding
 } from '@infrastructure/security/versioned-secret';
 import { getWebhookEncryptionKeyRing, getWebhookSecretOverlapMs } from './config';
 import type { WebhookSecretRingEntry } from './model';
@@ -28,16 +29,22 @@ import type { WebhookSecretRingEntry } from './model';
 const generatePlaintextSecret = (): string => `whsec_${randomBytes(32).toString('base64')}`;
 
 /**
+ * The binding of a ring secret to its entry: the `webhook-secret` HKDF label and the entry's own
+ * `id` as associated data. Also what a re-encryption job rewraps under.
+ */
+export const ringSecretBinding = (entryId: string): SecretBinding => ({
+    purpose: 'webhook-secret',
+    aad: entryId
+});
+
+/**
  * Encrypt a ring secret for storage. See `encryptVersionedSecret` for the wire format.
  *
  * @param entryId - the ring entry's own `id`, the AAD: the parent subscription has no `_id` yet
  *   when its first secret is minted, so the entry id is the only stable binding
  */
 export const encryptRingSecret = (plaintext: string, entryId: string): string =>
-    encryptVersionedSecret(plaintext, getWebhookEncryptionKeyRing(), {
-        purpose: 'webhook-secret',
-        aad: entryId
-    });
+    encryptVersionedSecret(plaintext, getWebhookEncryptionKeyRing(), ringSecretBinding(entryId));
 
 /**
  * Decrypt a stored ring secret.
@@ -50,7 +57,7 @@ export const decryptRingSecret = (stored: string, entryId: string): string =>
     decryptVersionedSecret(
         stored,
         getWebhookEncryptionKeyRing(),
-        { purpose: 'webhook-secret', aad: entryId },
+        ringSecretBinding(entryId),
         'webhook secret'
     );
 
