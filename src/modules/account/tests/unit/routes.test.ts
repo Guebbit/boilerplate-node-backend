@@ -28,7 +28,7 @@ const TOKEN_BEARING = [
     'POST /verify-confirm',
     'POST /email-change-confirm',
     'POST /email-change-undo',
-    'GET /refresh',
+    'POST /refresh',
     'POST /logout'
 ];
 
@@ -99,7 +99,7 @@ describe('account routes — what is mounted', () => {
             'POST /reauth',
             'POST /reauth/methods/:method/send',
             'GET /abilities',
-            'GET /refresh',
+            'POST /refresh',
             'POST /logout',
             'POST /logout-all',
             'GET /sessions',

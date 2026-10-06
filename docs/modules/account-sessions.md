@@ -46,7 +46,7 @@ account exists.
 
 |                | Access token               | Refresh token             |
 | -------------- | -------------------------- | ------------------------- |
-| Travels in     | the `Authorization` header | the `jwt` cookie          |
+| Travels in     | the `Authorization` header | the `__Host-jwt` cookie   |
 | Lifetime from  | `NODE_TOKEN_ACCESS_TIME`   | one of three tiers, below |
 | Readable by JS | yes — the client holds it  | no — `httpOnly`           |
 
@@ -100,7 +100,7 @@ flowchart LR
   ASP.NET Core Identity carries it the same way. An OAuth-originated challenge has no earlier
   password step, so the 2FA request is the only place it can be said.
 - **Reauth and password change.** Both replace the session, so `reissueSession` reads the tier off
-  the request's own `jwt` cookie (signature only — a password change has already revoked the row)
+  the request's own `__Host-jwt` cookie (signature only — a password change has already revoked the row)
   and keeps it. No cookie, a stranger's cookie or an expired one all read as "no tier": a session
   cookie, never a persistent one granted by accident.
 
@@ -198,13 +198,19 @@ management and the data export stay password-only (ASVS 5.0 §7.5.1).
 
 ## The cookie, flag by flag
 
-| Flag       | Value           | Why                                                                                 |
-| ---------- | --------------- | ----------------------------------------------------------------------------------- |
-| `httpOnly` | `true`          | The refresh token is the long-lived credential; script must not be able to read it. |
-| `secure`   | production only | So local development over http still works, without weakening the deployed cookie.  |
-| `sameSite` | `lax`           | Survives a top-level navigation back into the app; refuses cross-site form posts.   |
-| `path`     | `/`             | The refresh endpoint and the logout endpoint are on different paths.                |
-| `maxAge`   | the chosen tier | The cookie expires when the token does, rather than outliving it.                   |
+The name is `__Host-jwt`: the prefix makes a browser refuse the cookie unless it is `Secure`, `Path=/`
+and Domain-less. Refresh is a `POST`, and refresh, logout and the SSE streams answer 403 to a request
+naming an `Origin` that is not an allowed frontend origin (the same list CORS uses), so a request from
+someone else's page cannot act on the cookie.
+
+| Flag       | Value           | Why                                                                                      |
+| ---------- | --------------- | ---------------------------------------------------------------------------------------- |
+| `httpOnly` | `true`          | The refresh token is the long-lived credential; script must not be able to read it.      |
+| `secure`   | `true`, always  | The `__Host-` name requires it; browsers accept `Secure` cookies from `localhost`.       |
+| `sameSite` | `lax`           | Survives a top-level navigation back into the app; refuses cross-site form posts.        |
+| `path`     | `/`             | The refresh endpoint and the logout endpoint are on different paths; `__Host-` needs it. |
+| `domain`   | none            | Host-locked: a sibling subdomain cannot set or overwrite the cookie.                     |
+| `maxAge`   | the chosen tier | The cookie expires when the token does, rather than outliving it.                        |
 
 There is a second, deliberately **non-secure** cookie carrying nothing but a logged-in hint, so the
 client shell can render the right chrome before its first request answers. It holds no credential
@@ -272,7 +278,7 @@ the caller's re-minted session survive its own bump.
 
 ## Refresh rotation
 
-`GET /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
+`POST /account/refresh` doesn't just re-sign an access token — it REPLACES the refresh token too,
 every time. Without that, a stolen cookie would stay valid, silently, for as long as it had left to
 live (up to a year, `remember: long`); rotation turns "a value that never changes" into "a value
 that changes on every use", so a copy presented after the original has moved is detectable.

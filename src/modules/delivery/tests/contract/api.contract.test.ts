@@ -346,7 +346,7 @@ const loginAdminRemembered = async () => {
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
-    const jwtCookie = setCookie(response, 'jwt');
+    const jwtCookie = setCookie(response, '__Host-jwt');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
     return jwtCookie;
 };
@@ -358,7 +358,7 @@ const loginAdminRemembered = async () => {
  */
 const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
     advanceDate((REAUTH_TIME_CRITICAL + 1) * 1000);
-    const refreshed = await api().get('/account/refresh').set('Cookie', jwtCookie);
+    const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
     return `Bearer ${refreshed.body.data.token as string}`;
 };
 

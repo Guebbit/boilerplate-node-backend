@@ -37,18 +37,21 @@ beforeEach(() => {
 });
 
 describe('createRefreshCookie', () => {
-    it('sets the jwt cookie httpOnly, lax and site-wide', () => {
+    it('sets the __Host-jwt cookie httpOnly, lax, site-wide and Domain-less', () => {
         const response = makeResponse();
 
         createRefreshCookie(response, 'signed.jwt.value');
 
         const [name, value, options] = response.cookie.mock.calls[0];
-        expect(name).toBe('jwt');
+        expect(name).toBe('__Host-jwt');
         expect(value).toBe('signed.jwt.value');
         // httpOnly is the load-bearing flag: this cookie is the credential.
         expect(options.httpOnly).toBe(true);
         expect(options.sameSite).toBe('lax');
         expect(options.path).toBe('/');
+        // The `__Host-` prefix: a browser refuses the cookie with a Domain, or without Secure.
+        expect(options.domain).toBeUndefined();
+        expect(options.secure).toBe(true);
     });
 
     it('marks the cookie secure in production', () => {
@@ -69,13 +72,13 @@ describe('createRefreshCookie', () => {
         expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
 
-    it('leaves the cookie non-secure in development, so local HTTP still works', () => {
+    it('stays secure in development too: the __Host- prefix requires it, and browsers accept it on localhost', () => {
         setEnvironment({ NODE_ENV: 'development' });
         const response = makeResponse();
 
         createRefreshCookie(response, 'token');
 
-        expect(response.cookie.mock.calls[0][2].secure).toBe(false);
+        expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
 
     it('persists for the maxAge it is given', () => {
@@ -100,13 +103,13 @@ describe('createRefreshCookie', () => {
 });
 
 describe('destroyRefreshCookie', () => {
-    it('clears jwt with the same flags it was set with', () => {
+    it('clears __Host-jwt with the same flags it was set with', () => {
         const response = makeResponse();
 
         destroyRefreshCookie(response);
 
         const [name, options] = response.clearCookie.mock.calls[0];
-        expect(name).toBe('jwt');
+        expect(name).toBe('__Host-jwt');
         // A browser drops a cookie only on a matching name/path/flags triple. Any drift here is
         // a logout that appears to succeed and leaves the session alive.
         expect(options).toEqual(

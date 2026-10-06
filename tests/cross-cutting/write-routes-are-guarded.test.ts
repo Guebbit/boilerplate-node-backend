@@ -160,6 +160,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: "regenerating the caller's own backup codes"
     },
+    'account POST /refresh': {
+        requiresAuth: false,
+        reason: 'minting an access token — the refresh-token cookie is the credential, not a login'
+    },
     'account POST /logout': {
         requiresAuth: false,
         reason: 'revoking THIS session — the refresh-token cookie is the credential, not a login'

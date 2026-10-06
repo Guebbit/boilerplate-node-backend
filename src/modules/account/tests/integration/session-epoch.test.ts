@@ -38,7 +38,7 @@ const loginAs = async (email: string) => {
     const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
     return {
         bearer: `Bearer ${response.body.data.token as string}`,
-        cookie: cookieHeader(response, 'jwt')
+        cookie: cookieHeader(response, '__Host-jwt')
     };
 };
 
@@ -66,7 +66,7 @@ describe('a token minted before the epoch', () => {
 
         await userService.bumpSessionEpoch(user.id, new Date(Date.now() + PAST_THE_SECOND_MS));
 
-        const refresh = await api().get('/account/refresh').set('Cookie', cookie);
+        const refresh = await api().post('/account/refresh').set('Cookie', cookie);
         expect(refresh.status).toBe(401);
     });
 
@@ -105,8 +105,8 @@ describe('the events that move the epoch', () => {
         expect(await statusWith(caller.bearer)).toBe(401);
         expect(await statusWith(`Bearer ${change.body.data.token as string}`)).toBe(200);
         const refresh = await api()
-            .get('/account/refresh')
-            .set('Cookie', cookieHeader(change, 'jwt'));
+            .post('/account/refresh')
+            .set('Cookie', cookieHeader(change, '__Host-jwt'));
         expect(refresh.status).toBe(200);
     });
 
@@ -123,7 +123,7 @@ describe('the events that move the epoch', () => {
         expect(response.status).toBe(200);
         expect(await statusWith(caller.bearer)).toBe(401);
         expect(response.headers['set-cookie']).toEqual(
-            expect.arrayContaining([expect.stringMatching(/^jwt=;/)])
+            expect.arrayContaining([expect.stringMatching(/^__Host-jwt=;/)])
         );
     });
 
@@ -161,11 +161,11 @@ describe('the events that move the epoch', () => {
         expect(confirm.status).toBe(200);
         expect(await statusWith(other.bearer)).toBe(401);
         const refresh = await api()
-            .get('/account/refresh')
-            .set('Cookie', cookieHeader(confirm, 'jwt'));
+            .post('/account/refresh')
+            .set('Cookie', cookieHeader(confirm, '__Host-jwt'));
         expect(refresh.status).toBe(200);
         // The other device's refresh token is gone, not just its access token.
-        const stale = await api().get('/account/refresh').set('Cookie', other.cookie);
+        const stale = await api().post('/account/refresh').set('Cookie', other.cookie);
         expect(stale.status).toBe(401);
     });
 
@@ -206,7 +206,7 @@ describe('the events that move the epoch', () => {
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.tokens.filter((token) => token.type === 'refresh')).toHaveLength(1);
         // The old cookie no longer refreshes; the new one does.
-        const stale = await api().get('/account/refresh').set('Cookie', caller.cookie);
+        const stale = await api().post('/account/refresh').set('Cookie', caller.cookie);
         expect(stale.status).toBe(401);
     });
 });

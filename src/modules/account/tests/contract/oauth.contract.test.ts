@@ -142,10 +142,10 @@ describe('GET /account/oauth/:provider/callback', () => {
 
         expect(response.status).toBe(302);
         expect(response.headers.location).toBe('http://localhost:8080/oauth/callback');
-        expect(setCookie(response, 'jwt')).toBeTruthy();
+        expect(setCookie(response, '__Host-jwt')).toBeTruthy();
         expect(setCookie(response, 'isAuth')).toBeTruthy();
         // No "remember me" box on a provider round trip: browser-session cookies.
-        expect(setCookie(response, 'jwt')).not.toMatch(/max-age=|expires=/i);
+        expect(setCookie(response, '__Host-jwt')).not.toMatch(/max-age=|expires=/i);
         expect(setCookie(response, 'isAuth')).not.toMatch(/max-age=|expires=/i);
 
         const created = await userRepository.findOne({ email: 'oauth.demo@example.com' });
@@ -281,8 +281,8 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
         // First login creates the OAuth-only account; enroll TOTP on it through its own session.
         const created = await fakeLogin();
         const refreshed = await api()
-            .get('/account/refresh')
-            .set('Cookie', setCookie(created, 'jwt')!);
+            .post('/account/refresh')
+            .set('Cookie', setCookie(created, '__Host-jwt')!);
         const bearer = `Bearer ${refreshed.body.data.token as string}`;
         const setup = await api()
             .post('/account/2fa/methods/totp/setup')
@@ -307,7 +307,7 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
         const methods = JSON.parse(location.searchParams.get('methods')!) as { method: string }[];
         expect(methods.map((m) => m.method)).toEqual(['totp']);
         // No session — the whole point of 1b.
-        expect(setCookie(challenged, 'jwt')).toBeUndefined();
+        expect(setCookie(challenged, '__Host-jwt')).toBeUndefined();
         expect(setCookie(challenged, 'isAuth')).toBeUndefined();
         expect(setCookie(challenged, 'oauth_mfa_challenge')).toBeTruthy();
 

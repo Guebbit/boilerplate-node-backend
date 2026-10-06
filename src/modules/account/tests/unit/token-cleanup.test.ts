@@ -106,7 +106,7 @@ describe('the refresh controller runs no sweep of its own', () => {
     });
 
     it.each([
-        ['a refresh cookie', { jwt: 'refresh-token' }],
+        ['a refresh cookie', { '__Host-jwt': 'refresh-token' }],
         ['no cookie at all', {}]
     ])('with %s, only the exchange runs', async (_label, cookies) => {
         mockRefreshAccessToken.mockResolvedValue({

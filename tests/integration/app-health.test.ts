@@ -129,7 +129,9 @@ describe('Observability routes', () => {
         const login = await api()
             .post('/account/login')
             .send({ email: admin.email, password: PLAIN_PASSWORD });
-        const cookie = (login.get('Set-Cookie') ?? []).find((value) => value.startsWith('jwt='))!;
+        const cookie = (login.get('Set-Cookie') ?? []).find((value) =>
+            value.startsWith('__Host-jwt=')
+        )!;
 
         const response = await api()
             .get('/observability/events')

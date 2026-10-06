@@ -30,7 +30,7 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
 
 /** What `requirePermissionViaCookie` leaves on a request it admitted. */
 const admittedRequest = () =>
-    asStub<Request>({ cookies: { jwt: 'cookie.jwt' }, authContext: { id: 'user-1' } });
+    asStub<Request>({ cookies: { '__Host-jwt': 'cookie.jwt' }, authContext: { id: 'user-1' } });
 
 /** A response recording what a refusal answers. */
 const makeResponse = () => {
@@ -73,7 +73,7 @@ describe('GET /notifications/stream', () => {
 
     it.each([
         ['no refresh cookie', asStub<Request>({ cookies: {}, authContext: { id: 'user-1' } })],
-        ['no resolved caller', asStub<Request>({ cookies: { jwt: 'cookie.jwt' } })]
+        ['no resolved caller', asStub<Request>({ cookies: { '__Host-jwt': 'cookie.jwt' } })]
     ])('fails closed with 401 on %s, and opens no stream', (_name, request) => {
         const { response, status, json } = makeResponse();
 

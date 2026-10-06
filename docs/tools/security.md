@@ -16,7 +16,7 @@
 This backend uses a **split-token model**:
 
 - **Access token**: short-lived JWT returned by `POST /account/login` and sent on API calls in the `Authorization` header with the Bearer scheme.
-- **Refresh token**: longer-lived JWT stored in the HTTP-only `jwt` cookie and used only to mint a new access token (`GET /account/refresh`).
+- **Refresh token**: longer-lived JWT stored in the HTTP-only `__Host-jwt` cookie and used only to mint a new access token (`POST /account/refresh`).
 
 This keeps normal authenticated requests explicit (client-attached Bearer token), while keeping the refresh token out of JavaScript access (HTTP-only cookie).
 
@@ -225,21 +225,21 @@ resolve, fire-and-forget, so a partner integration that stopped calling can be f
 ## Login → auth → refresh request flow
 
 1. User logs in (`POST /account/login`).
-2. Server returns a short-lived access token and sets `jwt` refresh cookie.
+2. Server returns a short-lived access token and sets the `__Host-jwt` refresh cookie.
 3. Client calls protected APIs with the Bearer token in `Authorization`.
 4. If access token is expired/invalid, API responds `401 Unauthorized`.
-5. Client calls `GET /account/refresh`; browser sends `jwt` cookie automatically.
+5. Client calls `POST /account/refresh`; browser sends the `__Host-jwt` cookie automatically.
 6. Server validates refresh token signature **and** DB presence, then returns a new access token.
 7. Client retries protected request with the new access token.
 
 ```mermaid
 flowchart LR
     A[Login\nPOST /account/login] --> B[Access token in response]
-    A --> C[Refresh token in\nHttpOnly jwt cookie]
+    A --> C[Refresh token in\nHttpOnly __Host-jwt cookie]
     B --> D[Protected API call\nAuthorization Bearer]
     D --> E{Access token valid?}
     E -- Yes --> F[Controller executes]
-    E -- No (401) --> G[GET /account/refresh\nwith jwt cookie]
+    E -- No (401) --> G[POST /account/refresh\nwith __Host-jwt cookie]
     G --> H{Refresh JWT valid\nand stored in DB?}
     H -- Yes --> I[New access token]
     I --> D
@@ -639,7 +639,7 @@ can never be satisfied by an SSE connection.
 
 What `EventSource` does send, given `withCredentials: true`, is cookies, and this app already
 issues an `HttpOnly` refresh cookie at login. So `requirePermissionViaCookie` takes the same
-permission key every other guard takes and verifies that cookie exactly as `GET /account/refresh`
+permission key every other guard takes and verifies that cookie exactly as `POST /account/refresh`
 does — signature **and** presence on the user document — so a revoked or
 logged-out token is rejected, not merely an expired one.
 

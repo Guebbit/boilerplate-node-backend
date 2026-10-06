@@ -13,7 +13,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 /**
  * POST /account/logout-all
  * User logout from EVERY device.
- * Remove jwt cookie and ALL refresh tokens in the DB, and move the session epoch so access tokens
+ * Remove the refresh cookie and ALL refresh tokens in the DB, and move the session epoch so access tokens
  * already handed out stop working too. The caller is signed out as well: no re-mint here.
  */
 export const postLogoutEverywhere = (request: Request, response: Response) => {

@@ -158,7 +158,7 @@ be read:
 The success path calls the same `issueSession` [`postLogin`](./account-sessions.md) does, with
 `amr: [provider.name]` — so a Google login records **how** it was proved, and the freshness guards
 read it like any other method. It returns no access token: the frontend's
-`GET /account/refresh` bootstrap mints one the moment it lands.
+`POST /account/refresh` bootstrap mints one the moment it lands.
 
 ## Connected accounts: seeing and removing a link {#connected-accounts}
 

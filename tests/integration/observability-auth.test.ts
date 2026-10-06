@@ -28,7 +28,7 @@ const signIn = async (role: 'admin' | 'user') => {
         .send({ email: user.email, password: PLAIN_PASSWORD });
 
     const cookies = response.get('Set-Cookie') ?? [];
-    return { user, cookie: cookies.find((cookie) => cookie.startsWith('jwt='))! };
+    return { user, cookie: cookies.find((cookie) => cookie.startsWith('__Host-jwt='))! };
 };
 
 describe('GET /observability/events', () => {
@@ -54,7 +54,7 @@ describe('GET /observability/events', () => {
     it('refuses a forged cookie', async () => {
         const response = await api()
             .get('/observability/events')
-            .set('Cookie', 'jwt=not-a-real-token');
+            .set('Cookie', '__Host-jwt=not-a-real-token');
 
         expect(response.status).toBe(401);
     });

@@ -70,7 +70,7 @@ const sessionFor = async (amr: string[], withPassword: boolean) => {
     return {
         user,
         bearer: `Bearer ${token}` as const,
-        jwtCookie: `jwt=${refreshToken}`
+        jwtCookie: `__Host-jwt=${refreshToken}`
     };
 };
 
@@ -251,7 +251,7 @@ describe('POST /account/reauth with a mailed code', () => {
         freezeDate();
         const { bearer, jwtCookie } = await sessionFor(['google'], false);
         advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
-        const stale = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
         const staleBearer = `Bearer ${stale.body.data.token as string}`;
         expect(bearer).not.toBe(staleBearer);
         const blocked = await api()
@@ -275,7 +275,7 @@ describe('POST /account/reauth with a mailed code', () => {
         freezeDate();
         const { jwtCookie } = await sessionFor(['pwd'], true);
         advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
-        const stale = await api().get('/account/refresh').set('Cookie', jwtCookie);
+        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
 
         const response = await api()
             .get(`/account/export/${'0'.repeat(24)}`)

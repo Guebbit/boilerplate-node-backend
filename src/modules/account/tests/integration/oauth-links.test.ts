@@ -50,7 +50,7 @@ const linkedAccount = async () => {
     return {
         user,
         bearer: `Bearer ${login.body.data.token as string}`,
-        cookie: cookieHeader(login, 'jwt')
+        cookie: cookieHeader(login, '__Host-jwt')
     };
 };
 
@@ -136,7 +136,7 @@ describe('DELETE /account/oauth/links/{provider}', () => {
         const { cookie } = await linkedAccount();
         advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
         // The access token expired along the way; the refresh cookie mints one whose `auth_time` is old.
-        const refreshed = await api().get('/account/refresh').set('Cookie', cookie);
+        const refreshed = await api().post('/account/refresh').set('Cookie', cookie);
 
         const response = await api()
             .delete('/account/oauth/links/google')

@@ -44,7 +44,7 @@ beforeEach(() => {
 const sessionWith = async (userId: string, amr: string[]) => {
     const refreshToken = await createRefreshToken(userId, undefined, amr);
     const token = await createAccessToken(refreshToken);
-    return { bearer: `Bearer ${token}`, cookie: `jwt=${refreshToken}` };
+    return { bearer: `Bearer ${token}`, cookie: `__Host-jwt=${refreshToken}` };
 };
 
 /** The token a mailed link carries, read off its `linkUrl`. */

@@ -599,9 +599,9 @@ export const invalidateCache =
  * Forbid every cache — browser, proxy, CDN — from storing the response at all. Mounted on the
  * account router, where every endpoint exchanges credentials or changes auth state.
  *
- * Prevents an intermittent silent logout: without it, a cached `GET /account/refresh` can
- * revalidate to a bodyless `304`, leaving the client with no access token but a valid refresh
- * cookie — so the UI shows signed-in. `no-store`, not `no-cache`, because `no-cache` still permits
+ * Prevents an intermittent silent logout: without it, a cached credential answer (a token mint,
+ * the profile read) can revalidate to a bodyless `304`, leaving the client with no access token but
+ * a valid refresh cookie — so the UI shows signed-in. `no-store`, not `no-cache`, because `no-cache` still permits
  * storing and revalidating, which is exactly the 304 path that causes this.
  *
  * Marks `response.locals.noStore` for `setCache` above to check and refuse — see that guard.

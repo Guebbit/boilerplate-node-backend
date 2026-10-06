@@ -451,7 +451,7 @@ export const requirePermission = (key: string) => {
  * to an already-open stream that cannot be told apart from a revoked one), so only they may decide.
  *
  * @param request - only for the audit trail; never re-authenticated from it
- * @param refreshToken - the `jwt` cookie value
+ * @param refreshToken - the `__Host-jwt` cookie value
  * @param key - the permission key to check
  * @returns the resolved user when they hold `key`, otherwise `undefined`
  */
@@ -473,7 +473,7 @@ const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: 
 /**
  * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
  * SSE, via `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential,
- * verified as `GET /account/refresh` verifies it: signature *and* presence on the user document,
+ * verified as `POST /account/refresh` verifies it: signature *and* presence on the user document,
  * so a revoked token is rejected rather than merely an expired one.
  *
  * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
@@ -528,7 +528,7 @@ export const requirePermissionViaCookie = (key: string) => {
  * stops.
  *
  * @param request - the request that opened the stream, kept only for the audit trail
- * @param refreshToken - the `jwt` cookie value captured when the stream connected
+ * @param refreshToken - the `__Host-jwt` cookie value captured when the stream connected
  * @param key - the permission key to re-check
  * @returns whether the caller still holds `key`
  */

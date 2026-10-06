@@ -61,7 +61,7 @@ const clearOAuthCookies = (response: Response): void => {
  * GET /account/oauth/:provider/callback
  * Validates the CSRF `state`, exchanges the code, then finds-or-creates the account and mints a
  * session exactly the way `postLogin`'s success tail does — minus the access token, which the
- * frontend's `GET /account/refresh` bootstrap mints once it lands.
+ * frontend's `POST /account/refresh` bootstrap mints once it lands.
  */
 export const getOAuthCallback = (request: Request, response: Response) => {
     const providerName = String(request.params.provider).toLowerCase();

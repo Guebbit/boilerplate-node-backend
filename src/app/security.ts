@@ -20,7 +20,7 @@ import { rateLimiter } from '@infrastructure/http/middlewares/rate-limit';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
 import { limitJsonDepth } from '@infrastructure/http/middlewares/json-depth';
 import { REQUEST_CONTENT_TYPES } from '@api/request-content-types';
-import { siteConfig } from '@infrastructure/http/config';
+import { isAllowedOrigin } from '@infrastructure/http/origins';
 import { appConfig } from './config';
 import { enabledModules } from '../modules';
 
@@ -49,18 +49,6 @@ const isRawBodyPath = (url: string): boolean =>
     RAW_BODY_PATHS.some(
         (path) => url === path || url.startsWith(`${path}?`) || url.startsWith(`${path}/`)
     );
-
-/**
- * Origins allowed to call this API with credentials, from `NODE_CORS_ORIGIN`.
- *
- * Separated by comma if multiple; blank entries are dropped so a trailing comma cannot add an
- * empty origin to the set.
- */
-const allowedOrigins = new Set(
-    siteConfig().NODE_CORS_ORIGIN.length > 0
-        ? siteConfig().NODE_CORS_ORIGIN
-        : ['http://localhost:8080']
-);
 
 /**
  * Bound how long a client may take to SEND a request, which Node's own defaults barely do.
@@ -154,7 +142,7 @@ export const installSecurity = (app: Express): void => {
                     callback(null, true);
                     return;
                 }
-                if (allowedOrigins.has(origin)) {
+                if (isAllowedOrigin(origin)) {
                     callback(null, true);
                     return;
                 }

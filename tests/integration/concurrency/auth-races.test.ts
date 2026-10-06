@@ -197,7 +197,9 @@ const issueSession = async () => {
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
-    const jwtCookie = (login.get('Set-Cookie') ?? []).find((cookie) => cookie.startsWith('jwt='))!;
+    const jwtCookie = (login.get('Set-Cookie') ?? []).find((cookie) =>
+        cookie.startsWith('__Host-jwt=')
+    )!;
     return { user, jwtCookie };
 };
 
@@ -208,7 +210,7 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
         const { jwtCookie } = await issueSession();
 
         const results = await raceN(RACE_SIZE, () =>
-            api().get('/account/refresh').set('Cookie', jwtCookie)
+            api().post('/account/refresh').set('Cookie', jwtCookie)
         );
 
         expectNoServerErrors(results);
@@ -219,13 +221,13 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
         const { jwtCookie } = await issueSession();
 
         const results = await raceN(RACE_SIZE, () =>
-            api().get('/account/refresh').set('Cookie', jwtCookie)
+            api().post('/account/refresh').set('Cookie', jwtCookie)
         );
 
         const rotatedCookies = results
             .map((result) => (result.status === 'fulfilled' ? result.value : undefined))
             .flatMap((response) => response?.get('Set-Cookie') ?? [])
-            .filter((cookie) => cookie.startsWith('jwt='));
+            .filter((cookie) => cookie.startsWith('__Host-jwt='));
 
         expect(rotatedCookies).toHaveLength(RACE_SIZE);
         expect(new Set(rotatedCookies).size).toBe(RACE_SIZE);
@@ -238,7 +240,7 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
         // and it gets marked exactly once, however many racers tried.
         const { user, jwtCookie } = await issueSession();
 
-        await raceN(RACE_SIZE, () => api().get('/account/refresh').set('Cookie', jwtCookie));
+        await raceN(RACE_SIZE, () => api().post('/account/refresh').set('Cookie', jwtCookie));
 
         const stored = await userRepository.findOneWithCredentials({ email: user.email });
         const refreshTokens = stored?.tokens?.filter((entry) => entry.type === 'refresh') ?? [];

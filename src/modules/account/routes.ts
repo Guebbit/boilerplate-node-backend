@@ -74,6 +74,7 @@ import { deleteOAuthLink } from './controllers/delete-oauth-link';
 import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
+import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import { getMyAbilities } from './controllers/get-my-abilities';
 import { normalizeEmail } from '@modules/users';
 
@@ -260,11 +261,14 @@ router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, post
  */
 router.get('/abilities', getMyAbilities);
 
-// GET /account/refresh — create a new access token from the jwt cookie
-router.get('/refresh', getRefreshToken);
+// POST /account/refresh — create a new access token from the refresh cookie. A POST, since it
+// rotates the token (a state change a GET must not make), and origin-checked: the cookie alone
+// authenticates it, so a request from someone else's page must not act.
+router.post('/refresh', requireAllowedOrigin, getRefreshToken);
 
-// POST /account/logout — revoke THIS session's refresh token (cookie is the credential)
-router.post('/logout', postLogout);
+// POST /account/logout — revoke THIS session's refresh token (cookie is the credential), behind the
+// same origin check as refresh.
+router.post('/logout', requireAllowedOrigin, postLogout);
 
 // POST /account/logout-all — revoke all refresh tokens (requires auth). Sensitive: evicting the
 // owner is an attack, not just an action, if a stolen-but-unfresh session could do it.

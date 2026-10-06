@@ -108,7 +108,7 @@ export const postSignup = (
              * address browse freely and stops it only at `cart.self.checkout`, so a second login
              * before reaching that state would be friction with no security benefit.
              *
-             * Cookies only, and the body stays `User` — the frontend's `GET /account/refresh`
+             * Cookies only, and the body stays `User` — the frontend's `POST /account/refresh`
              * bootstrap mints the access token, exactly as it does after the OAuth callback. That
              * also keeps rung 2's refused 201 byte-identical in the BODY; only the absence of
              * Set-Cookie distinguishes it, which is as close as indistinguishability gets once

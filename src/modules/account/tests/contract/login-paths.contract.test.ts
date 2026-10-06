@@ -162,7 +162,7 @@ const oauthPath: LoginPath = {
     assertRefused: (response) => {
         expect(response.status).toBe(302);
         expect(response.headers.location).toContain('error=');
-        expect(setCookie(response, 'jwt')).toBeUndefined();
+        expect(setCookie(response, '__Host-jwt')).toBeUndefined();
         expect(setCookie(response, 'isAuth')).toBeUndefined();
     },
     attemptSuccess: async (role) => {
@@ -186,7 +186,7 @@ const refreshPath: LoginPath = {
         const login = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
-        const jwtCookie = setCookie(login, 'jwt')!;
+        const jwtCookie = setCookie(login, '__Host-jwt')!;
 
         // Deactivated/deleted AFTER the session was minted — the account holder's next refresh
         // must not continue it, same guard `createRefreshToken` applies at the initial mint.
@@ -197,7 +197,7 @@ const refreshPath: LoginPath = {
         // Cleared AFTER the setup login above (a genuine success, its own AUTH_LOGIN) and BEFORE
         // the refusal under test.
         auditSpy.mockClear();
-        return api().get('/account/refresh').set('Cookie', jwtCookie);
+        return api().post('/account/refresh').set('Cookie', jwtCookie);
     },
     assertRefused: (response) => {
         expect(response.status).toBe(401);

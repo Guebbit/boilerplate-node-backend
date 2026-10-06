@@ -15,6 +15,7 @@ import {
     requirePermission,
     requirePermissionViaCookie
 } from '@kernel/middlewares/authorizations';
+import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import { isMetricsScraper } from './metrics-scraper';
 import { getObservabilityHealth } from './controllers/get-observability-health';
 import { getObservabilityMetricsOverview } from './controllers/get-observability-metrics-overview';
@@ -36,7 +37,13 @@ export const router = Router();
  * endpoint is hit by Prometheus, which can't log in and so uses a static credential.
  */
 // GET /observability/events — the live SSE stream, opened by the browser's `EventSource`.
-router.get('/events', requirePermissionViaCookie(OBSERVABILITY_READ_KEY), getObservabilityEvents);
+router.get(
+    '/events',
+    // The cookie alone authenticates this stream, so a page on another origin must not open it.
+    requireAllowedOrigin,
+    requirePermissionViaCookie(OBSERVABILITY_READ_KEY),
+    getObservabilityEvents
+);
 
 // GET /observability/metrics — the Prometheus scrape, behind the scraper's static credential.
 router.get('/metrics', isMetricsScraper, getObservabilityMetrics);

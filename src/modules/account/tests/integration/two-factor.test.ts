@@ -697,7 +697,7 @@ describe('logging in with a device factor', () => {
             });
 
         expect(response.status).toBe(200);
-        const maxAge = /max-age=(\d+)/i.exec(setCookie(response, 'jwt') ?? '')?.[1];
+        const maxAge = /max-age=(\d+)/i.exec(setCookie(response, '__Host-jwt') ?? '')?.[1];
         expect(Number(maxAge)).toBe(getExpiryTime(RefreshTokenExpiryTime.MEDIUM));
     });
 
@@ -711,8 +711,8 @@ describe('logging in with a device factor', () => {
             .send({ challenge: login.body.data.challenge, code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
-        expect(setCookie(response, 'jwt')).toBeDefined();
-        expect(setCookie(response, 'jwt')).not.toMatch(/max-age=|expires=/i);
+        expect(setCookie(response, '__Host-jwt')).toBeDefined();
+        expect(setCookie(response, '__Host-jwt')).not.toMatch(/max-age=|expires=/i);
         expect(setCookie(response, 'isAuth')).not.toMatch(/max-age=|expires=/i);
     });
 
