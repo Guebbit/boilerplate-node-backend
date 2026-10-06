@@ -402,10 +402,20 @@ export const DEAD_LETTER_EXCHANGE = 'dead-letter';
 const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' } as const;
 
 /**
+ * How long a parked message is kept: 7 days, then the broker drops it. Declared in code, so it
+ * holds on an operator's own broker too. Without it a parking queue grows for ever.
+ * https://www.rabbitmq.com/docs/ttl
+ */
+const DEAD_LETTER_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/**
  * How a parking queue is declared — shared by {@link assertJobQueue} and {@link parkedCounts},
  * since a second declaration that differs answers `PRECONDITION_FAILED`.
  */
-const DEAD_LETTER_QUEUE_OPTIONS = { durable: true, arguments: QUORUM_QUEUE_TYPE };
+const DEAD_LETTER_QUEUE_OPTIONS = {
+    durable: true,
+    arguments: { ...QUORUM_QUEUE_TYPE, 'x-message-ttl': DEAD_LETTER_TTL_MS }
+};
 
 /**
  * The parking lot for a work queue's exhausted or permanently-rejected messages — a plain durable

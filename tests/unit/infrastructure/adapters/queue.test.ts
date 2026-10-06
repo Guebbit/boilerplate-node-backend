@@ -21,6 +21,9 @@ import { setEnvironment } from '@tests/environment';
  * change these `assertQueue` expectations must catch, not silently agree with.
  */
 const QUORUM_QUEUE_TYPE = { 'x-queue-type': 'quorum' };
+
+/** A parking queue also expires its messages after 7 days. */
+const DEAD_LETTER_ARGUMENTS = { ...QUORUM_QUEUE_TYPE, 'x-message-ttl': 604_800_000 };
 const AT_LEAST_ONCE_DEAD_LETTERING = {
     'x-dead-letter-strategy': 'at-least-once',
     'x-overflow': 'reject-publish'
@@ -320,7 +323,7 @@ describe('publishToQueue()', () => {
         });
         expect(mockAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf('emails'), {
             durable: true,
-            arguments: QUORUM_QUEUE_TYPE
+            arguments: DEAD_LETTER_ARGUMENTS
         });
         expect(mockAssertQueue).toHaveBeenCalledWith('emails.retry', {
             durable: true,
@@ -610,12 +613,12 @@ describe('redactedBrokerTarget()', () => {
  * own DLX, which now always means "retry") and only acks the original once that publish itself
  * confirms — see the module's own docblock for why a nack alone can no longer express "done".
  */
-/** Register a consumer and hand back the callback the broker would invoke per delivery. */
-const captureConsumerCallback = async (handler: jest.Mock, schema: ZodType = anyPayload) => {
-    mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
 /** A schema that accepts any JSON — for the cases that are not about the contract. */
 const anyPayload = z.unknown();
 
+/** Register a consumer and hand back the callback the broker would invoke per delivery. */
+const captureConsumerCallback = async (handler: jest.Mock, schema: ZodType = anyPayload) => {
+    mockAssertQueue.mockResolvedValue({ queue: 'jobs', messageCount: 0, consumerCount: 0 });
     mockPrefetch.mockImplementation(() => Promise.resolve());
     mockConsume.mockResolvedValue({ consumerTag: 'tag-1' });
     mockCreateConfirmChannel.mockImplementation(() => Promise.resolve(channelMock()));
@@ -695,9 +698,6 @@ describe('consumeFromQueue acknowledgement policy', () => {
         );
     });
 
-    it('parks without retrying when the handler refuses the message', async () => {
-        // A business rejection: the job was understood and declined. Retrying it would ask the
-        // same question again and get the same answer, forever.
     it("hands the handler the schema's output, so a key the contract does not name is dropped", async () => {
         const handler = jest.fn().mockResolvedValue(true);
         const onMessage = await captureConsumerCallback(handler, z.object({ jobId: z.number() }));
@@ -707,6 +707,9 @@ describe('consumeFromQueue acknowledgement policy', () => {
         expect(handler).toHaveBeenCalledWith({ jobId: 7 }, expect.anything());
     });
 
+    it('parks without retrying when the handler refuses the message', async () => {
+        // A business rejection: the job was understood and declined. Retrying it would ask the
+        // same question again and get the same answer, forever.
         const handler = jest.fn().mockResolvedValue(false);
         const onMessage = await captureConsumerCallback(handler);
 
@@ -1000,7 +1003,7 @@ describe('parkedCounts()', () => {
         for (const queue of Object.values(WORKER_CHANNELS))
             expect(mockPlainAssertQueue).toHaveBeenCalledWith(deadLetterQueueOf(queue), {
                 durable: true,
-                arguments: QUORUM_QUEUE_TYPE
+                arguments: DEAD_LETTER_ARGUMENTS
             });
         expect(result).toHaveLength(Object.keys(WORKER_CHANNELS).length);
         expect(result.every(({ parked }) => parked === 3)).toBe(true);

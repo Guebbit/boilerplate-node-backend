@@ -566,6 +566,18 @@ One detail is load-bearing: a term that vanishes under stripping returns **`unde
 empty pattern. `$regex: ''` matches every document, so it would silently turn a filter into
 "everything" — the exact inversion of what the caller asked for.
 
+## Redis and RabbitMQ stay plaintext
+
+Redis and RabbitMQ are reached over plaintext on the compose network of the single host, and
+publish no port outside it. Nothing refuses a plaintext URL: a deployment that crosses a network
+sets `rediss://` and `amqps://` itself. Sentry's and GitLab's self-hosted setups make the same
+choice for their own bundled stores.
+
+The SMTP leg is the one that does cross a network, so it is the one that insists on TLS: on port 587
+the transport refuses to continue without STARTTLS (`requireTLS`). A parked (dead-letter) job is
+kept seven days and then dropped by the broker; the TTL is declared in code, so it holds on an
+operator's own broker too.
+
 ## One environment switch
 
 `NODE_ENV` has two settings that matter: **development or test** (a developer's machine, CI) and
