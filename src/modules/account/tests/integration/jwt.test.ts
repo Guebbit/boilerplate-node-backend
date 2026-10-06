@@ -76,17 +76,22 @@ describe('verifyAccessToken', () => {
         // accepted as an access token and the revocation lookup could be bypassed entirely.
         const token = signAs(REFRESH_SECRET, { id: 'user-1' }, { expiresIn: 900 });
 
-        await expect(verifyAccessToken(token)).rejects.toThrow();
+        // Its `kid` names no member of the access ring: a key this ring never held.
+        await expect(verifyAccessToken(token)).rejects.toMatchObject({
+            reason: 'invalid_signature'
+        });
     });
 
     it('rejects an expired token', async () => {
         const token = signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: -10 });
 
-        await expect(verifyAccessToken(token)).rejects.toThrow();
+        await expect(verifyAccessToken(token)).rejects.toMatchObject({ reason: 'expired' });
     });
 
     it('rejects a structurally invalid token', async () => {
-        await expect(verifyAccessToken('not-a-jwt')).rejects.toThrow();
+        await expect(verifyAccessToken('not-a-jwt')).rejects.toMatchObject({
+            reason: 'malformed'
+        });
     });
 
     it('rejects a token whose payload was tampered with', async () => {
@@ -96,7 +101,7 @@ describe('verifyAccessToken', () => {
 
         await expect(
             verifyAccessToken(`${header}.${forgedPayload}.${signature}`)
-        ).rejects.toThrow();
+        ).rejects.toMatchObject({ reason: 'invalid_signature' });
     });
 });
 
@@ -108,7 +113,10 @@ describe('token types (`typ` header)', () => {
                 const user = await createUser();
                 const refresh = await createRefreshToken(String(user._id));
 
-                await expect(verifyAccessToken(refresh)).rejects.toThrow('Wrong token type');
+                await expect(verifyAccessToken(refresh)).rejects.toMatchObject({
+                    reason: 'malformed',
+                    message: 'Wrong token type'
+                });
             }
         );
     });
@@ -194,7 +202,10 @@ describe('verifyRefreshToken', () => {
 
         await user.tokenRemoveAll(TokenType.REFRESH);
 
-        await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
+        await expect(verifyRefreshToken(token)).rejects.toMatchObject({
+            reason: 'revoked',
+            message: 'Forbidden'
+        });
     });
 
     it('rejects a token signed with the access secret', async () => {

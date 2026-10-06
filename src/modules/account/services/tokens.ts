@@ -7,7 +7,10 @@
  * {@link redeemLiveToken} composes both for the confirm controllers that don't — a refusal never says why.
  */
 
-import type { Session } from '@types';
+import type { CallerContext, Session } from '@types';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { accountAuditActions } from '../audit';
+import { authOneTimeTokenRejectedTotal } from '../metrics';
 import {
     userService,
     hashToken,
@@ -130,3 +133,31 @@ export const sessionsList = (
 
         return generateSuccess({ sessions });
     });
+
+/** The four confirm flows that spend a one-time link token. */
+export type OneTimeTokenFlow =
+    | 'password_reset'
+    | 'email_verify'
+    | 'email_change'
+    | 'account_delete';
+
+/**
+ * Count and audit one refused link token. `auth.` not `security.`: a customer with a stale or
+ * mistyped link is the usual cause, so it does not page the platform operator.
+ *
+ * @param context - the caller context of the refused request
+ * @param flow - which confirm flow refused it
+ */
+export const recordOneTimeTokenRejected = (
+    context: CallerContext,
+    flow: OneTimeTokenFlow
+): void => {
+    authOneTimeTokenRejectedTotal.inc({ flow });
+    recordAudit(context, {
+        action: accountAuditActions.AUTH_ONE_TIME_TOKEN_REJECTED,
+        actor_user_id: 'anonymous',
+        actor_role: 'anonymous',
+        outcome: 'failure',
+        metadata: { flow }
+    });
+};

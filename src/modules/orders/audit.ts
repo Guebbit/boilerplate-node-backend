@@ -9,6 +9,8 @@
 
 /** The audit action vocabulary this module owns. */
 export const ordersAuditActions = {
+    /** Staff opened someone else's order — `admin.` because only the wide read produces it. */
+    ADMIN_ORDER_VIEWED: 'admin.order.viewed',
     ORDER_CREATED: 'order.created',
     ORDER_UPDATED: 'order.updated',
     ORDER_DELETED: 'order.deleted',

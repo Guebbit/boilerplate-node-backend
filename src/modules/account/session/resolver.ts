@@ -8,12 +8,12 @@
  * See: docs/modules/account-sessions.md
  */
 
-import type { AuthResolver } from '@kernel/authentication';
+import type { AuthResolver, Resolution } from '@kernel/authentication';
 import { rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { userService } from '@modules/users';
 import type { AuthContext } from '@types';
-import { verifyAccessToken, verifyRefreshToken, type TokenData } from './jwt';
+import { verifyAccessToken, verifyRefreshToken, TokenRejection, type TokenData } from './jwt';
 import { predatesSessionEpoch } from './epoch';
 
 /**
@@ -23,7 +23,7 @@ import { predatesSessionEpoch } from './epoch';
  * `findAuthenticatableById`, and the two travel together — dropping the claims here would
  * silently discard what the caller worked to prove.
  */
-const resolve =
+const resolveClaims =
     (verify: (token: string) => Promise<TokenData>) =>
     (token: string): Promise<AuthContext | undefined> =>
         verify(token)
@@ -100,6 +100,22 @@ const resolve =
                       }
                     : undefined
             );
+
+/**
+ * Wraps a claims resolver in the port's answer shape: a refused token becomes a `{ miss }`, a
+ * resolved (or no-longer-existing) user becomes `{ ok }`, and anything else — an outage — still
+ * rejects, so the guard can tell "your token is bad" from "we are down".
+ */
+const resolve =
+    (verify: (token: string) => Promise<TokenData>) =>
+    (token: string): Promise<Resolution<AuthContext | undefined>> =>
+        resolveClaims(verify)(token).then(
+            (ok): Resolution<AuthContext | undefined> => ({ ok }),
+            (error: unknown): Resolution<AuthContext | undefined> => {
+                if (error instanceof TokenRejection) return { miss: error.reason };
+                throw error;
+            }
+        );
 
 /**
  * This module's answer to the kernel's "who is making this request" port — see `module.ts`'s own

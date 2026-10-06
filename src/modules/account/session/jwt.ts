@@ -8,7 +8,8 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { sign, verify, decode } from 'jsonwebtoken';
+import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
+import type { ResolveMissReason } from '@kernel/authentication';
 import { userService, TokenType, hashToken } from '@modules/users';
 import type { UserDocument } from '@modules/users';
 import {
@@ -96,6 +97,30 @@ const TOKEN_TYPE_HEADER = { access: 'at+jwt', refresh: 'rt+jwt' } as const;
 type TokenKind = keyof typeof TOKEN_TYPE_HEADER;
 
 /**
+ * A token was refused for a reason the caller can act on — the one rejection the resolver turns
+ * into a `{ miss }` answer, where any other error stays a rejection (an outage, a bug).
+ */
+export class TokenRejection extends Error {
+    /** @param reason - why the token was refused, as the kernel's resolver port names it */
+    constructor(
+        readonly reason: ResolveMissReason,
+        message: string
+    ) {
+        super(message);
+        this.name = 'TokenRejection';
+    }
+}
+
+/**
+ * Classify what jsonwebtoken refused a token for. Only a bad signature is `invalid_signature`;
+ * every other structural failure reads as `malformed`.
+ */
+const reasonOf = (error: Error): ResolveMissReason => {
+    if (error instanceof TokenExpiredError) return 'expired';
+    return error.message === 'invalid signature' ? 'invalid_signature' : 'malformed';
+};
+
+/**
  * Verify a token against whichever ring member its `kid` header names, HS256 pinned throughout,
  * and its `typ` header pinned to `kind`.
  * A `kid` naming no current ring member — a key this deployment has already retired, or a token
@@ -116,9 +141,16 @@ const verifyAgainstRing = (
         // jsonwebtoken: `decode` reads the header without checking the signature, which is all a
         // `kid` lookup needs. It returns `null` for a string that isn't shaped like a JWT at all,
         // rather than throwing.
-        const secret = keyForId(ring, decode(token, { complete: true })?.header.kid);
+        const decoded = decode(token, { complete: true });
+        const secret = keyForId(ring, decoded?.header.kid);
         if (secret === undefined) {
-            reject(new Error('Unknown signing key'));
+            // Not a JWT at all is `malformed`; a JWT naming no live ring member is a forged or retired key.
+            reject(
+                new TokenRejection(
+                    decoded ? 'invalid_signature' : 'malformed',
+                    'Unknown signing key'
+                )
+            );
             return;
         }
         // `algorithms: ['HS256']` pins the accepted algorithm: without it a token whose header
@@ -127,11 +159,11 @@ const verifyAgainstRing = (
         // the header beside the payload, so `typ` can be checked after the signature is.
         verify(token, secret, { algorithms: ['HS256'], complete: true }, (error, data) => {
             if (error) {
-                reject(error);
+                reject(new TokenRejection(reasonOf(error), error.message));
                 return;
             }
             if (data?.header.typ !== TOKEN_TYPE_HEADER[kind]) {
-                reject(new Error('Wrong token type'));
+                reject(new TokenRejection('malformed', 'Wrong token type'));
                 return;
             }
             resolve(data.payload as TokenData & { exp: number });
@@ -159,14 +191,14 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     verifyAgainstRing(token, getRefreshTokenRing(), 'refresh').then((data) =>
         userService.findByTokenValue(token).then((user) => {
             if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
-                throw new Error('Forbidden');
+                throw new TokenRejection('revoked', 'Forbidden');
             // A rotated-away token still matches the unfiltered lookup (reuse detection and the
             // two-tab grace need that); as a credential for anything but the rotation itself it is
             // dead. Reuse is only ever DETECTED at the rotation (RFC 9700 §4.14.2), never here.
             const digest = hashToken(token);
             const entry = user.tokens.find((stored) => stored.token === digest);
             if (entry?.type !== (TokenType.REFRESH as string) || entry.supersededAt)
-                throw new Error('Forbidden');
+                throw new TokenRejection('revoked', 'Forbidden');
             return data;
         })
     );

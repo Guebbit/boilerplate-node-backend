@@ -32,7 +32,7 @@ import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
 import { verifyOwnPassword, PASSWORD_RESET_TOKEN_TYPE, tokenAdd } from './authentication';
 import { EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS } from './token-types';
-import { findLiveToken, spendLiveToken } from './tokens';
+import { findLiveToken, spendLiveToken, recordOneTimeTokenRejected } from './tokens';
 import { UpdateAccountBody } from '@api/schemas.zod';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
 import {
@@ -306,7 +306,10 @@ export const completePasswordReset = (
     const errors = validatePasswordChange(password, passwordConfirm);
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
-    const linkRefused = () => generateReject(422, [t('account.reset.token-not-found')]);
+    const linkRefused = () => {
+        recordOneTimeTokenRejected(context, 'password_reset');
+        return generateReject(422, [t('account.reset.token-not-found')]);
+    };
 
     return findLiveToken(PASSWORD_RESET_TOKEN_TYPE, token)
         .then((user) => {

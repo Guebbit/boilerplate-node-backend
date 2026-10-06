@@ -15,6 +15,7 @@ import { userService } from '@modules/users';
 import { assignRole } from '@modules/access';
 import { permissionsOfRole } from '@kernel/permissions';
 import { resolveCredential } from '@kernel/authentication';
+import { credentialOf } from '@tests/credentials';
 import apiKeysModule from '@modules/api-keys/module';
 import { mint, revoke } from '@modules/api-keys/services/api-keys';
 import { apiKeyRepository } from '@modules/api-keys/repository';
@@ -134,7 +135,7 @@ describe('a self key is not an any key', () => {
 
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
 
-        const resolved = await resolveCredential(minted.data.secret);
+        const resolved = await credentialOf(minted.data.secret);
         expect(resolved?.caller.permissions).not.toContain('orders.any.read');
     });
 });
@@ -156,7 +157,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
-        const beforeDemotion = await resolveCredential(minted.data.secret);
+        const beforeDemotion = await credentialOf(minted.data.secret);
         expect(beforeDemotion?.caller.permissions).toContain('apikeys.any.read');
         // A key acts at its minter's level — what the rank rule compares.
         expect(beforeDemotion?.caller.level).toBe('admin');
@@ -164,7 +165,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         // `customer` holds none of the api-keys keys — the demotion this test is about.
         await assignRole(userId, TEST_TENANT_ID, 'tenant', 'customer');
 
-        const afterDemotion = await resolveCredential(minted.data.secret);
+        const afterDemotion = await credentialOf(minted.data.secret);
         // Still a real, resolvable credential (not revoked, not expired) — just holding nothing
         // now, which is the point: the DOCUMENT never changed, only what it re-floors against did.
         expect(afterDemotion?.caller.permissions).not.toContain('apikeys.any.read');
@@ -188,10 +189,10 @@ describe('the credential-resolve path — re-floored at every use, not just at m
             contextFor(userId, permissionsOfRole('admin'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
-        const before = await resolveCredential(minted.data.secret);
+        const before = await credentialOf(minted.data.secret);
 
         await userRepository.updateMany({ _id: userId }, { active: false });
-        const after = await resolveCredential(minted.data.secret);
+        const after = await credentialOf(minted.data.secret);
         const stored = await apiKeyRepository.findById(minted.data.id);
 
         expect(before?.caller.permissions).toContain('apikeys.any.read');
@@ -210,7 +211,7 @@ describe('the credential-resolve path — re-floored at every use, not just at m
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
 
-        const resolved = await resolveCredential(minted.data.secret);
+        const resolved = await credentialOf(minted.data.secret);
 
         expect(resolved?.credentialId).toBe(`sk_${minted.data.publicPrefix}`);
         expect(resolved?.credentialId).not.toContain(minted.data.secret);
@@ -229,7 +230,7 @@ describe('revoke', () => {
 
         await revoke(minted.data.id, context);
 
-        expect(await resolveCredential(minted.data.secret)).toBeUndefined();
+        expect(await credentialOf(minted.data.secret)).toBeUndefined();
     });
 
     it('is idempotent — revoking an already-revoked key still succeeds', async () => {
@@ -268,7 +269,7 @@ describe('revoke across administrators', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(await resolveCredential(minted.data.secret)).toBeUndefined();
+        expect(await credentialOf(minted.data.secret)).toBeUndefined();
     });
 });
 
@@ -285,7 +286,59 @@ describe('an expired credential', () => {
             expiresAt: new Date(Date.now() - 1000)
         });
 
-        expect(await resolveCredential(plaintext)).toBeUndefined();
+        expect(await credentialOf(plaintext)).toBeUndefined();
+    });
+});
+
+/** An already-stored key, minted straight into the repository so its state is exactly `overrides`. */
+const stored = (overrides: { revokedAt?: Date; expiresAt?: Date }) => {
+    const { plaintext, publicPrefix, hash } = mintApiKey();
+    return apiKeyRepository
+        .create({
+            tenant: TEST_TENANT_ID,
+            name: 'refused',
+            publicPrefix,
+            hash,
+            permissions: ['apikeys.any.read'],
+            createdByUserId: 'irrelevant-for-this-check',
+            expiresAt: new Date(Date.now() + 3_600_000),
+            ...overrides
+        })
+        .then(() => plaintext);
+};
+
+describe('why a credential was refused', () => {
+    it('calls a token that is not shaped like a key malformed', async () => {
+        await expect(resolveCredential('sk_short')).resolves.toEqual({ miss: 'malformed' });
+    });
+
+    it('calls a well-formed key nobody minted an invalid signature', async () => {
+        const { plaintext } = mintApiKey();
+
+        await expect(resolveCredential(plaintext)).resolves.toEqual({
+            miss: 'invalid_signature'
+        });
+    });
+
+    it('calls a minted prefix with the wrong secret an invalid signature', async () => {
+        const plaintext = await stored({});
+        const guessed = `${plaintext.slice(0, -1)}${plaintext.endsWith('A') ? 'B' : 'A'}`;
+
+        await expect(resolveCredential(guessed)).resolves.toEqual({ miss: 'invalid_signature' });
+    });
+
+    it('names a revoked key only when the presented secret is the real one', async () => {
+        const plaintext = await stored({ revokedAt: new Date() });
+        const guessed = `${plaintext.slice(0, -1)}${plaintext.endsWith('A') ? 'B' : 'A'}`;
+
+        await expect(resolveCredential(plaintext)).resolves.toEqual({ miss: 'revoked' });
+        await expect(resolveCredential(guessed)).resolves.toEqual({ miss: 'invalid_signature' });
+    });
+
+    it('names an expired key expired', async () => {
+        const plaintext = await stored({ expiresAt: new Date(Date.now() - 1000) });
+
+        await expect(resolveCredential(plaintext)).resolves.toEqual({ miss: 'expired' });
     });
 });
 
@@ -314,8 +367,8 @@ describe('a hard-deleted user takes their credentials with them', () => {
 
         await userService.removeById(String(user._id), true);
 
-        expect(await resolveCredential(first.data.secret)).toBeUndefined();
-        expect(await resolveCredential(second.data.secret)).toBeUndefined();
+        expect(await credentialOf(first.data.secret)).toBeUndefined();
+        expect(await credentialOf(second.data.secret)).toBeUndefined();
         expect(await apiKeyRepository.findById(first.data.id)).toBeNull();
         expect(await apiKeyRepository.findById(second.data.id)).toBeNull();
     });
@@ -389,7 +442,7 @@ describe('touchLastUsed', () => {
             new Error('write conflict')
         );
 
-        const resolved = await resolveCredential(minted.data.secret);
+        const resolved = await credentialOf(minted.data.secret);
 
         expect(resolved?.caller.permissions).toContain('apikeys.any.read');
         // Fire-and-forget: give the rejected touch's own microtask a turn before asserting the log.

@@ -6,6 +6,8 @@
 
 /** The audit action strings this module fires, keyed by event. */
 export const returnsAuditActions = {
+    /** Staff opened a return's detail. */
+    ADMIN_RETURN_VIEWED: 'admin.return.viewed',
     RETURN_REQUESTED: 'return.requested',
     ADMIN_RETURN_APPROVED: 'admin.return.approved',
     ADMIN_RETURN_DECLINED: 'admin.return.declined',

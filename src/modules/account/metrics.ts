@@ -217,3 +217,35 @@ export const authOauthTotal = new Counter({
     labelNames: ['provider', 'status'] as const,
     registers: [metricsRegistry]
 });
+
+/**
+ * Password-reset confirmations (the token-spending step), by outcome. Its own series beside
+ * {@link authPasswordResetTotal}, which counts only the request for a link.
+ */
+export const authPasswordResetConfirmTotal = new Counter({
+    name: 'auth_password_reset_confirm_total',
+    help: 'Total password-reset confirmation attempts, labelled by outcome.',
+    labelNames: ['status'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
+ * One-time link tokens refused as unknown, expired or used, by flow. A spike on one flow is
+ * someone guessing links; flows are literals, never request data.
+ */
+export const authOneTimeTokenRejectedTotal = new Counter({
+    name: 'auth_one_time_token_rejected_total',
+    help: 'One-time link tokens refused, labelled by flow.',
+    labelNames: ['flow'] as const,
+    registers: [metricsRegistry]
+});
+
+/**
+ * Refresh tokens presented after rotation, outside the grace window: the token value leaked.
+ * Every increment also revoked the account's whole refresh set.
+ */
+export const authRefreshReuseTotal = new Counter({
+    name: 'auth_refresh_token_reuse_detected_total',
+    help: 'Total refresh-token reuse detections.',
+    registers: [metricsRegistry]
+});

@@ -11,6 +11,8 @@ import { rejectResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
 import { setEtag } from '@infrastructure/http/preconditions';
+import { recordStaffRead } from '@kernel/staff-read';
+import { ordersAuditActions } from '../audit';
 import { respondWithOrder } from './respond';
 
 /**
@@ -33,6 +35,13 @@ export const getOrderItem = (
                 rejectResponse(response, 404, [t('orders.not-found')]);
                 return;
             }
+            recordStaffRead(request, {
+                key: 'orders.any.read',
+                action: ordersAuditActions.ADMIN_ORDER_VIEWED,
+                targetType: 'order',
+                targetId: id,
+                ownerId: String(order.userId)
+            });
             // The version an edit sends back as `If-Match`.
             setEtag(response, order);
             // The body carries what THIS caller may do to the order, so the client renders its
