@@ -46,3 +46,10 @@ contract.postman.json
 
 # Logs
 *.log
+
+# Local env files (`.env.local`, `.env.production`, ...) and anything a user uploaded. The committed
+# `seed/` and `system/` images ARE the product, so they stay — the same rule as `.gitignore`.
+.env*
+public/images/*
+!public/images/seed/
+!public/images/system/

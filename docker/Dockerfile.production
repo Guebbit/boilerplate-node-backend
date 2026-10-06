@@ -143,6 +143,9 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 # Application source and the runtime assets it reads from disk, copied from the build stage so that
 # what ships is exactly what was type-checked.
 #
+# No `--chown`: the code stays root-owned, so the `node` user the app runs as can read it and
+# cannot rewrite it. Only the writable directories further down belong to `node`.
+#
 # Each of these is here because something reads it at runtime, not for completeness:
 #   src/      the application, entered at src/cluster.ts — includes each module's own
 #             src/modules/*/templates/ (the EJS email/PDF templates it owns)
@@ -154,18 +157,33 @@ RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 #                 resolve it
 #   scripts/db/   the deploy-time scripts — `db:sync`, `access:bootstrap`.
 #                 Named file by file, not as a directory, so the image carries only what it runs
-#   scripts/ops/  the scheduled `reap:*` jobs, run by a cron container against this image
+#   scripts/ops/  the jobs `docker/crontab` runs, file by file: a one-off tool (`demo-remove*`,
+#                 `refresh-breached-passwords`) has no business in a production image. A new
+#                 crontab line needs its file added here
 #   public/   express.static root — CSS, favicon, and the committed seed images
-COPY --from=build --chown=node:node /app/src ./src
-COPY --from=build --chown=node:node /app/api ./api
-COPY --from=build --chown=node:node /app/shared ./shared
-COPY --from=build --chown=node:node /app/scripts/run-script.ts ./scripts/
-COPY --from=build --chown=node:node /app/scripts/db/index-sync.ts \
+COPY --from=build /app/src ./src
+COPY --from=build /app/api ./api
+COPY --from=build /app/shared ./shared
+COPY --from=build /app/scripts/run-script.ts ./scripts/
+COPY --from=build /app/scripts/db/index-sync.ts \
     /app/scripts/db/sync-indexes.ts /app/scripts/db/cache-clear.ts \
     /app/scripts/db/bootstrap-access.ts ./scripts/db/
-COPY --from=build --chown=node:node /app/scripts/ops ./scripts/ops
-COPY --from=build --chown=node:node /app/public ./public
-COPY --from=build --chown=node:node /app/tsconfig.json ./
+COPY --from=build /app/scripts/ops/reap-account-exports.ts \
+    /app/scripts/ops/reap-expired-tokens.ts \
+    /app/scripts/ops/reap-inactive-accounts.ts \
+    /app/scripts/ops/reap-invoice-pdfs.ts \
+    /app/scripts/ops/reap-mail-spool.ts \
+    /app/scripts/ops/reap-orders.ts \
+    /app/scripts/ops/reap-orphaned-images.ts \
+    /app/scripts/ops/reap-payments.ts \
+    /app/scripts/ops/reap-quarantine.ts \
+    /app/scripts/ops/sweep-order-effects.ts \
+    /app/scripts/ops/sweep-outbox.ts \
+    /app/scripts/ops/sweep-payment-effects.ts \
+    /app/scripts/ops/sweep-reservations.ts \
+    /app/scripts/ops/sweep-webhook-retries.ts ./scripts/ops/
+COPY --from=build /app/public ./public
+COPY --from=build /app/tsconfig.json ./
 
 # Uploads, invoice cache/mail spool and quarantined files land under these three directories at
 # runtime. Each has to exist and be writable by the user below BEFORE its volume is mounted over

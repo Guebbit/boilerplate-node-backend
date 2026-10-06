@@ -73,3 +73,43 @@ describe('every scheduled script names a file that exists', () => {
         expect(existsSync(path.join(ROOT, scriptPath))).toBe(true);
     });
 });
+
+/**
+ * The production image copies `scripts/ops/` file by file, so a crontab line whose file the
+ * Dockerfile forgot is a job that fails every time the `cron` container runs it. Each side is
+ * checked against the other: a crontab job has its COPY, and no one-off tool is shipped.
+ */
+describe('docker/Dockerfile.production ships exactly the scheduled jobs', () => {
+    const dockerfile = readFileSync(path.join(ROOT, 'docker', 'Dockerfile.production'), 'utf8');
+
+    /** Every `scripts/ops/<file>.ts` the Dockerfile names. */
+    const shipped = [...dockerfile.matchAll(/\/app\/scripts\/ops\/([\w-]+\.ts)/g)].map(
+        ([, file]) => file
+    );
+
+    /** The file each crontab job runs, read from its `package.json` command. */
+    const scheduledFiles = (): string[] => {
+        const { scripts } = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+            scripts: Record<string, string>;
+        };
+
+        return scriptsInCrontab().map((name) =>
+            path.basename(/tsx (\S+\.ts)/.exec(scripts[name])?.[1] ?? '')
+        );
+    };
+
+    it('copies the file of every job the crontab runs', () => {
+        for (const file of scheduledFiles()) expect(shipped).toContain(file);
+    });
+
+    it('copies nothing the crontab does not run', () => {
+        const scheduled = new Set(scheduledFiles());
+
+        for (const file of shipped) expect(scheduled).toContain(file);
+    });
+
+    it('actually reads both sides', () => {
+        expect(shipped.length).toBeGreaterThan(0);
+        expect(scheduledFiles().length).toBeGreaterThan(0);
+    });
+});
