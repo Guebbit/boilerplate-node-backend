@@ -66,6 +66,9 @@ paths:
                 languages, each carrying `active: false`. The flag gates selection by visitors and
                 nothing else — the same rule products and users follow.
             operationId: getLocales
+            security:
+                - {}
+                - bearerAuth: []
             responses:
                 '200':
                     description: Locale capabilities
@@ -123,6 +126,7 @@ paths:
 
                 Public and cacheable, like every other locale read.
             operationId: getLocaleTenants
+            security: []
             responses:
                 '200':
                     description: The configured tenants
@@ -146,6 +150,7 @@ paths:
                 Not to be confused with `GET /locales/{locale}/messages`, which serves the client's
                 own copy out of the database.
             operationId: getLocaleDictionary
+            security: []
             parameters:
                 - name: locale
                   in: path
@@ -285,6 +290,7 @@ paths:
 
                 Public and cacheable, like every other locale read.
             operationId: getLocaleMessages
+            security: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/MessagesTenantQueryParam'
