@@ -283,6 +283,44 @@ const afterReset = (
 };
 
 /**
+ * The 422 every dead reset link answers with, and its audit trail. Unknown, expired and already
+ * used read alike on purpose.
+ *
+ * @param context - the caller
+ */
+const resetLinkRefused = (context: CallerContext): ResponseReject => {
+    recordOneTimeTokenRejected(context, 'password_reset');
+    return generateReject(422, [t('account.reset.token-not-found')]);
+};
+
+/**
+ * The tail of {@link completePasswordReset} once the link is FOUND: breach check, then the
+ * atomic spend, then the write. The spend stays last so a refused password never burns the link.
+ *
+ * @param user - the holder of the live token
+ * @param token - the token from the mailed link
+ * @param password - the new password
+ * @param context - the caller
+ */
+const resetWith = (
+    user: UserDocument,
+    token: string,
+    password: string,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    assertPasswordNotBreached(password).then((breachErrors) => {
+        if (breachErrors.length > 0) return generateReject(422, breachErrors);
+
+        return spendLiveToken(user, token).then((spentByThisRequest) =>
+            spentByThisRequest
+                ? writePassword(user, password, markResetCompleted).then((result) =>
+                      afterReset(result, user, context)
+                  )
+                : resetLinkRefused(context)
+        );
+    });
+
+/**
  * `POST /account/reset-confirm` — the whole reset, in the order that never burns a link for a
  * password that was going to be refused: shape and match, then the live token is FOUND, then the
  * breach check, and only then is the token SPENT. The spend is the atomic `$pull` that settles two
@@ -306,27 +344,10 @@ export const completePasswordReset = (
     const errors = validatePasswordChange(password, passwordConfirm);
     if (errors.length > 0) return Promise.resolve(generateReject(422, errors));
 
-    const linkRefused = () => {
-        recordOneTimeTokenRejected(context, 'password_reset');
-        return generateReject(422, [t('account.reset.token-not-found')]);
-    };
-
     return findLiveToken(PASSWORD_RESET_TOKEN_TYPE, token)
-        .then((user) => {
-            if (!user) return linkRefused();
-
-            return assertPasswordNotBreached(password).then((breachErrors) => {
-                if (breachErrors.length > 0) return generateReject(422, breachErrors);
-
-                return spendLiveToken(user, token).then((spentByThisRequest) =>
-                    spentByThisRequest
-                        ? writePassword(user, password, markResetCompleted).then((result) =>
-                              afterReset(result, user, context)
-                          )
-                        : linkRefused()
-                );
-            });
-        })
+        .then((user) =>
+            user ? resetWith(user, token, password, context) : resetLinkRefused(context)
+        )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 };
 

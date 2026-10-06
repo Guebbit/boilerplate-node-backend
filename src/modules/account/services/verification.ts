@@ -38,7 +38,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
  * direction is SHORTER, and how long an unclaimed mailbox stays trustworthy is a deployment's
  * call, not this file's.
  */
-const EMAIL_VERIFY_TOKEN_TTL_MS = accountConfig().NODE_EMAIL_VERIFY_TTL_MS;
+const emailVerifyTokenTtlMs = (): number => accountConfig().NODE_EMAIL_VERIFY_TTL_MS;
 
 /**
  * Seconds between two verification emails for one account — what the client counts down before
@@ -90,7 +90,7 @@ export const sendVerificationEmail = (
 
     return userService
         .tokenRemoveAll(user, type)
-        .then(() => tokenAdd(user, type, EMAIL_VERIFY_TOKEN_TTL_MS))
+        .then(() => tokenAdd(user, type, emailVerifyTokenTtlMs()))
         .then((token) => {
             /*
              * The recipient's OWN language, exactly as the reset and delete emails choose

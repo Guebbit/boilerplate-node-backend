@@ -26,7 +26,7 @@ import { cacheInvalidationFailuresTotal } from '@infrastructure/observability/me
  * Prefix for every key this app owns. Redis has no namespaces beyond numbered databases, so
  * staging and production need different prefixes or they read each other's cached responses.
  */
-const CACHE_PREFIX = redisConfig().NODE_REDIS_CACHE_PREFIX;
+const cachePrefix = (): string => redisConfig().NODE_REDIS_CACHE_PREFIX;
 
 /**
  * Cache usage is on only when Redis is configured and not explicitly disabled — two independent
@@ -81,7 +81,7 @@ export const cacheState = (): DependencyStatus => cacheConnection.state();
  * Build one namespaced Redis key: `<prefix>:key:<hash>` for a cached value (a Redis string),
  * `<prefix>:tag:<name>` for the keys under a tag (a Redis sorted set, scored by expiry).
  */
-const prefix = (value: string) => `${CACHE_PREFIX}:${value}`;
+const prefix = (value: string) => `${cachePrefix()}:${value}`;
 
 /**
  * Warm up Redis during app startup so the first request does not pay the connect cost.
@@ -394,7 +394,7 @@ export const drainMatchingKeys = async (
 
 /**
  * Delete every cached entry and tag set belonging to this app — the escape hatch for writes
- * that never ran `invalidateCache`. Deliberately NOT `FLUSHALL`: scoped to `<CACHE_PREFIX>:*`,
+ * that never ran `invalidateCache`. Deliberately NOT `FLUSHALL`: scoped to `<cachePrefix()>:*`,
  * so a shared Redis is untouched, and `SCAN` iterates in batches rather than blocking the server.
  *
  * Never rejects, but reports via `reachable` — fail-open is each caller's own choice.
