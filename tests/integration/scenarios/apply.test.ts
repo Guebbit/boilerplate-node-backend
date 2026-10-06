@@ -103,7 +103,7 @@ describe('scenarios/apply.ts', () => {
 
             const result = await runApply(['blank'], dbUri, nodeEnv);
 
-            expect(result.status).toBe(0);
+            expect(result.status).toBe(1);
             expect(result.stdout + result.stderr).toContain('not development or test');
 
             // The gate returns before `bootAppInProcess()` ever connects — nothing to drop.
