@@ -11,6 +11,7 @@ import type { LoginTwoFactorRequest, AuthTokens } from '@types';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { issueSession } from '../session/session';
+import { rememberDevice } from '../session/device-cookie';
 import { toRememberTier } from '../session/config';
 import { recordLoginSuccess } from '../session/login-observability';
 import { authTwoFactorChallengeTotal } from '../metrics';
@@ -65,6 +66,8 @@ export const postLoginTwoFactor = (
                         authTwoFactorChallengeTotal.inc({ status: 'success' });
                         recordLoginSuccess(request, userId, unrestricted);
                         destroyMfaChallengeCookie(response);
+                        // The login is only complete here, so the browser becomes familiar here.
+                        rememberDevice(request, response, user.email);
                         successResponse<AuthTokens>(
                             response,
                             { token: accessToken },

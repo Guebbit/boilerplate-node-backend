@@ -52,6 +52,7 @@ process.env.NODE_RATE_LIMIT_MAX ??= '20000';
 process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '1000';
 process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '1000';
 process.env.NODE_AUTH_RATE_LIMIT_BLOCK_MAX ??= '1000';
+process.env.NODE_AUTH_RATE_LIMIT_DEVICE_MAX ??= '1000';
 
 /**
  * `submissionLimiter` (`POST /feedback/contact`) needs the same treatment, for a sharper reason
@@ -254,6 +255,7 @@ process.env.NODE_TOKEN_REFRESH ??= 'test-refresh-secret';
 
 /** Same reasoning as the two secrets above — `account/two-factor/` needs a real value too. */
 process.env.NODE_TOTP_ENCRYPTION_KEY ??= 'test-totp-encryption-key';
+process.env.NODE_DEVICE_COOKIE_SECRET ??= 'test-device-cookie-secret';
 
 /** Same reasoning again — a webhook subscription's secret ring (`modules/webhooks/secrets.ts`). */
 process.env.NODE_WEBHOOK_SECRET_ENCRYPTION_KEY ??= 'test-webhook-secret-encryption-key';

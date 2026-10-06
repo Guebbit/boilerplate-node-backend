@@ -7,7 +7,7 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, keyRing, versionedKeyRing } from '@infrastructure/config/fields';
+import { int, keyRing, secret, versionedKeyRing } from '@infrastructure/config/fields';
 import type { VersionedKey } from '@infrastructure/security/versioned-secret';
 
 /** The "remember me" tiers a refresh token may be issued under — see the table in the doc above. */
@@ -78,6 +78,15 @@ export const sessionConfig = defineConfig({
         NODE_TOTP_ENCRYPTION_KEY: versionedKeyRing({
             required: { minLength: 16, placeholder: 'your-totp-encryption-key-here' },
             describe: 'Ring encrypting second-factor material at rest, `version:key`, newest first.'
+        }),
+        // The familiar-device cookie's HMAC key. Unset on a developer machine means no cookie is
+        // ever set or honoured; in production, unset or the placeholder refuses to boot.
+        NODE_DEVICE_COOKIE_SECRET: secret({
+            minLength: 16,
+            placeholder: 'your-device-cookie-secret-here',
+            productionOnly: true,
+            describe:
+                'Key signing the familiar-device cookie that lets a known browser skip the per-account login lockout.'
         }),
         NODE_TOKEN_ROTATION_GRACE_MS: int({
             default: 10_000,

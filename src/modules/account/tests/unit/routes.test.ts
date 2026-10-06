@@ -175,15 +175,16 @@ describe('account routes — authorization', () => {
 });
 
 describe('account routes — credential rate limiting', () => {
-    it.each(RATE_LIMITED)('%s carries ALL THREE credential budgets', (signature) => {
+    it.each(RATE_LIMITED)('%s carries ALL the credential budgets', (signature) => {
         const limiters = chainOf(router, signature).filter((entry) =>
             entry.startsWith('credentials-')
         );
 
-        // Identity, address AND address-block: each is keyed differently and defends an attack
-        // the other two miss. Any one missing reads as protected and is not.
+        // Identity, a forged device cookie, address AND address-block: each is keyed differently
+        // and defends an attack the others miss. Any one missing reads as protected and is not.
         expect(limiters).toEqual([
             'credentials-identity',
+            'credentials-device',
             'credentials-address',
             'credentials-block'
         ]);

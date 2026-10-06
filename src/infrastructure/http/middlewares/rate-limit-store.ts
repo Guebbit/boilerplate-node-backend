@@ -7,7 +7,12 @@
  * cache keys can never evict a counter.
  */
 
-import { MemoryStore, type Options, type Store } from 'express-rate-limit';
+import {
+    MemoryStore,
+    type ClientRateLimitInfo,
+    type Options,
+    type Store
+} from 'express-rate-limit';
 import type { RateLimitBudget } from '@types';
 import { RedisStore } from 'rate-limit-redis';
 import { logger } from '@infrastructure/adapters/logger';
@@ -155,41 +160,155 @@ const failoverStore = (
 };
 
 /**
+ * Say, once per budget, that counting is per process: with more than one worker and no Redis a
+ * security control is silently off by a factor of the worker count.
+ *
+ * `error`, not `warn`: that belongs at the level someone is paged for, not in the noise.
+ *
+ * @param namespace - the budget
+ */
+const warnPerProcessCounting = (namespace: string): void => {
+    if (limitsRedisUrl() || clusterConfig().NODE_CLUSTER_WORKERS === 1) return;
+    // Stryker disable all
+    logger.error({
+        message:
+            'Rate limiting is counting per process: no Redis is configured and this app runs a worker per CPU. ' +
+            'Every budget in NODE_RATE_LIMIT_* is effectively multiplied by the worker count. ' +
+            'Set NODE_RATE_LIMIT_REDIS_URL, or run NODE_CLUSTER_WORKERS=1.',
+        namespace
+    });
+    // Stryker restore all
+};
+
+/**
+ * The plain store one counter lives in: Redis behind a failover when a `limits` URL is configured,
+ * an in-process one otherwise. Split out so the escalating wrapper below can build several.
+ *
+ * @param namespace - the counter's key prefix
+ * @param onStoreError - what the budget does while the `limits` Redis is unavailable
+ */
+const plainStore = (
+    namespace: string,
+    onStoreError: NonNullable<RateLimitBudget['onStoreError']>
+): Store => {
+    const url = limitsRedisUrl();
+
+    if (!url) return new MemoryStore();
+
+    return failoverStore(namespace, lazyRedisStore(namespace, url), onStoreError);
+};
+
+/**
+ * A record's hit count, or 0 once its window ended. `MemoryStore#get` answers an expired entry
+ * until its sweep runs, which would keep a lockout alive past its time; Redis has already
+ * dropped the key by then.
+ */
+const liveHits = (record: ClientRateLimitInfo | undefined): number =>
+    record && (!record.resetTime || record.resetTime.getTime() > Date.now()) ? record.totalHits : 0;
+
+/** What {@link escalatingStore} needs to know about the budget it escalates. */
+export interface Escalation {
+    /** The cap: a key whose count passes it is locked. */
+    limit: number;
+    /** How many times the lockout may double. */
+    doublings: number;
+}
+
+/**
+ * A store whose lockout doubles each time the same key hits the cap again.
+ *
+ * `express-rate-limit` counts hits in one fixed window per store, and neither Redis nor the memory
+ * store can stretch one key's expiry afterwards. So the lockout lengths are separate stores, one
+ * per level, each with its own window (`windowMs × 2^level`):
+ *
+ * ```
+ * a request → is the key locked at ANY level? → keep counting there (still refused)
+ *           → not locked: the strike count picks the level → count there
+ *           → the count just passed the cap: record a strike
+ * ```
+ *
+ * The strike count lives in one more store whose window outlasts the longest lockout, so a key
+ * that behaves is forgotten. Every store is a {@link plainStore}, so Redis and its memory
+ * fallback work for each level exactly as they do for a flat budget.
+ *
+ * @param namespace - the budget, prefixing every level's keys
+ * @param onStoreError - what the budget does while the `limits` Redis is unavailable
+ * @param escalation - the cap and the number of doublings
+ */
+const escalatingStore = (
+    namespace: string,
+    onStoreError: NonNullable<RateLimitBudget['onStoreError']>,
+    escalation: Escalation
+): Store => {
+    const levels = Array.from({ length: escalation.doublings + 1 }, (_unused, level) =>
+        plainStore(`${namespace}:x${String(level)}`, onStoreError)
+    );
+    const strikes = plainStore(`${namespace}:strikes`, onStoreError);
+    // Which level a key was last counted at, so a successful request un-counts the right one.
+    const lastLevel = new Map<string, number>();
+
+    /** The level a key is currently locked at, if any: its count has passed the cap. */
+    const lockedLevel = async (key: string): Promise<number | undefined> => {
+        for (const [level, store] of [...levels.entries()].toReversed())
+            if (liveHits(await store.get?.(key)) > escalation.limit) return level;
+        return undefined;
+    };
+
+    /** Count one hit at a level, remembering it for a later `decrement`. */
+    const countAt = (level: number, key: string) => {
+        lastLevel.set(key, level);
+        return levels[level].increment(key);
+    };
+
+    return {
+        init: (received: Options) => {
+            for (const [level, store] of levels.entries())
+                void store.init?.({ ...received, windowMs: received.windowMs * 2 ** level });
+            // Outlasts the longest lockout, so a well-behaved key is forgotten.
+            void strikes.init?.({
+                ...received,
+                windowMs: received.windowMs * 2 ** (escalation.doublings + 1)
+            });
+        },
+        increment: async (key: string) => {
+            const locked = await lockedLevel(key);
+            if (locked !== undefined) return countAt(locked, key);
+
+            const recorded = liveHits(await strikes.get?.(key));
+            const result = await countAt(Math.min(recorded, escalation.doublings), key);
+            // The count just passed the cap: this is a lockout, and the next one is longer.
+            if (result.totalHits === escalation.limit + 1) await strikes.increment(key);
+            return result;
+        },
+        decrement: (key: string) => levels[lastLevel.get(key) ?? 0].decrement(key),
+        resetKey: (key: string) =>
+            Promise.all(
+                [...levels, strikes].map((store) => Promise.resolve(store.resetKey(key)))
+            ).then(() => undefined),
+        get: async (key: string) => levels[(await lockedLevel(key)) ?? 0].get?.(key)
+    };
+};
+
+/**
  * The store one limiter counts in.
  *
  * @param namespace - which budget these counters belong to, so two limiters sharing one Redis
  *  cannot spend each other's allowance
  * @param onStoreError - what the budget does while the `limits` Redis is unavailable
+ * @param escalation - when given, repeated lockouts of one key double in length — see
+ *  {@link escalatingStore}
  * @returns a Redis-backed store with a safe fallback when a `limits` URL is configured, an
  *  in-process one otherwise
  */
 export const rateLimitStore = (
     namespace: string,
-    onStoreError: NonNullable<RateLimitBudget['onStoreError']> = 'memory'
+    onStoreError: NonNullable<RateLimitBudget['onStoreError']> = 'memory',
+    escalation?: Escalation
 ): Store => {
-    const url = limitsRedisUrl();
-
-    if (!url) {
-        /*
-         * `error`, not `warn`: with more than one worker this is a security control silently not
-         * doing what its config claims, off by a factor of the worker count — that belongs at the
-         * level someone is paged for, not in the noise.
-         */
-        if (clusterConfig().NODE_CLUSTER_WORKERS !== 1)
-            // Stryker disable all
-            logger.error({
-                message:
-                    'Rate limiting is counting per process: no Redis is configured and this app runs a worker per CPU. ' +
-                    'Every budget in NODE_RATE_LIMIT_* is effectively multiplied by the worker count. ' +
-                    'Set NODE_RATE_LIMIT_REDIS_URL, or run NODE_CLUSTER_WORKERS=1.',
-                namespace
-            });
-        // Stryker restore all
-
-        return new MemoryStore();
-    }
-
-    return failoverStore(namespace, lazyRedisStore(namespace, url), onStoreError);
+    warnPerProcessCounting(namespace);
+    return escalation
+        ? escalatingStore(namespace, onStoreError, escalation)
+        : plainStore(namespace, onStoreError);
 };
 
 /**

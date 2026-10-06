@@ -10,6 +10,7 @@ import { z } from 'zod';
 import { accountService, twoFactorService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { issueSession } from '../session/session';
+import { rememberDevice } from '../session/device-cookie';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
@@ -104,6 +105,9 @@ export const postLogin = (
                     // Read fresh from the membership — the document carries no role of its own.
                     isUnrestrictedCaller(userId).then((unrestricted) => {
                         recordLoginSuccess(request, userId, unrestricted);
+                        // A completed login marks this browser familiar for the account, so a
+                        // lockout an attacker caused cannot keep the owner out.
+                        rememberDevice(request, response, data.email);
                         successResponse<LoginOutcome>(
                             response,
                             { token: accessToken },
