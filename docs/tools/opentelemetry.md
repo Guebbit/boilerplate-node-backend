@@ -70,6 +70,16 @@ This means the three signals stay linked without extra effort:
 
 In [Grafana](./grafana.md): find the log line in Loki Explore → click the `trace_id` link → land on the exact Tempo trace. Or go the other way: find a slow Tempo span → click "Loki logs" → see the surrounding log lines. → [Trace ↔ log correlation](./loki.md#trace-log-correlation)
 
+## Who may name a trace
+
+The API is reachable by anyone, so it never adopts a caller's `traceparent` as its parent:
+
+- **No remote parent, no baggage.** A custom propagator (`publicEndpointPropagator`, `runtime/otel-sdk.ts`) still writes `traceparent` on outgoing calls but extracts nothing inbound. A caller cannot graft requests onto another trace, force sampling with a `-01` flag, or fill our baggage; a `-00` flag does not switch tracing off either.
+- **A link instead.** A valid inbound `traceparent` becomes a span link on the HTTP server span, so a browser span and the request it caused are findable from each other. This is the pattern Go's `WithPublicEndpoint` implements.
+- **Request ids follow.** `x-request-id` is never the request id: a well-formed client value is logged and audited as `client_request_id`.
+
+`NODE_TRUSTED_INGRESS` turns this off for a deployment whose proxy **strips or overwrites** `traceparent` and `x-request-id` itself, so what arrives was set by that proxy: the caller's trace then continues here as the parent and its request id is kept. It is off by default and is never keyed on the peer's address: behind Traefik every peer is the proxy.
+
 ## Works with
 
 - **[Winston](./winston.md)** — OTel injects `trace_id` into Winston's context automatically. Every log line carries the trace ID for free. → [How logs and traces correlate](#how-logs-and-traces-correlate)

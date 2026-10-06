@@ -12,13 +12,30 @@
  * forward; this pins that a span really does reach a real exporter's `export()` at runtime too.
  */
 
-import { TraceFlags } from '@opentelemetry/api';
+import { IncomingMessage, type ClientRequest } from 'node:http';
+import { Socket } from 'node:net';
+import {
+    ROOT_CONTEXT,
+    TraceFlags,
+    context,
+    defaultTextMapGetter,
+    defaultTextMapSetter,
+    propagation,
+    trace,
+    type Span
+} from '@opentelemetry/api';
+import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { ReadableSpan } from '@opentelemetry/sdk-trace';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { asStub } from '@tests/stub';
 import { withEnvironment } from '@tests/environment';
 import { NoopSpanProcessor } from '@opentelemetry/sdk-trace';
-import { buildProcessors, redactUrlSecrets } from '@infrastructure/runtime/otel-sdk';
+import {
+    buildProcessors,
+    linkInboundTrace,
+    publicEndpointPropagator,
+    redactUrlSecrets
+} from '@infrastructure/runtime/otel-sdk';
 
 /**
  * Enough of a `ReadableSpan` to survive `onEnd`'s sampled check and `_flushOneBatch`'s resource
@@ -80,5 +97,121 @@ describe('otel-sdk — redactUrlSecrets', () => {
 
     it('leaves a URL with nothing to hide untouched', () => {
         expect(redactUrlSecrets('/products?page=2')).toBe('/products?page=2');
+    });
+});
+
+/** A valid W3C traceparent whose sampled flag is `flags` (`01` sampled, `00` not). */
+const traceparent = (flags: string) =>
+    `00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-${flags}`;
+
+/** An incoming request carrying exactly these headers. */
+const incoming = (headers: Record<string, string>): IncomingMessage =>
+    Object.assign(new IncomingMessage(new Socket()), { headers });
+
+describe('otel-sdk — publicEndpointPropagator', () => {
+    const propagator = publicEndpointPropagator();
+
+    it('adopts no remote parent from an inbound traceparent', () => {
+        const extracted = propagator.extract(
+            ROOT_CONTEXT,
+            { traceparent: traceparent('01') },
+            defaultTextMapGetter
+        );
+
+        expect(trace.getSpanContext(extracted)).toBeUndefined();
+    });
+
+    it('drops inbound baggage', () => {
+        const extracted = propagator.extract(
+            ROOT_CONTEXT,
+            { baggage: 'userId=evil' },
+            defaultTextMapGetter
+        );
+
+        expect(propagation.getBaggage(extracted)).toBeUndefined();
+    });
+
+    it('still injects traceparent on an outgoing call', () => {
+        const provider = new NodeTracerProvider();
+        const span = provider.getTracer('test').startSpan('outgoing');
+        const carrier: Record<string, string> = {};
+
+        propagator.inject(trace.setSpan(ROOT_CONTEXT, span), carrier, defaultTextMapSetter);
+
+        expect(carrier.traceparent).toContain(span.spanContext().traceId);
+    });
+
+    it('lists traceparent as the field it writes', () => {
+        expect(propagator.fields()).toEqual(['traceparent', 'tracestate']);
+    });
+
+    it('still yields a sampled root span when the caller sent an unsampled traceparent', () => {
+        // The attack the propagator closes: a `-00` flag must not switch our tracing off.
+        const provider = new NodeTracerProvider();
+        const extracted = propagator.extract(
+            context.active(),
+            { traceparent: traceparent('00') },
+            defaultTextMapGetter
+        );
+
+        const span = provider.getTracer('test').startSpan('request', {}, extracted);
+
+        expect(span.spanContext().traceFlags & TraceFlags.SAMPLED).toBe(TraceFlags.SAMPLED);
+        expect(span.spanContext().traceId).not.toBe('4bf92f3577b34da6a3ce929d0e0e4736');
+    });
+});
+
+/** A span that records the links it was given. */
+const recordingSpan = () => {
+    const addLink = jest.fn();
+    return { span: asStub<Span>({ addLink }), addLink };
+};
+
+describe('otel-sdk — linkInboundTrace', () => {
+    it('links the trace a valid traceparent names', () => {
+        const { span, addLink } = recordingSpan();
+
+        linkInboundTrace(span, incoming({ traceparent: traceparent('01') }));
+
+        expect(addLink).toHaveBeenCalledWith({
+            context: expect.objectContaining({
+                traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+                spanId: '00f067aa0ba902b7'
+            })
+        });
+    });
+
+    it('links an unsampled caller too: the link carries its flags, it does not obey them', () => {
+        const { span, addLink } = recordingSpan();
+
+        linkInboundTrace(span, incoming({ traceparent: traceparent('00') }));
+
+        expect(addLink).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+        ['no traceparent', {}],
+        ['a malformed one', { traceparent: 'not-a-traceparent' }],
+        [
+            'an all-zero trace id',
+            { traceparent: '00-00000000000000000000000000000000-00f067aa0ba902b7-01' }
+        ]
+    ])('links nothing for %s', (_label, headers) => {
+        const { span, addLink } = recordingSpan();
+
+        linkInboundTrace(span, incoming(headers));
+
+        expect(addLink).not.toHaveBeenCalled();
+    });
+
+    it('leaves an outgoing request alone', () => {
+        const { span, addLink } = recordingSpan();
+
+        linkInboundTrace(
+            span,
+            asStub<ClientRequest>({ headers: { traceparent: traceparent('01') } })
+        );
+
+        expect(addLink).not.toHaveBeenCalled();
     });
 });

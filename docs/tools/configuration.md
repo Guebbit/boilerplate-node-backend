@@ -265,11 +265,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 
 ### tracing
 
-| Variable                             | Type | Default | Rules | What it does                                                  |
-| ------------------------------------ | ---- | ------- | ----- | ------------------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`        | text | —       | —     | OTLP collector for every signal. Unset drops spans.           |
-| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | text | —       | —     | OTLP collector for traces only; wins over the endpoint above. |
-| `npm_package_version`                | text | —       | —     | Set by npm when started through a script; stamped on spans.   |
+| Variable                             | Type   | Default | Rules | What it does                                                                                                                                                                |
+| ------------------------------------ | ------ | ------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`        | text   | —       | —     | OTLP collector for every signal. Unset drops spans.                                                                                                                         |
+| `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | text   | —       | —     | OTLP collector for traces only; wins over the endpoint above.                                                                                                               |
+| `NODE_TRUSTED_INGRESS`               | switch | `off`   | —     | A trusted proxy in front of the API strips or overwrites traceparent and x-request-id. On: continue the caller's trace and keep its request id. Off: both start fresh here. |
+| `npm_package_version`                | text   | —       | —     | Set by npm when started through a script; stamped on spans.                                                                                                                 |
 
 ### pseudonymisation
 

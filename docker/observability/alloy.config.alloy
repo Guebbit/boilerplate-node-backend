@@ -34,7 +34,7 @@ faro.receiver "frontend" {
     // no LogQL selector can separate from anything else.
     //
     // `service` matches the label Promtail promotes from the backend's Winston records, so a
-    // single `tracesToLogsV2` mapping in Grafana works for both sides of a stitched trace, and
+    // single `tracesToLogsV2` mapping in Grafana works for both sides of a linked trace, and
     // `{service="frontend"}` is a usable selector. `kind` is the Faro payload discriminator
     // (exception / log / measurement / event), which is what you filter on first when triaging.
     extra_log_labels = {
@@ -58,8 +58,9 @@ loki.write "default" {
 }
 
 // Forward Faro traces to the existing OTel Collector, which already fans out to Tempo.
-// Reusing the collector keeps a single trace pipeline, so frontend spans stitch onto
-// backend spans via the shared W3C traceparent / trace_id.
+// Reusing the collector keeps a single trace pipeline. A backend span carries a LINK to the
+// frontend span named in the W3C traceparent; it does not share its trace_id (the API never
+// adopts a caller-chosen one — see docs/tools/opentelemetry.md#who-may-name-a-trace).
 otelcol.exporter.otlp "tempo" {
     client {
         endpoint = "otel-collector:4317"

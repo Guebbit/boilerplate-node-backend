@@ -31,8 +31,10 @@ Put the **Grafana Faro Web SDK** in the frontend and add **one** container,
 `grafana/alloy`, as the browser-facing collector. It routes into the stack you already run:
 
 - errors + browser logs → **Loki**
-- frontend traces → the **existing Tempo** (so FE spans stitch onto BE spans — one trace
-  from button click to Mongoose query, correlated by `trace_id`)
+- frontend traces → the **existing Tempo** (a backend request carries a **link** to the browser
+  span that caused it: the two are findable from each other, but they are separate traces, since
+  the API never adopts a caller-chosen trace id — see
+  [OpenTelemetry](./opentelemetry.md#who-may-name-a-trace))
 - web-vitals → **Prometheus**
 - everything visualized in **Grafana**, next to backend signals
 
@@ -163,6 +165,6 @@ Because each job is behind an SDK boundary, switching is localized:
 ## Related pages
 
 - [Observability Reference](./observability-reference.md) — the backend stack this reuses
-- [OpenTelemetry](./opentelemetry.md) — how FE traces stitch onto BE traces via Tempo
+- [OpenTelemetry](./opentelemetry.md) — how a backend request links to the FE trace that caused it, via Tempo
 - [Product Analytics](./analytics.md) — the provider port, and how to pick between Umami and PostHog
 - [Docker & Podman](./docker-and-podman.md) — where new containers get wired in

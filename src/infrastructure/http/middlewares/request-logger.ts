@@ -22,7 +22,7 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
         const durationMs = Number(process.hrtime.bigint() - startTime) / 1_000_000;
         const route = getRouteLabel(request);
         const { statusCode } = response;
-        const { method, requestId } = request;
+        const { method, requestId, clientRequestId } = request;
         // A 4xx is the caller's fault and a 5xx is ours, so they must not share a severity.
         const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
 
@@ -30,6 +30,7 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
         // before `next()` because that is when Express has populated it.
         logger.log(level, `${method} ${route} ${statusCode} ${durationMs.toFixed(1)}ms`, {
             request_id: requestId,
+            client_request_id: clientRequestId,
             trace_id: getActiveSpanContext().traceId,
             method,
             route,

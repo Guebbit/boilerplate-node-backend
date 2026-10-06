@@ -30,6 +30,8 @@ declare module 'express-serve-static-core' {
          */
         credentialId?: string;
         requestId?: string;
+        /** The caller's own well-formed `x-request-id`, kept for correlation; never the request id. */
+        clientRequestId?: string;
         /**
          * URLs of the images this request uploaded, set only when there was no broker to hand the
          * digest job to (`quarantineUploadedImages` ran the pipeline inline). Read through
