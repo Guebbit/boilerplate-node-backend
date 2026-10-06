@@ -570,32 +570,25 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                         required: true
                     },
                     enrolledAt: {
-                        type: Date,
-                        required: false
+                        type: Date
                     },
                     secret: {
-                        type: String,
-                        required: false
+                        type: String
                     },
                     lastUsedStep: {
-                        type: Number,
-                        required: false
+                        type: Number
                     },
                     codeHash: {
-                        type: String,
-                        required: false
+                        type: String
                     },
                     codeExpiresAt: {
-                        type: Date,
-                        required: false
+                        type: Date
                     },
                     codeSentAt: {
-                        type: Date,
-                        required: false
+                        type: Date
                     },
                     codeAttempts: {
-                        type: Number,
-                        required: false
+                        type: Number
                     }
                 }
             ],
@@ -622,10 +615,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         reauthCode: {
             type: new Schema(
                 {
-                    codeHash: { type: String, required: false },
-                    codeExpiresAt: { type: Date, required: false },
-                    codeSentAt: { type: Date, required: false },
-                    codeAttempts: { type: Number, required: false }
+                    codeHash: { type: String },
+                    codeExpiresAt: { type: Date },
+                    codeSentAt: { type: Date },
+                    codeAttempts: { type: Number }
                 },
                 { _id: false }
             ),

@@ -33,7 +33,7 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 
 setupTestDb();
 
-/** Comfortably past `JSON_BODY_LIMIT` (`src/app/security.ts`, 100kb by default). */
+/** Comfortably past `NODE_JSON_BODY_LIMIT` (`src/app/config.ts`, 100kb by default). */
 const OVERSIZED_BODY = JSON.stringify({ email: 'a'.repeat(200_000) });
 
 /**

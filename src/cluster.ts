@@ -22,6 +22,11 @@ import { crashVerdict, workerTarget } from '@infrastructure/runtime/cluster-poli
 /**
  * Cluster management
  * https://www.digitalocean.com/community/tutorials/how-to-scale-node-js-applications-with-clustering
+
+ *
+ * Read once at import, on purpose: this file is the process entry point, so no test or
+ * `createApp({ env })` override can arrive after it, and the primary/worker split is
+ * decided exactly once per process.
  */
 const CLUSTER_ENABLED = clusterConfig().NODE_ENABLE_CLUSTERING;
 
