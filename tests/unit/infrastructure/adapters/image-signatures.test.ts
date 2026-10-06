@@ -69,7 +69,9 @@ describe('identifyImage', () => {
         ],
         ['a PHP snippet', '<?php system($_GET["c"]); ?>'],
         ['a shell script', '#!/bin/sh\nrm -rf /'],
-        ['plain text', 'this is not an image']
+        ['plain text', 'this is not an image'],
+        // 'WEBP' at offset 8 with no RIFF at 0 is not a WebP.
+        ['a script with WEBP at offset 8', '<script>WEBPalert(1)</script>']
     ])('refuses to identify %s', (_label, content) => {
         expect(identifyImage(Buffer.from(content))).toBeUndefined();
     });
