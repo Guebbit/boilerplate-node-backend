@@ -203,6 +203,22 @@ fixture. Lint refuses a production import of any `factories` file, which is what
 safe. The test doubles (a fake payment provider, a mail log) are not deleted: they were never in
 `src/` — they live in `scenarios/`, which the image does not copy.
 
+**Who owns the code in the production image**: root, read-only to `node`. The runtime stage copies
+without `--chown`; only `public/images`, `tmp/storage` and `tmp/quarantine` belong to `node`. A write
+primitive gained through a dependency therefore cannot rewrite the code it runs, with or without
+the compose file's `read_only`. `scripts/ops/` is copied file by file — exactly the jobs
+`docker/crontab` runs, so a one-off tool (`demo-remove*`, `refresh-breached-passwords`) never ships;
+a cross-cutting test keeps the two lists equal.
+
+**Boot check**: `docker/boot-check.sh <image>` starts the production image against a throwaway Mongo
+with the fail-closed env set, waits for `/livez`, and fails if `node` can write under `/app/src`. CI's
+`boot` job and a developer run the same script:
+
+```sh
+docker build -f docker/Dockerfile.production -t boot-check .
+docker/boot-check.sh boot-check
+```
+
 ## How to think about the setup
 
 - **Compose is the local truth**: one file wires together the app plus all sidecars needed for demos and local debugging.
