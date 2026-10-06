@@ -40,14 +40,34 @@ export const parseVersionedKeyRing = (raw: string | undefined): VersionedKey[] =
         });
 
 /**
+ * Which ring a ciphertext belongs to. It is the HKDF `info` label, so the three rings derive
+ * unrelated keys even if an operator reuses one secret for two of them.
+ */
+export type SecretPurpose = 'pii' | 'totp' | 'webhook-secret';
+
+/**
+ * What binds a ciphertext to its place.
+ *
+ * Fields:
+ *   purpose - the ring (HKDF label).
+ *   aad     - GCM associated data, e.g. `users:phone:<user _id>`. A ciphertext copied to another row
+ *             or field fails its auth tag instead of decrypting.
+ */
+export interface SecretBinding {
+    purpose: SecretPurpose;
+    aad: string;
+}
+
+/**
  * AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any
  * length, so it is stretched with HKDF-SHA256 (`node:crypto`, no new dependency) rather than a
- * single hash pass — defense in depth against a future low-entropy operator secret, since a bare
- * hash of a weak string is only as hard to invert as the string itself.
+ * single hash pass. HKDF does not add work against a weak secret (RFC 5869); the boot check
+ * demands key-sized entropy for that.
+ * `purpose` is the HKDF `info`: domain separation between rings.
  * https://nodejs.org/api/crypto.html#cryptohkdfsyncdigest-ikm-salt-info-keylen
  */
-const deriveKey = (secret: string): Buffer =>
-    Buffer.from(hkdfSync('sha256', secret, '', 'versioned-secret', 32));
+const deriveKey = (secret: string, purpose: SecretPurpose): Buffer =>
+    Buffer.from(hkdfSync('sha256', secret, '', purpose, 32));
 
 /** GCM authentication tag length, in bytes — the full 128 bits, and the only length accepted back. */
 const AUTH_TAG_BYTES = 16;
@@ -60,14 +80,18 @@ const AUTH_TAG_BYTES = 16;
  * rather than a migration that cannot tell which key a row used.
  *
  * @param ring - newest key first; see {@link parseVersionedKeyRing}
+ * @param binding - the ring's HKDF label and the row/field this value is bound to
  */
 export const encryptVersionedSecret = (
     plaintext: string,
-    ring: readonly VersionedKey[]
+    ring: readonly VersionedKey[],
+    binding: SecretBinding
 ): string => {
     const { version, key } = ring[0];
     const iv = randomBytes(12);
-    const cipher = createCipheriv('aes-256-gcm', deriveKey(key), iv);
+    const cipher = createCipheriv('aes-256-gcm', deriveKey(key, binding.purpose), iv);
+    // Associated data: authenticated but not stored, so it must be re-supplied to decrypt.
+    cipher.setAAD(Buffer.from(binding.aad, 'utf8'));
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     return `${version}:${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${ciphertext.toString('hex')}`;
 };
@@ -77,6 +101,7 @@ export const encryptVersionedSecret = (
  *
  * @param ring - every key this deployment still holds, in any order — lookup is by the
  *   ciphertext's own stamped version, not by position
+ * @param binding - must equal the one it was encrypted under, or the auth tag fails
  * @param label - what to name the secret in the version-mismatch error, e.g. `'TOTP'` or
  *   `'webhook secret'`
  * @throws when the format is malformed, the stamped version names no key in the ring, or the auth
@@ -85,6 +110,7 @@ export const encryptVersionedSecret = (
 export const decryptVersionedSecret = (
     stored: string,
     ring: readonly VersionedKey[],
+    binding: SecretBinding,
     label: string
 ): string => {
     const [version, ivHex, tagHex, ciphertextHex] = stored.split(':', 4);
@@ -93,7 +119,7 @@ export const decryptVersionedSecret = (
 
     const decipher = createDecipheriv(
         'aes-256-gcm',
-        deriveKey(configured.key),
+        deriveKey(configured.key, binding.purpose),
         Buffer.from(ivHex, 'hex'),
         // The full 16-byte tag `encryptVersionedSecret` writes. Unset, Node also accepts a tag
         // truncated to as little as 4 bytes, which is far easier to forge.
@@ -101,6 +127,7 @@ export const decryptVersionedSecret = (
         { authTagLength: AUTH_TAG_BYTES }
     );
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    decipher.setAAD(Buffer.from(binding.aad, 'utf8'));
     return Buffer.concat([
         decipher.update(Buffer.from(ciphertextHex, 'hex')),
         decipher.final()

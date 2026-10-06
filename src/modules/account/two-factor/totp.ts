@@ -23,25 +23,39 @@ const TOTP_STEP_SECONDS = 30;
  */
 const TOTP_EPOCH_TOLERANCE_SECONDS = TOTP_STEP_SECONDS;
 
+/** The AAD binding a TOTP secret to its method entry. */
+const totpAad = (methodId: string): string => `users:twoFactorMethods.secret:${methodId}`;
+
 /**
  * Encrypt a TOTP secret for storage. See `encryptVersionedSecret` for the wire format.
  *
  * @param plaintext - the base32 TOTP secret from otplib's `generateSecret`
+ * @param methodId - the method entry's own `_id`; it is the AAD, so the ciphertext only decrypts
+ *   on the entry it was written to
  * @returns the versioned ciphertext to store in the method entry's `secret`
  */
-export const encryptTotpSecret = (plaintext: string): string =>
-    encryptVersionedSecret(plaintext, getTotpEncryptionKeyRing());
+export const encryptTotpSecret = (plaintext: string, methodId: string): string =>
+    encryptVersionedSecret(plaintext, getTotpEncryptionKeyRing(), {
+        purpose: 'totp',
+        aad: totpAad(methodId)
+    });
 
 /**
  * Decrypt a stored TOTP secret.
  *
  * @param stored - the versioned ciphertext from a method entry's `secret`
+ * @param methodId - the same entry's `_id`
  * @returns the plaintext base32 secret
  * @throws when the format is malformed, the key is wrong, or the auth tag does not match
  *   (tampering, or the wrong key version)
  */
-export const decryptTotpSecret = (stored: string): string =>
-    decryptVersionedSecret(stored, getTotpEncryptionKeyRing(), 'TOTP');
+export const decryptTotpSecret = (stored: string, methodId: string): string =>
+    decryptVersionedSecret(
+        stored,
+        getTotpEncryptionKeyRing(),
+        { purpose: 'totp', aad: totpAad(methodId) },
+        'TOTP'
+    );
 
 /**
  * The `otpauth://` URI an authenticator app scans to enroll — the frontend renders it as a QR

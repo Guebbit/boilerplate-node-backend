@@ -27,26 +27,41 @@ import type { WebhookSecretRingEntry } from './model';
  */
 const generatePlaintextSecret = (): string => `whsec_${randomBytes(32).toString('base64')}`;
 
-/** Encrypt a ring secret for storage. See `encryptVersionedSecret` for the wire format. */
-export const encryptRingSecret = (plaintext: string): string =>
-    encryptVersionedSecret(plaintext, getWebhookEncryptionKeyRing());
+/**
+ * Encrypt a ring secret for storage. See `encryptVersionedSecret` for the wire format.
+ *
+ * @param entryId - the ring entry's own `id`, the AAD: the parent subscription has no `_id` yet
+ *   when its first secret is minted, so the entry id is the only stable binding
+ */
+export const encryptRingSecret = (plaintext: string, entryId: string): string =>
+    encryptVersionedSecret(plaintext, getWebhookEncryptionKeyRing(), {
+        purpose: 'webhook-secret',
+        aad: entryId
+    });
 
 /**
  * Decrypt a stored ring secret.
  *
+ * @param entryId - the ring entry's `id`, as at encryption
  * @throws when the format is malformed, the key is wrong, or the auth tag does not match
  *   (tampering, or a key version this deployment no longer holds)
  */
-export const decryptRingSecret = (stored: string): string =>
-    decryptVersionedSecret(stored, getWebhookEncryptionKeyRing(), 'webhook secret');
+export const decryptRingSecret = (stored: string, entryId: string): string =>
+    decryptVersionedSecret(
+        stored,
+        getWebhookEncryptionKeyRing(),
+        { purpose: 'webhook-secret', aad: entryId },
+        'webhook secret'
+    );
 
 /** A new ring entry, and the plaintext it was minted with — the caller hands the plaintext back exactly once. */
 export const mintRingSecret = (): { entry: WebhookSecretRingEntry; plaintext: string } => {
     const plaintext = generatePlaintextSecret();
+    const id = randomUUID();
     return {
         entry: {
-            id: randomUUID(),
-            ciphertext: encryptRingSecret(plaintext),
+            id,
+            ciphertext: encryptRingSecret(plaintext, id),
             createdAt: new Date()
         },
         plaintext
@@ -85,7 +100,8 @@ export const liveRingEntries = (
 export const activeRingSecrets = (
     ring: readonly WebhookSecretRingEntry[],
     now: Date = new Date()
-): string[] => liveRingEntries(ring, now).map((entry) => decryptRingSecret(entry.ciphertext));
+): string[] =>
+    liveRingEntries(ring, now).map((entry) => decryptRingSecret(entry.ciphertext, entry.id));
 
 /** Drop one entry from a ring by its id — the second half of a rotation, once every consumer has switched. */
 export const removeRingSecret = (

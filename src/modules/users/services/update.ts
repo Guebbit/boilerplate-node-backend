@@ -71,7 +71,8 @@ export const update = (
     // schema. `null` clears the override — $unset on save.
     if (data.locale !== undefined) user.locale = clearedOrValue(data.locale);
     if (data.phone !== undefined)
-        user.phone = data.phone === null ? undefined : encryptPii(data.phone);
+        user.phone =
+            data.phone === null ? undefined : encryptPii(data.phone, `users:phone:${user.id}`);
     if (data.website !== undefined) user.website = clearedOrValue(data.website);
     // Absent leaves the stored choice alone, same as every field above; only an explicit
     // boolean changes it.

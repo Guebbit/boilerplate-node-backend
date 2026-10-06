@@ -269,4 +269,31 @@ describe('PII at rest', () => {
         const view = await addressService.addressesGet(user.id);
         expect(view.addresses[0]).toMatchObject({ ...HOME, phone: '+39 059 000001' });
     });
+
+    it('refuses a field copied onto another entry or field: the entry id is in the AAD', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        await addressService.addressAdd(user.id, OFFICE);
+
+        const stored = await addressBookModel.findOne({ userId: user._id });
+        const [first, second] = stored?.items ?? [];
+        if (!first || !second) throw new Error('two entries expected');
+        // An attacker with write access to the database swaps ciphertext between rows.
+        second.city = first.city;
+        await stored?.save();
+
+        await expect(addressService.addressesGet(user.id)).rejects.toThrow();
+    });
+
+    it('re-encrypts a PATCHed field under its own entry id, so it still reads back', async () => {
+        const user = await createUser();
+        await addressService.addressAdd(user.id, HOME);
+        const { addresses } = await addressService.addressesGet(user.id);
+        const [entry] = addresses;
+
+        await addressService.addressUpdate(user.id, entry?.id ?? '', { city: 'Parma' });
+
+        const after = await addressService.addressesGet(user.id);
+        expect(after.addresses[0]?.city).toBe('Parma');
+    });
 });
