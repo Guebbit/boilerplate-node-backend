@@ -103,6 +103,6 @@ export const mailRecipientLimiter: RequestHandler = (request: Request, response,
             return;
         }
         response.setHeader('Retry-After', String(retryAfterSeconds));
-        refuseRateLimited(MAIL_RECIPIENT_BUDGET.audited)(request, response);
+        refuseRateLimited(MAIL_RECIPIENT_BUDGET)(request, response);
     });
 };

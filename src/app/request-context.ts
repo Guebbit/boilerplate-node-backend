@@ -1,14 +1,14 @@
 /**
  * @module
- * Per-request context: the correlation id, the access log, the observability handle, the locale.
+ * Per-request context: the access log, the observability handle, the locale.
  *
  * Everything here attaches something the rest of the request reads, which is why it is one group
- * and why it must precede the routes. The internal order is load-bearing too: the request id is
- * generated first because the access log and every audit entry record it.
+ * and why it must precede the routes. The request id is the exception: it is
+ * mounted earlier (`requestIdMiddleware`), because the access log and every audit entry record it.
  */
 
 import crypto from 'node:crypto';
-import type { Express } from 'express';
+import type { Express, RequestHandler } from 'express';
 import { requestLogger } from '@infrastructure/http/middlewares/request-logger';
 import { attachLocale } from '@infrastructure/http/middlewares/locale';
 
@@ -21,25 +21,28 @@ import { attachLocale } from '@infrastructure/http/middlewares/locale';
 const REQUEST_ID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
 
 /**
- * Install request-id generation, access logging, the observability context and locale negotiation.
+ * Request ID middleware — reuse a well-formed client ID or generate a new UUID.
+ *
+ * Mounted by `createApp` before `installSecurity`, so even a request the global rate limiter
+ * refuses carries `x-request-id` (the access log, which stays after the limiter, never sees it).
+ */
+export const requestIdMiddleware: RequestHandler = (request, response, next) => {
+    const clientRequestId = request.get('x-request-id');
+    const requestId =
+        clientRequestId && REQUEST_ID_PATTERN.test(clientRequestId)
+            ? clientRequestId
+            : crypto.randomUUID();
+    request.requestId = requestId;
+    response.setHeader('x-request-id', requestId);
+    next();
+};
+
+/**
+ * Install access logging, the observability context and locale negotiation.
  *
  * @param app - the express application to configure
  */
 export const installRequestContext = (app: Express): void => {
-    /*
-     * Request ID middleware — reuse client ID or generate new UUID
-     */
-    app.use((request, response, next) => {
-        const clientRequestId = request.get('x-request-id');
-        const requestId =
-            clientRequestId && REQUEST_ID_PATTERN.test(clientRequestId)
-                ? clientRequestId
-                : crypto.randomUUID();
-        request.requestId = requestId;
-        response.setHeader('x-request-id', requestId);
-        next();
-    });
-
     /*
      * Winston access log + OpenTelemetry trace injection
      */

@@ -21,6 +21,7 @@ import type { RateLimitInfo, Store } from 'express-rate-limit';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
 import { rateLimitStore } from '@infrastructure/http/middlewares/rate-limit-store';
 import { rateLimitBudgetConfig, rateLimitConfig } from '@infrastructure/http/config';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -59,14 +60,15 @@ export const DEFAULT_API_KEY_RATE_LIMIT_MAX = 120;
  * What a caller sees when a budget is spent: the shared error envelope, never express-rate-limit's
  * own plain-text body.
  *
- * `audit` is opt-in per budget. The credential budgets record every refusal — a burst of them IS
+ * `audited` is opt-in per budget. The credential budgets record every refusal — a burst of them IS
  * what credential stuffing looks like, and the one signal that arrives before an account is taken.
  * The global brake does not: a port scan would just bury the trail in noise.
  */
 export const refuseRateLimited =
-    (audit: boolean) =>
+    (budget: Pick<RateLimitBudget, 'namespace' | 'audited'>) =>
     (request: Request, response: Response): Response => {
-        if (audit)
+        rateLimitRefusalsTotal.inc({ budget: budget.namespace });
+        if (budget.audited)
             recordAudit(callerContextOf(request), {
                 action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
                 outcome: 'failure',
@@ -126,7 +128,7 @@ export const buildRateLimiter = (budget: RateLimitBudget): RequestHandler =>
          * blip is neither an authentication outage nor an open door. Logged once per outage.
          */
         passOnStoreError: budget.onStoreError === 'pass',
-        handler: refuseRateLimited(budget.audited),
+        handler: refuseRateLimited(budget),
         // `logger` shipped in express-rate-limit 8.5.0. https://github.com/express-rate-limit/express-rate-limit/releases
         logger: limiterLogger,
         limit: budgetLimit(budget),
