@@ -25,6 +25,8 @@ import {
     type AddressesView
 } from './presenter';
 
+export { reencryptAddressBooks } from './reencrypt';
+
 /** Get the user's book. Absence and emptiness are the same state — an empty view, never 404. */
 export const addressesGet = (userId: string): Promise<AddressesView> =>
     addressBookRepository.findByUserId(userId).then((book) => presentAddresses(book));

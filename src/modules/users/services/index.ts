@@ -75,6 +75,8 @@ export { validateData } from './validation';
 export { search, getById, findByEmail } from './read';
 export { enqueueIfPending } from './image';
 export { create } from './create';
+export { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
+export type { TwoFactorSecretRing } from './reencrypt';
 export { update, updateById } from './update';
 export { remove, restoreById, removeById } from './remove';
 export { consumeToken } from './tokens';

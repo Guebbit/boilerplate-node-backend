@@ -180,7 +180,7 @@ describe('the mail guards', () => {
         setEnvironment({ NODE_ENV: 'production' });
         setEnvironment({ NODE_CORS_ORIGIN: 'https://app.example.com' });
         setEnvironment({ NODE_FRONTEND_URL: 'https://shop.example.com' });
-        setEnvironment({ NODE_PSEUDONYM_KEY: 'a-long-enough-pseudonym-key' });
+        setEnvironment({ NODE_PSEUDONYM_KEY: 'cd'.repeat(32) });
         setEnvironment({ NODE_MAIL_TRANSPORT: undefined });
 
         expect(assertApp).not.toThrow();

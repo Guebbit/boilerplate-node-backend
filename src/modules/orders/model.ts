@@ -30,6 +30,7 @@ import {
 import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';
+import { decryptSerializedOrder } from './pii';
 import {
     fulfillmentStatusOf,
     paymentStatusOf,
@@ -163,8 +164,8 @@ export interface OrderDocument
      * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
      * — an order already past its own window at erasure time is due almost immediately, not given
      * a fresh retention period. `scripts/ops/reap-orders.ts` scrubs the order's remaining PII
-     * (email, shipping name/phone/street, notes) once this elapses; the order row itself is never
-     * deleted.
+     * (email replaced; both addresses and notes unset) once this elapses; the order row itself is
+     * never deleted.
      */
     anonymizeAfter?: Date;
     /**
@@ -383,6 +384,7 @@ export const orderSchema = new Schema<OrderDocument>(
             enum: Object.values(OrderStatus),
             default: OrderStatus.pending
         },
+        // Stored encrypted (`./pii`), like both addresses below: never filter or sort on it.
         notes: {
             type: String
         },
@@ -460,7 +462,7 @@ export const orderSchema = new Schema<OrderDocument>(
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
          * Present only when a line ships to an address: absent on an all-digital order, a pickup,
-         * and orders that predate the book.
+         * and orders that predate the book. Every text field is stored encrypted (`./pii`).
          */
         shippingAddress: {
             type: orderAddressSchema
@@ -700,6 +702,8 @@ export const applyOrderTransform = applySerialization(orderSchema, {
         applyOrderTax(serialized, currency);
         applyTransferInstructions(serialized);
         applyOrderProjections(serialized);
+        // Last: nothing above reads the addresses or the notes, so they stay ciphertext until here.
+        decryptSerializedOrder(serialized);
     }
 });
 

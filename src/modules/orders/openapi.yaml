@@ -49,11 +49,6 @@ paths:
                       view combines this with `status=pending`.
                   schema:
                       $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
-                - name: notes
-                  in: query
-                  schema:
-                      type: string
-                      maxLength: 1000
                 - name: deleted
                   in: query
                   description: >-
@@ -535,9 +530,6 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
                 paymentMethod:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
-                notes:
-                    type: string
-                    maxLength: 1000
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
                 # Admin-effective, like `active`: a caller who cannot see deleted rows at all
                 # gets an empty page for `true`.

@@ -46,7 +46,7 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
         // the one place that decrypts it.
         ...(document.phone === undefined
             ? {}
-            : { phone: decryptPii(document.phone, 'user phone') }),
+            : { phone: decryptPii(document.phone, `users:phone:${document.id}`, 'user phone') }),
         ...(document.website === undefined ? {} : { website: document.website }),
         ...(document.analyticsConsent === undefined
             ? {}

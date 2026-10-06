@@ -11,21 +11,34 @@
 import {
     encryptVersionedSecret,
     decryptVersionedSecret,
+    type SecretBinding,
     type VersionedKey
 } from './versioned-secret';
 import { piiConfig } from './config';
 
 /** `NODE_PII_ENCRYPTION_KEY`'s ring — see `parseVersionedKeyRing` for the env var's wire format. */
-const getPiiEncryptionKeyRing = (): VersionedKey[] => piiConfig().NODE_PII_ENCRYPTION_KEY;
+export const getPiiEncryptionKeyRing = (): VersionedKey[] => piiConfig().NODE_PII_ENCRYPTION_KEY;
 
-/** Encrypt one PII field for storage. See `encryptVersionedSecret` for the wire format. */
-export const encryptPii = (plaintext: string): string =>
-    encryptVersionedSecret(plaintext, getPiiEncryptionKeyRing());
+/**
+ * The binding a PII field is written under — what a re-encryption job needs to rewrap one.
+ *
+ * @param aad - where the value lives, as for {@link encryptPii}
+ */
+export const piiBinding = (aad: string): SecretBinding => ({ purpose: 'pii', aad });
+
+/**
+ * Encrypt one PII field for storage. See `encryptVersionedSecret` for the wire format.
+ *
+ * @param aad - where the value lives, e.g. `users:phone:<user _id>`; decrypting needs the same one
+ */
+export const encryptPii = (plaintext: string, aad: string): string =>
+    encryptVersionedSecret(plaintext, getPiiEncryptionKeyRing(), { purpose: 'pii', aad });
 
 /**
  * Decrypt one stored PII field.
  *
+ * @param aad - the one it was encrypted under; a value moved to another row or field fails
  * @param label - what to name the field in a version-mismatch error, e.g. `'address fullName'`
  */
-export const decryptPii = (stored: string, label: string): string =>
-    decryptVersionedSecret(stored, getPiiEncryptionKeyRing(), label);
+export const decryptPii = (stored: string, aad: string, label: string): string =>
+    decryptVersionedSecret(stored, getPiiEncryptionKeyRing(), { purpose: 'pii', aad }, label);

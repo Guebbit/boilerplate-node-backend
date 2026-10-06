@@ -23,18 +23,13 @@ const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
 };
 
 describe('GET /orders — the filters it now publishes', () => {
-    /*
-     * `status` and `notes` were applied by the repository and named nowhere in the contract, so a
-     * generated client had no way to know they worked. `notes` is staff-written text on the order,
-     * so the filter is only reachable by someone who can already see it.
-     */
-    it('narrows by status, and by a fragment of the notes', async () => {
+    // `status` was applied by the repository and named nowhere in the contract, so a generated
+    // client had no way to know it worked. (`notes` is encrypted at rest, so it is not filterable.)
+    it('narrows by status', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();
         const paid = await createOrder(user, [toOrderItem(product, 1)]);
-        const pending = await createOrder(user, [toOrderItem(product, 1)], {
-            notes: 'call before dispatch'
-        });
+        await createOrder(user, [toOrderItem(product, 1)]);
         // Reached through the transition rather than written into the column: a status the
         // application cannot arrive at is not one worth filtering for.
         await orderRepository.updateStatusIfIn(String(paid._id), ['pending'], 'paid');
@@ -43,12 +38,6 @@ describe('GET /orders — the filters it now publishes', () => {
         expect(byStatus.status).toBe(200);
         expect(byStatus.body.data.items.map((o: { id: string }) => o.id)).toEqual([
             String(paid._id)
-        ]);
-
-        const byNotes = await api().get('/orders?notes=dispatch').set('Authorization', bearer);
-        expect(byNotes.status).toBe(200);
-        expect(byNotes.body.data.items.map((o: { id: string }) => o.id)).toEqual([
-            String(pending._id)
         ]);
     });
 

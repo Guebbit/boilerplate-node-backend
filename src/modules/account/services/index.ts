@@ -58,6 +58,7 @@ export {
 export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from './token-types';
 export { reapExpiredTokens } from './token-cleanup';
 export { reapExpiredExports } from './export-rows';
+export { reencryptTotpSecrets } from './reencrypt';
 export { pruneOwnExpiredTokens } from '../session/prune';
 export { sendAccountMail } from './mail';
 export {

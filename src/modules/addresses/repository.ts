@@ -4,6 +4,11 @@
  * the export's own JSDoc below for why.
  */
 
+import {
+    reencryptOf,
+    type ReencryptSpec,
+    type ReencryptReport
+} from '@infrastructure/security/reencrypt';
 import { Types, type ClientSession } from 'mongoose';
 import { addressBookModel, applyAddressBookTransform } from './model';
 import type { AddressBookDocument } from './model';
@@ -14,8 +19,7 @@ import {
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
-import { encryptPii } from '@infrastructure/security/pii-encryption';
-import { encryptAddressItem, decryptAddressItem } from './pii';
+import { encryptAddressItem, encryptAddressField, decryptAddressItem } from './pii';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { addressBookMax } from './config';
@@ -40,7 +44,7 @@ export const ADDRESS_BOOK_FULL = 'address-book-full';
  * @param item - the entry to append, encrypted, with its own `_id`
  * @param claimsDefault - whether the caller asked for the default slot
  */
-const appendEntryPipeline = (item: Record<string, unknown>, claimsDefault: boolean) => {
+const appendEntryPipeline = (item: object, claimsDefault: boolean) => {
     const existing = { $ifNull: ['$items', []] };
     const becomesDefault = claimsDefault ? true : { $eq: [{ $size: existing }, 0] };
 
@@ -99,6 +103,10 @@ const decryptBook = (book: AddressBookDocument): AddressBookDocument => {
  * inferred one at an export boundary (TS7056) — the same reason `Repository` exists.
  */
 export const addressBookRepository: Repository<AddressBookDocument, Wire<AddressBookDocument>> & {
+    reencrypt: (
+        spec: ReencryptSpec<AddressBookDocument>,
+        dryRun?: boolean
+    ) => Promise<ReencryptReport>;
     findByUserId: (userId: string) => Promise<AddressBookDocument | null>;
     addEntry: (
         userId: string,
@@ -114,6 +122,7 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
     removeEntry: (userId: string, addressId: string) => Promise<AddressBookDocument | null>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
 } = {
+    reencrypt: reencryptOf(addressBookModel),
     ...createRepository<AddressBookDocument, Wire<AddressBookDocument>>(addressBookModel, {
         transform: applyAddressBookTransform
     }),
@@ -128,7 +137,9 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         addressBookModel
             .create({
                 ...data,
-                items: (data.items ?? []).map((item) => encryptAddressItem(item))
+                items: (data.items ?? []).map((item) =>
+                    encryptAddressItem(item, item._id ?? new Types.ObjectId())
+                )
             })
             .then(decryptBook),
 
@@ -157,7 +168,8 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
      */
     addEntry: (userId: string, entry: AddressInput, attemptsLeft = 3) => {
         const owner = toObjectId(userId);
-        const item = { ...encryptAddressItem(entry), _id: new Types.ObjectId() };
+        // `_id` first: it is part of every field's AAD.
+        const item = encryptAddressItem(entry, new Types.ObjectId());
 
         return addressBookModel
             .findOneAndUpdate(
@@ -199,13 +211,21 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
         // ($unset on save, via `clearedOrValue`); the other five are required on the resource
         // itself, so the contract refuses `null` for them before this ever runs.
         if (changes.label !== undefined) entry.label = clearedOrValue(changes.label);
-        if (changes.fullName !== undefined) entry.fullName = encryptPii(changes.fullName);
-        if (changes.street !== undefined) entry.street = encryptPii(changes.street);
-        if (changes.city !== undefined) entry.city = encryptPii(changes.city);
-        if (changes.zip !== undefined) entry.zip = encryptPii(changes.zip);
-        if (changes.country !== undefined) entry.country = encryptPii(changes.country);
+        if (changes.fullName !== undefined)
+            entry.fullName = encryptAddressField('fullName', changes.fullName, addressId);
+        if (changes.street !== undefined)
+            entry.street = encryptAddressField('street', changes.street, addressId);
+        if (changes.city !== undefined)
+            entry.city = encryptAddressField('city', changes.city, addressId);
+        if (changes.zip !== undefined)
+            entry.zip = encryptAddressField('zip', changes.zip, addressId);
+        if (changes.country !== undefined)
+            entry.country = encryptAddressField('country', changes.country, addressId);
         if (changes.phone !== undefined)
-            entry.phone = changes.phone === null ? undefined : encryptPii(changes.phone);
+            entry.phone =
+                changes.phone === null
+                    ? undefined
+                    : encryptAddressField('phone', changes.phone, addressId);
 
         return book.save().then(decryptBook);
     },

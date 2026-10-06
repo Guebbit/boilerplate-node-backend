@@ -35,7 +35,13 @@ describe('TOTP secret encryption', () => {
     it('round-trips a secret through encrypt then decrypt, under the configured TOTP key', () => {
         const secret = generateSecret();
 
-        expect(decryptTotpSecret(encryptTotpSecret(secret))).toBe(secret);
+        expect(decryptTotpSecret(encryptTotpSecret(secret, 'method-1'), 'method-1')).toBe(secret);
+    });
+
+    it('refuses a secret copied onto another method entry', () => {
+        const stored = encryptTotpSecret(generateSecret(), 'method-1');
+
+        expect(() => decryptTotpSecret(stored, 'method-2')).toThrow();
     });
 });
 

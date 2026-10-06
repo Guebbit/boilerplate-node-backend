@@ -90,22 +90,22 @@ assuming `ring[0]`.
 1. Prepend the new secret, keep the old one: `NODE_TOTP_ENCRYPTION_KEY=v2:<new>,v1:<old>`. Deploy —
    every new TOTP enrollment and every delivered-code HMAC now uses `v2`; every row still stamped
    `v1` keeps decrypting against the entry that wrote it.
-2. Re-encrypt existing rows onto the new key, at whatever pace fits — lazily, the next time a row
-   is written for an unrelated reason, or a one-off `scripts/ops/` script (see
-   [Data](../reference/data.md#data-a-one-off-script-under-scripts-ops)) that reads every `v1`-stamped
-   secret, decrypts and re-encrypts it. Until that finishes, both entries must stay in the ring.
-3. Once nothing decrypts against `v1` any more, drop it from the ring and deploy again. A row still
-   stamped with a dropped version fails loudly (`Unknown TOTP key version: v1`) rather than reading
-   as garbage — confirm the migration actually reached every row before this step, not after.
+2. Re-encrypt existing rows onto the new key: `npm run reencrypt`. Nothing re-encrypts a row lazily:
+   only a fresh write of that same field or this script moves it, so skipping it leaves `v1` rows
+   that the next step would strand. `npm run reencrypt -- --dry-run` writes nothing and prints, per
+   field, how many values sit on each key version. Batched, and safe to repeat: a value already on
+   `v2` is not touched, so a second run writes nothing. Each owning module walks its own
+   fields (address books, user phones, order and invoice addresses and notes, TOTP secrets,
+   webhook secrets); `scripts/ops/reencrypt.ts` only lists them. Not scheduled: a rotation is an
+   event, not a cadence. Until it finishes, both entries must stay in the ring.
+3. Once `npm run reencrypt -- --dry-run` reports nothing on `v1`, drop it from the ring and deploy
+   again. A row still stamped with a dropped version fails loudly (`Unknown TOTP key version: v1`)
+   rather than reading as garbage.
 
 A delivered code (`account/two-factor/delivered-codes.ts`) is the one exception: it is never
 persisted across a rotation (`DELIVERED_CODE_TTL_MS` is ten minutes), so it always signs and
 verifies against `ring[0]` — a rotation mid-flight invalidates a code in transit, the same trade the
 JWT rotation above makes for a session mid-refresh.
-
-**Optional, not built:** a startup probe warning when a key's recorded version looks old enough to
-need attention. Needs a "rotated since X" timestamp somewhere first, which nothing here writes
-today — a follow-on, not part of this runbook.
 
 ## Pseudonymised identifiers
 

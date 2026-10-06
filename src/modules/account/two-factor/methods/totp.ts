@@ -25,7 +25,8 @@ export const totpMethod: TwoFactorMethodHandler = {
         // otplib: a fresh base32 TOTP secret, one per enrollment attempt.
         // https://github.com/yeojz/otplib
         const secret = generateSecret();
-        entry.secret = encryptTotpSecret(secret);
+        // A hydrated subdocument always has its `_id` by now (`two-factor.ts` pushes it first).
+        entry.secret = encryptTotpSecret(secret, String(entry._id));
         // A fresh secret means a fresh replay window: the old high-water mark belongs to a
         // secret that no longer exists, and keeping it would refuse the first valid code.
         entry.lastUsedStep = undefined;
@@ -39,22 +40,22 @@ export const totpMethod: TwoFactorMethodHandler = {
 
     verify: (user, entry, code) => {
         if (!entry.secret) return Promise.resolve(false);
-        return verifyTotpCode(decryptTotpSecret(entry.secret), code, entry.lastUsedStep).then(
-            (result) => {
-                // `timeStep` is present whenever `valid` is: the type just cannot say so.
-                if (!result.valid || result.timeStep === undefined) return false;
-                const { timeStep } = result;
+        return verifyTotpCode(
+            decryptTotpSecret(entry.secret, String(entry._id)),
+            code,
+            entry.lastUsedStep
+        ).then((result) => {
+            // `timeStep` is present whenever `valid` is: the type just cannot say so.
+            if (!result.valid || result.timeStep === undefined) return false;
+            const { timeStep } = result;
 
-                // The replay mark is a conditional write (only a LATER step wins), so two requests
-                // carrying one code cannot both pass: the loser is a wrong code. The in-memory
-                // entry follows, so the caller's own save writes the same value.
-                return userService
-                    .claimTotpStep(user.id, entry.method, timeStep)
-                    .then((claimed) => {
-                        if (claimed) entry.lastUsedStep = timeStep;
-                        return claimed;
-                    });
-            }
-        );
+            // The replay mark is a conditional write (only a LATER step wins), so two requests
+            // carrying one code cannot both pass: the loser is a wrong code. The in-memory
+            // entry follows, so the caller's own save writes the same value.
+            return userService.claimTotpStep(user.id, entry.method, timeStep).then((claimed) => {
+                if (claimed) entry.lastUsedStep = timeStep;
+                return claimed;
+            });
+        });
     }
 };

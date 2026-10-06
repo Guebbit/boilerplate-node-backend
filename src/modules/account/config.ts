@@ -19,29 +19,31 @@ export type AccountLinkKind = 'verify' | 'reset' | 'delete' | 'email-change' | '
  *
  * Each template defaults to the paired frontend's own route
  * (`<paired-frontend>/src/modules/account/routes.ts`). `{token}` is filled in by
- * {@link frontendLink}, never left for the frontend to parse out of the path itself.
+ * {@link frontendLink}, never left for the frontend to parse out of the path itself. The token
+ * rides in the URL FRAGMENT (`#token=`), which a browser never sends to a server (RFC 3986 §3.5), so
+ * it reaches no access log, proxy log or `Referer` header.
  */
 export const accountConfig = defineConfig({
     name: 'account',
     shape: {
         NODE_FRONTEND_LINK_VERIFY: text({
-            default: 'verify-email/confirm?token={token}',
+            default: 'verify-email/confirm#token={token}',
             describe: 'Template of the email-verification link.'
         }),
         NODE_FRONTEND_LINK_RESET: text({
-            default: 'password-reset/confirm?token={token}',
+            default: 'password-reset/confirm#token={token}',
             describe: 'Template of the password-reset link.'
         }),
         NODE_FRONTEND_LINK_DELETE: text({
-            default: 'account-delete/confirm?token={token}',
+            default: 'account-delete/confirm#token={token}',
             describe: 'Template of the account-deletion link.'
         }),
         NODE_FRONTEND_LINK_EMAIL_CHANGE: text({
-            default: 'email-change/confirm?token={token}',
+            default: 'email-change/confirm#token={token}',
             describe: 'Template of the email-change link.'
         }),
         NODE_FRONTEND_LINK_EMAIL_UNDO: text({
-            default: 'email-change/undo?token={token}',
+            default: 'email-change/undo#token={token}',
             describe: 'Template of the link in the old-address notice that undoes an email change.'
         }),
         NODE_FRONTEND_LINK_EXPORT: text({

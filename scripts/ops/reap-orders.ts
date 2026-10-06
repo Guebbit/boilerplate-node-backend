@@ -9,9 +9,8 @@
  * stamps `anonymizeAfter` to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)` the moment an
  * account is erased — an order already past its own window is due almost immediately, not given a
  * fresh retention period. This script is the other half — once that date arrives, it replaces the
- * order's remaining PII (email, shipping name/phone/street, notes) with placeholders. Amounts,
- * line items, dates, city and country survive: revenue history stays intact, only the person is
- * gone from it.
+ * order's remaining PII: the email is replaced, both addresses and the notes are unset. Amounts,
+ * line items and dates survive: revenue history stays intact, only the person is gone from it.
  *
  * Meant to run periodically (the same cron container as the other `reap:*` scripts), never on
  * every boot.

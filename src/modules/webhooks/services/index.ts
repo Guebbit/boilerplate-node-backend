@@ -12,6 +12,7 @@ import * as deliveries from './deliveries';
 
 export { subscribeToWebhookEvents } from './publish';
 export { sweepDueWebhookDeliveries } from './sweep';
+export { reencryptWebhookSecrets } from './reencrypt';
 export { processDeliveryJob } from './attempt';
 export { listWebhookEventCatalogue } from './catalogue';
 export type { WebhookEventCatalogueEntry } from '@types';

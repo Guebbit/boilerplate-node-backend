@@ -50,7 +50,6 @@ const anInvoice = (id: string) =>
         _id: id,
         number: 'INV-1',
         lines: [],
-        billingAddress: {},
         seller: {},
         taxSummary: []
     });
@@ -62,7 +61,6 @@ const aCreditNote = (id: string) =>
         number: 'CN-1',
         invoiceNumber: 'INV-1',
         lines: [],
-        billingAddress: {},
         seller: {},
         taxSummary: []
     });

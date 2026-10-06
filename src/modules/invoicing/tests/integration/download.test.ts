@@ -15,6 +15,7 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
 import { auditLogger } from '@infrastructure/adapters/logger';
+import { invoicingRepository } from '../../repository';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -78,6 +79,29 @@ describe('GET /orders/{id}/invoice', () => {
         expect(response.status).toBe(200);
         expect(response.headers['content-type']).toBe('application/pdf');
         expect(response.headers['cache-control']).toBe('private, no-store');
+    });
+
+    it('renders the buyer address in plaintext, though the invoice row stores it encrypted', async () => {
+        const { bearer, user } = await authenticateAs('user');
+        const product = await createProduct();
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            billingAddress: {
+                fullName: 'Ada Lovelace',
+                street: '1 Accounts Office Way',
+                city: 'Leeds',
+                zip: 'LS1',
+                country: 'GB'
+            }
+        });
+        jest.mocked(renderHtmlToPdf).mockClear();
+
+        await markPaid(String(order._id));
+        await waitUntilInvoiced(String(order._id), bearer);
+
+        const html = jest.mocked(renderHtmlToPdf).mock.calls.map(([page]) => page);
+        expect(html.some((page) => page.includes('Ada Lovelace'))).toBe(true);
+        const row = await invoicingRepository.findInvoiceByOrderId(String(order._id));
+        expect(row?.billingAddress?.fullName).not.toBe('Ada Lovelace');
     });
 
     it("a scoped caller cannot download another customer's invoice — absence, not refusal", async () => {

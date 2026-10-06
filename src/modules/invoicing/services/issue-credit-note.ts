@@ -14,6 +14,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { orderTotal } from '@modules/orders';
 import { translator } from '@infrastructure/i18n';
 import { invoicingRepository } from '../repository';
+import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
 import { findInvoiceForOrder } from './issue-invoice';
 import { allocateCreditNoteNumber } from './numbering';
 import { partialCredit } from './partial-credit';
@@ -135,8 +136,19 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                         currency: invoice.currency,
                         locale: invoice.locale,
                         ...(invoice.orderNumber ? { orderNumber: invoice.orderNumber } : {}),
+                        // Decrypted under the invoice's id, re-encrypted under the note's own.
                         ...(invoice.billingAddress
-                            ? { billingAddress: invoice.billingAddress }
+                            ? {
+                                  billingAddress: encryptInvoiceParty(
+                                      decryptInvoiceParty(
+                                          invoice.billingAddress,
+                                          'invoice',
+                                          invoice._id
+                                      ),
+                                      'credit-note',
+                                      _id
+                                  )
+                              }
                             : {}),
                         seller: invoice.seller,
                         ...reversedFigures(invoice, input)

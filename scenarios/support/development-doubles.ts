@@ -29,7 +29,7 @@ import { registerDoubles } from './doubles/register';
 const DEV_DEFAULTS: Readonly<Record<string, string>> = {
     NODE_PAYMENT_PROVIDER: 'fake',
     NODE_MAIL_TRANSPORT: 'log',
-    NODE_PSEUDONYM_KEY: 'dev-only-pseudonym-key-not-a-secret'
+    NODE_PSEUDONYM_KEY: '44df8572d10ff3d8a54e552b215b307c6cc2c286faff33a691299c0a6394ed0e'
 };
 
 for (const [name, value] of Object.entries(DEV_DEFAULTS))

@@ -13,9 +13,16 @@
 import { Types } from 'mongoose';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { orderTaxBreakdown, orderTotal, orderCurrency, shopIdentity } from '@modules/orders';
+import {
+    orderTaxBreakdown,
+    orderTotal,
+    orderCurrency,
+    shopIdentity,
+    billingAddressOf
+} from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
+import { encryptInvoiceParty } from '../pii';
 import { allocateInvoiceNumber } from './numbering';
 import type { InvoiceDocument, InvoiceLine, InvoiceSeller } from '../model';
 
@@ -85,6 +92,8 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
 
     // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
     const _id = new Types.ObjectId();
+    // The order stores its address under ITS id; the invoice re-encrypts it under its own.
+    const billingAddress = billingAddressOf(order);
 
     return withTransaction((session) =>
         allocateInvoiceNumber(session).then((number) =>
@@ -97,7 +106,9 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                     currency,
                     locale: order.items[0].locale,
                     ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-                    ...(order.billingAddress ? { billingAddress: order.billingAddress } : {}),
+                    ...(billingAddress
+                        ? { billingAddress: encryptInvoiceParty(billingAddress, 'invoice', _id) }
+                        : {}),
                     seller: frozenSeller(),
                     lines: frozenLines(order),
                     ...(order.shippingCost === undefined

@@ -171,6 +171,44 @@ describe('assertConfigIn', () => {
         ).toThrow(/NODE_SAMPLE_RING/);
     });
 
+    describe('a key that must decode to enough bytes', () => {
+        const keyed = defineConfig({
+            name: 'keyed',
+            shape: { NODE_SAMPLE_KEY: secret({ minLength: 1, minBytes: 32 }) }
+        });
+        const refuses = (value: string): void =>
+            expect(() =>
+                assertConfigIn([keyed.slice], { NODE_ENV: 'production', NODE_SAMPLE_KEY: value })
+            ).toThrow(/NODE_SAMPLE_KEY/);
+        const accepts = (value: string): void =>
+            expect(() =>
+                assertConfigIn([keyed.slice], { NODE_ENV: 'production', NODE_SAMPLE_KEY: value })
+            ).not.toThrow();
+
+        it('accepts 32 bytes of hex, base64 and base64url, and a ring entry with a version prefix', () => {
+            accepts('ab'.repeat(32));
+            accepts(Buffer.alloc(32, 7).toString('base64'));
+            accepts(Buffer.alloc(33, 255).toString('base64url'));
+            accepts(`v2:${'cd'.repeat(32)},v1:${'ef'.repeat(32)}`);
+        });
+
+        it('refuses a value that is long enough in characters but short in bytes', () => {
+            // 40 hex characters are only 20 bytes; as base64 they would overcount to 30.
+            refuses('ab'.repeat(20));
+            refuses(Buffer.alloc(31, 1).toString('base64'));
+        });
+
+        it('refuses a value that is neither hex nor base64, however long', () => {
+            // `Buffer.from(x, "base64")` skips bad characters, so this would "decode" long enough.
+            refuses('this is a long passphrase, with spaces and punctuation!!');
+            refuses('placeholder-with-a-dot.and.more.characters.beyond.32');
+        });
+
+        it('judges every member of a ring, so one weak entry anywhere refuses', () => {
+            refuses(`${'ab'.repeat(32)},short`);
+        });
+    });
+
     it('reports fields for the generated page in declaration order', () => {
         expect(slice.slice.fields.map(({ name }) => name)).toEqual([
             'NODE_SAMPLE_LIMIT',

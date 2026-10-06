@@ -189,7 +189,7 @@ describe('orders — a never-paid order is due for anonymization AT ONCE (A1)', 
 });
 
 describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
-    it('scrubs email and the shipping name/street once anonymizeAfter has elapsed', async () => {
+    it('scrubs the email and unsets both addresses and the notes once anonymizeAfter has elapsed', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
@@ -218,20 +218,11 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(scrubbed).toBe(1);
         const reloaded = await orderRepository.findById(String(order._id));
         expect(reloaded!.email).toBe('anonymized@deleted.invalid');
-        expect(reloaded!.shippingAddress!.fullName).toBe('Anonymized');
-        expect(reloaded!.shippingAddress!.street).toBe('Anonymized');
-        expect(reloaded!.shippingAddress!.phone).toBeUndefined();
-        // The billing address is the same personal data under another name.
-        expect(reloaded!.billingAddress!.fullName).toBe('Anonymized');
-        expect(reloaded!.billingAddress!.street).toBe('Anonymized');
-        expect(reloaded!.billingAddress!.phone).toBeUndefined();
-        expect(reloaded!.billingAddress!.city).toBe('Leeds');
-        // City and country are not personal data on their own — kept.
-        expect(reloaded!.shippingAddress!.city).toBe('London');
-        expect(reloaded!.shippingAddress!.country).toBe('GB');
-        expect(reloaded!.anonymizeAfter).toBeUndefined();
-        // The buyer's free-text notes are personal data too, and must not survive the scrub.
+        // Nothing personal survives — not even the city, zip or country of a half-address.
+        expect(reloaded!.shippingAddress).toBeUndefined();
+        expect(reloaded!.billingAddress).toBeUndefined();
         expect(reloaded!.notes).toBeUndefined();
+        expect(reloaded!.anonymizeAfter).toBeUndefined();
     });
 
     it('leaves an order with no address at all working, scrubbing only email', async () => {
@@ -248,7 +239,7 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         expect(reloaded!.billingAddress).toBeUndefined();
     });
 
-    it('scrubs a billing address alone — a digital-only order has no shipping one', async () => {
+    it('a scrubbed order still serializes — no address is conjured, nothing to decrypt', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {
@@ -262,12 +253,11 @@ describe('orders — anonymizeDueOrders (reap-orders sweep)', () => {
         });
         await detachOrderUserId(String(user._id), new Date(Date.now() - 1000));
 
-        await expect(orderService.anonymizeDueOrders()).resolves.toBe(1);
+        await orderService.anonymizeDueOrders();
 
-        const reloaded = await orderRepository.findById(String(order._id));
-        expect(reloaded!.billingAddress!.fullName).toBe('Anonymized');
-        // No partial shipping address is conjured by the scrub.
-        expect(reloaded!.shippingAddress).toBeUndefined();
+        const wire = (await orderRepository.findById(String(order._id)))!.toJSON();
+        expect(wire.billingAddress).toBeUndefined();
+        expect(wire.shippingAddress).toBeUndefined();
     });
 
     it('moves the edit counter, so an edit form opened before the sweep is refused afterwards', async () => {

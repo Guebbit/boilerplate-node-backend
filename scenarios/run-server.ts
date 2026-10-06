@@ -75,13 +75,15 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // above, for the rare case of reaching it from another device.
     NODE_HOST: '127.0.0.1',
     // Real secrets guard real tokens; a demo signs throwaway tokens for a throwaway database.
-    NODE_TOKEN_ACCESS: 'demo-access-secret',
-    NODE_TOKEN_REFRESH: 'demo-refresh-secret',
+    // Public, throwaway, 32-byte hex: the boot check refuses anything shorter or not hex/base64.
+    NODE_TOKEN_ACCESS: '644fdac9f3bfa73cb8631497e4db1ebded912c7145e4a3ac63d79a46009c7dc1',
+    NODE_TOKEN_REFRESH: 'be6d19cc08ee1fd32e2edb158e250e51b70dd1cc1ba3e5e4c7e3350e33f8299f',
     // Same for the at-rest encryption keys: the seed writes address-book PII, and a key ring with
     // no key cannot encrypt it — a checkout with no `.env` (every CI runner) died seeding.
-    NODE_PII_ENCRYPTION_KEY: 'demo-pii-encryption-key',
-    NODE_TOTP_ENCRYPTION_KEY: 'demo-totp-encryption-key',
-    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'demo-webhook-secret-encryption-key',
+    NODE_PII_ENCRYPTION_KEY: '0de7cfab8ea0f3676609c67a34b42cee6355e7e72c8a51e30d66633e60529dc9',
+    NODE_TOTP_ENCRYPTION_KEY: '371235f9725b90a6a87b6b9877e29313e804682717b699e1264bd816973f5769',
+    NODE_WEBHOOK_SECRET_ENCRYPTION_KEY:
+        'f0affe382aa45708b641b8274977884f2b6e0041de1f7c639cdfcd8ab77a1444',
     // Known, so the paired e2e suite can sign a payment-provider delivery (`POST /payments/webhook`)
     // itself; the frontend's `paymentWebhookSecret` carries the same value.
     NODE_PAYMENT_WEBHOOK_SECRET: 'demo-payment-webhook-secret',

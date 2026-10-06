@@ -13,6 +13,7 @@ import {
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { ordersAnalyticsEvents } from '../analytics';
+import { decryptOrderAddress } from '../pii';
 import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { ownerScope } from './scope';
@@ -89,6 +90,17 @@ export const getById = (
     if (!id) return Promise.resolve(undefined);
     return orderRepository.findByIdScoped(id, scope);
 };
+
+/**
+ * The order's frozen billing address in plaintext, for the invoice issuer: a hydrated
+ * {@link OrderDocument} holds the stored ciphertext, and only `toJSON` decrypts.
+ * @param order - the order as {@link getById} hands it back
+ * @returns the address, or `undefined` on an order that never had one
+ */
+export const billingAddressOf = (order: OrderDocument): Order['billingAddress'] =>
+    order.billingAddress
+        ? decryptOrderAddress(order.billingAddress, 'billingAddress', String(order._id))
+        : undefined;
 
 /**
  * The ids of the orders this account has open and unpaid right now, whatever the payment method —

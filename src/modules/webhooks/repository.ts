@@ -5,6 +5,11 @@
  * every enabled subscription an event might match.
  */
 
+import {
+    reencryptOf,
+    type ReencryptSpec,
+    type ReencryptReport
+} from '@infrastructure/security/reencrypt';
 import { randomUUID } from 'node:crypto';
 import type { UpdateQuery } from 'mongoose';
 import {
@@ -120,11 +125,16 @@ export const webhookSubscriptionRepository: Repository<
     WebhookSubscriptionDocument,
     WebhookSubscription
 > & {
+    reencrypt: (
+        spec: ReencryptSpec<WebhookSubscriptionDocument>,
+        dryRun?: boolean
+    ) => Promise<ReencryptReport>;
     findEnabled: typeof findEnabled;
     findByIdInTenant: typeof findSubscriptionByIdInTenant;
     recordOutcome: typeof recordOutcome;
     disable: typeof disable;
 } = {
+    reencrypt: reencryptOf(webhookSubscriptionModel),
     ...subscriptionBase,
     findEnabled,
     findByIdInTenant: findSubscriptionByIdInTenant,

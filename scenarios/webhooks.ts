@@ -68,7 +68,7 @@ export const seedWebhooksCollection = (): Promise<SeedOutcome[]> => {
     // (`model.ts`'s `{ timestamps: { createdAt: true } }`) and stamps itself on insert.
     const entry = {
         id: WEBHOOK_DEMO_SECRET_ID,
-        ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET)
+        ciphertext: encryptRingSecret(WEBHOOK_DEMO_SECRET, WEBHOOK_DEMO_SECRET_ID)
     };
     // No `createdAt`/`updatedAt`: the schema's own `{ timestamps: true }` stamps both on insert,
     // same reasoning as the ring entry above. Cast because `fixture` is a plain literal, not a

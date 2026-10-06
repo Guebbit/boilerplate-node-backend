@@ -17,8 +17,13 @@ import type { WebhookSecretRingEntry } from '@modules/webhooks/model';
 
 describe('encryptRingSecret / decryptRingSecret', () => {
     it('round-trips a plaintext secret under the configured webhook key', () => {
-        const ciphertext = encryptRingSecret('whsec_hello-world');
-        expect(decryptRingSecret(ciphertext)).toBe('whsec_hello-world');
+        const ciphertext = encryptRingSecret('whsec_hello-world', 'entry-1');
+        expect(decryptRingSecret(ciphertext, 'entry-1')).toBe('whsec_hello-world');
+    });
+
+    it('refuses a ciphertext moved onto another ring entry', () => {
+        const ciphertext = encryptRingSecret('whsec_hello-world', 'entry-1');
+        expect(() => decryptRingSecret(ciphertext, 'entry-2')).toThrow();
     });
 });
 
@@ -31,7 +36,7 @@ describe('mintRingSecret', () => {
             /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i
         );
         expect(entry.createdAt).toBeInstanceOf(Date);
-        expect(decryptRingSecret(entry.ciphertext)).toBe(plaintext);
+        expect(decryptRingSecret(entry.ciphertext, entry.id)).toBe(plaintext);
     });
 
     it('mints a different secret and id every time', () => {

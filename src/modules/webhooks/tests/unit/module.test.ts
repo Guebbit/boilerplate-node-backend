@@ -28,7 +28,7 @@ withoutEnvironmentInThisFile(TOUCHED);
 const configure = (): void => {
     setEnvironment({ NODE_ENV: 'development' });
     setEnvironment({ NODE_URL: 'https://api.example.com/' });
-    setEnvironment({ NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'a-real-32-byte-webhook-secret-key!!' });
+    setEnvironment({ NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'ab'.repeat(32) });
 };
 
 describe('the secret-ring encryption key', () => {
@@ -45,6 +45,17 @@ describe('the secret-ring encryption key', () => {
         configure();
         setEnvironment({
             NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'your-webhook-secret-encryption-key-here'
+        });
+
+        expect(() => assertModuleConfig([webhooksModule], [])).toThrow(
+            /NODE_WEBHOOK_SECRET_ENCRYPTION_KEY/
+        );
+    });
+
+    it('refuses a key long enough in characters but not 32 bytes of hex or base64', () => {
+        configure();
+        setEnvironment({
+            NODE_WEBHOOK_SECRET_ENCRYPTION_KEY: 'a-real-32-byte-webhook-secret-key!!'
         });
 
         expect(() => assertModuleConfig([webhooksModule], [])).toThrow(

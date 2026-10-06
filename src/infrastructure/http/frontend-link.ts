@@ -32,7 +32,7 @@ const supportedLocale = (locale: string): string =>
  * it always comes first, straight from `locale` — since every route on the paired frontend lives
  * under `/:locale`.
  *
- * @param template - the path, e.g. `orders/{id}` or `password-reset/confirm?token={token}` — the
+ * @param template - the path, e.g. `orders/{id}` or `password-reset/confirm#token={token}` — the
  *   caller's own default or its `NODE_FRONTEND_LINK_*` override, already resolved before this runs
  * @param locale - the email's own locale
  * @param parameters - one value per `{name}` placeholder `template` uses; a name `template` does

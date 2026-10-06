@@ -49,7 +49,7 @@ const mailedToken = (template: string): string => {
     >;
     const mail = enqueueEmail.mock.calls.findLast(([, name]) => name === template);
     const link = (mail?.[2] as { linkUrl?: string } | undefined)?.linkUrl ?? '';
-    const token = /[&?]token=([^&]+)/.exec(link)?.[1];
+    const token = /#token=([^&]+)/.exec(link)?.[1];
     if (!token) throw new Error(`no token in a queued '${template}' mail`);
     return decodeURIComponent(token);
 };

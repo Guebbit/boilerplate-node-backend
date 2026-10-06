@@ -66,23 +66,28 @@ export const sessionConfig = defineConfig({
             describe: 'Access-token lifetime in seconds.'
         }),
         NODE_TOKEN_ACCESS: keyRing({
-            required: { minLength: 16, placeholder: 'your-access-token-secret-here' },
+            required: { minLength: 16, minBytes: 32, placeholder: 'your-access-token-secret-here' },
             describe: 'Access-token signing ring, newest first.'
         }),
         NODE_TOKEN_REFRESH: keyRing({
-            required: { minLength: 16, placeholder: 'your-refresh-token-secret-here' },
+            required: {
+                minLength: 16,
+                minBytes: 32,
+                placeholder: 'your-refresh-token-secret-here'
+            },
             describe: 'Refresh-token signing ring, newest first.'
         }),
         // A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
         // read this repository — same failure shape as the two rings above, same fix.
         NODE_TOTP_ENCRYPTION_KEY: versionedKeyRing({
-            required: { minLength: 16, placeholder: 'your-totp-encryption-key-here' },
+            required: { minLength: 16, minBytes: 32, placeholder: 'your-totp-encryption-key-here' },
             describe: 'Ring encrypting second-factor material at rest, `version:key`, newest first.'
         }),
         // The familiar-device cookie's HMAC key. Unset on a developer machine means no cookie is
         // ever set or honoured; in production, unset or the placeholder refuses to boot.
         NODE_DEVICE_COOKIE_SECRET: secret({
             minLength: 16,
+            minBytes: 32,
             placeholder: 'your-device-cookie-secret-here',
             productionOnly: true,
             describe:

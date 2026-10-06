@@ -497,6 +497,22 @@ describe('userService.updateById', () => {
         expect(presentUser(stored!, null).phone).toBe('+1 555 0100');
     });
 
+    it('refuses a phone ciphertext copied onto another account: the user id is in the AAD', async () => {
+        const owner = await createUser();
+        const other = await createUser({ email: 'other@example.com', username: 'other' });
+        await userService.updateById(
+            owner._id.toString(),
+            { phone: '+1 555 0100' },
+            callerContextAs('admin')
+        );
+        const stored = await userRepository.findById(owner._id.toString());
+        const victim = await userRepository.findById(other._id.toString());
+        // What an attacker with database write access does: paste one row's ciphertext on another.
+        victim!.phone = stored!.phone;
+
+        expect(() => presentUser(victim!, null)).toThrow();
+    });
+
     it('returns reject result when the user does not exist', async () => {
         const result = await userService.updateById(
             '000000000000000000000000',
