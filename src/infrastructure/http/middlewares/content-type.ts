@@ -13,39 +13,7 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { rejectResponse } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES } from '@api/error-codes';
-
-/** One operation's row in the table the guard is built from. */
-interface DeclaredOperation {
-    /** Upper-case HTTP method. */
-    method: string;
-    /** Matches the request path of this operation's contract path template. */
-    pattern: RegExp;
-    /** How many `{param}` segments the template has — fewer means more specific. */
-    parameterCount: number;
-    /** The media types the contract declares for this operation's body. */
-    types: readonly string[];
-}
-
-/**
- * Compiles a contract path template into a matcher.
- *
- * @param template - a contract path such as `/products/{id}/restore`
- * @returns the matcher, and how many parameters the template has
- */
-const compileTemplate = (template: string): { pattern: RegExp; parameterCount: number } => {
-    const segments = template.split('/');
-    const source = segments
-        .map((segment) =>
-            segment.startsWith('{')
-                ? '[^/]+'
-                : segment.replaceAll(/[$()*+.?[\\\]^{|}]/g, String.raw`\$&`)
-        )
-        .join('/');
-    return {
-        pattern: new RegExp(`^${source}$`),
-        parameterCount: segments.filter((segment) => segment.startsWith('{')).length
-    };
-};
+import type { RequestContentType } from '@api/request-content-types';
 
 /**
  * Whether the request sends bytes. type-is's own check counts `Content-Length: 0` as a body,
@@ -59,26 +27,20 @@ const carriesBody = (request: Request): boolean =>
     Number(request.headers['content-length'] ?? 0) > 0;
 
 /**
- * Builds the guard from a `METHOD /path/{param}` → media types table.
+ * Builds the guard from the generated operation table.
  *
  * Only a request that carries a body is judged: an action POST with no body has nothing to
  * misinterpret, and a missing required body is the schema's own 422. A route the table does not
  * know is left alone.
  *
- * @param table - the operations that declare a request body, keyed `METHOD /path/{param}`
+ * @param operations - the operations that declare a request body, most specific first (the
+ *   generator orders them: static segments before parameters, so `/products/search` never reads
+ *   as `/products/{id}`)
  * @returns express middleware answering 415 for an undeclared type
  */
 export const requireDeclaredContentType = (
-    table: Readonly<Record<string, readonly string[]>>
+    operations: readonly RequestContentType[]
 ): RequestHandler => {
-    const operations: DeclaredOperation[] = Object.entries(table)
-        .map(([key, types]) => {
-            const [method = '', template = ''] = key.split(' ', 2);
-            return { method, ...compileTemplate(template), types };
-        })
-        // Static segments before parameters, so `/products/search` never reads as `/products/{id}`.
-        .toSorted((left, right) => left.parameterCount - right.parameterCount);
-
     return (request: Request, response: Response, next: NextFunction) => {
         const path = request.path.length > 1 ? request.path.replace(/\/$/, '') : request.path;
         const operation = operations.find(

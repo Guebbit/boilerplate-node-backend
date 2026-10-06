@@ -19,9 +19,10 @@
  *
  * Usage: tsx scripts/contracts/generate-error-codes.ts --out <path> [--check]
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeOrCheck } from './generated-file';
 import { parse } from 'yaml';
 
 /** One error code's declaration, as `x-error-codes` holds it. Only `status`/`description` are read; both already carry the WHY in the contract, so neither is repeated in a comment here. */
@@ -58,9 +59,6 @@ const resolveOutputPath = (): string => {
 
 /** Absolute path of the file to generate, from `--out`. */
 const OUTPUT = resolveOutputPath();
-
-/** `--check` compares and reports; without it the file is written. */
-const checkOnly = process.argv.includes('--check');
 
 /**
  * The bundled contract, parsed. `parse` is the `yaml` package's YAML 1.2 loader; the `as` narrows
@@ -109,16 +107,4 @@ const output =
     'export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];\n';
 
 // Write the file, or under `--check` compare it with what is on disk.
-if (!checkOnly) {
-    writeFileSync(OUTPUT, output, 'utf8');
-    console.log(`✓ Generated ${OUTPUT}`);
-} else if (existsSync(OUTPUT) && readFileSync(OUTPUT, 'utf8') === output) {
-    console.log(`✓ ${OUTPUT} is current with openapi.yaml`);
-} else {
-    console.error(
-        `${OUTPUT} is not what openapi.yaml generates.\n` +
-            `  Run: npm run gen:api\n` +
-            `  Then commit the result.`
-    );
-    process.exit(1);
-}
+writeOrCheck(OUTPUT, output, 'openapi.yaml');

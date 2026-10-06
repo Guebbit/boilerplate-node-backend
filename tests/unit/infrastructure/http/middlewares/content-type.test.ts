@@ -5,15 +5,31 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
+import { REQUEST_CONTENT_TYPES, type RequestContentType } from '@api/request-content-types';
 import { requireDeclaredContentType } from '@infrastructure/http/middlewares/content-type';
 
 /** A table with one JSON-only route, one that also takes merge-patch, and a static-vs-param pair. */
-const TABLE = {
-    'POST /things': ['application/json'],
-    'PATCH /things/{id}': ['application/json', 'application/merge-patch+json'],
-    'POST /things/search': ['application/x-www-form-urlencoded'],
-    'POST /things/{id}/restore': ['application/json']
-};
+const TABLE: readonly RequestContentType[] = [
+    { method: 'POST', pattern: /^\/things$/, parameterCount: 0, types: ['application/json'] },
+    {
+        method: 'POST',
+        pattern: /^\/things\/search$/,
+        parameterCount: 0,
+        types: ['application/x-www-form-urlencoded']
+    },
+    {
+        method: 'PATCH',
+        pattern: /^\/things\/[^/]+$/,
+        parameterCount: 1,
+        types: ['application/json', 'application/merge-patch+json']
+    },
+    {
+        method: 'POST',
+        pattern: /^\/things\/[^/]+\/restore$/,
+        parameterCount: 1,
+        types: ['application/json']
+    }
+];
 
 /** What one call needs to say about the request it stands in for. */
 interface Sent {
@@ -130,5 +146,12 @@ describe('requireDeclaredContentType', () => {
 
     it('leaves a route the table does not know alone', () => {
         expect(run({ method: 'POST', path: '/elsewhere', type: 'text/plain' }).passed).toBe(true);
+    });
+});
+
+describe('the generated operation table', () => {
+    it('lists fewer path parameters first, which the guard relies on to match a static route first', () => {
+        const counts = REQUEST_CONTENT_TYPES.map(({ parameterCount }) => parameterCount);
+        expect(counts).toEqual(counts.toSorted((left, right) => left - right));
     });
 });
