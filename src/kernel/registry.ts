@@ -421,7 +421,9 @@ export interface AppModule {
  * @throws {Error} when two entries share a key
  */
 const uniqueEntries = <T>(entries: [string, T][], label: string): Record<string, T> => {
-    const merged: Record<string, T> = {};
+    // No prototype: a lookup by an attacker-chosen key (`constructor`, `__proto__`) finds nothing
+    // instead of an inherited function.
+    const merged: Record<string, T> = Object.create(null) as Record<string, T>;
     for (const [key, value] of entries) {
         if (Object.hasOwn(merged, key))
             throw new Error(`Two modules declare the same ${label}: "${key}".`);
