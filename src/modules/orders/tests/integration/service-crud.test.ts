@@ -16,6 +16,7 @@ import { createProduct, saveProduct, countersOf } from '@modules/products/tests/
 import { countOrders, createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import {
     getById,
+    getForCaller,
     create,
     update,
     updateById,
@@ -621,6 +622,24 @@ describe('removeById', () => {
         await removeById(MISSING_ID, true);
 
         await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
+    });
+});
+
+describe('getForCaller', () => {
+    it('hands the owner and an admin the order, and a stranger nothing', async () => {
+        const { first, second, firstOrder } = await twoBuyers();
+        const id = String(firstOrder._id);
+
+        await expect(getForCaller(id, asCustomer(first.id))).resolves.toBeDefined();
+        await expect(getForCaller(id, asAdmin(second.id))).resolves.toBeDefined();
+        await expect(getForCaller(id, asCustomer(second.id))).resolves.toBeUndefined();
+    });
+
+    it('answers undefined for an unknown or missing id', async () => {
+        const { first } = await twoBuyers();
+
+        await expect(getForCaller(MISSING_ID, asCustomer(first.id))).resolves.toBeUndefined();
+        await expect(getForCaller(undefined, asCustomer(first.id))).resolves.toBeUndefined();
     });
 });
 
