@@ -453,7 +453,9 @@ components:
                     minimum: 0
                     description: >-
                         The order's total as the intent froze it. Always two decimal places,
-                        rounded half-up at the point of calculation.
+                        rounded half-up at the point of calculation. If the provider reports a success for
+                        a different amount or currency, the payment reads `succeeded` with what
+                        ARRIVED here, its order is cancelled and the money is returned.
                 currency:
                     type: string
                     description: ISO-4217 currency code (e.g. EUR)

@@ -143,7 +143,7 @@ ledger.
 :::
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
-stops touching card data. The service, the settlement and the contract's shape stay as they are.
+stops touching card data. The service and the contract's shape stay as they are; settlement stays too, with one added input: the adapter reports `amountReceived`, `currency` and `paymentId` with every `succeeded`, converted from its minor units, and echoes the `metadata.paymentId` it was given at `prepare`. A success that disagrees with the frozen payment is refused, see [the final write](./payments.md#the-pre-check-and-the-final-write).
 
 ## Related pages
 

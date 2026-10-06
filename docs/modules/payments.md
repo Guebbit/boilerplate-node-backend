@@ -146,6 +146,30 @@ put it straight back" on the order's status as read _after_ its own payment writ
 copy `markPaid` answered. Either the cancel's refund sees `succeeded`, or this re-read sees
 `cancelled`; the conditional `succeeded → refunded` write makes sure only one of them refunds.
 
+**Before the final write, the money is compared with what was asked.** A provider's `succeeded`
+carries `amountReceived`, `currency` and `paymentId`, and `settlePayment` checks all three against
+the payment frozen at the intent, in minor units. One that differs, or is missing, is not accepted
+(PayPal IPN, WooCommerce "on hold" and Magento "Suspected Fraud" all make the same comparison). The
+payment is written `succeeded` with what ARRIVED, and then:
+
+```mermaid
+flowchart TD
+    S["provider reports succeeded"] --> C{"amount, currency and<br/>paymentId match?"}
+    C -->|yes| P["markPaid, commit stock,<br/>payment.succeeded"]
+    C -->|no| W["record what arrived<br/>(no pendingEffects)"]
+    W --> A["audit payment.amount_mismatch,<br/>count it, log an error"]
+    A --> X["cancel the order (system actor)"]
+    X --> R["ORDER_REFUND_OWED: the existing<br/>refund path returns the money"]
+    R --> A409["confirm and sync answer 409<br/>PAYMENT_ORDER_NOT_PAYABLE;<br/>the webhook acknowledges"]
+```
+
+No stock is committed, no `payment.succeeded` is announced, no invoice is issued. The 409 is not a
+decline, so it spends no decline budget. A crash after the payment write leaves the order
+`pending`; the reservation expiry then cancels it and the same refund path returns the money. A
+hand-recorded payment (`manual`) is exempt: its amount is the order's own, with no provider
+reporting a different one. The audit action stays out of `security.*`, whose whole prefix the
+incident view takes: this is a reconciliation, not an attack signal.
+
 ## Pending effects
 
 The `succeeded` write, the stock commit and clearing the marker that says which is still owed are

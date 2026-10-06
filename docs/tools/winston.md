@@ -156,6 +156,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `orders`         | `ORDER_STATUS_OVERRIDDEN`                   | `order.status_overridden`                   | `order`                |
 | `orders`         | `ORDER_UPDATED`                             | `order.updated`                             | `order`                |
 | `payments`       | `ADMIN_PAYMENT_REFUNDED`                    | `admin.payment.refunded`                    | `order`                |
+| `payments`       | `PAYMENT_AMOUNT_MISMATCH`                   | `payment.amount_mismatch`                   | `payment`              |
 | `payments`       | `PAYMENT_CONFIRMED`                         | `payment.confirmed`                         | —                      |
 | `payments`       | `PAYMENT_FAILED`                            | `payment.failed`                            | —                      |
 | `payments`       | `PAYMENT_RECORDED_OFFLINE`                  | `payment.recorded_offline`                  | `order`                |

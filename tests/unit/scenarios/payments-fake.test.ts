@@ -9,7 +9,8 @@ import {
     FAKE_DECLINE_METHOD,
     FAKE_SUCCESS_METHOD,
     fakePaymentProvider,
-    setFakeOutcome
+    setFakeOutcome,
+    setFakeReceipt
 } from '@scenarios/support/doubles/payments/fake';
 import {
     PaymentInFlightError,
@@ -241,5 +242,68 @@ describe('fakePaymentProvider.parseWebhook', () => {
         await expect(
             fakePaymentProvider.parseWebhook(body, signWebhookPayload(body))
         ).rejects.toThrow(WebhookRejected);
+    });
+});
+
+/** Prepares an intent for 50.00 EUR on payment `pay_<suffix>`, and returns its reference. */
+const prepared = async (suffix: string) => {
+    const { providerRef } = await fakePaymentProvider.prepare(
+        { amount: 50, currency: 'EUR' },
+        { orderId: `order_${suffix}`, paymentId: `pay_${suffix}` }
+    );
+    return providerRef;
+};
+
+describe('fakePaymentProvider — what a success reports it collected', () => {
+    it('reports the amount, currency and payment id the intent was prepared with', async () => {
+        const providerRef = await prepared('a');
+
+        await expect(
+            fakePaymentProvider.confirm(providerRef, FAKE_SUCCESS_METHOD)
+        ).resolves.toEqual(
+            expect.objectContaining({
+                status: 'succeeded',
+                amountReceived: 50,
+                currency: 'EUR',
+                paymentId: 'pay_a'
+            })
+        );
+        await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
+            expect.objectContaining({ amountReceived: 50, currency: 'EUR', paymentId: 'pay_a' })
+        );
+    });
+
+    it('reports a receipt override on both confirm and retrieve, keeping the other fields', async () => {
+        const providerRef = await prepared('b');
+        setFakeReceipt(providerRef, { amountReceived: 1 });
+
+        await expect(
+            fakePaymentProvider.confirm(providerRef, FAKE_SUCCESS_METHOD)
+        ).resolves.toEqual(
+            expect.objectContaining({ amountReceived: 1, currency: 'EUR', paymentId: 'pay_b' })
+        );
+        await expect(fakePaymentProvider.retrieve(providerRef)).resolves.toEqual(
+            expect.objectContaining({ amountReceived: 1, currency: 'EUR', paymentId: 'pay_b' })
+        );
+    });
+
+    it('reports no money for a state that is not a success', async () => {
+        const providerRef = await prepared('c');
+
+        const declined = await fakePaymentProvider.confirm(providerRef, FAKE_DECLINE_METHOD);
+
+        expect(declined).not.toHaveProperty('amountReceived');
+        expect(declined).not.toHaveProperty('paymentId');
+    });
+
+    it('reports nothing for an intent this process never prepared', async () => {
+        const state = await fakePaymentProvider.confirm(
+            'fake_pi_never_prepared',
+            FAKE_SUCCESS_METHOD
+        );
+
+        expect(state.status).toBe('succeeded');
+        expect(state.amountReceived).toBeUndefined();
+        expect(state.paymentId).toBeUndefined();
     });
 });

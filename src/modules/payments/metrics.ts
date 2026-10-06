@@ -18,3 +18,14 @@ export const paymentConfirmTotal = new Counter({
     labelNames: ['outcome'],
     registers: [metricsRegistry]
 });
+
+/**
+ * Payments the provider reported `succeeded` for a different amount, currency or payment than the
+ * one frozen. Labelled by which fields differed. Any increment is a reconciliation to look at.
+ */
+export const paymentAmountMismatchTotal = new Counter({
+    name: 'payment_amount_mismatch_total',
+    help: 'Provider-reported successes whose amount, currency or payment id differ from the frozen payment.',
+    labelNames: ['field'],
+    registers: [metricsRegistry]
+});

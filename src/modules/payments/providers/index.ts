@@ -39,6 +39,20 @@ export interface ProviderPaymentState {
      * never sees a card number, so it has no way to derive them itself.
      */
     cardLast4?: string;
+    /**
+     * What the provider actually collected, a decimal in {@link ProviderPaymentState.currency}.
+     * Reported with `succeeded`: settlement compares it with the amount frozen on the payment, and
+     * a `succeeded` without it cannot be verified, so it is treated as a mismatch. A real adapter
+     * converts its minor units here.
+     */
+    amountReceived?: number;
+    /** The currency that was collected, as the payment stores it (ISO-4217, upper case). */
+    currency?: string;
+    /**
+     * The `metadata.paymentId` the intent was prepared with, echoed back by the provider. Ties
+     * the money to THIS payment row, so an intent that belongs to another one is caught.
+     */
+    paymentId?: string;
 }
 
 /** What `prepare` hands back: the reference we persist, and the secret the browser finishes with. */

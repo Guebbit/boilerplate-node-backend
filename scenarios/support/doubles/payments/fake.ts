@@ -62,6 +62,50 @@ export const FAKE_DECLINE_METHOD = 'pm_card_declined';
 const outcomes = new Map<string, ProviderPaymentState>();
 
 /**
+ * What each intent was prepared for, so a `succeeded` can report what was "collected": the amount
+ * and currency it was opened with and the payment id it carries — what a real provider echoes back.
+ * Same in-memory trade-off as {@link outcomes}: an intent this process never prepared reports none.
+ */
+const intents = new Map<string, { amount: number; currency: string; paymentId: string }>();
+
+/** What {@link setFakeReceipt} may override in a `succeeded` answer, per intent. */
+type ReceiptOverride = Pick<ProviderPaymentState, 'amountReceived' | 'currency' | 'paymentId'>;
+
+/** Receipts a test has told the provider to report differently from what was prepared. */
+const receiptOverrides = new Map<string, ReceiptOverride>();
+
+/**
+ * A `succeeded` state carries what was collected: the override if a test set one, else what the
+ * intent was prepared for. Any other state reports no money at all.
+ *
+ * @param providerRef - the intent
+ * @param state - the state about to be answered
+ */
+const withReceipt = (providerRef: string, state: ProviderPaymentState): ProviderPaymentState => {
+    if (state.status !== 'succeeded') return state;
+    const prepared = intents.get(providerRef);
+    const override = receiptOverrides.get(providerRef);
+    return {
+        ...state,
+        amountReceived: override?.amountReceived ?? state.amountReceived ?? prepared?.amount,
+        currency: override?.currency ?? state.currency ?? prepared?.currency,
+        paymentId: override?.paymentId ?? state.paymentId ?? prepared?.paymentId
+    };
+};
+
+/**
+ * Test lever: make this intent's `succeeded` report a different amount, currency or payment id
+ * than it was prepared with — what a provider collecting the wrong money looks like. Applies to
+ * both `confirm` and `retrieve`. Fields left out keep what the intent was prepared with.
+ *
+ * @param providerRef - the intent
+ * @param receipt - the fields to report differently
+ */
+export const setFakeReceipt = (providerRef: string, receipt: ReceiptOverride): void => {
+    receiptOverrides.set(providerRef, receipt);
+};
+
+/**
  * Test lever: what the provider will answer for `providerRef` from now on, as if the customer had
  * finished it at the provider with no `confirm` ever reaching this server — a 3-D Secure completed
  * in another tab, a bank debit that cleared. It is the only way to get a webhook to find an
@@ -106,6 +150,7 @@ export const fakePaymentProvider: PaymentProvider = {
     // double-click case prepares the same reference twice instead of opening a second intent.
     prepare: (charge, metadata, existingProviderRef) => {
         const providerRef = existingProviderRef ?? `fake_pi_${metadata.paymentId}`;
+        intents.set(providerRef, { ...charge, paymentId: metadata.paymentId });
         // Stryker disable all
         logger.info(
             `[fake-psp] prepare ${charge.amount} ${charge.currency} for order ${metadata.orderId} → ${providerRef}`
@@ -130,14 +175,14 @@ export const fakePaymentProvider: PaymentProvider = {
             `[fake-psp] confirm ${providerRef} with ****${state.cardLast4} → ${state.status}`
         );
         // Stryker restore all
-        return Promise.resolve(state);
+        return Promise.resolve(withReceipt(providerRef, state));
     },
 
     retrieve: (providerRef) => {
         const state = outcomes.get(providerRef) ?? { status: 'processing' as const };
         // Stryker disable next-line all
         logger.info(`[fake-psp] retrieve ${providerRef} → ${state.status}`);
-        return Promise.resolve(state);
+        return Promise.resolve(withReceipt(providerRef, state));
     },
 
     // This fake never leaves the process, so there is no second network attempt to deduplicate —

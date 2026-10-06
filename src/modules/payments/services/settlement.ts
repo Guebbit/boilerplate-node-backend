@@ -21,7 +21,8 @@ import {
     bankTransferHoldHours,
     isPayable,
     mailBuyer,
-    paymentSucceededEmail
+    paymentSucceededEmail,
+    toMinorUnits
 } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
@@ -29,6 +30,8 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { recordAudit } from '@infrastructure/observability/audit';
 import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
+import { paymentAmountMismatchTotal } from '../metrics';
+import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
 import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
 import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
@@ -52,6 +55,157 @@ interface Settlement {
      */
     orderLost: boolean;
 }
+
+/**
+ * Which of amount, currency and payment id the provider's `succeeded` disagrees with the payment
+ * on. Empty means it matches. A field the provider did not report counts as differing: money that
+ * cannot be verified is not accepted.
+ *
+ * Amounts are compared in minor units, so a float's noise is not a mismatch.
+ *
+ * @param payment - the payment, as frozen at the intent
+ * @param state - what the provider reported
+ */
+const receiptMismatch = (payment: PaymentDocument, state: ProviderPaymentState): string[] => {
+    const fields: string[] = [];
+    if (state.currency !== payment.currency) fields.push('currency');
+    if (
+        state.amountReceived === undefined ||
+        toMinorUnits(state.amountReceived, payment.currency) !==
+            toMinorUnits(payment.amount, payment.currency)
+    )
+        fields.push('amount');
+    if (state.paymentId !== String(payment._id)) fields.push('paymentId');
+    return fields;
+};
+
+/**
+ * Put the money of a payment that landed on an order nobody can still be paid back.
+ *
+ * Marker:   written BEFORE the attempt. Unlike a cancel, nothing retries this call itself, so a
+ *           throw with no durable note first would lose the refund.
+ * Refund:   `performRefund`, not a bare `provider.refund` — the payment ends up saying
+ *           `refunded`, through the same at-most-once guard every other refund goes through.
+ * Failure:  logged, never rethrown — the caller must still answer its own caller, and `orders`'
+ *           own `ORDER_REFUND_OWED` sweep is what finishes it if this attempt didn't.
+ *
+ * @param orderId - the order whose payment is being returned
+ * @returns the payment as the refund left it, or `null` when the refund did not land
+ */
+const refundLostPayment = async (orderId: string): Promise<PaymentDocument | null> => {
+    await orderService.markRefundOwed(orderId);
+    const refunded = await performRefund(orderId)
+        .then((result) => orderService.clearRefundOwed(orderId).then(() => result))
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not refund order ${orderId} after its payment landed on an order no longer payable — left for the retry sweep`,
+                error
+            });
+            // Stryker restore all
+            return null;
+        });
+    await paymentRepository.clearPendingEffects(orderId);
+    return refunded;
+};
+
+/** The caller context a settlement acts under when no request is behind it. */
+const systemContext = (subject: 'Order' | 'Payment'): CallerContext => ({
+    caller: callerForSubject(SYSTEM_ACTOR, subject),
+    analyticsConsent: false
+});
+
+/**
+ * Cancel the order of a payment whose amount, currency or payment id did not match. The cancel's
+ * own refund announcement returns the money (`performRefund` needs only a `succeeded` payment).
+ * When the cancel is refused — the order moved on its own meanwhile — the money is put back
+ * directly instead. A cancel that throws is logged and left to the reservation expiry, which
+ * cancels the still-pending order and refunds the same way.
+ *
+ * @param orderId - the order to cancel
+ */
+const cancelMismatchedOrder = (orderId: string): Promise<void> =>
+    orderService
+        .cancelById(orderId, SYSTEM_ACTOR, {}, systemContext('Order'))
+        .then((cancelled) => {
+            if (cancelled.success) return undefined;
+            return refundLostPayment(orderId).then(() => undefined);
+        })
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not cancel order ${orderId} after a payment mismatch — the reservation expiry will, and refund it`,
+                error
+            });
+            // Stryker restore all
+        });
+
+/**
+ * A provider-reported success that is not the payment we froze. Records what arrived, cancels the
+ * order and lets the existing refund path return the money: nothing is paid, no stock is
+ * committed, no `payment.succeeded` is announced and no invoice is issued.
+ *
+ * The write is conditional, so exactly one of several racing calls reports and cancels; the others
+ * only answer that the order is no longer payable.
+ *
+ * @param payment - the payment, as frozen at the intent
+ * @param state - the provider's `succeeded`
+ * @param fields - which of amount, currency and paymentId disagreed
+ */
+const settleMismatch = (
+    payment: PaymentDocument,
+    state: ProviderPaymentState,
+    fields: readonly string[]
+): Promise<Settlement> => {
+    const orderId = String(payment.orderId);
+
+    // What ARRIVED is written over the frozen figures, so the refund returns what was collected.
+    // No `pendingEffects`: there is no stock commit owed for a payment that is not accepted.
+    return paymentRepository
+        .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'succeeded', {
+            ...(state.cardLast4 ? { cardLast4: state.cardLast4 } : {}),
+            ...(state.amountReceived === undefined ? {} : { amount: state.amountReceived }),
+            ...(state.currency ? { currency: state.currency } : {})
+        })
+        .then(async (recorded) => {
+            if (!recorded) return { payment, orderLost: true };
+
+            for (const field of fields) paymentAmountMismatchTotal.inc({ field });
+            // Stryker disable all
+            logger.error({
+                message: `Payments: the provider reported a success for order ${orderId} that is not the payment frozen for it — order cancelled, money to be returned`,
+                paymentId: String(payment._id),
+                fields,
+                expected: { amount: payment.amount, currency: payment.currency },
+                received: {
+                    amount: state.amountReceived,
+                    currency: state.currency,
+                    paymentId: state.paymentId
+                }
+            });
+            // Stryker restore all
+            recordAudit(systemContext('Payment'), {
+                action: paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH,
+                outcome: 'failure',
+                target_type: 'payment',
+                target_id: String(payment._id),
+                metadata: {
+                    order_id: orderId,
+                    fields,
+                    expected: { amount: payment.amount, currency: payment.currency },
+                    received: {
+                        amount: state.amountReceived,
+                        currency: state.currency,
+                        payment_id: state.paymentId
+                    }
+                }
+            });
+
+            await cancelMismatchedOrder(orderId);
+            const current = await paymentRepository.findByOrderId(orderId);
+            return { payment: current ?? recorded, orderLost: true };
+        });
+};
 
 /**
  * Apply what the provider says about a payment. **The one place money is reconciled**, reached
@@ -109,6 +263,11 @@ export const settlePayment = (
             orderLost: false
         }));
 
+    // The money must be the money we asked for, checked before anything is paid. A hand-recorded
+    // payment (`manual`) has no provider reporting figures: its amount IS the order's own.
+    const mismatched = payment.provider === 'manual' ? [] : receiptMismatch(payment, state);
+    if (mismatched.length > 0) return settleMismatch(payment, state, mismatched);
+
     // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
     // racing settlements gets past it. `markPaid` is `orders`' own conditional write — this
     // module reports the fact, it never writes the order's status itself. `markPaid` fires
@@ -148,32 +307,9 @@ export const settlePayment = (
         const orderIsPaid = orderNow?.status === OrderStatus.paid;
 
         if (!orderIsPaid) {
-            /*
-             * The money moved but the order was gone (cancelled, or a racing tab won). Put it
-             * straight back — the invariant is the module docblock's rule 2.
-             *
-             * Marker:   written BEFORE the attempt. Unlike a cancel, nothing retries this call
-             *           itself, so a throw with no durable note first would lose the refund.
-             * Refund:   `performRefund`, not a bare `provider.refund` — the payment ends up
-             *           saying `refunded`, through the same at-most-once guard every other
-             *           refund goes through.
-             * Failure:  logged, never rethrown — this settlement must still answer its own
-             *           caller (a webhook, confirm or sync), and `orders`' own `ORDER_REFUND_OWED`
-             *           sweep is what finishes it if this attempt didn't.
-             */
-            await orderService.markRefundOwed(orderId);
-            const refunded = await performRefund(orderId)
-                .then((result) => orderService.clearRefundOwed(orderId).then(() => result))
-                .catch((error: unknown) => {
-                    // Stryker disable all
-                    logger.error({
-                        message: `Payments: could not refund order ${orderId} after its payment landed on an order no longer payable — left for the retry sweep`,
-                        error
-                    });
-                    // Stryker restore all
-                    return null;
-                });
-            await paymentRepository.clearPendingEffects(orderId);
+            // The money moved but the order was gone (cancelled, or a racing tab won). Put it
+            // straight back — the invariant is the module docblock's rule 2.
+            const refunded = await refundLostPayment(orderId);
             return { payment: refunded ?? succeeded, orderLost: true };
         }
 
