@@ -55,6 +55,14 @@ jest.mock('@infrastructure/adapters/ssrf-guard', () => {
         ...actual,
         resolveSafeOutboundTarget: (rawUrl: string) => {
             const parsed = new URL(rawUrl);
+            // A host the real guard would refuse, so a refused delivery can be read back.
+            if (parsed.hostname === 'internal.example.test') {
+                const refusal: Error = new actual.SsrfRefusedError(
+                    'unsafe-address',
+                    'Resolved address 10.1.2.3 for internal.example.test is not a publicly routable address'
+                );
+                return Promise.reject(refusal);
+            }
             return Promise.resolve({
                 hostname: parsed.hostname,
                 resolvedAddress: parsed.hostname,
@@ -495,6 +503,18 @@ describe('sustained failure', () => {
         expect(reloadedSubscription?.consecutiveFailures).toBe(0);
         expect(reloadedSubscription?.enabled).toBe(true);
         expect(reloadedSubscription?.failingSince).toBeUndefined();
+    });
+});
+
+describe('a delivery the SSRF guard refuses', () => {
+    it('records a fixed line, with neither the reason nor the resolved address', async () => {
+        const subscription = await createSubscription('https://internal.example.test/hook');
+        const job = await createPendingDelivery(subscription);
+
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        const stored = await webhookDeliveryRepository.findById(job.deliveryId);
+        expect(stored?.error).toBe('This URL cannot receive webhooks.');
     });
 });
 

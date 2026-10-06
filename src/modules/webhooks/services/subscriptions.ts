@@ -8,6 +8,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
+import { logger } from '@infrastructure/adapters/logger';
 import {
     generateReject,
     generateSuccess,
@@ -54,20 +55,24 @@ const URL_CHECK_TIMEOUT_MS = 5000;
 const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
     resolveSafeOutboundTarget(url, AbortSignal.timeout(URL_CHECK_TIMEOUT_MS))
         .then((): undefined => undefined)
-        .catch((error: unknown) =>
-            generateReject(422, [
+        .catch((error: unknown) => {
+            // The caller learns only that the URL was refused: a reason or a resolved address
+            // would map the internal network for whoever is probing it. The operator reads both here.
+            logger.warn({
+                message: 'A webhook URL was refused.',
+                reason: error instanceof SsrfRefusedError ? error.reason : 'unverifiable',
+                detail: error instanceof Error ? error.message : String(error)
+            });
+            // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
+            // verified the target, so nothing is subscribed to it.
+            return generateReject(422, [
                 {
                     code: ERROR_CODES.VALIDATION_ERROR,
                     message: t('webhooks.url-refused'),
-                    // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
-                    // verified the target, so nothing is subscribed to it.
-                    details: {
-                        field: 'url',
-                        reason: error instanceof SsrfRefusedError ? error.reason : 'unverifiable'
-                    }
+                    details: { field: 'url' }
                 }
-            ])
-        );
+            ]);
+        });
 
 /** List this tenant's subscriptions, newest first, optionally filtered by `enabled`. */
 export const list = (

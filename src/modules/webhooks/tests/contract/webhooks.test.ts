@@ -488,7 +488,7 @@ describe('a private target is refused at create and update', () => {
             .send(subscriptionBody({ url: 'https://internal.example.test/hook' }));
 
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].details).toEqual({ field: 'url', reason: 'unsafe-address' });
+        expect(response.body.errors[0].details).toEqual({ field: 'url' });
         expect(await webhookSubscriptionRepository.count({})).toBe(0);
     });
 
