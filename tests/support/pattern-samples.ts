@@ -28,10 +28,7 @@ const PATTERN_SAMPLES: Record<string, string> = {
     '^[A-Za-z0-9_-]+$': 'abc',
     '^[\\w-]+$': 'abc',
     // An https-only URL.
-    '(?:^https://)': 'https://example.com/hook',
-    // PasswordNew — all four character classes, in any order. Lookahead, so nothing can generate
-    // it; this is the shortest value that satisfies the rule.
-    '^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[^\\dA-Za-z]).{8,}$': 'Aa1!aaaa'
+    '(?:^https://)': 'https://example.com/hook'
 };
 
 /**

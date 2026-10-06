@@ -34,7 +34,7 @@ export interface OwnedSeedRepository<TFixture> {
  * `create()` unless `present()` finds it.
  *
  * `create()`/`save()` rather than `updateOne(..., { upsert: true })`, so pre-save hooks still run —
- * most importantly the bcrypt password hash, which a raw driver write would skip. An existing row
+ * most importantly the password hash, which a raw driver write would skip. An existing row
  * is SKIPPED, never rewritten: re-running this does not repair a database seeded from older
  * fixtures — this never updates, which is why it is named "insert", not "upsert".
  *

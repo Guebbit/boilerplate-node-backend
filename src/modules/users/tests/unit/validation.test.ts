@@ -7,7 +7,7 @@
  * and a message attached to the wrong rule, by asserting on `en.json`'s own copy.
  */
 import { zodUserSchema } from '@modules/users/model';
-import { signupBodyPasswordMin } from '@api/schemas.zod';
+import { signupBodyPasswordMin, signupBodyPasswordMax } from '@api/schemas.zod';
 import { readLocaleDictionary } from '@infrastructure/i18n';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import { MINIMAL_PASSWORD } from '@modules/users/tests/factories';
@@ -107,41 +107,33 @@ describe('password messages', () => {
         expect(messages).not.toContain(copy('field-password-required'));
     });
 
-    it('accepts a password of exactly the contract minimum, complexity included', () => {
+    it('uses the maximum-length copy for a password past the contract ceiling', () => {
+        const messages = messagesFor(
+            { ...validUser, password: 'a'.repeat(signupBodyPasswordMax + 1) },
+            'password'
+        );
+
+        expect(messages).toContain(copy('field-password-max'));
+    });
+
+    it('accepts a password of exactly the contract maximum, long passphrases included', () => {
+        expect(
+            messagesFor({ ...validUser, password: 'a'.repeat(signupBodyPasswordMax) }, 'password')
+        ).toEqual([]);
+    });
+
+    it('accepts a password of exactly the contract minimum', () => {
         expect(messagesFor({ ...validUser, password: MINIMAL_PASSWORD }, 'password')).toEqual([]);
     });
 
-    // Length alone is not enough: the paired frontend's `usersPasswordSchema` also requires
-    // complexity, and the contract (`PasswordNew` in `shared/contracts/openapi.root.yaml`)
-    // documents the same rule. This and the four cases below pin the server-side enforcement.
-    it('rejects a password the contract minimum accepts on length alone', () => {
-        expect(
-            messagesFor({ ...validUser, password: 'a'.repeat(signupBodyPasswordMin) }, 'password')
-        ).not.toEqual([]);
-    });
-
-    it('uses the lowercase copy for a password with none', () => {
-        expect(messagesFor({ ...validUser, password: 'AA1!AAAA' }, 'password')).toContain(
-            copy('field-password-lowercase')
-        );
-    });
-
-    it('uses the uppercase copy for a password with none', () => {
-        expect(messagesFor({ ...validUser, password: 'aa1!aaaa' }, 'password')).toContain(
-            copy('field-password-uppercase')
-        );
-    });
-
-    it('uses the digit copy for a password with none', () => {
-        expect(messagesFor({ ...validUser, password: 'Aa!aaaaa' }, 'password')).toContain(
-            copy('field-password-digit')
-        );
-    });
-
-    it('uses the symbol copy for a password with none', () => {
-        expect(messagesFor({ ...validUser, password: 'Aa1aaaaa' }, 'password')).toContain(
-            copy('field-password-symbol')
-        );
+    // No composition rules (NIST SP 800-63B-4): length is the whole policy here, and the breached
+    // check, not a mix of character classes, keeps a weak one out.
+    it.each([
+        ['all lowercase', 'a'.repeat(signupBodyPasswordMin)],
+        ['all digits', '1'.repeat(signupBodyPasswordMin)],
+        ['a passphrase of words', 'correct horse battery staple']
+    ])('accepts %s, since length is all the policy asks of the shape', (_label, password) => {
+        expect(messagesFor({ ...validUser, password }, 'password')).toEqual([]);
     });
 });
 

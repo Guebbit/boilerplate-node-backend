@@ -87,21 +87,19 @@ describe('the password vocabulary', () => {
     it.each([
         ['PLAIN_PASSWORD', PLAIN_PASSWORD],
         ['REPLACEMENT_PASSWORD', REPLACEMENT_PASSWORD],
-        ['MINIMAL_PASSWORD', MINIMAL_PASSWORD]
+        ['MINIMAL_PASSWORD', MINIMAL_PASSWORD],
+        ['LEGACY_PASSWORD', LEGACY_PASSWORD]
     ])('accepts %s as a settable password', (_name, password) => {
         expect(satisfiesPolicy(password)).toBe(true);
     });
 
-    it.each([
-        ['LEGACY_PASSWORD', LEGACY_PASSWORD],
-        ['WEAK_PASSWORD', WEAK_PASSWORD]
-    ])('rejects %s as a settable password', (_name, password) => {
-        expect(satisfiesPolicy(password)).toBe(false);
+    it('rejects WEAK_PASSWORD as a settable password', () => {
+        expect(satisfiesPolicy(WEAK_PASSWORD)).toBe(false);
     });
 
-    it('keeps LEGACY_PASSWORD long enough to be an existing credential', () => {
-        // It fails only on character classes. A password below the length floor could not have
-        // been set under ANY past policy, so it would prove nothing about a legacy account.
+    it('keeps LEGACY_PASSWORD all lowercase: no mix of character classes is asked for', () => {
+        // The policy is length alone, so a value that the old composition rule refused must pass.
+        expect(LEGACY_PASSWORD).toMatch(/^[a-z-]+$/);
         expect(LEGACY_PASSWORD.length).toBeGreaterThanOrEqual(signupBodyPasswordMin);
     });
 

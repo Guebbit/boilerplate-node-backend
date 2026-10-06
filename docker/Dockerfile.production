@@ -132,7 +132,7 @@ COPY package.json package-lock.json ./
 
 # `--omit=dev` is the difference between ~1.4 GB and ~200 MB of node_modules. `--ignore-scripts`
 # skips postinstall hooks, which are the usual way a transitive dependency runs arbitrary code at
-# image-build time; bcrypt ships prebuilt binaries for Alpine and does not need one.
+# image-build time. Nothing left in the runtime tree needs one: password hashing is node:crypto's.
 #
 # `npm cache clean --force` in the SAME layer, because a separate RUN would leave the cache in the
 # layer beneath it and delete nothing from the final image.

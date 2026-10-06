@@ -38,12 +38,12 @@ export const postLogin = (
      * uniformly — `accountService.login` parses anyway, so this is not where a 422 is avoided.
      *
      * Uniform:     whether the ACCOUNT EXISTS. `login` compares against `DUMMY_PASSWORD_HASH` on
-     *              a miss, so an unknown address costs the same bcrypt round as a wrong password
+     *              a miss, so an unknown address costs the same hash round as a wrong password
      *              and both answer 401. That is the property worth protecting, and it holds.
      * Not uniform: the password's SHAPE. The service answers 422 for a malformed body, the way
      *              RFC 6749 §5.2 separates `invalid_request` from `invalid_grant`. All it exposes
-     *              is `Password.minLength`, which `openapi.yaml` publishes; the complexity
-     *              pattern deliberately lives on `PasswordNew`, for signup and reset, not here.
+     *              is `Password.minLength`, which `openapi.yaml` publishes; `PasswordNew`, for
+     *              signup and reset, bounds the same length and nothing more.
      * Audit:       a 422 raised HERE would return before `recordLoginFailure` and drop the
      *              attempt from the trail. The service's 422 arrives after it, and is recorded.
      * Absent body: express 5 leaves `request.body` undefined when no parser matched. The `?? {}`

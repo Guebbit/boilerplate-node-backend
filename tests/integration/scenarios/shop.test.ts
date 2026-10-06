@@ -79,7 +79,7 @@ afterAll(() => disconnect().then(emptyFileSandbox));
 /**
  * How long one build may take.
  *
- * Far above the suite default because this is the real thing: twelve bcrypt cost-12 logins and
+ * Far above the suite default because this is the real thing: twelve password-hash logins and
  * several hundred HTTP round trips through the whole middleware stack. It runs ONCE — every case
  * below reads the database it left behind.
  */

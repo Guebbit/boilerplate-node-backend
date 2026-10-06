@@ -81,8 +81,8 @@ describe('signup', () => {
 
         expect(stored?.password).toBeDefined();
         expect(stored?.password).not.toBe(PLAIN_PASSWORD);
-        // bcrypt's modular-crypt prefix, so this asserts "hashed with bcrypt", not merely "differs".
-        expect(stored?.password).toMatch(/^\$2[aby]\$/);
+        // The PHC prefix, so this asserts "hashed with argon2id", not merely "differs".
+        expect(stored?.password).toMatch(/^\$argon2id\$v=19\$m=19456,t=2,p=1\$/);
     });
 
     it('rejects a mismatched confirmation with 422 and says so', async () => {
@@ -383,7 +383,7 @@ describe('passwordChange', () => {
         expect(response.status).toBe(200);
 
         const stored = await userRepository.findOneWithCredentials({ email: 'change@example.com' });
-        expect(stored?.password).toMatch(/^\$2[aby]\$/);
+        expect(stored?.password).toMatch(/^\$argon2id\$/);
         // And it is the NEW one: the login flow is the honest way to assert that.
         const loggedIn = await accountService.login('change@example.com', PLAIN_PASSWORD);
         expect(loggedIn.success).toBe(true);

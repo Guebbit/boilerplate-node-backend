@@ -11,7 +11,7 @@ import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { cooldownRemaining } from '../cooldown';
-import bcrypt from 'bcrypt';
+import { hashPasswordSync, verifyPassword } from '@infrastructure/security/password-hash';
 import { randomBytes } from 'node:crypto';
 import { checkEmailPolicy } from '@infrastructure/adapters/antibot';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
@@ -97,12 +97,12 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
     });
 
 /**
- * A bcrypt hash of no real password, computed once at import time (a one-time boot cost, not a
+ * An argon2id hash of no real password, computed once at import time (a one-time boot cost, not a
  * per-request one). `login` compares against this on an unknown email, so "no such account"
- * costs the same as "wrong password" — without it, bcrypt's own cost is exactly what makes the
+ * costs the same as "wrong password" — without it, the hash's own cost is exactly what makes the
  * fast path a timing oracle for enumerating registered addresses.
  */
-const DUMMY_PASSWORD_HASH = bcrypt.hashSync(randomBytes(32).toString('hex'), 12);
+const DUMMY_PASSWORD_HASH = hashPasswordSync(randomBytes(32).toString('hex'));
 
 /**
  * How long a reset link works — how long a stolen mailbox stays useful. Tunable because the safe
@@ -564,15 +564,15 @@ export const login = (
             .then((user) => {
                 // Compare against DUMMY_PASSWORD_HASH on a miss, so an
                 // unknown email costs the same as a wrong password — an unconditional `return`
-                // here would answer 401 before bcrypt's own cost, the timing gap that lets an
+                // here would answer 401 before the hash's own cost, the timing gap that lets an
                 // attacker tell "no such account" from "wrong password" by response time alone.
-                return bcrypt
-                    .compare(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH)
-                    .then((doMatch) => {
+                return verifyPassword(password ?? '', user?.password ?? DUMMY_PASSWORD_HASH).then(
+                    (doMatch) => {
                         if (!user || !doMatch)
                             return generateReject(401, [t('account.login.wrong-data')]);
                         return generateSuccess<UserDocument>(user);
-                    });
+                    }
+                );
             })
             .catch((error: unknown) => rejectDatabaseEnvelope('auth', error))
     );
@@ -658,13 +658,9 @@ export const verifyOwnPassword = (
             if (!user) return generateReject(401, []);
             if (!user.password) return generateReject(422, [t(wrongKey)]);
 
-            return bcrypt
-                .compare(password, user.password)
-                .then((doMatch) =>
-                    doMatch
-                        ? generateSuccess<UserDocument>(user)
-                        : generateReject(422, [t(wrongKey)])
-                );
+            return verifyPassword(password, user.password).then((doMatch) =>
+                doMatch ? generateSuccess<UserDocument>(user) : generateReject(422, [t(wrongKey)])
+            );
         });
 
 export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';

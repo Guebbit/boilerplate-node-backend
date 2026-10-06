@@ -57,7 +57,7 @@ export type DatabaseCopy = Readonly<Record<string, Document[]>>;
  * Read the whole database into memory.
  *
  * Exists for `./demo`: a `shop` restore replays this copy instead of reseeding, which
- * skips the fourteen bcrypt cost-12 hashes and the whole HTTP flow run that produced the
+ * skips the fourteen password hashes and the whole HTTP flow run that produced the
  * scenario in the first place. Nothing else should reach for it — a copy of the database in a
  * process's heap is only affordable because the demo profile's database is small and disposable.
  */

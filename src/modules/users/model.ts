@@ -8,7 +8,7 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
-import bcrypt from 'bcrypt';
+import { hashPassword } from '@infrastructure/security/password-hash';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
@@ -18,7 +18,8 @@ import {
     createUserBodyEmailMax,
     createUserBodyUsernameMax,
     createUserBodyUsernameMin,
-    signupBodyPasswordMin
+    signupBodyPasswordMin,
+    signupBodyPasswordMax
 } from '@api/schemas.zod';
 import { type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
@@ -352,27 +353,16 @@ export const zodUserSchema = CreateUserBody.extend({
         // greetings and lists, so an unbounded one is text of the caller's choosing in many places.
         .max(createUserBodyUsernameMax, { error: () => t('users.field-username-max') }),
 
-    // Complexity beyond length duplicates `PasswordNew`'s contract pattern in translated form —
-    // the generated schema (`SignupBody`) would answer first in English, same reason as the
-    // length check above. The length floor is `SignupBody`'s: `/users` carries no password.
-    // One `.refine()` per rule so each gets its own message, matching the paired frontend's
-    // `usersPasswordSchema` rule-for-rule (`schemas.ts`).
+    // Length only (NIST SP 800-63B-4: no composition rules); the breached-password check does the
+    // rest. The floor is `SignupBody`'s (`/users` carries no password), restated here only to give
+    // the failure a translated message, like the username's above.
     password: z
         .string()
         .min(1, { error: () => t('users.field-password-required') })
         .min(signupBodyPasswordMin, { error: () => t('users.field-password-min') })
-        .refine((password) => /[a-z]/.test(password), {
-            error: () => t('users.field-password-lowercase')
-        })
-        .refine((password) => /[A-Z]/.test(password), {
-            error: () => t('users.field-password-uppercase')
-        })
-        .refine((password) => /\d/.test(password), {
-            error: () => t('users.field-password-digit')
-        })
-        .refine((password) => /[^\dA-Za-z]/.test(password), {
-            error: () => t('users.field-password-symbol')
-        })
+        // The generated ceiling (128), restated like the others: this `.extend()` replaces the
+        // generated field outright, and a replaced field drops its bound.
+        .max(signupBodyPasswordMax, { error: () => t('users.field-password-max') })
 });
 
 /**
@@ -767,8 +757,8 @@ userSchema.index(
  */
 
 /**
- * Pre-save hook: hashes the password with bcrypt whenever it changes, so a plaintext value never
- * reaches storage. See the bcrypt call below for the cost-factor rationale.
+ * Pre-save hook: hashes the password with argon2id whenever it changes, so a plaintext value never
+ * reaches storage. The cost factors and why are in `src/infrastructure/security/password-hash.ts`.
  */
 userSchema.pre('save', function (this: UserDocument) {
     // The second half is only reachable in principle (`isModified` true, value falsy) — an
@@ -776,9 +766,7 @@ userSchema.pre('save', function (this: UserDocument) {
     // what lets TypeScript see `this.password` as a `string` below, now that it is optional.
     if (!this.isModified('password') || !this.password) return;
 
-    // bcrypt cost factor — 12 rounds. Higher is slower to brute-force and slower to hash; 12 is
-    // the library's own recommended floor for a production login path.
-    return bcrypt.hash(this.password, 12).then((hashedPassword) => {
+    return hashPassword(this.password).then((hashedPassword) => {
         this.password = hashedPassword;
     });
 });

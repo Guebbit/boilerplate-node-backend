@@ -32,13 +32,12 @@ export { userRepository } from '../repository';
  */
 export const REPLACEMENT_PASSWORD = 'Replacement1!';
 
-/** The SHORTEST password the policy accepts — exactly the minimum length, one of each class. */
+/** The SHORTEST password the policy accepts — exactly the minimum length. */
 export const MINIMAL_PASSWORD = 'Aa1!aaaa';
 
 /**
- * Long enough, but missing character classes: what an account created before the complexity rule
- * still holds. Only ever an EXISTING password — provable at login and as `currentPassword`, never
- * settable — which is the distinction `Password` and `PasswordNew` draw in `openapi.yaml`.
+ * A long, all-lowercase passphrase: valid under a length-only policy, and what the old composition
+ * rule used to refuse. Proves nothing about the shape of a password is asked beyond its length.
  */
 export const LEGACY_PASSWORD = 'correct-horse-battery';
 

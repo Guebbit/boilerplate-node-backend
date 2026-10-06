@@ -11,7 +11,7 @@
  * Re-minting the session stays the controller's job (`../session/session.ts`); this only decides.
  */
 
-import bcrypt from 'bcrypt';
+import { verifyPassword } from '@infrastructure/security/password-hash';
 import { t } from '@infrastructure/i18n';
 import { ERROR_CODES } from '@api/error-codes';
 import {
@@ -182,9 +182,8 @@ export const sendReauthCode = (
 
 /** Whether the typed password matches; an account with none never does. */
 const passwordMatches = (user: UserDocument, password: string): Promise<boolean> =>
-    // bcrypt: compares a plaintext against the stored hash, salt and cost read from the hash itself.
-    // https://github.com/kelektiv/node.bcrypt.js#to-check-a-password
-    user.password ? bcrypt.compare(password, user.password) : Promise.resolve(false);
+    // argon2id: compares a plaintext against the stored hash, salt and cost read from the hash itself.
+    user.password ? verifyPassword(password, user.password) : Promise.resolve(false);
 
 /**
  * Check a typed code against the one in flight. A wrong guess spends an attempt, so the entry is
