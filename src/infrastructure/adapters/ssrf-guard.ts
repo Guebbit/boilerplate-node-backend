@@ -118,6 +118,9 @@ const isAddressUnsafe = (address: string): boolean => {
     if (net.isIP(address) === 0) return true;
 
     const parsed = ipaddr.process(address);
+    // ipaddr.js has no range name for the deprecated IPv4-compatible block `::/96` (RFC 4291),
+    // so it reads as unicast; refuse it by CIDR.
+    if (parsed.kind() === 'ipv6' && parsed.match(ipaddr.parseCIDR('::/96'))) return true;
     return parsed.range() !== 'unicast';
 };
 
