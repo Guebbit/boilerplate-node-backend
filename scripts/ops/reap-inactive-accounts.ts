@@ -47,7 +47,7 @@ import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { stopQueue } from '@infrastructure/adapters/queue';
 import { bootI18n, getDefaultLocale } from '@infrastructure/i18n';
 import { registerModules } from '@kernel/registry';
-import { enabledModules, enabledModuleLocales } from '../../src/modules';
+import { enabledModules, enabledModuleDirectories } from '../../src/modules';
 import { userService, type UserDocument } from '@modules/users';
 import { inactivityWarningEmail, greetableName } from '@modules/account';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -79,7 +79,7 @@ const daysAgo = (days: number): Date => new Date(Date.now() - days * 24 * 60 * 6
  * translated email copy outside the HTTP process. Nothing else `boot`/`start` does (cache, queue
  * readiness, route mounting) is this script's concern.
  */
-const initI18n = (): Promise<unknown> => bootI18n(enabledModuleLocales());
+const initI18n = (): Promise<unknown> => bootI18n(enabledModuleDirectories('locales'));
 
 /** Stage one: warn, and stamp so this account is not warned twice. */
 const warn = (user: UserDocument): Promise<void> => {

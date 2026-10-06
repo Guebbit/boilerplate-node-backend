@@ -49,7 +49,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { settleWithin } from '@infrastructure/runtime/settle';
 
 import { registerModules } from '@kernel/registry';
-import { enabledModules, enabledModuleLocales, enabledModuleTemplateDirectories } from './modules';
+import { enabledModules, enabledModuleDirectories } from './modules';
 import { APP_CONFIG_SLICES } from '@app/config';
 
 import { applyServerTimeouts, installRequestParsing, installSecurity } from '@app/security';
@@ -155,12 +155,12 @@ export const createApp = (options: AppOptions = {}): AppInstance => {
                 // sits below every module and cannot go looking for them, so the paths are handed in.
                 // Every dictionary in src/locales is registered, so dropping in a file is the only
                 // step needed to add a language — the middleware negotiates against the same list.
-                bootI18n(enabledModuleLocales())
+                bootI18n(enabledModuleDirectories('locales'))
             )
             .then(() => {
                 // Same reasoning, for a module's own EJS templates — before the first
                 // request or queue job that could resolve a template name against them.
-                registerTemplateDirectories(enabledModuleTemplateDirectories());
+                registerTemplateDirectories(enabledModuleDirectories('templates'));
             })
             /*
              * Layer whatever has been edited on top of the files just loaded, then keep doing it.

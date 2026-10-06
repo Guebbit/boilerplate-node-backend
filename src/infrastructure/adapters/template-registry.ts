@@ -28,7 +28,7 @@ let collectedTemplates: Record<string, string> = {};
  * job that could resolve a name against it.
  *
  * @param directories - absolute paths, each expected to hold `<name>.ejs` files — a module's own
- *   `AppModule.templates`, collected by `enabledModuleTemplateDirectories`
+ *   `AppModule.templates`, collected by `enabledModuleDirectories('templates')`
  * @throws {Error} when two directories declare the same template name
  */
 export const registerTemplateDirectories = (directories: readonly string[]): void => {
