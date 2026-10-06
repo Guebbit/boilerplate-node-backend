@@ -159,7 +159,10 @@ paths:
                 Adds a new secret to the ring and returns its plaintext once, in `newSecret` — the
                 ring then carries two active secrets, and deliveries sign with both (two
                 space-separated `v1,` values in `webhook-signature`) until the old one is dropped
-                through `DELETE .../secrets/{secretId}`. Its own route rather than a flag on
+                through `DELETE .../secrets/{secretId}` or its overlap window ends (24 hours by
+                default, `NODE_WEBHOOK_SECRET_OVERLAP_HOURS`), after which it stops signing and
+                disappears from `secretIds`. A ring holds at most two: rotating again drops the
+                oldest. Its own route rather than a flag on
                 `PATCH`'s body: a command, not state, so it does not share a route with
                 url/description/eventTypes/enabled.
             operationId: rotateWebhookSubscriptionSecret

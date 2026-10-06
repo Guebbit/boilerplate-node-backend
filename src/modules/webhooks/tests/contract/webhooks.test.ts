@@ -271,6 +271,23 @@ describe('POST /webhooks/subscriptions/:id/rotate-secret', () => {
         expect(response.body.data.secretIds).toHaveLength(2);
     });
 
+    it('keeps at most two secrets, dropping the oldest on a second rotation', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+        const created = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody());
+        const url = `/webhooks/subscriptions/${String(created.body.data.id)}/rotate-secret`;
+
+        const first = await api().post(url).set('Authorization', bearer);
+        const second = await api().post(url).set('Authorization', bearer);
+
+        expect(second.body.data.secretIds).toHaveLength(2);
+        // The oldest is gone; the one the first rotation minted survives beside the new one.
+        expect(second.body.data.secretIds).toContain(first.body.data.secretIds[1]);
+        expect(second.body.data.secretIds).not.toContain(first.body.data.secretIds[0]);
+    });
+
     it('404s an id from outside this admin’s reach', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
