@@ -28,6 +28,7 @@ const DATA = {
     pageMetaLinks: [],
     greeting: '',
     body: '',
+    providers: '',
     lines: [],
     total: '',
     linkLabel: '',

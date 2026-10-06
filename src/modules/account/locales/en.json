@@ -107,7 +107,9 @@
                 "subject": "Your password was changed",
                 "meta-title": "Password reset",
                 "greeting": "Hello, {{name}}!",
-                "body": "Your password has been reset."
+                "body": "Your password has been reset.",
+                "providers": "These sign-in methods are still connected to your account: {{providers}}. A password reset does not disconnect them; if you do not recognise one, remove it from your profile.",
+                "providers-none": "No Google or GitHub sign-in is connected to your account."
             },
             "delete-request": {
                 "subject": "Confirm account deletion",
@@ -182,7 +184,9 @@
         "oauth": {
             "unknown-provider": "This sign-in method isn't available.",
             "invalid-state": "This sign-in attempt has expired. Please try again.",
-            "invalid-verifier": "This sign-in attempt has expired. Please try again."
+            "invalid-verifier": "This sign-in attempt has expired. Please try again.",
+            "link-removed": "That sign-in method was disconnected.",
+            "link-not-found": "That sign-in method is not connected to your account."
         }
     }
 }

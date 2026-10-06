@@ -265,7 +265,11 @@ const afterReset = (
      */
     const mail = resetConfirmEmail(
         recipientLocale(user.locale, context),
-        greetableName(user, user.email)
+        greetableName(user, user.email),
+        // `oauthAccounts` is `select: false`: present on a holder loaded for the reset, absent on
+        // one that was not, which is then simply "no providers to name".
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `oauthAccounts` is always loaded; `select: false` makes that a lie
+        (user.oauthAccounts ?? []).map(({ provider }) => provider)
     );
     // Normal priority: a confirmation, not a link or code anyone is blocked on.
     void sendAccountMail(user.email, mail, 'normal');

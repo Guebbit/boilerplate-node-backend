@@ -281,8 +281,18 @@ export const twoFactorLockedEmail = (
     };
 };
 
-/** Password reset: the confirmation, after the password actually changed. */
-export const resetConfirmEmail = (locale: string, name: string): EmailContent => {
+/**
+ * Password reset: the confirmation, after the password actually changed. Names the sign-in
+ * providers still connected to the account: a reset changes the password, not what Google or
+ * GitHub can still do, and the owner can only act on a connection they were told about.
+ *
+ * @param providers - registry names of the linked providers; empty says none are connected
+ */
+export const resetConfirmEmail = (
+    locale: string,
+    name: string,
+    providers: readonly string[] = []
+): EmailContent => {
     const t = translator(locale);
     return {
         template: 'account.reset-confirm',
@@ -293,6 +303,17 @@ export const resetConfirmEmail = (locale: string, name: string): EmailContent =>
             pageMetaLinks: [],
             greeting: greetingFor(t, 'account.email.reset-confirm.greeting', name),
             body: t('account.email.reset-confirm.body'),
+            // Always a sentence: "none connected" is as useful to the owner as the list.
+            providers:
+                providers.length > 0
+                    ? t('account.email.reset-confirm.providers', {
+                          providers: providers
+                              .map(
+                                  (provider) => provider.charAt(0).toUpperCase() + provider.slice(1)
+                              )
+                              .join(', ')
+                      })
+                    : t('account.email.reset-confirm.providers-none'),
             footer: t('email.footer')
         }
     };

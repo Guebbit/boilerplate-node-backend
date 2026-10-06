@@ -106,6 +106,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `account`        | `AUTH_LOGIN`                                | `auth.login`                                | —                      |
 | `account`        | `AUTH_OAUTH_FAILED`                         | `auth.oauth.failed`                         | —                      |
 | `account`        | `AUTH_OAUTH_LINKED`                         | `auth.oauth.linked`                         | —                      |
+| `account`        | `AUTH_OAUTH_UNLINKED`                       | `auth.oauth.unlinked`                       | —                      |
 | `account`        | `AUTH_PASSWORD_CHANGED`                     | `auth.password.changed`                     | —                      |
 | `account`        | `AUTH_PASSWORD_RESET_COMPLETED`             | `auth.password_reset.completed`             | —                      |
 | `account`        | `AUTH_PASSWORD_RESET_REQUESTED`             | `auth.password_reset.requested`             | —                      |

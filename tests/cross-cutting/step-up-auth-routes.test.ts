@@ -66,6 +66,8 @@ const STEP_UP_ROUTES: Record<string, string> = {
     'account PUT /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
     'account PATCH /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
     'account POST /logout-all': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
+    'account DELETE /oauth/links/:provider': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     'account DELETE /sessions/:sessionId': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
     // The data export adopts this same guard in place of a bespoke password check — see the
     // route's own comment in `account/routes.ts`.

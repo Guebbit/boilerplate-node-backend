@@ -81,6 +81,14 @@ export const registerFromOAuth = (data: OAuthSignupFields) => userRepository.cre
 export const discardFailedSignup = (user: UserDocument): Promise<void> =>
     userRepository.deleteOne(user).then(() => undefined);
 
+/**
+ * Detach one provider from an account.
+ *
+ * @returns whether a link was removed; `false` when `provider` was never linked
+ */
+export const unlinkOAuthAccount = (userId: string, provider: string): Promise<boolean> =>
+    userRepository.unlinkOAuthAccount(userId, provider);
+
 /** Attach a federated identity to an existing account. */
 export const linkOAuthAccount = (
     userId: string,

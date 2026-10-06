@@ -722,6 +722,47 @@ paths:
                                 $ref: '#/components/schemas/OAuthProvidersEnvelope'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/oauth/links:
+        get:
+            tags: [Auth]
+            summary: List the caller's connected accounts
+            description: The sign-in providers linked to the authenticated account (Google, GitHub), with when each was connected. Never carries a provider's own identifier. An empty list means the account signs in with a password alone.
+            operationId: listOAuthLinks
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The linked providers
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OAuthLinksEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /account/oauth/links/{provider}:
+        delete:
+            tags: [Auth]
+            summary: Disconnect a linked sign-in provider
+            description: Removes the link between the account and `provider`, so that provider can no longer sign in to it. Needs a fresh session (`401 REAUTH_REQUIRED`). There is no guard on removing the last sign-in method, by decision (forgot-password recovers an account that was left with none). Answers 404 when `provider` is not linked.
+            operationId: unlinkOAuthProvider
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: provider
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+                      maxLength: 32
+                  description: One of the `provider` names `GET /account/oauth/links` lists.
+            responses:
+                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/oauth/{provider}:
         get:
             tags: [Auth]
@@ -1019,6 +1060,43 @@ components:
                     type: array
                     items: { type: string }
                     description: Registry names this deployment holds credentials for, e.g. `["google", "github"]`.
+
+        OAuthLink:
+            type: object
+            additionalProperties: false
+            required: [provider, connectedAt]
+            properties:
+                provider:
+                    type: string
+                    description: Registry name of the linked provider, e.g. `google`.
+                connectedAt:
+                    type: string
+                    format: date-time
+                    description: When the account was linked to this provider.
+
+        OAuthLinks:
+            type: object
+            additionalProperties: false
+            required: [links]
+            properties:
+                links:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OAuthLink'
+
+        OAuthLinksEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/OAuthLinks'
 
         OAuthProvidersEnvelope:
             type: object

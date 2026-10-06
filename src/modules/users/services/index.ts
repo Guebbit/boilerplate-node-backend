@@ -58,7 +58,8 @@ import {
     registerFromOAuth,
     buildSignupDecoy,
     discardFailedSignup,
-    linkOAuthAccount
+    linkOAuthAccount,
+    unlinkOAuthAccount
 } from './signup';
 import {
     findInactiveUnwarned,
@@ -124,6 +125,7 @@ export const userService = {
     tokenSupersede,
     tokenTouch,
     linkOAuthAccount,
+    unlinkOAuthAccount,
     findInactiveUnwarned,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,

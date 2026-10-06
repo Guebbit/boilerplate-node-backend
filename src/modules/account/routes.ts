@@ -69,6 +69,8 @@ import { getAccountExport } from './controllers/get-account-export';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
+import { getOAuthLinks } from './controllers/get-oauth-links';
+import { deleteOAuthLink } from './controllers/delete-oauth-link';
 import { getOAuthStart } from './controllers/get-oauth-start';
 import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
@@ -372,6 +374,19 @@ router.post(
 // GET /account/oauth/providers — which providers this deployment has credentials for. Public,
 // informational; registered ABOVE the `:provider` route below so it isn't swallowed by it.
 router.get('/oauth/providers', getOAuthProviders);
+
+// GET /account/oauth/links — the caller's connected providers. Registered ABOVE the `:provider`
+// route below, like `/oauth/providers`, so it is not swallowed by it.
+router.get('/oauth/links', isAuth, getOAuthLinks);
+
+// DELETE /account/oauth/links/:provider — disconnect one provider. Sensitive tier: it removes a way
+// into the account, an identity change like the email.
+router.delete(
+    '/oauth/links/:provider',
+    isAuth,
+    requireFreshAuth(REAUTH_TIME_SENSITIVE),
+    deleteOAuthLink
+);
 
 // GET /account/oauth/:provider — 302 to the provider's consent screen. Public: this is how an
 // OAuth session begins, same footing as /login and /signup.

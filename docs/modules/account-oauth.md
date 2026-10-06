@@ -160,6 +160,22 @@ The success path calls the same `issueSession` [`postLogin`](./account-sessions.
 read it like any other method. It returns no access token: the frontend's
 `GET /account/refresh` bootstrap mints one the moment it lands.
 
+## Connected accounts: seeing and removing a link {#connected-accounts}
+
+A linked provider is a way into the account, so its owner can see and remove it. Two routes, both
+for a signed-in caller, neither public:
+
+| Route                                   | Answers                                                           |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| `GET /account/oauth/links`              | each linked provider and when it was connected, never its id      |
+| `DELETE /account/oauth/links/:provider` | removes the link; fresh session (sensitive tier); `404` if absent |
+
+There is **no guard on removing the last sign-in method**, by decision: forgot-password recovers a
+passwordless account, so a lock-out here is the owner's to repair, not a state to forbid. The
+password-reset confirmation mail names the providers still connected (or says none are): a reset
+changes the password, not what Google or GitHub can still do, and the owner can only act on a link
+they were told about.
+
 ## Two consequences worth naming
 
 - **An OAuth-only account has no password.** `users.password` is deliberately not `required`, and

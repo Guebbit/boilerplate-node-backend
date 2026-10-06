@@ -71,6 +71,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
     linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<void>;
+    unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
     bumpSessionEpoch: (id: string, at: Date) => Promise<void>;
@@ -359,6 +360,24 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Remove the link to one provider — atomic `$pull`, the mirror of {@link linkOAuthAccount} and
+     * for the same reason: `oauthAccounts` is `select: false`, so there is no loaded array to
+     * filter. `timestamps: false`: disconnecting a provider is not an edit of the profile.
+     *
+     * @param provider - the registry name to disconnect
+     * @returns whether a link was actually removed (false: it was never linked)
+     */
+    unlinkOAuthAccount: (userId: string, provider: string) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(userId) },
+                { $pull: { oauthAccounts: { provider } } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Reserve one wrong-code attempt BEFORE the code is compared, in a single atomic write.

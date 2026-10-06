@@ -120,6 +120,8 @@ describe('account routes — what is mounted', () => {
             'DELETE /2fa/methods/:method',
             'POST /2fa/backup-codes',
             'GET /oauth/providers',
+            'GET /oauth/links',
+            'DELETE /oauth/links/:provider',
             'GET /oauth/:provider',
             'GET /oauth/:provider/callback'
         ]);

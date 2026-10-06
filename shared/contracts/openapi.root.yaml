@@ -2036,6 +2036,10 @@ paths:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~12fa~1backup-codes'
     /account/oauth/providers:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1providers'
+    /account/oauth/links:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1links'
+    /account/oauth/links/{provider}:
+        $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1links~1{provider}'
     /account/oauth/{provider}:
         $ref: '../../src/modules/account/openapi.yaml#/paths/~1account~1oauth~1{provider}'
     /account/oauth/{provider}/callback:

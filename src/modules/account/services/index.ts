@@ -111,7 +111,9 @@ export const accountService = {
     reapExpiredExports: exportRows.reapExpiredExports,
     pruneOwnExpiredTokens,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
-    recordOAuthFailure: oauth.recordOAuthFailure
+    recordOAuthFailure: oauth.recordOAuthFailure,
+    listOAuthLinks: oauth.listOAuthLinks,
+    unlinkOAuthProvider: oauth.unlinkOAuthProvider
 };
 
 /**

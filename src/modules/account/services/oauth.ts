@@ -268,3 +268,48 @@ export const recordOAuthFailure = (
         metadata: { provider, reason }
     });
 };
+
+/**
+ * The sign-in providers linked to an account — what `GET /account/oauth/links` shows. The
+ * provider's own identifier stays server-side: it is the key the login looks up, and the owner has
+ * no use for it.
+ *
+ * @param userId - the caller
+ * @returns one entry per linked provider, in the order they were connected
+ */
+export const listOAuthLinks = (
+    userId: string
+): Promise<{ provider: string; connectedAt: Date }[]> =>
+    // `oauthAccounts` is `select: false`, hence the credentialed read.
+    userService.findByIdWithCredentials(userId).then((user) =>
+        (user?.oauthAccounts ?? []).map(({ provider, connectedAt }) => ({
+            provider,
+            connectedAt
+        }))
+    );
+
+/**
+ * Disconnect one provider from the caller's account. There is no guard on removing the last
+ * sign-in method: forgot-password recovers a passwordless account, and an owner locking
+ * themselves out of their own sign-in is theirs to repair.
+ *
+ * @param userId - the caller
+ * @param provider - the registry name to disconnect
+ * @param context - for the audit row
+ * @returns whether a link was removed; `false` when it was never linked (answered 404)
+ */
+export const unlinkOAuthProvider = (
+    userId: string,
+    provider: string,
+    context: CallerContext
+): Promise<boolean> =>
+    userService.unlinkOAuthAccount(userId, provider).then((removed) => {
+        if (removed)
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_OAUTH_UNLINKED,
+                actor_user_id: userId,
+                outcome: 'success',
+                metadata: { via: provider }
+            });
+        return removed;
+    });

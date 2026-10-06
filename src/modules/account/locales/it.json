@@ -107,7 +107,9 @@
                 "subject": "La tua password è stata cambiata",
                 "meta-title": "Password reimpostata",
                 "greeting": "Ciao, {{name}}!",
-                "body": "La tua password è stata reimpostata."
+                "body": "La tua password è stata reimpostata.",
+                "providers": "Questi metodi di accesso sono ancora collegati al tuo account: {{providers}}. Reimpostare la password non li scollega; se non ne riconosci uno, rimuovilo dal tuo profilo.",
+                "providers-none": "Nessun accesso con Google o GitHub è collegato al tuo account."
             },
             "delete-request": {
                 "subject": "Conferma l'eliminazione dell'account",
@@ -182,7 +184,9 @@
         "oauth": {
             "unknown-provider": "Questo metodo di accesso non è disponibile.",
             "invalid-state": "Questo tentativo di accesso è scaduto. Riprova.",
-            "invalid-verifier": "Questo tentativo di accesso è scaduto. Riprova."
+            "invalid-verifier": "Questo tentativo di accesso è scaduto. Riprova.",
+            "link-removed": "Quel metodo di accesso è stato scollegato.",
+            "link-not-found": "Quel metodo di accesso non è collegato al tuo account."
         }
     }
 }
