@@ -29,7 +29,7 @@ import { enabledModules } from '../modules';
  * implicit one nobody reading this file would find. Explicit and
  * configurable, same shape as `NODE_MAX_UPLOAD_BYTES` for multipart bodies.
  */
-const JSON_BODY_LIMIT = appConfig().NODE_JSON_BODY_LIMIT;
+const jsonBodyLimit = (): string => appConfig().NODE_JSON_BODY_LIMIT;
 
 /**
  * Every path whose body must survive parsing verbatim, composed from each module's own declaration.
@@ -212,7 +212,7 @@ export const installRequestParsing = (app: Express): void => {
      */
     app.use(
         express.json({
-            limit: JSON_BODY_LIMIT,
+            limit: jsonBodyLimit(),
             // RFC 7396's own media type: a PATCH may send `application/merge-patch+json`, which is
             // the same JSON with the merge meaning the contract already gives every PATCH.
             type: ['application/json', 'application/merge-patch+json'],
