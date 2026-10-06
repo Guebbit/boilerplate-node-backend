@@ -6,6 +6,7 @@
  */
 
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
+import { resolveCredential, type ResolvedCredential } from '@kernel/authentication';
 import type { TenantCallerContext } from '@types';
 import { createUser } from '@modules/users/tests/factories';
 import { mint } from '@modules/api-keys/services/api-keys';
@@ -48,3 +49,14 @@ export const credentialHolding = async (permissions: string[]): Promise<string> 
 
     return result.data.secret;
 };
+
+/**
+ * What `resolveCredential` resolves for `secret`, or `undefined` when it was refused — the happy
+ * path's value without the `{ ok }` wrapper, for a test that asserts on the caller.
+ *
+ * @param secret - the plaintext `sk_...` credential
+ */
+export const credentialOf = (secret: string): Promise<ResolvedCredential | undefined> =>
+    resolveCredential(secret).then((resolution) =>
+        'ok' in resolution ? resolution.ok : undefined
+    );

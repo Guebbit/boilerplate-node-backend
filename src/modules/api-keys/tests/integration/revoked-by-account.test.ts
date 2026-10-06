@@ -8,7 +8,7 @@
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { resolveCredential } from '@kernel/authentication';
+import { credentialOf } from '@tests/credentials';
 import apiKeysModule from '@modules/api-keys/module';
 import { mint } from '@modules/api-keys/services/api-keys';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
@@ -61,12 +61,12 @@ const adminWithKey = async () => {
 describe('keys end with the sessions that may be compromised', () => {
     it('logging out everywhere revokes the keys the person minted', async () => {
         const { bearer, secret } = await adminWithKey();
-        expect(await resolveCredential(secret)).toBeDefined();
+        expect(await credentialOf(secret)).toBeDefined();
 
         const response = await api().post('/account/logout-all').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(await resolveCredential(secret)).toBeUndefined();
+        expect(await credentialOf(secret)).toBeUndefined();
     });
 
     it('a completed password reset revokes them too', async () => {
@@ -80,7 +80,7 @@ describe('keys end with the sessions that may be compromised', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(await resolveCredential(secret)).toBeUndefined();
+        expect(await credentialOf(secret)).toBeUndefined();
     });
 
     it('an ordinary password change does not: the owner proved the current password', async () => {
@@ -93,6 +93,6 @@ describe('keys end with the sessions that may be compromised', () => {
         });
 
         expect(response.status).toBe(200);
-        expect(await resolveCredential(secret)).toBeDefined();
+        expect(await credentialOf(secret)).toBeDefined();
     });
 });

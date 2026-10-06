@@ -33,6 +33,8 @@ Grafana reads Prometheus for all metric charts and dashboards.
 | `webhook_delivery_attempts_total`            | outbound webhook delivery attempts, by outcome         |
 | `webhook_subscriptions_auto_disabled_total`  | subscriptions auto-disabled for sustained failure      |
 | `webhook_deliveries_overdue`                 | pending deliveries more than 10 min past due           |
+| `security_events_total`                      | forged or guessed credentials, by `security.*` action  |
+| `auth_stale_credentials_total`               | expired or revoked credentials presented, by kind      |
 | `auth_login_total`, `cart_checkout_total`, … | business counters                                      |
 | `process_*` and `nodejs_*`                   | default `prom-client` runtime metrics                  |
 

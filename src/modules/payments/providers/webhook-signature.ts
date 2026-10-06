@@ -30,8 +30,15 @@ const TOLERANCE_SECONDS = 300;
  * the signature case would make that message look like a lie for the other two.
  */
 export class WebhookRejected extends Error {
-    /** @param message - why the delivery was refused; logged as the headline. */
-    constructor(message: string) {
+    /**
+     * @param message - why the delivery was refused; logged as the headline.
+     * @param signatureFailure - the SIGNATURE did not verify, which is what makes a refusal an
+     *   attack on the endpoint rather than a provider's own malformed event.
+     */
+    constructor(
+        message: string,
+        readonly signatureFailure = false
+    ) {
         super(message);
         this.name = 'WebhookRejected';
     }
@@ -85,15 +92,15 @@ export const verifyWebhookSignature = (rawBody: Buffer, header: string | undefin
     const timestamp = Number(parts.get('t'));
     const provided = parts.get('v1') ?? '';
     if (!Number.isFinite(timestamp) || !provided)
-        throw new WebhookRejected('Malformed signature header');
+        throw new WebhookRejected('Malformed signature header', true);
 
     if (Math.abs(Math.floor(Date.now() / 1000) - timestamp) > TOLERANCE_SECONDS)
-        throw new WebhookRejected('Signature timestamp outside tolerance');
+        throw new WebhookRejected('Signature timestamp outside tolerance', true);
 
     const expected = digest(timestamp, rawBody);
     // Lower-cased before the compare: a provider may send uppercase hex, and `expected` never is
     // (`.digest('hex')` always lower-cases) — comparing the raw strings would refuse a valid
     // uppercase delivery instead of matching it byte-for-byte.
     if (!constantTimeEqual(expected, provided.toLowerCase()))
-        throw new WebhookRejected('Signature does not match');
+        throw new WebhookRejected('Signature does not match', true);
 };
