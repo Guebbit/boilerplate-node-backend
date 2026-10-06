@@ -7,7 +7,7 @@
  * attaches — lives in `../uploads`, not here.
  */
 
-import type { NextFunction, Request, RequestHandler } from 'express';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 // multer is the `multipart/form-data` body parser for Express. It populates `request.file` /
 // `request.files` and, with diskStorage, writes the bytes to disk before the handler runs.
 // `FileFilterCallback` is the signature of the accept/reject callback used below.
@@ -28,7 +28,7 @@ import { deleteFile } from '@infrastructure/adapters/filesystem';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { digestQuarantinedImage } from '@infrastructure/adapters/image.worker';
 import { queueState } from '@infrastructure/adapters/queue';
-import { getFormFiles } from '@infrastructure/http/uploads';
+import { getFormFiles, readUploadedImage } from '@infrastructure/http/uploads';
 import { logger } from '@infrastructure/adapters/logger';
 import { rejectResponse } from '@infrastructure/http/response';
 import { uploadConfig } from '@infrastructure/http/config';
@@ -285,6 +285,25 @@ const cleanupAfterPartialQuarantine = (
     ]);
 
 /**
+ * Deletes this request's upload when the response closes as a refusal and no write claimed it.
+ *
+ * Every refusal path (a 422, a 409, a thrown error) funnels through here, so no controller has to
+ * remember to clean up after itself. A client that aborts leaves status 200 and is left to
+ * `npm run reap:orphaned-images`, which also covers an upload promoted but not yet saved.
+ *
+ * @param request - the request the upload was attached to
+ * @param response - closes once the answer is sent (or the socket drops)
+ */
+const releaseUnclaimedUpload = (request: Request, response: Response): void => {
+    response.once('close', () => {
+        if (response.statusCode < 400 || request.uploadClaimed) return;
+        // `deleteUpload` resolves even when the storage hiccups (image-store.ts), so a failure
+        // here is only logged by the store itself.
+        void readUploadedImage(request).deleteUpload();
+    });
+};
+
+/**
  * Digest a batch of already-quarantined keys inline, because no broker is currently reachable to
  * hand the job to instead — see {@link quarantineUploadedImages} for why this path exists at all.
  *
@@ -297,6 +316,7 @@ const cleanupAfterPartialQuarantine = (
  */
 const digestQuarantinedKeysInline = (
     request: Request,
+    response: Response,
     keys: string[],
     next: NextFunction
 ): Promise<void> =>
@@ -311,6 +331,7 @@ const digestQuarantinedKeysInline = (
         .then((digested) => {
             request.storedImageUrls = digested.map((result) => result.imageUrl);
             request.storedThumbnailUrls = digested.map((result) => result.thumbnailUrl);
+            releaseUnclaimedUpload(request, response);
             // No writeback on this path — the urls ride the request into the write itself — so
             // the quarantine files are done with as soon as the digest is.
             return Promise.all(keys.map((key) => imageStore.removeQuarantined(key))).then(() =>
@@ -335,7 +356,7 @@ const digestQuarantinedKeysInline = (
  * A failure here fails the request: a quarantined image the database write then contradicts is
  * recoverable, while a row pointing at bytes never stored is a 404 forever.
  */
-export const quarantineUploadedImages: RequestHandler = (request, _response, next) => {
+export const quarantineUploadedImages: RequestHandler = (request, response, next) => {
     const staged = getFormFiles(request);
     if (!staged || staged.length === 0) {
         next();
@@ -360,6 +381,7 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
 
                 if (queueState() === 'ready') {
                     request.quarantinedImageKeys = keys;
+                    releaseUnclaimedUpload(request, response);
                     next();
                     return;
                 }
@@ -391,7 +413,7 @@ export const quarantineUploadedImages: RequestHandler = (request, _response, nex
                 //   never retried, so this loses nothing (there is no duplicate run to converge)
                 //   while still keeping this promoted file from ever sharing a name with an
                 //   unrelated upload.
-                return digestQuarantinedKeysInline(request, keys, next);
+                return digestQuarantinedKeysInline(request, response, keys, next);
             }
             // A rejection from inside the callback above — its own cleanup Promise.all included —
             // must still reach next(): without this, the request hangs rather than answering the 500

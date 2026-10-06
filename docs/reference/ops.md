@@ -77,6 +77,7 @@ periodically", via `scripts/run-script.ts`.
 | Job                              | Schedule (UTC) | Leased | What it does                                                                                                   |
 | -------------------------------- | -------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
 | `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                  |
+| `npm run reap:orphaned-images`   | 02:03 nightly  | No     | Deletes a stored image or thumbnail no document names, once it is over an hour old.                            |
 | `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes a customer account inactive past the threshold. Disabled by default.      |
 | `npm run reap:expired-tokens`    | 02:07 nightly  | Yes    | Drops expired and long-superseded tokens from every account (a login and a refresh prune only their own).      |
 | `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.      |

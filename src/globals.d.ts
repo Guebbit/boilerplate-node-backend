@@ -46,6 +46,12 @@ declare module 'express-serve-static-core' {
          */
         quarantinedImageKeys?: string[];
         /**
+         * Set once a write has taken ownership of this request's upload (`claimUpload`). An upload
+         * still unclaimed when the response closes with a 4xx or 5xx is deleted by the upload
+         * middleware's close hook, so a refused request leaves no orphan behind.
+         */
+        uploadClaimed?: boolean;
+        /**
          * The body exactly as it arrived, kept for the routes whose callers SIGN it — a signature
          * covers bytes, and `JSON.stringify(request.body)` is not those bytes. Set by the JSON
          * parser's `verify` hook in `app/security.ts`, and only for the paths listed there.

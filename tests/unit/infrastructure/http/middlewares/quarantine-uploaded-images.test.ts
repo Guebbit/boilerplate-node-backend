@@ -7,11 +7,12 @@
  * store and the digest pipeline are mocked, because what is under test is the middleware's
  * handling of them, not where bytes land or how they are re-encoded.
  */
+import { EventEmitter } from 'node:events';
 import type { NextFunction, Request, Response } from 'express';
 import { quarantineUploadedImages } from '@infrastructure/http/middlewares/upload';
 
 jest.mock('@infrastructure/adapters/image-store', () => ({
-    imageStore: { quarantine: jest.fn(), removeQuarantined: jest.fn() }
+    imageStore: { quarantine: jest.fn(), removeQuarantined: jest.fn(), remove: jest.fn() }
 }));
 
 jest.mock('@infrastructure/adapters/filesystem', () => ({
@@ -29,7 +30,7 @@ jest.mock('@infrastructure/adapters/image.worker', () => ({
 }));
 
 const { imageStore } = jest.requireMock<{
-    imageStore: { quarantine: jest.Mock; removeQuarantined: jest.Mock };
+    imageStore: { quarantine: jest.Mock; removeQuarantined: jest.Mock; remove: jest.Mock };
 }>('@infrastructure/adapters/image-store');
 const { deleteFile } = jest.requireMock<{ deleteFile: jest.Mock }>(
     '@infrastructure/adapters/filesystem'
@@ -43,10 +44,15 @@ const { digestQuarantinedImage } = jest.requireMock<{ digestQuarantinedImage: je
 
 const uploaded = (filePath: string) => ({ path: filePath }) as Express.Multer.File;
 
+/** A response that can be closed with a status, the way Node's closes after the answer is sent. */
+const fakeResponse = (statusCode = 200) =>
+    // eslint-disable-next-line unicorn/prefer-event-target -- stands in for Node's EventEmitter-based ServerResponse, whose `close` is what the hook listens for
+    Object.assign(new EventEmitter(), { statusCode }) as EventEmitter & Response;
+
 /** Runs the middleware and resolves with whatever it passed to `next`. */
-const run = (request: Partial<Request>) =>
+const run = (request: Partial<Request>, response: Response = fakeResponse()) =>
     new Promise<unknown>((resolve) => {
-        quarantineUploadedImages(request as Request, {} as Response, resolve as NextFunction);
+        quarantineUploadedImages(request as Request, response, resolve as NextFunction);
     });
 
 describe('quarantineUploadedImages — broker ready', () => {
@@ -181,5 +187,68 @@ describe('quarantineUploadedImages — no broker ready', () => {
         await expect(run({ file: uploaded('/staging/a.png') })).resolves.toBe(failure);
 
         expect(imageStore.removeQuarantined).toHaveBeenCalledWith('a.png');
+    });
+});
+
+/**
+ * The close hook: an upload no write claimed is deleted when the response ends as a refusal. It
+ * is what lets every controller refuse without remembering to clean up.
+ */
+describe('quarantineUploadedImages — an unclaimed upload at close', () => {
+    beforeEach(() => {
+        imageStore.quarantine.mockResolvedValue('a.png');
+        imageStore.remove.mockClear();
+        imageStore.removeQuarantined.mockClear();
+    });
+
+    it.each([400, 422, 500])(
+        'deletes a pending upload when the response closes with %i',
+        async (status) => {
+            queueState.mockReturnValue('ready');
+            const response = fakeResponse(status);
+            await run({ file: uploaded('/staging/a.png') }, response);
+
+            response.emit('close');
+
+            expect(imageStore.removeQuarantined).toHaveBeenCalledWith('a.png');
+        }
+    );
+
+    it('deletes an inline-digested upload by its promoted url', async () => {
+        queueState.mockReturnValue('disabled');
+        digestQuarantinedImage.mockResolvedValue({
+            imageUrl: '/images/a.png',
+            thumbnailUrl: '/images/thumbs/v1/a.webp'
+        });
+        const response = fakeResponse(409);
+        await run({ file: uploaded('/staging/a.png') }, response);
+
+        response.emit('close');
+
+        expect(imageStore.remove).toHaveBeenCalledWith('/images/a.png');
+    });
+
+    it('keeps the upload when the response closes with a success', async () => {
+        queueState.mockReturnValue('ready');
+        const response = fakeResponse(201);
+        await run({ file: uploaded('/staging/a.png') }, response);
+        imageStore.removeQuarantined.mockClear();
+
+        response.emit('close');
+
+        expect(imageStore.removeQuarantined).not.toHaveBeenCalled();
+    });
+
+    it('keeps a claimed upload even when the response closes with an error', async () => {
+        queueState.mockReturnValue('ready');
+        const response = fakeResponse(500);
+        const request: Partial<Request> = { file: uploaded('/staging/a.png') };
+        await run(request, response);
+        imageStore.removeQuarantined.mockClear();
+
+        request.uploadClaimed = true;
+        response.emit('close');
+
+        expect(imageStore.removeQuarantined).not.toHaveBeenCalled();
     });
 });

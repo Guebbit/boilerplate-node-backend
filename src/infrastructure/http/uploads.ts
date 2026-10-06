@@ -112,12 +112,23 @@ export const readUploadedImage = (
     };
 };
 
+/**
+ * Marks this request's upload as owned by a write that succeeded — so the upload middleware's
+ * close hook (`releaseUnclaimedUpload`) leaves it alone. Call it once the row naming the image is
+ * saved; a request that never claims, and ends 4xx/5xx, has its upload deleted.
+ *
+ * @param request - the request the upload middleware ran on
+ */
+export const claimUpload = (request: Pick<Request, 'uploadClaimed'>): void => {
+    request.uploadClaimed = true;
+};
+
 /** The image fields a write persists — {@link RequestImage} minus its undo. */
 export type ImageChanges = Pick<RequestImage, 'imageUrl' | 'thumbnailUrl' | 'pendingImageKey'>;
 
 /**
- * Run a write with this request's image folded into it, and delete the upload again when the write
- * is refused or throws — an upload nothing references is an orphan.
+ * Run a write with this request's image folded into it, and claim the upload when the write
+ * succeeds. A refused or thrown write leaves it unclaimed, so the close hook deletes it.
  *
  * `changedImageUrl` is the validated change-set's own `imageUrl`, used only when no file was
  * uploaded: on a multipart PUT that is the `null` the fill step put there, which an upload in the
@@ -129,22 +140,18 @@ export type ImageChanges = Pick<RequestImage, 'imageUrl' | 'thumbnailUrl' | 'pen
  * @returns whatever `write` resolved to
  */
 export const writeWithUploadedImage = <TResult extends { success: boolean }>(
-    request: Parameters<typeof readUploadedImage>[0],
+    request: Parameters<typeof readUploadedImage>[0] & Pick<Request, 'uploadClaimed'>,
     changedImageUrl: null | undefined,
     write: (image: ImageChanges) => Promise<TResult>
 ): Promise<TResult> => {
-    const { imageUrl, thumbnailUrl, pendingImageKey, deleteUpload } = readUploadedImage(request);
-    const discardUpload = (): Promise<unknown> => deleteUpload().catch(() => undefined);
+    const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
 
     return write({
         imageUrl: imageUrl === undefined ? changedImageUrl : imageUrl,
         thumbnailUrl,
         pendingImageKey
-    })
-        .then((result) => (result.success ? result : discardUpload().then(() => result)))
-        .catch((error: unknown) =>
-            discardUpload().then((): never => {
-                throw error;
-            })
-        );
+    }).then((result) => {
+        if (result.success) claimUpload(request);
+        return result;
+    });
 };

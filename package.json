@@ -94,7 +94,7 @@
         "sweep:payment-effects": "tsx scripts/ops/sweep-payment-effects.ts",
         "sweep:reservations": "tsx scripts/ops/sweep-reservations.ts",
         "refresh:breached-passwords": "tsx scripts/ops/refresh-breached-passwords.ts",
-        "clean:orphaned-images": "tsx scripts/ops/clean-orphaned-images.ts",
+        "reap:orphaned-images": "tsx scripts/ops/reap-orphaned-images.ts",
         "compose": "${CONTAINER_ENGINE:-podman} compose",
         "compose:up": "npm run compose -- up -d",
         "compose:up:full": "npm run compose -- --profile observability --profile analytics --profile docs up -d",

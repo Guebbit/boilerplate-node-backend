@@ -25,6 +25,7 @@
 # No output redirects: supercronic hands each job's stdout/stderr straight to its own
 # (`-passthrough-logs`), which is the container's log stream Promtail ships.
 0  2 * * * cd /app && npm run reap:quarantine
+3  2 * * * cd /app && npm run reap:orphaned-images
 # WARNING: owned by the account module — delete it when removing the module (docs/modules/account.md)
 5  2 * * * cd /app && npm run reap:inactive-accounts
 # WARNING: owned by the account module — delete it when removing the module (docs/modules/account.md)
