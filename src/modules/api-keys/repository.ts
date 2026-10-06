@@ -36,6 +36,15 @@ const findActiveByPrefix = (publicPrefix: string): Promise<ApiKeyDocument | null
         .exec();
 
 /**
+ * The credential this prefix names in ANY state — revoked and expired included. Only for naming
+ * why an active lookup missed; authenticating from this row would defeat {@link findActiveByPrefix}.
+ *
+ * @param publicPrefix - the credential's public, non-secret prefix — see `./credentials`
+ */
+const findAnyByPrefix = (publicPrefix: string): Promise<ApiKeyDocument | null> =>
+    apiKeyModel.findOne({ publicPrefix }).exec();
+
+/**
  * Stamp `lastUsedAt` — fire-and-forget from the credential-resolve path, never awaited there: a
  * request authenticating with a key must not pay for this write's latency, and a lost update
  * (a crash between resolve and this landing) costs nothing more than a stale "last used" reading.
@@ -90,6 +99,7 @@ const revokeMany = (ids: readonly string[], at: Date): Promise<void> =>
 /** Explicit annotation: same TS7056 reason as every other module's repository — see `webhooks/repository.ts`. */
 export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
     findActiveByPrefix: typeof findActiveByPrefix;
+    findAnyByPrefix: typeof findAnyByPrefix;
     touchLastUsed: typeof touchLastUsed;
     deleteByUserId: typeof deleteByUserId;
     findActiveByMinter: typeof findActiveByMinter;
@@ -97,6 +107,7 @@ export const apiKeyRepository: Repository<ApiKeyDocument, ApiKey> & {
 } = {
     ...base,
     findActiveByPrefix,
+    findAnyByPrefix,
     touchLastUsed,
     deleteByUserId,
     findActiveByMinter,

@@ -1,19 +1,33 @@
 /**
  * @module
- * Who is making this request — a port the kernel declares and `account` supplies at boot. Two
- * outcomes, and callers depend on the difference: **rejects** (token absent, malformed, expired,
- * wrongly signed) vs. **resolves `undefined`** (token verified, user no longer exists). Collapsing
- * them turns a deleted account's 403 into a 401: "log in again" for an account that cannot.
+ * Who is making this request — a port the kernel declares and `account` supplies at boot. Three
+ * outcomes, and callers depend on the difference:
+ *
+ * Miss:        resolves `{ miss: reason }` — token malformed, expired, wrongly signed or revoked.
+ * Nobody:      resolves `{ ok: undefined }` — token verified, user no longer exists.
+ * Outage:      rejects — Mongo/Redis unreachable. Never a "your credentials are wrong".
+ *
+ * Collapsing the first two turns a deleted account's 403 into a 401: "log in again" for an account
+ * that cannot. The miss REASON is what the guard counts and audits.
  *
  * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */
 
 import type { AuthContext, Caller } from '@types';
 
+/**
+ * Why a presented credential was refused. `invalid_signature` and `malformed` are an attack on a
+ * credential; `revoked` and `expired` are normally a customer holding a stale one.
+ */
+export type ResolveMissReason = 'invalid_signature' | 'malformed' | 'revoked' | 'expired';
+
+/** What a resolver answers: the resolved value, or the reason the credential was refused. */
+export type Resolution<T> = { ok: T } | { miss: ResolveMissReason };
+
 /** Turns a signed token into the user it names. Implemented by `account`. */
 export interface AuthResolver {
-    fromAccessToken: (token: string) => Promise<AuthContext | undefined>;
-    fromRefreshToken: (token: string) => Promise<AuthContext | undefined>;
+    fromAccessToken: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    fromRefreshToken: (token: string) => Promise<Resolution<AuthContext | undefined>>;
 }
 
 /** The currently registered resolver, or `undefined` before `account` boots and installs one. */
@@ -36,7 +50,7 @@ export interface ResolvedCredential {
 
 /** Turns an opaque bearer credential into the caller it names. Implemented by `api-keys`, when present. */
 export interface CredentialResolver {
-    fromBearerToken: (token: string) => Promise<ResolvedCredential | undefined>;
+    fromBearerToken: (token: string) => Promise<Resolution<ResolvedCredential>>;
 }
 
 /** The currently registered credential resolver, or `undefined` when `api-keys` is not part of this build. */
@@ -78,11 +92,11 @@ const requireResolver = (): AuthResolver => {
 };
 
 /** Resolve an access token, for the `Authorization: Bearer` path. */
-export const resolveAccessToken = (token: string): Promise<AuthContext | undefined> =>
+export const resolveAccessToken = (token: string): Promise<Resolution<AuthContext | undefined>> =>
     Promise.resolve().then(() => requireResolver().fromAccessToken(token));
 
 /** Resolve a refresh token, for the cookie path. */
-export const resolveRefreshToken = (token: string): Promise<AuthContext | undefined> =>
+export const resolveRefreshToken = (token: string): Promise<Resolution<AuthContext | undefined>> =>
     Promise.resolve().then(() => requireResolver().fromRefreshToken(token));
 
 /**
@@ -90,9 +104,10 @@ export const resolveRefreshToken = (token: string): Promise<AuthContext | undefi
  *
  * Unlike {@link resolveAccessToken}, an unregistered resolver is NOT an error: `account` is
  * load-bearing for every build, but `api-keys` is deletable like any other module. A build without
- * it simply has nothing that can ever mint an `sk_...` token, so one arriving anyway resolves to
- * `undefined` — the same "no caller" outcome as a token whose user no longer exists — rather than
- * throwing.
+ * it simply has nothing that can ever mint an `sk_...` token, so one arriving anyway is a
+ * `malformed` miss — the same "no caller" outcome — rather than a throw.
  */
-export const resolveCredential = (token: string): Promise<ResolvedCredential | undefined> =>
-    Promise.resolve().then(() => credentialResolver?.fromBearerToken(token));
+export const resolveCredential = (token: string): Promise<Resolution<ResolvedCredential>> =>
+    Promise.resolve().then(
+        () => credentialResolver?.fromBearerToken(token) ?? { miss: 'malformed' as const }
+    );

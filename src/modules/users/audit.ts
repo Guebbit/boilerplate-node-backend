@@ -8,6 +8,8 @@
 
 /** The audit action vocabulary this module owns. */
 export const usersAuditActions = {
+    /** Staff opened one account's detail — the read of personal data, not the list. */
+    ADMIN_USER_VIEWED: 'admin.user.viewed',
     ADMIN_USER_CREATED: 'admin.user.created',
     ADMIN_USER_UPDATED: 'admin.user.updated',
     /*

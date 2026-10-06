@@ -12,18 +12,31 @@ import type { Request } from 'express';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { callerContextOf } from '@infrastructure/http/request';
+import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { accountAuditActions } from '../audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { authLoginTotal } from '../metrics';
 
+/**
+ * The keyed digest of the address a login named, or `undefined` when none was a string.
+ * Normalised first, or a spray hides behind letter case. The `log` purpose is what makes it
+ * correlate with the hashed address in the stdout lines, without storing the address itself.
+ */
+const attemptedIdentity = (email: unknown): string | undefined =>
+    typeof email === 'string' ? pseudonymise('log', email.trim().toLowerCase()) : undefined;
+
 /** Emit login failure observability (metrics + audit). */
 export const recordLoginFailure = (request: Request): void => {
+    // Narrowing cast: the body is untyped input here, and `attemptedIdentity` checks the type.
+    const target = attemptedIdentity((request.body as { email?: unknown } | undefined)?.email);
+
     authLoginTotal.inc({ status: 'failure' });
     recordAudit(callerContextOf(request), {
         action: accountAuditActions.AUTH_LOGIN,
         actor_user_id: 'anonymous',
         actor_role: 'anonymous',
-        outcome: 'failure'
+        outcome: 'failure',
+        ...(target && { target_type: 'login_identifier', target_id: target })
     });
 };
 

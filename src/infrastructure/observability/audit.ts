@@ -18,8 +18,8 @@ import type { AuthorizationScope, CallerContext } from '@types';
  *
  * Only the app-level actions live here — every domain action belongs to its own module
  * (`modules/account/audit.ts`, etc.), because `infrastructure` must not know which domains exist.
- * These four are the exception: `middlewares/authorizations.ts` emits them for requests refused
- * before any domain saw them, so no module could own them.
+ * These are the exception: the guards emit them for requests refused before any domain saw
+ * them, so no module could own them.
  */
 export const coreAuditActions = {
     SECURITY_UNAUTHORIZED: 'security.unauthorized',
@@ -31,10 +31,25 @@ export const coreAuditActions = {
      * afterwards: the retry that follows looks like an ordinary success, and a challenge nobody
      * logged is a control nobody can show was applied.
      */
-    SECURITY_REAUTH_REQUIRED: 'security.reauth_required'
+    SECURITY_REAUTH_REQUIRED: 'security.reauth_required',
+    /*
+     * An attack on a credential with no customer behind it — the `security.*` prefix reaches the
+     * platform operator, so each of these is only ever a forged or guessed value. A customer
+     * holding an expired or revoked session is `auth.*` or a bare metric, never one of these.
+     */
+    /** A bearer JWT whose signature, or whose signing key, does not verify. */
+    SECURITY_TOKEN_INVALID_SIGNATURE: 'security.token.invalid_signature',
+    /** A bearer or cookie value that is not a well-formed token of the expected kind at all. */
+    SECURITY_TOKEN_MALFORMED: 'security.token.malformed',
+    /** An `sk_` key presented with its CORRECT secret after it was revoked. */
+    SECURITY_API_KEY_REVOKED: 'security.api_key.revoked',
+    /** A payment-provider webhook whose signature did not verify. */
+    SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE: 'security.payment_webhook.invalid_signature',
+    /** A `/observability/metrics` scrape with the wrong bearer token. */
+    SECURITY_METRICS_TOKEN_INVALID: 'security.metrics_token.invalid'
 } as const;
 
-/** The four app-level action strings, derived from {@link coreAuditActions}'s values. */
+/** The app-level action strings, derived from {@link coreAuditActions}'s values. */
 type CoreAuditAction = (typeof coreAuditActions)[keyof typeof coreAuditActions];
 
 /**

@@ -21,7 +21,8 @@ import {
     resolveAccessToken,
     resolveRefreshToken,
     resolveCredential,
-    API_KEY_TOKEN_PREFIX
+    API_KEY_TOKEN_PREFIX,
+    type ResolveMissReason
 } from '@kernel/authentication';
 import { holdsKey } from '@kernel/ability';
 import { readRefreshCookie } from '@kernel/cookies';
@@ -44,6 +45,11 @@ import {
     coreAuditActions,
     buildAuditEvent
 } from '@infrastructure/observability/audit';
+import {
+    recordSecurityEvent,
+    staleCredentialsTotal,
+    type SecurityEventAction
+} from '@infrastructure/observability/security-events';
 import { reauthConfig } from '@kernel/config';
 
 /**
@@ -71,6 +77,45 @@ const auditRefusal = (
         outcome: 'failure',
         metadata: { route: request.path, method: request.method, ...fields.metadata }
     });
+
+/** Which credential family a refused token belonged to — a metric label, and audit metadata. */
+type CredentialKind = 'jwt' | 'api_key';
+
+/**
+ * The attack a refusal names, or `undefined` when a customer plausibly holds the credential.
+ * A bad signature and a malformed value are forgeries; a revoked `sk_` key is a retired secret
+ * still in circulation. An expired or revoked session JWT is only a stale tab.
+ */
+const securityActionFor = (
+    kind: CredentialKind,
+    reason: ResolveMissReason
+): SecurityEventAction | undefined => {
+    if (reason === 'invalid_signature') return coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE;
+    if (reason === 'malformed') return coreAuditActions.SECURITY_TOKEN_MALFORMED;
+    if (reason === 'revoked' && kind === 'api_key')
+        return coreAuditActions.SECURITY_API_KEY_REVOKED;
+    return undefined;
+};
+
+/**
+ * Count, and where it names an attack audit, a credential the resolver refused.
+ *
+ * @param request - the refused request, for the audit trail
+ * @param kind - which credential family was presented
+ * @param reason - why the resolver refused it
+ */
+const noteMiss = (request: Request, kind: CredentialKind, reason: ResolveMissReason): void => {
+    const action = securityActionFor(kind, reason);
+    if (!action) {
+        staleCredentialsTotal.inc({ kind, reason });
+        return;
+    }
+    recordSecurityEvent(callerContextOf(request), action, {
+        kind,
+        route: request.path,
+        method: request.method
+    });
+};
 
 /**
  * `getAuth`'s shared `.catch()`: an infrastructure failure goes to the global error handler as a
@@ -138,13 +183,14 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
     // an opaque token. See `API_KEY_TOKEN_PREFIX`'s own doc comment.
     if (token.startsWith(API_KEY_TOKEN_PREFIX)) {
         resolveCredential(token)
-            .then((resolved) => {
-                if (!resolved) {
+            .then((resolution) => {
+                if ('miss' in resolution) {
+                    noteMiss(request, 'api_key', resolution.miss);
                     next();
                     return;
                 }
-                request.caller = resolved.caller;
-                request.credentialId = resolved.credentialId;
+                request.caller = resolution.ok.caller;
+                request.credentialId = resolution.ok.credentialId;
                 apiKeyLimiter(request, response, next);
             })
             .catch((error: unknown) => {
@@ -154,7 +200,9 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
     }
 
     resolveAccessToken(token)
-        .then((user) => {
+        .then((resolution) => {
+            if ('miss' in resolution) noteMiss(request, 'jwt', resolution.miss);
+            const user = 'ok' in resolution ? resolution.ok : undefined;
             if (user) {
                 request.authContext = {
                     id: user.id,
@@ -445,7 +493,7 @@ export const requirePermission = (key: string) => {
  * {@link stillHoldsKeyViaCookie}'s periodic recheck of an already-open stream, so the two can never
  * disagree about who holds `key`.
  *
- * Rejects exactly when `resolveRefreshToken` does — a forged or expired token — and leaves that
+ * Rejects when the token is refused (forged, expired, revoked) or on an outage, and leaves that
  * distinct from "resolved to nobody, or resolved but lacks the key" on purpose: the two callers
  * below disagree about what a resolver failure should mean (401 to a connecting client; fail-closed
  * to an already-open stream that cannot be told apart from a revoked one), so only they may decide.
@@ -456,7 +504,12 @@ export const requirePermission = (key: string) => {
  * @returns the resolved user when they hold `key`, otherwise `undefined`
  */
 const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: string) =>
-    resolveRefreshToken(refreshToken).then((user) => {
+    resolveRefreshToken(refreshToken).then((resolution) => {
+        if ('miss' in resolution) {
+            noteMiss(request, 'jwt', resolution.miss);
+            throw new Error(`Refresh cookie refused: ${resolution.miss}`);
+        }
+        const user = resolution.ok;
         const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
 
         if (!allowed) {

@@ -14,6 +14,7 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ServiceBusyError } from '@infrastructure/runtime/busy';
 import { renderHtmlToPdf } from '@infrastructure/adapters/pdf';
+import { auditLogger } from '@infrastructure/adapters/logger';
 
 /** A second, distinctly-addressed customer — `authenticateAs('user')` always mints the same
  * default address, which collides the second time one test needs two customers. */
@@ -107,6 +108,31 @@ describe('GET /orders/{id}/invoice', () => {
             .set('Authorization', admin.bearer);
 
         expect(response.status).toBe(200);
+    });
+
+    it("records an admin's download, and not the owner's own", async () => {
+        const owner = await authenticateAs('user');
+        const admin = await authenticateAs('admin');
+        const product = await createProduct();
+        const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
+        await markPaid(String(order._id));
+        await waitUntilInvoiced(String(order._id), owner.bearer);
+        const auditSpy = jest.spyOn(auditLogger, 'log').mockImplementation(() => auditLogger);
+        const viewedActions = () =>
+            auditSpy.mock.calls
+                .map((call) => (call[2] as { action?: string }).action)
+                .filter((action) => action === 'admin.invoice.viewed');
+
+        await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', owner.bearer);
+        expect(viewedActions()).toEqual([]);
+
+        await api()
+            .get(`/orders/${String(order._id)}/invoice`)
+            .set('Authorization', admin.bearer);
+        expect(viewedActions()).toEqual(['admin.invoice.viewed']);
+        auditSpy.mockRestore();
     });
 
     it('answers 404 for an unusable id, not a 422', async () => {
