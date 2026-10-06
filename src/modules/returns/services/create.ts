@@ -45,6 +45,7 @@ import {
 } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { mailReturnNotice } from './notify';
+import { ownOrder } from './ownership';
 import { syncReturnStatus } from './projection';
 
 /** What a customer sends to open a return or withdraw. */
@@ -98,17 +99,6 @@ const badLines = (
     }[reason];
     return refused(generateReject(422, [{ code: ERROR_CODES.RETURN_LINES_INVALID, message }]));
 };
-
-/**
- * The buyer's own order, or `undefined`. Ownership, not just visibility: an operator who can read
- * any order still cannot exercise a consumer's right on their behalf.
- * @param orderId - the order
- * @param authContext - the caller
- */
-const ownOrder = (orderId: string, authContext: AuthContext): Promise<OrderDocument | undefined> =>
-    orderService
-        .getById(orderId, orderService.callerScope(authContext))
-        .then((order) => (order && String(order.userId) === authContext.id ? order : undefined));
 
 /**
  * What a withdrawal before dispatch hands back: the whole order, if anything was paid. An order
