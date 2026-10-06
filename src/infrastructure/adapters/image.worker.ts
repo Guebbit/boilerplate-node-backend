@@ -136,7 +136,12 @@ export const digestQuarantinedImage = (key: string, owner: string): Promise<Dige
                 `Quarantined image ${key} does not match an accepted format.`
             );
 
-        return Promise.all([digestImage(raw, mime), thumbnailImage(raw)])
+        // Digest first, then thumbnail the digested bytes: the original is decoded once, and the
+        // (smaller, metadata-free) re-encode is what the thumbnail decodes.
+        return digestImage(raw, mime)
+            .then((digested) =>
+                thumbnailImage(digested).then((thumbnail) => [digested, thumbnail] as const)
+            )
             .catch((error: unknown) => {
                 // Decoding is deterministic: bytes sharp cannot decode (a valid signature over a
                 // truncated or corrupt body, or past the pixel limit) fail identically on every
