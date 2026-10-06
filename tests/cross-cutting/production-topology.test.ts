@@ -43,6 +43,7 @@ interface ComposeFile {
             entrypoint?: string | string[];
             secrets?: string[];
             healthcheck?: { test?: string[] };
+            logging?: { driver?: string; options?: Record<string, string> };
         }
     >;
     secrets?: Record<string, { file: string }>;
@@ -102,6 +103,20 @@ const BACKING_SERVICES = ['database', 'cache', 'limits', 'queue'] as const;
  */
 const hostInterfaceOf = (port: PortMapping): string | undefined =>
     typeof port === 'string' ? /^(\[[^\]]+]|[\d.]+):/.exec(port)?.[1] : port.host_ip;
+
+describe('production container logs are bounded', () => {
+    /*
+     * Without `max-size` the default driver writes forever and a busy API fills the host's disk
+     * with its own log. Every service, the one-shot ones and the data stores included: a service
+     * left out is the one that fills the disk.
+     */
+    it.each(Object.keys(compose.services))('%s caps its log files', (name) => {
+        const { logging } = compose.services[name];
+
+        expect(logging?.driver).toBe('${CONTAINER_LOG_DRIVER:-json-file}');
+        expect(logging?.options).toEqual({ 'max-size': '10m', 'max-file': '5' });
+    });
+});
 
 describe('production containers are hardened', () => {
     /*

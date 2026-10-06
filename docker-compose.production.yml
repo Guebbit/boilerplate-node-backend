@@ -76,6 +76,23 @@
 # finish successfully before they start, so a fresh deployment gets its indexes and its shop's row
 # before anything serves a request.
 
+# ── CONTAINER LOGS, ONCE ────────────────────────────────────────────────────────────────────────
+# Merged into EVERY service with `logging: *logging`. Without `max-size` the default `json-file`
+# driver writes forever, and a busy API fills the host's disk with its own log. Ten megabytes times
+# five files bounds each container at 50 MB.
+#
+#   driver  `json-file`, because every shipper can tail it (Alloy, Promtail, Fluent Bit, a file
+#           agent) and `local` is a binary format only Docker reads. The variable exists because
+#           Podman runs production too: its default is `journald`, which writes no file at all, and
+#           `k8s-file` is the file-based driver there.
+#
+# CIS Docker Benchmark 2.12 / 5.x.
+x-logging: &logging
+    driver: ${CONTAINER_LOG_DRIVER:-json-file}
+    options:
+        max-size: 10m
+        max-file: '5'
+
 # ── CONTAINER HARDENING, ONCE ───────────────────────────────────────────────────────────────────
 # Merged into `app`, `cron` and `setup` with `<<: *hardening` — all three run the SAME image, so
 # they have the same needs and a divergence between them would be an accident rather than a
@@ -193,6 +210,7 @@ x-service-secrets: &service-secrets
 
 services:
     app:
+        logging: *logging
         # `image:` alongside `build:`: the image this build produces is tagged once, and `cron`/
         # `setup` reference that same tag by `image:` alone — one build, three containers running
         # it, never three separate builds of the same Dockerfile drifting apart.
@@ -313,6 +331,7 @@ services:
     # `replicas: 1` is what actually keeps two `reap:orders` passes from racing; the Mongo lease
     # (`src/infrastructure/persistence/lease.ts`) is the backstop for a future job that does need it.
     cron:
+        logging: *logging
         image: '${APP_IMAGE:-boilerplate-api:latest}'
         restart: unless-stopped
         deploy:
@@ -389,6 +408,7 @@ services:
     # `image:`, not `build:` — same image `app` built, never a separate build of the same
     # Dockerfile. Build `app` first (`docker compose ... build app`) on a stack's first deploy.
     setup:
+        logging: *logging
         image: '${APP_IMAGE:-boilerplate-api:latest}'
         env_file:
             - clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/.env
@@ -428,6 +448,7 @@ services:
                 required: false
 
     database:
+        logging: *logging
         image: docker.io/library/mongo:8
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -537,6 +558,7 @@ services:
     # docker-entrypoint-initdb.d. `setup` depends on this finishing successfully, since db:sync and
     # access:bootstrap both need a set that can take writes.
     mongo-rs-init:
+        logging: *logging
         image: docker.io/library/mongo:8
         restart: 'no'
         profiles: [bundled]
@@ -557,6 +579,7 @@ services:
                 condition: service_healthy
 
     cache:
+        logging: *logging
         image: docker.io/library/redis:8-alpine
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -614,6 +637,7 @@ services:
     # about a hundred bytes. Same password-file mechanism as `cache` (see its comment).
     # `--save 60 1`: a restart keeps the counters, so a Redis bounce is not a free budget reset.
     limits:
+        logging: *logging
         image: docker.io/library/redis:8-alpine
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.
@@ -643,6 +667,7 @@ services:
             retries: 5
 
     queue:
+        logging: *logging
         image: docker.io/library/rabbitmq:4-alpine
         restart: unless-stopped
         # Started only when `COMPOSE_PROFILES` includes `bundled` — see the note above `x-app-env`.

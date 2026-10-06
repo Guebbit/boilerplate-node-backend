@@ -131,6 +131,12 @@ carries `tls=true&tlsCAFile=/ca-dir/...` against the self-signed CA `mongo-entry
 ([Reaching the store](theory/defences/data-layer.md#reaching-the-store)) — a managed provider's own
 connection string supplies its own TLS, so this is a bundled-default concern only.
 
+**The managed database user.** Give the app a user with `readWrite` on its own database and
+nothing else — never the provider's root or admin account. The bundled `database` already works
+this way (`MONGO_APP_USER`, created by `docker/mongo-init.js`); a managed cluster needs the same
+user created by hand. `readWrite` is enough for everything the app does, `setup`'s `db:sync`
+index builds included.
+
 ```bash
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml build app
 docker compose --env-file "clients/acme/.env" -f docker-compose.production.yml up -d
