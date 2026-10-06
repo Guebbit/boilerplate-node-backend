@@ -19,7 +19,11 @@ const pdf = jest.fn((_options?: unknown) => Promise.resolve(pdfBuffer));
 const setContent = jest.fn((_html?: string, _options?: unknown) => Promise.resolve());
 const close = jest.fn(() => Promise.resolve());
 const setJavaScriptEnabled = jest.fn((_enabled?: boolean) => Promise.resolve());
-const newPage = jest.fn(() => Promise.resolve({ setContent, pdf, setJavaScriptEnabled }));
+const setRequestInterception = jest.fn((_enabled?: boolean) => Promise.resolve());
+const on = jest.fn((_event?: string, _handler?: unknown) => undefined);
+const newPage = jest.fn(() =>
+    Promise.resolve({ setContent, pdf, setJavaScriptEnabled, setRequestInterception, on })
+);
 const launch = jest.fn((_options?: unknown) => Promise.resolve({ newPage, close }));
 
 jest.mock('puppeteer-core', () => ({
@@ -33,6 +37,7 @@ import {
     MAX_WAITING_RENDERS,
     RENDER_TIMEOUT_MS,
     RenderTimeoutError,
+    refuseNonDataRequest,
     renderHtmlToPdf,
     settleRenders
 } from '@infrastructure/adapters/pdf';
@@ -42,6 +47,13 @@ import { setEnvironment } from '@tests/environment';
 /** The options object handed to the last `puppeteer.launch` call. */
 const lastLaunchOptions = () =>
     launch.mock.calls.at(-1)?.[0] as { executablePath: string; args: string[] };
+
+/** A puppeteer request double that records which way it was answered. */
+const make = (url: string) => ({
+    url: () => url,
+    abort: jest.fn(() => Promise.resolve()),
+    continue: jest.fn(() => Promise.resolve())
+});
 
 describe('renderHtmlToPdf', () => {
     describe('the browser it launches', () => {
@@ -82,6 +94,31 @@ describe('renderHtmlToPdf', () => {
             await renderHtmlToPdf('<p>hello</p>');
 
             expect(setJavaScriptEnabled).toHaveBeenCalledWith(false);
+        });
+
+        it('intercepts requests before the HTML is written, so none can slip out first', async () => {
+            await renderHtmlToPdf('<p>hello</p>');
+
+            expect(setRequestInterception).toHaveBeenCalledWith(true);
+            expect(on).toHaveBeenCalledWith('request', refuseNonDataRequest);
+            expect(setRequestInterception.mock.invocationCallOrder.at(-1)!).toBeLessThan(
+                setContent.mock.invocationCallOrder.at(-1)!
+            );
+        });
+
+        it('lets a data: url through and aborts every other request', () => {
+            const inline = make('data:image/png;base64,AAAA');
+            const remote = make('http://169.254.169.254/latest/meta-data/');
+            const local = make('file:///etc/passwd');
+
+            refuseNonDataRequest(inline);
+            refuseNonDataRequest(remote);
+            refuseNonDataRequest(local);
+
+            expect(inline.continue).toHaveBeenCalledTimes(1);
+            expect(inline.abort).not.toHaveBeenCalled();
+            expect(remote.abort).toHaveBeenCalledTimes(1);
+            expect(local.abort).toHaveBeenCalledTimes(1);
         });
 
         it('runs at most two browsers at once, however many renders are asked for', async () => {
