@@ -19,7 +19,7 @@ import { router } from './routes';
 import { localeService } from './services';
 import { translationRepository } from './repository';
 import { planForPort, writeForPort } from './services/translations';
-import { localesConfig } from './tenants';
+import { localesConfig } from './config';
 
 /**
  * Everything this module installs once every enabled module is known: the two kernel ports it

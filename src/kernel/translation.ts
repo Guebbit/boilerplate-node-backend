@@ -38,6 +38,22 @@ export type TranslatedFields = Record<string, string>;
 export type TranslationFieldChanges = Record<string, string | null>;
 
 /**
+ * A PUT states a locale WHOLE: every declared field it omits becomes the explicit `null` a PATCH
+ * would have sent, which is all the write side understands.
+ *
+ * @param declared - every field name the entity declares as translatable
+ * @param stated - the fields the body carried
+ * @returns `stated`, plus a `null` for each declared field it left out
+ */
+export const clearOmittedFields = <TValue>(
+    declared: readonly string[],
+    stated: Record<string, TValue>
+): Record<string, TValue | null> => ({
+    ...Object.fromEntries(declared.map((field) => [field, null])),
+    ...stated
+});
+
+/**
  * One or more locales for one entity, keyed by locale tag — an object upserts that locale's row,
  * `null` deletes it. The kernel's own vocabulary for what `modules/locales`' contract calls
  * `UpsertTranslationsRequest`: a caller building this needs no import from `src/modules/*`, and
