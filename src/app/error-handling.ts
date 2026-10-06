@@ -85,6 +85,33 @@ const resolveStatus = (error: Error): number => {
 };
 
 /**
+ * Names of the driver and ODM errors, by `name` rather than `instanceof`: `mongodb` and `bson`
+ * are transitive dependencies and a second copy would make `instanceof` answer false.
+ */
+const DATABASE_ERROR_NAME =
+    /^(?:Mongo\w*Error|Mongoose\w*Error|ValidationError|CastError|BSONError)$/;
+
+/**
+ * What of an error may reach the log: the identifying fields, never the message.
+ *
+ * - a body-parser error: `type` only. Its message quotes the request body (`Unexpected token ...
+ *   in JSON`), and a client controls that body.
+ * - a Mongo/Mongoose error: name and code only. Its message carries the offending values (a
+ *   duplicate-key error names the email).
+ * - anything else: unchanged, the logger's own serializer decides.
+ *
+ * @param error - the unhandled error
+ * @param declaredClientError - whether the error declared itself a client error (`expose`, 4xx)
+ */
+const loggableError = (error: Error, declaredClientError: boolean): unknown => {
+    if (declaredClientError && 'type' in error && typeof error.type === 'string')
+        return { type: error.type };
+    if (DATABASE_ERROR_NAME.test(error.name))
+        return { name: error.name, code: 'code' in error ? error.code : undefined };
+    return error;
+};
+
+/**
  * Global error handler — log once, stack in OTel span.
  *
  * Exported so it can be driven directly. Mounted last, after the 404 catch-all, which is what an
@@ -111,6 +138,9 @@ export const handleUncaughtError = (
     recordErrorOnActiveSpan(error);
 
     const status = resolveStatus(error);
+    const logged = loggableError(error, clientErrorStatus(error) !== undefined);
+    // Same rule for the headline: a stripped error's message is exactly what must not be logged.
+    const headline = logged === error ? `${error.name}: ${error.message}` : error.name;
 
     // The raw `error`, not hand-picked `name`/`message` fields — same reasoning as the
     // process-level handlers below: `redactFormat` (`adapters/logger.ts`) serializes an `Error`
@@ -119,11 +149,11 @@ export const handleUncaughtError = (
     // A client mistake (409 duplicate, 422 malformed) is the caller's problem, not an incident:
     // logged at `error` it would page someone for every bad request.
     // Stryker disable all
-    logger[status >= 500 ? 'error' : 'warn'](`${error.name}: ${error.message}`, {
+    logger[status >= 500 ? 'error' : 'warn'](headline, {
         request_id: request.requestId,
         trace_id: getActiveSpanContext().traceId,
         status,
-        error
+        error: logged
     });
     // Stryker restore all
 

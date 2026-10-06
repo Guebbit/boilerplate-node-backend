@@ -42,8 +42,13 @@ export const handleEmailJob = (job: Partial<EmailJobPayload>): Promise<boolean> 
     // fields are there, which is why no type predicate is needed to say so.
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the payload crossed a queue: its type is a claim, not a fact
     if (!job?.request?.to || !job.templateName) {
+        // `templateName` only: the rest of the job is a recipient, a subject and the template's data.
         // Stryker disable next-line all
-        logger.warn({ message: 'Invalid email job payload, discarding.', job });
+        logger.warn({
+            message: 'Invalid email job payload, discarding.',
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- a broker can deliver a null job
+            templateName: job?.templateName
+        });
         // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- same as above: a broker can deliver a null job
         return discardJobAttachments(job?.request?.attachments).then(() => false);
     }

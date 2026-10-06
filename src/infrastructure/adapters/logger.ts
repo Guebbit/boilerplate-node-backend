@@ -81,13 +81,38 @@ export const SENSITIVE_FIELDS = new Set([
     'credit_card',
     'card_number',
     'cvv',
-    'ssn'
+    'ssn',
+    // Exact names only. As substrings they would eat `idempotencyKey`, `statusCode`, `linkCount`.
+    'key',
+    'linkurl',
+    'challenge',
+    'verifier',
+    'iban'
 ]);
+
+/**
+ * Fragments that make a key sensitive wherever they appear in it, after {@link normalizeKey}.
+ *
+ * Substring, not exact, because secrets are named by what they ARE and the spellings multiply
+ * (`resetToken`, `webhookSecret`, `x-hub-signature`, `otpauthUrl`, `backupCodes`). Deliberately
+ * not here: `code` (the first thing a debugger reads), and any broad `code|key|link` pattern.
+ * An allowlist is the other design and is not used: it would hide every new field by default.
+ *
+ * Exported so the policy test can assert each entry.
+ */
+export const SENSITIVE_KEY_FRAGMENTS = [
+    'password',
+    'secret',
+    'token',
+    'signature',
+    'otpauth',
+    'backupcode'
+] as const;
 
 /**
  * A key as the redaction lists compare it: lowercase, with `_` and `-` dropped. The codebase
  * writes camelCase (`refreshToken`), HTTP writes kebab-case (`x-api-key`), and a list spelled one
- * way must not miss the others. Still an exact match after that — `tokenCount` is not `token`.
+ * way must not miss the others.
  *
  * @param key - the key as the caller wrote it
  */
@@ -95,6 +120,15 @@ const normalizeKey = (key: string): string => key.toLowerCase().replaceAll(/[_-]
 
 /** {@link SENSITIVE_FIELDS}, normalised once for the lookup. */
 const SENSITIVE_KEYS = new Set([...SENSITIVE_FIELDS].map((field) => normalizeKey(field)));
+
+/**
+ * Whether a normalised key is a credential: an exact entry, or one containing a fragment.
+ *
+ * @param normalized - the key after {@link normalizeKey}
+ */
+const isSensitiveKey = (normalized: string): boolean =>
+    SENSITIVE_KEYS.has(normalized) ||
+    SENSITIVE_KEY_FRAGMENTS.some((fragment) => normalized.includes(fragment));
 
 /** Replacement marker. A fixed string (rather than deletion) keeps log shape stable for parsers. */
 const REDACTED = '[REDACTED]';
@@ -111,7 +145,7 @@ const CIRCULAR = '[Circular]';
  * replaced, and merging the two lists would blur that line the day someone adds a field to one
  * without thinking about which policy it needs.
  */
-export const PERSONAL_FIELDS = new Set(['email', 'ip', 'phone', 'street', 'zip', 'fullname']);
+export const PERSONAL_FIELDS = new Set(['email', 'to', 'ip', 'phone', 'street', 'zip', 'fullname']);
 
 /**
  * How {@link PERSONAL_FIELDS} are treated on the way to a transport, from
@@ -206,7 +240,7 @@ const redactEntries = (
         // Personal-data fields only get the mode treatment when the value is itself a string;
         // a nested object under a personal-sounding key (unlikely, but not impossible) still
         // gets walked normally rather than silently skipped.
-        if (SENSITIVE_KEYS.has(normalized)) result[key] = REDACTED;
+        if (isSensitiveKey(normalized)) result[key] = REDACTED;
         else if (PERSONAL_FIELDS.has(normalized) && typeof value === 'string')
             result[key] = applyPersonalFieldMode(value);
         // Otherwise recurse so nested secrets (`{ user: { credentials: { password } } }`) and
@@ -252,6 +286,14 @@ export const redactFormat = winston.format((info) => {
     // `level` and `message` are winston's own reserved fields; separating them means the
     // redaction walk only sees caller-supplied metadata.
     const { level, message, ...rest } = info;
+
+    // winston copies an Error passed as metadata (`logger.error('text', error)`) onto the record
+    // as a top-level `stack`, past `serializeError`'s own guard. Same rule: only a developer's
+    // machine or CI keeps it.
+    if (!isRelaxedEnvironment()) {
+        delete rest.stack;
+        delete info.stack;
+    }
 
     // Turn a raw thrown Error into a serializable object *before* redaction, otherwise
     // the walk above would return an empty `{}` for it.

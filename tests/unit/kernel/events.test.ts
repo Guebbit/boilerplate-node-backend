@@ -62,7 +62,8 @@ describe('emitDomainEvent', () => {
         expect(second).toHaveBeenCalledTimes(1);
         expect(logger.error).toHaveBeenCalledWith(
             expect.stringContaining('test.thing-happened'),
-            expect.any(Error)
+            // Under an `error` key, so the logger serialises it (and, in production, drops the stack).
+            { error: expect.any(Error) }
         );
     });
 
@@ -71,10 +72,9 @@ describe('emitDomainEvent', () => {
 
         await expect(emitDomainEvent('test.thing-happened', { id: 'abc' })).resolves.toBe(false);
         // The rejection itself is what gets logged, not a generic "something failed".
-        expect(logger.error).toHaveBeenCalledWith(
-            expect.stringContaining('test.thing-happened'),
-            expect.objectContaining({ message: 'async boom' })
-        );
+        expect(logger.error).toHaveBeenCalledWith(expect.stringContaining('test.thing-happened'), {
+            error: expect.objectContaining({ message: 'async boom' })
+        });
     });
 
     it('reports true when every handler resolves', async () => {

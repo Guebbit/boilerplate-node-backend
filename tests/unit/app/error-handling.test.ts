@@ -118,6 +118,56 @@ describe('handleUncaughtError', () => {
     });
 });
 
+/** The one log call a handled error makes, whichever level it used. */
+const loggedCall = (error: unknown) => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+    const failure = jest.spyOn(logger, 'error').mockImplementation(() => logger);
+
+    handleUncaughtError(error, requestStub(), makeResponseStub(), NEXT);
+
+    return [...warn.mock.calls, ...failure.mock.calls][0] as [string, { error: unknown }];
+};
+
+describe('handleUncaughtError log content', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('logs only the type of a body-parser error, never the body its message quotes', () => {
+        const [headline, meta] = loggedCall(
+            Object.assign(new SyntaxError('Unexpected token p in {"password":"hunter2"'), {
+                expose: true,
+                status: 400,
+                type: 'entity.parse.failed'
+            })
+        );
+
+        expect(meta.error).toEqual({ type: 'entity.parse.failed' });
+        expect(JSON.stringify([headline, meta])).not.toContain('hunter2');
+    });
+
+    it('logs only the name and code of a Mongo error, never the values it names', () => {
+        const [headline, meta] = loggedCall(
+            Object.assign(new Error('E11000 duplicate key { email: "ada@example.com" }'), {
+                name: 'MongoServerError',
+                code: 11_000
+            })
+        );
+
+        expect(meta.error).toEqual({ name: 'MongoServerError', code: 11_000 });
+        expect(JSON.stringify([headline, meta])).not.toContain('ada@example.com');
+    });
+
+    it('still logs any other error whole', () => {
+        const failure = new Error('boom');
+
+        const [headline, meta] = loggedCall(failure);
+
+        expect(headline).toBe('Error: boom');
+        expect(meta.error).toBe(failure);
+    });
+});
+
 describe('handleUncaughtError log level', () => {
     afterEach(() => {
         jest.restoreAllMocks();
