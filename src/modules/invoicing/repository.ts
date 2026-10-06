@@ -7,7 +7,7 @@
  */
 
 import { Types } from 'mongoose';
-import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import type { ClientSession } from 'mongoose';
 import {
     invoiceModel,
     creditNoteModel,
@@ -24,22 +24,27 @@ const findInvoiceByOrderId = (orderId: string): Promise<InvoiceDocument | null> 
     invoiceModel.findOne({ orderId: new Types.ObjectId(orderId) }).exec();
 
 /**
- * Insert a new invoice — idempotent on `orderId` through the schema's own unique index: a
- * redelivered `ORDER_STATUS_CHANGED` event racing another writer's insert loses cleanly, reading
- * back the row the winner wrote instead of throwing past its caller.
- * @param fields - every frozen field the invoice is issued with
- * @returns the inserted invoice, or the one that already existed for this order
+ * A document's own `_id`, chosen by the caller before the insert.
+ * Allocated outside the transaction that writes it, so a retried transaction reuses the same id.
  */
-const insertInvoice = (fields: FrozenTaxDocument): Promise<InvoiceDocument> =>
-    invoiceModel.create(fields).catch((error: unknown) => {
-        if (!isDuplicateKey(error)) throw error;
-        return findInvoiceByOrderId(String(fields.orderId)).then((existing) => {
-            // Unreachable outside a corrupted unique index: the duplicate key error IS the
-            // existing row's own guarantee that a `findOne` right behind it finds something.
-            if (!existing) throw error;
-            return existing;
-        });
-    });
+interface WithId {
+    _id: Types.ObjectId;
+}
+
+/**
+ * Insert a new invoice. A second invoice for one order is refused by the schema's own unique
+ * index with a duplicate-key error: the caller reads the winner back once its transaction aborts.
+ * @param fields - every frozen field the invoice is issued with, and its pre-allocated `_id`
+ * @param session - the transaction that also allocated the invoice's number
+ * @returns the inserted invoice
+ */
+const insertInvoice = (
+    fields: FrozenTaxDocument & WithId,
+    session?: ClientSession
+): Promise<InvoiceDocument> =>
+    // Mongoose `create` with an array is the only form that takes `{ session }`; it resolves an array.
+    // https://mongoosejs.com/docs/api/model.html#Model.create()
+    invoiceModel.create([fields], { session }).then(([invoice]) => invoice);
 
 /**
  * Every credit note issued for an order, oldest first — one per refund.
@@ -76,25 +81,23 @@ const findCreditNoteByRefundId = (refundId: string): Promise<CreditNoteDocument 
     creditNoteModel.findOne({ refundId }).exec();
 
 /**
- * Insert a new credit note — idempotent on `refundId`, for the same reason as
- * {@link insertInvoice}: `PAYMENT_REFUNDED` is fired from an at-most-once write, but the event bus
- * itself promises no de-duplication of its own.
- * @param fields - every frozen field, plus the invoice this credit note reverses and its refund
+ * Insert a new credit note. A second one for one refund is refused by the unique `refundId` index,
+ * for the same reason as {@link insertInvoice}: `PAYMENT_REFUNDED` is fired from an at-most-once
+ * write, but the event bus itself promises no de-duplication of its own.
+ * @param fields - every frozen field, plus the invoice this credit note reverses, its refund and
+ *   its pre-allocated `_id`
+ * @param session - the transaction that also allocated the credit note's number
  */
 const insertCreditNote = (
-    fields: FrozenTaxDocument & {
-        invoiceId: Types.ObjectId;
-        invoiceNumber: string;
-        refundId: string;
-    }
+    fields: FrozenTaxDocument &
+        WithId & {
+            invoiceId: Types.ObjectId;
+            invoiceNumber: string;
+            refundId: string;
+        },
+    session?: ClientSession
 ): Promise<CreditNoteDocument> =>
-    creditNoteModel.create(fields).catch((error: unknown) => {
-        if (!isDuplicateKey(error)) throw error;
-        return findCreditNoteByRefundId(fields.refundId).then((existing) => {
-            if (!existing) throw error;
-            return existing;
-        });
-    });
+    creditNoteModel.create([fields], { session }).then(([creditNote]) => creditNote);
 
 /**
  * Atomically allocate the next sequence number in a counter for `year`, upserting the year's row
@@ -102,17 +105,19 @@ const insertCreditNote = (
  * shared here since both this module's series need it.
  * @param counterModel - which series' counter to increment
  * @param year - the UTC calendar year the sequence belongs to
+ * @param session - the transaction the allocation belongs to: an aborted insert gives the number back
  * @returns the sequence number just allocated (1 for the year's first document in that series)
  */
 const incrementCounter = (
     counterModel: typeof invoiceNumberCounterModel,
-    year: number
+    year: number,
+    session?: ClientSession
 ): Promise<number> =>
     counterModel
         .findOneAndUpdate(
             { _id: year },
             { $inc: { seq: 1 } },
-            { upsert: true, returnDocument: 'after' }
+            { upsert: true, returnDocument: 'after', session }
         )
         .exec()
         .then((counter) => counter.seq);
@@ -125,8 +130,8 @@ export const invoicingRepository = {
     findCreditNoteById,
     findCreditNoteByRefundId,
     insertCreditNote,
-    incrementInvoiceNumberCounter: (year: number): Promise<number> =>
-        incrementCounter(invoiceNumberCounterModel, year),
-    incrementCreditNoteNumberCounter: (year: number): Promise<number> =>
-        incrementCounter(creditNoteNumberCounterModel, year)
+    incrementInvoiceNumberCounter: (year: number, session?: ClientSession): Promise<number> =>
+        incrementCounter(invoiceNumberCounterModel, year, session),
+    incrementCreditNoteNumberCounter: (year: number, session?: ClientSession): Promise<number> =>
+        incrementCounter(creditNoteNumberCounterModel, year, session)
 };

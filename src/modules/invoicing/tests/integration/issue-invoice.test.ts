@@ -18,7 +18,9 @@ import { markPaid } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { invoiceNumberCounterModel } from '../../model';
 import { invoicingRepository } from '../../repository';
+import { issueInvoice } from '../../services';
 
 setupTestDb();
 
@@ -173,53 +175,59 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(Number(seqB) - Number(seqA)).toBe(1);
     });
 
-    it('never issues a second invoice for the same order', async () => {
+    it('never issues a second invoice for the same order, and burns no number on the loser', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
+        const year = new Date().getUTCFullYear();
 
         // Two callers racing the same fact — a redelivered event, or two settlements — both call
-        // this; `repository.ts`'s unique index is what makes it idempotent, not the caller.
-        const [first, second] = await Promise.all([
-            invoicingRepository.insertInvoice({
-                orderId: order._id,
-                number: '2026-000001',
-                issuedAt: new Date(),
-                currency: 'EUR',
-                locale: 'en',
-                seller: {},
-                lines: [{ title: 'Widget', quantity: 1, unitPrice: 10, taxRate: 0.22 }],
-                netTotal: 8.2,
-                taxTotal: 1.8,
-                shippingNetAmount: 0,
-                shippingTaxAmount: 0,
-                taxSummary: [],
-                shippingByRate: [],
-                grandTotal: 10
-            }),
-            invoicingRepository.insertInvoice({
-                orderId: order._id,
-                number: '2026-000002',
-                issuedAt: new Date(),
-                currency: 'EUR',
-                locale: 'en',
-                seller: {},
-                lines: [{ title: 'Widget', quantity: 1, unitPrice: 10, taxRate: 0.22 }],
-                netTotal: 8.2,
-                taxTotal: 1.8,
-                shippingNetAmount: 0,
-                shippingTaxAmount: 0,
-                taxSummary: [],
-                shippingByRate: [],
-                grandTotal: 10
-            })
-        ]);
+        // this; the unique index refuses the second insert and its transaction gives the number back.
+        const [first, second] = await Promise.all([issueInvoice(order), issueInvoice(order)]);
 
-        expect(first.number).toBe(second.number);
+        expect(first?.number).toBe(second?.number);
+        expect(String(first?._id)).toBe(String(second?._id));
         const stored = await invoicingRepository.findInvoiceByOrderId(String(order._id));
-        expect(stored?.number).toBe(first.number);
+        expect(stored?.number).toBe(first?.number);
+        const counter = await invoiceNumberCounterModel.findById(year).lean().exec();
+        expect(counter?.seq).toBe(1);
+    });
+
+    it('answers the existing invoice when the order is invoiced again later', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        const year = new Date().getUTCFullYear();
+
+        const first = await issueInvoice(order);
+        const again = await issueInvoice(order);
+
+        expect(String(again?._id)).toBe(String(first?._id));
+        const counter = await invoiceNumberCounterModel.findById(year).lean().exec();
+        expect(counter?.seq).toBe(1);
+    });
+
+    it('gives the number back when the insert fails for any other reason', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        const year = new Date().getUTCFullYear();
+        const insert = jest
+            .spyOn(invoicingRepository, 'insertInvoice')
+            .mockRejectedValueOnce(new Error('disk full'));
+
+        await expect(issueInvoice(order)).rejects.toThrow('disk full');
+        insert.mockRestore();
+
+        // The allocation shared the insert's transaction, so nothing was spent.
+        expect(await invoiceNumberCounterModel.findById(year).lean().exec()).toBeNull();
+        await expect(issueInvoice(order)).resolves.toMatchObject({ number: `${year}-000001` });
     });
 
     it('issues nothing for an order with no lines', async () => {

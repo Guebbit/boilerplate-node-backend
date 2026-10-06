@@ -3,12 +3,16 @@
  * Freezing an order into its invoice — the one write this module makes off `ORDER_STATUS_CHANGED`
  * (`to: 'paid'`), through `module.ts`'s own listener. Idempotent by construction: a redelivered
  * event, or two settlements racing the same order (see `orders/services/status.ts#markPaid`'s own
- * docblock), both attempt this, and `repository.ts#insertInvoice` reads the loser's duplicate-key
- * error back into the row the winner already wrote, rather than doubling the document.
+ * docblock), both attempt this. The number is allocated and the invoice inserted in one
+ * transaction, so the loser's duplicate-key error aborts it — the number goes back — and the
+ * loser reads the winner's row instead of doubling the document.
  *
  * See: docs/modules/invoicing.md
  */
 
+import { Types } from 'mongoose';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { orderTaxBreakdown, orderTotal, orderCurrency, shopIdentity } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
@@ -42,6 +46,22 @@ const frozenLines = (order: OrderDocument): InvoiceLine[] =>
     }));
 
 /**
+ * What a lost race reads back: the invoice the winner wrote for this order.
+ * @param orderId - the order both writers were invoicing
+ * @returns a `catch` handler that rethrows anything but a duplicate-key error
+ * @throws {unknown} the original error when it is not a duplicate, or when no winner can be found
+ */
+const readWinner = (orderId: string) => (error: unknown) => {
+    if (!isDuplicateKey(error)) throw error;
+    return findInvoiceForOrder(orderId).then((existing) => {
+        // Unreachable outside a corrupted unique index: the duplicate key error IS the
+        // existing row's own guarantee that a `findOne` right behind it finds something.
+        if (!existing) throw error;
+        return existing;
+    });
+};
+
+/**
  * Freezes and numbers one order's invoice — the whole job `module.ts`'s `ORDER_STATUS_CHANGED`
  * listener delegates here. Reads the order's OWN frozen `billingAddress` as the Art. 226 buyer
  * address — the one the checkout asked for, never the ship-to address by assumption: a
@@ -63,34 +83,45 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
         currency
     });
 
-    return allocateInvoiceNumber().then((number) =>
-        invoicingRepository.insertInvoice({
-            orderId: order._id,
-            number,
-            issuedAt: new Date(),
-            currency,
-            locale: order.items[0].locale,
-            ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-            ...(order.billingAddress ? { billingAddress: order.billingAddress } : {}),
-            seller: frozenSeller(),
-            lines: frozenLines(order),
-            ...(order.shippingCost === undefined ? {} : { shippingCost: order.shippingCost }),
-            netTotal: breakdown.netTotal,
-            taxTotal: breakdown.taxTotal,
-            shippingNetAmount: breakdown.shippingNetAmount,
-            shippingTaxAmount: breakdown.shippingTaxAmount,
-            taxSummary: breakdown.taxSummary,
-            shippingByRate: breakdown.shippingByRate,
-            // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
-            // both quote — never a hand-composed sum, so this can never drift from what the order
-            // itself says it charged.
-            grandTotal: orderTotal({
-                items: order.items,
-                shippingCost: order.shippingCost,
-                currency
-            })
-        })
-    );
+    // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
+    const _id = new Types.ObjectId();
+
+    return withTransaction((session) =>
+        allocateInvoiceNumber(session).then((number) =>
+            invoicingRepository.insertInvoice(
+                {
+                    _id,
+                    orderId: order._id,
+                    number,
+                    issuedAt: new Date(),
+                    currency,
+                    locale: order.items[0].locale,
+                    ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
+                    ...(order.billingAddress ? { billingAddress: order.billingAddress } : {}),
+                    seller: frozenSeller(),
+                    lines: frozenLines(order),
+                    ...(order.shippingCost === undefined
+                        ? {}
+                        : { shippingCost: order.shippingCost }),
+                    netTotal: breakdown.netTotal,
+                    taxTotal: breakdown.taxTotal,
+                    shippingNetAmount: breakdown.shippingNetAmount,
+                    shippingTaxAmount: breakdown.shippingTaxAmount,
+                    taxSummary: breakdown.taxSummary,
+                    shippingByRate: breakdown.shippingByRate,
+                    // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
+                    // both quote — never a hand-composed sum, so this can never drift from what the order
+                    // itself says it charged.
+                    grandTotal: orderTotal({
+                        items: order.items,
+                        shippingCost: order.shippingCost,
+                        currency
+                    })
+                },
+                session
+            )
+        )
+    ).catch(readWinner(String(order._id)));
 };
 
 /**

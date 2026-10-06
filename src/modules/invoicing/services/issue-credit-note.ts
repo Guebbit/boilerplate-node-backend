@@ -8,6 +8,9 @@
  * See: docs/modules/invoicing.md
  */
 
+import { Types } from 'mongoose';
+import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { orderTotal } from '@modules/orders';
 import { translator } from '@infrastructure/i18n';
 import { invoicingRepository } from '../repository';
@@ -85,12 +88,27 @@ const reversedFigures = (
 };
 
 /**
+ * What a lost race reads back: the credit note the winner wrote for this refund.
+ * @param refundId - the refund both writers were crediting
+ * @returns a `catch` handler that rethrows anything but a duplicate-key error
+ * @throws {unknown} the original error when it is not a duplicate, or when no winner can be found
+ */
+const readWinner = (refundId: string) => (error: unknown) => {
+    if (!isDuplicateKey(error)) throw error;
+    return invoicingRepository.findCreditNoteByRefundId(refundId).then((existing) => {
+        if (!existing) throw error;
+        return existing;
+    });
+};
+
+/**
  * Freezes and numbers a credit note for one refund of the invoice already issued on the order. A
  * no-op — `undefined`, never a throw — when no invoice exists to correct: every `succeeded`
  * payment belongs to a `paid` order this module has already invoiced, so the gap only opens on a
  * genuine race (an invoice not yet frozen when the refund lands) or on data older than this
  * module. Either way there is nothing a credit note could reference, so none is issued rather than
- * one pointing at nothing.
+ * one pointing at nothing. The number is allocated and the note inserted in one transaction, so a
+ * lost race (the same refund credited twice) aborts it and gives the number back.
  *
  * @param input - the refund that was just settled
  * @returns the credit note just issued (or the one this refund already had), or `undefined` when
@@ -100,22 +118,33 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
     findInvoiceForOrder(input.orderId).then((invoice) => {
         if (!invoice) return undefined;
 
-        return allocateCreditNoteNumber().then((number) =>
-            invoicingRepository.insertCreditNote({
-                orderId: invoice.orderId,
-                invoiceId: invoice._id,
-                invoiceNumber: invoice.number,
-                refundId: input.refundId,
-                number,
-                issuedAt: new Date(),
-                currency: invoice.currency,
-                locale: invoice.locale,
-                ...(invoice.orderNumber ? { orderNumber: invoice.orderNumber } : {}),
-                ...(invoice.billingAddress ? { billingAddress: invoice.billingAddress } : {}),
-                seller: invoice.seller,
-                ...reversedFigures(invoice, input)
-            })
-        );
+        // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
+        const _id = new Types.ObjectId();
+
+        return withTransaction((session) =>
+            allocateCreditNoteNumber(session).then((number) =>
+                invoicingRepository.insertCreditNote(
+                    {
+                        _id,
+                        orderId: invoice.orderId,
+                        invoiceId: invoice._id,
+                        invoiceNumber: invoice.number,
+                        refundId: input.refundId,
+                        number,
+                        issuedAt: new Date(),
+                        currency: invoice.currency,
+                        locale: invoice.locale,
+                        ...(invoice.orderNumber ? { orderNumber: invoice.orderNumber } : {}),
+                        ...(invoice.billingAddress
+                            ? { billingAddress: invoice.billingAddress }
+                            : {}),
+                        seller: invoice.seller,
+                        ...reversedFigures(invoice, input)
+                    },
+                    session
+                )
+            )
+        ).catch(readWinner(input.refundId));
     });
 
 /**
