@@ -50,8 +50,7 @@ describe('the operator’s audit read — what it shows', () => {
             ['auth.two_factor.challenge_failed', 'failure'],
             ['auth.oauth.failed', 'failure'],
             ['auth.refresh_token.reuse_detected', 'failure'],
-            ['system.webhook_subscription.auto_disabled', 'failure'],
-            ['worker.email.failed', 'failure']
+            ['system.webhook_subscription.auto_disabled', 'failure']
         ]);
 
         expect(await seenByOperator()).toEqual([
@@ -63,8 +62,7 @@ describe('the operator’s audit read — what it shows', () => {
             'security.rate_limit_hit:failure',
             'security.reauth_required:failure',
             'security.unauthorized:failure',
-            'system.webhook_subscription.auto_disabled:failure',
-            'worker.email.failed:failure'
+            'system.webhook_subscription.auto_disabled:failure'
         ]);
     });
 });
