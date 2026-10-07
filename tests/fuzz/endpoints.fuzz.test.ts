@@ -25,8 +25,8 @@
  * pass reaches the deepest code; the other two ask whether a caller the operation is NOT for gets
  * the refusal the spec documents — 401 without credentials where a token is required — rather
  * than a crash or an answer. Path parameters name REAL rows (a product, an order, a user) where
- * the path says which kind, so a handler runs past its 404; query parameters are drawn from the
- * spec like bodies are.
+ * the path says which kind, so a handler runs past its 404; id fields in bodies and queries do too
+ * (or a fresh well-formed id), and the rest of a query is drawn from the spec like bodies are.
  *
  * ── Where it runs ─────────────────────────────────────────────────────────────────────────────
  * In `npm run test` — so in the merge gate — at `TEST_FUZZ_RUNS`' small default, and nightly in
@@ -184,11 +184,12 @@ const fuzzAs = (
     variant: BodyVariant = jsonBody(operation)
 ) => {
     const url = buildUrl(operation, world);
+    const ids = Object.values(world);
     return fc.assert(
         fc.asyncProperty(
             fc.tuple(
-                bodyArbitraryFor(variant.schema) ?? NO_BODY,
-                queryArbitraryFor(operation.queryParameters)
+                bodyArbitraryFor(variant.schema, ids) ?? NO_BODY,
+                queryArbitraryFor(operation.queryParameters, ids)
             ),
             async ([body, query]: Draw) => {
                 const target = query ? `${url}?${query}` : url;
@@ -309,7 +310,7 @@ describe.each(
         const { user, bearer } = await authenticateAs('admin');
         const world = await seedWorld(user);
         // Every MULTIPART_FUZZABLE operation has a bodySchema by construction (the filter above).
-        const bodyArbitrary = bodyArbitraryFor(operation.bodySchema)!;
+        const bodyArbitrary = bodyArbitraryFor(operation.bodySchema, Object.values(world))!;
         const url = buildUrl(operation, world);
 
         await fc.assert(
