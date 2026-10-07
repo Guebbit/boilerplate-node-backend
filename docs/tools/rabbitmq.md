@@ -166,8 +166,8 @@ consumeFromQueue({
     prefetch: 5,
     handler: async (message) => {
         // Return true to ack. Return false ONLY for a job that will never be processable —
-        // it is dead-lettered permanently. Let anything transient reject: nack routes it to
-        // `<queue>.retry` (TTL, no consumer), which expires back onto this queue — never an
+        // it is dead-lettered permanently. Let anything transient throw: the consumer republishes it
+        // to `<queue>.retry` (TTL, no consumer), which expires back onto this queue — never an
         // immediate broker requeue.
         await sendEmail(message);
         return true;
@@ -180,41 +180,44 @@ consumeFromQueue({
 A failing job waits in a TTL queue and comes back on its own — the broker owns the delay, not an
 app-side timer:
 
-```
-work queue ──(nack, requeue=false)──▶ <queue>.retry (TTL, no consumer) ──(expires)──▶ work queue
-                                                                            attempts exhausted ──▶ <queue>.dead
+```mermaid
+flowchart LR
+    W["work queue"] -->|"handler threw: republish,<br/>x-retry-attempt + 1"| R["&lt;queue&gt;.retry<br/>(TTL, no consumer)"]
+    R -->|"TTL expires"| W
+    W -->|"parked: nack, requeue=false"| D["&lt;queue&gt;.dead"]
+    W -->|"x-delivery-limit spent<br/>reason: delivery_limit"| D
 ```
 
 Every work queue is declared with two companions, all through the same `dead-letter` exchange (a
 `direct` exchange — a routing key names exactly one queue):
 
-| Name            | What it is                                                                                                                             |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `<queue>.retry` | No consumer. `x-message-ttl` set to `NODE_QUEUE_RETRY_DELAY_SECONDS`; dead-letters BACK to `<queue>` once a message sits out its wait. |
-| `<queue>.dead`  | The parking lot. No consumer, no `x-dead-letter-*` of its own — nothing routes here automatically; the app publishes to it directly.   |
+| Name            | What it is                                                                                                                                    |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `<queue>.retry` | No consumer. `x-message-ttl` set to `NODE_QUEUE_RETRY_DELAY_SECONDS`; dead-letters BACK to `<queue>` once a message sits out its wait.        |
+| `<queue>.dead`  | The parking lot. No consumer, no `x-dead-letter-*` of its own. The work queue dead-letters into it, bound to the exchange under its own name. |
 
-The work queue's OWN dead-letter target is `<queue>.retry`, never `<queue>.dead` — a
-`nack(msg, false, false)` always means "try again later" now. That is what makes the handler's
-outcomes mean what they say:
+The work queue's OWN dead-letter target is `<queue>.dead`: a `nack(msg, false, false)` and a spent
+`x-delivery-limit` both park the message, so nothing is ever dropped. A retry is never a
+dead-letter; the consumer republishes it itself. That is what makes the handler's outcomes mean what
+they say:
 
 | Handler does                 | What happens                                                                                       |
 | ---------------------------- | -------------------------------------------------------------------------------------------------- |
 | resolve `true`               | `ack` — deleted, the job is done                                                                   |
-| resolve `false`              | parked in `<queue>.dead` directly — a permanent business rejection, never retried                  |
-| malformed / contract-invalid | parked in `<queue>.dead` directly — the bytes will never become valid on a retry                   |
-| throws, attempts remain      | `nack(msg, false, false)` — routes to `<queue>.retry`, comes back once its TTL expires             |
+| resolve `false`              | parked: `nack(msg, false, false)`, the broker moves it to `<queue>.dead` — never retried           |
+| malformed / contract-invalid | parked the same way — the bytes will never become valid on a retry                                 |
+| throws, attempts remain      | republished to `<queue>.retry` (confirmed), then acked; comes back once its TTL expires            |
 | throws, attempts exhausted   | parked in `<queue>.dead`, logged once at `error` (the job's identifying fields, never the payload) |
 
-**The attempt count is free.** RabbitMQ stamps an `x-death` array on a message every time it
-dead-letters it, with a `count` per `(queue, reason)` pair. The consumer reads the entry for
-`<queue>.retry` to know how many full retry cycles this delivery has already been through — no
-custom header, no republish needed to track it.
+**The attempt count is our own header.** Every retry republish stamps `x-retry-attempt` (one higher
+than it arrived with, `0` when absent). It is not `x-death`: RabbitMQ 4 ignores an `x-death` that a
+client republishes ([4.0.1 release notes](https://github.com/rabbitmq/rabbitmq-server/releases/tag/v4.0.1)),
+so a republished message would never count there.
 
-**Parking is always a direct publish, confirmed.** Every "parked" outcome above goes through the
-same internal helper: a `sendToQueue` straight to `<queue>.dead` (bypassing the retry queue and its
-DLX chain entirely), and the original message is only acked once that publish is itself confirmed
-by the broker — the same confirm-channel guarantee [Publishing a message](#publishing-a-message)
-describes, so a parking failure can never silently drop a job.
+**A retry is a confirmed republish.** The original is acked only once the broker has confirmed the
+copy in `<queue>.retry` — the same confirm-channel guarantee [Publishing a message](#publishing-a-message)
+describes — and nacked with requeue when the confirm fails, so a failed hop never drops a job.
+Parking needs no publish at all: the nack and the dead-lettering are one broker-side move.
 
 **The two knobs**, deployment-wide defaults — a consumer that genuinely needs different numbers
 declares them on its own `ConsumeOptions`, in code, next to its handler, rather than a second
@@ -252,15 +255,13 @@ Every queue `queue.ts` declares — work, retry and dead-letter alike — carrie
 queues, their predecessor, are gone in 4.x. The reason it matters here specifically: a quorum
 queue tracks its own `delivery-count`, incremented on EVERY redelivery — a consumer that crashes
 mid-handler included, not only a `nack` the app chose to send. That is what bounds a message that
-kills its consumer before the handler ever gets to nack it, which the app's own `x-death`-based
-attempt count (`NODE_QUEUE_MAX_ATTEMPTS`) alone cannot, since the handler's failure path never
-runs:
+kills its consumer before the handler ever gets to answer it, which the app's own
+`x-retry-attempt` count (`NODE_QUEUE_MAX_ATTEMPTS`) alone cannot, since the handler's failure path
+never runs:
 
 ```mermaid
 flowchart LR
-    W["work queue"] -->|"x-delivery-limit crashes"| R["&lt;queue&gt;.retry<br/>(TTL)"]
-    R -->|"expires: x-death +1"| W
-    W -->|"x-death ≥ NODE_QUEUE_MAX_ATTEMPTS:<br/>parked before the handler runs"| D["&lt;queue&gt;.dead"]
+    W["work queue"] -->|"x-delivery-limit crashes<br/>reason: delivery_limit"| D["&lt;queue&gt;.dead"]
 ```
 
 | Queue argument           | Value            | Where                    | Why                                                                                                                                                                                           |
@@ -270,16 +271,8 @@ flowchart LR
 | `x-dead-letter-strategy` | `at-least-once`  | work, retry              | The default, `at-most-once`, can silently drop a message in transit to its dead-letter target.                                                                                                |
 | `x-overflow`             | `reject-publish` | work, retry              | `at-least-once` requires it — the alternative default, `drop-head`, would silently discard the oldest queued message instead.                                                                 |
 
-When `x-delivery-limit` is reached, the work queue dead-letters the message through the SAME
-target a `nack` already uses (`<queue>.retry`).
-
-> **Known gap — such a message is lost.** The design says it then re-enters the ordinary retry
-> cycle. A real broker does not allow that: its dead-letter reason is `delivery_limit`, not
-> `rejected`, and RabbitMQ discards a message that returns to a queue already in its `x-death`
-> when no step of the cycle was a rejection. The job is gone after one TTL, never parked. The
-> flowchart's `x-delivery-limit` edge is therefore the intended path, not the observed one — see
-> [Broker testing](./broker-testing.md#known-gap-a-crashed-consumer-s-job-is-dropped), whose
-> `KNOWN GAP` case documents it and must flip when the adapter is fixed.
+When `x-delivery-limit` is reached, the work queue dead-letters the message straight to
+`<queue>.dead`, where it is parked like any other spent job.
 
 See [RabbitMQ: Quorum Queues](https://www.rabbitmq.com/docs/quorum-queues) and
 [Upgrading an existing broker](#retries-and-parking) above — a queue TYPE cannot change in place
