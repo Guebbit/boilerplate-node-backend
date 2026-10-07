@@ -757,7 +757,7 @@ services:
     # Alertmanager: groups and routes what Prometheus fires. Ships the `null` receiver.
     alertmanager:
         logging: *logging
-        image: docker.io/prom/alertmanager:v0.27.0
+        image: docker.io/prom/alertmanager:v0.34.1
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -768,7 +768,7 @@ services:
     # Loki: stores the container logs Alloy ships. Its config is the local stack's.
     loki:
         logging: *logging
-        image: docker.io/grafana/loki:3.3.2
+        image: docker.io/grafana/loki:3.7.8
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
@@ -782,7 +782,7 @@ services:
     # empty, so it can read them (as their owner) and do nothing else.
     alloy:
         logging: *logging
-        image: docker.io/grafana/alloy:v1.5.1
+        image: docker.io/grafana/alloy:v1.20.1
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening

@@ -390,7 +390,7 @@ services:
     otel-collector:
         logging: *container-logging
         profiles: ['observability']
-        image: otel/opentelemetry-collector-contrib:0.114.0
+        image: otel/opentelemetry-collector-contrib:0.161.0-386
         restart: unless-stopped
         command: ['--config=/etc/otel-collector-config.yaml']
         volumes:
@@ -425,7 +425,7 @@ services:
     alertmanager:
         logging: *container-logging
         profiles: ['observability']
-        image: prom/alertmanager:v0.27.0
+        image: prom/alertmanager:v0.34.1
         restart: unless-stopped
         command: ['--config.file=/etc/alertmanager/alertmanager.yml']
         volumes:
@@ -437,7 +437,7 @@ services:
     loki:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/loki:3.3.2
+        image: grafana/loki:3.7.8
         restart: unless-stopped
         command: ['-config.file=/etc/loki/loki-config.yaml']
         volumes:
@@ -450,7 +450,7 @@ services:
     promtail:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/promtail:3.3.2
+        image: grafana/promtail:3.6.8
         restart: unless-stopped
         command: ['-config.file=/etc/promtail/promtail-config.yaml']
         # The only part of this stack that differs between docker and podman, and it is two
@@ -494,7 +494,7 @@ services:
     alloy:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/alloy:v1.5.1
+        image: grafana/alloy:v1.20.1
         restart: unless-stopped
         command:
             - 'run'
@@ -639,7 +639,7 @@ services:
     webhook-tester-tls:
         logging: *container-logging
         profiles: ['integrations']
-        image: caddy:2.10.2-alpine
+        image: caddy:2.11.4-alpine
         restart: unless-stopped
         depends_on:
             - webhook-tester
