@@ -134,8 +134,8 @@ The shop's one currency (`NODE_DEFAULT_CURRENCY`, documented under
 [payments](./payments.md)) is published on `GET /products/settings` as `{ currency }`, public and
 uncached. It is a shop setting, not a product field (Shopify's `shop.currency`): a create form has
 no product yet to read `currency` from, and needs it to size the price input to that currency's
-minor unit. Read through `productCurrency()`, never `orders`' own reader, for the cycle reason
-that function's docblock gives.
+minor unit. Read through `productCurrency()`, never `orders`' own reader (that would close a module
+cycle); both read the one `currencyConfig` slice in `src/infrastructure/runtime/config.ts`.
 
 ## Translated content
 

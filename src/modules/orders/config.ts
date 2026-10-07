@@ -19,6 +19,7 @@
 
 import { ConfigError, defineConfig } from '@infrastructure/config/define';
 import { choice, csv, email, int, text } from '@infrastructure/config/fields';
+import { currencyConfig } from '@infrastructure/runtime/config';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
 
@@ -80,10 +81,6 @@ export const ordersConfig = defineConfig({
             case: 'upper',
             describe:
                 'Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own.'
-        }),
-        NODE_DEFAULT_CURRENCY: text({
-            default: 'EUR',
-            describe: 'The one ISO-4217 currency this shop trades in.'
         }),
         NODE_BANK_TRANSFER_BENEFICIARY: text({
             describe:
@@ -251,14 +248,13 @@ export const shipToCountries = (): string[] => {
 
 /**
  * The one ISO-4217 currency this deployment trades in — frozen onto every order, and every
- * payment `payments` stamps at intent time. Owned here, not in `payments`, for the same reason
- * the bank-transfer values are: `orders` freezes it first, and `payments` already depends on
- * `orders` for `markPaid`. `invoicing` freezes the SAME value again from its own event listener,
+ * payment `payments` stamps at intent time. The variable itself is the infrastructure's
+ * `currencyConfig`, shared with `products`; this getter is the order-side door to it. `invoicing` freezes the SAME value again from its own event listener,
  * never re-reading this getter once an invoice is issued. A shop that ever needs a second
  * currency needs a real design, not several modules quietly reading the same env var.
  * @returns the configured ISO-4217 currency code
  */
-export const shopCurrency = (): string => ordersConfig().NODE_DEFAULT_CURRENCY;
+export const shopCurrency = (): string => currencyConfig().NODE_DEFAULT_CURRENCY;
 
 /**
  * An order's own frozen currency, falling back to the shop's current one only for an order that
