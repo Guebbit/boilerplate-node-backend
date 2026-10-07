@@ -118,6 +118,7 @@ One primitive, `pseudonymise(purpose, value)` (`src/infrastructure/security/pseu
 | `log`         | personal fields in log lines            | see [Winston](./winston.md#personal-data)                                                                     |
 
 - **Scheme:** HMAC-SHA256 under a subkey HKDF-derived (RFC 5869) from `NODE_PSEUDONYM_KEY`, one subkey per purpose, so a digest made for one purpose cannot be replayed as another's.
+- **One HKDF entry point:** `deriveSubkey(root, info)` in `infrastructure/security/subkey.ts` derives and caches every subkey (this one, the at-rest AES keys in `versioned-secret.ts`, and the delivered-code MAC key) and returns an immutable `KeyObject`. Nothing else calls `hkdfSync`.
 - **Standard:** EDPB Guidelines 01/2025 ¶88-89 and ¶117-118, ENISA pseudonymisation techniques (2019) §7.3, NIST SP 800-57 §5.2.
 - **Rotation:** a single value, no ring. Changing it costs, once: identity rate-limit budgets reset (at most one window), log digests stop correlating across the change, and a retry with the same `Idempotency-Key` across the change answers `422` for at most 24 h.
 

@@ -11,20 +11,15 @@
  * Relative imports only: `logger.ts` imports this, and it sits on jest `globalSetup`'s chain.
  */
 
-import { createHmac, hkdfSync } from 'node:crypto';
+import { createHmac, type KeyObject } from 'node:crypto';
 import { pseudonymConfig } from './config';
+import { deriveSubkey } from './subkey';
 
 /**
  * What a digest is used for. A closed list so a new purpose is a deliberate edit, and so one
  * purpose's digests can never be replayed as another's.
  */
 export type PseudonymPurpose = 'log' | 'rate-limit' | 'idempotency';
-
-/**
- * Subkeys already derived, keyed by `root` then purpose. Keyed on the root because tests change
- * the environment between cases; HKDF is cheap but this sits on the request path.
- */
-const subkeys = new Map<string, Map<PseudonymPurpose, Buffer>>();
 
 /**
  * The HKDF subkey for one purpose under the current root secret.
@@ -34,23 +29,10 @@ const subkeys = new Map<string, Map<PseudonymPurpose, Buffer>>();
  * @throws {Error} when `NODE_PSEUDONYM_KEY` is unset: there is no built-in key, so a digest
  *   under a guessable one is refused rather than made
  */
-const subkeyFor = (purpose: PseudonymPurpose): Buffer => {
+const subkeyFor = (purpose: PseudonymPurpose): KeyObject => {
     const root = pseudonymConfig().NODE_PSEUDONYM_KEY;
     if (root === undefined) throw new Error('NODE_PSEUDONYM_KEY is not set.');
-    const forRoot = subkeys.get(root) ?? new Map<PseudonymPurpose, Buffer>();
-    subkeys.set(root, forRoot);
-
-    const known = forRoot.get(purpose);
-    if (known) return known;
-
-    /*
-     * Node: HKDF-SHA256 (RFC 5869). Args: digest, input key material, salt (empty: the root is
-     * already high-entropy), info (purpose label), output length in bytes.
-     * https://nodejs.org/api/crypto.html#cryptohkdfsyncdigest-ikm-salt-info-keylen
-     */
-    const derived = Buffer.from(hkdfSync('sha256', root, '', `pseudonym/v1/${purpose}`, 32));
-    forRoot.set(purpose, derived);
-    return derived;
+    return deriveSubkey(root, `pseudonym/v1/${purpose}`);
 };
 
 /**
