@@ -23,6 +23,8 @@
  *   npm run scenario:apply -- --describe-to=x  # also write the accounts and subjects to `x`
  */
 import '@infrastructure/config/dotenv';
+// Before any model loads: Mongoose defaults are read at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 // Registers the doubles a seed drives (the fake payment provider, the mail log) — see its header.
 import './support/development-doubles';
 import { mkdir, writeFile } from 'node:fs/promises';

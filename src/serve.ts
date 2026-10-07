@@ -14,6 +14,8 @@
  * "serve" were two different files.
  */
 
+// First, for its side effect: Mongoose defaults must be set before any model loads.
+import '@infrastructure/runtime/mongoose-boot';
 import { createApp } from './app';
 import { failBoot, registerSignalHandlers } from '@infrastructure/runtime/server-lifecycle';
 

@@ -7,6 +7,8 @@
  */
 // First: every other import reads the environment, and this is what loads `.env` into it.
 import './infrastructure/config/dotenv';
+// Before any model loads: Mongoose defaults are read at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 // OTel must initialize before any other module is loaded.
 import { startTracing } from '@infrastructure/runtime/otel-sdk';
 

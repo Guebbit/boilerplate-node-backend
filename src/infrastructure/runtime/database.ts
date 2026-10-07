@@ -13,6 +13,7 @@ import mongoose from 'mongoose';
 import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { databaseConfig, isRelaxedEnvironment } from '@infrastructure/runtime/config';
+import { applyMongooseDefaults } from '@infrastructure/runtime/mongoose-defaults';
 
 /** Give up after this many attempts so a misconfigured URI fails the deploy instead of retrying forever. */
 const MAX_RETRIES = 10;
@@ -95,6 +96,8 @@ export const getDatabaseUri = () => {
 export const configureMongoose = (
     maxTimeMs: number = databaseConfig().NODE_MONGO_MAX_TIME_MS
 ): void => {
+    // Also set by `mongoose-boot` at the entry; repeated here for a caller that skips the entry.
+    applyMongooseDefaults();
     if (!isRelaxedEnvironment()) mongoose.set('autoIndex', false);
     mongoose.set('maxTimeMS', maxTimeMs);
 };
