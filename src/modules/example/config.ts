@@ -13,11 +13,6 @@ import { int } from '@infrastructure/config/fields';
 export const exampleConfig = defineConfig({
     name: 'example',
     shape: {
-        NODE_EXAMPLE_BODY_MAX_LENGTH: int({
-            default: 5000,
-            min: 1,
-            max: 20_000,
-            describe: 'Longest body, in characters, an example may have. The contract allows 20000.'
-        })
+        NODE_EXAMPLE_BODY_MAX_LENGTH: int({ default: 5000, min: 1, max: 20_000 })
     }
 });

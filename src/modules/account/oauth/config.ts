@@ -32,16 +32,10 @@ const PROVIDER_PAIRS = [
 export const oauthConfig = defineConfig({
     name: 'account-oauth',
     shape: {
-        NODE_OAUTH_GOOGLE_CLIENT_ID: text({ describe: 'Google OAuth client id.' }),
-        NODE_OAUTH_GOOGLE_CLIENT_SECRET: text({
-            sensitive: true,
-            describe: 'Google OAuth client secret.'
-        }),
-        NODE_OAUTH_GITHUB_CLIENT_ID: text({ describe: 'GitHub OAuth client id.' }),
-        NODE_OAUTH_GITHUB_CLIENT_SECRET: text({
-            sensitive: true,
-            describe: 'GitHub OAuth client secret.'
-        })
+        NODE_OAUTH_GOOGLE_CLIENT_ID: text(),
+        NODE_OAUTH_GOOGLE_CLIENT_SECRET: text({ sensitive: true }),
+        NODE_OAUTH_GITHUB_CLIENT_ID: text(),
+        NODE_OAUTH_GITHUB_CLIENT_SECRET: text({ sensitive: true })
     },
     // An account made through a provider has no password, so its step-up is a code mailed to its
     // address. A deployment that enables a provider but cannot deliver mail would lock those

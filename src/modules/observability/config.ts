@@ -20,12 +20,9 @@ export const observabilityConfig = defineConfig({
         NODE_METRICS_TOKEN: secret({
             minLength: 0,
             minBytes: 32,
-            placeholder: 'change-me-dev-metrics-token',
-            describe: 'Bearer token a Prometheus scraper presents. Unset refuses every scrape.'
+            placeholder: 'change-me-dev-metrics-token'
         }),
-        NODE_LOKI_HOST: text({ describe: 'Loki host; reported by the health payload only.' }),
-        NODE_FARO_COLLECTOR_URL: text({
-            describe: 'Faro collector for browser telemetry; reported by the health payload only.'
-        })
+        NODE_LOKI_HOST: text(),
+        NODE_FARO_COLLECTOR_URL: text()
     }
 });

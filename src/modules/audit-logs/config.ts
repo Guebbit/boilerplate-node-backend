@@ -12,10 +12,6 @@ import { int } from '@infrastructure/config/fields';
 export const auditLogsConfig = defineConfig({
     name: 'audit-logs',
     shape: {
-        NODE_AUDIT_RETENTION_DAYS: int({
-            default: 90,
-            min: 1,
-            describe: 'Days an audit entry is kept. Changing it needs `db:sync`.'
-        })
+        NODE_AUDIT_RETENTION_DAYS: int({ default: 90, min: 1 })
     }
 });

@@ -45,43 +45,24 @@ export const toRememberTier = (
 export const sessionConfig = defineConfig({
     name: 'account-sessions',
     shape: {
-        NODE_TOKEN_REFRESH_TIME_SHORT: int({
-            default: 604_800,
-            min: 1,
-            describe: 'Refresh-token lifetime in seconds for a browser-session login.'
-        }),
-        NODE_TOKEN_REFRESH_TIME_MEDIUM: int({
-            default: 2_592_000,
-            min: 1,
-            describe: 'Refresh-token lifetime in seconds for the medium “remember me” tier.'
-        }),
-        NODE_TOKEN_REFRESH_TIME_LONG: int({
-            default: 31_536_000,
-            min: 1,
-            describe: 'Refresh-token lifetime in seconds for the long “remember me” tier.'
-        }),
-        NODE_TOKEN_ACCESS_TIME: int({
-            default: 600,
-            min: 1,
-            describe: 'Access-token lifetime in seconds.'
-        }),
+        NODE_TOKEN_REFRESH_TIME_SHORT: int({ default: 604_800, min: 1 }),
+        NODE_TOKEN_REFRESH_TIME_MEDIUM: int({ default: 2_592_000, min: 1 }),
+        NODE_TOKEN_REFRESH_TIME_LONG: int({ default: 31_536_000, min: 1 }),
+        NODE_TOKEN_ACCESS_TIME: int({ default: 600, min: 1 }),
         NODE_TOKEN_ACCESS: keyRing({
-            required: { minLength: 16, minBytes: 32, placeholder: 'your-access-token-secret-here' },
-            describe: 'Access-token signing ring, newest first.'
+            required: { minLength: 16, minBytes: 32, placeholder: 'your-access-token-secret-here' }
         }),
         NODE_TOKEN_REFRESH: keyRing({
             required: {
                 minLength: 16,
                 minBytes: 32,
                 placeholder: 'your-refresh-token-secret-here'
-            },
-            describe: 'Refresh-token signing ring, newest first.'
+            }
         }),
         // A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
         // read this repository — same failure shape as the two rings above, same fix.
         NODE_TOTP_ENCRYPTION_KEY: versionedKeyRing({
-            required: { minLength: 16, minBytes: 32, placeholder: 'your-totp-encryption-key-here' },
-            describe: 'Ring encrypting second-factor material at rest, `version:key`, newest first.'
+            required: { minLength: 16, minBytes: 32, placeholder: 'your-totp-encryption-key-here' }
         }),
         // The familiar-device cookie's HMAC key. Unset on a developer machine means no cookie is
         // ever set or honoured; in production, unset or the placeholder refuses to boot.
@@ -89,21 +70,10 @@ export const sessionConfig = defineConfig({
             minLength: 16,
             minBytes: 32,
             placeholder: 'your-device-cookie-secret-here',
-            productionOnly: true,
-            describe:
-                'Key signing the familiar-device cookie that lets a known browser skip the per-account login lockout.'
+            productionOnly: true
         }),
-        NODE_TOKEN_ROTATION_GRACE_MS: int({
-            default: 10_000,
-            min: 0,
-            describe: 'How long a just-rotated refresh token is still honoured (a page-load race).'
-        }),
-        NODE_TOKEN_REUSE_WINDOW_MS: int({
-            default: 86_400_000,
-            min: 1,
-            describe:
-                'How long a rotated-away refresh token is remembered, so replaying it reads as theft.'
-        })
+        NODE_TOKEN_ROTATION_GRACE_MS: int({ default: 10_000, min: 0 }),
+        NODE_TOKEN_REUSE_WINDOW_MS: int({ default: 86_400_000, min: 1 })
     },
     // The one relationship between the two windows that must hold: a token has to outlive the
     // grace window by some margin, or there is no interval in which reuse is detectable at all.

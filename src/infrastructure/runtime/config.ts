@@ -24,9 +24,7 @@ export const nodeEnvironmentConfig = defineConfig({
     shape: {
         NODE_ENV: text({
             // Verbatim: ` development` with a stray space is a typo, and a typo must stay strict.
-            verbatim: true,
-            describe:
-                'development or test relaxes the safety switches; anything else, unset included, is a deployment.'
+            verbatim: true
         })
     }
 });
@@ -35,18 +33,9 @@ export const nodeEnvironmentConfig = defineConfig({
 export const loggingConfig = defineConfig({
     name: 'logging',
     shape: {
-        NODE_SERVICE_NAME: text({
-            default: 'api',
-            describe: 'The service name stamped on every log line, span and health payload.'
-        }),
-        NODE_LOG_LEVEL: choice(LOG_LEVELS, {
-            describe:
-                'Minimum severity logged. Unset: debug on a developer machine, info elsewhere.'
-        }),
-        NODE_LOG_PERSONAL_FIELDS: choice(PERSONAL_FIELD_MODES, {
-            default: 'hash',
-            describe: 'How personal fields appear in logs: keyed hash, redacted, or plain.'
-        })
+        NODE_SERVICE_NAME: text({ default: 'api' }),
+        NODE_LOG_LEVEL: choice(LOG_LEVELS, {}),
+        NODE_LOG_PERSONAL_FIELDS: choice(PERSONAL_FIELD_MODES, { default: 'hash' })
     }
 });
 
@@ -54,21 +43,9 @@ export const loggingConfig = defineConfig({
 export const serverConfig = defineConfig({
     name: 'server',
     shape: {
-        NODE_PORT: int({
-            default: 3000,
-            min: 1,
-            max: 65_535,
-            describe: 'The port the server binds.'
-        }),
-        NODE_HOST: text({
-            describe: 'The address to bind. Unset binds every interface.'
-        }),
-        NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({
-            default: 15_000,
-            min: 1,
-            describe:
-                'How long a stop waits for in-flight work before forcing exit. Keep it below the orchestrator grace period.'
-        })
+        NODE_PORT: int({ default: 3000, min: 1, max: 65_535 }),
+        NODE_HOST: text(),
+        NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 })
     }
 });
 
@@ -76,40 +53,13 @@ export const serverConfig = defineConfig({
 export const clusterConfig = defineConfig({
     name: 'cluster',
     shape: {
-        NODE_ENABLE_CLUSTERING: flag({
-            default: false,
-            describe: 'Run a primary that forks workers.'
-        }),
-        NODE_CLUSTER_WORKERS: int({
-            default: 0,
-            min: 0,
-            describe: 'Worker count. 0 means one per available core.'
-        }),
-        NODE_CLUSTER_CRASH_WINDOW_MS: int({
-            default: 60_000,
-            min: 1,
-            describe: 'The window a worker crash is counted over.'
-        }),
-        NODE_CLUSTER_CRASH_BACKOFF_BASE_MS: int({
-            default: 500,
-            min: 1,
-            describe: 'Delay before the first respawn after a crash.'
-        }),
-        NODE_CLUSTER_CRASH_BACKOFF_MAX_MS: int({
-            default: 30_000,
-            min: 1,
-            describe: 'Ceiling the respawn backoff doubles up to.'
-        }),
-        NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: int({
-            default: 15_000,
-            min: 1,
-            describe: 'Grace before the primary kills a worker on shutdown.'
-        }),
-        NODE_CLUSTER_CRASH_LIMIT: int({
-            default: 10,
-            min: 1,
-            describe: 'Crashes in one window before the primary gives up.'
-        })
+        NODE_ENABLE_CLUSTERING: flag({ default: false }),
+        NODE_CLUSTER_WORKERS: int({ default: 0, min: 0 }),
+        NODE_CLUSTER_CRASH_WINDOW_MS: int({ default: 60_000, min: 1 }),
+        NODE_CLUSTER_CRASH_BACKOFF_BASE_MS: int({ default: 500, min: 1 }),
+        NODE_CLUSTER_CRASH_BACKOFF_MAX_MS: int({ default: 30_000, min: 1 }),
+        NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
+        NODE_CLUSTER_CRASH_LIMIT: int({ default: 10, min: 1 })
     }
 });
 
@@ -117,26 +67,12 @@ export const clusterConfig = defineConfig({
 export const databaseConfig = defineConfig({
     name: 'database',
     shape: {
-        NODE_DB_URI: text({
-            describe: 'A full Mongo URI. Wins over the host, port and name below when set.'
-        }),
-        NODE_DB_PASSWORD: text({
-            sensitive: true,
-            describe:
-                'Password merged into `NODE_DB_URI`, replacing any it carries (a URI only: the host/port form has no user). Read from `NODE_DB_PASSWORD_FILE` in a deployment, so the URI itself holds no secret.'
-        }),
-        NODE_MONGODB_HOST: text({ default: '127.0.0.1', describe: 'Mongo host.' }),
-        NODE_MONGODB_PORT: int({ default: 27_017, min: 1, max: 65_535, describe: 'Mongo port.' }),
-        NODE_MONGODB_NAME: text({
-            default: 'boilerplate-node-backend',
-            describe: 'Database name.'
-        }),
-        NODE_MONGO_MAX_TIME_MS: int({
-            default: 5000,
-            min: 0,
-            describe:
-                'Server-side time limit, in ms, on every query and aggregation that names none of its own. The scheduled jobs run with a longer one. 0 lifts the limit.'
-        })
+        NODE_DB_URI: text(),
+        NODE_DB_PASSWORD: text({ sensitive: true }),
+        NODE_MONGODB_HOST: text({ default: '127.0.0.1' }),
+        NODE_MONGODB_PORT: int({ default: 27_017, min: 1, max: 65_535 }),
+        NODE_MONGODB_NAME: text({ default: 'boilerplate-node-backend' }),
+        NODE_MONGO_MAX_TIME_MS: int({ default: 5000, min: 0 })
     }
 });
 
@@ -148,10 +84,7 @@ export const databaseConfig = defineConfig({
 export const currencyConfig = defineConfig({
     name: 'currency',
     shape: {
-        NODE_DEFAULT_CURRENCY: text({
-            default: 'EUR',
-            describe: 'The one ISO-4217 currency this shop trades in.'
-        })
+        NODE_DEFAULT_CURRENCY: text({ default: 'EUR' })
     }
 });
 
@@ -159,22 +92,10 @@ export const currencyConfig = defineConfig({
 export const tracingConfig = defineConfig({
     name: 'tracing',
     shape: {
-        OTEL_EXPORTER_OTLP_ENDPOINT: text({
-            describe: 'OTLP collector for every signal. Unset drops spans.'
-        }),
-        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: text({
-            describe: 'OTLP collector for traces only; wins over the endpoint above.'
-        }),
-        NODE_TRUSTED_INGRESS: flag({
-            default: false,
-            describe:
-                "A trusted proxy in front of the API strips or overwrites traceparent and x-request-id. On: continue the caller's trace and keep its request id. Off: both start fresh here."
-        }),
-        npm_package_version: text({
-            default: '0.0.0',
-            setBy: 'npm',
-            describe: 'Set by npm when started through a script; stamped on spans.'
-        })
+        OTEL_EXPORTER_OTLP_ENDPOINT: text(),
+        OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: text(),
+        NODE_TRUSTED_INGRESS: flag({ default: false }),
+        npm_package_version: text({ default: '0.0.0' })
     }
 });
 

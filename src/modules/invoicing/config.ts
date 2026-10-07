@@ -12,16 +12,7 @@ import { int, text } from '@infrastructure/config/fields';
 export const invoicingConfig = defineConfig({
     name: 'invoicing',
     shape: {
-        NODE_EINVOICING_PROVIDER: text({
-            default: 'pdf',
-            case: 'lower',
-            describe: 'The e-invoicing implementation. Only `pdf` ships.'
-        }),
-        NODE_INVOICE_PDF_RETENTION_DAYS: int({
-            default: 30,
-            min: 0,
-            describe:
-                'Days a rendered invoice or credit-note PDF is kept on disk for the next download. 0 stores nothing: every download renders again.'
-        })
+        NODE_EINVOICING_PROVIDER: text({ default: 'pdf', case: 'lower' }),
+        NODE_INVOICE_PDF_RETENTION_DAYS: int({ default: 30, min: 0 })
     }
 });

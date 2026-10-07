@@ -98,34 +98,17 @@ const webhookSecretRing = (value: string): string[] =>
 export const paymentsConfig = defineConfig({
     name: 'payments',
     shape: {
-        NODE_PAYMENT_PROVIDER: text({
-            case: 'lower',
-            describe:
-                'The card payment provider a deployment registers. Unset: no card payments, and checkout offers only the other methods.'
-        }),
+        NODE_PAYMENT_PROVIDER: text({ case: 'lower' }),
         NODE_PAYMENT_WEBHOOK_SECRET: secret({
             // `0`: may stay unset (no provider, nothing to sign). Never the `.env-example`
             // placeholder in a deployment; the 16-character floor of a SET value is `check` below.
             minLength: 0,
             placeholder: 'your-payment-webhook-secret-here',
-            productionOnly: true,
-            describe:
-                'The secret the provider signs webhook deliveries with, or a comma-separated ring of them: the first signs, every one verifies. Unset when no provider is configured; every entry 16+ characters once set.'
+            productionOnly: true
         }),
-        NODE_STRIPE_SECRET_KEY: text({
-            sensitive: true,
-            describe: 'Stripe secret key. A test-mode key refuses boot outside development/test.'
-        }),
-        NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({
-            default: 1,
-            min: 0,
-            describe: 'Age a `pendingEffects` marker must reach before the sweep acts on it.'
-        }),
-        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({
-            default: 30,
-            min: 1,
-            describe: 'Days an abandoned payment attempt is kept before the sweep deletes it.'
-        })
+        NODE_STRIPE_SECRET_KEY: text({ sensitive: true }),
+        NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
+        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 })
     },
     check: (config, environment) => [
         ...(config.NODE_PAYMENT_WEBHOOK_SECRET !== undefined &&

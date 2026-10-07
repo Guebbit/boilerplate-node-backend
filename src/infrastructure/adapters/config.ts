@@ -27,31 +27,14 @@ const SMTP_COMPANIONS = ['NODE_SMTP_USER', 'NODE_SMTP_PASS', 'NODE_SMTP_SENDER']
 export const mailConfig = defineConfig({
     name: 'mail',
     shape: {
-        NODE_MAIL_TRANSPORT: text({
-            default: 'smtp',
-            case: 'lower',
-            describe:
-                'The mail transport. Production has `smtp`; a name this process does not register is refused at boot.'
-        }),
-        NODE_SMTP_HOST: text({ describe: 'SMTP server. Unset leaves email second factors off.' }),
-        NODE_SMTP_PORT: int({
-            default: 587,
-            min: 1,
-            max: 65_535,
-            describe: '587 STARTTLS, 465 implicit TLS, 25 relay.'
-        }),
-        NODE_SMTP_NAME: text({ describe: 'Hostname announced in the SMTP EHLO greeting.' }),
-        NODE_SMTP_USER: text({ describe: 'SMTP AUTH user.' }),
-        NODE_SMTP_PASS: text({ sensitive: true, describe: 'SMTP AUTH password.' }),
-        NODE_SMTP_SENDER: text({
-            describe: 'Default From address, e.g. `Shop <shop@example.com>`.'
-        }),
-        NODE_E2E_RUN: flag({
-            default: false,
-            setBy: 'e2e:serve',
-            describe:
-                'Set by `e2e:serve`. Refuses a non-local SMTP host so a live suite cannot mail real people.'
-        })
+        NODE_MAIL_TRANSPORT: text({ default: 'smtp', case: 'lower' }),
+        NODE_SMTP_HOST: text(),
+        NODE_SMTP_PORT: int({ default: 587, min: 1, max: 65_535 }),
+        NODE_SMTP_NAME: text(),
+        NODE_SMTP_USER: text(),
+        NODE_SMTP_PASS: text({ sensitive: true }),
+        NODE_SMTP_SENDER: text(),
+        NODE_E2E_RUN: flag({ default: false })
     },
     check: (config) => [
         // Selecting an SMTP host without its credentials builds a transport that only fails when
@@ -71,17 +54,8 @@ export const mailConfig = defineConfig({
 export const mailFilesConfig = defineConfig({
     name: 'mail-files',
     shape: {
-        NODE_MAIL_SPOOL_PATH: text({
-            default: path.join('tmp', 'storage', 'mail-spool'),
-            describe:
-                'Where an attachment waits between the request and the mail. Mount a volume here in a deployment.'
-        }),
-        NODE_MAIL_SPOOL_RETENTION_HOURS: int({
-            default: 1,
-            min: 1,
-            describe:
-                'Hours a spooled attachment is left alone before the sweep counts it abandoned.'
-        })
+        NODE_MAIL_SPOOL_PATH: text({ default: path.join('tmp', 'storage', 'mail-spool') }),
+        NODE_MAIL_SPOOL_RETENTION_HOURS: int({ default: 1, min: 1 })
     }
 });
 
@@ -89,41 +63,14 @@ export const mailFilesConfig = defineConfig({
 export const queueConfig = defineConfig({
     name: 'queue',
     shape: {
-        NODE_RABBITMQ_URL: text({
-            sensitive: true,
-            describe: 'A full AMQP URL. Wins over the fragments below.'
-        }),
-        NODE_RABBITMQ_HOST: text({ default: '127.0.0.1', describe: 'Broker host.' }),
-        NODE_RABBITMQ_PORT: int({
-            min: 1,
-            max: 65_535,
-            describe:
-                'Broker port. The fragment that switches the queue on: unset (and no URL) means no queue.'
-        }),
-        NODE_RABBITMQ_USER: text({
-            default: 'guest',
-            describe: 'Broker user (guest works over localhost only).'
-        }),
-        NODE_RABBITMQ_PASSWORD: text({
-            default: 'guest',
-            sensitive: true,
-            describe:
-                'Broker password. Also merged into `NODE_RABBITMQ_URL` when that is set, replacing any it carries. Read from `NODE_RABBITMQ_PASSWORD_FILE` in a deployment.'
-        }),
-        NODE_RABBITMQ_ENABLED: flag({
-            default: true,
-            describe: 'Kill switch that leaves the URL in place.'
-        }),
-        NODE_QUEUE_MAX_ATTEMPTS: int({
-            default: 5,
-            min: 1,
-            describe: 'Deliveries a job gets before it is parked.'
-        }),
-        NODE_QUEUE_RETRY_DELAY_SECONDS: int({
-            default: 30,
-            min: 1,
-            describe: 'How long a failed job waits before it is redelivered.'
-        })
+        NODE_RABBITMQ_URL: text({ sensitive: true }),
+        NODE_RABBITMQ_HOST: text({ default: '127.0.0.1' }),
+        NODE_RABBITMQ_PORT: int({ min: 1, max: 65_535 }),
+        NODE_RABBITMQ_USER: text({ default: 'guest' }),
+        NODE_RABBITMQ_PASSWORD: text({ default: 'guest', sensitive: true }),
+        NODE_RABBITMQ_ENABLED: flag({ default: true }),
+        NODE_QUEUE_MAX_ATTEMPTS: int({ default: 5, min: 1 }),
+        NODE_QUEUE_RETRY_DELAY_SECONDS: int({ default: 30, min: 1 })
     }
 });
 
@@ -131,29 +78,12 @@ export const queueConfig = defineConfig({
 export const redisConfig = defineConfig({
     name: 'redis',
     shape: {
-        NODE_REDIS_URL: text({
-            sensitive: true,
-            describe: 'A full Redis URL. Wins over host and port.'
-        }),
-        NODE_REDIS_PASSWORD: text({
-            sensitive: true,
-            describe:
-                'Password merged into `NODE_REDIS_URL`, replacing any it carries. Read from `NODE_REDIS_PASSWORD_FILE` in a deployment.'
-        }),
-        NODE_REDIS_HOST: text({ default: '127.0.0.1', describe: 'Redis host.' }),
-        NODE_REDIS_PORT: int({
-            min: 1,
-            max: 65_535,
-            describe: 'Redis port. Unset (and no URL) means no Redis.'
-        }),
-        NODE_REDIS_CACHE_PREFIX: text({
-            default: 'boilerplate-node-backend',
-            describe: 'Prefix of every cache key. Staging and production must differ.'
-        }),
-        NODE_REDIS_CACHE_ENABLED: flag({
-            default: true,
-            describe: 'Kill switch for the cache that leaves Redis up.'
-        })
+        NODE_REDIS_URL: text({ sensitive: true }),
+        NODE_REDIS_PASSWORD: text({ sensitive: true }),
+        NODE_REDIS_HOST: text({ default: '127.0.0.1' }),
+        NODE_REDIS_PORT: int({ min: 1, max: 65_535 }),
+        NODE_REDIS_CACHE_PREFIX: text({ default: 'boilerplate-node-backend' }),
+        NODE_REDIS_CACHE_ENABLED: flag({ default: true })
     }
 });
 
@@ -161,36 +91,12 @@ export const redisConfig = defineConfig({
 export const imageConfig = defineConfig({
     name: 'images',
     shape: {
-        NODE_IMAGE_MAX_INPUT_PIXELS: int({
-            default: 50_000_000,
-            min: 1,
-            describe: 'Decoded pixel ceiling. The decompression-bomb guard.'
-        }),
-        NODE_IMAGE_MAX_DIMENSION: int({
-            default: 2048,
-            min: 1,
-            describe: 'Longest side of a stored image, in pixels.'
-        }),
-        NODE_IMAGE_THUMBNAIL_DIMENSION: int({
-            default: 320,
-            min: 1,
-            describe: 'Longest side of a thumbnail, in pixels.'
-        }),
-        NODE_PUBLIC_PATH: text({
-            default: 'public',
-            describe: 'The directory served at the site root, where a promoted image lands.'
-        }),
-        NODE_QUARANTINE_RETENTION_HOURS: int({
-            default: 24,
-            min: 1,
-            describe:
-                'Hours a quarantined upload is left alone before the sweep counts it abandoned.'
-        }),
-        NODE_QUARANTINE_PATH: text({
-            default: path.join('tmp', 'quarantine'),
-            describe:
-                'Where an upload waits for its digest job. Must survive a restart: mount a volume.'
-        })
+        NODE_IMAGE_MAX_INPUT_PIXELS: int({ default: 50_000_000, min: 1 }),
+        NODE_IMAGE_MAX_DIMENSION: int({ default: 2048, min: 1 }),
+        NODE_IMAGE_THUMBNAIL_DIMENSION: int({ default: 320, min: 1 }),
+        NODE_PUBLIC_PATH: text({ default: 'public' }),
+        NODE_QUARANTINE_RETENTION_HOURS: int({ default: 24, min: 1 }),
+        NODE_QUARANTINE_PATH: text({ default: path.join('tmp', 'quarantine') })
     }
 });
 
@@ -198,10 +104,7 @@ export const imageConfig = defineConfig({
 export const outboundConfig = defineConfig({
     name: 'outbound',
     shape: {
-        NODE_OUTBOUND_ALLOWED_PORTS: csv({
-            describe:
-                'Ports besides 443 an outbound URL may name. 443 is always allowed; every other port is refused, so a URL cannot probe an internal service (22, 6379, 5432).'
-        })
+        NODE_OUTBOUND_ALLOWED_PORTS: csv()
     },
     check: (config) =>
         config.NODE_OUTBOUND_ALLOWED_PORTS.filter(
@@ -213,15 +116,8 @@ export const outboundConfig = defineConfig({
 export const pdfConfig = defineConfig({
     name: 'pdf',
     shape: {
-        PUPPETEER_EXECUTABLE_PATH: text({
-            default: '/usr/bin/chromium-browser',
-            describe: 'The Chromium binary (puppeteer-core ships none).'
-        }),
-        NODE_DOCUMENT_STORE_PATH: text({
-            default: path.join('tmp', 'storage', 'documents'),
-            describe:
-                'Where a rendered invoice or credit-note PDF is kept between downloads. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up.'
-        })
+        PUPPETEER_EXECUTABLE_PATH: text({ default: '/usr/bin/chromium-browser' }),
+        NODE_DOCUMENT_STORE_PATH: text({ default: path.join('tmp', 'storage', 'documents') })
     }
 });
 
@@ -229,11 +125,7 @@ export const pdfConfig = defineConfig({
 export const exportStoreConfig = defineConfig({
     name: 'exportStore',
     shape: {
-        NODE_ACCOUNT_EXPORT_STORE_PATH: text({
-            default: path.join('tmp', 'storage', 'exports'),
-            describe:
-                'Where a built personal-data export is kept until it is downloaded or expires. Private, plaintext on disk, regenerable: mount a volume in a deployment, do not back it up.'
-        })
+        NODE_ACCOUNT_EXPORT_STORE_PATH: text({ default: path.join('tmp', 'storage', 'exports') })
     }
 });
 
@@ -244,36 +136,14 @@ export const ALTCHA_SECRET_MIN_LENGTH = 16;
 export const antibotConfig = defineConfig({
     name: 'antibot',
     shape: {
-        NODE_ANTIBOT_PROVIDER: text({
-            default: 'none',
-            case: 'lower',
-            describe: 'The human-challenge provider: none, turnstile or altcha.'
-        }),
-        NODE_ANTIBOT_EMAIL_POLICY: choice(['off', 'disposable', 'mx'], {
-            default: 'off',
-            describe:
-                'What a signup address must pass: nothing, not-disposable, or has an MX record.'
-        }),
-        NODE_ANTIBOT_EMAIL_ALLOWLIST: csv({
-            case: 'lower',
-            describe: 'Domains exempt from the email policy.'
-        }),
-        NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA: csv({
-            case: 'lower',
-            describe: 'Domains refused on top of the upstream disposable list.'
-        }),
-        NODE_ANTIBOT_ALTCHA_SECRET: text({
-            sensitive: true,
-            describe: `HMAC secret for altcha challenges (${String(ALTCHA_SECRET_MIN_LENGTH)}+ characters).`
-        }),
-        NODE_ANTIBOT_ALTCHA_COST: int({
-            default: 100_000,
-            min: 1,
-            describe:
-                'Work an altcha challenge takes to solve. Higher taxes bots and visitors alike.'
-        }),
-        NODE_ANTIBOT_TURNSTILE_SITE_KEY: text({ describe: 'Public Turnstile site key.' }),
-        NODE_ANTIBOT_TURNSTILE_SECRET: text({ sensitive: true, describe: 'Turnstile secret key.' })
+        NODE_ANTIBOT_PROVIDER: text({ default: 'none', case: 'lower' }),
+        NODE_ANTIBOT_EMAIL_POLICY: choice(['off', 'disposable', 'mx'], { default: 'off' }),
+        NODE_ANTIBOT_EMAIL_ALLOWLIST: csv({ case: 'lower' }),
+        NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA: csv({ case: 'lower' }),
+        NODE_ANTIBOT_ALTCHA_SECRET: text({ sensitive: true }),
+        NODE_ANTIBOT_ALTCHA_COST: int({ default: 100_000, min: 1 }),
+        NODE_ANTIBOT_TURNSTILE_SITE_KEY: text(),
+        NODE_ANTIBOT_TURNSTILE_SECRET: text({ sensitive: true })
     },
     check: (config) => {
         // Selecting a provider is a choice; selecting one without its secret is not. It would

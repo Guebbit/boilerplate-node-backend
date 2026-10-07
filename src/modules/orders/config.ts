@@ -39,86 +39,30 @@ export type ReturnPostagePayer = (typeof RETURN_POSTAGE_PAYERS)[number];
 export const ordersConfig = defineConfig({
     name: 'orders',
     shape: {
-        NODE_SHOP_COUNTRY: text({
-            required: { minLength: 1 },
-            describe: 'The shop’s own country, ISO-3166: the only jurisdiction VAT is charged at.'
-        }),
-        NODE_SHOP_LEGAL_NAME: text({
-            required: { minLength: 1 },
-            describe: 'The shop’s legal name, printed on invoices and the withdrawal notice.'
-        }),
-        NODE_SHOP_VAT_NUMBER: text({
-            describe: 'VAT identification number. Unset prints none rather than a fake one.'
-        }),
-        NODE_SHOP_STREET: text({
-            required: { minLength: 1 },
-            describe: 'The shop’s street address (invoice Art. 226(f); CRD Art. 6(1)(c)).'
-        }),
-        NODE_SHOP_CITY: text({ required: { minLength: 1 }, describe: 'The shop’s city.' }),
-        NODE_SHOP_ZIP: text({ required: { minLength: 1 }, describe: 'The shop’s postal code.' }),
-        NODE_SHOP_EMAIL: email({
-            required: { minLength: 1 },
-            describe:
-                'The address a customer writes to (CRD Art. 6(1)(c)). Not the no-reply sender.'
-        }),
-        NODE_SHOP_PHONE: text({
-            required: { minLength: 1 },
-            describe: 'The shop’s telephone number (CRD Art. 6(1)(c), since the Omnibus Directive).'
-        }),
-        NODE_RETURN_ADDRESS_NAME: text({ describe: 'Who the return parcel is addressed to.' }),
-        NODE_RETURN_ADDRESS_STREET: text({ describe: 'Return address street.' }),
-        NODE_RETURN_ADDRESS_CITY: text({ describe: 'Return address city.' }),
-        NODE_RETURN_ADDRESS_ZIP: text({ describe: 'Return address postal code.' }),
-        NODE_RETURN_ADDRESS_COUNTRY: text({
-            case: 'upper',
-            describe: 'Return address country, ISO-3166 alpha-2.'
-        }),
-        NODE_RETURN_POSTAGE_PAYER: choice(RETURN_POSTAGE_PAYERS, {
-            default: 'consumer',
-            describe: 'Who bears the direct cost of returning goods. Drives the withdrawal wording.'
-        }),
-        NODE_SHIP_TO_COUNTRIES: csv({
-            case: 'upper',
-            describe:
-                'Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own.'
-        }),
-        NODE_BANK_TRANSFER_BENEFICIARY: text({
-            describe:
-                'Account name a transfer is made out to. Unset with the IBAN: transfer is not offered.'
-        }),
-        NODE_BANK_TRANSFER_IBAN: text({ describe: 'Account IBAN, validated at boot.' }),
-        NODE_BANK_TRANSFER_BIC: text({ describe: 'Account BIC/SWIFT. Optional.' }),
-        NODE_BANK_TRANSFER_HOLD_HOURS: int({
-            default: 168,
-            min: 1,
-            describe: 'Hours stock is held for an unpaid transfer order.'
-        }),
-        NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({
-            default: 2,
-            min: 1,
-            describe:
-                'Unpaid (pending) orders one account may hold at once, whatever the payment method. Each holds stock, so this is what stops one account taking the shelf. 2 lets a failed card be retried; a strict shop sets 1.'
-        }),
-        NODE_ORDER_EFFECT_RETRY_MINUTES: int({
-            default: 5,
-            min: 0,
-            describe: 'Grace before the sweep retries a cancelled order’s refund.'
-        }),
-        NODE_WITHDRAWAL_PERIOD_DAYS: int({
-            default: 30,
-            min: 21,
-            describe:
-                'Days a consumer may withdraw. At least 21: the law’s 14, plus room for any weekend or holiday roll-over, which is not computed.'
-        }),
-        NODE_ORDER_PII_RETENTION_DAYS: int({
-            default: 3650,
-            min: 1,
-            describe: 'Days before a terminal order’s personal data is erased.'
-        }),
-        NODE_FRONTEND_LINK_ORDER: text({
-            default: 'orders/{id}',
-            describe: 'Template of the link to an order page.'
-        })
+        NODE_SHOP_COUNTRY: text({ required: { minLength: 1 } }),
+        NODE_SHOP_LEGAL_NAME: text({ required: { minLength: 1 } }),
+        NODE_SHOP_VAT_NUMBER: text(),
+        NODE_SHOP_STREET: text({ required: { minLength: 1 } }),
+        NODE_SHOP_CITY: text({ required: { minLength: 1 } }),
+        NODE_SHOP_ZIP: text({ required: { minLength: 1 } }),
+        NODE_SHOP_EMAIL: email({ required: { minLength: 1 } }),
+        NODE_SHOP_PHONE: text({ required: { minLength: 1 } }),
+        NODE_RETURN_ADDRESS_NAME: text(),
+        NODE_RETURN_ADDRESS_STREET: text(),
+        NODE_RETURN_ADDRESS_CITY: text(),
+        NODE_RETURN_ADDRESS_ZIP: text(),
+        NODE_RETURN_ADDRESS_COUNTRY: text({ case: 'upper' }),
+        NODE_RETURN_POSTAGE_PAYER: choice(RETURN_POSTAGE_PAYERS, { default: 'consumer' }),
+        NODE_SHIP_TO_COUNTRIES: csv({ case: 'upper' }),
+        NODE_BANK_TRANSFER_BENEFICIARY: text(),
+        NODE_BANK_TRANSFER_IBAN: text(),
+        NODE_BANK_TRANSFER_BIC: text(),
+        NODE_BANK_TRANSFER_HOLD_HOURS: int({ default: 168, min: 1 }),
+        NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({ default: 2, min: 1 }),
+        NODE_ORDER_EFFECT_RETRY_MINUTES: int({ default: 5, min: 0 }),
+        NODE_WITHDRAWAL_PERIOD_DAYS: int({ default: 30, min: 21 }),
+        NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3650, min: 1 }),
+        NODE_FRONTEND_LINK_ORDER: text({ default: 'orders/{id}' })
     }
 });
 
