@@ -75,7 +75,6 @@ const SHOP_REFUSAL_REASONS: readonly string[] = ['outranked', 'own'];
  *
  * - `security.*`: unauthorized, forbidden, a rate limit hit, a step-up demanded — except the shop's
  *   own rank refusals ({@link SHOP_REFUSAL_REASONS}), which are the shop admin's business;
- * - `worker.*`: the background workers' own failures;
  * - `auth.login` only when it FAILED, and the three other signs of an attack on a credential:
  *   a failed second factor, a failed OAuth sign-in, a refresh token replayed;
  * - a webhook subscription disabled for failing.
@@ -86,7 +85,7 @@ const SHOP_REFUSAL_REASONS: readonly string[] = ['outranked', 'own'];
 const INCIDENT_SCOPE: Record<string, unknown> = {
     $nor: [{ action: 'security.forbidden', 'metadata.reason': { $in: SHOP_REFUSAL_REASONS } }],
     $or: [
-        { action: { $regex: /^(?:security|worker)\./ } },
+        { action: { $regex: /^security\./ } },
         { action: 'auth.login', outcome: 'failure' },
         {
             action: {

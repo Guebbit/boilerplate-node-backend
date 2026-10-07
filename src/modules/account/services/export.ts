@@ -39,6 +39,7 @@ import { exportRetentionMs } from '../config';
 import { recipientLocale } from '../emails';
 import { accountAuditActions } from '../audit';
 import { accountExportRepository, type AccountExportRow } from '../repository';
+import { mailRecipientRefusal } from '../mail-budget';
 import { runExportJob } from './export-job';
 import { removeRow } from './export-rows';
 
@@ -83,7 +84,7 @@ const isStale = (row: AccountExportRow): boolean =>
  * @param userId - the account asking
  * @returns the row to answer with, and whether it is new (and so needs a job)
  */
-const insertRow = (userId: string): Promise<{ row: AccountExportRow; created: boolean }> => {
+const insertRow = (userId: string): Promise<ExportRowChoice> => {
     const _id = new Types.ObjectId();
     const now = new Date();
     const row: AccountExportRow = {
@@ -134,19 +135,42 @@ const dispatch = (job: AccountExportJobPayload): Promise<void> =>
         inlineBuilds.add(running);
     });
 
+/** A row to answer a request with, and whether it is new (and so needs a job). */
+interface ExportRowChoice {
+    row: AccountExportRow;
+    created: boolean;
+}
+
 /**
- * The live row to answer a request with, or `undefined` when a new one must be made. A `building`
- * row that has not gone stale is live; anything else is deleted here, file and row, so the new row
- * takes its place.
+ * The row to answer a request with, or the 429 that refuses it. A `building` row that has not gone
+ * stale is answered as it is, uncharged. Anything else means a NEW build, which costs one mail from
+ * the mailbox budget because the build ends in a mailed link. The budget is asked BEFORE the old
+ * export is deleted, so a refused request leaves the ready one downloadable.
  *
  * @param userId - the account asking
+ * @param email - the mailbox the finished export's link goes to, charged for a new build
+ * @returns the row and whether it is new, or the budget's refusal
  */
-const liveRowOrClear = (userId: string): Promise<AccountExportRow | undefined> =>
+const rowOrRefusal = (userId: string, email: string): Promise<ExportRowChoice | ResponseReject> =>
     accountExportRepository.findByUserId(userId).then((existing) => {
-        if (!existing) return undefined;
-        if (existing.status === 'building' && !isStale(existing)) return existing;
-        return removeRow(existing).then(() => undefined);
+        if (existing?.status === 'building' && !isStale(existing)) {
+            return { row: existing, created: false };
+        }
+
+        return mailRecipientRefusal(email).then(
+            (refusal) =>
+                refusal ??
+                (existing ? removeRow(existing) : Promise.resolve()).then(() => insertRow(userId))
+        );
     });
+
+/**
+ * Whether a request resolved to a row rather than to the budget's refusal.
+ *
+ * @param outcome - what {@link rowOrRefusal} resolved to
+ */
+const isRow = (outcome: ExportRowChoice | ResponseReject): outcome is ExportRowChoice =>
+    'row' in outcome;
 
 /**
  * Ask for the caller's own data. Answers at once; the file is built in the background and a link
@@ -156,7 +180,8 @@ const liveRowOrClear = (userId: string): Promise<AccountExportRow | undefined> =
  * @param email - the caller's own email, the key the `feedback` section matches by — handed to the
  *   job together with whether the account has proved it, since an unproven address is anyone's
  * @param context - for the audit event this call itself is, and the request's language
- * @returns `202` with the export's `id` and `status`, or `404` when the account is gone
+ * @returns `202` with the export's `id` and `status`, `404` when the account is gone, or `429`
+ *   when a new build would exceed the mailbox budget
  */
 export const requestExport = (
     userId: string,
@@ -166,33 +191,34 @@ export const requestExport = (
     userService.getById(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
 
-        return liveRowOrClear(userId)
-            .then((live) => (live ? { row: live, created: false } : insertRow(userId)))
-            .then(({ row, created }) => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_DATA_EXPORT_REQUESTED,
-                    outcome: 'success',
-                    target_type: 'account_export',
-                    target_id: String(row._id),
-                    ...(created ? {} : { metadata: { reused: true } })
-                });
+        return rowOrRefusal(userId, user.email).then((outcome) => {
+            if (!isRow(outcome)) return outcome;
+            const { row, created } = outcome;
 
-                const job: AccountExportJobPayload = {
-                    exportId: String(row._id),
-                    userId,
-                    email,
-                    emailVerified: Boolean(user.verifiedAt),
-                    locale: recipientLocale(user.locale, context)
-                };
-
-                return (created ? dispatch(job) : Promise.resolve()).then(() =>
-                    generateSuccess<AccountExportRequestResult>(
-                        { id: String(row._id), status: row.status },
-                        202,
-                        t('account.export.requested')
-                    )
-                );
+            recordAudit(context, {
+                action: accountAuditActions.AUTH_DATA_EXPORT_REQUESTED,
+                outcome: 'success',
+                target_type: 'account_export',
+                target_id: String(row._id),
+                ...(created ? {} : { metadata: { reused: true } })
             });
+
+            const job: AccountExportJobPayload = {
+                exportId: String(row._id),
+                userId,
+                email,
+                emailVerified: Boolean(user.verifiedAt),
+                locale: recipientLocale(user.locale, context)
+            };
+
+            return (created ? dispatch(job) : Promise.resolve()).then(() =>
+                generateSuccess<AccountExportRequestResult>(
+                    { id: String(row._id), status: row.status },
+                    202,
+                    t('account.export.requested')
+                )
+            );
+        });
     });
 
 /**
