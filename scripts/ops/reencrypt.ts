@@ -14,6 +14,8 @@
  * Not scheduled: a rotation is an event, not a cadence, so there is no `docker/crontab` line.
  */
 import '@infrastructure/config/dotenv';
+// Before any model loads: Mongoose defaults are read at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import {

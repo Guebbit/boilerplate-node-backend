@@ -14,6 +14,8 @@
 // First, and for its side effect alone: it must write the environment before any import below
 // can read it. See the file's own header.
 import './setup-environment';
+// Before any model loads: a `bulkWrite` filter reads `strictQuery` as it was at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { bootI18n } from '@infrastructure/i18n';

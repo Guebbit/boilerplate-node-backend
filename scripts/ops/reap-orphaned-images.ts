@@ -18,6 +18,8 @@
  *   - a throwaway Mongo (`npm run demo`, e2e) that was reseeded under files on a persistent disk
  */
 import '@infrastructure/config/dotenv';
+// Before any model loads: Mongoose defaults are read at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 import path from 'node:path';
 import mongoose from 'mongoose';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';

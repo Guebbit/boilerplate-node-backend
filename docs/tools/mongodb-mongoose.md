@@ -119,6 +119,21 @@ past it, instead of letting it hold a connection and a core for as long as it li
   `tests/integration/persistence/query-time-limit.test.ts` proves the server really kills a slow
   find and a slow aggregate.
 
+## An undeclared path in a filter is an error
+
+`applyMongooseDefaults()` (`infrastructure/runtime/mongoose-defaults.ts`) sets Mongoose's
+`strictQuery` to `'throw'`. A filter on a path the schema does not declare raises
+`StrictModeError` instead of being dropped, so a typo such as `find({ emial })` cannot quietly
+match every document.
+
+- **Set before any model loads.** A `bulkWrite` filter reads the option as it was when the schema
+  was built. `infrastructure/runtime/mongoose-boot.ts` is imported for its side effect as the
+  first project import of `serve.ts`, `cluster.ts`, every job under `scripts/` and `scenarios/`,
+  and the jest bootstrap (`tests/support/setup.ts`). `configureMongoose()` repeats the call.
+- **What it does not cover.** An operator on a declared path (`{ email: { $ne: null } }`). That is
+  a separate hardening, not built.
+- **Tests:** `tests/integration/persistence/strict-query.test.ts`.
+
 ## Seeds
 
 Seeds populate the database with **known test data** for local development.

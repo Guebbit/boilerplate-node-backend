@@ -24,6 +24,8 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseDotenv } from 'dotenv';
+// Before any model loads: Mongoose defaults are read at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
 import { installDemoClock, registerDemoClock } from './support/demo-clock';
 import { startEphemeralMongo } from './support/ephemeral-mongo';

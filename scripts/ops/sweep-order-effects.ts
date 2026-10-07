@@ -24,6 +24,8 @@
  * See: docs/reference/ops.md
  */
 import '@infrastructure/config/dotenv';
+// Before any model loads: Mongoose defaults are read at schema build.
+import '@infrastructure/runtime/mongoose-boot';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { registerModules } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';

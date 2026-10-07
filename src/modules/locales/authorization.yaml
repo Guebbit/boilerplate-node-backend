@@ -5,10 +5,9 @@ keys:
       subject: Locale
       action: read
       scope: tenant
-      description: Read active, undeleted locales and their dictionaries — the storefront's own view.
+      description: Read active locales and their dictionaries — the storefront's own view.
       conditions:
           active: true
-          deletedAt: null
     - key: locales.any.read
       module: locales
       subject: Locale

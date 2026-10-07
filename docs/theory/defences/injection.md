@@ -20,6 +20,11 @@ meaningful.** Every defence below is a variation on keeping it a value.
 | XPath / XQuery injection         | SQLi's shape, against XML documents                                          | No surface: nothing queries XML.                                                                                                                                                                                                                                                                              |
 | GraphQL injection                | string-built queries; resolvers passing arguments to SQL or a shell          | No surface: REST only — see [The API surface](api-surface.md#which-routes-exist).                                                                                                                                                                                                                             |
 
+A filter on a path the schema does not declare is refused with `StrictModeError` rather than dropped
+(`strictQuery: 'throw'`), so a mistyped field cannot widen a query — see
+[An undeclared path in a filter is an error](../../tools/mongodb-mongoose.md#an-undeclared-path-in-a-filter-is-an-error).
+It does not stop an operator on a declared path.
+
 Search text is the one place a request value legitimately becomes part of a pattern, and it is
 handled in [Into a pattern](#into-a-pattern) below.
 
