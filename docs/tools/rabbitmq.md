@@ -104,9 +104,7 @@ When none of the vars are set, all queue operations silently no-op — the rest 
 
 At boot the log names the broker in use, with the credentials left out
 (`queue: connecting to amqp://rabbitmq:5672 (from NODE_RABBITMQ_URL)`). `NODE_RABBITMQ_URL` wins over
-host and port, so setting it together with `NODE_RABBITMQ_HOST` or `NODE_RABBITMQ_PORT` logs a warning:
-a stale URL in a `.env` otherwise shadows a host and port that look right, and the queue points at a
-broker nobody started without any error.
+host and port; the boot log names the broker and its source.
 
 ## Docker Compose
 

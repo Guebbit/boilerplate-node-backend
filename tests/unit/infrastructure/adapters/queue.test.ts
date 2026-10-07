@@ -554,33 +554,6 @@ describe('the boot announcement', () => {
 
         expect(await messagesAt('info')).toEqual([]);
     });
-
-    it('warns when the URL is set together with a port, since the URL wins', async () => {
-        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
-        setEnvironment({ NODE_RABBITMQ_PORT: '5673' });
-
-        const messages = await messagesAt('warn');
-
-        expect(messages).toHaveLength(1);
-        expect(messages[0]).toContain('NODE_RABBITMQ_URL is set together with');
-    });
-
-    it('warns when the URL is set together with a host', async () => {
-        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
-        setEnvironment({ NODE_RABBITMQ_HOST: '127.0.0.1' });
-
-        expect(await messagesAt('warn')).toHaveLength(1);
-    });
-
-    it('does not warn about a URL on its own, or host and port on their own', async () => {
-        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
-        expect(await messagesAt('warn')).toEqual([]);
-
-        disableRabbitMQ();
-        setEnvironment({ NODE_RABBITMQ_HOST: '127.0.0.1' });
-        setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
-        expect(await messagesAt('warn')).toEqual([]);
-    });
 });
 
 describe('redactedBrokerTarget()', () => {

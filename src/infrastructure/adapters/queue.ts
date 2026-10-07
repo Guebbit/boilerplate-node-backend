@@ -40,7 +40,6 @@ import {
 } from '@infrastructure/adapters/managed-connection';
 import { WORKER_CHANNELS } from '@types';
 import { queueConfig } from '@infrastructure/adapters/config';
-import { currentEnvironment } from '@infrastructure/config/store';
 import { isTestEnvironment } from '@infrastructure/runtime/config';
 import { settleWithin } from '@infrastructure/runtime/settle';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
@@ -277,27 +276,11 @@ export const redactedBrokerTarget = (url: string): string => {
 };
 
 /**
- * Says at boot which broker this process will dial, and warns when `NODE_RABBITMQ_URL` is hiding
- * host or port settings.
- *
- * Why it exists: the URL wins over the fragments, and a stale URL in a `.env` shadows a host and
- * port that look correct. The queue then points at a broker nobody started, with no error.
+ * Says at boot which broker this process will dial, and where the address came from.
+ * The URL wins over host/port; this line is how a stale one shows up.
  */
 const announceBroker = (): void => {
-    const environment = currentEnvironment();
     const url = getAmqpUrl();
-
-    if (
-        (environment.NODE_RABBITMQ_URL ?? '') !== '' &&
-        ((environment.NODE_RABBITMQ_HOST ?? '') !== '' ||
-            (environment.NODE_RABBITMQ_PORT ?? '') !== '')
-    ) {
-        logger.warn({
-            message:
-                'queue: NODE_RABBITMQ_URL is set together with NODE_RABBITMQ_HOST/NODE_RABBITMQ_PORT. ' +
-                'The URL wins and the host and port are ignored; unset one of them.'
-        });
-    }
 
     if (!url || !queueConfig().NODE_RABBITMQ_ENABLED) return;
 
