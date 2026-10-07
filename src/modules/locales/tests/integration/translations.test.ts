@@ -47,7 +47,7 @@ describe('getEntityTranslations', () => {
         const result = await localeService.getEntityTranslations('bogus', 'p1');
 
         expect(result.success).toBe(false);
-        expect(result.status).toBe(422);
+        expect(result.status).toBe(404);
     });
 
     it('answers an empty list for an entity with no rows yet', async () => {
@@ -79,7 +79,7 @@ describe('upsertEntityTranslations', () => {
         });
 
         expect(result.success).toBe(false);
-        expect(result.status).toBe(422);
+        expect(result.status).toBe(404);
     });
 
     it('refuses a locale that does not exist', async () => {

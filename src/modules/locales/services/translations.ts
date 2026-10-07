@@ -42,9 +42,9 @@ export interface EntityTranslationsResult {
     fields: readonly string[];
 }
 
-/** An `entityType` the `translatables` registry does not know. */
+/** An `entityType` the registry does not know: 404, like any path that names nothing. */
 const entityTypeUnknown = (entityType: string): ResponseReject =>
-    generateReject(422, [t('locales.error-entity-type-unknown', { entityType })]);
+    generateReject(404, [t('locales.error-entity-type-unknown', { entityType })]);
 
 /** An `entityId` the module named by `entityType` does not currently hold. */
 const entityNotFound = (entityType: string, entityId: string): ResponseReject =>
