@@ -46,27 +46,27 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         });
     });
 
-    it('422s an unregistered entityType, matching the spec', async () => {
+    it('404s an unregistered entityType, like any path that names nothing', async () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
             .get('/locales/translations/bogus/000000000000000000000000')
             .set('Authorization', bearer);
 
-        expect(response.status).toBe(422);
+        expect(response.status).toBe(404);
     });
 
     it.each(['constructor', 'toString', '__proto__'])(
-        '422s %s as an entityType: an inherited property is not a registered type',
+        '404s %s as an entityType: an inherited property is not a registered type',
         async (entityType) => {
             const { bearer } = await authenticateAs('admin');
 
             const response = await api()
                 .patch(`/locales/translations/${entityType}/000000000000000000000000`)
                 .set('Authorization', bearer)
-                .send({ translations: {} });
+                .send({ en: { fields: { title: 'x' } } });
 
-            expect(response.status).toBe(422);
+            expect(response.status).toBe(404);
         }
     );
 

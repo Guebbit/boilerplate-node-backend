@@ -402,7 +402,7 @@ components:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 subscriptionId:
-                    type: string
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 eventId:
                     type: string
                 eventType:

@@ -569,7 +569,6 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
             tags: [System]
@@ -1345,8 +1344,8 @@ components:
             description: >-
                 A `translatables` registry key — `product` in V1. Not an enum: the set grows as
                 more of the kernel registry declares translatable collections, and this contract
-                does not enumerate a kernel manifest. An unregistered value is refused at write
-                time with a 422, not by this schema.
+                does not enumerate a kernel manifest. An unregistered value answers 404, like any
+                path that names nothing; the length bounds here stay 422.
             example: product
 
         Translation:
