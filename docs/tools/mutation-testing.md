@@ -817,6 +817,36 @@ then held 220–620 MB from the first file to the last.
 --runInBand --logHeapUsage <files>`, then a heap snapshot after two files. Count a per-file
 object (`Mongoose` works) and walk its retainer path to a GC root — the root names the culprit.
 
+### Stryker's coverage records, and collecting after each file {#collect-after-each-file}
+
+Clearing timers was not enough: on 2026-10-04 the sweep's `preflight` still died after 13 minutes
+at a 12 GB heap, and a parallel variant at Node's default heap lost 208 of 210 shards the same way.
+Two more things kept finished files in memory, and both happen only under Stryker.
+
+| Cause                          | What happens                                                                                                                                                                                                                                                                                   | Fix in `tests/support/test-environment.ts`                                                                                              |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Stryker's coverage records** | Stryker shares one namespace object across every file. With `coverageAnalysis: perTest`, its instrumented code creates a `{}` per covering test _inside_ the file's VM context — and an object keeps its whole context alive. Every file that exercised the mutated code stayed: ~420 MB each. | At teardown, copy those records into the environment's own realm (`releaseStrykerCoverage`). Same data, nothing pointing into the file. |
+| **Lazy collection**            | V8 frees a finished file's context lazily. In one process the next files outrun it, and V8 throws "heap out of memory" with the memory still reclaimable — [known jest behaviour](https://github.com/jestjs/jest/issues/11956).                                                                | At teardown, call `gc()` when `--expose-gc` made it available.                                                                          |
+
+Measured 2026-10-07, heap after each file of Stryker's initial run (`--dryRunOnly`):
+
+| Mutated file (related test files) | Heap cap | Neither fix              | Collection only                          | Both                             |
+| --------------------------------- | -------- | ------------------------ | ---------------------------------------- | -------------------------------- |
+| `feedback/model.ts` (124)         | 4 GB     | out of memory by file 23 | finished, 0.6–3.2 GB                     | —                                |
+| `users/model.ts` (205)            | 8 GB     | out of memory            | out of memory by file 27, +420 MB a file | finished, levels off near 4.4 GB |
+
+The first row hid the first cause: few of `feedback`'s test files run its model during a test, so few
+records were made. `users/model.ts` is exercised by nearly every test file, so nearly every file
+stayed. A plain `jest --runInBand` shows neither: there is no Stryker namespace, and with
+`--logHeapUsage` plus `--expose-gc` jest collects after each file itself.
+
+Who sets `--expose-gc`:
+
+- `scripts/mutation/stryker-run.ts` — the local runs and the PR diff job.
+- `NODE_OPTIONS` in `mutation.yml`'s `preflight` and `mutation-wave.yml`'s shards.
+
+A normal test run sets neither the flag nor the namespace, so it pays nothing.
+
 ### The `bson` warning sign {#the-bson-warning-sign}
 
 `bson` is not a leak on its own. It is the **amplifier** that makes any other leak expensive, and

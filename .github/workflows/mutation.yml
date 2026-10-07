@@ -78,9 +78,10 @@ jobs:
                   node-version: ${{ env.NODE_VERSION }}
 
             - name: Run the widest initial test run
-              # Same heap, worker count and dry-run budget as a wave shard (`mutation-wave.yml`).
+              # Same heap, worker count, `--expose-gc` and dry-run budget as a wave shard
+              # (`mutation-wave.yml`).
               env:
-                  NODE_OPTIONS: --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
+                  NODE_OPTIONS: --expose-gc --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
               run: |
                   npx stryker run tmp/stryker.ci.json --mutate src/modules/users/model.ts \
                     --concurrency 1 --dryRunTimeoutMinutes 90 --dryRunOnly

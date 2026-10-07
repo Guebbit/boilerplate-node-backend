@@ -134,12 +134,15 @@ jobs:
               # memory" before testing a mutant (2026-09-27). One worker halves the speed and ends
               # that failure; the waves absorb the speed.
               #
+              # `--expose-gc`: lets the test environment collect after each test file, which the
+              # initial test run needs to fit — docs/tools/mutation-testing.md#collect-after-each-file.
+              #
               # `timeout` stops Stryker at 330 minutes so the step, not GitHub, ends the job: exit
               # 124 is how the next wave knows to split this shard rather than retry it whole.
               env:
                   MUTATE: ${{ steps.args.outputs.mutate }}
                   MUTATION_SLICE: ${{ steps.args.outputs.slice }}
-                  NODE_OPTIONS: --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
+                  NODE_OPTIONS: --expose-gc --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
               run: |
                   set +e
                   timeout --kill-after=2m 330m npx stryker run tmp/stryker.ci.json \

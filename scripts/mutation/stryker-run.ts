@@ -101,6 +101,9 @@ export const runStryker = ({
     const passedConcurrency = args.some((argument) => argument.startsWith('--concurrency'));
 
     /*
+     * `--expose-gc` lets the test environment collect after each file, which a single-process dry
+     * run needs to finish — see docs/tools/mutation-testing.md#collect-after-each-file.
+     *
      * `--max-old-space-size` raises V8's default, a flat ~4.2 GB here rather than a share of the
      * machine — a worker wanting more dies in the first minute. It cannot bound memory held outside
      * the heap, such as `bson`'s buffers. See docs/tools/mutation-testing.md#worker-heap-cap.
@@ -113,12 +116,13 @@ export const runStryker = ({
     const childEnvironment = {
         ...process.env,
         NODE_TEST_TMP_BASE: TEST_TMP_BASE,
-        ...(heapMb
-            ? {
-                  NODE_OPTIONS:
-                      `${process.env.NODE_OPTIONS ?? ''} --max-old-space-size=${heapMb}`.trim()
-              }
-            : {})
+        NODE_OPTIONS: [
+            process.env.NODE_OPTIONS,
+            '--expose-gc',
+            heapMb ? `--max-old-space-size=${heapMb}` : undefined
+        ]
+            .filter(Boolean)
+            .join(' ')
     };
 
     /*
