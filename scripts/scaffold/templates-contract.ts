@@ -35,6 +35,14 @@ const KEYED_ERRORS_WITH_NOT_FOUND = [
     errorResponse('500', 'InternalError')
 ].join('\n');
 
+/** A route with only a path id: no body or query to fail, so no 422, and a malformed id is the 404. */
+const PATH_ONLY_ERRORS = [
+    errorResponse('401', 'Unauthorized'),
+    errorResponse('403', 'Forbidden'),
+    errorResponse('404', 'NotFound'),
+    errorResponse('500', 'InternalError')
+].join('\n');
+
 /**
  * The module's `openapi.yaml`: list, create, replace, patch and delete, plus the schemas only
  * these paths reference.
@@ -151,7 +159,7 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             responses:
                 '200': { $ref: '${ROOT}#/components/responses/Success' }
-${KEYED_ERRORS_WITH_NOT_FOUND}
+${PATH_ONLY_ERRORS}
 
 components:
     schemas:

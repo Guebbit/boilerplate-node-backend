@@ -1,7 +1,7 @@
 /**
  * @module
- * Single-order read controller, scoped by caller role; see the exported controller's own JSDoc
- * for the 404-vs-422 distinction this file enforces before the query runs.
+ * Single-order read controller, scoped by caller role. A malformed id is checked before the
+ * query and answers the same 404 as an unknown one.
  */
 
 import type { Request, Response } from 'express';

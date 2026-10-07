@@ -38,7 +38,6 @@ paths:
                 # same status with `orders.not-found` instead — the client cannot tell the two
                 # apart from the status code alone, by design (see `orders`' own `GET /orders/{id}`).
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 # `invoicingLimiter` sits in front of this route — see routes.ts.
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -69,7 +68,6 @@ paths:
                                 $ref: '#/components/schemas/CreditNoteListEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /orders/{id}/credit-notes/{creditNoteId}:
@@ -103,7 +101,6 @@ paths:
                 # `errors[].code` is `ORDER_CREDIT_NOTE_NOT_ISSUED` for an order that exists but has
                 # no such credit note; `orders.not-found` for a genuinely unknown/inaccessible order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
                 # See `GET /orders/{id}/invoice`: a full render queue answers 503 with `Retry-After`.
