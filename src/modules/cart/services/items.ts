@@ -195,7 +195,7 @@ export const cartItemRemoveById = (
     context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
     cartRepository.removeLine(userId, id).then((cart) => {
-        if (!cart) return generateReject(404, []);
+        if (!cart) return generateReject(404, [t('cart.item-not-found')]);
         recordAudit(context, {
             action: cartAuditActions.USER_CART_ITEM_REMOVED,
             actor_role: 'user',

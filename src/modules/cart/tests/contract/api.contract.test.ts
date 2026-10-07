@@ -18,6 +18,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { MISSING_ID } from '@tests/ids';
+import { t } from '@infrastructure/i18n';
 
 setupTestDb();
 
@@ -595,8 +596,9 @@ describe('DELETE /cart/{productId}', () => {
 
         const response = await api().delete('/cart/not-an-id').set('Authorization', bearer);
 
-        // A path id: the same 404 a product that is not in the cart gets.
+        // A path id: the same 404 copy a product that is not in the cart gets.
         expect(response.status).toBe(404);
+        expect(response.body.errors[0].message).toBe(t('cart.item-not-found'));
     });
 });
 

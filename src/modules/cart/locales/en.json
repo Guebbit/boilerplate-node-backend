@@ -4,6 +4,7 @@
         "total-changed": "The total changed since you last saw it. Check the new total and place the order again.",
         "empty": "Your cart is empty.",
         "product-removed": "Product removed from cart.",
+        "item-not-found": "That item is not in your cart.",
         "product-unavailable": "One or more products in your cart are no longer available — see `details.lines`.",
         "product-added": "Product successfully added to cart.",
         "reorder": {

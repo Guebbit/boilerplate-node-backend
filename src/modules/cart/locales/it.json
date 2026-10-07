@@ -4,6 +4,7 @@
         "total-changed": "Il totale è cambiato da quando l’hai visto. Controlla il nuovo totale e conferma di nuovo l’ordine.",
         "empty": "Il tuo carrello è vuoto.",
         "product-removed": "Prodotto rimosso dal carrello.",
+        "item-not-found": "Questo articolo non è nel tuo carrello.",
         "product-unavailable": "Uno o più prodotti nel carrello non sono più disponibili — vedi `details.lines`.",
         "product-added": "Prodotto aggiunto al carrello.",
         "reorder": {

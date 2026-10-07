@@ -27,11 +27,11 @@ export const deleteCartItem = (
 ) => {
     const userId = request.authContext!.id;
     // `write` reads params before body, no query — neither route declares one. The path segment
-    // wins on the canonical route (a malformed one is the bare 404 a line not in the cart gets);
+    // wins on the canonical route (a malformed one answers the same 404 copy as a line not in the cart);
     // the alias has no path segment, so the body is the only source that can ever supply one (a
     // malformed one is a 422 naming `productId`).
     const productId = requireId(request, response, {
-        notFound: null,
+        notFound: 'cart.item-not-found',
         name: 'productId',
         surface: 'write'
     });

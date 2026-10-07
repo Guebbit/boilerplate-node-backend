@@ -740,6 +740,7 @@ describe('cartItemRemoveById', () => {
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(404);
+        expect(asReject(result).errors[0].message).toBe(t('cart.item-not-found'));
     });
 
     it('rejects with 404 when the user has no cart at all', async () => {
@@ -750,6 +751,7 @@ describe('cartItemRemoveById', () => {
         const result = await cartItemRemoveById(user.id, String(product._id), testCallerContext);
 
         expect(asReject(result).status).toBe(404);
+        expect(asReject(result).errors[0].message).toBe(t('cart.item-not-found'));
     });
 
     it('leaves an empty cart behind when the last line goes', async () => {
