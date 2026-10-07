@@ -119,7 +119,7 @@ paths:
             description: |
                 Returns the most recent INCIDENT events, newest first, from the persisted audit trail:
                 security refusals (`security.*`), failed sign-ins, a failed second factor or OAuth
-                sign-in, a replayed refresh token, worker failures, and a webhook subscription
+                sign-in, a replayed refresh token, and a webhook subscription
                 disabled for failing. Never what a shop's customers did (orders, payments, accounts,
                 successful sign-ins): that is a shop admin's `GET /audit`.
                 Every `ip` is a keyed digest (`hmac:` and 12 hex characters), comparable across rows

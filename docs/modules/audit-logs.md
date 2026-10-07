@@ -115,7 +115,7 @@ flowchart LR
 
 **The operator's read is an incident feed, not the trail.** `GET /observability/audit` goes through
 `searchIncidents`, which ANDs the operator's own filters with an allow-list (`INCIDENT_SCOPE` in
-`service.ts`): the `security.*` and `worker.*` actions, a refused sign-in, a failed second-factor
+`service.ts`): the `security.*` actions, a refused sign-in, a failed second-factor
 challenge or provider sign-in, a reused refresh token and an auto-disabled webhook. The one
 `security.forbidden` it drops is the shop's own rank refusals (`metadata.reason` is `outranked` or
 `own`): staff refused a thing that belongs to an equal, a superior or themselves is the shop's

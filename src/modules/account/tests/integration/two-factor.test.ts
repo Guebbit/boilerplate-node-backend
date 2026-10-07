@@ -667,6 +667,19 @@ describe('logging in with a device factor', () => {
         expect(response.status).toBe(422);
     });
 
+    it('refuses an empty code at the schema, without taking a wrong-code attempt', async () => {
+        const { user, bearer } = await authenticateVerified();
+        await enrollTotp(bearer);
+        const login = await startLogin(user.email);
+
+        const response = await api()
+            .post('/account/login/2fa')
+            .send({ challenge: login.body.data.challenge, code: '' });
+
+        expect(response.status).toBe(422);
+        expect(await lockStateOf(user.id)).toEqual({ failures: 0, lockedUntil: undefined });
+    });
+
     it('mints a session on the right code, carrying otp in amr', async () => {
         const { user, bearer } = await authenticateVerified();
         const { secret } = await enrollTotp(bearer);

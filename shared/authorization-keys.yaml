@@ -262,7 +262,7 @@ keys:
       subject: Payment
       action: read
       scope: tenant
-      description: Read every payment in the shop — the support desk, helping with an order that is never their own.
+      description: Read every payment in the shop — the support desk helping with an order that is never their own, and the shop manager seeing the money behind the orders they handle.
     - key: payments.any.create
       module: payments
       subject: Payment

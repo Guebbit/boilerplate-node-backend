@@ -85,7 +85,7 @@ paths:
         get:
             tags: [Payments]
             summary: Get the payment behind an order
-            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. Admins read anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. A caller holding `payments.any.read` reads anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
             operationId: getPaymentByOrder
             security:
                 - bearerAuth: []

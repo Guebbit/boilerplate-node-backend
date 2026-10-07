@@ -186,6 +186,20 @@ cases:
       resource: { tenantId: shop_2, active: true }
       expect: deny
 
+    - name: a manager may read a customer's payment
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [payments.any.read] }
+      action: read
+      subject: Payment
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: allow
+
+    - name: a manager may not refund a payment
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [payments.any.read] }
+      action: update
+      subject: Payment
+      resource: { tenantId: shop_1, userId: usr_2 }
+      expect: deny
+
     - name: the same person, member of two shops, is one caller in one of them at a time
       caller: { id: usr_2, scope: tenant, tenantId: shop_2, permissions: [products.any.update] }
       action: update

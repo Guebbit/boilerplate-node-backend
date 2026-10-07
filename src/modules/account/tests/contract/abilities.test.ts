@@ -154,4 +154,24 @@ describe('GET /account/abilities', () => {
         expect(response.body.data.subjects).toEqual(PERMISSION_SUBJECTS);
         expect(response.body.data.subjects).toEqual(expect.arrayContaining(['Product', 'Order']));
     });
+
+    it('lists no grantable role for a stranger', async () => {
+        const response = await api().get('/account/abilities').expect(200);
+
+        expect(response.body.data.grantableRoles).toEqual([]);
+    });
+
+    it('lists the roles an administrator may assign, and not the platform one', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/account/abilities')
+            .set('Authorization', bearer)
+            .expect(200);
+
+        expect(response.body.data.grantableRoles).toEqual(
+            expect.arrayContaining(['customer', 'manager', 'moderator', 'admin'])
+        );
+        expect(response.body.data.grantableRoles).not.toContain('operator');
+    });
 });

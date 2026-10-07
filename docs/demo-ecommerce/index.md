@@ -127,7 +127,7 @@ what a route guard and a listing actually answer.
 | `guest`      | r        | —    | —      | —        | —         | —        | —         | —        | r       | —    | —       | —          | —        | —        | —             | —       | —             |
 | `unverified` | r        | u    | r      | r        | —         | —        | —         | —        | r       | —    | —       | —          | —        | —        | —             | rcud    | rd            |
 | `customer`   | r        | ux   | r      | r        | —         | —        | —         | —        | r       | —    | —       | —          | —        | —        | —             | rcud    | rd            |
-| `manager`    | RCUD     | —    | RCUD   | r        | R         | START    | RURECEIVE | R        | RCUD    | RU   | —       | R          | RCUD     | —        | —             | rcud    | rd            |
+| `manager`    | RCUD     | —    | RCUD   | R        | R         | START    | RURECEIVE | R        | RCUD    | RU   | —       | R          | RCUD     | —        | —             | rcud    | rd            |
 | `warehouse`  | R        | —    | R      | —        | RC        | USTART   | RRECEIVE  | —        | r       | —    | —       | —          | —        | —        | —             | rcud    | rd            |
 | `support`    | r        | —    | R      | R        | —         | —        | RU        | RUD      | r       | —    | RU      | —          | —        | —        | —             | rcud    | rd            |
 | `editor`     | RCUD     | —    | —      | —        | —         | —        | —         | —        | RCUD    | RU   | —       | —          | —        | —        | —             | rcud    | rd            |
