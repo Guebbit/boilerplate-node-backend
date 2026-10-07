@@ -138,6 +138,9 @@ reason — a delivery arrived, or a count was corrected. That is deliberate, and
 
 The one exception is creating a brand-new product, which can start with an opening quantity.
 
+**You can see an order's payment, but you cannot return money by hand.** That is the moderator's and
+the admin's job; cancelling a paid order still refunds it.
+
 ## Prices and delivery
 
 Product prices are set per product. Delivery prices are fixed rules, not settings:
