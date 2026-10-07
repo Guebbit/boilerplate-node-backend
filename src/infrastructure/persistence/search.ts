@@ -241,3 +241,18 @@ export const resolveSort = (
     }
     return Object.keys(sort).length > 0 ? { ...sort, _id: -1 } : undefined;
 };
+
+/**
+ * {@link resolveSort} off a whole filter bag: reads the caller's `sort` key, so a repository does
+ * not cast the untyped bag itself.
+ *
+ * @param filters - the request's filters, `sort` among them when the caller sent one
+ * @param sortable - wire field → Mongo path
+ * @returns the sort, or `undefined` when no token survived
+ */
+export const sortOf = (
+    filters: object,
+    sortable: Readonly<Record<string, string>> = {}
+): Record<string, 1 | -1> | undefined =>
+    // `as`: the filter bag is untyped by design; `resolveSort` takes `unknown` and validates it.
+    resolveSort((filters as { sort?: unknown }).sort, sortable);

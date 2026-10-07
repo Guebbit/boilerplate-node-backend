@@ -30,7 +30,7 @@ import {
     buildPaginatedMeta,
     DEFAULT_SORT,
     SORT_COLLATION,
-    resolveSort,
+    sortOf,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
@@ -115,7 +115,7 @@ const search = async (
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
     // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
     // makes ties the normal case rather than the edge one.
-    const chosen = resolveSort((filters as { sort?: unknown }).sort, ORDER_SORTABLE);
+    const chosen = sortOf(filters, ORDER_SORTABLE);
     const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: chosen ?? DEFAULT_SORT }];
 
     return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(

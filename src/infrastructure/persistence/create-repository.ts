@@ -20,7 +20,7 @@ import {
     toSearchPattern,
     DEFAULT_SORT,
     SORT_COLLATION,
-    resolveSort,
+    sortOf,
     type PaginatedMeta
 } from './search';
 import { trackDatabaseQuery } from './metrics';
@@ -425,8 +425,7 @@ export function createRepository<TDocument extends Document, TWire>(
         // Explicit argument, else the caller's `sort` filter through the whitelist, else the total
         // default: `count` and `findAll` are separate queries, so a tie can put one document on
         // two pages — see `DEFAULT_SORT`.
-        const chosen =
-            sort ?? resolveSort((filters as { sort?: unknown }).sort, searchable.sortable);
+        const chosen = sort ?? sortOf(filters, searchable.sortable);
         // `scope` is the caller's authorization boundary (own rows, publicly visible rows), which
         // no client-supplied filter may widen — so both must hold, under `$and`. A spread would
         // let one side's key replace the other's: two `$or`s, and one is silently dropped.
