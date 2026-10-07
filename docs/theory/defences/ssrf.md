@@ -11,7 +11,9 @@ made to. Everything else is variation.
 This backend has two paths where that is true — outbound [webhooks](../../modules/webhooks.md),
 which POST to a URL the subscriber registered, and the one-off download of an OAuth provider's
 avatar at signup (`adapters/remote-image.ts`) — and one guard built for both,
-`infrastructure/adapters/ssrf-guard.ts`. Every other outbound `fetch` in `src/` targets a
+`infrastructure/adapters/ssrf-guard.ts`. Both reach it through one request function,
+`pinnedHttpsRequest` (`infrastructure/adapters/pinned-https.ts`): the one outbound path for a
+user-supplied URL. Every other outbound `fetch` in `src/` targets a
 hard-coded host. The table below is read against that split: the guarded webhook path on one side,
 "no surface at all" everywhere else.
 

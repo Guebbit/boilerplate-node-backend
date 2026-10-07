@@ -16,15 +16,10 @@
  * Always TLS: `ssrf-guard.ts` refuses every non-`https:` URL, the demo host included.
  */
 
-import { request as httpsRequest } from 'node:https';
-import type { IncomingMessage } from 'node:http';
-import {
-    resolveSafeOutboundTarget,
-    SsrfRefusedError,
-    type SafeOutboundTarget
-} from '@infrastructure/adapters/ssrf-guard';
+import { pinnedHttpsRequest } from '@infrastructure/adapters/pinned-https';
+import { SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
 import { logger } from '@infrastructure/adapters/logger';
-import { signWebhookPayload, type WebhookSignatureHeaders } from './webhook-signing';
+import { signWebhookPayload } from './webhook-signing';
 
 /** What a tenant reads when the SSRF guard refused its URL; the reason goes to the log only. */
 const SSRF_REFUSED_TEXT = 'This URL cannot receive webhooks.';
@@ -58,71 +53,6 @@ export interface WebhookDeliveryResult {
     error?: string;
 }
 
-/** The bare status this module reads off a response; the body is drained, never parsed. */
-interface RawResponse {
-    statusCode: number;
-}
-
-/**
- * POST the signed body to a pinned target.
- *
- * node:https — https.request(options, callback): https://nodejs.org/api/https.html#httpsrequestoptions-callback
- *  - `lookup`: DNS pinning from `ssrf-guard.ts` — the connection is made to the address that was
- *    already validated, not to whatever a second resolution would answer.
- *  - `hostname` stays the ORIGINAL host (not the pinned IP): TLS SNI and certificate hostname
- *    verification must check against the name the operator configured, only the IP the socket
- *    connects to is pinned.
- *  - `signal`: the hard total timeout, created once in {@link deliverWebhook} and shared with the
- *    DNS resolution before this — `request.destroy()` fires on abort, surfaced below as the
- *    request's `error` event with `err.name === 'AbortError'`.
- *  - No redirect handling: this call answers with whatever status the endpoint sent, 3xx included,
- *    and `deliverWebhook` below treats 3xx as a failure rather than a location to chase.
- *
- * Trust is Node's own store: the system roots, plus whatever `NODE_EXTRA_CA_CERTS` added at process
- * start. Only the development/demo scripts set that (the demo sink's test CA); no `ca` option
- * is passed here, so nothing in this file can widen it.
- *
- * @param target - the pinned, already-validated destination from `resolveSafeOutboundTarget`
- * @param url - the parsed subscription URL, for the scheme/path/query/port `lookup` cannot supply
- * @param headers - the three `webhook-*` headers from `signWebhookPayload`
- * @param body - the exact signed bytes
- * @param signal - {@link deliverWebhook}'s one total-attempt-budget abort, already spent on
- *   resolution by the time it reaches this call
- */
-const postSignedPayload = (
-    target: SafeOutboundTarget,
-    url: URL,
-    headers: WebhookSignatureHeaders,
-    body: string,
-    signal: AbortSignal
-): Promise<RawResponse> =>
-    new Promise((resolve, reject) => {
-        const outgoingRequest = httpsRequest(
-            {
-                hostname: target.hostname,
-                port: url.port ? Number(url.port) : 443,
-                path: `${url.pathname}${url.search}`,
-                method: 'POST',
-                lookup: target.lookup,
-                headers: {
-                    'content-type': 'application/json',
-                    'content-length': Buffer.byteLength(body),
-                    ...headers
-                },
-                signal
-            },
-            (incomingResponse: IncomingMessage) => {
-                // Only the status is used — draining rather than reading keeps the socket from
-                // backing up on an endpoint that sends a body nobody asked for.
-                incomingResponse.resume();
-                resolve({ statusCode: incomingResponse.statusCode ?? 0 });
-            }
-        );
-
-        outgoingRequest.on('error', reject);
-        outgoingRequest.end(body);
-    });
-
 /** Whichever `.name` a rejection carries, read without requiring `instanceof Error` — see below. */
 const errorName = (error: unknown): string | undefined =>
     typeof error === 'object' &&
@@ -147,7 +77,7 @@ const describeDeliveryError = (error: unknown): string => {
         });
         return SSRF_REFUSED_TEXT;
     }
-    // 'AbortError' is the POST phase (`postSignedPayload`'s `signal` option, Node's own naming);
+    // 'AbortError' is the POST phase (`pinnedHttpsRequest`'s `signal` option, Node's own naming);
     // 'TimeoutError' is the DNS phase (`ssrf-guard.ts`'s `rejectOnAbort`, `signal.reason` itself,
     // a `DOMException` — `AbortSignal.timeout`'s own name for its reason). Read via `errorName`,
     // not `error instanceof Error`: under Jest's VM sandboxing that `DOMException` fails
@@ -172,29 +102,42 @@ export const deliverWebhook = (attempt: WebhookDeliveryAttempt): Promise<Webhook
     // `signal` parameter docblock for why the resolver needs it too.
     const signal = AbortSignal.timeout(timeoutMs);
 
-    return resolveSafeOutboundTarget(attempt.url, signal)
-        .then((target) => {
+    return Promise.resolve()
+        .then(() => {
             const body = JSON.stringify(attempt.payload);
             const { headers } = signWebhookPayload({
                 id: attempt.eventId,
                 body,
                 secrets: attempt.secrets
             });
-            return postSignedPayload(target, new URL(attempt.url), headers, body, signal);
+            return pinnedHttpsRequest(attempt.url, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'content-length': Buffer.byteLength(body),
+                    ...headers
+                },
+                body,
+                signal
+            });
         })
         .then((response): WebhookDeliveryResult => {
+            // Only the status is used — draining rather than reading keeps the socket from
+            // backing up on an endpoint that sends a body nobody asked for.
+            response.resume();
+            const statusCode = response.statusCode ?? 0;
             const durationMs = Date.now() - startedAt;
-            if (response.statusCode >= 200 && response.statusCode < 300)
-                return { success: true, statusCode: response.statusCode, durationMs };
+            if (statusCode >= 200 && statusCode < 300)
+                return { success: true, statusCode, durationMs };
 
-            const isRedirect = response.statusCode >= 300 && response.statusCode < 400;
+            const isRedirect = statusCode >= 300 && statusCode < 400;
             return {
                 success: false,
-                statusCode: response.statusCode,
+                statusCode,
                 durationMs,
                 error: isRedirect
-                    ? `Endpoint answered ${response.statusCode}; redirects are never followed`
-                    : `Endpoint answered ${response.statusCode}`
+                    ? `Endpoint answered ${statusCode}; redirects are never followed`
+                    : `Endpoint answered ${statusCode}`
             };
         })
         .catch(

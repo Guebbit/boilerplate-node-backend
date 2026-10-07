@@ -13,7 +13,6 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
-import { request as httpsRequest } from 'node:https';
 import path from 'node:path';
 import { deleteFile } from '@infrastructure/adapters/filesystem';
 import {
@@ -22,7 +21,7 @@ import {
 } from '@infrastructure/adapters/image.worker';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { logger } from '@infrastructure/adapters/logger';
-import { resolveSafeOutboundTarget } from '@infrastructure/adapters/ssrf-guard';
+import { pinnedHttpsRequest } from '@infrastructure/adapters/pinned-https';
 import { uploadStagingPath } from '@infrastructure/http/middlewares/upload';
 
 /** Total budget for resolving, connecting and downloading — one signal covers all of it. */
@@ -53,43 +52,23 @@ const readCapped = (response: IncomingMessage): Promise<Buffer> =>
     });
 
 /**
- * GET a url through the SSRF guard: https only, DNS pinned to the validated address, and no
- * redirect followed (a 3xx is a failure, not a location to chase).
- * https://nodejs.org/api/https.html#httpsrequestoptions-callback
+ * GET a url through {@link pinnedHttpsRequest}: https only, DNS pinned to the validated address,
+ * and no redirect followed (a 3xx is a failure, not a location to chase).
  *
  * @param rawUrl - the provider-supplied avatar url
  * @throws when the guard refuses it, the status is not 200, or the body is too large
  */
-const download = (rawUrl: string): Promise<Buffer> => {
-    const signal = AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS);
-    return resolveSafeOutboundTarget(rawUrl, signal).then(
-        (target) =>
-            new Promise<Buffer>((resolve, reject) => {
-                const url = new URL(rawUrl);
-                const outgoing = httpsRequest(
-                    {
-                        // The original host, not the pinned IP: TLS must verify the name.
-                        hostname: target.hostname,
-                        port: url.port ? Number(url.port) : 443,
-                        path: `${url.pathname}${url.search}`,
-                        method: 'GET',
-                        lookup: target.lookup,
-                        signal
-                    },
-                    (response) => {
-                        if (response.statusCode !== 200) {
-                            response.resume();
-                            reject(new Error(`Remote image answered ${response.statusCode}.`));
-                            return;
-                        }
-                        readCapped(response).then(resolve, reject);
-                    }
-                );
-                outgoing.on('error', reject);
-                outgoing.end();
-            })
-    );
-};
+const download = (rawUrl: string): Promise<Buffer> =>
+    pinnedHttpsRequest(rawUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(DOWNLOAD_TIMEOUT_MS)
+    }).then((response) => {
+        if (response.statusCode !== 200) {
+            response.resume();
+            throw new Error(`Remote image answered ${response.statusCode}.`);
+        }
+        return readCapped(response);
+    });
 
 /**
  * Stage downloaded bytes and run them through quarantine and the digest pipeline.
