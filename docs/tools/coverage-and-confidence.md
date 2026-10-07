@@ -59,7 +59,7 @@ Because of latency, not information.
 | ---------------------------- | ------------------------------------------------ | ------------------ |
 | `npm run test:unit:coverage` | seconds                                          | every push         |
 | `npm run mutation`           | minutes — the files a branch changed             | every pull request |
-| `npm run mutation:full`      | far longer — it reruns the suite once per mutant | weekly, sharded    |
+| `npm run mutation:full`      | far longer — it reruns the suite once per mutant | monthly, sharded   |
 
 Coverage is the **smoke alarm**: cheap, fast, and it tells you something changed shape. Mutation
 testing is the **inspection**: slow, thorough, authoritative.
@@ -153,7 +153,7 @@ baseline sat at 0% for that reason rather than because the tests were weak.
 [one ruler](./mutation-testing.md#one-ruler). More tests running can only kill more mutants, never
 fewer, so this closes the blind spot rather than trading it for a different one. The price is
 real: every mutation run now starts a real Mongo, so the per-mutant cost is higher — which is why
-the full sweep is sharded and weekly rather than an unsharded nightly (below, and
+the full sweep is sharded and monthly rather than an unsharded nightly (below, and
 [The three commands](./mutation-testing.md#the-three-commands)).
 
 **The exclusion was a memory-leak workaround, not an oversight**, and understanding why it existed

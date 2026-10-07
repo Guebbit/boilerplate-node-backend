@@ -1,7 +1,7 @@
 name: Mutation
 
 # Deliberately breaks the source in small ways and checks the suite notices. Measures how good the
-# TESTS are, not how good the code is. Weekly, not a merge gate — except the diff job, which is.
+# TESTS are, not how good the code is. Monthly, not a merge gate — except the diff job, which is.
 #
 # Mutation testing lives in its own workflow, deliberately.
 #
@@ -14,14 +14,17 @@ name: Mutation
 # What it answers: "do the tests actually work?" A mutant that survives is a bug the suite cannot
 # see. Unlike line coverage, that cannot be satisfied by executing code without asserting on it.
 #
-# The weekly sweep runs in WAVES (`mutation-wave.yml`), then one merge. It is built to finish,
+# The monthly sweep runs in WAVES (`mutation-wave.yml`), then one merge. It is built to finish,
 # however long that takes — days on the free runners, not hours:
 #
 #   Wave:      one matrix of at most 256 shards, one Stryker worker each.
 #   Retry:     a shard out of time comes back in the next wave in smaller pieces; one that crashed
 #              comes back once as it was.
-#   Verdict:   `mutation-merge` alone — one report, one baseline commit, red only when a file
+#   Verdict:   `mutation-merge` alone — one report, one new baseline, red only when a file
 #              could not be measured at all or scored below its baseline.
+#   Read-only: no job can write to the repository. Every job installs packages, and a package's
+#              install script runs with whatever token the job holds. The new baseline is an
+#              artifact instead — `npm run mutation:pull` fetches it, and you commit it.
 #
 # Before any of that, `preflight` runs the one test run that killed 30 shards on 2026-09-27 — the
 # initial run of the most widely imported file — on this same runner setup. A sweep that cannot
@@ -32,9 +35,10 @@ name: Mutation
 
 on:
     schedule:
-        # 03:00 UTC on Sundays — half an hour before the frontend's, so the two do not compete for
-        # runners.
-        - cron: '0 3 * * 0'
+        # 03:00 UTC on the 1st of the month — half an hour before the frontend's, so the two do not
+        # compete for runners. Monthly, not weekly: a sweep takes about a week of runner time at
+        # `mutation-wave.yml`'s parallelism, and the free plan's job slots are shared by every repo.
+        - cron: '0 3 1 * *'
     workflow_dispatch:
         inputs:
             check-only:
@@ -71,6 +75,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Set up the runner
               uses: ./.github/actions/mutation-runner
@@ -147,20 +153,22 @@ jobs:
 
     mutation-merge:
         # Folds every finished shard, from every wave, into one report and into
-        # `mutation-baseline.json` — see scripts/mutation/ci/merge.ts.
+        # `mutation-baseline.json` — see scripts/mutation/ci/merge.ts. Read-only, like every job
+        # here: the new baseline leaves as an artifact, never as a commit.
         needs: [preflight, wave-8]
         if: ${{ !cancelled() && github.event_name != 'pull_request' && !inputs.check-only && needs.preflight.result == 'success' }}
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
-            contents: write
+            contents: read
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
               with:
                   # The branch as it is NOW, not as it was when the sweep started days ago: the
-                  # baseline commit below lands on top of whatever was pushed meanwhile.
+                  # sweep folds into the newest recorded baseline, not a days-old copy.
                   ref: ${{ github.ref }}
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -192,7 +200,7 @@ jobs:
               # `--merge`, not `--update`: files this sweep could not measure keep their recorded
               # score instead of leaving the baseline. See scripts/mutation/baseline.ts's
               # `mergeIntoBaseline`. The exit code is kept for the verdict step, not acted on here —
-              # the commit below must happen either way.
+              # the upload below must happen either way.
               id: check
               run: |
                   set +e
@@ -228,25 +236,18 @@ jobs:
                   path: tmp/mutation-ci/merged/
                   retention-days: 90
 
-            - name: Commit the updated baseline
+            - name: Upload the new baseline
               # Regardless of the verdict: the record should reflect what was actually measured,
-              # good news or not — that is the whole point of a ratchet. Retried on a rejected push,
-              # since a sweep that takes days almost always finishes behind the branch.
-              run: |
-                  git config user.name 'github-actions[bot]'
-                  git config user.email 'github-actions[bot]@users.noreply.github.com'
-                  if git diff --quiet -- mutation-baseline.json; then
-                    echo "no change to mutation-baseline.json"
-                    exit 0
-                  fi
-                  git add mutation-baseline.json
-                  git commit -m "chore(mutation): fold this week's sweep into the baseline"
-                  for attempt in 1 2 3; do
-                    git push && exit 0
-                    echo "push rejected (attempt $attempt) — rebasing onto the branch"
-                    git pull --rebase origin "$GITHUB_REF_NAME"
-                  done
-                  exit 1
+              # good news or not — that is the whole point of a ratchet. `npm run mutation:pull`
+              # fetches it; committing it is a person's step. Name and path are what
+              # scripts/mutation/github-artifacts.ts and pull-baseline.ts expect.
+              # https://github.com/actions/upload-artifact
+              if: always() && steps.check.outcome == 'success'
+              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+              with:
+                  name: mutation-baseline
+                  path: mutation-baseline.json
+                  retention-days: 90
 
             - name: Verdict
               env:
@@ -290,6 +291,7 @@ jobs:
               with:
                   # `merge-base` needs both sides; a shallow clone has neither.
                   fetch-depth: 0
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup Node
               uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -337,6 +339,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
             - name: Open or update the weekly-failure issue
               uses: ./.github/actions/notify-failure
               with:
