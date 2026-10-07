@@ -81,7 +81,9 @@ flowchart LR
     Q -->|no| IS
     Q -->|yes| CH["challenge + code<br/><i>amr gains 'otp'</i>"]
     CH --> IS
-    OA["OAuth callback<br/><i>amr is the provider</i>"] --> IS
+    OA["OAuth callback<br/><i>amr is the provider</i>"] --> OQ{"2FA armed?"}
+    OQ -->|no| IS
+    OQ -->|yes| CH
     IS["issueSession"] --> T["access token<br/><i>short · in memory</i>"]
     IS --> RC["refresh cookie<br/><i>long · httpOnly</i>"]
     RC -->|refresh| T

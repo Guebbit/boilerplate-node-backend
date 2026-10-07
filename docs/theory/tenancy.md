@@ -196,9 +196,9 @@ Until then, the answer to "should this be pooled multi-tenant?" is **no, on purp
 ## 10 · What we deliberately did not build
 
 **Pooled multi-tenancy** — one process, one database, every row tagged `tenantId`, a CASL filter on
-every read. It is real work: only 5 of 16 modules compile a scoped read filter today
-(`products`, `orders`, `payments`, `locales`, `delivery`) — the other eleven would need one added
-— and only 6 of 24 Mongoose models carry an organisation column.
+every read. It is real work: only a few modules compile a scoped read filter today
+(`products`, `orders`, `payments`, `locales`) — every other one would need one added — and only
+a few Mongoose models carry an organisation column.
 
 **A concrete example of what "declined, not merely undone" means:** the webhooks fan-out matches
 every enabled subscription against an event, unconditionally. That is correct in silo — there is

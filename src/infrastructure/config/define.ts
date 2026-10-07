@@ -270,7 +270,7 @@ export const defineConfig = <TShape extends Shape>(
  * @param slices - the slices to judge
  * @param environment - the environment
  */
-export const configProblems = (
+const configProblems = (
     slices: readonly ConfigSlice[],
     environment: Environment
 ): { [K in keyof SliceProblems]: string[] } => {
