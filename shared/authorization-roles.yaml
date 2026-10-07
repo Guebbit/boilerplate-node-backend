@@ -117,7 +117,9 @@ roles:
           # editing a listing needs this by name.
           - translations.any.read
           - translations.any.update
-          - payments.self.read
+          # The manager cancels paid orders, which refunds them, so it reads the money; refunding
+          # itself stays `payments.any.update`.
+          - payments.any.read
           - inventory.any.read
           # A manager may start fulfilment on a paid order — POST /delivery/order/{id}/start.
           - delivery.any.start

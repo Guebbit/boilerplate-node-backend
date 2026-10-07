@@ -1,7 +1,7 @@
 /**
  * @module
  * The per-RECIPIENT mail budget: how many mails this app will send to one mailbox in a day,
- * whichever flow asks. Signup, password reset, email change and both resends can each be pointed at
+ * whichever flow asks. Signup, password reset, email change, both resends and a data export can each be pointed at
  * a stranger's address; a budget on the caller (an address, an account) bounds the caller, never
  * the victim, and a `+tag` makes every attempt look like a new address.
  *
@@ -44,7 +44,7 @@ export const MAIL_RECIPIENT_BUDGET: RateLimitBudget = {
     keyedBy:
         'the recipient mailbox: lowercased, `+tag` dropped, dots dropped for Gmail, pseudonymised',
     bounds:
-        'Mails to ONE mailbox from signup, reset, email change and both resends, over a day — ' +
+        'Mails to ONE mailbox from signup, reset, email change, both resends and a data export, over a day — ' +
         'bounds the VICTIM of a mail bomb, which a budget on the caller cannot.',
     audited: true
 };

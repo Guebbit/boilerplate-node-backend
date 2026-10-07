@@ -224,6 +224,9 @@ Decisions rather than mechanics:
   deleted first. The unique index on `userId` settles two simultaneous requests: one wins, the other
   gets the winner back. A `building` row older than 30 minutes counts as lost with its process and is
   replaced too.
+- **A new export costs one mail.** Starting one is charged to the per-mailbox mail
+  budget, because it ends in a mailed link. A spent budget answers `429` before the old export is deleted,
+  so a ready file stays downloadable; asking while one is `building` is not charged.
 - **Peak memory is one section.** The worker collects the sections one at a time and appends each to
   the file as it arrives, so the largest section is the ceiling, not the sum. The audit section reads
   by cursor on the `{ actor_user_id, timestamp }` index: no count and no skip per page, which made
@@ -247,6 +250,15 @@ Decisions rather than mechanics:
   [crypto and secrets](../theory/defences/crypto-and-secrets.md#secrets-at-rest).
 - **Audited at both ends.** `auth.data_export.requested` when it is asked for, and
   `auth.data_export.downloaded` when the data actually leaves.
+
+## Abilities {#abilities}
+
+`GET /account/abilities` publishes the caller's packed rules in both scopes, so a client renders
+from the server's rules instead of a copy. It also carries `grantableRoles`: the tenant roles the
+caller may assign through the user writes. The list comes from `grantableRoles` in the
+[`access`](./access.md) service, which asks the same rule as the `409` those writes answer, so a role
+picker built from it offers exactly what the write accepts. Like the rules, it has no authority:
+the write is re-checked. Empty for an anonymous caller.
 
 ## Related pages
 

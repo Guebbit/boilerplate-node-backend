@@ -775,7 +775,7 @@ components:
                 out what it would be refused from the same rules the server enforces, rather than
                 from a hand-maintained duplicate that drifts — the drift is silent until somebody
                 is shown a button that answers 403.
-            required: [tenant, platform, version, subjects]
+            required: [tenant, platform, version, subjects, grantableRoles]
             properties:
                 subjects:
                     type: array
@@ -785,6 +785,16 @@ components:
                         `Order`/`Product`/`ApiKey`/... a rule's second element may be. Published so
                         a client's own `meta.can` rules are typed against the real set rather than
                         an unchecked string a typo can silently fail closed on.
+                grantableRoles:
+                    type: array
+                    items: { type: string }
+                    description: |
+                        The tenant-scope roles this caller may assign through `POST`/`PUT`/`PATCH
+                        /users`, in the order `shared/authorization-roles.yaml` declares them.
+                        Computed by the same rule as the `409` those writes answer, so a role
+                        picker built from it offers exactly what the write accepts. Empty for a
+                        caller who may grant nothing, an anonymous one included. It has NO
+                        AUTHORITY: the write is re-checked server-side.
                 tenantId:
                     type: string
                     description: |

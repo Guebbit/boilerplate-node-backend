@@ -15,6 +15,7 @@ import {
     findRole,
     isBelowLevel,
     levelOfRoles,
+    PRESET_ROLES,
     SIGNUP_DEFAULT_ROLE_NAME,
     VERIFIED_CUSTOMER_ROLE_NAME
 } from '@kernel/permissions';
@@ -82,11 +83,12 @@ export const membershipIn = (
     scope: AuthorizationScope
 ): Promise<MembershipDocument | null> => membershipRepository.findOne(userId, tenantId, scope);
 
+/** The verdict of {@link checkGrant}: the lowered role name, or why the grant is refused. */
+type GrantVerdict = { lowered: string } | { refusal: string };
+
 /**
- * The synchronous half of {@link assignRole}: refuses the same two things, and returns the
- * lowered role name for the caller to act on. Split out so {@link assertCanGrant} can ask "would
- * this succeed" before committing other state, without a compensating rollback if the grant turns
- * out to be refused — see `users/services/update.ts`'s `updateSavedUser`.
+ * The boolean core of {@link validateGrant}: asks whether a grant would be accepted and, when it
+ * would not, says why — without throwing, so {@link grantableRoles} can ask once per role.
  *
  * Refuses two things, and each refusal is an invariant of the model:
  *
@@ -102,22 +104,22 @@ export const membershipIn = (
  *
  * @param granter - the keys the person MAKING the grant holds, or `undefined` for a seeder, a
  *   migration or an operator on the console — the three callers with nobody to escalate from
- * @throws AccessInvariantError for either reason above
  */
-const validateGrant = (
+const checkGrant = (
     scope: AuthorizationScope,
     roleName: string,
     granter?: readonly string[]
-): string => {
+): GrantVerdict => {
     const lowered = roleName.toLowerCase();
     const role = findRole(lowered);
     const permissions = role?.scope === scope ? role.permissions : undefined;
 
     if (!permissions) {
-        throw new AccessInvariantError(
-            `[access] "${roleName}" is not a role in this ${scope} scope. ` +
+        return {
+            refusal:
+                `[access] "${roleName}" is not a role in this ${scope} scope. ` +
                 `Declare it in shared/authorization-roles.yaml first, or assign one that exists.`
-        );
+        };
     }
 
     const exempt =
@@ -130,16 +132,50 @@ const validateGrant = (
         const escalated = permissions.filter((key) => !held.has(key));
 
         if (escalated.length > 0) {
-            throw new AccessInvariantError(
-                `[access] cannot grant "${roleName}": it holds ${escalated.join(', ')}, ` +
+            return {
+                refusal:
+                    `[access] cannot grant "${roleName}": it holds ${escalated.join(', ')}, ` +
                     `which the granter does not. A role editor that allows this is a ` +
                     `privilege-escalation endpoint.`
-            );
+            };
         }
     }
 
-    return lowered;
+    return { lowered };
 };
+
+/**
+ * The synchronous half of {@link assignRole}: refuses what {@link checkGrant} refuses, and returns
+ * the lowered role name for the caller to act on. Split out so {@link assertCanGrant} can ask
+ * "would this succeed" before committing other state, without a compensating rollback if the grant
+ * turns out to be refused — see `users/services/update.ts`'s `updateSavedUser`.
+ *
+ * @param granter - same meaning as in {@link checkGrant}
+ * @throws AccessInvariantError for either reason {@link checkGrant} gives
+ */
+const validateGrant = (
+    scope: AuthorizationScope,
+    roleName: string,
+    granter?: readonly string[]
+): string => {
+    const verdict = checkGrant(scope, roleName, granter);
+    if ('refusal' in verdict) throw new AccessInvariantError(verdict.refusal);
+    return verdict.lowered;
+};
+
+/**
+ * The roles a granter may assign in a scope: every preset of that scope that the write path's own
+ * rule ({@link validateGrant}) would accept. A client builds its role picker from this, so the
+ * picker and the `409` can never disagree. It has no authority: the write re-checks.
+ *
+ * @param scope - the scope the roles are assigned in
+ * @param granter - the keys the person making the grant holds in that scope
+ * @returns the role names, in the order `shared/authorization-roles.yaml` declares them
+ */
+export const grantableRoles = (scope: AuthorizationScope, granter: readonly string[]): string[] =>
+    PRESET_ROLES.filter(
+        (role) => role.scope === scope && !('refusal' in checkGrant(scope, role.name, granter))
+    ).map((role) => role.name);
 
 /**
  * Would {@link assignRole} succeed, without writing anything — for a caller that needs to know
