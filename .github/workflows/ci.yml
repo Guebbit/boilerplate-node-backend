@@ -64,6 +64,7 @@ jobs:
               with:
                   # Need full history to walk the commit range.
                   fetch-depth: 0
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -88,6 +89,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -107,6 +110,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -126,6 +131,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -144,6 +151,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -189,6 +198,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Checkout paired frontend
               id: sibling
@@ -200,6 +211,7 @@ jobs:
                   path: .spec-sibling
                   # Only needed when the sibling is private; falls back to this repo's token.
                   token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Report an unreachable sibling
               if: steps.sibling.outcome == 'failure'
@@ -230,6 +242,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -248,6 +262,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -275,6 +291,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -307,6 +325,7 @@ jobs:
               with:
                   # `merge-base` needs both sides; a shallow clone has neither.
                   fetch-depth: 0
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -338,6 +357,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -377,6 +398,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -401,6 +424,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -439,6 +464,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -470,6 +497,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -493,6 +522,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -520,6 +551,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -563,6 +596,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -599,6 +634,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -632,6 +669,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -668,6 +707,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             # Installs this backend's dependencies and a system `mongod` for the demo profile's
             # in-memory database — the same preamble the test jobs use.
@@ -685,6 +726,7 @@ jobs:
                   path: ${{ env.FRONTEND_PATH }}
                   # Only needed when the sibling is private; falls back to this repo's token.
                   token: ${{ secrets.SPEC_SIBLING_TOKEN || github.token }}
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Cache Cypress binary
               uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
@@ -752,6 +794,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Build the dev/test image
               run: docker build -f docker/Dockerfile -t boilerplate-api-gate:${{ github.sha }} .
@@ -776,6 +820,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Build the production image
               run: docker build -f docker/Dockerfile.production -t boot-check:${{ github.sha }} .
@@ -803,6 +849,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -834,6 +882,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup

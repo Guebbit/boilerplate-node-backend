@@ -33,6 +33,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             # Picks the query pack and sets up the extractor. No build step: JS/TS is analysed
             # from source, so unlike compiled languages nothing has to run first.
