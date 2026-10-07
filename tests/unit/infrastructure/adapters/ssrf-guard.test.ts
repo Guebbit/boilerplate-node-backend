@@ -4,10 +4,32 @@ import {
     registerSsrfExemptOrigin
 } from '@infrastructure/adapters/ssrf-exemptions';
 import { setEnvironment } from '@tests/environment';
+import { resolve4, resolve6 } from 'node:dns/promises';
+
+// Names are resolved through `resolve4`/`resolve6`; mocked so no case depends on a real resolver.
+jest.mock('node:dns/promises', () => ({ resolve4: jest.fn(), resolve6: jest.fn() }));
+
+/** The two mocked resolvers, typed so a case can script an answer or a rejection per family. */
+const dns = { v4: jest.mocked(resolve4), v6: jest.mocked(resolve6) };
 
 /**
- * Unit table for the SSRF guard's address and port rules. Literal IPs never reach DNS, so no
- * resolver is mocked here; the hostile-URL table lives in `tests/fuzz/ssrf-guard.fuzz.test.ts`.
+ * Scripts what DNS answers for both record types; an `Error` becomes a rejection (`ENODATA`).
+ * @param v4 - the A answer
+ * @param v6 - the AAAA answer; defaults to no data
+ */
+const mockDns = (v4: string[] | Error, v6: string[] | Error = new Error('ENODATA')): void => {
+    dns.v4.mockImplementation(() =>
+        v4 instanceof Error ? Promise.reject(v4) : Promise.resolve(v4)
+    );
+    dns.v6.mockImplementation(() =>
+        v6 instanceof Error ? Promise.reject(v6) : Promise.resolve(v6)
+    );
+};
+
+/**
+ * Unit table for the SSRF guard: address and port rules, the pin, the exemption and the abort
+ * signal. Literal IPs never reach DNS; names go through the mocked resolver above. The
+ * hostile-URL table lives in `tests/fuzz/ssrf-guard.fuzz.test.ts`.
  */
 
 describe('resolveSafeOutboundTarget — the deprecated IPv4-compatible block ::/96', () => {
@@ -58,5 +80,194 @@ describe('resolveSafeOutboundTarget — the port rule', () => {
         await expect(resolveSafeOutboundTarget('https://127.0.0.1:3071/x')).rejects.toMatchObject({
             reason: 'unsafe-port'
         });
+    });
+});
+
+describe('resolveSafeOutboundTarget — embedding forms and IPv4-mapped literals', () => {
+    it.each([
+        ['6to4', 'https://[2002:5db8:d707::]/x'],
+        ['NAT64', 'https://[64:ff9b::5db8:d707]/x'],
+        ['Teredo', 'https://[2001:0:4136:e378:8000:63bf:a247:28f8]/x']
+    ])('refuses a %s address even though the embedded IPv4 is public', async (_label, url) => {
+        await expect(resolveSafeOutboundTarget(url)).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
+    });
+
+    it('unwraps an IPv4-mapped literal and judges the IPv4 inside', async () => {
+        await expect(
+            resolveSafeOutboundTarget('https://[::ffff:93.184.215.7]/x')
+        ).resolves.toBeDefined();
+        await expect(
+            resolveSafeOutboundTarget('https://[::ffff:127.0.0.1]/x')
+        ).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
+    });
+
+    it('pins a public IPv6 literal with family 6 and brackets stripped', async () => {
+        const target = await resolveSafeOutboundTarget('https://[2606:4700::1111]/x');
+
+        expect(target.hostname).toBe('2606:4700::1111');
+        expect(target.resolvedAddress).toBe('2606:4700::1111');
+        const callback = jest.fn();
+        target.lookup('ignored.test', { all: false }, callback);
+        expect(callback).toHaveBeenCalledWith(null, '2606:4700::1111', 6);
+    });
+});
+
+describe('resolveSafeOutboundTarget — name resolution', () => {
+    it('refuses when a private v6 answer sits beside a public v4 one', async () => {
+        mockDns(['93.184.215.7'], ['fd00::1']);
+
+        await expect(resolveSafeOutboundTarget('https://mixed.test/x')).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
+    });
+
+    it('lets a missing family not hide the other: v4 ENODATA plus a public v6 resolves to the v6', async () => {
+        mockDns(new Error('ENODATA'), ['2606:4700::1111']);
+
+        await expect(resolveSafeOutboundTarget('https://v6only.test/x')).resolves.toMatchObject({
+            resolvedAddress: '2606:4700::1111'
+        });
+    });
+
+    it('answers every lookup shape with the one pinned address when several are public', async () => {
+        mockDns(['93.184.215.7', '93.184.215.8'], ['2606:4700::1111']);
+
+        const target = await resolveSafeOutboundTarget('https://many.test/x');
+
+        expect(['93.184.215.7', '93.184.215.8', '2606:4700::1111']).toContain(
+            target.resolvedAddress
+        );
+        const single = jest.fn();
+        const all = jest.fn();
+        target.lookup('other.test', {}, single);
+        target.lookup('other.test', { all: true }, all);
+        expect(single).toHaveBeenCalledWith(null, target.resolvedAddress, expect.any(Number));
+        expect(all).toHaveBeenCalledWith(null, [
+            { address: target.resolvedAddress, family: expect.any(Number) }
+        ]);
+    });
+
+    it('fails closed on a malformed DNS answer', async () => {
+        mockDns(['not-an-ip']);
+
+        await expect(resolveSafeOutboundTarget('https://garbled.test/x')).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
+    });
+
+    it('refuses with dns-resolution-failed when neither family answers', async () => {
+        mockDns(new Error('ENOTFOUND'), new Error('ENOTFOUND'));
+
+        await expect(resolveSafeOutboundTarget('https://nowhere.test/x')).rejects.toMatchObject({
+            reason: 'dns-resolution-failed'
+        });
+    });
+});
+
+describe('resolveSafeOutboundTarget — the origin exemption', () => {
+    afterEach(() => {
+        clearSsrfExemptOrigins();
+    });
+
+    it('resolves and pins an exempt name to the private address DNS gave', async () => {
+        registerSsrfExemptOrigin('https://sink.test');
+        mockDns(['127.0.0.1']);
+
+        const target = await resolveSafeOutboundTarget('https://sink.test/hook');
+
+        expect(target.resolvedAddress).toBe('127.0.0.1');
+        expect(dns.v4).toHaveBeenCalledTimes(1);
+        const callback = jest.fn();
+        target.lookup('sink.test', { all: false }, callback);
+        expect(callback).toHaveBeenCalledWith(null, '127.0.0.1', 4);
+    });
+
+    it('still refuses an exempt name that does not resolve', async () => {
+        registerSsrfExemptOrigin('https://sink.test');
+        mockDns(new Error('ENOTFOUND'), new Error('ENOTFOUND'));
+
+        await expect(resolveSafeOutboundTarget('https://sink.test/hook')).rejects.toMatchObject({
+            reason: 'dns-resolution-failed'
+        });
+    });
+
+    it('does not waive an invalid URL', async () => {
+        registerSsrfExemptOrigin('https://sink.test');
+
+        await expect(resolveSafeOutboundTarget('https://sink.test:bad/hook')).rejects.toMatchObject(
+            {
+                reason: 'invalid-url'
+            }
+        );
+    });
+
+    it.each([
+        ['a subdomain', 'https://evil.sink.test/x'],
+        ['a suffix', 'https://sink.test.evil.test/x'],
+        ['a prefix', 'https://xsink.test/x'],
+        ['a trailing-dot FQDN', 'https://sink.test./x']
+    ])('does not exempt %s', async (_label, url) => {
+        registerSsrfExemptOrigin('https://sink.test');
+        mockDns(['127.0.0.1']);
+
+        await expect(resolveSafeOutboundTarget(url)).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
+    });
+
+    it('does not exempt a neighbouring literal', async () => {
+        registerSsrfExemptOrigin('https://127.0.0.1');
+
+        await expect(resolveSafeOutboundTarget('https://127.0.0.10/x')).rejects.toMatchObject({
+            reason: 'unsafe-address'
+        });
+    });
+
+    it('matches the exemption whatever the hostname case', async () => {
+        registerSsrfExemptOrigin('https://sink.test');
+        mockDns(['127.0.0.1']);
+
+        await expect(resolveSafeOutboundTarget('https://SINK.Test/x')).resolves.toMatchObject({
+            resolvedAddress: '127.0.0.1'
+        });
+    });
+
+    it('exempts a bracketed IPv6 literal origin as URL writes it', async () => {
+        registerSsrfExemptOrigin('https://[::1]');
+
+        await expect(resolveSafeOutboundTarget('https://[::1]/x')).resolves.toMatchObject({
+            resolvedAddress: '::1'
+        });
+    });
+});
+
+describe('resolveSafeOutboundTarget — the abort signal', () => {
+    it('rejects promptly with the abort reason when the signal is already aborted', async () => {
+        mockDns(['93.184.215.7']);
+        const reason = new Error('budget spent');
+
+        await expect(
+            resolveSafeOutboundTarget('https://slow.test/x', AbortSignal.abort(reason))
+        ).rejects.toBe(reason);
+    });
+
+    it('wraps a non-Error abort reason in an Error carrying its text', async () => {
+        mockDns(['93.184.215.7']);
+
+        await expect(
+            resolveSafeOutboundTarget('https://slow.test/x', AbortSignal.abort('budget'))
+        ).rejects.toEqual(expect.objectContaining({ message: 'budget' }));
+    });
+
+    it('changes nothing when the signal never fires', async () => {
+        mockDns(['93.184.215.7']);
+
+        await expect(
+            resolveSafeOutboundTarget('https://slow.test/x', new AbortController().signal)
+        ).resolves.toMatchObject({ resolvedAddress: '93.184.215.7' });
     });
 });
