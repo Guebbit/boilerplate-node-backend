@@ -471,7 +471,7 @@ services:
     grafana:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/grafana:11.4.0
+        image: grafana/grafana:13.2.3
         restart: unless-stopped
         environment:
             GF_AUTH_ANONYMOUS_ENABLED: 'true'
