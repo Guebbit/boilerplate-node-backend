@@ -251,6 +251,15 @@ Decisions rather than mechanics:
 - **Audited at both ends.** `auth.data_export.requested` when it is asked for, and
   `auth.data_export.downloaded` when the data actually leaves.
 
+## Abilities {#abilities}
+
+`GET /account/abilities` publishes the caller's packed rules in both scopes, so a client renders
+from the server's rules instead of a copy. It also carries `grantableRoles`: the tenant roles the
+caller may assign through the user writes. The list comes from `grantableRoles` in the
+[`access`](./access.md) service, which asks the same rule as the `409` those writes answer, so a role
+picker built from it offers exactly what the write accepts. Like the rules, it has no authority:
+the write is re-checked. Empty for an anonymous caller.
+
 ## Related pages
 
 - [Sessions](./account-sessions.md) — the token mechanics, in detail

@@ -34,6 +34,10 @@ paths:
                 allowed; every request is re-evaluated server-side. Published here because the
                 alternative is every client inventing the same guess.
 
+                `grantableRoles` lists the tenant-scope roles the caller may assign through the user
+                writes, computed by the same rule as their `409`; a role picker reads it instead of a
+                hard-coded list. Empty for an anonymous caller. It has no authority either.
+
                 Answered for an anonymous caller too: a stranger holds the `guest` role, which is
                 a value in the model rather than an absence, and a shop front that greys nothing
                 out for a visitor is a shop front that lies twice.

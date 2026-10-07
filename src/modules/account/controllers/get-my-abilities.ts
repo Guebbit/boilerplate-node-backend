@@ -18,6 +18,7 @@ import type { Request, Response } from 'express';
 import { packRules } from '@casl/ability/extra';
 import { successResponse } from '@infrastructure/http/response';
 import { buildAbility } from '@kernel/ability';
+import { grantableRoles } from '@modules/access';
 import {
     anonymousCaller,
     callerInScope,
@@ -74,6 +75,8 @@ export const getMyAbilities = (request: Request, response: Response) => {
         ...(tenant.tenantId ? { tenantId: tenant.tenantId } : {}),
         tenant: rulesFor(tenant),
         platform: platform ? rulesFor(platform) : [],
+        // Empty for a stranger: they grant nothing. Same rule as the 409, so the two cannot drift.
+        grantableRoles: context ? grantableRoles('tenant', tenant.permissions) : [],
         version: modelVersion,
         subjects: PERMISSION_SUBJECTS
     });
