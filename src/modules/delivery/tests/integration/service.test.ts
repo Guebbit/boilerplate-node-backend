@@ -14,7 +14,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { orderService } from '@modules/orders';
+import { orderService, withdrawUntilFrom } from '@modules/orders';
 import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
 import { recordShipment, recordDelivery, getForOrder } from '@modules/delivery/service';
@@ -207,6 +207,23 @@ describe('recordDelivery', () => {
                 deliveredOn.getUTCDate() + 1
             ) - 1;
         expect(stored!.withdrawUntil!.getTime()).toBe(endOfDeliveryDay + 30 * 24 * 60 * 60 * 1000);
+    });
+
+    it('stamps a forced delivery with the parcel’s own instant, and counts the deadline from it', async () => {
+        const { order } = await shippedOrderFor();
+
+        const result = await recordDelivery(
+            String(order._id),
+            callerContextAs('admin'),
+            true,
+            'carrier confirmed by phone'
+        );
+
+        expect(result.success).toBe(true);
+        const shipment = await shipmentRepository.findByOrderId(String(order._id));
+        const stored = await orderService.getById(String(order._id));
+        expect(stored!.statusOverrides?.at(-1)?.at).toEqual(shipment!.deliveredAt);
+        expect(stored!.withdrawUntil).toEqual(withdrawUntilFrom(shipment!.deliveredAt!, 30));
     });
 
     it('refuses an order that has not shipped', async () => {

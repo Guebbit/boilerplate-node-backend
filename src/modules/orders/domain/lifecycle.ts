@@ -11,8 +11,12 @@
 import { OrderStatus } from '@types';
 import type { OrderActions } from '@types';
 
-/** `system` is not a rank above `admin` — it is narrower: moves nobody may make by hand. */
-export type OrderActor = 'customer' | 'admin' | 'system';
+/**
+ * `system` is not a rank above `admin` — it is narrower: moves nobody may make by hand.
+ * `withdrawal` is the consumer's right of withdrawal (Directive Art. 9): a buyer's own act, wider
+ * than an ordinary customer cancel — it reaches `processing` too.
+ */
+export type OrderActor = 'customer' | 'admin' | 'system' | 'withdrawal';
 
 /**
  * The lifecycle, as a total map from each status to the moves it permits.
@@ -28,7 +32,7 @@ export const ORDER_LIFECYCLE: Readonly<
         // Deliberately absent from `paid`/`processing` below: the sweep must never cancel an
         // order that landed a payment in the same race, which `admin` and `customer` legitimately
         // still may (an operator's or buyer's own choice, not a stale deadline).
-        [OrderStatus.cancelled]: ['customer', 'admin', 'system']
+        [OrderStatus.cancelled]: ['customer', 'admin', 'system', 'withdrawal']
     },
     [OrderStatus.paid]: {
         // `system`, not `admin`: this follows fulfilment starting being recorded through
@@ -36,14 +40,14 @@ export const ORDER_LIFECYCLE: Readonly<
         // a direct admin write — see `src/modules/orders/services/status.ts`'s `markProcessing`.
         // Reachable by `admin` too, only through the override door (`canOverrideTo`).
         [OrderStatus.processing]: ['system'],
-        [OrderStatus.cancelled]: ['customer', 'admin']
+        [OrderStatus.cancelled]: ['customer', 'admin', 'withdrawal']
     },
     [OrderStatus.processing]: {
         // `system`, not `admin`: this follows a parcel's handover being recorded through
         // `delivery`'s own door, never a direct admin write — see
         // `src/modules/orders/services/status.ts`'s `markShipped`.
         [OrderStatus.shipped]: ['system'],
-        [OrderStatus.cancelled]: ['admin']
+        [OrderStatus.cancelled]: ['admin', 'withdrawal']
     },
     [OrderStatus.shipped]: {
         // `system` likewise — a parcel's arrival, recorded through `delivery`'s own door. See

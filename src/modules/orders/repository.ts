@@ -13,6 +13,7 @@ import {
 } from '@infrastructure/security/reencrypt';
 import { orderModel, applyOrderTransform, orderNumberCounterModel } from './model';
 import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
+import type { StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { encryptOrderPii } from './pii';
@@ -29,10 +30,11 @@ import {
     buildPaginatedMeta,
     DEFAULT_SORT,
     SORT_COLLATION,
-    resolveSort,
+    sortOf,
     type PaginatedMeta
 } from '@infrastructure/persistence/search';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
+import { setAndUnset } from '@infrastructure/persistence/changes';
 
 /**
  * What `sort` may order by: wire field → column. `totalPrice` is derived at serialisation, so it
@@ -113,7 +115,7 @@ const search = async (
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
     // another. Orders arrive in bursts (a seed, a bulk import, two concurrent checkouts), which
     // makes ties the normal case rather than the edge one.
-    const chosen = resolveSort((filters as { sort?: unknown }).sort, ORDER_SORTABLE);
+    const chosen = sortOf(filters, ORDER_SORTABLE);
     const basePipeline: PipelineStage[] = [{ $match: match }, { $sort: chosen ?? DEFAULT_SORT }];
 
     return aggregate<{ totalItems?: number }>([...basePipeline, { $count: 'totalItems' }]).then(
@@ -270,26 +272,20 @@ const markDelivered = (
  */
 const setProjection = (
     id: string,
-    fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
-): Promise<boolean> => {
-    const $set: Record<string, string> = {};
-    const $unset: Record<string, 1> = {};
-    // `in`, not a truthiness check: a key present as `undefined` means clear, absent means leave.
-    for (const key of ['paymentStatus', 'returnStatus'] as const) {
-        if (!(key in fields)) continue;
-        const value = fields[key];
-        if (value === undefined) $unset[key] = 1;
-        else $set[key] = value;
+    fields: {
+        paymentStatus?: StampedPaymentStatus | undefined;
+        returnStatus?: StampedReturnStatus | undefined;
     }
+): Promise<boolean> => {
+    // `in`, not a truthiness check: a key present as `undefined` means clear, absent means leave.
+    const changes = Object.fromEntries(
+        (['paymentStatus', 'returnStatus'] as const)
+            .filter((key) => key in fields)
+            .map((key) => [key, fields[key]])
+    );
 
     return orderModel
-        .updateOne(
-            { _id: toObjectId(id) },
-            {
-                ...(Object.keys($set).length > 0 ? { $set } : {}),
-                ...(Object.keys($unset).length > 0 ? { $unset } : {})
-            }
-        )
+        .updateOne({ _id: toObjectId(id) }, setAndUnset(changes))
         .exec()
         .then(({ matchedCount }) => matchedCount > 0);
 };
@@ -570,7 +566,10 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     setProjection: (
         id: string,
-        fields: { paymentStatus?: string | undefined; returnStatus?: string | undefined }
+        fields: {
+            paymentStatus?: StampedPaymentStatus | undefined;
+            returnStatus?: StampedReturnStatus | undefined;
+        }
     ) => Promise<boolean>;
     markDelivered: (
         id: string,

@@ -81,7 +81,7 @@ export interface WithdrawalNotice {
  * A postal address on one line, skipping whatever is absent.
  * @param address - the address to print
  */
-const addressLine = (address: ReturnAddress): string =>
+export const addressLine = (address: ReturnAddress): string =>
     [address.name, address.street, `${address.zip} ${address.city}`, address.country]
         .filter(Boolean)
         .join(', ');

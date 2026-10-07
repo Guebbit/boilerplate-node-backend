@@ -11,7 +11,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-import type { ReturnAddress, ReturnPostagePayer } from '@modules/orders';
+import { addressLine, type ReturnAddress, type ReturnPostagePayer } from '@modules/orders';
 
 /** Which notice is being sent. */
 export type ReturnNoticeKind =
@@ -88,16 +88,7 @@ export const returnNoticeEmail = (
             : t(`returns.email.postage-${input.returnPostage}`);
     const { returnAddress } = input;
     const address = returnAddress
-        ? t('returns.email.return-address', {
-              address: [
-                  returnAddress.name,
-                  returnAddress.street,
-                  `${returnAddress.zip} ${returnAddress.city}`,
-                  returnAddress.country
-              ]
-                  .filter(Boolean)
-                  .join(', ')
-          })
+        ? t('returns.email.return-address', { address: addressLine(returnAddress) })
         : undefined;
 
     return {

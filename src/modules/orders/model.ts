@@ -666,6 +666,7 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
  * @param serialized - the order as it is being serialized
  */
 const applyOrderProjections = (serialized: Record<string, unknown>) => {
+    // The `as` casts below narrow `toJSON`'s untyped record: each field is the schema's own type.
     serialized.paymentStatus = paymentStatusOf(
         serialized.paymentStatus as StampedPaymentStatus | undefined,
         serialized.paidAt as Date | undefined

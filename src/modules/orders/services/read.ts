@@ -4,7 +4,7 @@
  * two counters and lookups `payments` and checkout lean on. Writes live in `./crud` and `./remove`.
  */
 
-import type { SearchOrdersRequest, Order, CallerContext } from '@types';
+import type { SearchOrdersRequest, Order, CallerContext, AuthContext } from '@types';
 import type { OrderDocument } from '../model';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import {
@@ -16,7 +16,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { decryptOrderAddress } from '../pii';
 import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
-import { ownerScope } from './scope';
+import { callerScope, ownerScope } from './scope';
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
@@ -90,6 +90,18 @@ export const getById = (
     if (!id) return Promise.resolve(undefined);
     return orderRepository.findByIdScoped(id, scope);
 };
+
+/**
+ * One order by id, as far as this caller may read it — {@link getById} behind {@link callerScope}.
+ * A missing, malformed or someone else's order all answer `undefined`, so a controller turns the
+ * three into the same 404.
+ * @param id - the order
+ * @param authContext - the caller, or `undefined` for no request behind this read
+ */
+export const getForCaller = (
+    id: string | undefined,
+    authContext: AuthContext | undefined
+): Promise<OrderDocument | undefined> => getById(id, callerScope(authContext));
 
 /**
  * The order's frozen billing address in plaintext, for the invoice issuer: a hydrated

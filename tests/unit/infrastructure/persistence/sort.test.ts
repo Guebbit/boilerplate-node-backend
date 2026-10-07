@@ -3,7 +3,7 @@
  * CSV, repeated keys, a body array), `resolveSort` turns tokens into a Mongo sort through a
  * per-collection whitelist. See docs/api/sorting.md.
  */
-import { resolveSort, splitSortParameter } from '@infrastructure/persistence/search';
+import { resolveSort, sortOf, splitSortParameter } from '@infrastructure/persistence/search';
 
 const sortable = { price: 'price', title: 'titleColumn', createdAt: 'createdAt' };
 
@@ -74,5 +74,15 @@ describe('resolveSort', () => {
         expect(resolveSort(undefined, sortable)).toBeUndefined();
         expect(resolveSort('nope', sortable)).toBeUndefined();
         expect(resolveSort('price')).toBeUndefined();
+    });
+});
+
+describe('sortOf', () => {
+    it('reads the `sort` key off a filter bag, through the whitelist', () => {
+        expect(sortOf({ sort: '-price', title: 'x' }, sortable)).toEqual({ price: -1, _id: -1 });
+    });
+
+    it('answers undefined when the bag carries no sort', () => {
+        expect(sortOf({ title: 'x' }, sortable)).toBeUndefined();
     });
 });

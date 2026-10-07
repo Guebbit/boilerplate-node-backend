@@ -140,6 +140,21 @@ export const databaseConfig = defineConfig({
     }
 });
 
+/**
+ * The one currency the shop trades in. Infrastructure, not a module's, because `orders` and
+ * `products` both read it and neither may import the other's config (`products` is imported by
+ * `orders`, so the reverse would close a module cycle).
+ */
+export const currencyConfig = defineConfig({
+    name: 'currency',
+    shape: {
+        NODE_DEFAULT_CURRENCY: text({
+            default: 'EUR',
+            describe: 'The one ISO-4217 currency this shop trades in.'
+        })
+    }
+});
+
 /** Trace export, whether inbound trace context is trusted, and the version stamped on it. */
 export const tracingConfig = defineConfig({
     name: 'tracing',

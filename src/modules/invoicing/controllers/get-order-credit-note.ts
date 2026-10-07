@@ -37,7 +37,7 @@ export const getOrderCreditNote = (
     const { creditNoteId } = request.params;
 
     return orderService
-        .getById(id, orderService.callerScope(request.authContext))
+        .getForCaller(id, request.authContext)
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);

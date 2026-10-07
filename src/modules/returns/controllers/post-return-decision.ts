@@ -17,9 +17,8 @@ import { returnService } from '../services';
 export const postReturnApprove = (request: Request<{ id?: string }>, response: Response) => {
     const id = requireId(request, response, { notFound: 'returns.not-found' });
     if (!id) return;
-    const { authContext } = request;
-    // `isAuth` is mounted above this route, so a caller is always present here.
-    if (!authContext) return;
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
 
     return returnService
         .approveReturn(id, callerContextOf(request))
@@ -38,9 +37,8 @@ export const postReturnDecline = (request: Request<{ id?: string }>, response: R
     if (!id) return;
     const body = parseBody(DeclineReturnBody, request.body, response);
     if (!body) return;
-    const { authContext } = request;
-    // `isAuth` is mounted above this route, so a caller is always present here.
-    if (!authContext) return;
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
 
     return returnService
         .declineReturn(id, body.reason, callerContextOf(request))
