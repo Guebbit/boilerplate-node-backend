@@ -733,6 +733,13 @@ one constraint: a type-only import must be written `import type`, or swc emits a
 a value that does not exist at runtime. The app is already written that way, enforced by
 `verbatimModuleSyntax` in `tsconfig.json`, so nothing needs doing here beyond not turning that off.
 
+**A third note: `jest.spyOn` on a namespace import.** `jest.spyOn(port, 'fn')` after
+`import * as port` has to redefine an export. swc makes exports non-configurable getters, so under
+this config it throws `TypeError: Cannot redefine property: fn`, while the normal run passes.
+Replace the module with `jest.mock` instead, keeping the real function as the default
+implementation — `tests/support/ports.ts` explains the pattern, and
+`src/modules/invoicing/tests/unit/render.test.ts` shows it.
+
 ### Preventing it
 
 - **Sweep before the run, not only after it.** A killed process cannot clean up after itself, so the

@@ -10,14 +10,24 @@ import { testCallerContext } from '@tests/callers';
 import { createUser, LEGACY_PASSWORD, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
 import * as passwordHash from '@infrastructure/security/password-hash';
+import { observePort } from '@tests/ports';
+
+/*
+ * `verifyPassword` is REPLACED by a pass-through, not spied on: `jest.spyOn` cannot redefine a
+ * namespace import's getter under the mutation run's swc transform — see `tests/support/ports.ts`.
+ */
+jest.mock('@infrastructure/security/password-hash', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/security/password-hash')>(
+        '@infrastructure/security/password-hash'
+    );
+    return { ...actual, verifyPassword: jest.fn(actual.verifyPassword) };
+});
 
 setupTestDb();
 
-afterEach(() => jest.restoreAllMocks());
-
 describe('login with an unknown address', () => {
     it('still verifies against an argon2id hash, so a miss costs what a wrong password costs', async () => {
-        const verify = jest.spyOn(passwordHash, 'verifyPassword');
+        const verify = observePort(passwordHash.verifyPassword);
 
         const response = await accountService.login('nobody@example.com', 'whatever-it-is');
 

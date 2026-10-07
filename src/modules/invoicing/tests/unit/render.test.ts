@@ -21,6 +21,22 @@ jest.mock('../../providers', () => ({
     resolveEInvoicingProvider: () => ({ issue: (document: unknown) => issue(document) })
 }));
 
+/*
+ * The store's two calls are REPLACED by pass-throughs, so one test can make one of them fail:
+ * `jest.spyOn` cannot redefine a namespace import's getter under the mutation run's swc
+ * transform — see `tests/support/ports.ts`.
+ */
+jest.mock('@infrastructure/adapters/document-store', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/adapters/document-store')>(
+        '@infrastructure/adapters/document-store'
+    );
+    return {
+        ...actual,
+        readDocument: jest.fn(actual.readDocument),
+        writeDocument: jest.fn(actual.writeDocument)
+    };
+});
+
 let root: string;
 
 beforeEach(async () => {
@@ -36,10 +52,7 @@ beforeEach(async () => {
     });
 });
 
-afterEach(async () => {
-    jest.restoreAllMocks();
-    await rm(root, { recursive: true, force: true });
-});
+afterEach(() => rm(root, { recursive: true, force: true }));
 
 /** The names in the store, sorted. */
 const storedNames = (): Promise<string[]> => readdir(root).then((names) => names.toSorted());
@@ -126,7 +139,7 @@ describe('a store that fails', () => {
     // A document store is an optimisation. A full disk or a bad mount must not turn an invoice
     // download into a 500.
     it('still answers the download when the file cannot be written', async () => {
-        jest.spyOn(documentStore, 'writeDocument').mockRejectedValue(new Error('disk full'));
+        jest.mocked(documentStore.writeDocument).mockRejectedValueOnce(new Error('disk full'));
 
         const bytes = await renderInvoicePdf(anInvoice('f'.repeat(24)));
 
@@ -134,7 +147,7 @@ describe('a store that fails', () => {
     });
 
     it('renders instead when the stored file cannot be read', async () => {
-        jest.spyOn(documentStore, 'readDocument').mockRejectedValue(new Error('EIO'));
+        jest.mocked(documentStore.readDocument).mockRejectedValueOnce(new Error('EIO'));
 
         const bytes = await renderInvoicePdf(anInvoice('9'.repeat(24)));
 
