@@ -1,6 +1,6 @@
 name: Mutation wave
 
-# One wave of the weekly sweep. `mutation.yml` calls this once per wave, each after the last.
+# One wave of the monthly sweep. `mutation.yml` calls this once per wave, each after the last.
 #
 # A wave is one matrix of at most 256 shards (GitHub's per-matrix cap). Wave 1 runs the plan;
 # every later wave runs what the previous one could not finish — split smaller if it ran out of
@@ -33,6 +33,8 @@ jobs:
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Setup
               uses: ./.github/actions/setup
@@ -99,14 +101,16 @@ jobs:
         continue-on-error: true
         strategy:
             fail-fast: false
-            # Leaves 8 of the free plan's 20 concurrent jobs for `ci.yml` and everything else on the
-            # account — a sweep lasts days, and must not starve them.
-            max-parallel: 12
+            # Leaves 14 of the free plan's 20 concurrent jobs for `ci.yml`, the frontend and everything
+            # else on the account. A sweep lasts about a week this way; nothing waits on it.
+            max-parallel: 6
             matrix:
                 shard: ${{ fromJson(needs.plan.outputs.shards) }}
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
 
             - name: Set up the runner
               uses: ./.github/actions/mutation-runner
@@ -134,12 +138,15 @@ jobs:
               # memory" before testing a mutant (2026-09-27). One worker halves the speed and ends
               # that failure; the waves absorb the speed.
               #
+              # `--expose-gc`: lets the test environment collect after each test file, which the
+              # initial test run needs to fit — docs/tools/mutation-testing.md#collect-after-each-file.
+              #
               # `timeout` stops Stryker at 330 minutes so the step, not GitHub, ends the job: exit
               # 124 is how the next wave knows to split this shard rather than retry it whole.
               env:
                   MUTATE: ${{ steps.args.outputs.mutate }}
                   MUTATION_SLICE: ${{ steps.args.outputs.slice }}
-                  NODE_OPTIONS: --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
+                  NODE_OPTIONS: --expose-gc --max-old-space-size=12288 --disable-warning=MODULE_TYPELESS_PACKAGE_JSON
               run: |
                   set +e
                   timeout --kill-after=2m 330m npx stryker run tmp/stryker.ci.json \

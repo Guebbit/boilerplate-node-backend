@@ -1,7 +1,8 @@
 /**
  * @module
- * The jest environment every suite runs in: `jest-environment-node`, plus one guarantee — no
- * callback a test file registered outlives that file.
+ * The jest environment every suite runs in: `jest-environment-node`, plus guarantees that a
+ * finished test file can be freed — nothing it registered keeps running, nothing Stryker shares
+ * points into it, and, under `--expose-gc`, it is collected before the next file starts.
  *
  * Why:   a live callback belongs to the file's VM context, so it keeps the WHOLE context alive —
  *        the app, the models, every module the file loaded.
@@ -147,6 +148,61 @@ const withOwnProperties = <T extends object>(wrapper: T, original: object): T =>
     Object.defineProperties(wrapper, Object.getOwnPropertyDescriptors(original));
 
 /**
+ * Narrows to an object whose properties can be read and replaced.
+ *
+ * @param value - anything read off Stryker's shared namespace
+ * @returns whether it is a non-null object
+ */
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === 'object' && value !== null;
+
+/**
+ * The record itself when it was made in this module's realm, otherwise a copy made here.
+ *
+ * @param record - a flat `mutant id → hit count` map
+ * @returns an equal record that does not belong to a test file's VM context
+ */
+const inThisRealm = (record: Record<string, unknown>): Record<string, unknown> =>
+    Object.getPrototypeOf(record) === Object.prototype ? record : { ...record };
+
+/**
+ * Moves Stryker's coverage records out of a finished test file's realm.
+ *
+ * Why:   Stryker shares one namespace object across every file. Its instrumented code creates a
+ *        `{}` per covering test INSIDE the file's VM context, and an object keeps its context
+ *        alive — the whole file, ~420 MB. Every file that exercised the mutated code stayed.
+ * Who:   only Stryker's dry run with `coverageAnalysis: perTest`; anywhere else there is no
+ *        namespace and this does nothing.
+ * Shape: `mutantCoverage = { static: {id: hits}, perTest: {testId: {id: hits}} }` — written by
+ *        `@stryker-mutator/instrumenter`'s preamble, read back unchanged at the end of the run.
+ * See:   docs/tools/mutation-testing.md#collect-after-each-file
+ *
+ * @param global - the finished file's global, where Stryker's jest environment put the namespace
+ */
+const releaseStrykerCoverage = (global: object): void => {
+    // Stryker passes its namespace's name through jest `globals`; `__stryker__` is its default.
+    const configured: unknown = Reflect.get(global, '__strykerGlobalNamespace__');
+    const namespace: unknown = Reflect.get(
+        global,
+        typeof configured === 'string' ? configured : '__stryker__'
+    );
+    if (!isRecord(namespace) || !isRecord(namespace.mutantCoverage)) return;
+
+    const { static: hits, perTest } = namespace.mutantCoverage;
+    if (!isRecord(hits) || !isRecord(perTest)) return;
+
+    namespace.mutantCoverage = {
+        static: inThisRealm(hits),
+        perTest: Object.fromEntries(
+            Object.entries(perTest).map(([test, covered]) => [
+                test,
+                isRecord(covered) ? inThisRealm(covered) : covered
+            ])
+        )
+    };
+};
+
+/**
  * `jest-environment-node` that clears, at teardown, every timer and performance observer the file
  * left running.
  * https://jestjs.io/docs/configuration#testenvironment-string
@@ -205,7 +261,16 @@ export default class TestEnvironment extends NodeEnvironment {
     }
 
     /**
-     * Clears whatever the file left running, then lets `jest-environment-node` release the context.
+     * Clears whatever the file left running, moves Stryker's records out of it, lets
+     * `jest-environment-node` release the context, then collects the garbage when `--expose-gc`
+     * made `gc` available.
+     *
+     * Why collect: V8 frees a finished file's context lazily — collectable, but not yet collected.
+     *   In one process (Stryker's dry run) the next files outrun it, and V8 throws "heap out of
+     *   memory" with the memory still reclaimable. Known jest behaviour:
+     *   https://github.com/jestjs/jest/issues/11956
+     * Who sets the flag: the mutation runs only, so a normal run pays nothing.
+     * See: docs/tools/mutation-testing.md#collect-after-each-file
      */
     override async teardown(): Promise<void> {
         for (const timer of this.pending) clearTimeout(timer);
@@ -214,6 +279,8 @@ export default class TestEnvironment extends NodeEnvironment {
         this.observers.clear();
         if (observerRegistry.current === this.observers)
             observerRegistry.current = this.previousObservers;
+        releaseStrykerCoverage(this.global);
         await super.teardown();
+        globalThis.gc?.();
     }
 }

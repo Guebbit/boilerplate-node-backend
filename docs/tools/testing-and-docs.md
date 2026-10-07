@@ -156,15 +156,15 @@ Cypress runs are an order of magnitude slower than these, because they drive a r
 A `setupTestDb()`-calling spec lives in that module's own `tests/integration/`, never its
 `tests/unit/` — the placement rule every module follows.
 
-| Command                      | What it runs                                                                         |
-| ---------------------------- | ------------------------------------------------------------------------------------ |
-| `npm run test:unit`          | one function, no database                                                            |
-| `npm run test:cross-cutting` | the sweeps: one rule across every module                                             |
-| `npm run test:integration`   | a real database, or the real app over HTTP, `--runInBand`                            |
-| `npm run test:contract`      | HTTP against the spec, `--runInBand`                                                 |
-| `npm run test:fuzz`          | the spec, hostile, `--runInBand`                                                     |
-| `npm test`                   | all five, in that order                                                              |
-| `npm run mutation:full`      | whole scope, sharded and weekly in CI, see [Mutation Testing](./mutation-testing.md) |
+| Command                      | What it runs                                                                          |
+| ---------------------------- | ------------------------------------------------------------------------------------- |
+| `npm run test:unit`          | one function, no database                                                             |
+| `npm run test:cross-cutting` | the sweeps: one rule across every module                                              |
+| `npm run test:integration`   | a real database, or the real app over HTTP, `--runInBand`                             |
+| `npm run test:contract`      | HTTP against the spec, `--runInBand`                                                  |
+| `npm run test:fuzz`          | the spec, hostile, `--runInBand`                                                      |
+| `npm test`                   | all five, in that order                                                               |
+| `npm run mutation:full`      | whole scope, sharded and monthly in CI, see [Mutation Testing](./mutation-testing.md) |
 
 The mutation run's swc transform skips type-checking, which `npm run ts-check` does once for the
 whole project anyway, so the same tests run markedly faster there. See `jest.config.mutation.js`.

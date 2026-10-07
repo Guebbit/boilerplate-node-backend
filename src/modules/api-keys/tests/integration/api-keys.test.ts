@@ -23,9 +23,31 @@ import { mintApiKey } from '@modules/api-keys/credentials';
 import { logger } from '@infrastructure/adapters/logger';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
-import * as mailer from '@infrastructure/adapters/mailer';
 import { ACCOUNT_SESSIONS_REVOKED } from '@modules/account';
 import { enabledModules } from '../../../../modules';
+
+/**
+ * Every mail the app queued, newest last. Named `mock*` because `jest.mock` is hoisted above the
+ * imports and may only close over identifiers with that prefix.
+ */
+const mockOutbox: { to?: string; template: string; data: Record<string, unknown> }[] = [];
+
+/*
+ * The mailer is REPLACED, not spied on: `jest.spyOn` cannot redefine a namespace import's getter
+ * under the mutation run's swc transform — see `tests/support/ports.ts`. A case that never reads
+ * the outbox is unaffected by what lands in it.
+ */
+jest.mock('@infrastructure/adapters/mailer', () => ({
+    ...jest.requireActual<typeof import('@infrastructure/adapters/mailer')>(
+        '@infrastructure/adapters/mailer'
+    ),
+    enqueueEmail: jest.fn(
+        (envelope: { to?: string }, template: string, data: Record<string, unknown> = {}) => {
+            mockOutbox.push({ to: envelope.to, template, data });
+            return Promise.resolve();
+        }
+    )
+}));
 
 setupTestDb();
 
@@ -473,20 +495,11 @@ const liveCount = (userId: string): Promise<number> =>
     apiKeyRepository.findActiveByMinter(userId).then((keys) => keys.length);
 
 describe('a credential outlives a session, so ending sessions wholesale ends credentials', () => {
-    /** Every queued mail, newest last. */
-    const outbox: { to?: string; template: string; data: Record<string, unknown> }[] = [];
-
     beforeEach(() => {
-        outbox.length = 0;
+        mockOutbox.length = 0;
         resetDomainEvents();
         registerModules(enabledModules);
-        jest.spyOn(mailer, 'enqueueEmail').mockImplementation((envelope, template, data = {}) => {
-            outbox.push({ to: envelope.to, template, data });
-            return Promise.resolve();
-        });
     });
-
-    afterEach(() => jest.restoreAllMocks());
 
     it('mails the minter when a credential is created, without the secret', async () => {
         const user = await createRealUser('minter-mail');
@@ -496,9 +509,9 @@ describe('a credential outlives a session, so ending sessions wholesale ends cre
             contextFor(String(user._id), ['apikeys.any.read'])
         );
         // The mail is fire-and-forget: wait for the user lookup and the enqueue to settle.
-        await eventually(() => outbox.some((mail) => mail.template === 'api-keys.minted'));
+        await eventually(() => mockOutbox.some((mail) => mail.template === 'api-keys.minted'));
 
-        const mails = outbox.filter((mail) => mail.template === 'api-keys.minted');
+        const mails = mockOutbox.filter((mail) => mail.template === 'api-keys.minted');
         expect(mails).toHaveLength(1);
         expect(mails[0].to).toBe('minter-mail@example.com');
         expect(JSON.stringify(mails[0].data)).not.toContain(minted.data?.secret ?? 'missing');
@@ -506,12 +519,12 @@ describe('a credential outlives a session, so ending sessions wholesale ends cre
 
     it('revokes every live key a person minted when they log out everywhere, and mails the list', async () => {
         const { userId } = await mintTwo('logout-all-keys');
-        outbox.length = 0;
+        mockOutbox.length = 0;
 
         await emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, { userId, reason: 'logout-all' });
 
         expect(await liveCount(userId)).toBe(0);
-        const mails = outbox.filter((mail) => mail.template === 'api-keys.revoked');
+        const mails = mockOutbox.filter((mail) => mail.template === 'api-keys.revoked');
         expect(mails).toHaveLength(1);
         expect(String(mails[0].data.list).split(', ')).toHaveLength(2);
     });
@@ -528,7 +541,7 @@ describe('a credential outlives a session, so ending sessions wholesale ends cre
         const mine = await mintTwo('mine-revoked');
         const theirs = await mintTwo('theirs-kept');
         const nobody = await createRealUser('no-keys');
-        outbox.length = 0;
+        mockOutbox.length = 0;
 
         await emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
             userId: String(nobody._id),
@@ -540,6 +553,6 @@ describe('a credential outlives a session, so ending sessions wholesale ends cre
         });
 
         expect(await liveCount(theirs.userId)).toBe(2);
-        expect(outbox.filter((mail) => mail.template === 'api-keys.revoked')).toHaveLength(1);
+        expect(mockOutbox.filter((mail) => mail.template === 'api-keys.revoked')).toHaveLength(1);
     });
 });

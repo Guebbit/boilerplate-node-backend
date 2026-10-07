@@ -2,13 +2,16 @@
  * @module
  * The jest environment — `tests/support/test-environment.ts`.
  *
- * Its one promise is that nothing a test file registered keeps running after the file ends, since a
+ * Its main promise is that nothing a test file registered keeps running after the file ends, since a
  * live callback pins the file's whole VM context in memory. Each case builds a real environment,
- * starts something through it, tears it down, and checks the callback never runs again.
+ * starts something through it, tears it down, and checks the callback never runs again. The last
+ * cases check the other promises: Stryker's records leave the file's realm, and a collection runs
+ * at teardown when `--expose-gc` provides one.
  */
 
 import { PerformanceObserver, performance } from 'node:perf_hooks';
 import { promisify } from 'node:util';
+import { runInNewContext } from 'node:vm';
 import TestEnvironment from '@tests/test-environment';
 import { asStub } from '@tests/stub';
 
@@ -104,5 +107,48 @@ describe('TestEnvironment', () => {
         await settle();
 
         expect(seen).toEqual(['before-teardown']);
+    });
+
+    it('moves Stryker’s coverage records out of the finished file’s realm, values intact', async () => {
+        const environment = await createEnvironment();
+        // `runInNewContext` builds the records the way instrumented code does: inside another realm.
+        const coverage: unknown = runInNewContext(
+            '({ static: { 1: 2 }, perTest: { a: { 3: 4 } } })'
+        );
+        const namespace = { mutantCoverage: coverage };
+        Reflect.set(environment.global, '__stryker__', namespace);
+
+        await environment.teardown();
+
+        expect(namespace.mutantCoverage).toEqual({ static: { 1: 2 }, perTest: { a: { 3: 4 } } });
+        expect(namespace.mutantCoverage).not.toBe(coverage);
+        // The `toEqual` above just proved this shape.
+        const moved = namespace.mutantCoverage as { static: object; perTest: { a: object } };
+        expect(Object.getPrototypeOf(moved.static)).toBe(Object.prototype);
+        expect(Object.getPrototypeOf(moved.perTest.a)).toBe(Object.prototype);
+    });
+
+    it('keeps a coverage record already in this realm, and honours a renamed namespace', async () => {
+        const environment = await createEnvironment();
+        const hits = { 3: 4 };
+        const namespace = { mutantCoverage: { static: {}, perTest: { a: hits } } };
+        Reflect.set(environment.global, '__strykerGlobalNamespace__', '__renamed__');
+        Reflect.set(environment.global, '__renamed__', namespace);
+
+        await environment.teardown();
+
+        expect(namespace.mutantCoverage.perTest.a).toBe(hits);
+    });
+
+    it('collects garbage once the file ends, when --expose-gc made that possible', async () => {
+        const collect = jest.fn();
+        const original = globalThis.gc;
+        globalThis.gc = collect;
+        const environment = await createEnvironment();
+
+        await environment.teardown();
+        globalThis.gc = original;
+
+        expect(collect).toHaveBeenCalledTimes(1);
     });
 });

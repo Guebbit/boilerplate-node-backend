@@ -29,6 +29,14 @@ module.exports = {
      * `.env` is the one knob. See docs/tools/mutation-testing.md#the-worker-pool-multiplication.
      */
     maxWorkers: 1,
+    /*
+     * Four times the base config's 30 s. Instrumented code under per-test coverage runs slower, and
+     * one timed-out test in Stryker's initial run fails the whole shard — measured 2026-10-07, the
+     * generated-basket property in `checkout-money-reconciliation.test.ts`. A mutant that hangs is
+     * still caught: Stryker's own `timeoutMS` stops it, independently of this.
+     * https://stryker-mutator.io/docs/stryker-js/configuration/#timeoutms-number
+     */
+    testTimeout: 120_000,
     transform: {
         // Spread first: only the TypeScript matcher is replaced, so the base config's `.js` entry
         // (babel-jest, for the ESM-only `@scure`/`@noble`) survives.
