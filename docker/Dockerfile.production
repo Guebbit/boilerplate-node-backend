@@ -6,7 +6,7 @@
 # there is no source in the image at all, so it cannot run anywhere the host folder is absent.
 #
 # This file is the other half. The source is baked in, dev dependencies are gone, the process runs
-# as a non-root user, and the image only exists if the code type-checks and lints first.
+# as a non-root user, and the image only exists if the code type-checks first (lint runs in CI, not here — see below).
 #
 # ── WHY THIS STAYS ON ALPINE WHILE docker/Dockerfile MOVED TO DEBIAN ─────────────────────────────
 # `docker/Dockerfile` needs glibc for `mongodb-memory-server`'s baked `mongod`. This image runs no

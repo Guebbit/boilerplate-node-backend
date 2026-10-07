@@ -76,14 +76,14 @@ prints goes through `<%= %>` — `infrastructure/adapters/pdf.ts`,
 Listed because a guard is only as reassuring as what it protects — and because the webhook path is
 constrained, not absent.
 
-| Attack                 | How it works                                                                    | This boilerplate                                                                                                                                                                                                                                                                             |
-| ---------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cloud metadata access  | credentials from `169.254.169.254` in a cloud VM without IMDSv2                 | The only caller-supplied-URL path refuses link-local addresses before it connects (above). The deployment-side belt — IMDSv2 and blocking link-local egress — is [Egress filtering and cloud metadata](../../tools/deployment-hardening.md#egress-filtering-and-cloud-metadata).             |
-| Internal service reach | unauthenticated admin panels, databases and brokers trusted by network position | Neither Mongo, Redis nor RabbitMQ publishes a port in the production compose file; they are reachable on the compose network and nowhere else — `docker-compose.production.yml`. So even a primitive would find authenticated services — see [Data layer](data-layer.md#reaching-the-store). |
+| Attack                 | How it works                                                                    | This boilerplate                                                                                                                                                                                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Cloud metadata access  | credentials from `169.254.169.254` in a cloud VM without IMDSv2                 | The two external-URL paths (webhooks, the avatar download) refuse link-local addresses before it connects (above). The deployment-side belt — IMDSv2 and blocking link-local egress — is [Egress filtering and cloud metadata](../../tools/deployment-hardening.md#egress-filtering-and-cloud-metadata). |
+| Internal service reach | unauthenticated admin panels, databases and brokers trusted by network position | Neither Mongo, Redis nor RabbitMQ publishes a port in the production compose file; they are reachable on the compose network and nowhere else — `docker-compose.production.yml`. So even a primitive would find authenticated services — see [Data layer](data-layer.md#reaching-the-store).             |
 
 ## If you add another outbound fetch
 
-Outbound webhooks were the first feature to fetch a caller-supplied URL, and
+Outbound webhooks and the OAuth avatar download fetch a URL that comes from outside, and
 `infrastructure/adapters/ssrf-guard.ts` is the reference the next one should copy rather than
 re-derive. The non-negotiables, all of which it already implements:
 
@@ -100,7 +100,7 @@ Teredo — are a class of bug a hand-rolled range test gets wrong. See
 
 ## Related
 
-- [webhooks](../../modules/webhooks.md) — the one outbound path that takes a caller-supplied URL
+- [webhooks](../../modules/webhooks.md) — one of the two outbound paths that take an externally supplied URL (the other is the avatar download)
 - [The API surface](api-surface.md) — consuming upstream APIs safely
 - [Data layer](data-layer.md) — what sits behind the network boundary
 - [Authorization](authorization.md#bypassing-the-check-rather-than-passing-it) — the confused-deputy row

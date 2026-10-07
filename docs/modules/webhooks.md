@@ -235,7 +235,7 @@ the only way in. See that repo's `docs/modules/webhooks.md` for the client side,
 
 There is no switch. Webhooks are on when this module is in the build, and a deployment that never
 sends them removes it — [Removing a module](../theory/module-lifecycle.md#removing-a-module). That
-also removes the one place the backend fetches a caller-supplied URL (see
+also removes the one place the backend fetches a tenant-supplied URL (the avatar download in `account` fetches a provider-supplied one; see
 [Server-side request forgery](../theory/defences/ssrf.md)).
 
 The standard procedure catches most of it: `tsc` stops on every file that imports the module
@@ -251,7 +251,7 @@ hand:
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | the retry-sweep script entry  | `sweep:webhook-retries` in `package.json`                                                                                                                                                                                                                                     | points at a deleted file            |
 | the cron line and its comment | `docker/crontab`                                                                                                                                                                                                                                                              | fails every minute                  |
-| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, but this module is its only caller today                                                                                                                                                                               | compiles, and nothing calls it      |
+| the SSRF guard                | `src/infrastructure/adapters/ssrf-guard.ts` — generic, shared with `adapters/remote-image.ts` (the avatar download)                                                                                                                                                           | still used by the avatar download   |
 | the environment               | the `NODE_WEBHOOK_*` lines in `.env-example`                                                                                                                                                                                                                                  | documents settings nothing reads    |
 | the local test sink           | the `webhook-tester` service in `docker-compose.yml`, `WEBHOOK_TESTER_PORT`                                                                                                                                                                                                   | runs for nothing                    |
 | the sink's TLS                | `webhook-tester-tls` in `docker-compose.yml`, `docker/webhook-tester-tls.Caddyfile`, `scenarios/support/tls/`, `scenarios/tools/generate-webhook-sink-tls.ts` (`scenario:tls`), the `NODE_EXTRA_CA_CERTS` in the `dev`, `demo` and `e2e:serve` scripts and in compose's `app` | trusts a certificate nothing serves |

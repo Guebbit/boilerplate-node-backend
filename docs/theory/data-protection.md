@@ -87,7 +87,7 @@ flowchart TD
 **Scoping the incident** — the queries that establish who and what, both already indexed for
 exactly this:
 
-- `GET /observability/audit?actor_user_id=<id>` — everything one account did or had done to it.
+- `GET /observability/audit?actor=<id>` — everything one account did or had done to it.
 - `GET /observability/audit?action=<action>` — every occurrence of one action across accounts, for
   the audit vocabulary each module owns (`account/audit.ts`, `users/audit.ts`, …). `auth.login`,
   `admin.user.erased` and `auth.data_export.downloaded` are usually the first three worth checking.

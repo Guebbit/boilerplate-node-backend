@@ -113,8 +113,9 @@ it — see that file's own closing note for why.
 **A family needs a concrete key for every action a route asks about.** `apikeys` once declared
 only a read and a `manage`, so "holds every concrete key in the family" reduced to "holds the
 read" — a read-only role satisfied a guard meant for a minter. The fix generalised: `manage` is
-gone, so every action a route can gate on is its own declared key, and there is no collapse left
-to have.
+gone, so every action a route can gate on is its own declared key. One collapse remains, on
+purpose: `holdsKey` (`kernel/ability.ts`) answers `can(action, subject)`, so `orders.self.read` and
+`orders.any.read` are the same question to a guard. Use `heldKeys` to enumerate what a caller holds.
 
 **Tenant keys are bare; platform keys are always prefixed.** That asymmetry is the whole safety
 property:
