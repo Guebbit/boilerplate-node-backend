@@ -20,6 +20,7 @@ import {
 } from './model';
 import type { LocaleDocument, LocaleEntryDocument, TranslationDocument } from './model';
 import { createRepository, type Repository } from '@infrastructure/persistence/create-repository';
+import { setAndUnset } from '@infrastructure/persistence/changes';
 import type {
     Language,
     LocaleEntry,
@@ -441,20 +442,19 @@ const upsertEntityLocale = (
     session?: ClientSession
 ): Promise<TranslationDocument> => {
     // `fields.<name>` paths: the field is a `Mixed` map, so a dotted `$set` touches one key only.
-    const entries = Object.entries(fields);
-    const set = Object.fromEntries(
-        entries.flatMap(([name, value]) => (value === null ? [] : [[`fields.${name}`, value]]))
-    );
-    const unset = Object.fromEntries(
-        entries.flatMap(([name, value]) => (value === null ? [[`fields.${name}`, '']] : []))
+    // A `null` in `fields` clears that key, which `setAndUnset` reads as `undefined`.
+    const { $set, $unset } = setAndUnset(
+        Object.fromEntries(
+            Object.entries(fields).map(([name, value]) => [`fields.${name}`, value ?? undefined])
+        )
     );
 
     return translationModel
         .findOneAndUpdate(
             { entityType, entityId, locale },
             {
-                $set: { ...set, origin, translatedBy, sourceDigest },
-                ...(Object.keys(unset).length > 0 ? { $unset: unset } : {}),
+                $set: { ...$set, origin, translatedBy, sourceDigest },
+                ...($unset ? { $unset } : {}),
                 $setOnInsert: { entityType, entityId, locale }
             },
             { upsert: true, returnDocument: 'after', session }
