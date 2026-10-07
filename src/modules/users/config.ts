@@ -15,8 +15,8 @@ import { PII_ENCRYPTION_KEY_FIELD } from '@infrastructure/security/config';
 /**
  * A phone number encrypted under the shipped placeholder is recoverable by anyone who has read
  * this repository — same failure shape `NODE_TOTP_ENCRYPTION_KEY` guards against, same fix. Shared
- * with `addresses` (never optional without this module, per its own `dependsOn`), so requiring it
- * here covers both.
+ * with `addresses`: both are `group: foundation`, so neither is ever deployed without the other
+ * and requiring it here covers both.
  */
 export const usersConfig = defineConfig({
     name: 'users',

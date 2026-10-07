@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — the per-user inbox: one row per message, kept until its owner deletes it.
-**Depends on** — [`cart`](./cart.md), [`wishlist`](./wishlist.md) and [`products`](./products.md), only for the event names it listens to.
+**Depends on** — [`cart`](./cart.md) and [`wishlist`](./wishlist.md), only for the event names it listens to.
 **Breaks if you change** — nothing outside this folder. No module imports it: a producer announces an event and never calls in.
 :::
 
