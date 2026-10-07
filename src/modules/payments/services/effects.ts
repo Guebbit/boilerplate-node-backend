@@ -65,34 +65,69 @@ const retryOne = (payment: PaymentDocument): Promise<boolean> => {
 };
 
 /**
- * Sweep every payment whose settlement died before it could commit stock, mark a refund owed, or
- * clear its marker.
+ * The skeleton both sweeps share: find the payments due, handle each one in turn, warn when the
+ * batch was full so a truncated run is not read as done.
  *
+ * @param find - reads one batch of payments untouched since the cutoff
+ * @param handle - settles one payment; resolves whether it did, and never rejects
+ * @param label - which sweep this is, for its log lines
  * @returns how many payments were settled
  */
-export const retryPendingEffects = async (): Promise<number> => {
+const sweepDue = async (
+    find: (cutoff: Date, limit: number) => Promise<PaymentDocument[]>,
+    handle: (payment: PaymentDocument) => Promise<boolean>,
+    label: 'effect' | 'refund'
+): Promise<number> => {
     const cutoff = new Date(Date.now() - paymentEffectRetryMinutes() * 60_000);
-    const due = await paymentRepository.findWithPendingEffects(cutoff, SWEEP_BATCH_SIZE);
+    const due = await find(cutoff, SWEEP_BATCH_SIZE);
 
     let settled = 0;
     for (const payment of due) {
-        if (await retryOne(payment)) settled += 1;
+        if (await handle(payment)) settled += 1;
     }
 
     // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
     if (due.length === SWEEP_BATCH_SIZE)
         // Stryker disable all
         logger.warn(
-            `Payment effect sweep: hit the ${SWEEP_BATCH_SIZE}-payment batch cap — run it again to continue`
+            `Payment ${label} sweep: hit the ${SWEEP_BATCH_SIZE}-payment batch cap — run it again to continue`
         );
     // Stryker restore all
 
     if (due.length > 0)
         // Stryker disable next-line all
-        logger.info(`Payment effect sweep: ${settled} of ${due.length} owed effects settled`);
+        logger.info(`Payment ${label} sweep: ${settled} of ${due.length} owed items settled`);
 
     return settled;
 };
+
+/**
+ * Sweep every payment whose settlement died before it could commit stock, mark a refund owed, or
+ * clear its marker.
+ *
+ * @returns how many payments were settled
+ */
+export const retryPendingEffects = (): Promise<number> =>
+    sweepDue(paymentRepository.findWithPendingEffects, retryOne, 'effect');
+
+/**
+ * Retry one payment's open refunds; a failure is logged and leaves them open for the next sweep.
+ *
+ * @param payment - a payment with at least one refund still open
+ * @returns whether at least one refund settled
+ */
+const retryOneRefund = (payment: PaymentDocument): Promise<boolean> =>
+    settleOpenRefunds(payment)
+        .then((outcome) => outcome.settled)
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not retry the open refund for order ${String(payment.orderId)} — it stays open, and the next sweep tries again`,
+                error
+            });
+            // Stryker restore all
+            return false;
+        });
 
 /**
  * Retry every refund the provider refused, or that died before it was answered — the refund half
@@ -103,31 +138,5 @@ export const retryPendingEffects = async (): Promise<number> => {
  *
  * @returns how many payments had at least one refund settled
  */
-export const retryOpenRefunds = async (): Promise<number> => {
-    const cutoff = new Date(Date.now() - paymentEffectRetryMinutes() * 60_000);
-    const due = await paymentRepository.findWithOpenRefunds(cutoff, SWEEP_BATCH_SIZE);
-
-    let settled = 0;
-    for (const payment of due) {
-        const outcome = await settleOpenRefunds(payment).catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not retry the open refund for order ${String(payment.orderId)} — it stays open, and the next sweep tries again`,
-                error
-            });
-            // Stryker restore all
-            return undefined;
-        });
-        if (outcome?.settled) settled += 1;
-    }
-
-    // A full batch means more is waiting. Said out loud, so a truncated run is not read as done.
-    if (due.length === SWEEP_BATCH_SIZE)
-        // Stryker disable all
-        logger.warn(
-            `Payment refund sweep: hit the ${SWEEP_BATCH_SIZE}-payment batch cap — run it again to continue`
-        );
-    // Stryker restore all
-
-    return settled;
-};
+export const retryOpenRefunds = (): Promise<number> =>
+    sweepDue(paymentRepository.findWithOpenRefunds, retryOneRefund, 'refund');
