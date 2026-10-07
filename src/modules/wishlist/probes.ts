@@ -36,7 +36,7 @@ export const probes: Probe[] = [
     },
     {
         name: 'Probe: an id no ObjectId can be built from',
-        why: `422, not 404. \`Id\` is a plain string in the contract — a backend is free to use ULIDs — so the Mongo-shaped check lives in the controller, and this is the boundary that says a malformed id is a different answer from an absent one. Nothing in the contract can express the difference.`,
+        why: `404, the same answer as an absent id. \`Id\` is a plain string in the contract — a backend is free to use ULIDs — so the Mongo-shaped check lives in the controller, and a path id it cannot build is refused like one that names nothing.`,
         method: 'DELETE',
         path: '/wishlist/not-an-object-id',
         auth: 'bearer'

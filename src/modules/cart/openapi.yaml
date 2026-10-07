@@ -184,10 +184,8 @@ paths:
                                 $ref: '#/components/schemas/CartResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                # Well-formed product id that matches no cart line. 422 covers the malformed case.
+                # Well-formed product id that matches no cart line. A malformed id is the same 404.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # `{productId}` is not a usable ObjectId — the controller answers before querying.
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /cart/shipping-method:
@@ -384,7 +382,6 @@ paths:
                 # Every product on the order has left the public catalogue — nothing to add.
                 # `errors[].code` is `REORDER_UNAVAILABLE`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:

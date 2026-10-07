@@ -18,7 +18,7 @@ export const probes: Probe[] = [
     },
     {
         name: 'Probe: edit an example with an id no ObjectId can be built from',
-        why: `422, not 404. \`Id\` is a plain string in the contract, so the Mongo-shaped check lives in the controller, and this is the boundary that says a malformed id is a different answer from an absent one.`,
+        why: `404, the same answer as an absent id. \`Id\` is a plain string in the contract, so the Mongo-shaped check lives in the controller, and a path id it cannot build is refused like one that names nothing.`,
         method: 'PATCH',
         path: '/examples/not-an-object-id',
         auth: 'bearer',
