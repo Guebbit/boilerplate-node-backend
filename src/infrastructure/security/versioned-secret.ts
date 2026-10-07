@@ -11,7 +11,8 @@
  * credential and key rotation" is the operator-facing runbook this exists for.
  */
 
-import { createCipheriv, createDecipheriv, hkdfSync, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, randomBytes, type KeyObject } from 'node:crypto';
+import { deriveSubkey } from './subkey';
 
 /** An operator-configured encryption key, tagged with the version stamped on ciphertext it produces. */
 export interface VersionedKey {
@@ -60,14 +61,13 @@ export interface SecretBinding {
 
 /**
  * AES-256-GCM needs a 32-byte key; the configured value is an operator-chosen string of any
- * length, so it is stretched with HKDF-SHA256 (`node:crypto`, no new dependency) rather than a
+ * length, so it is stretched with HKDF-SHA256 ({@link deriveSubkey}) rather than a
  * single hash pass. HKDF does not add work against a weak secret (RFC 5869); the boot check
  * demands key-sized entropy for that.
  * `purpose` is the HKDF `info`: domain separation between rings.
- * https://nodejs.org/api/crypto.html#cryptohkdfsyncdigest-ikm-salt-info-keylen
  */
-const deriveKey = (secret: string, purpose: SecretPurpose): Buffer =>
-    Buffer.from(hkdfSync('sha256', secret, '', purpose, 32));
+const deriveKey = (secret: string, purpose: SecretPurpose): KeyObject =>
+    deriveSubkey(secret, purpose);
 
 /** GCM authentication tag length, in bytes — the full 128 bits, and the only length accepted back. */
 const AUTH_TAG_BYTES = 16;

@@ -3,8 +3,8 @@
 ::: tip At a glance
 **Owns** — the address book: one document per user, entries keeping their own id (two addresses
 can be identical in every field and still be different entries).
-**Depends on** — [`users`](./users.md), which runs this module's `personalData.erase` hook inside
-its hard delete — never a service call.
+**Depends on** — nothing. [`users`](./users.md) reaches it only through the `personalData.erase`
+hook its hard delete runs, never a service call.
 **Breaks if you change** — [`cart`](./cart.md)'s checkout, the only sibling consumer of
 `addressForCheckout`.
 :::

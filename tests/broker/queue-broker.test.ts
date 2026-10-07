@@ -3,8 +3,8 @@
  *
  * `tests/unit/infrastructure/adapters/queue.test.ts` mocks `amqplib`, so it proves the arguments
  * `queue.ts` hands over and never what the broker does with them. Each case here is one only a
- * broker can answer: does the topology declare on the version we run, does `x-death` carry the
- * count `deathCountFor` reads, where does a message actually go once a delivery limit is spent.
+ * broker can answer: does the topology declare on the version we run, does a retry republish
+ * carry the `x-retry-attempt` header `attemptsOf` reads, where does a message actually go once a delivery limit is spent.
  *
  * ── What is left out, on purpose ──────────────────────────────────────────────────────────────
  * The webhook path through the broker (the live e2e and `webhooks/tests/integration/delivery.test.ts`
@@ -170,12 +170,6 @@ const recorder = (decide: (call: number) => Promise<boolean> = () => Promise.res
     };
 };
 
-/** The `x-death` entry the broker stamped for one queue, as `deathCountFor` reads it. */
-const deathEntry = (raw: ConsumeMessage, queue: string) =>
-    (raw.properties.headers?.['x-death'] as { queue: string; count: number; reason: string }[])
-        // The broker's own header; `deathCountFor` narrows it the same way.
-        .find((entry) => entry.queue === queue);
-
 /**
  * Takes one delivery and dies without acking it: the channel closes, and the broker returns the
  * message to the queue with its delivery count one higher. What a crashed worker looks like.
@@ -235,7 +229,7 @@ describe('the topology on a real broker', () => {
                 'x-dead-letter-strategy': 'at-least-once',
                 'x-overflow': 'reject-publish',
                 'x-dead-letter-exchange': 'dead-letter',
-                'x-dead-letter-routing-key': `${queue}.retry`
+                'x-dead-letter-routing-key': `${queue}.dead`
             });
             expect(retry.type).toBe('quorum');
             expect(retry.arguments).toMatchObject({
@@ -250,7 +244,7 @@ describe('the topology on a real broker', () => {
 });
 
 describe('retry and parking', () => {
-    it('gives a throwing handler its job back after the TTL, with the broker counting the trip', () =>
+    it('gives a throwing handler its job back after the TTL, with the attempt counted in x-retry-attempt', () =>
         inBrokerEnvironment(async () => {
             const queue = uniqueQueue();
             const adapter = await bootAdapter();
@@ -264,12 +258,9 @@ describe('retry and parking', () => {
 
             const [first, second] = seen;
             expect(first?.payload).toEqual({ job: 'retry-me' });
-            expect(first?.raw.properties.headers?.['x-death']).toBeUndefined();
-            // What `deathCountFor` reads: the retry queue's own entry, stamped by the broker.
-            expect(deathEntry(second.raw, `${queue}.retry`)).toMatchObject({
-                count: 1,
-                reason: 'expired'
-            });
+            expect(first?.raw.properties.headers?.['x-retry-attempt']).toBeUndefined();
+            // What `attemptsOf` reads: our own header, stamped by the retry republish.
+            expect(second.raw.properties.headers?.['x-retry-attempt']).toBe(1);
             expect(second.at - first.at).toBeGreaterThanOrEqual(RETRY_DELAY_SECONDS * 900);
             expect(await depth(`${queue}.dead`)).toBe(0);
         }));
@@ -290,7 +281,7 @@ describe('retry and parking', () => {
 
             expect(seen).toHaveLength(MAX_ATTEMPTS);
             expect(await adapter.parkedCounts()).toContainEqual({ name: queue, parked: 1 });
-            // Parked byte for byte, `x-death` history included, and nothing left to retry.
+            // Parked byte for byte, and nothing left to retry.
             const channel = await rawChannel();
             const parked = await channel.get(adapter.deadLetterQueueOf(queue), { noAck: true });
             expect(parked && JSON.parse(parked.content.toString())).toEqual({ job: 'doomed' });
@@ -337,19 +328,10 @@ describe('a consumer that dies without answering', () => {
         }));
 
     /*
-     * KNOWN GAP. This case passes while it documents what the broker does TODAY, which is not what
-     * `queue.ts` and `docs/tools/rabbitmq.md#queue-type-quorum` promise: the job is dropped.
-     *
-     * Why: `x-delivery-limit` dead-letters the job work -> retry with reason `delivery_limit`, the
-     * TTL sends it retry -> work with reason `expired`, and RabbitMQ discards a message that
-     * returns to a queue already in its `x-death` when no step of the cycle was `rejected`
-     * (https://www.rabbitmq.com/docs/dlx#dead-letter-cycles). A `nack` is `rejected`, which is why
-     * the handler-throws path survives its own round trip and this one does not.
-     *
-     * When it is fixed this case must flip: the job ends in `<queue>.dead` (or is redelivered), and
-     * the assertions below that it is nowhere, and that no consumer is ever offered it, go.
+     * `x-delivery-limit` dead-letters the job straight to `<queue>.dead` (reason `delivery_limit`),
+     * so a job that kills its consumer on contact is parked, never dropped.
      */
-    it('KNOWN GAP: drops a job whose consumer died past x-delivery-limit, instead of parking it', () =>
+    it('parks a job whose consumer died past x-delivery-limit', () =>
         inBrokerEnvironment(async () => {
             const queue = uniqueQueue();
             const adapter = await bootAdapter();
@@ -359,16 +341,20 @@ describe('a consumer that dies without answering', () => {
             const counts = await crashRepeatedly(queue, DELIVERY_LIMIT + 1);
             expect(counts).toEqual([0, 1, 2, 3]);
 
-            // Only now is a real consumer attached, so it sees only what the broker still holds.
-            const { handler, seen } = recorder();
-            await adapter.consumeFromQueue({ queue, handler, schema: anyPayload });
-            // Past the retry TTL plus the hop back, which is when a retry would reappear.
-            await quiet(RETRY_DELAY_SECONDS * 4000);
+            await waitUntil(
+                async () => (await depth(adapter.deadLetterQueueOf(queue))) === 1,
+                'the job to be parked'
+            );
 
-            expect(seen).toHaveLength(0);
+            const channel = await rawChannel();
+            const parked = await channel.get(adapter.deadLetterQueueOf(queue), { noAck: true });
+            // The broker's own header: one entry per queue the message was dead-lettered from.
+            const deaths = (parked ? parked.properties.headers?.['x-death'] : []) as {
+                reason: string;
+            }[];
+            expect(deaths[0]?.reason).toBe('delivery_limit');
             expect(await depth(queue)).toBe(0);
             expect(await depth(adapter.retryQueueOf(queue))).toBe(0);
-            expect(await depth(adapter.deadLetterQueueOf(queue))).toBe(0);
         }));
 });
 

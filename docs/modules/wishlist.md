@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — one wishlist per user, holding product references and nothing else.
-**Depends on** — [`products`](./products.md), [`users`](./users.md), [`cart`](./cart.md).
+**Depends on** — [`products`](./products.md), [`cart`](./cart.md).
 **Breaks if you change** — nothing outside this folder. No module depends on it.
 :::
 

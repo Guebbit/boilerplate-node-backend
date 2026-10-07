@@ -5,9 +5,10 @@
  * database, so the TTL/attempt/cooldown rules can be tested against a fixed clock.
  */
 
-import { createHmac, hkdfSync, randomInt } from 'node:crypto';
+import { createHmac, randomInt } from 'node:crypto';
 import type { DeliveredCodeState } from '@modules/users';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
+import { deriveSubkey } from '@infrastructure/security/subkey';
 import { getTotpEncryptionKeyRing } from '../session/config';
 import { cooldownRemaining } from '../cooldown';
 
@@ -44,12 +45,8 @@ export const DELIVERED_CODE_MAX_ATTEMPTS = 5;
  * @returns the hex digest to store in the entry's `codeHash`
  */
 export const hashDeliveredCode = (code: string): string =>
-    // Node: HKDF-SHA256 (RFC 5869); args are digest, key material, salt, info, length in bytes.
-    // https://nodejs.org/api/crypto.html#cryptohkdfsyncdigest-ikm-salt-info-keylen
-    createHmac(
-        'sha256',
-        Buffer.from(hkdfSync('sha256', getTotpEncryptionKeyRing()[0].key, '', 'delivered-code', 32))
-    )
+    // Node: HMAC. https://nodejs.org/api/crypto.html#cryptocreatehmacalgorithm-key-options
+    createHmac('sha256', deriveSubkey(getTotpEncryptionKeyRing()[0].key, 'delivered-code'))
         .update(code)
         .digest('hex');
 

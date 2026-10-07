@@ -10,7 +10,6 @@
 
 import path from 'node:path';
 import { readdirSync } from 'node:fs';
-import { mailFilesConfig } from '@infrastructure/adapters/config';
 
 /** Every collected template's absolute path, keyed by name without `.ejs` — see {@link registerTemplateDirectories}. */
 let collectedTemplates: Record<string, string> = {};
@@ -47,18 +46,8 @@ export const registerTemplateDirectories = (directories: readonly string[]): voi
 };
 
 /**
- * Absolute path to a single flat override directory, when a deployment sets
- * `NODE_EMAIL_TEMPLATES_DIR` — the escape hatch for a project that forks this template set
- * wholesale, kept working exactly as before templates were collected per module.
- */
-const overrideTemplatesDirectory = (): string | undefined => {
-    const directory = mailFilesConfig().NODE_EMAIL_TEMPLATES_DIR;
-    return directory ? path.resolve(directory) : undefined;
-};
-
-/**
  * What a template name may look like: `<module>.<mail-name>`, letters, digits, dots and dashes.
- * No path separator, so a name can never climb out of the override directory it is joined onto.
+ * No path separator, so a name can never climb out of the directory it is looked up in.
  */
 const TEMPLATE_NAME = /^[\da-z][\d.a-z-]*$/i;
 
@@ -70,16 +59,13 @@ const TEMPLATE_NAME = /^[\da-z][\d.a-z-]*$/i;
  * publishes it and the paired frontend asserts on it against both backends.
  *
  * @param templateName - an `EmailContent.template` name, without extension
- * @throws {Error} when the name holds a path separator or other odd character, or when no
- *   override directory is set and the name is not one {@link registerTemplateDirectories} collected — a module deleted without deleting the name
+ * @throws {Error} when the name holds a path separator or other odd character, or when it is not
+ *   one {@link registerTemplateDirectories} collected — a module deleted without deleting the name
  *   that referenced its template, say
  */
 export const templateFile = (templateName: string): string => {
     if (!TEMPLATE_NAME.test(templateName))
         throw new Error(`[templates] "${templateName}" is not a valid template name.`);
-
-    const override = overrideTemplatesDirectory();
-    if (override) return path.resolve(override, `${templateName}.ejs`);
 
     // `hasOwn`: a bare index would answer `constructor` with `Object`'s own function.
     const file = Object.hasOwn(collectedTemplates, templateName)

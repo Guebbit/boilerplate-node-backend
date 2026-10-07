@@ -2,11 +2,7 @@
 <html lang="<%= locale %>">
 <%- include("/shared/templates/layouts/email-template-head.ejs"); %>
 <body>
-<main class="centered">
-    <h1><%= greeting %></h1>
-    <p><%= body %></p>
-    <p><%= advice %></p>
-</main>
+<%- include("./partials/account.notice-advice.ejs"); %>
 <%- include("/shared/templates/layouts/default-footer.ejs"); %>
 </body>
 </html>

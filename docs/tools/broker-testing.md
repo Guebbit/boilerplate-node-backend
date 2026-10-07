@@ -12,9 +12,9 @@ case in `tests/broker/queue-broker.test.ts` is one only a broker can answer:
 | Case                                   | What only a real broker proves                                                                                                            |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | topology                               | quorum, `at-least-once`, `reject-publish`, TTL and `x-delivery-limit` declare on the image; a second declare is not `PRECONDITION_FAILED` |
-| retry                                  | a throwing handler gets the job back after the TTL, with the `x-death` count `deathCountFor` reads                                        |
+| retry                                  | a throwing handler gets the job back after the TTL, with the attempt counted in `x-retry-attempt`, which `attemptsOf` reads               |
 | parking                                | spent attempts land in `<queue>.dead` and `parkedCounts()` sees them; a `false` handler parks without a retry                             |
-| a consumer that dies without answering | the job comes back with a higher `x-delivery-count` while under the limit; **past it, it is dropped** (see below)                         |
+| a consumer that dies without answering | the job comes back with a higher `x-delivery-count` while under the limit; past it, it is parked in `<queue>.dead` (`delivery_limit`)     |
 | priority                               | `high` is delivered before `normal`, with no `x-max-priority` opt-in                                                                      |
 | prefetch                               | a consumer holds at most `prefetch` unacknowledged jobs                                                                                   |
 | reconnect                              | a connection closed from the broker's side is recovered and the consumer is re-bound                                                      |
@@ -23,26 +23,6 @@ Left out as redundant: the webhook path through the broker (the live e2e and
 `modules/webhooks/tests/integration/delivery.test.ts`), and publish-confirm refusal and timeout — a
 broker cannot be made to refuse on demand without testing RabbitMQ itself, and the unit tests cover
 our branch.
-
-## Known gap: a crashed consumer's job is dropped
-
-One case, named `KNOWN GAP`, passes while it documents a defect. The retry design in
-[RabbitMQ](./rabbitmq.md#queue-type-quorum) says a message that exhausts `x-delivery-limit` re-enters
-the retry cycle. The broker does not do that:
-
-```mermaid
-flowchart LR
-    W["work queue"] -->|"x-delivery-limit spent<br/>reason: delivery_limit"| R["&lt;queue&gt;.retry (TTL)"]
-    R -->|"expires<br/>reason: expired"| X["dropped"]
-    R -.->|"what the design expects"| W
-    N["handler throws"] -->|"nack: reason rejected"| R
-```
-
-RabbitMQ discards a message that returns to a queue already in its `x-death` when no step of the
-cycle was `rejected` ([dead-letter cycles](https://www.rabbitmq.com/docs/dlx#dead-letter-cycles)).
-A `nack` is `rejected`, so the handler-throws path survives its own round trip; the delivery limit
-is not, so the job is gone — in the broker's log as `Dead-letter queues cycle detected`. When the
-adapter is fixed, that case must flip to assert the job is parked (or redelivered).
 
 ## The broker
 

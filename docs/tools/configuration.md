@@ -317,7 +317,6 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | --------------------------------- | ----------------- | ------------------------ | ----- | ------------------------------------------------------------------------------------------------ |
 | `NODE_MAIL_SPOOL_PATH`            | text              | `tmp/storage/mail-spool` | —     | Where an attachment waits between the request and the mail. Mount a volume here in a deployment. |
 | `NODE_MAIL_SPOOL_RETENTION_HOURS` | whole number >= 1 | `1`                      | —     | Hours a spooled attachment is left alone before the sweep counts it abandoned.                   |
-| `NODE_EMAIL_TEMPLATES_DIR`        | text              | —                        | —     | A flat directory of EJS templates that overrides every module’s own.                             |
 
 ### queue
 

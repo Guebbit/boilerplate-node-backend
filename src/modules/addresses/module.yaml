@@ -1,8 +1,7 @@
 summary: "The address book, its own module so the cart's checkout can reach it without importing account."
 subdomain: supporting
 group: foundation
-dependsOn:
-    - users # its hard delete runs this module's `personalData.erase` hook — never a service call
+dependsOn: []
 noAudit: "Edits the caller's own address book: your own data, no money, no stock, no identity beyond the caller."
 frontend:
     counterparts: [account]

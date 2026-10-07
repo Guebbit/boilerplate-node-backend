@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — shipping rates and shipment records: who handed a parcel over, and who recorded its arrival.
-**Depends on** — [`orders`](./orders.md) for the order a parcel is about, [`users`](./users.md) for the recipient's language.
+**Depends on** — [`orders`](./orders.md) for the order a parcel is about.
 **Breaks if you change** — `findShippingMethod` or `priceShipping`. The cart prices a checkout through both.
 :::
 
@@ -38,8 +38,8 @@ flowchart LR
 
 ## The story
 
-A shipment is _about_ an order. The dependency on [`users`](./users.md) is narrower than it looks:
-this module reads the account only to address the shipped email in the recipient's language.
+A shipment is _about_ an order. The shipped email's language comes through `orders`' `mailBuyer`,
+so this module never reads the account itself.
 
 **The rates are pure functions in `domain/`, and that is what makes the cart's edge cheap to
 hold.** [`cart`](./cart.md) imports `findShippingMethod` and `priceShipping` directly — a real,
@@ -83,7 +83,7 @@ flowchart LR
     CA["cart<br/><i>pricing a checkout</i>"] -->|"findShippingMethod · priceShipping"| RA["pure rates<br/><i>domain/ — no HTTP, no record</i>"]
     S1["staff<br/>POST .../ship<br/>{trackingCode}"] --> SH["shipment created<br/><i>one per order</i>"]
     SH --> MS["orders.markShipped"]
-    SH --> EM["shipped email<br/><i>in the recipient's language — users</i>"]
+    SH --> EM["shipped email<br/><i>in the recipient's language — via orders</i>"]
     S2["staff<br/>POST .../deliver"] --> DV["arrival recorded"]
     DV --> MD["orders.markDelivered"]
     S3["staff<br/>POST .../fulfill<br/><i>digital-only order</i>"] --> MF["orders.markFulfilled<br/><i>no parcel written</i>"]

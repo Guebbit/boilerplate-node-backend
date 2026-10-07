@@ -5,7 +5,7 @@
  * `wishlist` announce whose lists lost a deleted product, and a refused guest-cart merge
  * announces its lines — never by an import in the other direction: nothing imports this module
  * to send a message, which keeps the graph acyclic and the producers ignorant of the inbox.
- * Depends on `cart`, `wishlist` and `products` only for the event names it subscribes to.
+ * Depends on `cart` and `wishlist` only for the event names it subscribes to.
  *
  * See: docs/modules/notifications.md
  */

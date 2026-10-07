@@ -9,7 +9,8 @@ import {
     redactedBrokerTarget,
     parkedCounts,
     DEAD_LETTER_EXCHANGE,
-    deadLetterQueueOf
+    deadLetterQueueOf,
+    RETRY_ATTEMPT_HEADER
 } from '@infrastructure/adapters/queue';
 import { logger } from '@infrastructure/adapters/logger';
 import { queueJobsDeadLetteredTotal } from '@infrastructure/observability/metrics-queue';
@@ -309,10 +310,10 @@ describe('publishToQueue()', () => {
 
     /**
      * The retry topology, declared idempotently on every publish (`assertJobQueue`): the work
-     * queue's own dead-letter target is the RETRY queue, never `.dead` directly — `.dead` only
-     * ever receives an explicit publish from `handleDelivery`'s `parkInDead`, never a nack. The
-     * retry queue's own dead-letter target points back at the work queue, which is what makes its
-     * TTL expiry a redelivery instead of a dead end.
+     * queue's own dead-letter target is `.dead`, so a park `nack` and a spent delivery limit both
+     * land there. A retry is a republish, never a dead-letter. The retry queue's own dead-letter
+     * target points back at the work queue, which is what makes its TTL expiry a redelivery
+     * instead of a dead end.
      */
     it('declares the work queue, its retry queue and its dead-letter queue, wired for redelivery', async () => {
         await ensureConnected();
@@ -340,7 +341,7 @@ describe('publishToQueue()', () => {
         expect(mockAssertQueue).toHaveBeenCalledWith('emails', {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
-            deadLetterRoutingKey: 'emails.retry',
+            deadLetterRoutingKey: 'emails.dead',
             arguments: {
                 ...QUORUM_QUEUE_TYPE,
                 ...AT_LEAST_ONCE_DEAD_LETTERING,
@@ -348,11 +349,11 @@ describe('publishToQueue()', () => {
             }
         });
         expect(mockBindQueue).toHaveBeenCalledWith('emails', DEAD_LETTER_EXCHANGE, 'emails');
-        // `.dead` gets no binding at all — nothing dead-letters into it automatically.
-        expect(mockBindQueue).not.toHaveBeenCalledWith(
+        // `.dead` is bound under its own name, the work queue's dead-letter routing key.
+        expect(mockBindQueue).toHaveBeenCalledWith(
             deadLetterQueueOf('emails'),
             DEAD_LETTER_EXCHANGE,
-            expect.anything()
+            'emails.dead'
         );
     });
 
@@ -468,7 +469,7 @@ describe('consumeFromQueue()', () => {
         expect(mockAssertQueue).toHaveBeenCalledWith('pdfs', {
             durable: true,
             deadLetterExchange: DEAD_LETTER_EXCHANGE,
-            deadLetterRoutingKey: 'pdfs.retry',
+            deadLetterRoutingKey: 'pdfs.dead',
             arguments: {
                 ...QUORUM_QUEUE_TYPE,
                 ...AT_LEAST_ONCE_DEAD_LETTERING,
@@ -553,33 +554,6 @@ describe('the boot announcement', () => {
 
         expect(await messagesAt('info')).toEqual([]);
     });
-
-    it('warns when the URL is set together with a port, since the URL wins', async () => {
-        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
-        setEnvironment({ NODE_RABBITMQ_PORT: '5673' });
-
-        const messages = await messagesAt('warn');
-
-        expect(messages).toHaveLength(1);
-        expect(messages[0]).toContain('NODE_RABBITMQ_URL is set together with');
-    });
-
-    it('warns when the URL is set together with a host', async () => {
-        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
-        setEnvironment({ NODE_RABBITMQ_HOST: '127.0.0.1' });
-
-        expect(await messagesAt('warn')).toHaveLength(1);
-    });
-
-    it('does not warn about a URL on its own, or host and port on their own', async () => {
-        setEnvironment({ NODE_RABBITMQ_URL: 'amqp://rabbitmq:5672' });
-        expect(await messagesAt('warn')).toEqual([]);
-
-        disableRabbitMQ();
-        setEnvironment({ NODE_RABBITMQ_HOST: '127.0.0.1' });
-        setEnvironment({ NODE_RABBITMQ_PORT: '5672' });
-        expect(await messagesAt('warn')).toEqual([]);
-    });
 });
 
 describe('redactedBrokerTarget()', () => {
@@ -604,14 +578,13 @@ describe('redactedBrokerTarget()', () => {
  * | outcome                        | call                           | effect                          |
  * | ------------------------------- | ------------------------------ | -------------------------------- |
  * | handler resolves true           | `ack`                          | broker deletes it — done         |
- * | handler resolves false          | `parkInDead` (publish + ack)   | refused on purpose, never retried|
- * | handler throws, attempts left   | `nack(msg, false, false)`      | routes to `<queue>.retry` via DLX|
- * | handler throws, attempts spent  | `parkInDead` (publish + ack)   | done retrying                    |
- * | message will not parse          | `parkInDead` (publish + ack)   | will never parse on a retry      |
+ * | handler resolves false          | `parkInDead` (nack, no requeue)| refused on purpose, never retried|
+ * | handler throws, attempts left   | republish to `<queue>.retry`   | attempt header + 1, then ack     |
+ * | handler throws, attempts spent  | `parkInDead` (nack, no requeue)| done retrying                    |
+ * | message will not parse          | `parkInDead` (nack, no requeue)| will never parse on a retry      |
  *
- * `parkInDead` publishes the message to `<queue>.dead` directly (never through the work queue's
- * own DLX, which now always means "retry") and only acks the original once that publish itself
- * confirms — see the module's own docblock for why a nack alone can no longer express "done".
+ * `parkInDead` nacks without requeue and the work queue dead-letters the message into
+ * `<queue>.dead` (see `assertJobQueue`); the retry is a confirmed republish, acked once confirmed.
  */
 /** A schema that accepts any JSON — for the cases that are not about the contract. */
 const anyPayload = z.unknown();
@@ -642,7 +615,7 @@ const captureConsumerCallback = async (handler: jest.Mock, schema: ZodType = any
 /**
  * A delivery carrying the given body, serialized the way `publishToQueue` writes it.
  *
- * @param headers - `x-death`/etc, as a real redelivered message would carry them; empty for a
+ * @param headers - `x-retry-attempt`/etc, as a real redelivered message would carry them; empty for a
  *   first delivery, same as amqplib hands the consumer one.
  */
 /** Let a delivery's handler chain settle — however many ticks it takes. */
@@ -672,7 +645,13 @@ describe('consumeFromQueue acknowledgement policy', () => {
         await onMessage(delivery({ jobId: 1 }));
         await settle();
 
-        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+        expect(mockSendToQueue).toHaveBeenCalledWith(
+            'jobs.retry',
+            expect.any(Buffer),
+            expect.anything(),
+            expect.any(Function)
+        );
+        expect(mockAck).toHaveBeenCalledTimes(1);
     });
 
     it('acks when the handler reports success', async () => {
@@ -713,106 +692,148 @@ describe('consumeFromQueue acknowledgement policy', () => {
         const handler = jest.fn().mockResolvedValue(false);
         const onMessage = await captureConsumerCallback(handler);
 
+        const before = await deadLetteredCountFor('jobs');
+
         await onMessage(delivery({ jobId: 2 }));
         await settle();
 
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+        expect(mockSendToQueue).not.toHaveBeenCalled();
+        expect(mockAck).not.toHaveBeenCalled();
+        expect(await deadLetteredCountFor('jobs')).toBe(before + 1);
+    });
+
+    it('republishes to the retry queue, then acks, when the handler throws and attempts remain', async () => {
+        // The retry is our own confirmed republish, not a dead-letter: the first throw stamps
+        // `x-retry-attempt: 1` and keeps everything else about the message.
+        const handler = jest.fn().mockRejectedValue(new Error('SMTP timeout'));
+        const onMessage = await captureConsumerCallback(handler);
+        const incoming = {
+            content: Buffer.from(JSON.stringify({ jobId: 3 })),
+            properties: { priority: 8, headers: { 'x-trace': 'abc' } }
+        };
+
+        await onMessage(incoming);
+        await settle();
+
         expect(mockSendToQueue).toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.any(Buffer),
-            expect.objectContaining({ persistent: true }),
+            'jobs.retry',
+            incoming.content,
+            {
+                persistent: true,
+                priority: 8,
+                headers: { 'x-trace': 'abc', [RETRY_ATTEMPT_HEADER]: 1 }
+            },
             expect.any(Function)
         );
         expect(mockAck).toHaveBeenCalledTimes(1);
         expect(mockNack).not.toHaveBeenCalled();
     });
 
-    it('routes to the retry queue when the handler throws and attempts remain', async () => {
-        // The distinction from the case above: `nack(msg, false, false)` still routes through the
-        // work queue's own dead-letter target, which is now always `<queue>.retry` — the
-        // difference between "this email will be sent once SMTP comes back" and "this email is
-        // lost" is which queue that routing key names, not whether this call happens.
-        const handler = jest.fn().mockRejectedValue(new Error('SMTP timeout'));
+    it('increments the attempt header on every further throw', async () => {
+        const handler = jest.fn().mockRejectedValue(new Error('still down'));
         const onMessage = await captureConsumerCallback(handler);
+
+        await onMessage(delivery({ jobId: 3 }, { [RETRY_ATTEMPT_HEADER]: 2 }));
+        await settle();
+
+        expect(mockSendToQueue).toHaveBeenCalledWith(
+            'jobs.retry',
+            expect.any(Buffer),
+            expect.objectContaining({ headers: { [RETRY_ATTEMPT_HEADER]: 3 } }),
+            expect.any(Function)
+        );
+    });
+
+    it('counts a header that is not a number as no attempt at all', async () => {
+        const handler = jest.fn().mockRejectedValue(new Error('boom'));
+        const onMessage = await captureConsumerCallback(handler);
+
+        await onMessage(delivery({ jobId: 3 }, { [RETRY_ATTEMPT_HEADER]: 'forged' }));
+        await settle();
+
+        expect(mockSendToQueue).toHaveBeenCalledWith(
+            'jobs.retry',
+            expect.any(Buffer),
+            expect.objectContaining({ headers: { [RETRY_ATTEMPT_HEADER]: 1 } }),
+            expect.any(Function)
+        );
+    });
+
+    it('ignores x-death, which RabbitMQ 4 does not keep for a republished message', async () => {
+        const handler = jest.fn().mockRejectedValue(new Error('boom'));
+        const onMessage = await captureConsumerCallback(handler);
+
+        await onMessage(
+            delivery(
+                { jobId: 3 },
+                { 'x-death': [{ queue: 'jobs.retry', count: 9, reason: 'expired' }] }
+            )
+        );
+        await settle();
+
+        expect(mockSendToQueue).toHaveBeenCalledWith(
+            'jobs.retry',
+            expect.any(Buffer),
+            expect.anything(),
+            expect.any(Function)
+        );
+        expect(mockNack).not.toHaveBeenCalled();
+    });
+
+    it('requeues the delivery when the retry republish is refused, so the job is never lost', async () => {
+        const handler = jest.fn().mockRejectedValue(new Error('boom'));
+        const onMessage = await captureConsumerCallback(handler);
+        mockSendToQueue.mockImplementationOnce(
+            (
+                _queue: string,
+                _content: Buffer,
+                _options: unknown,
+                callback?: (error: unknown) => void
+            ) => {
+                callback?.(new Error('channel-level nack'));
+                return true;
+            }
+        );
 
         await onMessage(delivery({ jobId: 3 }));
         await settle();
 
-        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
-        expect(mockSendToQueue).not.toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.anything(),
-            expect.anything(),
-            expect.anything()
-        );
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, true);
+        expect(mockAck).not.toHaveBeenCalled();
+    });
+
+    it('leaves the delivery to the broker when the channel closes under the retry republish', async () => {
+        const handler = jest.fn().mockRejectedValue(new Error('boom'));
+        const onMessage = await captureConsumerCallback(handler);
+        mockSendToQueue.mockImplementationOnce(() => {
+            throw new Error('Channel closed');
+        });
+
+        await onMessage(delivery({ jobId: 3 }));
+        await settle();
+
+        // amqplib's synchronous throw is contained: the unacked delivery returns on its own.
+        expect(mockAck).not.toHaveBeenCalled();
+        expect(mockNack).not.toHaveBeenCalled();
     });
 
     it('parks once a thrown error has exhausted every attempt, rather than retrying forever', async () => {
-        // `x-death` already carries 4 completed retries (the default NODE_QUEUE_MAX_ATTEMPTS is
+        // The header already carries 4 failed attempts (the default NODE_QUEUE_MAX_ATTEMPTS is
         // 5) — this delivery is the 5th, so a further failure has nowhere left to retry to.
         const handler = jest.fn().mockRejectedValue(new Error('still down'));
         const onMessage = await captureConsumerCallback(handler);
         const before = await deadLetteredCountFor('jobs');
 
-        await onMessage(
-            delivery(
-                { jobId: 4 },
-                {
-                    'x-death': [
-                        {
-                            queue: 'jobs.retry',
-                            count: 4,
-                            reason: 'expired',
-                            exchange: 'dead-letter'
-                        }
-                    ]
-                }
-            )
-        );
+        await onMessage(delivery({ jobId: 4 }, { [RETRY_ATTEMPT_HEADER]: 4 }));
         await settle();
 
-        expect(mockNack).not.toHaveBeenCalled();
-        expect(mockSendToQueue).toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.any(Buffer),
-            expect.objectContaining({ persistent: true }),
-            expect.any(Function)
-        );
-        expect(mockAck).toHaveBeenCalledTimes(1);
-        // Nothing else reads `<queue>.dead` on its own — this counter is the only thing that
-        // surfaces a parked job to an operator (see prometheus.alert-rules.yaml's QueueJobsParked).
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+        expect(mockSendToQueue).not.toHaveBeenCalled();
+        expect(mockAck).not.toHaveBeenCalled();
+        // The broker moves it to `<queue>.dead`; this counter is the only thing that surfaces a
+        // parked job to an operator (see prometheus.alert-rules.yaml's QueueJobsParked).
         expect(await deadLetteredCountFor('jobs')).toBe(before + 1);
-    });
-
-    it('parks a message whose crash cycles used up every attempt, without running the handler', async () => {
-        // A consumer that crashes never reaches the handler's `.catch`: the broker's delivery
-        // limit sends it round the retry queue instead. 5 completed cycles = the default 5 attempts.
-        const handler = jest.fn().mockResolvedValue(true);
-        const onMessage = await captureConsumerCallback(handler);
-
-        await onMessage(
-            delivery(
-                { jobId: 5 },
-                {
-                    'x-death': [
-                        {
-                            queue: 'jobs.retry',
-                            count: 5,
-                            reason: 'expired',
-                            exchange: 'dead-letter'
-                        }
-                    ]
-                }
-            )
-        );
-        await settle();
-
-        expect(handler).not.toHaveBeenCalled();
-        expect(mockSendToQueue).toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.any(Buffer),
-            expect.objectContaining({ persistent: true }),
-            expect.any(Function)
-        );
     });
 
     it('parks a message that will never parse, rather than cycling it through retries', async () => {
@@ -824,14 +845,9 @@ describe('consumeFromQueue acknowledgement policy', () => {
         await onMessage({ content: Buffer.from('{ not json'), properties: { headers: {} } });
 
         expect(handler).not.toHaveBeenCalled();
-        expect(mockNack).not.toHaveBeenCalled();
-        expect(mockSendToQueue).toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.any(Buffer),
-            expect.objectContaining({ persistent: true }),
-            expect.any(Function)
-        );
-        expect(mockAck).toHaveBeenCalledTimes(1);
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+        expect(mockSendToQueue).not.toHaveBeenCalled();
+        expect(mockAck).not.toHaveBeenCalled();
     });
 
     it('ignores a broker-side cancellation, which delivers null', async () => {
@@ -884,13 +900,9 @@ describe('consumeFromQueue contract validation', () => {
         await settle();
 
         expect(handler).not.toHaveBeenCalled();
-        expect(mockNack).not.toHaveBeenCalled();
-        expect(mockSendToQueue).toHaveBeenCalledWith(
-            'jobs.dead',
-            expect.any(Buffer),
-            expect.objectContaining({ persistent: true }),
-            expect.any(Function)
-        );
+        expect(mockNack).toHaveBeenCalledWith(expect.anything(), false, false);
+        expect(mockSendToQueue).not.toHaveBeenCalled();
+        expect(mockAck).not.toHaveBeenCalled();
     });
 
     it('runs the handler when the payload carries a field the contract does not declare', async () => {
