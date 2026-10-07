@@ -67,7 +67,7 @@ export const mailConfig = defineConfig({
     ]
 });
 
-/** Where a spooled attachment and the email templates live. */
+/** Where a spooled attachment waits. */
 export const mailFilesConfig = defineConfig({
     name: 'mail-files',
     shape: {
@@ -81,9 +81,6 @@ export const mailFilesConfig = defineConfig({
             min: 1,
             describe:
                 'Hours a spooled attachment is left alone before the sweep counts it abandoned.'
-        }),
-        NODE_EMAIL_TEMPLATES_DIR: text({
-            describe: 'A flat directory of EJS templates that overrides every module’s own.'
         })
     }
 });
