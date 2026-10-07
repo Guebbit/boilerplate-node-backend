@@ -84,7 +84,7 @@
             "meta-title": "Order cancelled",
             "greeting": "Hello, {{name}}!",
             "body": "Your order {{order}} has been cancelled.",
-            "refund-paid": "{{amount}} is being returned to the payment method you used. How long it takes to show up depends on your bank or card issuer.",
+            "refund-paid": "{{amount}} is being returned to the payment method you used. How long it takes to show up depends on your bank or card issuer. We will send you a confirmation once the refund has been issued.",
             "refund-none": "No refund was issued with this cancellation. If you think that is a mistake, please contact us.",
             "refund-unpaid": "You had not paid for this order, so nothing was charged."
         },

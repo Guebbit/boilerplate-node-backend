@@ -17,6 +17,7 @@ import type { StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { encryptOrderPii } from './pii';
+import { ANONYMIZED_EMAIL } from './domain/anonymization';
 import { OrderStatus } from '@types';
 import type { Order } from '@types';
 import {
@@ -474,9 +475,6 @@ const detachUserId = (
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
 };
-
-/** The placeholder `scrubDueForAnonymization` writes over `email`, which the schema requires. */
-const ANONYMIZED_EMAIL = 'anonymized@deleted.invalid';
 
 /**
  * `scripts/ops/reap-orders.ts`'s sweep: every order whose `anonymizeAfter` has elapsed loses its

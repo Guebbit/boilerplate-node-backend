@@ -1,6 +1,6 @@
 /**
  * @module
- * `sendOrderPlacedEmail` (`services/notify.ts`): which mail it builds — `orderConfirmEmail` vs.
+ * `sendOrderPlacedEmail` and `mailBuyer` (`services/notify.ts`): which mail it builds — `orderConfirmEmail` vs.
  * `bankTransferInstructionsEmail` has its own coverage in `emails.test.ts` — and that NEITHER ever
  * carries an attachment: nothing is invoiced yet at placement time, whatever the payment method
  * (see `docs/modules/invoicing.md`).
@@ -8,7 +8,8 @@
 
 import { asStub } from '@tests/stub';
 import { withEnvironmentOverrides } from '@tests/environment';
-import { sendOrderPlacedEmail } from '../../services/notify';
+import { mailBuyer, sendOrderPlacedEmail } from '../../services/notify';
+import { ANONYMIZED_EMAIL } from '../../domain/anonymization';
 import type { OrderDocument } from '../../model';
 
 const enqueueEmailMock = jest.fn().mockResolvedValue(undefined);
@@ -66,5 +67,24 @@ describe('sendOrderPlacedEmail — no invoice attachment', () => {
                 return Promise.resolve();
             }
         );
+    });
+});
+
+describe('mailBuyer — anonymised order', () => {
+    it('sends nothing: never builds, never enqueues, never looks the buyer up', async () => {
+        const build = jest.fn();
+
+        await mailBuyer(orderFixture({ email: ANONYMIZED_EMAIL }), build);
+
+        expect(build).not.toHaveBeenCalled();
+        expect(enqueueEmailMock).not.toHaveBeenCalled();
+    });
+
+    it('still builds for an order with a real email', async () => {
+        const build = jest.fn();
+
+        await mailBuyer(orderFixture({ email: 'ada@example.com' }), build);
+
+        expect(build).toHaveBeenCalledWith(expect.any(String), 'ada@example.com');
     });
 });

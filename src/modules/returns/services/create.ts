@@ -182,9 +182,10 @@ const writeWithdrawalRecord = (
 
 /**
  * A withdrawal before dispatch: cancel the order, refund it in full, record the withdrawal as a
- * return closed at birth, and acknowledge it. Exactly one mail goes out about the withdrawal — the
- * acknowledgement, with no postage line since no goods are expected; `return-closed` is for a
- * return whose goods came back.
+ * return closed at birth, and acknowledge it. The acknowledgement is the one mail about the
+ * withdrawal itself, with no postage line since no goods are expected; the refund's own
+ * `order-refunded` mail follows when the money settles. `return-closed` is for a return whose
+ * goods came back.
  *
  * @param order - the order being withdrawn from
  * @param authContext - the buyer

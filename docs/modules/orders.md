@@ -327,6 +327,9 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 | Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |
 | Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
 
+An anonymised order is never mailed: its email is a `.invalid` placeholder (`mailBuyer` skips it), so
+any mail to it would only bounce.
+
 ```mermaid
 flowchart TD
     cancel["cancelById succeeds"] --> person{"a person cancelled,<br/>not a withdrawal?"}

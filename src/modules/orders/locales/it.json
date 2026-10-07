@@ -84,7 +84,7 @@
             "meta-title": "Ordine annullato",
             "greeting": "Ciao, {{name}}!",
             "body": "Il tuo ordine {{order}} è stato annullato.",
-            "refund-paid": "{{amount}} verranno restituiti al metodo di pagamento che hai usato. Quanto tempo serve perché compaiano dipende dalla tua banca o dal tuo emittente.",
+            "refund-paid": "{{amount}} verranno restituiti al metodo di pagamento che hai usato. Quanto tempo serve perché compaiano dipende dalla tua banca o dal tuo emittente. Ti invieremo una conferma quando il rimborso sarà stato emesso.",
             "refund-none": "Con questo annullamento non è stato effettuato alcun rimborso. Se pensi sia un errore, contattaci.",
             "refund-unpaid": "Non avevi pagato questo ordine, quindi non è stato addebitato nulla."
         },

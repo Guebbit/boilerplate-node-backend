@@ -16,6 +16,7 @@ import {
     bankTransferIbanFriendly,
     transferInstructionsFor
 } from '../config';
+import { ANONYMIZED_EMAIL } from '../domain/anonymization';
 import { orderConfirmEmail, bankTransferInstructionsEmail } from '../emails';
 import type { OrderDocument } from '../model';
 
@@ -72,8 +73,9 @@ export const sendOrderPlacedEmail = (
  * inside this function's own catch, so neither a rejected lookup nor a throwing `build` can ever
  * reject back into a caller — cancellation and shipment are both mid state-transition when they
  * call this, and a mail hiccup must not undo either.
+ * An anonymised order is never mailed: its email is the placeholder, so `build` does not run.
  * @param order - the order the mail is about; `order.userId` is the account to look up, absent
- *   once a detach has erased it — `order.email` is always the recipient
+ *   once a detach has erased it — `order.email` is the recipient unless the order was anonymised
  * @param build - given the resolved locale and display name, builds and sends the mail
  * @returns settles once `build` has run, for a caller that wants to sequence a next step after
  *   the mail (delivery's audit line); never rejects
@@ -81,8 +83,10 @@ export const sendOrderPlacedEmail = (
 export const mailBuyer = (
     order: OrderDocument,
     build: (locale: string, name: string) => void
-): Promise<void> =>
-    (order.userId ? userService.getById(String(order.userId)) : Promise.resolve(undefined))
+): Promise<void> => {
+    // `.invalid` never resolves (RFC 6761 section 6.4): the mail would be a guaranteed bounce.
+    if (order.email === ANONYMIZED_EMAIL) return Promise.resolve();
+    return (order.userId ? userService.getById(String(order.userId)) : Promise.resolve(undefined))
         .catch((error: unknown) => {
             // Stryker disable all
             logger.error({
@@ -105,3 +109,4 @@ export const mailBuyer = (
             });
             // Stryker restore all
         });
+};
