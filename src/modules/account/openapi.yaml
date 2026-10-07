@@ -1252,6 +1252,7 @@ components:
                 code:
                     type: string
                     maxLength: 64
+                    minLength: 1
                     description: A code from any armed method, or an unused backup code. Which method it came from is the server's problem, not the client's.
                 remember:
                     $ref: '#/components/schemas/RememberTier'
@@ -1440,6 +1441,7 @@ components:
                 code:
                     type: string
                     maxLength: 64
+                    minLength: 1
                     description: A code from any armed method, or an unused backup code. Required once any factor is armed — a replace, or adding a second method — and ignored for the account's first factor.
 
         TwoFactorConfirmRequest:
@@ -1450,6 +1452,7 @@ components:
                 code:
                     type: string
                     maxLength: 64
+                    minLength: 1
                     description: 'The code for the method being armed — read off the device, or received through its channel. A backup code is NOT accepted here: the point of this call is to prove the new factor works.'
 
         TwoFactorCodeRequest:
@@ -1460,6 +1463,7 @@ components:
                 code:
                     type: string
                     maxLength: 64
+                    minLength: 1
                     description: A code from any armed method, or an unused backup code. Used to prove the factor being removed — or the account it protects — really belongs to the caller.
 
         TwoFactorConfirmed:
