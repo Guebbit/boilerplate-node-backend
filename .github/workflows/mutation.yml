@@ -178,13 +178,13 @@ jobs:
             - name: Download every finished shard's report
               # No shard finishing is a result the merge reports, not an error here.
               continue-on-error: true
-              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   pattern: shard-w*
                   path: tmp/mutation-ci/shards
 
             - name: Download every wave's plan
-              uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+              uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
               with:
                   pattern: plan-w*
                   merge-multiple: true
