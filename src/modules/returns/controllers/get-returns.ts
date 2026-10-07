@@ -22,9 +22,8 @@ export const getReturns = (request: Request, response: Response) => {
     const parsed = parseBody(listReturnsQuerySchema, request.query, response);
     if (!parsed) return;
 
-    const { authContext } = request;
-    // `isAuth` is mounted above this route, so a caller is always present here.
-    if (!authContext) return;
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
 
     return returnService
         .listReturns(parsed, authContext)

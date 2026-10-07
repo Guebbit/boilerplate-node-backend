@@ -21,9 +21,8 @@ export const postReturnReceive = (request: Request<{ id?: string }>, response: R
     // The body is optional: receiving with nothing to deduct is the common case.
     const body = parseBody(ReceiveReturnBody, request.body ?? {}, response);
     if (!body) return;
-    const { authContext } = request;
-    // `isAuth` is mounted above this route, so a caller is always present here.
-    if (!authContext) return;
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
 
     return returnService
         .receiveReturn(id, body, callerContextOf(request))
