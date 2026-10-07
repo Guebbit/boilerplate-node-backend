@@ -15,7 +15,8 @@ import { text } from 'node:stream/consumers';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { setupTestDb } from '@tests/setup-test-db';
-import { setEnvironment } from '@tests/environment';
+import { setEnvironment, withEnvironment } from '@tests/environment';
+import { asReject } from '@tests/response';
 import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
@@ -349,6 +350,41 @@ describe('one live export per account', () => {
         await settleInlineExports();
         await expect(accountExportModel.countDocuments({ userId: user.id })).resolves.toBe(1);
     });
+});
+
+/** Run `body` with a mailbox budget of `limit` mails a day. */
+const withBudget = (limit: number, body: () => Promise<void>) =>
+    withEnvironment('NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX', String(limit), body);
+
+describe('the mailbox budget', () => {
+    it('answers 429 once the mailbox is spent, and the ready export stays downloadable', () =>
+        withBudget(1, async () => {
+            setPersonalDataSections(basicSections());
+            const { user, result: first } = await requestFor({ email: 'budget@example.com' });
+            await settleInlineExports();
+
+            const refused = await requestExport(user.id, user.email, testCallerContext);
+
+            expect(asReject(refused).status).toBe(429);
+            expect(asReject(refused).errors[0].code).toBe('RATE_LIMITED');
+            expect(await downloadOf(user.id, first.data.id)).toContain('exportedAt');
+        }));
+
+    it('does not charge a request that finds an export still building', () =>
+        withBudget(1, async () => {
+            const { held, release } = gate();
+            setPersonalDataSections([held]);
+            const user = await createUser({ email: 'building@example.com' });
+
+            const first = await requestExport(user.id, user.email, testCallerContext);
+            const second = await requestExport(user.id, user.email, testCallerContext);
+
+            expect(first.success && second.success).toBe(true);
+            expect(second.status).toBe(202);
+            expect(second.data?.id).toBe(first.data?.id);
+            release();
+            await settleInlineExports();
+        }));
 });
 
 describe('a build that fails', () => {

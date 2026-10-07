@@ -981,6 +981,11 @@ paths:
                 first). A file is kept for `NODE_ACCOUNT_EXPORT_TTL_DAYS` days. Requires a FRESH session
                 (`requireFreshAuth`) rather than a request body — a personal-data dump is worth
                 re-proving identity for, and this repository already has the mechanism.
+
+
+                Starting a NEW build costs one mail from the per-mailbox mail budget, since it ends in a
+                mailed link: a spent budget answers `429`, and the previous export is left in place.
+                Asking while one is `building` is not charged.
             operationId: requestAccountExport
             security:
                 - bearerAuth: []
@@ -993,6 +998,7 @@ paths:
                                 $ref: '#/components/schemas/AccountExportRequestEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/export/{id}:

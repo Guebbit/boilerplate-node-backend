@@ -224,6 +224,9 @@ Decisions rather than mechanics:
   deleted first. The unique index on `userId` settles two simultaneous requests: one wins, the other
   gets the winner back. A `building` row older than 30 minutes counts as lost with its process and is
   replaced too.
+- **A new export costs one mail.** Starting one is charged to the per-mailbox mail
+  budget, because it ends in a mailed link. A spent budget answers `429` before the old export is deleted,
+  so a ready file stays downloadable; asking while one is `building` is not charged.
 - **Peak memory is one section.** The worker collects the sections one at a time and appends each to
   the file as it arrives, so the largest section is the ceiling, not the sum. The audit section reads
   by cursor on the `{ actor_user_id, timestamp }` index: no count and no skip per page, which made
