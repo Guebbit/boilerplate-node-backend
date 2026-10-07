@@ -377,7 +377,7 @@ services:
     tempo:
         logging: *container-logging
         profiles: ['observability']
-        image: grafana/tempo:2.6.1
+        image: grafana/tempo:3.1.0
         restart: unless-stopped
         command: ['-config.file=/etc/tempo/tempo.yaml']
         volumes:
