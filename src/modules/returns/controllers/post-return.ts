@@ -20,9 +20,8 @@ export const postReturn = (request: Request, response: Response) => {
     const body = parseBody(CreateReturnBody, request.body, response);
     if (!body) return;
 
-    const { authContext } = request;
-    // `isAuth` is mounted above this route, so a caller is always present here.
-    if (!authContext) return;
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
 
     return returnService
         .createReturn(body, authContext, callerContextOf(request))

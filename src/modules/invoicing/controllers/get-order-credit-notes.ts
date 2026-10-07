@@ -20,7 +20,7 @@ export const getOrderCreditNotes = (request: Request<{ id?: string }>, response:
     if (!id) return;
 
     return orderService
-        .getById(id, orderService.callerScope(request.authContext))
+        .getForCaller(id, request.authContext)
         .then((order) => {
             if (!order) {
                 rejectResponse(response, 404, [t('orders.not-found')]);

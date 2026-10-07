@@ -12,7 +12,8 @@ import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
-import { applyToEveryLine, syncStockCache } from './transition';
+import { applyToEveryLine } from './transition';
+import { refreshStockCacheForProducts } from './returns';
 
 /**
  * Claim a hold and move its counters as ONE unit: both land, or neither does.
@@ -144,9 +145,13 @@ export const restockForOrder = async (orderId: string, session?: ClientSession):
  * @param orderId - the order whose hold just moved
  */
 export const refreshStockCacheForOrder = (orderId: string): Promise<void> =>
-    reservationRepository.findByOrderId(orderId).then(async (hold) => {
-        for (const { productId } of hold?.items ?? []) await syncStockCache(String(productId));
-    });
+    reservationRepository
+        .findByOrderId(orderId)
+        .then((hold) =>
+            refreshStockCacheForProducts(
+                (hold?.items ?? []).map(({ productId }) => String(productId))
+            )
+        );
 
 /**
  * Extend a still-open hold to `hours` from now — a card payment gone `processing` (a SEPA debit,

@@ -26,6 +26,7 @@ import {
     shipToCountries,
     withdrawalPeriodDays,
     shopCountry,
+    shopCurrency,
     shopIdentity
 } from '../../config';
 import ordersModule from '../../module';
@@ -65,7 +66,8 @@ const TOUCHED = [
     'NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT',
     'NODE_FRONTEND_LINK_ORDER',
     'NODE_FRONTEND_URL',
-    'NODE_WITHDRAWAL_PERIOD_DAYS'
+    'NODE_WITHDRAWAL_PERIOD_DAYS',
+    'NODE_DEFAULT_CURRENCY'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -349,5 +351,17 @@ describe('returnPostagePayer', () => {
         setEnvironment({ NODE_RETURN_POSTAGE_PAYER: 'nobody' });
 
         expect(() => returnPostagePayer()).toThrow(/NODE_RETURN_POSTAGE_PAYER/);
+    });
+});
+
+describe('shopCurrency', () => {
+    it('defaults to EUR', () => {
+        expect(shopCurrency()).toBe('EUR');
+    });
+
+    it('reads NODE_DEFAULT_CURRENCY, the variable the infrastructure slice declares', () => {
+        setEnvironment({ NODE_DEFAULT_CURRENCY: 'GBP' });
+
+        expect(shopCurrency()).toBe('GBP');
     });
 });

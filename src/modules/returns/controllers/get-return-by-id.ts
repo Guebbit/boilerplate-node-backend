@@ -17,9 +17,8 @@ import { returnsAuditActions } from '../audit';
 export const getReturnById = (request: Request<{ id?: string }>, response: Response) => {
     const id = requireId(request, response, { notFound: 'returns.not-found' });
     if (!id) return;
-    const { authContext } = request;
-    // `isAuth` is mounted above this route, so a caller is always present here.
-    if (!authContext) return;
+    /* Auth context is guaranteed by isAuth middleware */
+    const authContext = request.authContext!;
 
     return returnService
         .getReturn(id, authContext)

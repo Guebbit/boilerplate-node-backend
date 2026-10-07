@@ -18,6 +18,7 @@ import {
     type Wire
 } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
+import { setAndUnset } from '@infrastructure/persistence/changes';
 
 /**
  * `providerRef` and `pendingEffects` are what `applyPaymentTransform` omits — internal bookkeeping
@@ -36,19 +37,17 @@ export interface UpsertedPayment {
  * share: the same filter — an order's row still sitting at a status nobody has paid past — the same
  * upsert options, and the same duplicate-key collision mapped to `null` rather than thrown, since
  * that collision IS the answer "this order's money already moved". Callers differ only in what they
- * `$set`/`$unset` and whose id lands on an insert.
+ * change and whose id lands on an insert.
  * @param orderId - the order the payment belongs to
  * @param userId - the payer to attach on INSERT only; absent writes no `userId` at all — an intent
  *   or offline record against an order whose account is already erased pays for real, with no
  *   payer to record
- * @param set - this caller's own `$set` fields
- * @param unset - this caller's own `$unset` fields, when it has any
+ * @param changes - this caller's own fields: a value is `$set`, `undefined` is `$unset`
  */
 const upsertConfirmable = (
     orderId: string,
     userId: string | undefined,
-    set: Record<string, unknown>,
-    unset?: Record<string, 1>
+    changes: Record<string, unknown>
 ): Promise<UpsertedPayment | null> =>
     paymentModel
         .findOneAndUpdate(
@@ -57,8 +56,7 @@ const upsertConfirmable = (
                 status: { $in: [...CONFIRMABLE_PAYMENT_STATUSES] }
             },
             {
-                $set: set,
-                ...(unset ? { $unset: unset } : {}),
+                ...setAndUnset(changes),
                 $setOnInsert: userId === undefined ? {} : { userId: toObjectId(userId) }
             },
             // `includeResultMetadata`: the driver's own answer to "did this insert or update" —
@@ -229,12 +227,14 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * order to `paid`, so this record never invents its own copy of that move.
      */
     upsertOffline: (orderId, userId, data) =>
-        upsertConfirmable(
-            orderId,
-            userId,
-            { ...data, provider: 'manual', status: 'requires_confirmation' },
-            { providerRef: 1, cardLast4: 1 }
-        ),
+        upsertConfirmable(orderId, userId, {
+            ...data,
+            provider: 'manual',
+            status: 'requires_confirmation',
+            // A card attempt's leftovers: this row is now the hand-paid one.
+            providerRef: undefined,
+            cardLast4: undefined
+        }),
 
     /**
      * The status-machine primitive, same shape as the order repository's: the `$in` rides in

@@ -10,7 +10,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
 import { returnRepository } from '../repository';
-import { projectReturnStatus } from '../domain';
+import { projectReturnStatus, returnableLinesOf, returnableQuantities, wireLines } from '../domain';
 
 /**
  * Recompute and report one order's `returnStatus`.
@@ -22,21 +22,13 @@ export const syncReturnStatus = (orderId: string): Promise<void> =>
         .then(([returns, order]) => {
             if (!order) return undefined;
 
-            const ordered = new Map<string, number>();
             // Excluded goods never come back, so they must not keep the order from reading `returned`.
-            for (const item of order.items.filter((line) => !isExcludedFromWithdrawal(line))) {
-                const productId = String(item.product._id);
-                ordered.set(productId, (ordered.get(productId) ?? 0) + item.quantity);
-            }
             const status = projectReturnStatus(
                 returns.map(({ status: returnStatus, lines }) => ({
                     status: returnStatus,
-                    lines: lines.map(({ productId, quantity }) => ({
-                        productId: String(productId),
-                        quantity
-                    }))
+                    lines: wireLines(lines)
                 })),
-                ordered
+                returnableQuantities(returnableLinesOf(order.items, isExcludedFromWithdrawal), [])
             );
             return orderService.markReturnStatus(orderId, status).then(() => undefined);
         })

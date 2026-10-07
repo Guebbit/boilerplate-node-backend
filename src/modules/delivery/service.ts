@@ -375,7 +375,7 @@ const moveAndStampDelivered = (
     // stamps it on the parcel, and the two must never disagree about when the goods arrived.
     const deliveredAt = new Date();
     const moveOrder = forced
-        ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context)
+        ? orderService.forceMove(orderId, OrderStatus.delivered, reason!, context, deliveredAt)
         : orderService.markDelivered(orderId, deliveredAt);
 
     return moveOrder.then((moved) => {

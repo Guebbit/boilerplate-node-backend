@@ -113,6 +113,33 @@ export const cartItemSetById = (
     upsertCartItem(userId, id, quantity, 'set');
 
 /**
+ * Announce a cart-line write that succeeded: `201` made the line (`CART_ITEM_ADDED`), anything else
+ * changed one already there (`CART_ITEM_UPDATED`). A refusal emits nothing.
+ * @param context - the caller, for the analytics base
+ * @param result - what the write answered
+ * @param id - the product whose line was written
+ * @param quantity - the quantity the caller sent
+ * @returns `result`, untouched, so the caller can return it
+ */
+const emitItemWritten = (
+    context: CallerContext,
+    result: ResponseSuccess<CartView> | ResponseReject,
+    id: string,
+    quantity: number
+): ResponseSuccess<CartView> | ResponseReject => {
+    if (result.success)
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event:
+                result.status === 201
+                    ? cartAnalyticsEvents.CART_ITEM_ADDED
+                    : cartAnalyticsEvents.CART_ITEM_UPDATED,
+            properties: { product_id: id, quantity }
+        });
+    return result;
+};
+
+/**
  * `POST /cart` — "add to cart": a product not in the cart gets a line, one already there GROWS by
  * `quantity` (Shopify's `/cart/add`, commercetools' `addLineItem`). `PUT /cart/{productId}` is the
  * door that sets. Wraps `cartItemAddById` rather than folding the emit into it, so callers with no
@@ -127,18 +154,9 @@ export const cartItemAdd = (
     quantity: number,
     context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    cartItemAddById(userId, id, quantity).then((result) => {
-        if (result.success)
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event:
-                    result.status === 201
-                        ? cartAnalyticsEvents.CART_ITEM_ADDED
-                        : cartAnalyticsEvents.CART_ITEM_UPDATED,
-                properties: { product_id: id, quantity }
-            });
-        return result;
-    });
+    cartItemAddById(userId, id, quantity).then((result) =>
+        emitItemWritten(context, result, id, quantity)
+    );
 
 /**
  * `PUT /cart/{productId}` — set the quantity of a specific cart item: 201 when it creates the
@@ -150,18 +168,9 @@ export const cartItemUpdateQuantity = (
     quantity: number,
     context: CallerContext
 ): Promise<ResponseSuccess<CartView> | ResponseReject> =>
-    cartItemSetById(userId, id, quantity).then((result) => {
-        if (result.success)
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event:
-                    result.status === 201
-                        ? cartAnalyticsEvents.CART_ITEM_ADDED
-                        : cartAnalyticsEvents.CART_ITEM_UPDATED,
-                properties: { product_id: id, quantity }
-            });
-        return result;
-    });
+    cartItemSetById(userId, id, quantity).then((result) =>
+        emitItemWritten(context, result, id, quantity)
+    );
 
 /**
  * Add quantity of target product to existing quantity in cart (by ID).

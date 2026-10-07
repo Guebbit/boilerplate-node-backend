@@ -222,8 +222,8 @@ export const cancelById = (
      * asking for anything broader would have missed them, silently treating them as a customer
      * and forcing a refund they had a reason not to make.
      */
-    const actor = options.withdrawal ? 'admin' : actorOf(authContext);
-    const refund = actor === 'admin' && !options.withdrawal ? (options.refund ?? true) : true;
+    const actor = options.withdrawal ? 'withdrawal' : actorOf(authContext);
+    const refund = actor === 'admin' ? (options.refund ?? true) : true;
 
     // The write's OWN scope: an operator's update scope, or the caller's own live orders — never
     // the read scope, which a warehouse or support account holds over every order.
@@ -232,9 +232,7 @@ export const cancelById = (
     // The rank rule applies when an operator cancels, not when a buyer withdraws or a system
     // sweep expires an order: only the former is a person acting on somebody else's order.
     const rank =
-        actor === 'admin' && !options.withdrawal
-            ? outrankedOrderRefusal(id, context)
-            : Promise.resolve(undefined);
+        actor === 'admin' ? outrankedOrderRefusal(id, context) : Promise.resolve(undefined);
 
     /*
      * The statuses a cancel may move from are read off the lifecycle table, not declared, and the
@@ -266,7 +264,7 @@ export const cancelById = (
                           // The withdrawal is acknowledged by `returns`; the sweep's expiry and
                           // every system cancel mail their own explanation (or, for an erased
                           // account, nobody).
-                          !options.withdrawal && !viaReservationExpiry && actor !== 'system'
+                          !viaReservationExpiry && actor !== 'withdrawal' && actor !== 'system'
                       )
                     : // Which refusal was it? This read only informs the message — the write
                       // above already decided nothing changes.

@@ -252,6 +252,12 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | whole number >= 1 | `15000` | —     | Grace before the primary kills a worker on shutdown. |
 | `NODE_CLUSTER_CRASH_LIMIT`           | whole number >= 1 | `10`    | —     | Crashes in one window before the primary gives up.   |
 
+### currency
+
+| Variable                | Type | Default | Rules | What it does                                   |
+| ----------------------- | ---- | ------- | ----- | ---------------------------------------------- |
+| `NODE_DEFAULT_CURRENCY` | text | `EUR`   | —     | The one ISO-4217 currency this shop trades in. |
+
 ### database
 
 | Variable                 | Type                  | Default                    | Rules                                            | What it does                                                                                                                                                                                     |
@@ -602,7 +608,6 @@ limit budgets are in [Security](./security.md#the-rate-limit-budgets).
 | `NODE_RETURN_ADDRESS_COUNTRY`             | text                  | —             | —                       | Return address country, ISO-3166 alpha-2.                                                                                                                                                                       |
 | `NODE_RETURN_POSTAGE_PAYER`               | one of consumer, shop | `consumer`    | —                       | Who bears the direct cost of returning goods. Drives the withdrawal wording.                                                                                                                                    |
 | `NODE_SHIP_TO_COUNTRIES`                  | comma-separated list  | `empty`       | —                       | Countries a physical order may ship to, ISO-3166, comma-separated. Unset: the shop’s own.                                                                                                                       |
-| `NODE_DEFAULT_CURRENCY`                   | text                  | `EUR`         | —                       | The one ISO-4217 currency this shop trades in.                                                                                                                                                                  |
 | `NODE_BANK_TRANSFER_BENEFICIARY`          | text                  | —             | —                       | Account name a transfer is made out to. Unset with the IBAN: transfer is not offered.                                                                                                                           |
 | `NODE_BANK_TRANSFER_IBAN`                 | text                  | —             | —                       | Account IBAN, validated at boot.                                                                                                                                                                                |
 | `NODE_BANK_TRANSFER_BIC`                  | text                  | —             | —                       | Account BIC/SWIFT. Optional.                                                                                                                                                                                    |

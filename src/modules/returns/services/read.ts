@@ -20,6 +20,7 @@ import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { presentReturn } from '../presenter';
+import { ownOrder } from './ownership';
 import { DECIDABLE_RETURN_STATUSES, RECEIVABLE_RETURN_STATUSES } from '../domain';
 
 /** The filters `GET /returns` accepts. */
@@ -123,11 +124,9 @@ export const getReturn = (
         if (isStaff(authContext))
             return withActions(found, authContext).then((payload) => generateSuccess(payload));
 
-        return orderService
-            .getById(String(found.orderId), orderService.callerScope(authContext))
-            .then((order) =>
-                order && String(order.userId) === authContext.id
-                    ? withActions(found, authContext).then((payload) => generateSuccess(payload))
-                    : generateReject(404, [t('returns.not-found')])
-            );
+        return ownOrder(String(found.orderId), authContext).then((order) =>
+            order
+                ? withActions(found, authContext).then((payload) => generateSuccess(payload))
+                : generateReject(404, [t('returns.not-found')])
+        );
     });

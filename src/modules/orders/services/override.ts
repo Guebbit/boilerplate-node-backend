@@ -49,6 +49,8 @@ import { ERROR_CODES } from '@api/error-codes';
  * @param mode - `'status'` for the status-only door, `'forced'` for a delivery door
  * @param reason - required on every override, never empty
  * @param context - the admin making the call
+ * @param at - when the move happened; defaults to now. A door that stamps the same instant on its
+ *   own record (`delivery`'s parcel) passes it, so the two cannot disagree
  * @returns the order as it now stands, or `null` if it had already moved past every legal `from`
  */
 const applyOverride = (
@@ -57,7 +59,8 @@ const applyOverride = (
     to: OrderStatus,
     mode: OrderStatusOverride['mode'],
     reason: string,
-    context: CallerContext
+    context: CallerContext,
+    at: Date = new Date()
 ): Promise<OrderDocument | null> => {
     // `caller.id` is optional on the type only because a stranger genuinely has none — this
     // function is never reached without `orders.any.override`, which no stranger holds. Rejected,
@@ -79,7 +82,7 @@ const applyOverride = (
         mode,
         reason,
         actorUserId,
-        at: new Date()
+        at
     };
 
     // An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
@@ -191,6 +194,8 @@ export const overrideStatus = (
  * @param to - `shipped` or `delivered` — `delivery`'s two doors are the only callers
  * @param reason - required, already validated non-empty by the caller
  * @param context - the caller, checked here for `orders.any.override`
+ * @param at - when the move happened, when the caller already stamped that instant elsewhere
+ *   (`delivery`'s parcel); defaults to now
  * @returns a 403 {@link ResponseReject} if `context.caller` lacks `orders.any.override`; otherwise
  *   the order as it now stands, or `null` if the move was no longer legal (lost a race, or the
  *   order had already moved past `to`) — see {@link isForceMoveRefusal} for telling the two apart
@@ -199,12 +204,13 @@ export const forceMove = (
     orderId: string,
     to: Extract<OrderStatus, 'shipped' | 'delivered'>,
     reason: string,
-    context: CallerContext
+    context: CallerContext,
+    at?: Date
 ): Promise<OrderDocument | null | ResponseReject> => {
     if (!holdsKey(context.caller, 'orders.any.override')) return Promise.resolve(notEarned());
 
     return orderRepository.findByIdScoped(orderId).then((order) => {
         if (!order || !canOverrideTo(order.status, to)) return null;
-        return applyOverride(orderId, order.status, to, 'forced', reason, context);
+        return applyOverride(orderId, order.status, to, 'forced', reason, context, at);
     });
 };

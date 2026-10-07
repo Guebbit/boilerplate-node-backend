@@ -41,10 +41,13 @@ import {
     QUANTITY_HOLDING_RETURN_STATUSES,
     checkRequestedLines,
     initialStatusFor,
-    returnableQuantities
+    returnableLinesOf,
+    returnableQuantities,
+    wireLines
 } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { mailReturnNotice } from './notify';
+import { ownOrder } from './ownership';
 import { syncReturnStatus } from './projection';
 
 /** What a customer sends to open a return or withdraw. */
@@ -98,17 +101,6 @@ const badLines = (
     }[reason];
     return refused(generateReject(422, [{ code: ERROR_CODES.RETURN_LINES_INVALID, message }]));
 };
-
-/**
- * The buyer's own order, or `undefined`. Ownership, not just visibility: an operator who can read
- * any order still cannot exercise a consumer's right on their behalf.
- * @param orderId - the order
- * @param authContext - the caller
- */
-const ownOrder = (orderId: string, authContext: AuthContext): Promise<OrderDocument | undefined> =>
-    orderService
-        .getById(orderId, orderService.callerScope(authContext))
-        .then((order) => (order && String(order.userId) === authContext.id ? order : undefined));
 
 /**
  * What a withdrawal before dispatch hands back: the whole order, if anything was paid. An order
@@ -221,16 +213,13 @@ const withdrawBeforeDispatch = (
  * @param session - the opening's transaction, so the read happens under the order's lock
  */
 const alreadyReturned = (orderId: string, session: ClientSession): Promise<ProductQuantity[]> =>
-    returnRepository.findByOrderId(orderId, session).then((returns) =>
-        returns
-            .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
-            .flatMap(({ lines }) =>
-                lines.map(({ productId, quantity }) => ({
-                    productId: String(productId),
-                    quantity
-                }))
-            )
-    );
+    returnRepository
+        .findByOrderId(orderId, session)
+        .then((returns) =>
+            returns
+                .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
+                .flatMap(({ lines }) => wireLines(lines))
+        );
 
 /**
  * Write the return once its lines are decided: freeze what is coming back. Announcing it is the
@@ -295,12 +284,7 @@ const openUnderLock = (
             .then((earlier) => {
                 const verdict = checkRequestedLines(
                     returnableQuantities(
-                        order.items
-                            .filter((item) => !isExcludedFromWithdrawal(item))
-                            .map((item) => ({
-                                productId: String(item.product._id),
-                                quantity: item.quantity
-                            })),
+                        returnableLinesOf(order.items, isExcludedFromWithdrawal),
                         earlier
                     ),
                     input.lines

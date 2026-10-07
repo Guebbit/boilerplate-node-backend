@@ -21,7 +21,7 @@ import {
 } from '../../domain/lifecycle';
 
 const EVERY_STATUS = Object.values(OrderStatus);
-const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system'];
+const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'withdrawal'];
 
 /** The two an HTTP caller can be. `system` names moves that follow a fact from outside the app. */
 const REQUEST_ACTORS: readonly OrderActor[] = ['customer', 'admin'];
@@ -131,6 +131,16 @@ describe('who may cancel', () => {
             OrderStatus.paid,
             OrderStatus.processing
         ]);
+    });
+
+    it('lets a withdrawal reach the same statuses as an operator, but is its own actor', () => {
+        // The consumer may withdraw right up to the moment the goods leave (Directive Art. 9).
+        expect(statusesLeadingTo(OrderStatus.cancelled, 'withdrawal')).toEqual([
+            OrderStatus.pending,
+            OrderStatus.paid,
+            OrderStatus.processing
+        ]);
+        expect(canTransition(OrderStatus.processing, OrderStatus.paid, 'withdrawal')).toBe(false);
     });
 
     it('never lets shipped goods be cancelled, by anyone', () => {

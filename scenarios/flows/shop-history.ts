@@ -214,7 +214,7 @@ const plannedDemand = (): Map<string, number> => {
     // by line — a shelf with spare units on it is a shop, and a shelf one unit short is a checkout
     // that fails three hundred requests into a boot.
     add({ productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 40 });
-    add({ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 30 });
+    add({ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 15 });
     // The three `current`-image demo rows below, each bought alone once and again inside
     // `order.mixedImageStates` — two units apiece.
     for (const index of [121, 122, 123]) add({ productId: fillerProductId(index), quantity: 2 });

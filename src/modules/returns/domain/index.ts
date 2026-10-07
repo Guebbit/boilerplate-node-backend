@@ -13,7 +13,12 @@ export {
 } from './lifecycle';
 export type { ReturnStatus, ReturnReason } from './lifecycle';
 
-export { returnableQuantities, checkRequestedLines } from './quantities';
+export {
+    returnableQuantities,
+    returnableLinesOf,
+    wireLines,
+    checkRequestedLines
+} from './quantities';
 export type { ProductQuantity, LinesVerdict } from './quantities';
 
 export { projectReturnStatus } from './status-projection';

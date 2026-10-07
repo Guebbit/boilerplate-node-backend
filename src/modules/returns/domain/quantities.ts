@@ -10,6 +10,39 @@ export interface ProductQuantity {
     quantity: number;
 }
 
+/** Anything with an identity that stringifies to the product id — an ObjectId, or the id itself. */
+interface ProductIdLike {
+    toString(): string;
+}
+
+/**
+ * Lines as the rules count them: a product id as a string, so a stored ObjectId and a request's
+ * string compare equal.
+ * @param lines - lines from a return document or an order
+ * @returns the same quantities keyed by string id
+ */
+export const wireLines = (
+    lines: readonly { productId: ProductIdLike; quantity: number }[]
+): ProductQuantity[] =>
+    lines.map(({ productId, quantity }) => ({ productId: String(productId), quantity }));
+
+/**
+ * The lines of an order a return could ever take back: everything except goods the product marks
+ * as excluded from withdrawal (Art. 16), which never come back.
+ * @param items - the order's items
+ * @param isExcluded - whether an item is one of the excluded goods
+ * @returns one line per item, keyed by string product id
+ */
+export const returnableLinesOf = <
+    TItem extends { product: { _id: ProductIdLike }; quantity: number }
+>(
+    items: readonly TItem[],
+    isExcluded: (item: TItem) => boolean
+): ProductQuantity[] =>
+    items
+        .filter((item) => !isExcluded(item))
+        .map((item) => ({ productId: String(item.product._id), quantity: item.quantity }));
+
 /**
  * What is left to return per product: what the order held, less what earlier returns took.
  * @param ordered - the order's lines
