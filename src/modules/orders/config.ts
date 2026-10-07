@@ -257,17 +257,6 @@ export const shipToCountries = (): string[] => {
 export const shopCurrency = (): string => currencyConfig().NODE_DEFAULT_CURRENCY;
 
 /**
- * An order's own frozen currency, falling back to the shop's current one only for an order that
- * predates the field — a live order always has its own. The one place that fallback is decided,
- * so every service pricing an existing order (a payment intent, an invoice, a confirmation email)
- * reads the same answer rather than repeating the `??` at each call site.
- * @param order - anything carrying the order's own optional frozen currency
- * @returns the ISO-4217 code money arithmetic against this order should use
- */
-export const orderCurrency = (order: { currency?: string }): string =>
-    order.currency ?? shopCurrency();
-
-/**
  * The account name a transfer should be made out to. Unset means transfer is not offered at all.
  * @returns the configured beneficiary, or `undefined`
  */

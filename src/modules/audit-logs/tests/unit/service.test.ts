@@ -45,6 +45,7 @@ const mockedLogger = logger as jest.Mocked<typeof logger>;
 const makeEntry = (overrides: Partial<AuditEntry> = {}): AuditEntry => ({
     actor_user_id: 'user-1',
     actor_role: 'user',
+    actor_scope: 'tenant',
     action: 'auth.login',
     outcome: 'success',
     timestamp: new Date('2026-08-01T10:00:00.000Z'),

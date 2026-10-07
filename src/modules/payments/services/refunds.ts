@@ -218,7 +218,7 @@ const mailRefundIssued = (payment: PaymentDocument, refund: RefundRecord): void 
                       const mail = refundIssuedEmail(
                           locale,
                           name,
-                          order.orderNumber ?? orderId,
+                          order.orderNumber,
                           { amount: refund.amount, currency: refund.currency },
                           payment.status === 'refunded'
                       );

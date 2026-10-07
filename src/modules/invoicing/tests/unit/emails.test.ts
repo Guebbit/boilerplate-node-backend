@@ -14,6 +14,7 @@ const DOCUMENT: EInvoicingDocument = {
     issuedAt: new Date('2026-03-01T00:00:00Z'),
     currency: 'EUR',
     locale: 'en',
+    orderNumber: '2026-000007',
     seller: {},
     lines: [{ title: 'Widget', quantity: 5, unitPrice: 19.99, taxRate: 0.22 }],
     netTotal: 81.93,

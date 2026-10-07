@@ -101,7 +101,6 @@ export {
     bankTransferIbanFriendly,
     maxOpenUnpaidOrdersPerAccount,
     shopCurrency,
-    orderCurrency,
     shopCountry,
     shopIdentity,
     withdrawalPeriodDays,

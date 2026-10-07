@@ -30,6 +30,8 @@ const makeOrderPayload = async () => {
     return {
         userId: user._id,
         email: user.email,
+        orderNumber: '2026-000001',
+        currency: 'EUR',
         items: [
             {
                 product: { ...snapshot, taxRate: resolveTaxRate(taxClass) },

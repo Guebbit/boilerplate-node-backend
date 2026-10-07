@@ -17,8 +17,8 @@ import { orderService, parseReference, type OrderDocument } from '@modules/order
 
 /**
  * The order behind an RF reference — the admin's lookup before `recordOfflinePayment` settles it.
- * An order with no reference at all (placed before the field existed) is not reachable through
- * this endpoint; the admin finds it by id through the normal order search instead.
+ * An order with no reference at all (a `card` order) is not reachable through this endpoint; a raw
+ * order id is not a reference either. The admin finds those by id through the normal order search.
  *
  * @param ref - what the admin pasted, exactly as `parseReference` will read it
  * @returns the order, or a 404 for a malformed or unmatched reference alike — a client that typed

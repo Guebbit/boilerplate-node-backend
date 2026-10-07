@@ -62,7 +62,7 @@ describe('getOrderByReference', () => {
         expect(orderIdOf(result)).toBe(String(order._id));
     });
 
-    it('answers 404 for a raw order id — an order that predates this field is not reachable here', async () => {
+    it('a raw ObjectId is not a reference: it answers 404', async () => {
         const user = await createUser();
         const product = await createProduct();
         const order = await createOrder(user, [toOrderItem(product, 1)], {

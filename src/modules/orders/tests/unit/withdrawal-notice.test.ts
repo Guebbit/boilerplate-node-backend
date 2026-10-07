@@ -24,8 +24,11 @@ const line = (
     flags: { requiresShipping?: boolean; noWithdrawal?: boolean } = {}
 ): OrderLines['items'][number] => ({ quantity: 1, product: { title, price: 10, ...flags } });
 
-const GOODS: OrderLines = { items: [line('Dog Bed')] };
-const DIGITAL: OrderLines = { items: [line('E-book', { requiresShipping: false })] };
+const GOODS: OrderLines = { items: [line('Dog Bed')], currency: 'EUR' };
+const DIGITAL: OrderLines = {
+    items: [line('E-book', { requiresShipping: false })],
+    currency: 'EUR'
+};
 
 /** The finished text of a notice, for a substring check that does not care which row holds it. */
 const textOf = (notice: ReturnType<typeof withdrawalNotice>): string =>
@@ -52,7 +55,7 @@ describe('withdrawalNotice: which case applies', () => {
     it('a mix of goods and digital follows the goods clock', () => {
         const notice = withdrawalNotice(
             'en',
-            { items: [...DIGITAL.items, ...GOODS.items] },
+            { items: [...DIGITAL.items, ...GOODS.items], currency: 'EUR' },
             ORDER_ID
         );
 
@@ -62,7 +65,7 @@ describe('withdrawalNotice: which case applies', () => {
     it('all excluded: only the Art. 6(1)(k) sentence, no instructions and no form', () => {
         const notice = withdrawalNotice(
             'en',
-            { items: [line('Custom mug', { noWithdrawal: true })] },
+            { items: [line('Custom mug', { noWithdrawal: true })], currency: 'EUR' },
             ORDER_ID
         );
 
@@ -80,7 +83,8 @@ describe('withdrawalNotice: which case applies', () => {
                     line('Dog Bed'),
                     line('Custom mug', { noWithdrawal: true }),
                     line('Sealed soap', { noWithdrawal: true })
-                ]
+                ],
+                currency: 'EUR'
             },
             ORDER_ID
         );
@@ -257,7 +261,7 @@ describe('the shared partial, rendered', () => {
             orderConfirmEmail(
                 'en',
                 'Ada',
-                { items: [line('Custom mug', { noWithdrawal: true })] },
+                { items: [line('Custom mug', { noWithdrawal: true })], currency: 'EUR' },
                 ORDER_ID
             )
         );

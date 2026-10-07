@@ -13,13 +13,7 @@
 import { Types } from 'mongoose';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
-import {
-    orderTaxBreakdown,
-    orderTotal,
-    orderCurrency,
-    shopIdentity,
-    billingAddressOf
-} from '@modules/orders';
+import { orderTaxBreakdown, orderTotal, shopIdentity, billingAddressOf } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
@@ -41,7 +35,7 @@ const frozenSeller = (): InvoiceSeller => {
  * it from these same fields via `orderTaxBreakdown`, the pure function this module reuses rather
  * than re-implementing — storing the derived figures too would only be a second place for them to
  * drift from what that function computes. `rateType` is copied only when the order line actually
- * carries one — an order placed before this field existed has none to copy.
+ * carries one.
  */
 const frozenLines = (order: OrderDocument): InvoiceLine[] =>
     order.items.map((item) => ({
@@ -83,7 +77,7 @@ const readWinner = (orderId: string) => (error: unknown) => {
 export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | undefined> => {
     if (order.items.length === 0) return Promise.resolve(undefined);
 
-    const currency = orderCurrency(order);
+    const { currency } = order;
     const breakdown = orderTaxBreakdown({
         items: order.items,
         shippingCost: order.shippingCost,
@@ -105,7 +99,7 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
                     issuedAt: new Date(),
                     currency,
                     locale: order.items[0].locale,
-                    ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
+                    orderNumber: order.orderNumber,
                     ...(billingAddress
                         ? { billingAddress: encryptInvoiceParty(billingAddress, 'invoice', _id) }
                         : {}),

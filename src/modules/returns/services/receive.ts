@@ -29,7 +29,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { emitDomainEvent } from '@kernel/events';
 import { inventoryService } from '@modules/inventory';
 import { cheapestStandardShipping } from '@modules/delivery';
-import { orderService, orderCurrency, sumLineItems } from '@modules/orders';
+import { orderService, sumLineItems } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import type { CallerContext } from '@types';
@@ -84,7 +84,7 @@ const quote = (returned: ReturnDocument, order: OrderDocument, handlingDeduction
         fullReturn: carriesWholeOrder(returned, order),
         shippingPaid: order.shippingCost ?? 0,
         cheapestStandardShipping: cheapestStandardShipping(
-            sumLineItems(order.items, orderCurrency(order)).price
+            sumLineItems(order.items, order.currency).price
         ),
         handlingDeduction
     });

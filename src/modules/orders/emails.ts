@@ -10,7 +10,6 @@ import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
 import {
     orderFrontendLink,
-    orderCurrency,
     returnAddress,
     returnPostagePayer,
     shopIdentity,
@@ -44,8 +43,8 @@ export interface OrderLines {
     }[];
     /** The shipping frozen at checkout. Absent on an order that chose no delivery method. */
     shippingCost?: number;
-    /** The order's own frozen currency; `orderCurrency`'s fallback covers an order that predates it. */
-    currency?: string;
+    /** The order's own frozen currency. */
+    currency: string;
 }
 
 /**
@@ -58,7 +57,7 @@ const totalOf = (order: OrderLines): number =>
     orderTotal({
         items: order.items,
         shippingCost: order.shippingCost,
-        currency: orderCurrency(order)
+        currency: order.currency
     });
 
 /** Days the law gives to hand goods back and to reimburse, whatever longer window the shop offers. */
@@ -438,7 +437,7 @@ export const orderCancelledEmail = (
             greeting: t('orders.email-cancelled.greeting', { name }),
             body: t('orders.email-cancelled.body', { order: orderRef }),
             refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {
-                amount: money(locale, totalOf(order), orderCurrency(order))
+                amount: money(locale, totalOf(order), order.currency)
             }),
             footer: t('email.footer')
         }

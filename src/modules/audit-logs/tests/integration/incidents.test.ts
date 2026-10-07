@@ -22,6 +22,7 @@ const row = (
 ): Partial<AuditLogDocument> => ({
     actor_user_id: 'user-1',
     actor_role: 'user',
+    actor_scope: 'tenant',
     action,
     outcome,
     timestamp: new Date(),

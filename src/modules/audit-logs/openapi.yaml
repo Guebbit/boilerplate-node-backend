@@ -67,7 +67,7 @@ components:
         AuditEntryItem:
             type: object
             additionalProperties: false
-            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            required: [actor_user_id, actor_role, actor_scope, action, outcome, timestamp, level]
             properties:
                 actor_user_id: { type: string }
                 actor_role:
@@ -82,7 +82,7 @@ components:
                     {
                         type: string,
                         enum: [tenant, platform],
-                        description: 'Which world this action happened in — a shop or the installation. Absent on a row recorded before this field existed.'
+                        description: 'Which world this action happened in — a shop or the installation.'
                     }
                 action:
                     {
@@ -141,7 +141,7 @@ components:
         ExportAuditEntry:
             type: object
             additionalProperties: false
-            required: [actor_user_id, actor_role, action, outcome, timestamp, level]
+            required: [actor_user_id, actor_role, actor_scope, action, outcome, timestamp, level]
             properties:
                 actor_user_id:
                     type: string
@@ -154,7 +154,7 @@ components:
                 actor_scope:
                     type: string
                     enum: [tenant, platform]
-                    description: Which world this action happened in — a shop or the installation. Absent on a row recorded before this field existed.
+                    description: Which world this action happened in — a shop or the installation.
                 action:
                     type: string
                     description: Dotted action name, e.g. `order.created`.

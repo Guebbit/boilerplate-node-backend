@@ -135,8 +135,8 @@ describe('create', () => {
         ).data;
 
         // Both minted in the frozen year and one apart — not merely "different".
-        const [firstYear, firstSeq] = first.orderNumber!.split('-').map(Number);
-        const [secondYear, secondSeq] = second.orderNumber!.split('-').map(Number);
+        const [firstYear, firstSeq] = first.orderNumber.split('-').map(Number);
+        const [secondYear, secondSeq] = second.orderNumber.split('-').map(Number);
         expect(firstYear).toBe(2026);
         expect(secondYear).toBe(2026);
         expect(secondSeq).toBe(firstSeq + 1);

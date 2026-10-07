@@ -67,11 +67,11 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         actor_role_name: {
             type: String
         },
-        // Not `required`: a row written before this field existed stays valid, and reads as
-        // "unknown which world" rather than failing validation on the way back out.
+        // Every audit row names its world: `buildAuditEvent` always fills it in.
         actor_scope: {
             type: String,
-            enum: [...AUTHORIZATION_SCOPES]
+            enum: [...AUTHORIZATION_SCOPES],
+            required: true
         },
         action: {
             type: String,

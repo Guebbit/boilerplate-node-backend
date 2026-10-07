@@ -135,7 +135,7 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                         issuedAt: new Date(),
                         currency: invoice.currency,
                         locale: invoice.locale,
-                        ...(invoice.orderNumber ? { orderNumber: invoice.orderNumber } : {}),
+                        orderNumber: invoice.orderNumber,
                         // Decrypted under the invoice's id, re-encrypted under the note's own.
                         ...(invoice.billingAddress
                             ? {

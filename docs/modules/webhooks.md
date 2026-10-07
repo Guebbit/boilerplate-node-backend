@@ -132,7 +132,7 @@ Once a subscription auto-disables, `services/attempt.ts#notifyOwnerOfAutoDisable
 created it — resolved fresh, at send time, from the id the subscription points at
 (`WebhookSubscriptionDocument.ownerUserId`, never a stored copy of the address; see the field's own
 docblock for the GDPR reasoning). Best-effort and fire-and-forget, the same as every other queued
-notification in this codebase; silently skipped for a subscription that predates the field, or
+notification in this codebase; silently skipped for a subscription with no owner, or
 whose owner no longer resolves to a user.
 
 This is deliberately a DIFFERENT channel from what operators hear. A failed delivery never parks —

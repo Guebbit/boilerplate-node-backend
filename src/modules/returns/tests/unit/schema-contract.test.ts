@@ -12,6 +12,7 @@ describe('returnSchema', () => {
             'currency',
             'lines',
             'orderId',
+            'orderNumber',
             'reason',
             'returnPostage'
         ]);

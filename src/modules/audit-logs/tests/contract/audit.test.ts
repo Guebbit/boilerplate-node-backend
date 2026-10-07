@@ -46,6 +46,7 @@ describe('GET /audit', () => {
         await auditLogRepository.create({
             actor_user_id: String(user._id),
             actor_role: 'user',
+            actor_scope: 'tenant',
             actor_role_name: 'moderator',
             action: 'admin.user.banned',
             outcome: 'success',
@@ -85,6 +86,7 @@ describe('GET /audit', () => {
         await auditLogRepository.create({
             actor_user_id: String(user._id),
             actor_role: 'user',
+            actor_scope: 'tenant',
             actor_role_name: 'moderator',
             action: 'admin.user.banned',
             outcome: 'success',

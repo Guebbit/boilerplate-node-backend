@@ -834,6 +834,7 @@ describe('logging in with a device factor', () => {
             email: 'stale-challenge@example.com',
             tokens: [
                 {
+                    sentAt: new Date(),
                     type: TokenType.MFA_CHALLENGE,
                     token: hashToken('stale-mfa-challenge'),
                     expiration: new Date(Date.now() - 1000)

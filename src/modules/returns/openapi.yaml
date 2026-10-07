@@ -298,7 +298,7 @@ components:
         Return:
             type: object
             additionalProperties: false
-            required: [id, orderId, currency, status, reason, lines, returnPostage, createdAt]
+            required: [id, orderId, orderNumber, currency, status, reason, lines, returnPostage, createdAt]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -306,7 +306,7 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 orderNumber:
                     type: string
-                    description: The order's human number, when it has one.
+                    description: The order's human number.
                 currency:
                     type: string
                     description: ISO-4217 code of the order's own currency.

@@ -676,7 +676,7 @@ describe('requestEmailVerificationFor', () => {
         // Ageing the recorded send, rather than a fake clock — `sentAt` is what the cooldown reads.
         const aged = await userRepository.findByIdWithCredentials(user.id);
         const live = aged!.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)!;
-        live.sentAt = new Date(live.sentAt!.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
+        live.sentAt = new Date(live.sentAt.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
         await userRepository.save(aged!);
 
         asSuccess(await accountService.requestEmailVerificationFor(user.id, testCallerContext));
@@ -700,7 +700,7 @@ describe('requestEmailVerificationFor', () => {
 const ageEmailChangeSend = async (userId: string): Promise<void> => {
     const aged = await userRepository.findByIdWithCredentials(userId);
     const live = aged!.tokens.find(({ type }) => type === EMAIL_CHANGE_TOKEN_TYPE)!;
-    live.sentAt = new Date(live.sentAt!.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
+    live.sentAt = new Date(live.sentAt.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
     await userRepository.save(aged!);
 };
 
@@ -929,7 +929,7 @@ describe('requestPasswordReset', () => {
 const ageResetSend = async (userId: string): Promise<void> => {
     const aged = await userRepository.findByIdWithCredentials(userId);
     const live = aged!.tokens.find(({ type }) => type === PASSWORD_RESET_TOKEN_TYPE)!;
-    live.sentAt = new Date(live.sentAt!.getTime() - (RESET_REQUEST_SECONDS + 1) * 1000);
+    live.sentAt = new Date(live.sentAt.getTime() - (RESET_REQUEST_SECONDS + 1) * 1000);
     await userRepository.save(aged!);
 };
 
@@ -1250,7 +1250,12 @@ describe('findLiveToken', () => {
          */
         await createUser({
             tokens: [
-                { type: 'password', token: 'stale-reset', expiration: new Date(Date.now() - 1000) }
+                {
+                    sentAt: new Date(),
+                    type: 'password',
+                    token: 'stale-reset',
+                    expiration: new Date(Date.now() - 1000)
+                }
             ]
         });
 

@@ -494,9 +494,9 @@ const createUserWithBothTokenTypes = () =>
     createUser({
         email: 'removeall@example.com',
         tokens: [
-            { type: TokenType.REFRESH, token: 'refresh-a' },
-            { type: TokenType.REFRESH, token: 'refresh-b' },
-            { type: TokenType.PASSWORD_RESET, token: 'reset-a' }
+            { type: TokenType.REFRESH, token: 'refresh-a', sentAt: new Date() },
+            { type: TokenType.REFRESH, token: 'refresh-b', sentAt: new Date() },
+            { type: TokenType.PASSWORD_RESET, token: 'reset-a', sentAt: new Date() }
         ] as Token[]
     });
 

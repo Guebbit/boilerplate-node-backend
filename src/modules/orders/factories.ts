@@ -15,6 +15,7 @@ import { identityOf, toDate, type OverridesFor } from '@infrastructure/persisten
 import { stripUndefined } from '@infrastructure/object-guards';
 import type { Id, Order, OrderItem, Product } from '@types';
 import type { FrozenOrderLineProduct, OrderDocument } from './model';
+import { shopCurrency } from './config';
 
 /**
  * The product as it was when the order was placed — the generated `Product`, with the three
@@ -98,6 +99,18 @@ const toSnapshot = ({
     })
 });
 
+/** Sequence behind the default `orderNumber`, so two fixtures in one test never share one. */
+let orderNumberSequence = 0;
+
+/**
+ * A distinct `{year}-{sequence}` number in the shape `allocateOrderNumber` mints, for a fixture
+ * that does not care which number it carries.
+ */
+const nextOrderNumber = (): string => {
+    orderNumberSequence += 1;
+    return `2026-${String(orderNumberSequence).padStart(6, '0')}`;
+};
+
 /**
  * Build an order ready for `orderRepository.create` from a caller's overrides.
  *
@@ -127,6 +140,9 @@ export const makeOrder = ({
     ...identityOf({ id, createdAt, updatedAt }),
     userId: new Types.ObjectId(userId),
     email: email ?? 'test@example.com',
+    // Both are required on a real order, so a fixture that does not pin one gets a stand-in.
+    currency: currency ?? shopCurrency(),
+    orderNumber: orderNumber ?? nextOrderNumber(),
     items: (items ?? []).map(({ product, quantity, locale }) => ({
         product: toSnapshot(product),
         quantity,
@@ -137,7 +153,7 @@ export const makeOrder = ({
     ...stripUndefined({ status }),
     /*
      * The three shipping columns pass through rather than defaulting to anything. All three are
-     * optional on the wire and absent on an order placed before the checkout asked for them, so a
+     * optional on the wire and absent when the checkout asked for none of them, so a
      * builder-supplied default would erase the difference between "not chosen" and "free" — which
      * is the distinction `pickup` (a real method, priced 0) exists to keep visible.
      *
@@ -152,10 +168,8 @@ export const makeOrder = ({
         billingAddress,
         paymentMethod,
         payBy: toDate(payBy),
-        currency,
         notes,
         deletedAt: toDate(deletedAt),
-        orderNumber,
         transferReference
     })
 });

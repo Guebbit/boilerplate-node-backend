@@ -18,6 +18,7 @@ setupTestDb();
 const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocument> => ({
     actor_user_id: 'user-1',
     actor_role: 'user',
+    actor_scope: 'tenant',
     action: coreAuditActions.SECURITY_UNAUTHORIZED,
     outcome: 'success',
     timestamp: new Date('2026-08-01T10:00:00.000Z'),

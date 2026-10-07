@@ -52,7 +52,7 @@ describe('parseReference — the RF branch', () => {
         expect(parseReference('RF00NOTAREALREFERENCE')).toBeNull();
     });
 
-    it('rejects a raw ObjectId — an order that predates this field is not reachable by reference', () => {
+    it('a raw ObjectId is not a reference', () => {
         expect(parseReference(ORDER_ID)).toBeNull();
         expect(parseReference('507F 1F77 BCF8 6CD7 9943 9011')).toBeNull();
     });

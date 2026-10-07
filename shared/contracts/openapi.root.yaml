@@ -921,8 +921,7 @@ components:
                 analyticsConsent:
                     type: boolean
                 # Enforced at signup only (`SignupRequest.termsAccepted`, required there) — every
-                # account in the database has this `true` by construction, including rows that
-                # predate the field, backfilled to `true` when the column was introduced.
+                # account in the database has this `true` by construction.
                 # Informational from here on: there is no re-acceptance flow.
                 termsAccepted:
                     type: boolean
@@ -1199,8 +1198,8 @@ components:
                         The ISO 11649 "RF" creditor reference minted for this order at checkout —
                         what the customer writes into the transfer's description, so an admin can
                         match the incoming payment back to it via `GET
-                        /payments/order-by-reference`. An order that predates this field falls
-                        back to its own raw id, which that same endpoint also accepts.
+                        /payments/order-by-reference`. A malformed or unmatched reference answers
+                        404; a raw order id is not a reference.
 
         # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
         # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
@@ -1533,6 +1532,8 @@ components:
                     paymentStatus,
                     fulfillmentStatus,
                     returnStatus,
+                    currency,
+                    orderNumber,
                     netTotal,
                     taxTotal,
                     shippingNetAmount,
@@ -1573,7 +1574,7 @@ components:
                     example: 149.97
                 # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
                 # change to the shop's own setting must not rewrite what an old order actually
-                # charged. Absent on an order that predates this field.
+                # charged.
                 currency:
                     type: string
                     readOnly: true
@@ -1630,8 +1631,8 @@ components:
                 notes:
                     type: string
                     description: Optional order notes
-                # Absent on an order that predates delivery, an admin-created order (no
-                # checkout), or an all-digital basket — nothing ships, so no method applies.
+                # Absent on an admin-created order (no checkout), or an all-digital basket — nothing
+                # ships, so no method applies.
                 # Present on every other order: a physical line makes a shipping method required.
                 shippingMethod:
                     type: string
@@ -1652,18 +1653,17 @@ components:
                 # (EU VAT Directive Art. 226). Present on every order a checkout places: the
                 # shipping address when the buyer chose "same as shipping", otherwise the book
                 # entry they named, otherwise their default. Absent on an admin-created order
-                # (`POST /orders` runs no checkout), on one placed before this field existed, and
-                # once the order is anonymised.
+                # (`POST /orders` runs no checkout), and once the order is anonymised.
                 billingAddress:
                     $ref: '#/components/schemas/OrderAddress'
-                # Absent on orders placed before this existed, and on order creation that isn't a
-                # checkout (the admin `POST /orders` path names no method).
+                # Absent on order creation that isn't a checkout (the admin `POST /orders` path
+                # names no method).
                 paymentMethod:
                     $ref: '#/components/schemas/PaymentMethodId'
                 # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
                 # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
                 # the sweep releases the stock and cancels the order. Absent once paid or
-                # cancelled: the hold is over either way, and on orders that predate this field.
+                # cancelled: the hold is over either way.
                 payBy:
                     type: string
                     format: date-time
@@ -1671,8 +1671,6 @@ components:
                 # Not a tax invoice number: this order is a receipt, not an invoice (no national
                 # e-invoicing system is involved) — see `docs/modules/orders.md`. Gaps are
                 # acceptable, the same way Shopify's `#1001` skips a number a failed write burned.
-                # Absent on an order created before this field existed; it is never assigned
-                # retroactively.
                 orderNumber:
                     type: string
                     readOnly: true

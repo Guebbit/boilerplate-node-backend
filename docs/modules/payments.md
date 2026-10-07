@@ -414,10 +414,9 @@ flowchart LR
   `payments`' lookup endpoint imports `parseReference` from the same file.
 - **Minted once, in the same write that creates the order, never recomputed.** `orders`' `placeOrder`
   mints it atomically as part of the write — see `OrderDocument.transferReference`'s own comment.
-  Absent on a `card` order, and on a `bank_transfer` order that predates this field — such an order
-  is simply not reachable through this lookup; an admin finds it by id through the normal order
-  search instead. No backward-compatible raw-id fallback: on a boilerplate there are ~zero pending
-  transfer orders old enough to need one, and CLAUDE.md's scope rule says not to keep one anyway.
+  Absent on a `card` order — such an order is simply not reachable through this lookup; an admin
+  finds it by id through the normal order search instead. No raw-id fallback: a raw order id is
+  not a reference and answers 404, like any other malformed one.
 - **No new settlement code.** The admin screen calls the lookup, then the existing `POST
 /payments/order/{orderId}/offline` — the same `pending → paid` move, stock commit, and events any
   other offline record already goes through.

@@ -27,7 +27,7 @@ export const mailReturnNotice = (
     mailBuyer(order, (locale, name) => {
         const mail = returnNoticeEmail(kind, locale, name, {
             ...input,
-            orderRef: order.orderNumber ?? String(order._id)
+            orderRef: order.orderNumber
         });
         void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });

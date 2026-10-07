@@ -33,7 +33,7 @@ export interface ReturnLine {
 export interface ReturnDocument extends Document {
     orderId: Types.ObjectId;
     /** The order's human number, copied so a staff queue reads without a join. */
-    orderNumber?: string;
+    orderNumber: string;
     /** ISO-4217 code of the order's own currency. */
     currency: string;
     status: ReturnStatus;
@@ -80,7 +80,7 @@ const returnLineSchema = new Schema<ReturnLine>(
 export const returnSchema = new Schema<ReturnDocument>(
     {
         orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
-        orderNumber: { type: String },
+        orderNumber: { type: String, required: true },
         currency: { type: String, required: true },
         status: {
             type: String,

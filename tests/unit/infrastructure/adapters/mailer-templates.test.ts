@@ -112,14 +112,18 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
             items: [
                 { quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } },
                 { quantity: 1, product: { title: 'A whole ham', price: 42 } }
-            ]
+            ],
+            currency: 'EUR'
         },
         'an-order-id'
     ),
     'orders.order-transfer-instructions': bankTransferInstructionsEmail(
         locale,
         'Ada',
-        { items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }] },
+        {
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            currency: 'EUR'
+        },
         { beneficiary: 'Guebbit Shop', iban: 'DE89370400440532013000', reference: 'an-order-id' },
         new Date('2026-09-19T12:00:00.000Z'),
         'an-order-id'
@@ -127,20 +131,26 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'orders.order-paid': paymentSucceededEmail(
         locale,
         'Ada',
-        { items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }] },
+        {
+            items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            currency: 'EUR'
+        },
         'an-order-id'
     ),
     'orders.order-transfer-expired': bankTransferExpiredEmail(locale, {
-        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
+        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+        currency: 'EUR'
     }),
     'orders.order-card-expired': cardHoldExpiredEmail(locale, {
-        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }]
+        items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+        currency: 'EUR'
     }),
     'orders.order-cancelled': orderCancelledEmail(
         locale,
         'Ada',
         {
             items: [{ quantity: 2, product: { title: 'Boiled sweets', price: 3.5 } }],
+            currency: 'EUR',
             paidAt: new Date('2026-09-19T12:00:00.000Z')
         },
         '2026-000041',
@@ -231,6 +241,7 @@ describe('email templates render in every supported locale', () => {
                 issuedAt: new Date('2026-01-15'),
                 currency: 'EUR',
                 locale,
+                orderNumber: '2026-000007',
                 seller: {},
                 lines: [{ title: 'A product', quantity: 2, unitPrice: 10, taxRate: 0.22 }],
                 netTotal: 16.39,

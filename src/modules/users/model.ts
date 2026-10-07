@@ -79,10 +79,9 @@ export interface Token {
      * When `tokenAdd` minted this entry. The record a resend cooldown reads: "how long since the
      * mail carrying this token went out" is a question `expiration` can only answer by being read
      * backwards through the TTL that set it, which silently changes meaning the moment that TTL
-     * is reconfigured. Absent on entries written before the field existed — a cooldown treats
-     * that as elapsed.
+     * is reconfigured.
      */
-    sentAt?: Date;
+    sentAt: Date;
     /**
      * When this token was last exchanged for an access token, absent until then — lets
      * `GET /account/sessions` show an idle session as idle rather than indistinguishable from
@@ -459,8 +458,8 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
          * but `true`, so every self-signup that reaches this default already validated it.
          * `default: true` is for every OTHER creation path — OAuth linking, the admin `/users`
          * route, test fixtures — none of which shows the checkbox, so none should have to restate
-         * it. A row written before the field existed simply reads as `undefined`, which every
-         * consumer treats as not accepted.
+         * it. A row with no value reads as `undefined`, which every consumer treats as not
+         * accepted.
          */
         termsAccepted: {
             type: Boolean,
@@ -530,7 +529,7 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                     },
                     sentAt: {
                         type: Date,
-                        required: false
+                        required: true
                     },
                     lastUsedAt: {
                         type: Date,

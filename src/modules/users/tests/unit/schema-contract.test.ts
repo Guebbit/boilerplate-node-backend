@@ -161,10 +161,11 @@ describe('userSchema — the credentials never load by accident', () => {
 });
 
 describe('userSchema — a stored token', () => {
-    it('requires a kind and the token itself', () => {
+    it('requires a kind, the token itself and when it was sent', () => {
         // A token row without its `type` cannot be revoked by any flow: every revocation is
-        // `$pull` by type, so an untyped entry survives logout, reset and account deletion.
-        expect(requiredPaths(subSchema(userSchema, 'tokens'))).toEqual(['token', 'type']);
+        // `$pull` by type, so an untyped entry survives logout, reset and account deletion. `sentAt`
+        // anchors every resend cooldown, so an entry without one would never make anyone wait.
+        expect(requiredPaths(subSchema(userSchema, 'tokens'))).toEqual(['sentAt', 'token', 'type']);
     });
 
     it('leaves the expiry and last-use optional', () => {

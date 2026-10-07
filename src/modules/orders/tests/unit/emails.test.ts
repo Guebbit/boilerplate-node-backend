@@ -15,7 +15,7 @@ import {
     type OrderLines
 } from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';
-import { orderFrontendLink, orderCurrency } from '@modules/orders/config';
+import { orderFrontendLink } from '@modules/orders/config';
 
 const NAME = 'Ada Lovelace';
 const ORDER_ID = 'order-1';
@@ -26,7 +26,8 @@ const ORDER: OrderLines = {
         { quantity: 2, product: { title: 'Grain-Free Dog Food', price: 100 } },
         { quantity: 3, product: { title: 'Memory Foam Dog Bed', price: 7.5 } }
     ],
-    shippingCost: 4.25
+    shippingCost: 4.25,
+    currency: 'EUR'
 };
 
 describe('orderConfirmEmail', () => {
@@ -62,9 +63,7 @@ describe('orderConfirmEmail', () => {
         // email and the charge cannot drift apart. `totals.property.test.ts` covers the sum.
         const { data } = orderConfirmEmail('en', NAME, ORDER, ORDER_ID);
 
-        expect(data.total).toContain(
-            String(orderTotal({ ...ORDER, currency: orderCurrency(ORDER) }))
-        );
+        expect(data.total).toContain(String(orderTotal(ORDER)));
     });
 
     it('includes the shipping cost in that total rather than quoting the goods alone', () => {
@@ -92,7 +91,7 @@ describe('orderConfirmEmail', () => {
         // Not reachable through checkout, but reachable through an admin-created order — and a
         // builder that indexed `items[0]` rather than mapping would throw here rather than in a
         // test.
-        const { data } = orderConfirmEmail('en', NAME, { items: [] }, ORDER_ID);
+        const { data } = orderConfirmEmail('en', NAME, { items: [], currency: 'EUR' }, ORDER_ID);
 
         expect(data.lines).toEqual([]);
     });
@@ -140,7 +139,8 @@ describe('orderConfirmEmail', () => {
     it("never re-resolves a line's title through `t()`, even one that collides with a real key", () => {
         const collidingTitle = 'orders.email-confirm.greeting';
         const order: OrderLines = {
-            items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }]
+            items: [{ quantity: 1, product: { title: collidingTitle, price: 1 } }],
+            currency: 'EUR'
         };
 
         const english = orderConfirmEmail('en', NAME, order, ORDER_ID).data.lines as string[];

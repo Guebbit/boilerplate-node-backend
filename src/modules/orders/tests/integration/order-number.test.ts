@@ -12,19 +12,6 @@ import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 setupTestDb();
 
 describe('GET /orders/{id} — the order number on the response', () => {
-    it('omits orderNumber on an order that predates this field', async () => {
-        const { bearer, user } = await authenticateAs('admin');
-        const product = await createProduct();
-        const order = await createOrder(user, [toOrderItem(product, 1)]);
-
-        const response = await api()
-            .get(`/orders/${String(order._id)}`)
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(200);
-        expect(response.body.data).not.toHaveProperty('orderNumber');
-    });
-
     it('publishes the order number frozen at creation', async () => {
         const { bearer, user } = await authenticateAs('admin');
         const product = await createProduct();

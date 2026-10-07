@@ -33,7 +33,7 @@ export interface EInvoicingDocument {
     issuedAt: Date;
     currency: string;
     locale: string;
-    orderNumber?: string;
+    orderNumber: string;
     billingAddress?: InvoiceParty;
     seller: InvoiceSeller;
     lines: InvoiceLine[];

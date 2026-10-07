@@ -40,7 +40,6 @@ import {
     type StampedPaymentStatus,
     type StampedReturnStatus
 } from './domain/projections';
-import { orderCurrency } from './config';
 import { OrderStatus, PaymentMethodId, RateType } from '@types';
 import type { Order } from '@types';
 
@@ -125,8 +124,6 @@ export interface OrderDocument
             | 'updatedAt'
             | 'deletedAt'
             | 'payBy'
-            | 'orderNumber'
-            | 'currency'
             | 'transferInstructions'
             | 'paymentStatus'
             | 'fulfillmentStatus'
@@ -149,17 +146,16 @@ export interface OrderDocument
     /**
      * `{year}-{sequence}`, assigned once by `allocateOrderNumber` at order-creation time — never
      * recomputed, unlike the VAT figures. Not a tax invoice number: this order is a receipt, not
-     * an invoice — see `docs/modules/orders.md`. Absent on an order that predates this field; it
-     * never gets one retroactively, since a number minted later could not honestly claim the
-     * order's actual place in the sequence.
+     * an invoice — see `docs/modules/orders.md`. Every write path sets it; a number minted later
+     * could not honestly claim the order's actual place in the sequence.
      */
-    orderNumber?: string;
+    orderNumber: string;
     /**
      * ISO-4217, frozen from `shopCurrency()` the moment `placeOrder` writes the row — never
      * re-read from config later, so a deployment's currency change cannot rewrite what an old
-     * order actually charged. Absent on an order that predates this field.
+     * order actually charged.
      */
-    currency?: string;
+    currency: string;
     /**
      * Set alongside `userId` being unset, to `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)`
      * — an order already past its own window at erasure time is due almost immediately, not given
@@ -212,11 +208,10 @@ export interface OrderDocument
      * (`src/modules/orders/domain/transfer-reference.ts`'s `buildReference`), from the SAME id
      * this write creates — never recomputed afterwards.
      *
-     * Absent:  on a `card` order, and on a `bank_transfer` order that predates this field —
-     *          `applyTransferInstructions` then shows no `transferInstructions` block at all
-     *          rather than a fabricated reference, and `GET /payments/order-by-reference` simply
-     *          cannot reach that order (its admin finds it by id through the normal order search
-     *          instead).
+     * Absent:  on a `card` order — `applyTransferInstructions` then shows no
+     *          `transferInstructions` block at all rather than a fabricated reference, and
+     *          `GET /payments/order-by-reference` cannot reach that order (its admin finds it by
+     *          id through the normal order search instead).
      * On wire: not part of the `Order` contract — `applyOrderTransform` omits it, the same
      *          treatment as `anonymizeAfter`/`pendingEffects` below, and it is surfaced only
      *          through `transferInstructions.reference`.
@@ -405,8 +400,8 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * The customer's checkout choice — a preference, not a lock: a card payment still
          * settles normally regardless of this value, and then rewrites it to `card`, so the
-         * field ends up saying how the order was actually paid. Absent on orders placed before
-         * this existed, and on order creation that isn't a checkout.
+         * field ends up saying how the order was actually paid. Absent on order creation that
+         * isn't a checkout.
          */
         paymentMethod: {
             type: String,
@@ -416,7 +411,7 @@ export const orderSchema = new Schema<OrderDocument>(
          * When this order's stock hold ends, stamped at checkout from the SAME duration handed
          * to `inventoryService.reserveForOrder` — the two must never disagree, which is why
          * neither is a second copy of the other's fallback. Absent once paid or cancelled: the
-         * hold is over either way, and on orders that predate this field.
+         * hold is over either way.
          */
         payBy: {
             type: Date
@@ -424,11 +419,11 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * `{year}-{sequence}`, minted once by `allocateOrderNumber` (`./services/order-numbering`)
          * at order-creation time. Not a tax invoice number — this order is a receipt, not an
-         * invoice, see `docs/modules/orders.md`. Absent on an order that predates this feature;
-         * never assigned retroactively.
+         * invoice, see `docs/modules/orders.md`. Required: every write path allocates one.
          */
         orderNumber: {
-            type: String
+            type: String,
+            required: true
         },
         /*
          * Stamped once, in the same conditional write that moves the order to `paid` — see the
@@ -453,16 +448,17 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * ISO-4217, frozen from `shopCurrency()` at the same moment `orderNumber` is minted —
          * never re-read from config later, so a deployment's currency change cannot rewrite what
-         * an old order actually charged. Absent on an order that predates this field.
+         * an old order actually charged.
          */
         currency: {
-            type: String
+            type: String,
+            required: true
         },
         /*
          * The address the order ships to — a SNAPSHOT, exactly like the product snapshots in
          * `items`: an order keeps where it was going, not what the address book says today.
-         * Present only when a line ships to an address: absent on an all-digital order, a pickup,
-         * and orders that predate the book. Every text field is stored encrypted (`./pii`).
+         * Present only when a line ships to an address: absent on an all-digital order, a pickup.
+         * Every text field is stored encrypted (`./pii`).
          */
         shippingAddress: {
             type: orderAddressSchema
@@ -470,7 +466,7 @@ export const orderSchema = new Schema<OrderDocument>(
         /*
          * Who the order is invoiced to — a snapshot like `shippingAddress`, and the one the invoice
          * reads (`invoicing/services/issue-invoice.ts`). Present on every order a checkout places;
-         * absent on an admin-created order (no checkout) and on one placed before this field.
+         * absent on an admin-created order (no checkout).
          */
         billingAddress: {
             type: orderAddressSchema
@@ -499,8 +495,7 @@ export const orderSchema = new Schema<OrderDocument>(
         },
         /*
          * The RF reference `placeOrder` mints for a `bank_transfer` order, from the same id this
-         * write creates. Absent on a `card` order and on an order that predates this field — no
-         * `required`, matching that.
+         * write creates. Absent on a `card` order — no `required`, matching that.
          */
         transferReference: {
             type: String
@@ -696,9 +691,9 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
-        // Resolved once, not read twice: an order predating `currency` falls back to the shop's
-        // current setting, same rule `issue-invoice.ts` freezes an invoice's own currency with.
-        const currency = orderCurrency({ currency: serialized.currency as string | undefined });
+        // `currency` is required on the schema, so a serialized order always carries it; the
+        // serialized shape is loose, hence the narrowing.
+        const currency = serialized.currency as string;
         applyOrderTotals(serialized, currency);
         applyOrderTax(serialized, currency);
         applyTransferInstructions(serialized);

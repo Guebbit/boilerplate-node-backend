@@ -167,8 +167,7 @@ export const create = (
         // A pointer, not a copy: whoever's email the auto-disable notice reaches is resolved fresh
         // at send time (`services/attempt.ts#notifyOwnerOfAutoDisable`), off this id — never stored
         // here. `context.caller.id` absent (a stranger, never reachable through this tenant-scoped
-        // route in practice) leaves nobody to notify later, same as a subscription that predates
-        // this field entirely.
+        // route in practice) leaves nobody to notify later.
         return webhookSubscriptionRepository
             .create({
                 tenant,

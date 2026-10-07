@@ -18,8 +18,7 @@ import type { ErrorCode } from '@api/error-codes';
 /**
  * Seconds still to wait before the same thing may be sent again, or 0 when a send may go ahead.
  *
- * An absent `sentAt` means nothing was ever sent, or the entry predates the field — either way
- * there is nothing to wait for.
+ * An absent `sentAt` means nothing was ever sent, so there is nothing to wait for.
  *
  * @param sentAt - when the last send went out
  * @param seconds - the window between two sends

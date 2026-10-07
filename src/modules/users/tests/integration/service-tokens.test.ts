@@ -23,8 +23,8 @@ const createUserWithTokens = () =>
     createUser({
         email: 'tokens@example.com',
         tokens: [
-            { type: 'password', token: hashToken('reset-token-value') },
-            { type: 'delete', token: hashToken('delete-token-value') }
+            { type: 'password', token: hashToken('reset-token-value'), sentAt: new Date() },
+            { type: 'delete', token: hashToken('delete-token-value'), sentAt: new Date() }
         ] as Token[]
     });
 

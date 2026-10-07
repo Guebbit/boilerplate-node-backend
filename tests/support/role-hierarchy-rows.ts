@@ -71,6 +71,7 @@ const returnOf = async (owner: Owner, status: 'requested' | 'approved') => {
 
     return returnModel.create({
         orderId: order._id,
+        orderNumber: order.orderNumber,
         currency: 'EUR',
         status,
         reason: 'other',

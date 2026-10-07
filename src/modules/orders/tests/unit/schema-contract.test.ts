@@ -21,13 +21,13 @@ import {
 } from '@tests/schema';
 
 describe('orderSchema — what an order must carry', () => {
-    it('requires the contact address, and nothing else', () => {
+    it('requires the contact address, the frozen currency and the order number, and nothing else', () => {
         // A set, not a list of individual checks: this fails if a `required` is REMOVED (rows
         // start persisting with no address) and equally if one is ADDED (writes a client was
         // allowed to make start being rejected). Both are breaking, in opposite directions.
         // `userId` is deliberately absent — account erasure unsets it, so the schema cannot
         // claim it is always there.
-        expect(requiredPaths(orderSchema)).toEqual(['email']);
+        expect(requiredPaths(orderSchema)).toEqual(['currency', 'email', 'orderNumber']);
     });
 
     it('stores the owner as an ObjectId, not a string', () => {
@@ -44,12 +44,16 @@ describe('orderSchema — what an order must carry', () => {
             expect(requiredPaths(orderSchema)).not.toContain(path);
     });
 
-    it('leaves the order number optional — absent means a pre-feature order', () => {
-        expect(requiredPaths(orderSchema)).not.toContain('orderNumber');
+    it('requires the order number and the frozen currency, both strings', () => {
+        // Every write path sets both; neither has a fallback anywhere downstream.
+        expect(requiredPaths(orderSchema)).toEqual(
+            expect.arrayContaining(['orderNumber', 'currency'])
+        );
         expect(typeOf(orderSchema, 'orderNumber')).toBe('String');
+        expect(typeOf(orderSchema, 'currency')).toBe('String');
     });
 
-    it('leaves the transfer reference optional — absent means card, or a pre-feature order', () => {
+    it('leaves the transfer reference optional — absent means card', () => {
         expect(requiredPaths(orderSchema)).not.toContain('transferReference');
         expect(typeOf(orderSchema, 'transferReference')).toBe('String');
     });

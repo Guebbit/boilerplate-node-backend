@@ -22,7 +22,6 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { emitDomainEvent } from '@kernel/events';
 import {
     orderService,
-    orderCurrency,
     orderTotal,
     isBeforeDispatch,
     isExcludedFromWithdrawal,
@@ -112,7 +111,7 @@ const refundOwedOn = (order: OrderDocument): number =>
         ? orderTotal({
               items: order.items,
               shippingCost: order.shippingCost,
-              currency: orderCurrency(order)
+              currency: order.currency
           })
         : 0;
 
@@ -158,8 +157,8 @@ const writeWithdrawalRecord = (
     return returnRepository
         .create({
             orderId: order._id,
-            ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-            currency: orderCurrency(order),
+            orderNumber: order.orderNumber,
+            currency: order.currency,
             status: 'closed',
             reason: 'withdrawal',
             lines: [],
@@ -242,8 +241,8 @@ const writeReturn = (
     return returnRepository.create(
         {
             orderId: order._id,
-            ...(order.orderNumber ? { orderNumber: order.orderNumber } : {}),
-            currency: orderCurrency(order),
+            orderNumber: order.orderNumber,
+            currency: order.currency,
             status: initialStatusFor(input.reason),
             reason: input.reason,
             ...(input.note ? { note: input.note } : {}),

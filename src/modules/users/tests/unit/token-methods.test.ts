@@ -155,15 +155,17 @@ describe('tokenRemoveAll', () => {
         // "Log out everywhere" must not spend a pending password-reset link, and revoking reset
         // tokens must not sign the user out of every device.
         const tokens: Token[] = [
-            { type: TokenType.REFRESH, token: 'session-a' },
-            { type: TokenType.PASSWORD_RESET, token: 'reset-a' },
-            { type: TokenType.REFRESH, token: 'session-b' }
+            { sentAt: new Date(), type: TokenType.REFRESH, token: 'session-a' },
+            { sentAt: new Date(), type: TokenType.PASSWORD_RESET, token: 'reset-a' },
+            { sentAt: new Date(), type: TokenType.REFRESH, token: 'session-b' }
         ];
         const document = documentDouble(tokens);
 
         await methods.tokenRemoveAll.call(document, TokenType.REFRESH);
 
-        expect(document.tokens).toEqual([{ type: TokenType.PASSWORD_RESET, token: 'reset-a' }]);
+        expect(document.tokens).toEqual([
+            expect.objectContaining({ type: TokenType.PASSWORD_RESET, token: 'reset-a' })
+        ]);
     });
 
     it('does not touch updatedAt', async () => {

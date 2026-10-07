@@ -227,16 +227,19 @@ describe('userRepository', () => {
             const user = await createUser({
                 tokens: [
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('refresh-1'),
                         expiration: new Date(Date.now() + 60_000)
                     },
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('refresh-2'),
                         expiration: new Date(Date.now() + 120_000)
                     },
                     {
+                        sentAt: new Date(),
                         type: TokenType.PASSWORD_RESET,
                         token: hashToken('password-1'),
                         expiration: new Date(Date.now() + 120_000)
@@ -259,11 +262,13 @@ describe('userRepository', () => {
             const user = await createUser({
                 tokens: [
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('expired-token'),
                         expiration: expired
                     },
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('valid-token'),
                         expiration: futureExpiration
@@ -293,18 +298,21 @@ describe('userRepository', () => {
             const user = await createUser({
                 tokens: [
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('stale-rotated'),
                         expiration: longUnexpired,
                         supersededAt: supersededLongAgo
                     },
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('freshly-rotated'),
                         expiration: longUnexpired,
                         supersededAt: supersededJustNow
                     },
                     {
+                        sentAt: new Date(),
                         type: TokenType.REFRESH,
                         token: hashToken('live'),
                         expiration: longUnexpired
@@ -346,8 +354,16 @@ describe('userRepository', () => {
         it('findByTokenValue finds the holder whatever kind the token is', async () => {
             const user = await createUser({
                 tokens: [
-                    { type: TokenType.REFRESH, token: hashToken('session-token') },
-                    { type: TokenType.PASSWORD_RESET, token: hashToken('reset-token') }
+                    {
+                        sentAt: new Date(),
+                        type: TokenType.REFRESH,
+                        token: hashToken('session-token')
+                    },
+                    {
+                        sentAt: new Date(),
+                        type: TokenType.PASSWORD_RESET,
+                        token: hashToken('reset-token')
+                    }
                 ]
             });
 
@@ -366,8 +382,16 @@ describe('userRepository', () => {
         it('tokenTouch stamps the token that matched, not the first in the array', async () => {
             const user = await createUser({
                 tokens: [
-                    { type: TokenType.REFRESH, token: hashToken('first-session') },
-                    { type: TokenType.REFRESH, token: hashToken('second-session') }
+                    {
+                        sentAt: new Date(),
+                        type: TokenType.REFRESH,
+                        token: hashToken('first-session')
+                    },
+                    {
+                        sentAt: new Date(),
+                        type: TokenType.REFRESH,
+                        token: hashToken('second-session')
+                    }
                 ]
             });
 

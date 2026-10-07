@@ -15,7 +15,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { PaymentMethod } from '@types';
-import { orderService, orderTotal, isPayable, orderCurrency } from '@modules/orders';
+import { orderService, orderTotal, isPayable } from '@modules/orders';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { CallerContext } from '@types';
@@ -87,7 +87,7 @@ export const recordOfflinePayment = async (
     }
 
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
-    const currency = orderCurrency(order);
+    const { currency } = order;
     const upserted = await paymentRepository.upsertOffline(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
         // document; spreading it copies nothing, since its schema paths are prototype getters,

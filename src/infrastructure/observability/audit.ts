@@ -109,7 +109,7 @@ export interface AuditEvent {
      * explicitly with the scope the guard actually resolved, or every platform refusal records as
      * a tenant one. `requirePermissionGuard` is the one caller that does.
      */
-    actor_scope?: AuthorizationScope;
+    actor_scope: AuthorizationScope;
     /** What was attempted (see the enum above). */
     action: AuditAction;
     /** Whether it worked. Failures are the security-relevant half: repeated ones signal attack. */

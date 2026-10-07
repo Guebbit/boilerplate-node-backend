@@ -158,13 +158,7 @@ const afterCancel = async (
      */
     if (byPerson)
         await mailBuyer(order, (locale, name) => {
-            const mail = orderCancelledEmail(
-                locale,
-                name,
-                order,
-                order.orderNumber ?? String(order._id),
-                refund
-            );
+            const mail = orderCancelledEmail(locale, name, order, order.orderNumber, refund);
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         });
 

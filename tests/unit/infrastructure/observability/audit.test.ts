@@ -34,6 +34,7 @@ describe('emitAuditEvent', () => {
             action: 'auth.login',
             actor_user_id: 'user-123',
             actor_role: 'user',
+            actor_scope: 'tenant',
             outcome: 'success',
             ip: '1.2.3.4',
             request_id: 'req-abc'
@@ -54,6 +55,7 @@ describe('emitAuditEvent', () => {
             action: 'auth.login',
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
+            actor_scope: 'tenant',
             outcome: 'failure',
             ip: '1.2.3.4'
         };
@@ -69,6 +71,7 @@ describe('emitAuditEvent', () => {
             action: 'admin.user.erased',
             actor_user_id: 'admin-456',
             actor_role: 'admin',
+            actor_scope: 'tenant',
             outcome: 'success',
             target_type: 'user',
             target_id: 'user-789',
@@ -92,6 +95,7 @@ describe('emitAuditEvent', () => {
             action: coreAuditActions.SECURITY_UNAUTHORIZED,
             actor_user_id: 'anonymous',
             actor_role: 'anonymous',
+            actor_scope: 'tenant',
             outcome: 'failure'
         });
 
@@ -110,6 +114,7 @@ describe('registerAuditSink', () => {
         action: 'auth.login',
         actor_user_id: 'user-123',
         actor_role: 'user',
+        actor_scope: 'tenant',
         outcome: 'success'
     };
 

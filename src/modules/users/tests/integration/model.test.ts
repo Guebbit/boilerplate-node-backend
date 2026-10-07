@@ -28,6 +28,7 @@ const withTokens = () =>
     createUser({
         tokens: [
             {
+                sentAt: new Date(),
                 type: TokenType.REFRESH,
                 token: 'refresh-token-value',
                 expiration: new Date(Date.now() + 60_000)

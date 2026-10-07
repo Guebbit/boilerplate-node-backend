@@ -658,6 +658,7 @@ describe('rotateRefreshToken reuse detection', () => {
 const addExpiredToken = async (userId: string, token: string) => {
     const doc = await userRepository.findByIdWithCredentials(userId);
     doc!.tokens.push({
+        sentAt: new Date(),
         type: TokenType.REFRESH,
         token: hashToken(token),
         expiration: new Date(Date.now() - 1000)

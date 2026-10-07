@@ -23,13 +23,14 @@ const RETENTION_SECONDS =
     Number(currentEnvironment().NODE_AUDIT_RETENTION_DAYS ?? 90) * 24 * 60 * 60;
 
 describe('auditLogSchema — what an entry must carry', () => {
-    it('requires who, what, how it went, when and at what level', () => {
-        // The five that make an entry answerable. Everything else — ip, user agent, request and
+    it('requires who, in which world, what, how it went, when and at what level', () => {
+        // The six that make an entry answerable. Everything else — ip, user agent, request and
         // trace ids, the target, the metadata — enriches an entry that is already complete, and
         // is absent on events that genuinely have none (a scheduled job has no IP).
         expect(requiredPaths(auditLogSchema)).toEqual([
             'action',
             'actor_role',
+            'actor_scope',
             'actor_user_id',
             'level',
             'outcome',

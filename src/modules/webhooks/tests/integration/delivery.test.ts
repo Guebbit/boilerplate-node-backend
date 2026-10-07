@@ -416,10 +416,10 @@ describe('sustained failure', () => {
         );
     });
 
-    it('sends no notice for a subscription that predates ownerUserId, but still audits it', async () => {
+    it('sends no notice for a subscription with no ownerUserId, but still audits it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        // No `ownerUserId` — `createSubscription`'s third argument defaults to `undefined`, the
-        // same shape a subscription created before this field existed carries.
+        // No `ownerUserId` — `createSubscription`'s third argument defaults to `undefined`: the
+        // stranger case, where nobody is recorded as the owner.
         const subscription = await createSubscription(`${server.url}/hook`);
 
         for (let chain = 0; chain < WEBHOOK_MAX_CONSECUTIVE_FAILURES - 1; chain++) {

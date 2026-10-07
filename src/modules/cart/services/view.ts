@@ -154,7 +154,7 @@ const buildView = (
     available: Map<string, number>
 ): CartView => {
     // A cart never freezes a currency of its own — it hasn't checked out — so it always
-    // prices against the shop's CURRENT setting, unlike an order's frozen `orderCurrency`.
+    // prices against the shop's CURRENT setting, unlike an order's own frozen `currency`.
     const currency = shopCurrency();
     const { count, quantity, price } = sumLineItems(lines, currency);
     const joined = lines.filter((line) => isJoined(line));

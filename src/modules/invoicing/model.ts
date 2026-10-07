@@ -70,9 +70,9 @@ export interface FrozenTaxDocument {
     currency: string;
     /** The language every string on the rendered PDF is in — the order's own frozen locale. */
     locale: string;
-    /** The order's own `orderNumber`, printed for cross-reference — absent on an order that predates it. */
-    orderNumber?: string;
-    /** Absent on a digital-only order, or one placed before the address book existed. */
+    /** The order's own `orderNumber`, printed for cross-reference. */
+    orderNumber: string;
+    /** Absent on an order with no billing address (an admin-created one, which runs no checkout). */
     billingAddress?: InvoiceParty;
     seller: InvoiceSeller;
     lines: InvoiceLine[];
@@ -168,7 +168,7 @@ const frozenTaxDocumentFields = {
     issuedAt: { type: Date, required: true },
     currency: { type: String, required: true },
     locale: { type: String, required: true },
-    orderNumber: { type: String },
+    orderNumber: { type: String, required: true },
     billingAddress: { type: partySchema },
     seller: { type: sellerSchema, required: true },
     lines: { type: [lineSchema], required: true },

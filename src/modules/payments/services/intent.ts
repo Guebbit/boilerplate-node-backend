@@ -13,7 +13,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
-import { orderService, orderTotal, isPayable, orderCurrency } from '@modules/orders';
+import { orderService, orderTotal, isPayable } from '@modules/orders';
 import { userService } from '@modules/users';
 import { resolvePaymentProvider, providerNamed, type PaymentProvider } from '../providers';
 import type { PaymentDocument } from '../model';
@@ -99,9 +99,8 @@ export const resolvePayerId = (orderUserId: string | undefined): Promise<string 
  * The amount is frozen here through `orderTotal` — the same function the order's serializer and
  * the confirmation email call, so the intent cannot ask for a different number than the order
  * shows. Lines alone is not that number: shipping is frozen on the order at checkout and the
- * contract counts it in `totalPrice`. `orderCurrency` resolves the SAME currency the order was
- * priced in — the shop's live setting only for an order that predates the field — so a provider
- * charging in JPY never sees a EUR-shaped amount for a currency change made after the order was
+ * contract counts it in `totalPrice`. The order's own frozen `currency` is the SAME one it was
+ * priced in, so a provider charging in JPY never sees a EUR-shaped amount for a currency change made after the order was
  * placed. Re-asking is the double-click case: it refreshes and answers the same intent, 200 where
  * the first ask was 201; an order whose money already moved answers 409.
  *
@@ -132,7 +131,7 @@ export const createIntent = async (
     const provider = resolvePaymentProvider();
     if (!provider) return cardNotAvailable();
     const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
-    const currency = orderCurrency(order);
+    const { currency } = order;
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
         // document; spreading it copies nothing, since its schema paths are prototype getters,
