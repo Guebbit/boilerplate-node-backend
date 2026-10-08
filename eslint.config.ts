@@ -1482,8 +1482,8 @@ export default tseslint.config(
     },
 
     /**
-     * Plain CommonJS tooling: jest's configs (a `.js` because the per-file coverage thresholds
-     * inside need an explanation attached, and JSON cannot carry a comment) and commitlint.
+     * Plain CommonJS tooling: jest's configs (a `.js` because their settings need an explanation
+     * attached, and JSON cannot carry a comment) and commitlint.
      * Outside the `tsconfig` project, so the type-aware program is off; CommonJS, so the
      * ESM-preference rules yield.
      */

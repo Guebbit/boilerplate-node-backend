@@ -46,18 +46,17 @@ flowchart TD
 | **Survived**    | A test runs this code but checks nothing that would catch it breaking — a useless assertion, or none at all | Sharpen the test: assert on the actual behaviour, not just "it didn't throw" |
 | **No coverage** | No test runs this code at all                                                                               | Write a test that reaches it — there is nothing to sharpen yet               |
 
-Both look like "coverage is fine" from the outside — 70%+ line coverage says nothing about either one. The tool lands one word on each so you don't have to guess which problem you have. (Full outcome list, including `killed`/`timeout`/`error`: [Glossary](#glossary) below; one mutant walked through step by step: [What a mutant actually is](#what-a-mutant-actually-is).)
+Both look like "the lines are covered" from the outside — a line coverage number says nothing about either one. The tool lands one word on each so you don't have to guess which problem you have. (Full outcome list, including `killed`/`timeout`/`error`: [Glossary](#glossary) below; one mutant walked through step by step: [What a mutant actually is](#what-a-mutant-actually-is).)
 
-### The four numbers people mix up
+### The three numbers people mix up
 
-This came up in practice: "didn't we set a 70% threshold?" — yes, but for a different tool measuring a different thing. Four separate percentages exist across this project, and only one of them is what you're probably thinking of:
+Coverage thresholds used to exist and no longer do; mutation testing is the one test-quality number. Three separate percentages are left across this project, and they are easy to mix up:
 
-| Where                                      | Measures                                                          | Number                                                                             | What happens if it's missed                                          |
-| ------------------------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| `jest.config.js` → `coverageThreshold`     | **Line coverage** — did this code execute at all, during any test | 70% per file (some files exempted, with the exemption recorded)                    | `npm run test:unit:coverage` fails outright, in CI's `test-unit` job |
-| `stryker.json` → `thresholds.high` / `low` | Nothing enforced — just colours the HTML report green/yellow/red  | 80 / 60                                                                            | Nothing. Decoration only.                                            |
-| `stryker.json` → `thresholds.break`        | Has the **whole run's** score collapsed                           | `null` — deliberately unset, see [Thresholds](#thresholds-—-measured-not-invented) | Nothing. The per-file ratchet is the real gate.                      |
-| `mutation-baseline.json` (**the ratchet**) | Did **this one file** score worse than it did last time           | no fixed number — compares each file only to its own history                       | `npm run mutation:check` fails, naming the exact file that got worse |
+| Where                                      | Measures                                                         | Number                                                                             | What happens if it's missed                                          |
+| ------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `stryker.json` → `thresholds.high` / `low` | Nothing enforced — just colours the HTML report green/yellow/red | 80 / 60                                                                            | Nothing. Decoration only.                                            |
+| `stryker.json` → `thresholds.break`        | Has the **whole run's** score collapsed                          | `null` — deliberately unset, see [Thresholds](#thresholds-—-measured-not-invented) | Nothing. The per-file ratchet is the real gate.                      |
+| `mutation-baseline.json` (**the ratchet**) | Did **this one file** score worse than it did last time          | no fixed number — compares each file only to its own history                       | `npm run mutation:check` fails, naming the exact file that got worse |
 
 The one that actually gates day-to-day work is the **last row** — the ratchet. `break` is a single global number, which means one strong file can hide one collapsing file behind the average; the ratchet can't be fooled that way because it checks every file against itself. See [The per-file ratchet](#the-per-file-ratchet) for how that comparison works, with a diagram.
 
@@ -1408,7 +1407,7 @@ service.
 
 ## The per-file ratchet
 
-Stryker's own thresholds are **global** — `high`, `low`, `break`, and nothing else. That is the same pooling failure that directory-shaped coverage thresholds have: a strong file carries a weak one, and the number that passes is an average nobody can act on. It gets worse as `mutate` widens, not better.
+Stryker's own thresholds are **global** — `high`, `low`, `break`, and nothing else. That is a pooling failure: a strong file carries a weak one, and the number that passes is an average nobody can act on. It gets worse as `mutate` widens, not better.
 
 So `mutation-baseline.json` records a score **per file**, and `scripts/mutation/check-baseline.ts` compares each run against it. The committed file is pending a reseed under the merged ruler ([one ruler](#one-ruler)) — once `mutation:full` has covered the whole scope and folded it in, every run after that compares against it:
 

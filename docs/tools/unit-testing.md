@@ -16,7 +16,6 @@ The layer that answers: **is this one piece of logic — a service, a repository
 flowchart TB
     Source["src/modules · kernel\nservices · repositories · models\nmiddlewares · infrastructure/http"] --> Unit["Jest\nsrc/modules/*/tests/unit/** + tests/unit/**"]
     Unit --> ModuleMock["jest.mock()\nadapters that shouldn't run for real\n(filesystem, mailer, cache)"]
-    Unit --> Coverage[("v8 coverage")]
     Unit --> Mutation["Stryker\nmutates THIS layer\nsee Mutation Testing"]
 
     classDef src fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -26,7 +25,7 @@ flowchart TB
     class Source src;
     class Unit test;
     class ModuleMock data;
-    class Coverage,Mutation out;
+    class Mutation out;
 ```
 
 Notably **not** here: HTTP, or a database, real or in-memory. No unit test sends a request through
@@ -94,23 +93,19 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 
 ## Commands
 
-| Command                      | Effect                                    |
-| ---------------------------- | ----------------------------------------- |
-| `npm run test:unit`          | Full unit suite                           |
-| `npm run test:unit:coverage` | Same, with the unit-layer coverage floors |
-| `npx jest <path>`            | One file, for fast iteration              |
+| Command             | Effect                       |
+| ------------------- | ---------------------------- |
+| `npm run test:unit` | Full unit suite              |
+| `npx jest <path>`   | One file, for fast iteration |
 
-::: warning Coverage here is a proxy, not the verdict
-Every test must pass — one failure is a red build, with no threshold on that. Coverage is a separate
-and weaker number: it reports which lines a suite EXECUTED, and a line can be executed by a test
-that asserts nothing about it.
+::: warning Coverage is not measured
+Every test must pass — one failure is a red build, with no threshold on that. Whether the suite is
+any good is a different question, and line coverage cannot answer it: a line can be executed by a
+test that asserts nothing about it.
 
 **[Mutation testing](./mutation-testing.md) is the instrument that judges this suite's quality** —
 it changes the code and checks a test goes red. An uncovered line cannot kill a mutant, so mutation
-score subsumes coverage; coverage is kept because it runs in seconds.
-
-A service reporting 37% on this run is not 63% broken and not 63% untested — it is covered by the
-integration suite, which this run does not execute. See
+score subsumes coverage; a line no test ran is a `NoCoverage` mutant. See
 [Tests → Three numbers](../reference/tests.md#three-numbers-and-they-are-not-the-same-question).
 :::
 

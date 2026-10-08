@@ -3,13 +3,12 @@
 The layer that answers: **are the units actually wired together?** A service, its repository and its Mongoose model can each be individually correct (see [Unit Testing](./unit-testing.md)) while the router that's supposed to connect them to the outside world mounts the wrong middleware, or mounts nothing at all. This layer drives the real Express app to check the wiring, not the logic behind it.
 
 ::: tip These specs are what covers the service layer
-A module's `service.ts` and `repository.ts` read near-zero on `test:unit:coverage`, and that is not
-a gap — it is this suite doing the covering, and that run does not execute it.
+A module's `service.ts` and `repository.ts` are tested mostly here, not in the unit suite.
 
 `stryker.json` runs these specs too, so a service or repository's mutation score reflects what this
 suite actually kills — a real number, not the `NoCoverage` artefact it used to be when the mutation
-ruler excluded `tests/integration/` entirely. Neither the coverage nor the mutation number is a pass
-rate — every test in every suite must pass regardless. See
+ruler excluded `tests/integration/` entirely. The mutation score is not a pass rate — every test
+in every suite must pass regardless. See
 [Tests → Three numbers](../reference/tests.md#three-numbers-and-they-are-not-the-same-question).
 :::
 

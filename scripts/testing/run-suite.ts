@@ -70,7 +70,7 @@ type Suite =
  * The layers this runner knows, keyed by the name its npm script passes.
  *
  * `unit` and `cross-cutting` run in parallel; only their worker count comes from this file.
- * Exported so a `package.json` script needing several layers unsharded (coverage, the JSON
+ * Exported so a `package.json` script needing several layers unsharded (the JSON
  * report, randomized order) can name them instead of hand-copying their jest patterns.
  */
 export const SUITES: Record<string, Suite> = {
@@ -136,7 +136,7 @@ if (suiteNames.length === 0) {
 // `--unsharded`: one jest process for every named suite, then exit with its status.
 if (unsharded) {
     // One process, every named suite's patterns at once — no shard/heap math, no `suite` lookup:
-    // the caller (coverage, the JSON report, randomized order) already chose its own jest flags.
+    // the caller (the JSON report, randomized order) already chose its own jest flags.
     const patterns = suiteNames.flatMap((name) => SUITES[name].patterns);
 
     /**

@@ -13,8 +13,6 @@
  *                    handed this one's mongoose connection.
  *   `testTimeout`    30s. Booting a cluster and pulling a Redis image is longer than that; the
  *                    files set their own.
- *   `coverage`       meaningless. The code under test runs in a child process, so nothing here is
- *                    instrumented — a floor would only ever measure the harness.
  *
  * `jest.config.js` ignores `tests/cluster` for the mirror image of these reasons, so `npm test`
  * stays in one process and stays fast.

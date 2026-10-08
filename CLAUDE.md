@@ -142,11 +142,9 @@ See `docs/reference/tests.md`.
   `jest/no-disabled-tests` refuse a `.only` or a `.skip` outright.
 - Assert through the public door (the route, the service, the repository), not on private
   internals. A test shaped like the implementation fails on every refactor and catches nothing.
-- **Mutation score is the signal; coverage is the proxy.** A line can be executed by a test that
-  asserts nothing about it. Where the two disagree, Stryker is the one telling the truth —
-  `docs/tools/coverage-and-confidence.md`.
-- Coverage floors are a ratchet recording where the code *is*, not a target, and they are not in
-  the commit gate. Run `npm run test:unit:coverage` by hand when the number matters.
+- **Mutation score is the one test-quality number; coverage is not measured.** A line can be
+  executed by a test that asserts nothing about it. Stryker marks every line no test ran as a
+  `NoCoverage` mutant — `docs/tools/coverage-and-confidence.md`.
 
 ## Comments
 

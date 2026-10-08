@@ -536,10 +536,7 @@ jobs:
     test-unit:
         # The fast suites, unit and cross-cutting: pure functions, services and repositories
         # against in-memory Mongo. One parallel jest pass gives the verdict and the JSON report.
-        #
-        # No coverage here. The per-file floors have their own job below: run `--runInBand` under
-        # coverage this pass reached 277 of 317 files in the old 40-minute budget, and a floor
-        # miss then fails the verdict of a suite whose tests all pass.
+        # Coverage is not measured anywhere: the mutation score is the test-quality number.
         runs-on: ubuntu-latest
         timeout-minutes: 30
         permissions:
@@ -579,43 +576,6 @@ jobs:
               with:
                   name: test-report-unit
                   path: tmp/reports/test-report.json
-                  retention-days: 14
-                  if-no-files-found: ignore
-
-    coverage-floors:
-        # The per-file coverage floors in `jest.config.js`, over the same unit and cross-cutting
-        # suites as `test-unit`. Report-only, like `audit` and `demo-strip-measure`: a floor is a
-        # ratchet recording where the code is, and `docs/tools/coverage-and-confidence.md` says
-        # mutation score, not this number, is the signal. It is not in the `ci` gate's `needs:`.
-        runs-on: ubuntu-latest
-        timeout-minutes: 40
-        permissions:
-            contents: read
-        env:
-            JEST_WORKERS: 3
-        steps:
-            - name: Checkout
-              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-              with:
-                  persist-credentials: false # no step after the checkout needs the token on disk
-
-            - name: Setup
-              uses: ./.github/actions/setup
-              with:
-                  node-version: ${{ env.NODE_VERSION }}
-                  setup-mongod: 'true'
-
-            # Jest exits non-zero on a failing test and on a threshold miss alike; the log names
-            # every file under its floor.
-            - name: Run unit tests against the coverage floors
-              run: npm run test:unit:coverage
-
-            - name: Upload coverage report
-              if: always()
-              uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-              with:
-                  name: coverage-report
-                  path: tmp/coverage/
                   retention-days: 14
                   if-no-files-found: ignore
 
@@ -920,7 +880,7 @@ jobs:
             - test-contract
             - container-gate
             - frontend-e2e
-            # `boot`, `audit`, `demo-strip-measure` and `coverage-floors` are deliberately excluded — see their
+            # `boot`, `audit` and `demo-strip-measure` are deliberately excluded — see their
             # own comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5

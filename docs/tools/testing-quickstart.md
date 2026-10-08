@@ -81,8 +81,7 @@ look like real bugs.
       Error: expected 2 to be 3
 ```
 
-It needs a JSON report to read, which `test:unit:report` produces. Coverage rows appear only when
-`tmp/coverage/lcov.info` exists — run `test:unit:coverage` first if you want them.
+It needs a JSON report to read, which `test:unit:report` produces.
 
 The same script exists in the paired frontend, sharing this machinery because Vitest's `json`
 reporter emits the shape Jest's `--json` does — though the two copies have since picked up their

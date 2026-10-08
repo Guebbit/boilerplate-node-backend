@@ -33,7 +33,6 @@ titles look similar. Use the evidence, in this order:
 - `tmp/reports/mutation/mutation.json` and `tmp/reports/stryker-incremental.json` — which
   mutants each test kills is the ground truth for "what does this test discriminate"
 - `tmp/reports/test-report.json` — per-test duration, for the cost ranking
-- coverage from `npm run test:unit:coverage` when the mutation data is stale
 
 ### 2 — find the passengers
 

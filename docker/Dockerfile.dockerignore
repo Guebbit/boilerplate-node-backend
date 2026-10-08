@@ -37,7 +37,7 @@ dist
 docs/.vitepress/dist
 docs/.vitepress/cache
 
-# Test and analysis output — jest coverage, test/mutation reports, Stryker's own sandbox, per-run
+# Test and analysis output — test/mutation reports, Stryker's own sandbox, per-run
 # Mongo data. None of it is read at runtime, and `tmp/reports/` alone is ~20 MB of mutation HTML —
 # every megabyte here is copied into the build context on every single build.
 tmp

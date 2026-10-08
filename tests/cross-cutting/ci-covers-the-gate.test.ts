@@ -80,9 +80,9 @@ const scriptsRunByCi = (all: Record<string, string>): Set<string> => {
  * which is the property that matters.
  */
 const COVERED_UNDER_ANOTHER_NAME: Record<string, string> = {
-    // `test-unit` runs `test:unit:coverage`, whose jest invocation takes `tests/cross-cutting` as
+    // `test-unit` runs `test:unit:report`, whose jest invocation takes `tests/cross-cutting` as
     // an argument alongside `tests/unit`. Same suite, different spelling.
-    'test:cross-cutting': 'test:unit:coverage'
+    'test:cross-cutting': 'test:unit:report'
 };
 
 describe('CI runs every check the local gate does', () => {

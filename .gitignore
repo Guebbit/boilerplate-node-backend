@@ -24,8 +24,8 @@ public/images/*
 !public/images/seed/
 !public/images/system/
 
-# Every run's throwaway output, in one gitignored place: `tmp/coverage` (jest coverage),
-# `tmp/reports` (test reports, mutation reports, mutation-shard reports, audit findings),
+# Every run's throwaway output, in one gitignored place: `tmp/reports` (test reports, mutation
+# reports, mutation-shard reports, audit findings),
 # `tmp/stryker` (Stryker's own per-run sandbox copy of the whole project), `tmp/test` (per-run
 # in-memory Mongo data directories and file sandboxes — see tests/support/global-setup.ts),
 # `tmp/quarantine` (an upload pending processing — src/infrastructure/adapters/image-store.ts)

@@ -71,7 +71,7 @@ The five layers answer "did it break". None answers **which module owns the brea
   (cross-cutting)      20    177       0     4.1s
 ```
 
-Plus slowest suites, slowest tests, per-module line coverage when `tmp/coverage/lcov.info` exists, and every failure named by the module that owns it.
+Plus slowest suites, slowest tests, and every failure named by the module that owns it.
 
 `scripts/testing/report-results.ts` is **kept identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both. By convention now, not by gate: it was on the shared-file list until the list narrowed to the three documents this repo produces and the frontend consumes.
 
@@ -282,15 +282,13 @@ lines this pull request touched — typically "changed lines must be ≥90% cove
 answer to a codebase whose global number is too low to raise, since it stops the bleeding without
 requiring history to be fixed.
 
-**Why it is not here.** Two gates already cover the same ground from better angles: the **per-file**
-coverage floors (see the `mutate` / `coverageThreshold` pairing) answer "is this code executed at
-all", and the **per-file mutation ratchet** answers the harder question "did the tests get weaker".
-A third gate over the same territory adds CI machinery and a second number to argue about, without
-answering anything the first two miss.
+**Why it is not here.** Coverage is not measured at all, and the changed files already carry a
+better gate: `npm run mutation` runs Stryker over the files a branch touched, where an unrun line is
+a `NoCoverage` mutant and the **per-file mutation ratchet** answers "did the tests get weaker".
 
-**What would change it.** A large legacy area landing below the floors, where fixing history is not
-realistic. Diff coverage is exactly the right tool for that situation — this repository is simply not
-in it.
+**What would change it.** A large legacy area scoring far below the ratchet, where fixing history
+is not realistic. Diff coverage is the right tool for that situation — this repository is simply
+not in it.
 
 ### Type-level tests
 

@@ -10,8 +10,6 @@
  *   `globalSetup`    starts a shared in-memory mongod. Nothing here reads a database.
  *   `testTimeout`    30s. Pulling a RabbitMQ image and waiting out a retry TTL is longer; the files
  *                    set their own.
- *   `coverage`       meaningless. `queue.ts` is covered by its unit suite; this one measures what a
- *                    real broker does with the arguments that suite only asserts we pass.
  *
  * `jest.config.js` ignores `tests/broker` so `npm test` stays free of a container.
  */

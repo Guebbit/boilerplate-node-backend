@@ -21,7 +21,7 @@
  *
  * ── Why per-module ───────────────────────────────────────────────────────────────────────────
  * Every other instrument in these repos is layer-shaped — `test:unit`, `test:contract`, the CI
- * jobs, the coverage globs, the mutation baseline's flat file list. That is the right shape for
+ * jobs, the mutation baseline's flat file list. That is the right shape for
  * running things and the wrong shape for reading them: the codebase is organised so that a module
  * is deletable, and nothing in the toolchain could tell you what a module's tests cost, or which
  * module owned a red build. This bucket-by-path is the cheapest possible fix, and it needs no
@@ -253,63 +253,6 @@ if (failures.length > 0) {
         console.log(`      ${failure.file}`);
         if (failure.reason) console.log(`      ${failure.reason}`);
     }
-}
-
-/* ── Coverage, bucketed the same way ────────────────────────────────────────────────────────── */
-
-/**
- * Line coverage per module, read from `tmp/coverage/lcov.info`.
- *
- * lcov rather than a JSON coverage map because it is the one format BOTH sides emit: Jest's
- * defaults include it, and the frontend's `<paired-frontend>/vitest.config.ts` names it
- * explicitly. Parsing it is four lines of string handling and no dependency — `SF:` opens a file,
- * `LF:`/`LH:` are the lines found and hit in it.
- *
- * Absent by design when a run was not a coverage run: this is the report, not the gate, and the
- * per-file floors in `jest.config.js` / `<paired-frontend>/vitest.config.ts` remain the thing that
- * fails a build. What
- * this adds is the number those floors cannot express — what a MODULE costs and what it covers —
- * because a floor is per file and a module is a directory of them.
- *
- * @param file - path to lcov.info
- * @returns hit/found line totals per bucket, or undefined when there is no report to read
- */
-const readCoverage = (file: string): Map<string, { hit: number; found: number }> | undefined => {
-    if (!existsSync(file)) return undefined;
-
-    const perBucket = new Map<string, { hit: number; found: number }>();
-    let bucket = '';
-
-    for (const line of readFileSync(file, 'utf8').split('\n')) {
-        if (line.startsWith('SF:')) bucket = bucketOf(line.slice(3).trim());
-        else if (line.startsWith('LF:') || line.startsWith('LH:')) {
-            const entry = perBucket.get(bucket) ?? { hit: 0, found: 0 };
-            if (line.startsWith('LF:')) entry.found += Number(line.slice(3));
-            else entry.hit += Number(line.slice(3));
-            perBucket.set(bucket, entry);
-        }
-    }
-
-    return perBucket;
-};
-
-/** Line coverage per bucket, or `undefined` when this was not a coverage run. */
-const coverage = readCoverage(path.join(REPO_ROOT, 'tmp', 'coverage', 'lcov.info'));
-
-// Print the coverage table, only for a coverage run.
-if (coverage) {
-    const covered = [...coverage].toSorted(([a], [b]) =>
-        isLayer(a) === isLayer(b) ? a.localeCompare(b) : isLayer(a) ? 1 : -1
-    );
-    const labelWidth = Math.max(...covered.map(([label]) => label.length), 'module'.length);
-
-    console.log(`\n  line coverage (from tmp/coverage/lcov.info)`);
-    console.log(`  ${'module'.padEnd(labelWidth)}   lines   covered`);
-    for (const [label, { hit, found }] of covered)
-        console.log(
-            `  ${label.padEnd(labelWidth)}  ${String(found).padStart(6)}  ` +
-                (found === 0 ? '—' : `${((hit / found) * 100).toFixed(1)}%`).padStart(8)
-        );
 }
 
 /*

@@ -1,30 +1,27 @@
 # Coverage & Confidence
 
-**Which number tells you the test suite is good, and which numbers only look like they do.**
+**Which number tells you the test suite is good, and why line coverage is not one of them.**
 
-Four things in this repository measure the tests rather than the code. They overlap, they disagree,
-and the overlaps are not all redundancy — some of them are the point. This page is the map.
+Coverage is **not measured anywhere** in this repository: no threshold, no floor, no report, no CI
+job. Two numbers judge the tests, and this page is the map of why.
 
 ::: tip The one-line version
-**Mutation testing is the instrument. Coverage is the smoke alarm. Pass rate is not negotiable.**
+**Mutation score is the one test-quality number. Pass rate is not negotiable.**
 :::
 
 ---
 
-## 1. The three numbers, ranked
+## 1. The two numbers
 
 | Number             | The question                                 | If it is low                                  |
 | ------------------ | -------------------------------------------- | --------------------------------------------- |
 | **Pass rate**      | did every assertion hold                     | something is **broken**. Fix it now.          |
 | **Mutation score** | would a test **notice** if this code changed | the suite is **weak here**. The real verdict. |
-| **Coverage**       | did this line **execute** during that run    | that run did not **reach** this code.         |
 
 Pass rate is absolute and has no threshold. One failing test is a red build. Nothing below softens
 that, and no percentage anywhere in this repo applies to it.
 
-The other two rank, and the ranking is not a matter of taste.
-
-### Why mutation testing outranks coverage
+### Why mutation testing replaces coverage
 
 Coverage asks whether a line ran. That is a low bar, and it is trivially gamed without meaning to:
 
@@ -42,34 +39,38 @@ Mutation testing asks the question that matters. Stryker rewrites the code — f
 drops a call, changes a boundary, returns an empty array — reruns the tests, and checks that
 **something goes red**. A mutant that survives is a change nobody would have caught.
 
-The relationship is one-directional, and that is what makes the ranking real:
+The relationship is one-directional, and that is what makes coverage redundant:
 
 > **An uncovered line cannot kill a mutant.** So every coverage gap already appears as surviving
 > mutants — while a covered line with no real assertion appears only in the mutation score.
 
-**Mutation score subsumes coverage.** Where the two disagree, the mutation score is right.
+**Mutation score subsumes coverage.** Stryker marks every line no test ran as a `NoCoverage`
+mutant, per line: that list is the "which code did nothing run" view, and it needs no second tool.
 
 ---
 
-## 2. So why keep coverage at all?
+## 2. Why the coverage floors were deleted
 
-Because of latency, not information.
+Per-file coverage thresholds used to run on the unit and cross-cutting suites. They went, on both
+repositories, for three reasons:
 
-|                              | Runtime                                          | Runs on            |
-| ---------------------------- | ------------------------------------------------ | ------------------ |
-| `npm run test:unit:coverage` | seconds                                          | every push         |
-| `npm run mutation`           | minutes — the files a branch changed             | every pull request |
-| `npm run mutation:full`      | far longer — it reruns the suite once per mutant | monthly, sharded   |
+- **They told nothing mutation testing does not.** The one argument for them was speed. It stopped
+  being true: the run took about 12 minutes locally and 18 on CI, and the job was report-only and
+  had been red since it was created.
+- **They misled.** They measured only the unit and cross-cutting run, so a repository or service
+  that the integration suites test well still read as low.
+- **Under v8 they even fall when a test is added.** v8 counts a branch only inside a function that
+  ran, so a file whose functions all go uncalled reads 0/0 = 100%. Once a test calls one of them,
+  the paths that test skips appear as misses: `payments/services/settlement.ts` went from 100% to
+  28.6% when one of its 16 functions got called.
 
-Coverage is the **smoke alarm**: cheap, fast, and it tells you something changed shape. Mutation
-testing is the **inspection**: slow, thorough, authoritative.
+What to do instead of reading a coverage number:
 
-That is not redundancy. Two instruments answering one question at different costs is a normal and
-correct arrangement — the mistake would be reading the fast one as the verdict.
-
-**What this means in practice:** the coverage floors in `jest.config.js` are a **ratchet**
-("do not get worse"), never a target, and never evidence that code is well tested. Read them as
-nothing more than a tripwire between mutation runs.
+| You want to know                     | Read                                                               |
+| ------------------------------------ | ------------------------------------------------------------------ |
+| Is this change tested well           | `npm run mutation` — the files the branch changed                  |
+| Which code did no test run           | the `NoCoverage` mutants in the Stryker report, per line           |
+| Is the suite getting worse over time | `mutation-baseline.json`, compared per file by `check-baseline.ts` |
 
 ---
 
@@ -79,8 +80,6 @@ The interesting cases are the ones people delete by mistake.
 
 ### Genuinely redundant
 
-- **A coverage floor on a file whose mutation score is enforced.** Same question, weaker
-  instrument. The floor adds nothing the mutation score does not already say.
 - **A test asserting a line runs**, where another test asserts what it produces.
 
 ### Looks redundant, is not
@@ -104,28 +103,27 @@ The interesting cases are the ones people delete by mistake.
 > failing the weaker one impossible. If they can disagree, they are measuring different things and
 > both earn their place.
 
-Mutation score subsumes coverage. Integration does not subsume unit; contract does not subsume
-integration.
+Mutation score subsumes coverage, which is why coverage is not measured. Integration does not
+subsume unit; contract does not subsume integration.
 
 ---
 
-## 4. Mutation testing is the primary instrument here
+## 3. Mutation testing is the instrument here
 
 This is a decision, recorded so it is not re-litigated by accident.
 
 `npm run mutation` / `npm run mutation:full` and their per-file scores in `mutation-baseline.json`
-are **the** judgement of whether this suite is any good. Everything else is either a faster proxy
-for it (coverage) or a different question entirely (contract, fuzz, cluster).
+are **the** judgement of whether this suite is any good. Everything else asks a different question
+entirely (contract, fuzz, cluster).
 
 Consequences worth stating:
 
-- **Do not chase a coverage number.** Raising coverage without raising the mutation score means
-  writing tests that execute code without asserting anything about it, which is worse than nothing —
-  it buys a green number and hides the gap.
-- **A surviving mutant is a real finding**, even at 100% coverage. It is usually a missing
+- **Do not chase an execution number.** Writing tests that execute code without asserting anything
+  about it is worse than nothing — it buys a green number and hides the gap.
+- **A surviving mutant is a real finding**, even where every line ran. It is usually a missing
   assertion, occasionally a mutant that cannot be killed because the code has no observable effect —
   in which case the code, not the test, is the thing to look at.
-- **The baseline is a ratchet**, like the coverage floors: `check-baseline.ts` compares
+- **The baseline is a ratchet**: `check-baseline.ts` compares
   each file against its recorded score with a 1-point tolerance, so the gate is "do not get worse"
   rather than an absolute grade.
 
@@ -134,13 +132,12 @@ Consequences worth stating:
 `stryker.json` carries `high: 80`, `low: 60`, `break: null`. `high`/`low` only colour the report —
 `break` is deliberately unset, because a single global percentage over the whole scope hides exactly
 the file that matters (see [The per-file ratchet](./mutation-testing.md#the-per-file-ratchet)). The
-ratchet in `mutation-baseline.json` is the real gate. Either way, none of these numbers are
-**comparable to a coverage percentage** — killing 80% of mutants is a far stronger statement than
-executing 80% of lines.
+ratchet in `mutation-baseline.json` is the real gate. Either way, killing 80% of
+mutants is a far stronger statement than executing 80% of lines would be.
 
 ---
 
-## 5. ⚠️ The blind spot that used to exist, and why closing it took a memory fix first
+## 4. ⚠️ The blind spot that used to exist, and why closing it took a memory fix first
 
 ::: warning Historical: mutation testing used to exclude the service layer entirely
 Until 2026-09-20 `stryker.config.json` mutated `src/modules/*/**/*.ts` — controllers, services, <!-- doc-paths:ignore -->
@@ -205,135 +202,20 @@ not an artefact of the ruler that used to skip those suites. The pending reseed
 comparable to that statement — until it runs, treat the committed file as stale.
 :::
 
-## 6. Where each number is currently trustworthy
+## 5. Where the number is currently trustworthy
 
 Honesty about instruments in use matters more than the instruments.
 
-**Coverage.** `test:unit:coverage` runs `tests/unit`, `tests/cross-cutting` and each module's own
-`tests/unit` — not the integration or contract suites. So a service covered entirely by integration
-specs reads near zero, and that is a fact about the RUN, not about the code. The floors were
-re-fitted to what that run actually measures on 2026-08-29; [How the floors are
-written](#how-the-floors-are-written) explains what they do and do not buy.
-
 **Mutation.** `stryker.json` mutates `src/modules/*/**/*.ts` and runs the integration suites that
-reach the service and repository layers, so it no longer shares coverage's blind spot there —
-though a file can still read 100% line coverage and a low mutation score, which is a different
-finding: the lines run, nothing asserts on what they did. See
+reach the service and repository layers, so a repository or service tested only through HTTP is
+judged on that testing. A file can still run every line and score low, which is the finding the
+number exists to produce: the lines run, nothing asserts on what they did. See
 [Mutation Testing](./mutation-testing.md) for the current shape.
 
 **A single combined coverage run was tried and abandoned.** Every suite under one instrumented
 process dies on a V8 fatal assertion with the fuzz suite, and on
-`FATAL ERROR: JavaScript heap out of memory` (~4 GB, ~8 minutes) without it. It would need an
-enlarged heap or per-suite runs with merged reports: real machinery, for the weaker instrument,
-answering a question mutation testing answers better. Recorded so nobody spends the afternoon again.
-
-## 7. How the floors are written {#how-the-floors-are-written}
-
-`coverageThreshold` in `jest.config.js` is a map of key → minima. How a key is SHAPED decides what
-it measures, and the two shapes fail differently:
-
-- A key naming a **directory** (`src/modules/`) pools every file beneath it into ONE total. Four
-  files at 0% hide behind six at 95%, and the gate stays green.
-- A key that is a **glob** (a wildcard segment, or a recursive `.ts` wildcard) is applied to each
-  matching file separately, and Jest prints one failure per file, naming it.
-
-Only the second is a gate. Under the pooled form this repo passed a 70% floor on `src/middlewares/` <!-- doc-paths:ignore -->
-while `auth-jwt.ts`, `locale.ts` and `metrics-scraper.ts` each sat at 0% — and `metrics-scraper.ts` <!-- doc-paths:ignore -->
-holds `isMetricsScraper`, the credential check on the Prometheus endpoint.
-
-### The three tiers a floor takes
-
-`jest.config.js` builds every entry through one helper rather than repeating four numbers:
-
-| Written as       | Means                                                                      |
-| ---------------- | -------------------------------------------------------------------------- |
-| `STANDARD`       | 70/70/70 — a file with its own unit suite                                  |
-| `PARTIAL`        | 25/70/0 — integration- and contract-covered; the unit layer only grazes it |
-| `UNTESTED`       | 0/0/0 — nothing drives it at all                                           |
-| `floor(s, b, f)` | a measured value, for the keys that fit no tier                            |
-
-`floor` takes `lines` as a fourth parameter defaulting to `statements`, because `coverageProvider:
-'v8'` derives both from the same range data — every floor in the repo measures identical on the two.
-The parameter stays overridable rather than hard-coded, since another provider would let them
-diverge.
-
-Raising a tier raises every key using it at once, which is the point of it being one value. A bare
-`floor(...)` call is a per-key record and moves on its own.
-
-**`PARTIAL` is the honest name for the blind spot** in section 5. A repository or service floored at
-`functions: 0` is not untested — the unit suite simply calls none of its exports, because the suites
-that do are excluded from this run. Branches stay floored at 70 because the unit suite does reach
-the guard clauses. Read a `PARTIAL` key as "the unit layer did not get worse", never as a grade.
-
-::: warning A tier is a claim that decays
-Floors are measured records, and code improves after they are written. `pdf.ts` and `stream.ts` sat
-at `0/0/0` while both had reached 100/100/100 — the label had been false for weeks, because nothing
-re-fits a floor automatically and these thresholds are not in the commit gate (see the note under
-[§2](#_2-so-why-keep-coverage-at-all)). When a negated exemption's file climbs back above its tier,
-delete the negation: `adapters/!(pdf|mailer).ts` and
-`observability/!(stream|metrics-http|tracer).ts` both collapsed into plain globs that way.
-:::
-
-### The drift trap
-
-**A threshold key matching no file is silently ignored.** It does not warn, it does not fail — it
-reads like a gate and enforces nothing. Every rename of a source directory has to re-check these
-keys, because the failure mode is a green run rather than an error.
-`tests/cross-cutting/coverage-thresholds.test.ts` exists to turn the next such rename red.
-
-```mermaid
-flowchart TD
-    A[A source directory is renamed] --> B{Does a threshold key still match it?}
-    B -->|Yes| C[Still measured]
-    B -->|No| D[Key matches nothing]
-    D --> E[Jest ignores it, no warning]
-    E --> F[Green run, zero enforcement]
-    F --> G[coverage-thresholds.test.ts fails instead]
-```
-
-### The exemption mechanism
-
-One file below the rest is exempted in TWO parts, and both are required:
-
-1. Negate it out of the glob with an extglob — `src/infrastructure/adapters/!(pdf|mailer).ts`.
-2. Give it its own key at its measured value.
-
-It cannot simply get a lower key alongside the glob. **Jest adds a file to EVERY matching group**
-rather than picking the most specific, so both checks run and the stricter one still fails it. An
-exemption has to leave the glob to be an exemption.
-
-Barrels are excluded the same way (`domain/!(index).ts`). A pure re-export file's `functions`
-metric counts the re-export arrows, "covered" only if something imported the barrel during the run
-— that measures wiring, not testing, and four `domain/index.ts` files dragged one key's `functions`
-floor from 100 to 0 while every file with logic in it measured 100.
-
-### What `functions: 0` means, which is nothing
-
-Ten of twelve `repository.ts`, eight of nine `service.ts` and twelve of seventeen `services/*.ts`
-files report 0% functions on this run. That is not a set of outliers to carve out — carving out ten
-of twelve leaves a rule with two members — it is the key saying it does not apply to this suite.
-Those keys still floor `statements`, `branches` and `lines`; the `functions` entry is a formality.
-
-### Controllers are deliberately unfloored
-
-They report ~0% on the unit run because `tests/contract/` and `tests/integration/` cover them,
-driving the real app over HTTP — a legitimate choice for handlers this thin. A floor here would
-measure the wrong suite, and the only way to satisfy it would be unit tests duplicating the
-contract suite less well. If they ever need a floor, it belongs on a coverage run that includes
-those suites.
-
-### Read them as a ratchet
-
-The floors are a record of where the code IS, not a target: a drop fails the build, an improvement
-should be ratcheted up. Several are low, for the reason the controller note gives spread wider —
-this run is `tests/unit` + `tests/cross-cutting` + each module's own `tests/unit`, and excludes
-integration and contract. Two ways out, both decisions rather than chores:
-
-1. Add a second coverage run including the integration and contract suites, and put the real floors
-   there. That is the run these numbers are asking for.
-2. Leave it, and read the job as "the unit layer did not get worse", which is what it honestly is.
-
-A file matched by no key is UNMEASURED, not zero.
+`FATAL ERROR: JavaScript heap out of memory` (~4 GB, ~8 minutes) without it. Recorded so nobody
+spends the afternoon again: the question it answered, mutation testing answers better.
 
 ---
 
