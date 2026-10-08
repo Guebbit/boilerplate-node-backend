@@ -49,3 +49,105 @@ describe('createSearchController — id is a batch filter, not a lookup', () => 
         );
     });
 });
+
+/** A schema mirroring the contract's sort grammar: 1-3 tokens of an enum, plus the overlaid `userId`. */
+const sortSchema = z.object({
+    sort: z
+        .array(z.enum(['price', '-price', 'title']))
+        .min(1)
+        .max(3)
+        .optional(),
+    userId: z.string().optional()
+});
+
+describe('createSearchController — the module overlay', () => {
+    it('lets the overlay beat the caller: a query userId is replaced by the overlay value', async () => {
+        const runSearch = jest.fn().mockResolvedValue({ items: [] });
+        const handler = createSearchController({
+            entity: 'widgets',
+            schema: sortSchema,
+            extendInput: () => ({ userId: undefined }),
+            runSearch
+        });
+
+        await handler(makeRequest({ userId: 'someone-else' }), makeResponse());
+
+        expect(runSearch.mock.calls[0]?.[0]).toEqual({ userId: undefined });
+    });
+
+    it('hands the overlay split sort tokens, not the raw CSV', async () => {
+        const extendInput = jest.fn(() => ({}));
+        const handler = createSearchController({
+            entity: 'widgets',
+            schema: sortSchema,
+            extendInput,
+            runSearch: jest.fn().mockResolvedValue({ items: [] })
+        });
+
+        await handler(makeRequest({ sort: 'price,-price' }), makeResponse());
+
+        expect(extendInput).toHaveBeenCalledWith(
+            expect.objectContaining({ sort: ['price', '-price'] }),
+            expect.anything()
+        );
+    });
+});
+
+describe('createSearchController — refusals and failures', () => {
+    it('answers 422 and never searches for a body sort of []', async () => {
+        const runSearch = jest.fn();
+        const response = makeResponse();
+        const request = asStub<Request>({
+            params: {},
+            query: {},
+            body: { sort: [] },
+            is: () => true
+        });
+
+        await createSearchController({ entity: 'widgets', schema: sortSchema, runSearch })(
+            request,
+            response
+        );
+
+        expect(response.status).toHaveBeenCalledWith(422);
+        expect(runSearch).not.toHaveBeenCalled();
+    });
+
+    it('answers 422 and never searches for a token outside the enum', async () => {
+        const runSearch = jest.fn();
+        const response = makeResponse();
+
+        await createSearchController({ entity: 'widgets', schema: sortSchema, runSearch })(
+            makeRequest({ sort: 'zzz' }),
+            response
+        );
+
+        expect(response.status).toHaveBeenCalledWith(422);
+        expect(runSearch).not.toHaveBeenCalled();
+    });
+
+    it('answers 500 once, and no 200, when the search rejects', async () => {
+        const response = makeResponse();
+
+        await createSearchController({
+            entity: 'widgets',
+            schema: sortSchema,
+            runSearch: () => Promise.reject(new Error('db down'))
+        })(makeRequest({}), response);
+
+        expect(response.status).toHaveBeenCalledTimes(1);
+        expect(response.status).toHaveBeenCalledWith(500);
+        expect(response.status).not.toHaveBeenCalledWith(200);
+    });
+
+    it.each([',', ' '])('passes a blank sort %p on with no sort key at all', async (blank) => {
+        const runSearch = jest.fn().mockResolvedValue({ items: [] });
+
+        await createSearchController({ entity: 'widgets', schema: sortSchema, runSearch })(
+            makeRequest({ sort: blank }),
+            makeResponse()
+        );
+
+        expect(runSearch.mock.calls[0]?.[0]).not.toHaveProperty('sort');
+    });
+});
