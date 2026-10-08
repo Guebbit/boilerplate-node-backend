@@ -48,10 +48,9 @@ flowchart LR
 
 Since 19 June 2026 an online shop in the EU must offer a "withdraw from contract here" button for
 the whole withdrawal period, with a confirmation step and an acknowledgement on a durable medium
-(Consumer Rights Directive Art. 11a, added by Directive 2023/2673). `docs/demo-ecommerce/scope.md`
-promised it; this module is the promise kept.
+(Consumer Rights Directive Art. 11a, added by Directive 2023/2673). This module is that button.
 
-The first draft treated the button as a feature. It is not. In Shopify, Medusa and commercetools it
+The button is not a feature of its own. In Shopify, Medusa and commercetools it
 is **a Return whose `reason` is `withdrawal`** — the same object a faulty-goods return uses, with a
 legal deadline and an acknowledgement attached. So there is no separate endpoint: the button is
 `POST /returns`.
@@ -236,10 +235,16 @@ sequenceDiagram
 
 `personalData` is a required manifest field. A return is keyed by `orderId` and **never** by
 `userId`, so `collect` walks `findOwnOrders`'s ids exactly like
-[`invoicing`](./invoicing.md#gdpr) does, and no `erase` is needed: `orders`' `detachUserId` already
+[`invoicing`](./invoicing.md) does (`personalData.collect`, no `erase`), and no `erase` is needed: `orders`' `detachUserId` already
 breaks the link on the order. That is the Art. 17(3)(b)/(e) retention exemption `invoicing`
-documents — a return is the same kind of legal record. `POST /account/export` gains a `returns`
-section.
+applies — a return is the same kind of legal record. `POST /account/export` carries a `returns`
+section, staff's `declineReason` included: a staff assessment of the customer is the customer's
+data under Art. 15.
+
+The free text is the exception to "kept": `npm run reap:returns` unsets `note` and `declineReason`
+once a return has not changed for `NODE_RETURN_TEXT_RETENTION_DAYS`; status, lines, amounts and
+dates stay. No early wipe on account erasure. The reasoning:
+[Data Retention: free text on returns](../theory/data-retention.md#free-text-on-returns).
 
 ## Permissions
 
@@ -258,9 +263,10 @@ decision of whether the return was owed.
 
 ## Configuration
 
-| Variable                      | Default | Meaning                                |
-| ----------------------------- | ------- | -------------------------------------- |
-| `NODE_RETURNS_RATE_LIMIT_MAX` | `20`    | Returns opened per window, per account |
+| Variable                          | Default | Meaning                                                                                  |
+| --------------------------------- | ------- | ---------------------------------------------------------------------------------------- |
+| `NODE_RETURNS_RATE_LIMIT_MAX`     | `20`    | Returns opened per window, per account                                                   |
+| `NODE_RETURN_TEXT_RETENTION_DAYS` | `1095`  | Days without a change before `reap:returns` unsets a return's `note` and `declineReason` |
 
 The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_POSTAGE_PAYER`) are
 [`orders`'s](./orders.md#shop-identity). The postage payer is frozen on each return when it opens.

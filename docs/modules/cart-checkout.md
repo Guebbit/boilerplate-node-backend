@@ -29,7 +29,7 @@ flowchart TD
     P --> Q["3 · the open-order cap<br/><i>orders — openUnpaidOrderIds</i>"]
     Q --> B["4 · resolve the shipping method<br/>a stored choice the basket no longer fits counts as none<br/><i>cart — effectiveShippingChoice</i>"]
     B --> C["5 · resolve the shipping address,<br/>only when a line ships to one<br/><i>addresses — addressForCheckout</i>"]
-    C --> D["6 · join the lines against the catalogue<br/><i>products</i>"]
+    C --> D["6 · join the lines against the catalogue and the stock ledger<br/><i>products; inventory — availableFor</i>"]
     D --> E["7 · evaluate the rules, the method/address<br/>requirement, then resolve the billing address<br/><i>cart/domain — evaluateShippingRequirement;<br/>addresses — addressForCheckout</i>"]
     E --> T["8 · the price check<br/>the total named in the request is the total now<br/><i>cart — expectedTotal</i>"]
     T --> F["9 · placeOrder<br/><i>orders — freeze lines, hold stock,<br/>invoice number, mint transfer reference, write</i>"]
@@ -80,12 +80,12 @@ outgrown the method's weight range) counts as none, so a leftover choice never r
 no longer describes; a physical basket left with none is refused at step 7. Checkout also forgets
 the stored choice once the order stands. The free-shipping line is priced on the whole basket,
 digital lines included, by the one function (`shippingPriceFor`) the cart's quote and the order's
-charge both call. **Step 8 is not checkout's write —
+charge both call. **Step 9 is not checkout's write —
 it's checkout handing everything it resolved to [`orders`'](./orders.md) `placeOrder`**, the one
 function every order (this checkout, the admin's own `POST /orders`) is written through. Checkout
 never freezes a line, allocates an invoice number, or mints a `bank_transfer` reference itself; it
 only decides whether the attempt should happen, then reads the verdict `placeOrder` hands back.
-Steps 9–10 are checkout's own again: clearing the cart is what makes the race in the next section
+Steps 10–11 are checkout's own again: clearing the cart is what makes the race in the next section
 possible, and only checkout knows which basket it was clearing.
 
 ## What crosses each edge
@@ -96,13 +96,14 @@ possible, and only checkout knows which basket it was clearing.
 | [`payments`](./payments.md)   | `customer-supplier`  | `listPaymentMethods` — the same list `GET /payments/methods` answers, so checkout and that endpoint can never disagree about what this deployment offers.             |
 | [`delivery`](./delivery.md)   | `published-language` | `findShippingMethod` and `priceShipping` — pure functions. The cart never learns that a shipment record exists.                                                       |
 | [`addresses`](./addresses.md) | `customer-supplier`  | `addressForCheckout` — the addresses this order ships to and is invoiced to. The address CRUD stays behind that module's routes.                                      |
-| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines and pre-flight availability.                                                                                    |
+| [`products`](./products.md)   | `conformist`         | Catalogue documents, read as they are, to price lines.                                                                                                                |
+| [`inventory`](./inventory.md) | `published-language` | `availableFor` — how much can be sold, read from the ledger rather than the catalogue's cached copy, to pre-flight availability.                                      |
 | [`orders`](./orders.md)       | `customer-supplier`  | `placeOrder` — the one function every order is written through, admin's own `POST /orders` included — and `openUnpaidOrderIds` for the open-order cap.                |
 
-::: tip The basket is mapped, not handed over — inside `placeOrder`, not here
-`inventory` is given product ids and quantities, nothing else — `placeOrder`'s job now, not
-checkout's. Mapping the lines rather than passing the whole basket is what keeps `inventory` from
-ever learning what a cart is; checkout itself no longer imports `inventory` at all.
+::: tip The basket is mapped, not handed over
+`inventory` is given product ids and quantities, nothing else: checkout asks `availableFor` with
+ids, and `placeOrder` takes the hold with ids and quantities. Mapping the lines rather than passing
+the whole basket is what keeps `inventory` from ever learning what a cart is.
 :::
 
 ## The price check
@@ -122,11 +123,11 @@ HTTP edge is the buyer's.
 
 ## The race, and why it is a 409
 
-Read cart → write order → empty cart is three statements. Until the cart write was made
-conditional, nothing tied the third to the first:
+Read cart → write order → empty cart is three statements. Were the cart write unconditional,
+nothing would tie the third to the first:
 
-> Two parallel `POST /cart/checkout` both read the same lines, both wrote an order, and both
-> emptied an already-empty cart. One cart, two orders, the customer charged twice. **A
+> Two parallel `POST /cart/checkout` would both read the same lines, both write an order, and both
+> empty an already-empty cart. One cart, two orders, the customer charged twice. **A
 > double-clicked button is enough to reach it.**
 
 So the cart is emptied **conditionally, on the `__v` it was read at**, and that write is what
@@ -173,6 +174,6 @@ than a dashboard glance.
 
 - [`cart`](./cart.md) — the module this belongs to
 - [`orders`](./orders.md) — the status machine a checkout drops an order into
-- [Reservations](./inventory-reservations.md) — what the hold in step 8 actually is
+- [Reservations](./inventory-reservations.md) — what the hold in step 9 actually is
 - [Request Flow](../theory/request-flow.md) — how a request reaches a service at all
 - [Product Analytics](../tools/analytics.md) — the funnel these two events sit in

@@ -80,14 +80,14 @@ flowchart LR
     subgraph Logs["Logs"]
         direction LR
         Win["Winston\nJSON to stdout"]
-        Tail["Promtail"]
+        Tail["Alloy"]
         Loki["Loki"]
         Win --> Tail --> Loki
     end
 
     subgraph Metrics["Metrics"]
         direction LR
-        Prom["Prometheus\nscrapes /metrics"]
+        Prom["Prometheus\nscrapes /observability/metrics"]
     end
 
     Grafana["Grafana\ndashboard"]
@@ -124,10 +124,8 @@ flowchart LR
 | Repository → Mongoose model → MongoDB | Runs the actual database query. Repositories own query shape; models own schema. Controllers never touch either directly.                                                                                          |
 | RabbitMQ                              | Receives heavy async jobs (email, PDF). The HTTP handler responds immediately; a separate worker processes the job at its own pace.                                                                                |
 
-The audit row moved. It used to say the controller was where a module emitted its audit action, and
-the tree says otherwise: a module that records an action does it from `service.ts` or
-`services/*.ts`, beside the write itself, and exactly **two controllers** in the whole tree emit —
-both in `account`, both arguing in place why they have to.
+A module records its audit action from `service.ts` or `services/*.ts`, beside the write itself.
+The exceptions are two `account` handlers, each arguing in place why it has to emit itself.
 `post-login` keeps the failure and success emits together at the handler because the success one may
 only fire once the refresh token, the cookies and the access token all exist, which is a step later
 than `login()` proving the credentials matched. `post-reset-request` emits **unconditionally**,
@@ -299,10 +297,10 @@ did not think to write one.
 | `PreconditionFailedError`    | 412    | The caller's `If-Match` no longer describes the row — see [Conditional writes](../api/write-methods.md#conditional-writes-etag-and-if-match).                |
 | anything else                | 500    | Genuinely unrecognised.                                                                                                                                      |
 
-Every branch above exists because something describing the CALLER was reaching the 500 and being
-reported as a server fault. `POST /products/search` is public and takes an `id` filter, so
-`{"id": ""}` was an **unauthenticated** request producing a server error — an availability signal
-as much as a correctness one.
+Every branch above exists so that something describing the CALLER is not reported as a server
+fault. `POST /products/search` is public and takes an `id` filter, so `{"id": ""}` must not become
+an **unauthenticated** request producing a server error — an availability signal as much as a
+correctness one.
 
 ### Three rules the branches share
 
@@ -321,9 +319,9 @@ as much as a correctness one.
 
 Request bodies are validated by Zod schemas generated from `openapi.yaml` before a controller runs,
 so a Mongoose validator firing means the model is enforcing something the contract does not.
-`POST /locales` was the worked example: a display name of one space satisfies `minLength: 1`, then
-the schema's `trim` reduces it to `''` and `required` refuses it — a 500 for a stray space, on a
-keyed route, found by `tests/fuzz/endpoints.fuzz.test.ts` on its third generated case.
+For example, a display name of one space satisfies `minLength: 1`, then the schema's `trim`
+reduces it to `''` and `required` refuses it — a 500 for a stray space, which
+`tests/fuzz/endpoints.fuzz.test.ts` finds.
 
 Closing it **at the contract** is still the better fix where the constraint can be expressed there.
 This branch is the floor under that, across every model at once.

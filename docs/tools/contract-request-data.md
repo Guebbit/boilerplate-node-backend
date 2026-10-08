@@ -31,11 +31,11 @@ Fixing that means teaching Jest to transform an ESM dependency inside `node_modu
 const createRandom = (seed: number) => {
     let state = seed >>> 0;
     return (): number => {
-        state = (state + 0x6d2b79f5) >>> 0;
+        state = (state + 0x6d_2b_79_f5) >>> 0;
         let t = state;
         t = Math.imul(t ^ (t >>> 15), t | 1);
         t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
     };
 };
 ```
@@ -76,10 +76,10 @@ flowchart TB
 ## The two entry points
 
 ```ts
-export const validPayload = <T>(schema: ZodTypeAny): T => {
+export const validPayload = <T = Record<string, unknown>>(schema: ZodType): T => {
     /* every field, valid */
 };
-export const invalidPayloads = (schema: ZodTypeAny): IInvalidPayloadCase[] => {
+export const invalidPayloads = (schema: ZodType): InvalidPayloadCase[] => {
     /* one violation each */
 };
 ```
@@ -107,7 +107,7 @@ The PRNGs stay separate — Mulberry32 here, faker's Mersenne Twister there — 
 
 The seven `describe` blocks are the operations that needed hand-written glue to reach a 2xx. The
 rest of the write surface is **walked**, not listed: `listOperations()` yields every `POST`, `PUT`
-and `PATCH` with a JSON body (65 today), and each gets the same four kinds of case, so a write
+and `PATCH` with a JSON body, and each gets the same four kinds of case, so a write
 added to the spec is covered on the next run.
 
 | Case                                        | Asserts                                                                                        |
@@ -134,18 +134,18 @@ The walker only knows what a zod schema can express. Three things it structurall
 
 - **Cross-field rules.** `SignupBody.passwordConfirm` has its own independent `.min(8)`, with no `.refine()` tying it to `password` — the "must match" rule lives in application code, not the schema. `request-contract.test.ts` patches `passwordConfirm = payload.password` after generating, skipping that patch only for the one test case where `passwordConfirm` itself is the field under test.
 - **Strings for an arbitrary `pattern`.** Producing a value from a regex is a whole library's worth of work, and not worth it for a handful of patterns. `tests/support/pattern-samples.ts` holds a hand-written sample per tricky pattern, keyed on the regex source, and `satisfyPattern()` **throws** when a pattern has no entry — because ignoring the `pattern` would hand the endpoint a payload the contract forbids, and the resulting 422 would read as an endpoint bug rather than a generator gap. The fuzz generator reads the same table; see [Fuzz Testing](./fuzz-testing.md#the-tripwires-on-itself).
-- **Referential validity.** `CreateOrderBody.userId` / `items[].productId` are opaque strings to the schema — nothing in `openapi.yaml` can say "must reference a real document". The test file creates a real product and a real user first and patches their ids in, again skipping the patch for whichever field a given `invalidPayloads()` case is actually testing (an earlier version of this file didn't skip correctly for `userId` and silently "fixed" every one of its own violation cases — worth knowing if you're extending this pattern to a new endpoint).
+- **Referential validity.** `CreateOrderBody.userId` / `items[].productId` are opaque strings to the schema — nothing in `openapi.yaml` can say "must reference a real document". The test file creates a real product and a real user first and patches their ids in, again skipping the patch for whichever field a given `invalidPayloads()` case is actually testing (skipping it wrongly would silently "fix" every one of that field's own violation cases — worth knowing if you're extending this pattern to a new endpoint).
 
 ## Real findings, left as findings
 
-Running this against the current API surfaced genuine, pre-existing drift between `openapi.yaml` and the hand-written validators layered on top of the generated schemas (`src/modules/users/model.ts` and `src/modules/products/model.ts` extend `CreateUserBody`/`CreateProductBody` with additional rules — the user half used to live in a separate `validation.ts` and was merged into the model). None are fixed by this test file — closing a spec/validator gap means either loosening the spec or tightening the validator (or, for the one 500, fixing a crash), and that's a call for whoever owns the endpoint, not something a test file should paper over by generating a "nicer" payload to dodge the finding. <!-- doc-paths:ignore -->
+When this layer finds drift between `openapi.yaml` and a hand-written validator, the test is not
+bent to dodge it. Closing a spec/validator gap means loosening the spec or tightening the
+validator, and that is a call for whoever owns the endpoint.
 
-| Endpoint / field                                                              | Spec says         | Validator actually does                                                                                                                                         |
-| ----------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CreateUserRequest.username`, `CreateProductRequest.title`                    | no minimum length | hand-tightened to `.min(3)` / `.min(5)` — **tighter than the contract**                                                                                         |
-| `CreateProductRequest.price`                                                  | `minimum: 0`      | only `.refine()`d to be present — the non-negative constraint isn't checked at all                                                                              |
-| `CreateProductRequest.active`/`categories`/`tags`, `CreateUserRequest.active` | boolean / array   | coerced (`!!request.body.active`, `coerceStringArray(...)`) **before** zod validation runs, so a wrong-typed value never reaches the check that would reject it |
-| `POST /users` with a wrong-typed `active`                                     | should be `422`   | returns **`500`** — malformed input crashing the request instead of being rejected cleanly                                                                      |
+The usual source is a model that `.extend()`s a generated body (`src/modules/users/model.ts`,
+`src/modules/products/model.ts`). `.extend()` REPLACES a field outright, so an override that forgets
+a constraint silently drops it. The models restate each bound for that reason, and this layer is
+what fails when one is missed.
 
 ### A finding in the generator itself
 

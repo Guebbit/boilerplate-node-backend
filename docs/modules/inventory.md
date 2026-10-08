@@ -74,17 +74,18 @@ which is which, and what gets recorded.
 
 The ledger is not a reaction to a counter change, it is half of one. `stockmovements` rows are
 written by the same call that moves the counter, which is why there is no `product.stock_moved`
-event: an earlier version had one, and every mover had to remember to announce on every path — and
-on the rollback paths they did not. A counter change nobody recorded is a corrupt audit trail, not
-a smaller feature.
+event: with one, every mover would have to remember to announce on every path, rollback paths
+included. A counter change nobody recorded is a corrupt audit trail, not a smaller feature.
+
+Reads go through `availableFor`: one batched ledger read that [`cart`](./cart.md) uses for its
+stock flags and its checkout, so a line never reads as fitting and then fails at the hold.
 
 Deleting this module leaves a shop that cannot sell. That is the honest consequence of owning
 something.
 
 ## Why `products` still carries a copy
 
-A catalogue read is the shop's most common query and must not need a join — that constraint predates
-this module owning its own collection and still holds. Three shapes were weighed for how a product
+A catalogue read is the shop's most common query and must not need a join. Three shapes were weighed for how a product
 read keeps showing `available` once the counters move here:
 
 1. **A separate `inventory` endpoint the storefront calls.** Rejected: it turns one catalogue read
@@ -98,15 +99,12 @@ read keeps showing `available` once the counters move here:
    sets them, and nothing else may.
 
 The sync is a **plain awaited function call inside `applyTransition`**, never a domain event. This
-module's own history already warns against event-driven counters — see "The story" above, and the
-old `product.stock_moved` event this codebase deliberately does not have any more: an event a
+module deliberately has no stock event (see "The story" above): an event a
 listener can miss is fine for a fact nothing depends on, and wrong for one a catalogue page reads.
-Write order matters and is deliberate: the counter and its ledger row commit first, exactly as
-`applyTransition` has always done it — the transition IS the source of truth the moment it commits,
+Write order matters and is deliberate: the counter and its ledger row commit first, as
+`applyTransition` does it — the transition IS the source of truth the moment it commits,
 regardless of whether the cache sync afterward succeeds. A failed sync is logged and left for the
-next transition on that product to correct, the same tolerance
-[`commitForOrder`](#the-pipeline) already applies to a refused counter write elsewhere in this file
-— never a reason to fail the transition that already committed.
+next transition on that product to correct — never a reason to fail the transition that already committed.
 
 The same sync also clears the `products` response-cache tag, because the product page and the
 lists carry `available`: every stock write (receipt, adjustment, hold, release, both sweeps, a
@@ -114,13 +112,12 @@ return's restock) ends in `syncStockCache`, so one call covers routes, jobs and 
 `GET /products/:id` is also `browserRevalidate`, so a browser checks first instead of keeping the
 page for an hour — see [Redis cache](../tools/redis-cache.md).
 
-One consequence worth naming: this module keeps importing `products` (for a shortfall's title, and
-now for the cache sync) exactly as it does today. Nothing about this decision reverses that edge —
-only `products → inventory` would be a cycle, and nothing here creates it.
+One consequence worth naming: this module imports `products` (for a shortfall's title, and
+for the cache sync). Only `products → inventory` would be a cycle, and nothing creates it.
 
 ## The pipeline
 
-Two entry points move stock — a checkout, and an admin with a clipboard. Every one of them writes
+Checkout, an admin with a clipboard, and a received return move stock. Every one of them writes
 the ledger in the same call that moves the counter.
 
 ```mermaid

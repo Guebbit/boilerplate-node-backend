@@ -17,10 +17,11 @@
 | Connection & helpers      | `src/infrastructure/adapters/queue.ts`                                                              |
 | Queue-aware dispatch      | `src/infrastructure/adapters/mailer.ts` → `enqueueEmail()`                                          |
 | Email worker (domainless) | `src/infrastructure/adapters/email.worker.ts`                                                       |
-| Webhook delivery (module) | `src/modules/webhooks/services/attempt.ts`                                                          |
+| Image digest worker       | `src/infrastructure/adapters/image.worker.ts`                                                       |
+| Webhook delivery (module) | `src/modules/webhooks/services/enqueue.ts` (publish), `attempt.ts` (consume)                        |
 | Worker registration       | `src/app/workers.ts` (domainless queues) + `kernel/registry.ts`'s `resolveConsumers` (module-owned) |
 | Startup hook              | `src/app.ts` → `startQueue` + `registerWorkers`                                                     |
-| Shutdown hook             | `src/app.ts` → `stopQueue`                                                                          |
+| Shutdown hook             | `src/infrastructure/runtime/server-lifecycle.ts` → `stopQueue`                                      |
 
 ## Architecture
 
@@ -46,17 +47,15 @@ flowchart LR
 
 ### Emails (fire-and-forget)
 
-All controllers that send emails use `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`:
+Everything that sends an email calls `enqueueEmail()` from `src/infrastructure/adapters/mailer.ts`,
+from a module's service (not a controller):
 
 - **Queue enabled** → the email job is published to the `worker.email.send` queue. The `email.worker.ts` consumer picks it up and calls `sendTemplatedEmail()` in the background.
-- **Queue disabled** → falls back to calling `sendTemplatedEmail()` directly (same behavior as before).
+- **Queue disabled, or the publish failed** → falls back to calling `sendTemplatedEmail()` directly, at the cost of request latency.
 
-Controllers using it:
-
-- `post-reset-request.ts` — password reset email
-- `post-reset-confirm.ts` — password change confirmation
-- `create-order.ts` — order confirmation email
-- `post-feedback-contact.ts` — contact form notification
+Callers include `account/services/mail.ts` (reset, verification, deletion links),
+`orders/services/notify.ts`, `payments/services/settlement.ts` and `refunds.ts`,
+`delivery/service.ts` and `feedback/service.ts`. `grep -rn enqueueEmail src` is the live list.
 
 ### Invoice PDF rendering — NOT a queue
 
@@ -91,16 +90,16 @@ See [Retries and parking](#retries-and-parking) for what happens after the "nack
 
 ## Configuration
 
-| Env var                  | Description                                               |
-| ------------------------ | --------------------------------------------------------- |
-| `NODE_RABBITMQ_URL`      | Full AMQP URI (preferred). Example: `******rabbitmq:5672` |
-| `NODE_RABBITMQ_HOST`     | Hostname fallback when URL is not set.                    |
-| `NODE_RABBITMQ_PORT`     | Port fallback (default `5672`).                           |
-| `NODE_RABBITMQ_USER`     | Username fallback (default `guest`).                      |
-| `NODE_RABBITMQ_PASSWORD` | Password fallback (default `guest`).                      |
-| `NODE_RABBITMQ_ENABLED`  | Set to `0` to disable even if URL is configured.          |
+| Env var                  | Description                                                                   |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `NODE_RABBITMQ_URL`      | Full AMQP URI (preferred). Example: `amqp://user:pass@rabbitmq:5672`          |
+| `NODE_RABBITMQ_HOST`     | Hostname fallback when URL is not set (default `127.0.0.1`).                  |
+| `NODE_RABBITMQ_PORT`     | Port fallback. Setting it is what switches the queue on when no URL is given. |
+| `NODE_RABBITMQ_USER`     | Username fallback (default `guest`).                                          |
+| `NODE_RABBITMQ_PASSWORD` | Password fallback (default `guest`).                                          |
+| `NODE_RABBITMQ_ENABLED`  | Set to `0` to disable even if URL is configured.                              |
 
-When none of the vars are set, all queue operations silently no-op — the rest of the app works normally.
+When neither the URL nor the port is set, all queue operations silently no-op — the rest of the app works normally.
 
 At boot the log names the broker in use, with the credentials left out
 (`queue: connecting to amqp://rabbitmq:5672 (from NODE_RABBITMQ_URL)`). `NODE_RABBITMQ_URL` wins over
@@ -359,7 +358,9 @@ Production keeps the library default, `Infinity`.
 
 ## Graceful shutdown
 
-`stopQueue()` is called during the app's graceful shutdown sequence (after the HTTP server closes). It closes the AMQP connection cleanly so in-flight messages are not lost.
+`stopQueue()` is called during the app's graceful shutdown sequence (after the HTTP server closes).
+It cancels every consumer, waits up to 5 s for handlers still running, then closes the AMQP
+connection. A handler that outlives the wait is redelivered.
 
 ## Works with
 

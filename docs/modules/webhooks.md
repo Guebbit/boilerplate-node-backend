@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
 **Depends on** — [`orders`](./orders.md) and [`payments`](./payments.md) for their domain-event constants, `users` for the disable-notice recipient's email — no reach back the other way.
-**Breaks if you change** — the ten event names in `asyncapi.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
+**Breaks if you change** — the eleven event names in `asyncapi.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
 :::
 
 ## What a webhook is
@@ -90,7 +90,7 @@ fragment declares the eleven events this shop's clone is willing to promise (ten
 check read that fragment directly — `asyncapi.public.yaml` is a derived sibling output, not the
 source either reads. A module reaching for the internal domain-event bus and calling it "public"
 would publish internal coupling as an external promise; declaring them here instead is what
-keeps that from happening. The mapping (which domain event becomes which public name) now lives on
+keeps that from happening. The mapping (which domain event becomes which public name) lives on
 `orders`'/`payments`'/`returns`' own manifests; this file still owns the channel CATALOGUE itself, because
 every channel shares one server and one header schema declared once here — see this file's own
 header comment for why splitting the catalogue by owning module is a separate, unresolved question.
@@ -171,10 +171,9 @@ A first attempt then waits for the next sweep, up to a minute, instead of going 
 
 **The sweep publishes; only a claim delivers — a visibility-timeout lease, the way SQS does it.**
 The sweep does NOT claim a row before publishing it: publishing is safe to do more than once (the
-claim below is what actually decides who sends), and a sweep that claimed first is exactly the bug
-this design replaced — every retry past the first attempt was silently acknowledged without ever
-being sent, because the sweep had already moved the row to `in-flight` before the worker's own
-claim ever ran. Now:
+claim below is what actually decides who sends), and a sweep that claimed first would move the row to
+`in-flight` before the worker's own claim ran, so every retry past the first attempt would be
+silently acknowledged without ever being sent. So:
 
 - `webhookDeliveryRepository.claimPending` (worker/queue path) and `claimForReplay` (admin replay)
   are the only two places a row becomes `in-flight` — each stamps a `leaseToken` and a
@@ -219,16 +218,15 @@ Every ingredient it is built from — the domain-event bus, the queue, the cron 
 AsyncAPI bundle — is still there and still used by whatever remains. `orders` and `payments` lose
 nothing: they never knew this module existed, and deleting them along with it needs no separate
 step here either — `orders`'/`payments`' `publicEvents` declarations go with their own manifests,
-and this module's `asyncapi.yaml` fragment (the ten channels, hand-authored, not generated from
+and this module's `asyncapi.yaml` fragment (the eleven channels, hand-authored, not generated from
 those modules) is deleted with the rest of the folder.
 :::
 
 ## Managing it
 
-Subscriptions, the secret ring and the delivery log all have an admin screen now, in the paired
+Subscriptions, the secret ring and the delivery log all have an admin screen in the paired
 `boilerplate-vue-frontend` — `webhooks` there, its own five routes over this module's ten
-endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer
-the only way in. See that repo's `docs/modules/webhooks.md` for the client side, including why
+endpoints. "Usable via any HTTP client" is true too (nothing here requires the UI). See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.
 
 ## Not wanted? Remove the module
@@ -241,7 +239,7 @@ also removes the one place the backend fetches a tenant-supplied URL (the avatar
 The standard procedure catches most of it: `tsc` stops on every file that imports the module
 (`scripts/ops/sweep-webhook-retries.ts`, `scenarios/webhooks.ts`, the cross-cutting tests), and the
 cross-cutting suite names the permissions, the page and the pairing entries. The module owns its
-queue consumer, its required/forbidden env checks, and its delivery substrate now (`consumers`,
+queue consumer, its required/forbidden env checks, and its delivery substrate (`consumers`,
 its `config` slice (`config.ts`, on its own `module.ts`) with the required key and the forbidden demo sink; `transport/` for the signing
 and delivery code) — deleting the folder deletes all of that too, with nothing left in `app/` or
 `kernel/` to also touch. What still sits outside the module and **nothing flags** — delete these by

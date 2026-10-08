@@ -3,8 +3,8 @@
 ::: tip At a glance
 **Owns** — machine-to-machine credentials: mint, list, revoke, and the `CredentialResolver` that
 lets an `sk_...` bearer token authenticate a request the way a JWT does.
-**Depends on** — [`users`](./users.md), for the minting user's account and current role — the same
-dependency `account` itself already has.
+**Depends on** — [`users`](./users.md) for the minting user's account, [`access`](./access.md)
+for their current role, and [`account`](./account.md) for the `account.sessions-revoked` event.
 **Breaks if you change** — the `sk_` token prefix (`kernel/authentication.ts`'s dispatch between
 this module's credential path and `account`'s JWT path assumes it), or the mint-time/check-time
 permission-floor pair in `services/api-keys.ts` and `module.ts`.
@@ -43,7 +43,7 @@ flowchart LR
 ## The story
 
 A partner integration, or a webhook consumer calling back into this shop's own API, has nothing to
-present today short of a person's password — which then appears in the audit trail as that person,
+present short of a person's password — which then appears in the audit trail as that person,
 and carries their whole reach rather than the two endpoints the partner needs. This module is the
 answer: a revocable credential, scoped to a caller-chosen subset of whoever minted it.
 
@@ -61,6 +61,11 @@ on every single use (`module.ts`'s `CredentialResolver`, re-deriving the minter'
 permissions and intersecting them against the key's stored snapshot). The second floor is the one
 that matters after the fact: demote or delete the person who minted a key, and every key they ever
 minted shrinks or dies with them — without the credential document itself ever being touched.
+
+**A key use counts as activity.** Each use stamps the key's own `lastUsedAt` and, at most once a
+day, the minter's `lastApiKeyUseAt` through the `users` service. The inactivity job reads that, so
+an account driven only through its keys is never minimised or reaped as idle
+([inactive accounts](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete)).
 
 ```mermaid
 flowchart LR
@@ -117,10 +122,9 @@ fellow administrator's included: revoking only takes access away, so the
 no administrator outranks another. Banning a compromised administrator is still a technician's
 edit of the database, [by decision](../theory/authorization.md#acting-on-someone-else-s-things).
 
-Minting, listing and revoking a credential all have an admin screen now, in the paired
+Minting, listing and revoking a credential have an admin screen in the paired
 `boilerplate-vue-frontend` — `api-keys` there, its own two routes over this module's three
-endpoints. "Usable via any HTTP client" is still true (nothing here requires the UI), but no longer
-the only way in. See that repo's `docs/modules/api-keys.md` for the client side, including why the
+endpoints. Nothing here requires the UI: any HTTP client works. See that repo's `docs/modules/api-keys.md` for the client side, including why the
 permissions field is free text rather than a picker.
 
 See: [Security](../tools/security.md#machine-to-machine-credentials),

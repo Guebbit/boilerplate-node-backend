@@ -11,7 +11,7 @@ flowchart LR
     B --> C["check out<br/><i>address + delivery</i>"]
     C --> D{"is it all<br/>in stock?"}
     D -.->|no| E["nothing happens<br/><i>the basket is kept</i>"]
-    D -->|yes| F["goods set aside<br/><i>30 minutes</i>"]
+    D -->|yes| F["goods set aside<br/><i>15 minutes</i>"]
     F --> G["pay"]
     G -.->|card refused| H["still unpaid<br/><i>they can try again</i>"]
     G -->|accepted| I["order confirmed"]
@@ -78,16 +78,16 @@ flowchart LR
 A product with no weight recorded counts as weightless — it never keeps a method off the list on
 its own.
 
-## The 30-minute hold
+## The 15-minute hold
 
 Setting goods aside is a promise with a deadline.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["checkout succeeds"] --> B["set aside<br/><i>30 minutes</i>"]
+    A["checkout succeeds"] --> B["set aside<br/><i>15 minutes</i>"]
     B -->|"pays in time"| C["sold<br/><i>leaves the shelf</i>"]
-    B -.->|"30 minutes pass"| D["back on the shelf<br/><i>the order is cancelled</i>"]
+    B -.->|"15 minutes pass"| D["back on the shelf<br/><i>the order is cancelled</i>"]
     B -.->|"they cancel"| D
 
     classDef act fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -107,12 +107,12 @@ off, the goods come back on their own and the half-finished order is cancelled.
 
 ## Paying
 
-The card form is real; the card is not. Any made-up number is accepted **except**
-`4000000000000002`, which is always refused — so a refusal can be demonstrated on purpose rather
+The card form is real; the card is not. Any made-up card is accepted **except**
+the test method `pm_card_declined`, which is always refused — so a refusal can be demonstrated on purpose rather
 than waited for.
 
 A refused card is not a failure of the order. The order stays unpaid, the goods stay set aside for
-the rest of the 30 minutes, and the customer can try again.
+the rest of the 15 minutes, and the customer can try again.
 
 Once payment goes through, the money and the goods are settled in the same instant: the order
 becomes **paid** and the goods stop being "set aside" and become "sold".

@@ -6,7 +6,7 @@ can be identical in every field and still be different entries).
 **Depends on** — nothing. [`users`](./users.md) reaches it only through the `personalData.erase`
 hook its hard delete runs, never a service call.
 **Breaks if you change** — [`cart`](./cart.md)'s checkout, the only sibling consumer of
-`addressForCheckout`.
+`addressForCheckout`, for both the shipping and the billing address.
 :::
 
 ## Its neighbourhood
@@ -36,21 +36,18 @@ flowchart LR
 
 ## The story
 
-Until this module existed, the address book lived inside [`account`](./account.md) — the only
-collection that module owned outright — and `cart`'s checkout imported `account` for exactly one
-function, `addressForCheckout`. That single arrow was the whole of an `account ↔ cart` import
-cycle: `account`'s own data export read `cart` for the shopping-basket section, and `cart` read
-`account` back for the delivery address.
+The address book is its own module, not part of [`account`](./account.md), so that it is a leaf.
+`cart`'s checkout needs exactly one function from it, `addressForCheckout`. Had the book lived in
+`account`, that arrow would close an `account ↔ cart` import cycle: `account`'s data export reads
+`cart` for the shopping-basket section, and `cart` would read `account` back for the delivery
+address.
 
-Extracting the address book into its own module breaks the cycle at its root. `account` never
-depended on `cart`'s existence to answer "who is this person"; it depended on it only because the
-address book happened to live in the same folder. Moving the data to where the dependency actually
-points — a leaf both `account` and `cart` can import, that imports neither back — removes the
+`account` never needed `cart` to answer "who is this person". Keeping the data where the
+dependency actually points — a leaf both can reach, that imports neither back — removes the
 arrow instead of routing around it.
 
 ::: tip Shares a URL, not a folder
-The routes stay at `/account/addresses` — nothing about the API surface changed, only which module
-answers it. Two routers mounting `getAuth` under the same prefix would normally mean the JWT
+The routes sit at `/account/addresses`, the `account` prefix, though this module answers them. Two routers mounting `getAuth` under the same prefix would normally mean the JWT
 verify, the user read and the membership read run twice for one request; `getAuth`
 (`kernel/middlewares/authorizations.ts`) returns early once a caller is already resolved, so the
 second router's mount costs nothing beyond the first.
@@ -59,11 +56,14 @@ second router's mount costs nothing beyond the first.
 `users` is reached only the other way round: a hard-deleted account takes its address book with
 it, through the `personalData.erase` hook this module declares and `users` runs inside the delete's
 transaction — the same hook `cart`, `wishlist`, `payments` and `orders` each declare for their own
-collection. Nothing here ever calls into `users`' service.
+collection. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` loses its book too, through this
+module's `personalData.minimise` hook: a saved address is re-entered on the next order, so it is the
+first thing an idle account no longer needs ([why](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete)).
+Nothing here ever calls into `users`' service.
 
 ## The pipeline
 
-One collection, five routes, one cross-cutting read.
+One collection, six routes, one cross-cutting read.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
@@ -72,14 +72,15 @@ flowchart LR
     A["POST /account/addresses"] --> B
     U["PUT /account/addresses/:id"] --> B
     PA["PATCH /account/addresses/:id"] --> B
+    DF["PUT /account/addresses/:id/default"] --> B
     D["DELETE /account/addresses/:id"] --> B
     B -->|"addressForCheckout"| C["cart's checkout"]
-    US["users"] -. "personalData.erase" .-> X["book deleted"]
+    US["users"] -. "personalData.erase / minimise" .-> X["book deleted"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef own fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef peer fill:#dbeafe,stroke:#2563eb,color:#111827;
-    class G,A,U,PA,D entry;
+    class G,A,U,PA,DF,D entry;
     class B,X own;
     class C,US peer;
 ```
@@ -100,8 +101,8 @@ so a burst of concurrent adds cannot all see room: exactly the cap is stored and
 `409 ADDRESS_BOOK_FULL`. The entry's text goes into the pipeline inside `$literal`, since a string
 starting with `$` is a field path there.
 
-`addressForCheckout(userId, addressId?)` answers three ways, and the distinction between the last
-two is deliberate: `undefined` means the caller keeps no addresses and named none (not required to
+`addressForCheckout(userId, addressId?)` answers three ways (an entry — the named one, or the
+default — `undefined`, or `null`), and the distinction between the last two is deliberate: `undefined` means the caller keeps no addresses and named none (not required to
 buy); `null` means they named an entry that is not theirs or does not exist. Checkout must refuse
 the second case, not silently ship nowhere — collapsing the two would let a stale id downgrade to
 "no address" instead of failing loudly.

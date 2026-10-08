@@ -21,8 +21,8 @@ flowchart TD
     Q1 -->|No| Serverless["No — serverless functions\ncan't hold a queue consumer\nor a persistent disk"]
     Q1 -->|Yes| Q2{"MongoDB 8,\nbundled or managed?"}
     Q2 -->|Neither| NoDB["No"]
-    Q2 -->|Yes| Q3{"Persistent disk,\nor an S3-compatible store?"}
-    Q3 -->|Neither| Uploads["With changes —\nuploads have nowhere to live"]
+    Q2 -->|Yes| Q3{"Persistent disk?"}
+    Q3 -->|No| Uploads["With changes —\nuploads have nowhere to live"]
     Q3 -->|Yes| Q4{"TLS in front,\noutbound SMTP on 587?"}
     Q4 -->|Neither| NoTLS["With changes"]
     Q4 -->|Yes| Yes(["Runs as shipped"])
@@ -35,19 +35,19 @@ flowchart TD
     class Yes good;
 ```
 
-| Need                                                        | Required?                               | Why                                                                                                                                                                                                                                                                        |
-| ----------------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A long-running Node 24 process, or an OCI container runtime | **Yes**                                 | The API, its queue consumers and its graceful shutdown all assume a process that stays up                                                                                                                                                                                  |
-| MongoDB 8 — bundled or managed                              | **Yes**                                 | The only store of record; a single-node replica set is what the shipped compose file runs (see [Two Client Stacks](./two-client-stacks.md))                                                                                                                                |
-| A persistent disk for uploads                               | **Yes**, until an S3 image store exists | Uploaded images live on disk today; an ephemeral filesystem loses them on every deploy                                                                                                                                                                                     |
-| TLS termination in front                                    | **Yes**                                 | The API listens on plain HTTP; its auth cookies need HTTPS                                                                                                                                                                                                                 |
-| Frontend and API on the same registrable domain             | **Yes**                                 | Auth cookies are `SameSite=lax` (`account/session/cookies.ts`), not `none` — the browser only sends them cross-SITE-navigation-safe, which still requires the two origins to share a registrable domain (`api.example.com` + `app.example.com`, not two unrelated domains) |
-| Outbound email (SMTP)                                       | **Yes**                                 | Signup verification, password reset. Some clouds block port 25 — 587 is what matters                                                                                                                                                                                       |
-| A scheduler for the `scripts/ops/` jobs                     | **Yes**                                 | Reapers and sweeps. The compose file ships a `cron` container; a platform's own scheduler works too                                                                                                                                                                        |
-| Redis                                                       | Optional                                | Two instances: the response cache, and `limits` (shared rate-limit buckets and single-use claims) — see [Redis Cache](./redis-cache.md#two-redis-instances). Without `limits`, each process counts on its own                                                              |
-| RabbitMQ                                                    | Optional                                | Without it, email sends inline and webhook deliveries wait for the sweep — see [RabbitMQ](./rabbitmq.md)                                                                                                                                                                   |
-| Chromium                                                    | Optional                                | The invoice render — both `GET /orders/{id}/invoice` and the copy attached to every order-confirmation email. Without it the endpoint answers 500 and every confirmation ships with no invoice, silently. About +200 MB of image                                           |
-| Memory                                                      | ~1–1.5 GB per full stack                | Node 250–400 MB, MongoDB's cache, the OS. 4 GB comfortably runs two stacks, 8 GB runs 8–10 small ones                                                                                                                                                                      |
+| Need                                                        | Required?                | Why                                                                                                                                                                                                                                                                        |
+| ----------------------------------------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A long-running Node 24 process, or an OCI container runtime | **Yes**                  | The API, its queue consumers and its graceful shutdown all assume a process that stays up                                                                                                                                                                                  |
+| MongoDB 8 — bundled or managed                              | **Yes**                  | The only store of record; a single-node replica set is what the shipped compose file runs (see [Two Client Stacks](./two-client-stacks.md))                                                                                                                                |
+| A persistent disk for uploads                               | **Yes**                  | Uploaded images live on disk (the only image store there is); an ephemeral filesystem loses them on every deploy                                                                                                                                                           |
+| TLS termination in front                                    | **Yes**                  | The API listens on plain HTTP; its auth cookies need HTTPS                                                                                                                                                                                                                 |
+| Frontend and API on the same registrable domain             | **Yes**                  | Auth cookies are `SameSite=lax` (`account/session/cookies.ts`), not `none` — the browser only sends them cross-SITE-navigation-safe, which still requires the two origins to share a registrable domain (`api.example.com` + `app.example.com`, not two unrelated domains) |
+| Outbound email (SMTP)                                       | **Yes**                  | Signup verification, password reset. Some clouds block port 25 — 587 is what matters                                                                                                                                                                                       |
+| A scheduler for the `scripts/ops/` jobs                     | **Yes**                  | Reapers and sweeps. The compose file ships a `cron` container; a platform's own scheduler works too                                                                                                                                                                        |
+| Redis                                                       | Optional                 | Two instances: the response cache, and `limits` (shared rate-limit buckets and single-use claims) — see [Redis Cache](./redis-cache.md#two-redis-instances). Without `limits`, each process counts on its own                                                              |
+| RabbitMQ                                                    | Optional                 | Without it, email sends inline and webhook deliveries wait for the sweep — see [RabbitMQ](./rabbitmq.md)                                                                                                                                                                   |
+| Chromium                                                    | Optional                 | The invoice render — both `GET /orders/{id}/invoice` and the copy attached to every order-confirmation email. Without it the endpoint answers 500 and every confirmation ships with no invoice, silently. About +200 MB of image                                           |
+| Memory                                                      | ~1–1.5 GB per full stack | Node 250–400 MB, MongoDB's cache, the OS. 4 GB comfortably runs two stacks, 8 GB runs 8–10 small ones                                                                                                                                                                      |
 
 **Serverless functions cannot run this app** — no long-lived process, no queue consumer, no local
 disk to hold an upload between requests.
@@ -111,12 +111,12 @@ A dedicated server from a shared-hosting vendor (HostGator's own included) profi
 that vendor's VPS row — physical rather than virtual, same root and network story.
 
 **A shared/cPanel host is the example that motivated the "with changes" — really "no" — outcome.**
-`.env-example` names HostGator as an SMTP host precisely because "can't run the app, can still send
-its mail" is a real, useful answer for a host that can do nothing else here.
+"Can't run the app, can still send its mail" is a real, useful answer for a host that can do
+nothing else here.
 
 **Container PaaS** (Render above; Railway, Fly.io, Heroku, DigitalOcean App Platform and Koyeb read
 the same way) runs a built image directly — the compose file itself doesn't apply. A platform
-without a persistent disk needs the (not-yet-built) S3 image store, and its managed
+without a persistent disk has nowhere to keep uploads (there is no S3 image store), and its managed
 Postgres/Redis-shaped add-ons stand in for the bundled services. **None of the PaaS options checked
 manage MongoDB itself** — only Postgres/MySQL/Redis-family engines — so Mongo there means "run your
 own container," the opposite of what "managed" means for every other engine on the same platform.

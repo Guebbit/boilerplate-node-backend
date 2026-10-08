@@ -67,7 +67,7 @@ flowchart TD
 | `prepare(charge, metadata)`                       | Opens an intent for an amount this application already froze. Returns `providerRef` (persisted) and `clientSecret` (handed to the browser, never stored). **Idempotent on `metadata.paymentId`** — the double-click case must not open a second intent.                                                                            |
 | `confirm(providerRef, methodRef)`                 | Attaches the browser's tokenised method and asks for the money. Returns one of four states; **a decline is an answer, not an error** — only transport failures throw.                                                                                                                                                              |
 | `retrieve(providerRef)`                           | Reads the authoritative state back. The reconciliation path, and what a finished challenge settles against.                                                                                                                                                                                                                        |
-| `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}`) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                                                                                            |
+| `refund(providerRef, charge, { idempotencyKey })` | Idempotent on the key (`refund:{paymentId}:{refundId}`, one per refund record) — a real PSP refunds once per key, so a retry cannot return the money twice. The caller guards its own side by only calling this on a `succeeded` payment, and only once it has confirmed.                                                          |
 | `cancel(providerRef, { reason })`                 | Closes an intent that has not succeeded yet — an abandoned card flow, or money recorded another way instead. **Idempotent**: an already-cancelled intent answers success. Throws `PaymentInFlightError` when the intent already succeeded or is still mid-flight — there is money to refund instead, not an intent left to cancel. |
 | `parseWebhook(rawBody, signature)`                | Verifies the delivery and translates the provider's own event shape into this module's. Takes the **unparsed** body — a signature covers exact bytes. Parses after the signature and before any lookup, against the contract's schema.                                                                                             |
 
@@ -125,7 +125,9 @@ the outside. The log line is the fake's substitute for that trail. It carries th
 and never more, the same rule the payment document follows.
 :::
 
-## Going live is one file and one variable
+## Adding a real adapter (Stripe as the example)
+
+Nothing here ships a PSP adapter; Stripe is the worked example.
 
 1. Write `stripe.ts` in `providers/`, implementing `PaymentProvider`. Its `parseWebhook` calls the <!-- doc-paths:ignore -->
    vendor's own verifier (`stripe.webhooks.constructEvent`) and maps any `payment_intent.*` event
@@ -136,8 +138,8 @@ and never more, the same rule the payment document follows.
 4. Point the vendor's dashboard at `POST /payments/webhook`, which needs a public HTTPS endpoint.
 
 ::: warning A test-mode key never boots in production
-`NODE_STRIPE_SECRET_KEY` is checked regardless of whether `stripe.ts` exists yet <!-- doc-paths:ignore -->
-(ST-1): a value starting `sk_test_` — Stripe's own test-mode prefix — refuses to boot outside
+`NODE_STRIPE_SECRET_KEY` is checked at boot even though no `stripe.ts` ships, so a project that adds one inherits the gate: a value starting `sk_test_` <!-- doc-paths:ignore -->
+— Stripe's own test-mode prefix — refuses to boot outside
 `NODE_ENV=development`/`test` (staging included), rather than silently running every "real" payment through Stripe's test
 ledger.
 :::

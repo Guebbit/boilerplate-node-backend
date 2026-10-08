@@ -76,13 +76,13 @@ This second point is also why `@faker-js/faker` (ESM-only from v10) can't be imp
 
 | Path                                                          | Contents                                                                                                                                |
 | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/modules/<name>/tests/unit/**`                            | One domain: its service, repository, model, validation and factory                                                                      |
-| `src/modules/<name>/tests/contract/**`                        | That domain's endpoints against `openapi.yaml`                                                                                          |
+| `src/modules/<name>/tests/unit/**`                            | One domain's pure logic: domain rules, presenters, validation, route wiring                                                             |
+| `src/modules/<name>/tests/integration/**`, `…/contract/**`    | That domain's service against a real database, and its endpoints against `openapi.yaml`                                                 |
 | `tests/cross-cutting/**`                                      | Properties asserted of EVERY module at once — sweeps, and the shared persistence and i18n substrate                                     |
-| `tests/unit/middlewares/**`                                   | Cache, request logging                                                                                                                  |
-| `tests/unit/infrastructure/**`                                | Adapters (cache, logger, mailer, queue), HTTP helpers, observability                                                                    |
-| `tests/unit/kernel/**`                                        | The module registry and the domain event bus                                                                                            |
-| `tests/unit/jobs/**`, `tests/unit/scripts/**`                 | Scheduled jobs, `scripts/db/` wrappers, the repo-hygiene scripts                                                                        |
+| `tests/unit/infrastructure/**`                                | Adapters (cache, logger, mailer, queue), HTTP helpers and middlewares, persistence, observability                                       |
+| `tests/unit/app/**`                                           | The app shell: error handling, telemetry, trust proxy, server timeouts                                                                  |
+| `tests/unit/kernel/**`                                        | The module registry, authorization, the domain event bus and the outbox                                                                 |
+| `tests/unit/scripts/**`                                       | Everything under `scripts/`: db wrappers, ops jobs, contracts, mutation, scaffolder, repo-hygiene                                       |
 | `tests/unit/scenarios/**`                                     | The scenario registry's own logic — the guarantee checker, the named accounts, seed-row images                                          |
 | `tests/support/**`                                            | Harness and helpers — never collected as specs                                                                                          |
 | `tests/support/setup-test-db.ts`, `tests/support/database.ts` | The `mongodb-memory-server` lifecycle                                                                                                   |

@@ -89,23 +89,26 @@ a reason — see [Who writes the status](#who-writes-the-status) below.
 
 ::: warning Two modules reach back, and both do it through events
 [`inventory`](./inventory.md) cancels an order when its hold times out (`inventory.reservation_expired`), and
-this module announces `order.refund_owed` (split from `order.cancelled` itself, so retrying the
-refund never re-delivers the customer-facing cancellation webhook — B6) so [`payments`](./payments.md)
+this module announces `order.refund_owed` (separate from `order.cancelled` itself, so retrying the
+refund never re-delivers the customer-facing cancellation webhook) so [`payments`](./payments.md)
 can refund. Neither is an import, which is what keeps a mutually-aware pair acyclic.
 :::
 
 Each account reads back only its own orders; writing and soft-deleting is admin-only. The
 `userId: 1, deletedAt: 1` index is what makes both of those cheap at once.
 
-Three scheduled jobs, all nightly via `docker/crontab`: `npm run reap:orders` replaces an order's
+Two scheduled jobs via `docker/crontab`. `npm run reap:orders`, nightly, replaces an order's
 remaining PII (email, shipping name/phone/street, notes) with placeholders once
 `NODE_ORDER_PII_RETENTION_DAYS` has passed from the order's OWN `createdAt`, counted from account
 erasure or that date, whichever is later — amounts, line items and dates survive, only the person
-is gone. An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
+is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
+module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
+their personal fields, since order history is part of the contract
+([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
 this reap is what protects the far more common case, the order nobody ever deletes. A paid order
 refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
 legal document from that same transition, and it must survive the order it was issued for. `npm run
-sweep:order-effects` re-announces `order.refund_owed` for a refund the event bus's one delivery
+sweep:order-effects`, every 5 minutes, re-announces `order.refund_owed` for a refund the event bus's one delivery
 attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
 full mechanism.
 
@@ -138,7 +141,7 @@ and, through `order.cancelled`, cancels the payment intent. It runs after the co
 moves stock and talks to a provider, neither of which a rolled-back erasure could undo. It sends
 no mail: the address belongs to an account that no longer exists. A failed cancel is logged and
 never undoes the erasure; the sweep still cancels it when the hold times out (up to 168 hours for
-a bank transfer), which is the late case that already existed.
+a bank transfer).
 
 ## Creating an order
 
@@ -182,7 +185,7 @@ exists for manual corrections, not as a second sales channel:
 - it takes a buyer, an email and line items, and nothing else — no payment method, no address, no
   shipping method, and no frontend screen behind it;
 - it holds stock for the default reservation window like any other order, so an unpaid correction
-  order is cancelled by the same nightly sweep as an abandoned checkout;
+  order is cancelled by the same reservation sweep as an abandoned checkout;
 - carrying no address or shipping, it cannot be fulfilled through the warehouse's normal
   ship/deliver flow — moving it forward is the admin override's job (see below), not a parcel
   someone can actually hand over.
@@ -256,7 +259,7 @@ knows the order is still `pending` from its own point of view.
 
 ## The invoice
 
-`orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine (E13), and it names this
+`orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine, and it names this
 order alone. The actual tax invoice — a frozen document, its own numbering series, credit notes on
 refund — is [`invoicing`](./invoicing.md), a module this one has no import of and no wiring for:
 `invoicing` depends on `orders`, never the reverse, and reaches its own `GET /orders/{id}/invoice`
@@ -269,7 +272,7 @@ The only trace of that relationship here is `paidAt` (`model.ts`), stamped by `s
 `invoicing` whether the freeze actually landed.
 
 The placed-order email carries no invoice: nothing is invoiced yet at that point, whatever the
-payment method — see [`invoicing`](./invoicing.md) for what changed and why.
+payment method — see [`invoicing`](./invoicing.md) for where the invoice comes from.
 
 ## The withdrawal window
 
@@ -395,7 +398,9 @@ when the shop offers a longer withdrawal period.
 | `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                              |
 | `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                            |
 | `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
-| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `14`                | Days a consumer has to withdraw. 14 is the legal minimum, so a smaller value is refused at read; a shop may offer longer                                                                         |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30   |
+| `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                          |
+| `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                             |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`

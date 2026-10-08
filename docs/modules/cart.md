@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — one cart document per user, priced against the live catalogue, and the checkout that ends it.
-**Depends on** — six modules. Checkout is where every rule in the shop has to agree at once.
+**Depends on** — seven modules. Checkout is where every rule in the shop has to agree at once.
 **Breaks if you change** — `clearLinesIfUnchanged`. It is what stops two parallel checkouts becoming two orders.
 :::
 
@@ -55,9 +55,9 @@ flowchart LR
 ## The story
 
 Checkout is the one place price, stock, address, shipping and order creation must all agree at
-the same instant, and that is why this module carries more edges than any other. **The six arrows
+the same instant, and that is why this module carries more edges than any other. **The seven arrows
 are not a smell to be refactored away — they are what a checkout is.** This module is a customer of
-four contexts rather than an orchestration layer sitting above them.
+those contexts rather than an orchestration layer sitting above them.
 
 A cart is its own collection keyed by `userId`, not a subdocument of the user. Two things follow,
 and both are the point: a user response cannot leak a cart it does not carry, and touching a cart
@@ -71,7 +71,9 @@ parallel checkouts turn one cart into two orders.
 :::
 
 The second index, `items.productId: 1`, exists for exactly one query: a deleted product has to find
-every cart holding it. Without the index that read scans the collection.
+every cart holding it. Without the index that read scans the collection. A third, TTL index on
+`updatedAt` (`NODE_CART_RETENTION_DAYS`) drops an abandoned cart; any touch restarts its clock.
+Changing the window needs `npm run db:sync`.
 
 Field names match the contract's `CartItem` — `{ productId, quantity }` — so a stored line and a
 wire line are the same shape, and there is no mapper between them to keep in sync.
@@ -152,14 +154,14 @@ document; a product listed twice sees its first line's result.
 
 ## The pipeline
 
-The six arrows, in the order checkout walks them. [Checkout](./cart-checkout.md) draws the same
+The arrows, in the order checkout walks them. [Checkout](./cart-checkout.md) draws the same
 flow at step-by-step resolution, including the lost race.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
 flowchart LR
     A["POST /cart/checkout"] --> B["price the lines<br/><i>products</i>"]
-    B --> C["resolve the address<br/><i>account</i>"]
+    B --> C["resolve the address<br/><i>addresses</i>"]
     C --> D["price the shipping<br/><i>delivery</i>"]
     D --> E["reserve the units<br/><i>inventory</i>"]
     E -.->|"any line short"| R["refused<br/><i>every short line at once</i>"]
@@ -184,4 +186,4 @@ flowchart LR
 - [`orders`](./orders.md) — what a checkout produces
 - [`inventory`](./inventory.md) — who holds the units while a checkout runs
 - [Redis Cache](../tools/redis-cache.md) — why the cart is not in it
-- [Strategic DDD](../theory/strategic-ddd.md) — reading a six-edge context map
+- [Strategic DDD](../theory/strategic-ddd.md) — reading a seven-edge context map

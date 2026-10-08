@@ -3,7 +3,7 @@
 The deployment shape of this stack, not the development one. `docker-compose.yml` bind-mounts the
 working tree and brings up the whole observability estate because seeing everything is the point
 of a dev box. `docker-compose.production.yml` is the other half: it runs the **built** image, binds
-the API port to loopback only, and stops at the four services the application cannot run without.
+the API port to loopback only, and stops at the services the application cannot run without: `app`, `cron`, and the datastores (`database`, `cache`, `limits`, `queue`).
 
 ::: warning Read this alongside the file, not instead of it
 Every decision below — why the port is loopback-only, why clustering is off, why observability is
@@ -22,7 +22,7 @@ flowchart TD
     Name --> Secrets["fill in every MUST SET value —\nboot refuses and names the first missing one"]
     Secrets --> Up["docker compose build app, then up -d\n(-f docker-compose.production.yml)"]
     Up --> Setup["setup runs once:\nindexes + the shop's row"]
-    Setup --> Running(["app, cron, database, cache, queue\npublished to 127.0.0.1 only"])
+    Setup --> Running(["app, cron, database, cache, limits, queue\npublished to 127.0.0.1 only"])
     Running --> Proxy["reverse proxy terminates TLS\nin front — the app does not;\nthe docker-compose.proxy.yml Traefik overlay does"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -152,8 +152,8 @@ one of them silently gives every client the same application config.
 
 That builds `docker/Dockerfile.production` (multi-stage: type-checks in a build stage, ships only
 production dependencies in the runtime stage), runs `setup` once — indexes and the shop's row, see
-[below](#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`
-and `queue`, the production names for Mongo, Redis and RabbitMQ. No bind mount, no hot reload:
+[below](#the-first-admin) — then starts the API, `cron`, and (bundled profile) `database`, `cache`,
+`limits` and `queue` — the production names for Mongo, the cache Redis, the rate-limit Redis and RabbitMQ. No bind mount, no hot reload:
 what's running is exactly what was built.
 
 ## Check it worked
@@ -202,15 +202,15 @@ published. See [Reporting a vulnerability](tools/security.md#reporting-a-vulnera
 
 ## What's different from dev
 
-| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                     |
-| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                        |
-| API port published to all interfaces                        | API port published to `127.0.0.1` only                                                                                           |
-| Full observability stack included                           | No observability containers — see [below](#observability-in-production)                                                          |
-| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                                                   |
-| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                   |
-| Mongo is a standalone with no auth                          | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, Redis requires `REDIS_PASSWORD` |
-| Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up            |
+| Dev (`docker-compose.yml`)                                  | Production (`docker-compose.production.yml`)                                                                                             |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Source bind-mounted, `tsx` watches for changes              | Source baked into the image at build time                                                                                                |
+| API port published to all interfaces                        | API port published to `127.0.0.1` only                                                                                                   |
+| Full observability stack included                           | No observability containers — see [below](#observability-in-production)                                                                  |
+| `NODE_ENABLE_CLUSTERING=1` (multi-process in one container) | `NODE_ENABLE_CLUSTERING=0` — one process per container, always                                                                           |
+| Runs as whatever user starts compose                        | Runs as the non-root `node` user inside the image, `read_only` root filesystem, all Linux capabilities dropped                           |
+| Mongo is a single-member replica set with no auth           | Mongo is a single-node replica set (`rs0`), a scoped `readWrite` app user behind a root account, both Redis instances require a password |
+| Uploads/storage/quarantine are host paths or absent         | `uploads`, `storage` and `quarantine` are named volumes — `storage` also holds the outbound mail spool, so back it up                    |
 
 Clustering is off on purpose: scale replicas with `--scale app=N` or an orchestrator instead, so
 one thing decides how many processes are live, not two layers of process management fighting a

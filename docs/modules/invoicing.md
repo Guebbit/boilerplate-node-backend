@@ -40,11 +40,8 @@ flowchart LR
 
 ## The story
 
-`orders`' own PDF used to be titled "Fattura n." — a tax invoice's name — while behaving like
-neither one: numbered and emailed before any payment, re-rendered from whatever the shop's config
-said today, downloadable on a cancelled order, and destroyed outright by a hard delete. A review
-relabelled it honestly first — "order confirmation / receipt, not a tax invoice" — and this module is the second half: the real thing,
-built once the relabel had already shipped.
+`orders` prints an order confirmation / receipt. It is not a tax invoice: it is numbered and
+emailed before any payment, and it does not freeze what it says. This module is the real thing.
 
 The model here is Stripe's invoice lifecycle (finalize once, void rather than delete) and Magento's
 "invoice at capture, credit memo at refund" — an invoice is minted from a FACT (the order was paid),
@@ -157,8 +154,8 @@ directory) and streamed from there for `NODE_INVOICE_PDF_RETENTION_DAYS` (30); t
 
 `providers/index.ts` declares `EInvoicingProvider`, shaped after `payments/providers` (one
 interface, one shipped implementation, an env var choosing between them): `pdf`
-(`providers/pdf.ts`) is the only one this boilerplate ships, rendering through the same
-EJS + Puppeteer pipeline `orders`' old receipt used. Italy's SdI and the EU's Peppol network are
+(`providers/pdf.ts`) is the only one this boilerplate ships, rendering through the
+EJS + Puppeteer pipeline (`renderHtmlToPdf`). Italy's SdI and the EU's Peppol network are
 integrations, not built here — both transmit a structured document to a third party and get back a
 delivery outcome, a shape genuinely different from "hand back some bytes", so a real adapter's
 `issue` would also need to report that outcome onto the document. Left for whoever builds the
@@ -232,10 +229,8 @@ since there is no numeric form for a reason code to become.
   alone, so a rate carrying both a zero-rated and an exempt line folds into one 0% row instead of
   two. Splitting those tables by (rate, category) is a bigger rework than adding the per-line code
   above — left for later.
-- **A render cache.** The old receipt cached a render for a few minutes to absorb a burst of
-  requests for the same order; this module skips it. The document is immutable once issued, so
-  there is no correctness reason to cache it — only a possible future perf one, if traffic ever
-  asks for it.
+- **A render cache.** The PDF store above already keeps the rendered file. The document is
+  immutable once issued, so there is no correctness reason for a shorter-lived cache on top.
 - **Line-level credit notes for a return.** A partial credit note names the VAT rates it refunds,
   not the returned products: the refund amount is all `payments` announces. A return's own lines
   would need `returns` to hand this module more than an amount.

@@ -1,7 +1,7 @@
 # Field limits
 
 Every string a request can carry declares its own `maxLength`. A field with no bound is limited
-only by the 100 kB body limit, so one field can cost a hundred kilobytes of memory, of Mongo
+only by the JSON body limit (`NODE_JSON_BODY_LIMIT`, default 100 kB), so one field can cost a hundred kilobytes of memory, of Mongo
 document and of log line. Two Spectral rules enforce it, on the root bundle and on every module
 fragment:
 

@@ -214,6 +214,7 @@ and `bson`'s 17 MiB buffer makes each leftover file expensive. The cause and the
             "<rootDir>/tests/cross-cutting/contract-bundles.test.ts",
             "<rootDir>/tests/cross-cutting/outbox-names.test.ts",
             "<rootDir>/tests/cluster/",
+            "<rootDir>/tests/broker/",
             "<rootDir>/tmp/",
             "<rootDir>/.claude/worktrees/"
         ]

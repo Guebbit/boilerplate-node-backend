@@ -137,8 +137,8 @@ flowchart TD
 
 <!-- module-graph:end -->
 
-`feedback` and `locales` are drawn detached because they are: nothing reaches them and they reach
-nothing. Deleting either takes exactly one folder and one page with it.
+`antibot`, `feedback` and `locales` are drawn detached because they are: nothing reaches them and
+they reach nothing. Deleting any of them takes exactly one folder and one page with it.
 
 Mutual awareness without a cycle is the shape worth noticing. `products` is reached by four modules
 and reaches none — a deleted product still has to leave every cart and wishlist, and that half
@@ -163,8 +163,8 @@ the top of the relevant `module.ts` because nothing mechanical can find them:
   code. Its window is an env var, so changing it is a `db:sync` away — never a restart.
 
 This is the reason those couplings are recorded as **prose next to the imports** rather than as a
-typed field. A manifest field reconciled against the import graph — which is what this repo used to
-have — could not express any of the three: an edge no import backed was rejected as stale.
+typed field. A manifest field reconciled against the import graph could not express any of the
+three: an edge no import backed would be rejected as stale.
 :::
 
 ## Every module
@@ -236,11 +236,10 @@ declared where it belongs: a `frontend:` block in the backend module's own `modu
 | --------------- | -------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `audit-logs`    | `observability`            | This module owns the trail and its own `GET /audit`; `observability` mounts a second, platform-scoped read (`GET /observability/audit`) over the same collection, and the screen that renders either is the frontend's `observability` module. |
 | `addresses`     | `account`                  | The frontend keeps the address book inside `account` rather than its own module — see the pairing test's own reason for it.                                                                                                                    |
+| `access`        | none                       | Routeless: tenants and memberships back every other module's auth resolution, and no screen renders them directly.                                                                                                                             |
+| `antibot`       | none                       | No screen of its own — whichever form is guarded (signup, reset, contact) fetches the challenge inline.                                                                                                                                        |
 | `invoicing`     | `orders`                   | No screen of its own — `GET /orders/{id}/invoice` and `/credit-notes` are two buttons on the frontend's own order detail page.                                                                                                                 |
 | everything else | the same name              | —                                                                                                                                                                                                                                              |
-
-And one frontend module answers to nothing here: `demo`, a client-side showcase of the shared UI
-kit, which pairs with the demo profile and the seeded dataset rather than with any single domain.
 
 `tests/cross-cutting/frontend-pairing.test.ts` holds this to the code: a counterpart that is not
 simply the same name has to carry its reason, and with a paired checkout every name has to exist

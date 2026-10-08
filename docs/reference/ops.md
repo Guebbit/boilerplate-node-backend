@@ -30,12 +30,20 @@ flowchart LR
     class Otel,Prom,Promtail,Loki,Tempo,Alert,Graf obs;
 ```
 
-| File                            | What it is                                                                                                                                                                              | Read next                                                                                                           |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `docker-compose.yml`            | The development stack: the API plus every backing service and the whole observability chain. What `npm run compose -- up -d` starts. Podman by default, Docker by environment override. | [Docker & Podman](../tools/docker-and-podman.md) · [Pairing & Ports](../tools/pairing-and-ports.md)                 |
-| `docker-compose.production.yml` | The production shape of the same stack — the built image instead of a bind mount, no dev tooling.                                                                                       | [Getting Started — Production](../getting-started-production.md) · [Docker & Podman](../tools/docker-and-podman.md) |
-| `docker/mongo-init.js`          | Runs once, against an empty Mongo volume: creates the app's own `readWrite` user, scoped to its database, so it never authenticates as the container's root account.                    | [Getting Started — Production](../getting-started-production.md)                                                    |
-| `.dockerignore`                 | What never enters the build context. The reports directory alone is tens of megabytes of mutation HTML, copied on every build otherwise.                                                | [Docker & Podman](../tools/docker-and-podman.md)                                                                    |
+| File                                                      | What it is                                                                                                                                                                                                                                  | Read next                                                                                                           |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `docker-compose.yml`                                      | The development stack: the API plus every backing service and the whole observability chain. What `npm run compose -- up -d` starts. Podman by default, Docker by environment override.                                                     | [Docker & Podman](../tools/docker-and-podman.md) · [Pairing & Ports](../tools/pairing-and-ports.md)                 |
+| `docker-compose.production.yml`                           | The production shape of the same stack — the built image instead of a bind mount, no dev tooling.                                                                                                                                           | [Getting Started — Production](../getting-started-production.md) · [Docker & Podman](../tools/docker-and-podman.md) |
+| `docker/mongo-init.js`                                    | Runs once, against an empty Mongo volume: creates the app's own `readWrite` user, scoped to its database, so it never authenticates as the container's root account.                                                                        | [Getting Started — Production](../getting-started-production.md)                                                    |
+| `.dockerignore`                                           | What never enters the build context. The reports directory alone is tens of megabytes of mutation HTML, copied on every build otherwise.                                                                                                    | [Docker & Podman](../tools/docker-and-podman.md)                                                                    |
+| `docker/Dockerfile.dockerignore`                          | The per-Dockerfile override for `docker/Dockerfile` only (it keeps `.git` in, which the in-container `complete` gate needs). It replaces the root list, so it repeats it in full.                                                           | [Docker & Podman](../tools/docker-and-podman.md)                                                                    |
+| `docker/mongo-entrypoint.sh`<br>`docker/mongo-rs-init.sh` | Mongo's replica-set bootstrap: the entrypoint wrapper creates the keyFile and wire-TLS certificates with the right ownership before `mongod` reads them, and the one-shot init initiates the single-node replica set and waits for PRIMARY. | [MongoDB & Mongoose](../tools/mongodb-mongoose.md)                                                                  |
+| `docker/boot-check.sh`                                    | Boots the production image against a real Mongo and proves it starts fail-closed (`/livez` answers) and the runtime user cannot write under `src/`.                                                                                         | [Deployment hardening](../tools/deployment-hardening.md)                                                            |
+| `docker/install-supercronic.mjs`                          | Installs supercronic, the scheduler the `cron` service runs, at image build time for both Dockerfiles.                                                                                                                                      | [Scheduled jobs](#scheduled-jobs)                                                                                   |
+| `docker/webhook-tester-tls.Caddyfile`                     | The TLS door in front of the `webhook-tester` service in `docker-compose.yml`.                                                                                                                                                              | [Webhooks](../modules/webhooks.md)                                                                                  |
+| `docker/resticprofile.example.toml`                       | An example resticprofile config for backing the stack up, to be copied outside the repo.                                                                                                                                                    | [Backups](../tools/backups.md)                                                                                      |
+| `docker-compose.proxy.yml`<br>`traefik/`                  | The shared Traefik proxy for several client stacks on one host, and the per-client route template (`traefik/client.example.yml`) copied into `traefik/dynamic/`.                                                                            | [Hosting](../tools/hosting.md)                                                                                      |
+| `docker-compose.test.yml`                                 | The wired half of the container lane: proves `NODE_TEST_MONGO_URI` / `NODE_TEST_REDIS_URL` reach the suites, with a `gate` service that runs `npm run complete` against real services.                                                      | [Docker & Podman](../tools/docker-and-podman.md)                                                                    |
 
 ## Images
 
@@ -50,21 +58,23 @@ flowchart LR
 
 One config per service in the chain. Each is mounted into its container by the compose file.
 
-| File                                                      | What it is                                                                                                                 | Read next                                        |
-| --------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `docker/observability/otel-collector.config.yaml`         | Receivers, processors and exporters for the OpenTelemetry Collector — where the app's spans arrive and where they go next. | [OpenTelemetry](../tools/opentelemetry.md)       |
-| `docker/observability/tempo.config.yaml`                  | Tempo's storage and retention for the traces the collector forwards.                                                       | [Tempo](../tools/tempo.md)                       |
-| `docker/observability/prometheus.config.yaml`             | The scrape configuration: which targets, how often, with which credentials.                                                | [Prometheus](../tools/prometheus.md)             |
-| `docker/observability/prometheus.alert-rules.yaml`        | The alerting rules evaluated against those metrics.                                                                        | [Prometheus](../tools/prometheus.md)             |
-| `docker/observability/alertmanager.config.yaml`           | What happens to a firing alert — routing, grouping, silencing.                                                             | [Prometheus](../tools/prometheus.md)             |
-| `docker/observability/loki.config.yaml`                   | Loki's storage, schema and retention for logs.                                                                             | [Loki](../tools/loki.md)                         |
-| `docker/observability/promtail.config.yaml`               | The log shipper: which files and container streams reach Loki, and how they are labelled.                                  | [Loki](../tools/loki.md)                         |
-| `docker/observability/promtail.podman.config.yaml`        | The same under Podman, whose container log paths and socket differ from Docker's.                                          | [Docker & Podman](../tools/docker-and-podman.md) |
-| `docker/observability/alloy.config.alloy`                 | The Grafana Alloy alternative to promtail, in Alloy's own configuration language.                                          | [Loki](../tools/loki.md)                         |
-| `docker/observability/grafana.datasources.yaml`           | Provisions Grafana's data sources — Prometheus, Loki, Tempo — so a fresh stack comes up already wired.                     | [Grafana](../tools/grafana.md)                   |
-| `docker/observability/grafana.dashboard-providers.yaml`   | Tells Grafana where to load dashboards from on startup.                                                                    | [Grafana](../tools/grafana.md)                   |
-| `docker/observability/grafana/dashboards/api-traces.json` | The provisioned dashboard itself: request rates, latencies and the trace links into Tempo.                                 | [Grafana](../tools/grafana.md)                   |
-| `docker/observability/umami-init.sh`                      | Initialises the Umami analytics database on first start.                                                                   | [Product Analytics](../tools/analytics.md)       |
+| File                                                                                                       | What it is                                                                                                                                                                                   | Read next                                        |
+| ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `docker/observability/otel-collector.config.yaml`                                                          | Receivers, processors and exporters for the OpenTelemetry Collector — where the app's spans arrive and where they go next.                                                                   | [OpenTelemetry](../tools/opentelemetry.md)       |
+| `docker/observability/tempo.config.yaml`                                                                   | Tempo's storage and retention for the traces the collector forwards.                                                                                                                         | [Tempo](../tools/tempo.md)                       |
+| `docker/observability/prometheus.config.yaml`                                                              | The scrape configuration: which targets, how often, with which credentials.                                                                                                                  | [Prometheus](../tools/prometheus.md)             |
+| `docker/observability/prometheus.alert-rules.yaml`                                                         | The alerting rules evaluated against those metrics.                                                                                                                                          | [Prometheus](../tools/prometheus.md)             |
+| `docker/observability/alertmanager.config.yaml`                                                            | What happens to a firing alert — routing, grouping, silencing.                                                                                                                               | [Prometheus](../tools/prometheus.md)             |
+| `docker/observability/loki.config.yaml`                                                                    | Loki's storage, schema and retention for logs.                                                                                                                                               | [Loki](../tools/loki.md)                         |
+| `docker/observability/promtail.config.yaml`                                                                | The log shipper: which files and container streams reach Loki, and how they are labelled.                                                                                                    | [Loki](../tools/loki.md)                         |
+| `docker/observability/promtail.podman.config.yaml`                                                         | The same under Podman, whose container log paths and socket differ from Docker's.                                                                                                            | [Docker & Podman](../tools/docker-and-podman.md) |
+| `docker/observability/alloy.config.alloy`                                                                  | The Grafana Alloy alternative to promtail, in Alloy's own configuration language.                                                                                                            | [Loki](../tools/loki.md)                         |
+| `docker/observability/alloy.logs.config.alloy`<br>`docker/observability/alloy.audit-forward.example.alloy` | The production stack's container-log pipeline (Alloy replaces the deprecated Promtail there), and an example of forwarding the audit stream to a second system the application cannot reach. | [Loki](../tools/loki.md)                         |
+| `docker/observability/prometheus.production.config.yaml`                                                   | Prometheus for the production `monitoring` profile: the API, its alert rules, Alertmanager — without the OTel collector the local file also scrapes.                                         | [Prometheus](../tools/prometheus.md)             |
+| `docker/observability/grafana.datasources.yaml`                                                            | Provisions Grafana's data sources — Prometheus, Loki, Tempo — so a fresh stack comes up already wired.                                                                                       | [Grafana](../tools/grafana.md)                   |
+| `docker/observability/grafana.dashboard-providers.yaml`                                                    | Tells Grafana where to load dashboards from on startup.                                                                                                                                      | [Grafana](../tools/grafana.md)                   |
+| `docker/observability/grafana/dashboards/api-traces.json`                                                  | The provisioned dashboard itself: request rates, latencies and the trace links into Tempo.                                                                                                   | [Grafana](../tools/grafana.md)                   |
+| `docker/observability/umami-init.sh`                                                                       | Initialises the Umami analytics database on first start.                                                                                                                                     | [Product Analytics](../tools/analytics.md)       |
 
 ## Scheduled jobs
 
@@ -74,30 +84,32 @@ survives a move off compose unchanged (a `CronJob` on Kubernetes, a systemd time
 the same `scripts/ops/reap-*`/`sweep:*` entry points every one of them already documents as "meant to run
 periodically", via `scripts/run-script.ts`.
 
-| Job                              | Schedule (UTC) | Leased | What it does                                                                                                   |
-| -------------------------------- | -------------- | ------ | -------------------------------------------------------------------------------------------------------------- |
-| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                  |
-| `npm run reap:orphaned-images`   | 02:03 nightly  | No     | Deletes a stored image or thumbnail no document names, once it is over an hour old.                            |
-| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Warns, then soft-, then hard-deletes a customer account inactive past the threshold. Disabled by default.      |
-| `npm run reap:expired-tokens`    | 02:07 nightly  | Yes    | Drops expired and long-superseded tokens from every account (a login and a refresh prune only their own).      |
-| `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.      |
-| `npm run reap:account-exports`   | 02:09 nightly  | No     | Deletes built data exports (file and row) past `NODE_ACCOUNT_EXPORT_TTL_DAYS`; the account can ask again.      |
-| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                      |
-| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                |
-| `npm run sweep:order-effects`    | 02:20 nightly  | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.      |
-| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.               |
-| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.          |
-| `npm run sweep:outbox`           | every minute   | No     | Publishes every due [outbox](../tools/outbox.md) event — the backstop for the writer's own after-commit nudge. |
-| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                               |
-| `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                           |
+| Job                              | Schedule (UTC) | Leased | What it does                                                                                                                                                                    |
+| -------------------------------- | -------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                                                                                   |
+| `npm run reap:orphaned-images`   | 02:03 nightly  | No     | Deletes a stored image or thumbnail no document names, once it is over an hour old.                                                                                             |
+| `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Minimises an account inactive past `NODE_INACTIVE_MINIMISE_DAYS`; with deletion turned on, warns, then soft-, then hard-deletes one inactive past `NODE_INACTIVE_ACCOUNT_DAYS`. |
+| `npm run reap:expired-tokens`    | 02:07 nightly  | Yes    | Drops expired and long-superseded tokens from every account (a login and a refresh prune only their own).                                                                       |
+| `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                       |
+| `npm run reap:account-exports`   | 02:09 nightly  | No     | Deletes built data exports (file and row) past `NODE_ACCOUNT_EXPORT_TTL_DAYS`; the account can ask again.                                                                       |
+| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                                                                                       |
+| `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                                 |
+| `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                                 |
+| `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                                |
+| `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                           |
+| `npm run sweep:outbox`           | every minute   | No     | Publishes every due [outbox](../tools/outbox.md) event — the backstop for the writer's own after-commit nudge.                                                                  |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                                                                                                |
+| `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                            |
+| `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.                                                                       |
 
 `docker/crontab` and the nightly jobs above are staggered five minutes apart so they do not all
 land on the connection pool at once — each job's own header in `scripts/ops/` has the full reasoning.
-`sweep:webhook-retries`, `sweep:payment-effects` and `sweep:reservations` run on a different
-schedule entirely, every 5 minutes or faster, because the sweep interval IS the retry/expiry
-granularity for what each covers — see [webhooks](../modules/webhooks.md#the-delivery-path),
-[payments](../modules/payments.md#pending-effects) and
-[inventory](../modules/inventory-reservations.md). `tests/cross-cutting/scheduled-jobs.test.ts`
+`sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects`, `sweep:reservations` and
+`sweep:order-effects` run on a different schedule entirely, every 5 minutes or faster, because the
+sweep interval IS the retry/expiry granularity for what each covers — see
+[webhooks](../modules/webhooks.md#the-delivery-path),
+[payments](../modules/payments.md#pending-effects),
+[inventory](../modules/inventory-reservations.md) and [orders](../modules/orders.md). `tests/cross-cutting/scheduled-jobs.test.ts`
 asserts `docker/crontab` and `package.json`'s `reap:*`/`sweep:*` scripts agree in both directions —
 a script renamed in one and not the other is either a job that fails every run or cleanup that
 silently stops running — and that every scheduled script still names a file that exists, so
@@ -110,7 +122,7 @@ racing over the same collection — nothing here is meant to scale. `withLease`
 that only one caller can hold at a time, TTL-bounded so a crashed holder's lease still expires.
 `reap:inactive-accounts` wraps its work in it, as the reference implementation — it hard-deletes
 accounts, so it is where "exactly one runner" earns its keep. Every other job is correct today
-under `replicas: 1` alone and is not wrapped — the three frequent sweeps included, each with its
+under `replicas: 1` alone and is not wrapped — the frequent sweeps included, each with its
 own independent reason a concurrent pass costs nothing (`webhookDeliveryRepository.claimPending`'s
 atomic claim, `commitForOrder`'s exactly-once hold claim, `reservationRepository.claimStatus`'s
 own). Any future scheduled job that would NOT be safe to run twice concurrently should wrap its
@@ -122,31 +134,28 @@ job also takes one; `GET /observability/health`'s `jobs` array reports the whole
 crontab job silently failing or silently not running at all is visible on the probe an operator
 already looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
 exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
-fires when a nightly job's last success is more than 48 hours old. The three 5-minute-or-faster
+fires when a nightly job's last success is more than 48 hours old. The 5-minute-or-faster
 jobs are excluded from that alert, each covered by its own faster-firing one instead:
-`sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:payment-effects` /
-`sweep:reservations` by `FrequentSweepStale` (30 min) — 48 hours at that cadence would page two
-days after a stuck payment or a reservation nobody is expiring. No Pushgateway needed: the value
+`sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:outbox` /
+`sweep:payment-effects` / `sweep:reservations` / `sweep:order-effects` by `FrequentSweepStale`
+(30 min) — 48 hours at that cadence would page two days after a stuck payment, a reservation
+nobody is expiring or a refund nobody is retrying. No Pushgateway needed: the value
 lives in Mongo, and the long-running app exports it at scrape time.
 See `docs/tools/observability-layer.md`.
 
 ## Data retention
 
-Four collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
+Several collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
 job — that is cleanup with no scheduler involved at all, the cheapest form there is, and it stays
 right for state with no retry story (a cart, an audit entry, a feedback ticket, an abandoned lease
-never need a second attempt at expiring). The six jobs above are the other half: retention and
+never need a second attempt at expiring). The jobs above are the other half: retention and
 periodic work that DOES need to run as a step, with a real success/failure outcome — see Scheduled
 jobs above.
 
-| Collection         | Window                         | Default | Read next                                   |
-| ------------------ | ------------------------------ | ------- | ------------------------------------------- |
-| `auditlogs`        | `NODE_AUDIT_RETENTION_DAYS`    | 90      | [Winston & Audit Logs](../tools/winston.md) |
-| `feedbackrequests` | `NODE_FEEDBACK_RETENTION_DAYS` | 730     | [feedback](../modules/feedback.md)          |
-| `carts`            | `NODE_CART_RETENTION_DAYS`     | 365     | [cart](../modules/cart.md)                  |
-| `leases`           | `NODE_LEASE_RETENTION_DAYS`    | 30      | Scheduled jobs, above                       |
+Every TTL index, reaper and cap, with its variable, default and lawful basis, is in the single
+[retention table](../theory/data-protection.md#processing-register-art-30). It is not repeated here.
 
-All four share one caveat, worth stating once rather than four times: **Mongo will not modify an
+Every TTL index shares one caveat, worth stating once: **Mongo will not modify an
 existing TTL index's `expireAfterSeconds` in place.** In development and test, where `autoIndex` is
 on, raising or lowering any of these variables and RESTARTING fails the boot outright — Mongo
 refuses the conflicting options. `npm run db:sync` is what applies it: it drops the index and
@@ -175,9 +184,22 @@ an attempt (never `succeeded`/`refunded`) once it has sat untouched for
 invoice, so there is nothing there worth keeping. See the script's own header, and
 [payments](../modules/payments.md)'s retention section for the full reasoning.
 
-`users` has no TTL either — `npm run reap:inactive-accounts` warns, then soft-deletes, then
-hard-deletes an account after `NODE_INACTIVE_ACCOUNT_DAYS` of no login, **disabled by default**
-(`0`). See the script's own header for the three-stage design.
+`users` has no TTL either. `npm run reap:inactive-accounts` measures activity as the latest login
+(refresh-token use) or API-key use, and runs two independent dials:
+
+| Dial                          | Default           | What happens past it                                                                                                   |
+| ----------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `NODE_INACTIVE_MINIMISE_DAYS` | `1095`, on        | every module's `personalData.minimise` hook runs: the address book goes, the orders' PII clock starts; the login stays |
+| `NODE_INACTIVE_ACCOUNT_DAYS`  | `0`, **disabled** | warn, then soft-delete, then hard-delete — the controller's call, never a default                                      |
+
+Why minimise rather than delete: [Data Retention](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete).
+See the script's own header for the stages.
+
+`returns` has no TTL: the row is a legal record. `npm run reap:returns` unsets only its free text
+(`note`, `declineReason`) once the return's `updatedAt` is older than `NODE_RETURN_TEXT_RETENTION_DAYS`
+(default 1095). `updatedAt`, not the closing date, because an approved return whose goods never
+arrive never closes. Safe to repeat: the filter only matches returns still holding text, and the
+wipe does not move `updatedAt`. Why three years: [Data Retention](../theory/data-retention.md#free-text-on-returns).
 
 `npm run sweep:order-effects` is a different kind of periodic job: not retention, but the retry
 behind a cancel's consequences. A cancel announces `ORDER_REFUND_OWED` — a separate event from the
@@ -186,8 +208,9 @@ customer-facing `ORDER_CANCELLED`, so retrying the refund never re-delivers that
 unreachable for the length of one call would leave the order cancelled and the refund lost.
 `cancelById` writes the intent to refund in the same document write that decides the cancel, and
 this sweep re-announces for whatever is still owed past `NODE_ORDER_EFFECT_RETRY_MINUTES`
-(default 5). Run it on the same schedule as the `reap:*` jobs; it is safe to repeat, since a second
-pass over a settled order refunds nothing.
+(default 5). Run it every 5 minutes, matching that grace window: a nightly run would leave a
+refund owed for up to 24 hours. It is safe to repeat, since a second pass over a settled order
+refunds nothing.
 
 The stock half of a cancel is not covered here, because it cannot half-happen: the status move,
 the hold's release and a paid order's restock are one `withTransaction`. A restock that throws
@@ -228,14 +251,18 @@ sit on top of them, are in [Data Protection](../theory/data-protection.md).
 
 ## CI
 
-| File                              | What it is                                                                                                                                                             | Read next                                                |
-| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| `.github/workflows/ci.yml`        | The gate on every push and pull request: build, lint, the contract checks and the test suites. Checks out the paired frontend first, so the cross-repo checks can run. | [Package Scripts](../tools/package-scripts.md)           |
-| `.github/workflows/mutation.yml`  | The nightly mutation run and the ratchet comparison — too slow for the push gate, too valuable to skip.                                                                | [Mutation Testing](../tools/mutation-testing.md)         |
-| `.github/workflows/fuzz.yml`      | The scheduled fuzz run, which walks the whole contract with generated hostile input.                                                                                   | [Fuzz Testing](../tools/fuzz-testing.md)                 |
-| `.github/workflows/codeql.yml`    | GitHub's static security analysis.                                                                                                                                     | [Security](../tools/security.md)                         |
-| `.github/dependabot.yml`          | The dependency update schedule.                                                                                                                                        | [Package Dependencies](../tools/package-dependencies.md) |
-| `.github/copilot-instructions.md` | The house rules, written for an assistant and equally readable by a person: the code brain, the docs brain and the change brain in three short lists.                  | [Reading Path](../theory/reading-path.md)                |
+| File                                                                      | What it is                                                                                                                                                                    | Read next                                                                               |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yml`                                                | The gate on every push and pull request: build, lint, the contract checks and the test suites. Checks out the paired frontend first, so the cross-repo checks can run.        | [Package Scripts](../tools/package-scripts.md)                                          |
+| `.github/workflows/mutation.yml`<br>`.github/workflows/mutation-wave.yml` | The monthly mutation sweep (run in waves of at most 256 shards) and the diff job that gates a branch on the files it touched — too slow for every push, too valuable to skip. | [Mutation Testing](../tools/mutation-testing.md)                                        |
+| `.github/workflows/fuzz.yml`                                              | The scheduled fuzz run, which walks the whole contract with generated hostile input.                                                                                          | [Fuzz Testing](../tools/fuzz-testing.md)                                                |
+| `.github/workflows/schemathesis.yml`                                      | Nightly stateful fuzzing: request sequences through the contract's declared `links`.                                                                                          | [Fuzz Testing](../tools/fuzz-testing.md#stateful-fuzzing-sequences-not-single-requests) |
+| `.github/workflows/order-random.yml`                                      | Nightly run of the integration, contract and fuzz suites with jest's `--randomize`, to catch a test that only passes in file order.                                           | [Integration Testing](../tools/integration-testing.md)                                  |
+| `.github/workflows/image-scan.yml`                                        | Builds the production image and reports what is inside it (Syft SBOM into Grype).                                                                                             | [Deployment hardening](../tools/deployment-hardening.md)                                |
+| `.github/workflows/codeql.yml`                                            | GitHub's static security analysis.                                                                                                                                            | [Security](../tools/security.md)                                                        |
+| `.github/dependabot.yml`                                                  | The dependency update schedule.                                                                                                                                               | [Package Dependencies](../tools/package-dependencies.md)                                |
+| `.github/CODEOWNERS`<br>`.github/actions/`                                | Who reviews every pull request, and the composite actions the workflows share (`setup`, `mutation-runner`, `notify-failure`).                                                 | —                                                                                       |
+| `.github/copilot-instructions.md`                                         | The house rules, written for an assistant and equally readable by a person: the code brain, the docs brain and the change brain in three short lists.                         | [Reading Path](../theory/reading-path.md)                                               |
 
 ## Rendered templates
 

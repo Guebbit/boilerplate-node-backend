@@ -70,7 +70,7 @@ Every page is a table. Three columns, and the third is the point:
 - **Read next** — where the explanation lives. `—` means no page covers it yet, and that is a
   documentation gap on the record rather than a missing link.
 
-## Three tiers, so the whole repository fits in ten pages
+## Three tiers, so the whole repository fits in a few pages
 
 Most of the repository is repetition. A row per file would be neither writable nor readable, so
 every tracked file lands in exactly one of three tiers.

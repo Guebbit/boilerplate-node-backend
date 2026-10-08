@@ -33,7 +33,7 @@ flowchart LR
 ```
 
 `held` is the only non-terminal state, and `expiresAt` is what makes it non-permanent — `committed`
-is otherwise terminal too, except for the one door `restockForOrder` opens onto `restocked` (B2).
+is otherwise terminal too, except for the one door `restockForOrder` opens onto `restocked`.
 
 | Transition        | Called by                                                                | Counters                   | Ledger `reason` |
 | ----------------- | ------------------------------------------------------------------------ | -------------------------- | --------------- |
@@ -94,10 +94,10 @@ decides.
 ## The ledger is half of the transition, not a reaction to it
 
 `stockmovements` rows are written **by the same call that moves the counter**. There is deliberately
-no `product.stock_moved` event, and there used to be:
+no `product.stock_moved` event:
 
-> As an event, the ledger row became a _reaction_ to a counter change rather than half of one, so
-> every mover had to remember to announce on every path — and on the rollback paths they did not.
+> As an event, the ledger row would be a _reaction_ to a counter change rather than half of one, so
+> every mover would have to remember to announce on every path, rollback paths included.
 > **A counter change nobody recorded is a corrupt audit trail, not a smaller feature.**
 
 The row records the deltas rather than the resulting totals, so replaying the ledger reconstructs
@@ -106,7 +106,7 @@ either counter at any point in time.
 ## The sweep
 
 `POST /inventory/reservations/sweep` releases every hold past its `expiresAt`; `npm run
-sweep:reservations` (B3) is the same work, driven every 5 minutes rather than on demand — see
+sweep:reservations` is the same work, driven every 5 minutes rather than on demand — see
 [Scheduled jobs](../reference/ops.md#scheduled-jobs). The admin route stays, deliberately: the
 operation is idempotent and cheap, and occasionally something an operator wants to force between
 ticks.
@@ -132,7 +132,7 @@ checkout hands it a longer one for a `bank_transfer` order (`NODE_BANK_TRANSFER_
 week by default). The sweep itself needed no change to honour this: it only ever reads each hold's
 own stored `expiresAt`, never a constant. See [Payments — Bank transfer](./payments.md#bank-transfer).
 
-**A card payment gone `processing` gets the same week, after the fact (B3).** `extendHoldForOrder`
+**A card payment gone `processing` gets the same week, after the fact.** `extendHoldForOrder`
 pushes a still-`held` hold's `expiresAt` out to `NODE_BANK_TRANSFER_HOLD_HOURS` from now, called by
 `settlePayment` the moment the provider reports `processing` — a SEPA debit, some bank redirects,
 can take days to settle, and the ordinary 15-minute window would let the sweep cancel an order
@@ -145,7 +145,7 @@ nothing left on it to extend.
 
 ## The threshold, and its two readers
 
-`NODE_LOW_STOCK_THRESHOLD` (5 by default) has two readers that deliberately count **different
+`NODE_LOW_STOCK_THRESHOLD` (5 by default, declared once as the infrastructure's `stockConfig` slice) has two readers that deliberately count **different
 populations**:
 
 | Reader                             | Population                     | Why                                                          |

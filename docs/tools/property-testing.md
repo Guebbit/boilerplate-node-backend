@@ -78,12 +78,17 @@ That second one is worth internalising: a property that fails on your own assert
 
 ## File map
 
-| Path                                                    | Contents                                                          |
-| ------------------------------------------------------- | ----------------------------------------------------------------- |
-| `src/modules/orders/tests/unit/totals.property.test.ts` | Arithmetic invariants, totality against hostile line items        |
-| `tests/cross-cutting/serialize.property.test.ts`        | Serializer guarantees over arbitrary document shapes              |
-| `tests/cross-cutting/search.property.test.ts`           | `escapeRegex` as a denial-of-service control; pagination totality |
-| `tests/cross-cutting/search-regex.test.ts`              | The example-based half — timing, named metacharacters, negatives  |
+| Path                                                                          | Contents                                                                        |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| `src/modules/orders/tests/unit/totals.property.test.ts`                       | Arithmetic invariants, totality against hostile line items                      |
+| `tests/cross-cutting/serialize.property.test.ts`                              | Serializer guarantees over arbitrary document shapes                            |
+| `tests/cross-cutting/search.property.test.ts`                                 | `escapeRegex` as a denial-of-service control; pagination totality               |
+| `tests/cross-cutting/search-regex.test.ts`                                    | The example-based half — timing, named metacharacters, negatives                |
+| `src/modules/orders/tests/unit/money.property.test.ts`                        | `Money` never yields `NaN`, `Infinity` or a fraction of a minor unit            |
+| `src/modules/delivery/tests/unit/rates.property.test.ts`                      | the free-shipping boundary, for every items total                               |
+| `tests/cross-cutting/money-reconciliation.property.test.ts`                   | `orderTotal` composed with `priceShipping`, as every caller uses them           |
+| `src/modules/inventory/tests/integration/ledger.property.test.ts`             | replaying a ledger reproduces the counters (real Mongo)                         |
+| `src/modules/inventory/tests/integration/multi-line-reserve.property.test.ts` | `reserved` equals the open holds, `available == onHand - reserved` (real Mongo) |
 
 The same technique and the same two rules apply in the paired frontend, over `boilerplate-vue-frontend/src/infrastructure/utils/formatters.ts` and `boilerplate-vue-frontend/src/infrastructure/utils/uploads.ts`.
 

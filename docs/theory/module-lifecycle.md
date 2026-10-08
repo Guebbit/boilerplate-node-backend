@@ -9,15 +9,14 @@ Both halves are the same claim read in two directions:
 > costs `rm -rf` and a line. Anything else that breaks is **real coupling**, and seeing it is the
 > point.
 
-That claim is not aspirational — `wishlist` was added under it, and three domains were deleted under
-it. What each one actually cost is recorded below, honestly, including the parts that are more than
-one line.
+That claim is not aspirational — the cost of one real addition is recorded below, honestly,
+including the parts that are more than one line.
 
 ## The one registry, and everything that reads from the folder
 
 A module is named in exactly one place that decides whether it exists: `enabledModules` in
 `src/modules.ts`. Everything else a module has to say about itself sits in its own folder, and the
-tables that used to be edited by hand read it from there.
+tables built from it read it from there.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 50}}}%%
@@ -330,8 +329,8 @@ npm run complete
 
 ### What it actually cost
 
-`wishlist`, measured when the registry tables were still edited by hand (today the section-order
-entries and the docs registrations below are gone too):
+`wishlist`, measured at its addition, with the section-order entries and docs registrations since
+made optional or automatic:
 
 |                                                  |                                                            |
 | ------------------------------------------------ | ---------------------------------------------------------- |
@@ -434,12 +433,12 @@ tier named a domain, and that is the thing the four tiers exist to prevent.
 Breaks under `tests/**` and `scripts/**` are residue. They are worth fixing, but they do not
 invalidate the claim — and some of them are **supposed** to break:
 
-| Break                                                             | Verdict                                                                                               |
-| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| an integration test asserting a race between two deleted modules  | correct — no modules, no race                                                                         |
-| `spec-identity` reporting the shared bundles as forked            | correct — deleting a domain **is** a two-repo change, and this is it saying so                        |
-| a sweep canary whose floor was calibrated to the old module count | residue — compare the sweep against the disk instead, see [What it finds today](#what-it-finds-today) |
-| a central spec importing the deleted module                       | residue — the spec used a domain as sample data                                                       |
+| Break                                                             | Verdict                                                                                   |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| an integration test asserting a race between two deleted modules  | correct — no modules, no race                                                             |
+| `spec-identity` reporting the shared bundles as forked            | correct — deleting a domain **is** a two-repo change, and this is it saying so            |
+| a sweep canary whose floor was calibrated to a fixed module count | residue — compare the sweep against the disk instead, see [What it finds](#what-it-finds) |
+| a central spec importing the deleted module                       | residue — the spec used a domain as sample data                                           |
 
 ### What `demo:remove` does about the residue
 
@@ -506,7 +505,7 @@ npx tsc --noEmit                                  # THE assertion: 0 errors in s
                                                   # in src/** from a module that did not DECLARE
                                                   # the dependency in its manifest
 
-# and from generate-collections.ts if any of them declared probes
+# and from client-collections-bundle.ts if any of them declared probes
 npm run contracts:bundle
 npx spectral lint openapi.yaml --ruleset shared/contracts/spectral.yaml
 npm test                                          # everything else: a report, not a verdict
@@ -516,39 +515,26 @@ Pick domains that are **depended upon**, not leaves — deleting a leaf proves v
 above are the interesting set because `cart → products`, `cart → orders` and `orders → products` are
 all declared edges.
 
-### What it finds today
+### What it finds
 
-Re-run 2026-08-16, at thirteen modules: **62 type errors across 26 files, 47 of them under `src/`.**
-Read them in three piles, because only one is a problem — and it is empty.
+Read the output in three piles, because only one is a problem, and it must stay empty.
 
-**Legitimate — ten production files across four modules.** `delivery`, `inventory`, `payments` and
-`wishlist` stop compiling because they genuinely import what was deleted. That is a real coupling
-failing loudly at the file and line that holds it, and the answer is to delete the dependents too or
-pick a different set. An earlier run of this check reported "zero files in `src/`"
-— that was true when those four modules did not exist, not a property that was lost.
-**`scripts/db/**` is still at zero\*\*, and that is the number this exercise is actually defending.
+**Legitimate: a dependent module stops compiling.** A module that genuinely imports what was
+deleted fails loudly at the file and line that holds the coupling. The answer is to delete the
+dependents too or pick a different set. **`scripts/db/**` must stay at zero\*\*, and that is the
+number this exercise defends.
 
-**Correct — the section lists and the co-located specs that assert a deleted domain.** Six of the
-errors were the section lists and `client-collections-bundle.ts` naming `products`/`cart`/`orders`, which
-was the removal procedure announcing itself rather than residue (both are read from disk now). Ten more are the four dependent modules' own `tests/unit` and `tests/contract` files, which
-go with their modules.
+**Correct: specs that assert a deleted domain.** The co-located `tests/unit` and `tests/contract`
+files of the dependent modules go with their modules.
 
-**Residue — the rest.** Central specs using a domain as sample data:
-`tests/unit/infrastructure/observability/analytics.test.ts` (three modules' `analytics.ts`),
-`mailer-templates.test.ts` (three modules' `emails.ts`),
-`tests/integration/concurrency/cart-races.test.ts` (correct — no modules, no race) and
-`tests/contract/request-contract.test.ts`. Plus one worth naming separately: `account`'s own
-address-book specs import `products` and `cart` factories from a module `account` does not depend
-on, which `eslint-plugin-boundaries` permits (a sibling's `tests/` is a legal reach) and only this
-exercise makes visible.
+**Residue: central specs using a domain as sample data.** For example a mechanism test that
+imports several modules' `emails.ts` or `analytics.ts` to render or sweep them, or a spec that
+drives a race between two deleted modules. Also sibling `tests/` reaches that
+`eslint-plugin-boundaries` permits and only this exercise makes visible.
 
-The sweep canaries are **no longer in that pile.** They stated their floor as a literal calibrated
-to the nine-module build — `expect(files.length).toBeGreaterThanOrEqual(6)` and friends — and the
-interesting part is how they failed: not by breaking, but by going **slack**. Nine-module floors
-against a thirteen-module repo pass even with three domains deleted, so they had stopped asserting
-anything at all. Each now compares the sweep against the disk (`owners` equals the modules that have
-a `tests/` directory) with a floor of `≥ 1`, which both survives a deletion and actually bites when
-a walk silently misses a module.
+A sweep canary states its floor against the disk (`owners` equals the modules that have a `tests/`
+directory, floor `≥ 1`), never as a literal calibrated to today's module count: a literal goes slack
+as modules are added and stops asserting anything.
 
 ### Why this is a procedure and not a test
 
@@ -563,26 +549,23 @@ ones a sweep cannot express:
   modules' `emails.ts` to render every template. Every one of those imports is through a legitimate
   public surface, so no import rule can distinguish it from a correct one. What makes it fragile is
   the _reason_ for the import, and that is a judgement call.
-- **A named export from a generated file.** ~~`client-collections-bundle.ts` imports `seedProducts` and
-  `seedOrders` by name~~ — fixed when the dataset stopped being a bundle. It reads
-  `scenarios/subjects.ts` now, which states only ids and credentials rather than two domain-shaped
-  identifiers pulled from a generated file. Kept here as the worked example: the fix was not a lint
-  rule, it was removing the reason the import existed.
+- **A named export from a generated file.** The client-collection generator reads
+  `scenarios/subjects.ts`, which states only ids and credentials, rather than domain-shaped
+  identifiers pulled from a generated file. The fix for that kind of coupling is removing the reason
+  the import exists, not a lint rule.
 
-    The same file imports domain names again today — `src/modules/<name>/probes.ts`, for the four
-    modules that declare probes — and that one is deliberate. The difference is what the import is
-    _for_: `seedProducts` was a domain used as a convenient handle on data the file could have read
-    generically, while a probe is a thing the module genuinely owns and nothing else can supply. So
-    the break it produces is informative rather than annoying, which is the whole test. An import that
-    fails loudly when a module goes away is not coupling to design out; it is the checklist entry the
-    compiler is holding for you.
+    The generator does import `src/modules/<name>/probes.ts` for the modules that declare probes,
+    and that is deliberate. A probe is a thing the module genuinely owns and nothing else can
+    supply, so the break it produces when the module goes away is informative rather than
+    annoying. An import that fails loudly when a module goes away is not coupling to design out; it
+    is the checklist entry the compiler is holding for you.
 
 - **A whole-word scan for domain names.** Tried and rejected: `observability` and `locales` are
   module names _and_ infrastructure folder names, and a module's `scenarios/<name>.ts` names
   collections forever by design. The false-positive rate makes it unusable.
 
 What the suite does cover is the neighbouring ground: `eslint-plugin-boundaries` holds a
-co-located spec to its sibling's barrel, and `route-spec-parity.test.ts` keeps every mounted route in
+co-located spec to its sibling's barrel, and `tests/contract/route-spec-parity.test.ts` keeps every mounted route in
 the spec and every spec operation mounted. Neither is a substitute for actually deleting a folder.
 
 ## Related pages

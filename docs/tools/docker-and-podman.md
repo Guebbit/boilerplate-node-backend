@@ -63,7 +63,7 @@ flowchart LR
 | Area                | Current implementation                                                                                                                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | App image           | `docker/Dockerfile` based on `node:24-trixie-slim` (Debian, glibc), with Chromium for Puppeteer-driven PDF rendering and a `mongod` baked in at build time — see [Running the gate in a container](#running-the-gate-in-a-container) |
-| Local orchestration | `docker-compose.yml` defines app, MongoDB, Redis, RabbitMQ, and the full observability stack                                                                                                                                         |
+| Local orchestration | `docker-compose.yml` defines app, cron, MongoDB, two Redis instances, RabbitMQ, and opt-in profiles: observability, analytics, docs, integrations                                                                                    |
 | Dev workflow        | bind mount source code into `/app`, keep `node_modules` inside the container, switch between single-worker and clustered dev commands                                                                                                |
 | Podman support      | `compose:restart`, `compose:rebuild` and `compose:kill` run `${CONTAINER_ENGINE:-podman} compose`; export `CONTAINER_ENGINE=docker` to switch                                                                                        |
 
@@ -92,27 +92,39 @@ on the host clearly shows, raised from inside `/app`.
 | --------- | --------------------------------------------------------------------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
 | `app`     | `docker/Dockerfile` (node:24-trixie-slim + Chromium + baked `mongod`) | `NODE_PORT` (default `3000`) | Runs the Express API. In dev: bind-mounted source, hot-reload. Depends on `database`, `redis`, `rabbitmq`, `otel-collector`. | [Runtime](./runtime.md) |
 
+### Scheduler
+
+| Container | Image               | Port(s) | Role                                                                                                                    | Read next               |
+| --------- | ------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `cron`    | `docker/Dockerfile` | none    | Runs `docker/crontab` with supercronic, the production scheduler. One replica, so two `reap:orders` passes cannot race. | [Runtime](./runtime.md) |
+
 ### Core data
 
 | Container  | Image                   | Port(s)                                | Role                                                                                                                                                                                                                                                            | Read next                                   |
 | ---------- | ----------------------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
 | `database` | `mongo:8`               | `27017`                                | Primary datastore. Persists in the named volume `boilerplate_mongodb_volume`; seeded by the `app` container's own startup command, never by a host `npm run dev` — see [Which database am I looking at?](../getting-started.md#which-database-am-i-looking-at). | [MongoDB & Mongoose](./mongodb-mongoose.md) |
 | `redis`    | `redis:7`               | `6379`                                 | Server-side response cache. Cache is intentionally ephemeral — data is lost on restart.                                                                                                                                                                         | [Redis Cache](./redis-cache.md)             |
+| `limits`   | `redis:7`               | `6380` (loopback)                      | Second Redis for rate-limit counters and single-use claims. `noeviction`, so a counter is never dropped under memory pressure. The `redis` cache evicts freely.                                                                                                 | [Redis Cache](./redis-cache.md)             |
 | `rabbitmq` | `rabbitmq:4-management` | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser.                                                                                                                                                                      | [RabbitMQ](./rabbitmq.md)                   |
 
 ### Observability stack
 
 Behind the `observability` profile: start it with `--profile observability` or `npm run compose:up:full`.
 
-| Container        | Image                                          | Port(s)                      | Role                                                                                                                       | Read next                                  |
-| ---------------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                      | [OpenTelemetry](./opentelemetry.md)        |
-| `tempo`          | `grafana/tempo:2.6.1`                          | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                            | [Tempo](./tempo.md)                        |
-| `prometheus`     | `prom/prometheus:v2.55.1`                      | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                          | [Prometheus](./prometheus.md)              |
-| `alertmanager`   | `prom/alertmanager:v0.27.0`                    | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications. Null receiver by default in local dev.                | [Prometheus](./prometheus.md#alertmanager) |
-| `loki`           | `grafana/loki:3.3.2`                           | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                       | [Loki](./loki.md)                          |
-| `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman. | [Loki](./loki.md)                          |
-| `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.            | [Grafana](./grafana.md)                    |
+| Container        | Image                                          | Port(s)                      | Role                                                                                                                       | Read next                                             |
+| ---------------- | ---------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `otel-collector` | `otel/opentelemetry-collector-contrib:0.114.0` | `4317` (gRPC), `4318` (HTTP) | Single ingestion point for all OTLP telemetry from the app. Fans out traces to Tempo.                                      | [OpenTelemetry](./opentelemetry.md)                   |
+| `tempo`          | `grafana/tempo:2.6.1`                          | internal only                | Stores distributed traces received from the OTel Collector. Queried by Grafana.                                            | [Tempo](./tempo.md)                                   |
+| `prometheus`     | `prom/prometheus:v2.55.1`                      | `9090`                       | Scrapes `/observability/metrics` from the app every 15 s. Evaluates alert rules. 7-day retention.                          | [Prometheus](./prometheus.md)                         |
+| `alertmanager`   | `prom/alertmanager:v0.27.0`                    | `9093`                       | Receives firing alerts from Prometheus. Routes/groups notifications. Null receiver by default in local dev.                | [Prometheus](./prometheus.md#alertmanager)            |
+| `loki`           | `grafana/loki:3.3.2`                           | `3100`                       | Stores log lines shipped by Promtail. Queried by Grafana via LogQL. 7-day retention.                                       | [Loki](./loki.md)                                     |
+| `promtail`       | `grafana/promtail:3.3.2`                       | internal only                | Tails container log files and pushes entries to Loki. Needs `CONTAINER_LOGS_PATH` / `PROMTAIL_CONFIG` in `.env` on Podman. | [Loki](./loki.md)                                     |
+| `alloy`          | `grafana/alloy:v1.5.1`                         | `12347` (Faro), `12345` (UI) | Receives browser telemetry (Grafana Faro) from the frontend; fans it into Loki and the OTel Collector.                     | [Frontend Observability](./frontend-observability.md) |
+| `grafana`        | `grafana/grafana:11.4.0`                       | `3001`                       | Unified UI: explore traces (Tempo), metrics (Prometheus), and logs (Loki). Anonymous admin access in local dev.            | [Grafana](./grafana.md)                               |
+
+### Analytics and docs (opt-in)
+
+Behind the `analytics` profile: `umami` (self-hosted product analytics, see [Product Analytics](./analytics.md)), its `umami-db` Postgres and a one-shot `umami-init`. Behind the `docs` profile: `docs`, the VitePress site on Nginx (`DOCS_PORT`, default `3090`).
 
 ### Integrations (opt-in)
 
@@ -136,12 +148,12 @@ rather than always-on.
 
 ## Service groups
 
-| Group         | Services                                                                               | Why they are here                                                     |
-| ------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| App runtime   | `app`                                                                                  | runs the backend with container-friendly dev commands                 |
-| Core data     | `database`, `redis`, `rabbitmq`                                                        | persistence, cache/pub-sub, and async jobs                            |
-| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `grafana` | traces, metrics, logs, and dashboards                                 |
-| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                      | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
+| Group         | Services                                                                                        | Why they are here                                                     |
+| ------------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| App runtime   | `app`, `cron`                                                                                   | runs the backend and its scheduled jobs                               |
+| Core data     | `database`, `redis`, `limits`, `rabbitmq`                                                       | persistence, cache, rate-limit counters, and async jobs               |
+| Observability | `otel-collector`, `tempo`, `prometheus`, `alertmanager`, `loki`, `promtail`, `alloy`, `grafana` | traces, metrics, logs, and dashboards                                 |
+| Integrations  | `webhook-tester`, `webhook-tester-tls`, `mailpit`                                               | opt-in sinks for outbound webhooks and mail; `--profile integrations` |
 
 ### The `integrations` profile is where a real consumer would go
 
@@ -250,10 +262,7 @@ the whole directory and any service left on the default would simply be missing 
 Whichever path you give is mounted at `/var/log/host-containers`, so the two promtail configs
 differ only in the glob under it and the parser stage — CRI for podman, JSON envelope for docker.
 
-There is no override file and no `-f` list. There used to be both, plus a `scripts/compose.ts` <!-- doc-paths:ignore -->
-that chose between them; the whole apparatus existed to move one volume mount, and it went wrong
-in the way that machinery does — it selected the docker override on a podman-only machine and
-Promtail silently tailed nothing.
+There is no override file and no `-f` list.
 
 ### Choosing the engine
 

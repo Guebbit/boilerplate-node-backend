@@ -16,7 +16,7 @@ flowchart LR
 
 That loop, repeated per section, is most of this page.
 
-## The five rules
+## The six rules
 
 | Rule                                                 | What it looks like                                                                                             |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -62,8 +62,9 @@ flowchart LR
     class B,Fresh good;
 ```
 
-Verify an anchor link before shipping it — `npm run check:docs-references` resolves every internal
-link and anchor against the built site and fails the build if one doesn't exist.
+Verify a link before shipping it. `npm run docs:build` fails on a dead link between two pages, and
+`npm run check:docs-references` fails on a dead file path (and a `#anchor` on a tracked page)
+named in an inline code span.
 
 ```bash
 npm run check:docs-references
@@ -93,13 +94,13 @@ passing a check. Judgement stays with whoever writes the page.
 | Page                                             | Diagrams | Why it works                                                         |
 | ------------------------------------------------ | -------- | -------------------------------------------------------------------- |
 | [Clustering & Shutdown](../theory/clustering.md) | 3        | The model for a SMALL page: diagram → env table → diagram → sequence |
-| [Modules](../theory/modules.md)                  | 8        | The model for a LONG page                                            |
-| [Tactical DDD](../theory/tactical-ddd.md)        | 8        | Concept-heavy material kept visual throughout                        |
-| [Mutation Testing](../tools/mutation-testing.md) | 7        | The most worked, copy-pasteable examples in the repo                 |
+| [Modules](../theory/modules.md)                  | 7        | The model for a LONG page                                            |
+| [Tactical DDD](../theory/tactical-ddd.md)        | 11       | Concept-heavy material kept visual throughout                        |
+| [Mutation Testing](../tools/mutation-testing.md) | 9        | The most worked, copy-pasteable examples in the repo                 |
 
 ## Where to go next
 
-| You want to                             | Read                            |
-| --------------------------------------- | ------------------------------- |
-| See the file glossary these docs index  | [File Glossary](./)             |
-| Find every internal link/anchor checker | `npm run check:docs-references` |
+| You want to                            | Read                            |
+| -------------------------------------- | ------------------------------- |
+| See the file glossary these docs index | [File Glossary](./)             |
+| Check the file paths the docs name     | `npm run check:docs-references` |

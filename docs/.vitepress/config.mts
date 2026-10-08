@@ -62,6 +62,7 @@ export default withMermaid(
                             { text: 'Authorization', link: '/theory/authorization' },
                             { text: 'Tenancy', link: '/theory/tenancy' },
                             { text: 'Data Protection', link: '/theory/data-protection' },
+                            { text: 'Data Retention', link: '/theory/data-retention' },
                             {
                                 text: 'Web Attacks & Defences',
                                 link: '/theory/defences/',

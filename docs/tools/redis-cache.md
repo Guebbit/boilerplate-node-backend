@@ -426,7 +426,7 @@ Two consequences worth keeping in mind:
 
 ### Queue workers
 
-`src/infrastructure/adapters/` (email, PDF, image digest) is a different meaning of the word:
+`src/infrastructure/adapters/` (email, image digest) plus the module-owned consumers (webhook delivery, account export) are a different meaning of the word:
 those are RabbitMQ consumers, and `registerWorkers()` runs them **inside every cluster worker**,
 so N processes consume from the same queues.
 
@@ -434,15 +434,15 @@ so N processes consume from the same queues.
 flowchart LR
     subgraph W["Each cluster worker process"]
         E["Express routes"] --> Cache[("Redis cache")]
-        Q["Mail + PDF consumers"] --> Rabbit[("RabbitMQ")]
+        Q["Mail + module consumers"] --> Rabbit[("RabbitMQ")]
         I["Image digest consumer"] --> Rabbit
         I -. invalidates on a<br/>matched writeback .-> Cache
     end
     Q -. no cache access .-x Cache
 ```
 
-That is fine for two of the three shipped workers — sending mail and rendering a PDF change no
-cached resource. The image digest worker is the exception, and it is one of the
+That is fine for every shipped worker but one — sending mail, delivering a webhook and building
+an export change no cached resource. The image digest worker is the exception, and it is one of the
 [writes that bypass the API](#writes-that-bypass-the-api) described above: the write that enqueues
 its job already cleared the target's cache tag, before the digest ran, so the response that write
 re-warmed still carries the pre-digest placeholder. The worker clears the same tag a second time
@@ -470,6 +470,8 @@ A non-zero rate on that counter means some endpoint is serving a stale answer to
 | `NODE_REDIS_CACHE_ENABLED`         | `1`                     | `0` serves every request uncached — the switch to reach for when a stale answer is worse than a slow one, and what the test suites set |
 | `NODE_REDIS_URL`                   | —                       | Wins outright; blanking it is how `npm run host` falls through to the host/port pair below                                             |
 | `NODE_REDIS_HOST` / `_PORT`        | `127.0.0.1` / —         | Used only when the URI is unset or empty                                                                                               |
+| `NODE_REDIS_PASSWORD`              | —                       | Password for the host/port pair; a URI carries its own                                                                                 |
+| `NODE_RATE_LIMIT_REDIS_URL`        | —                       | The `limits` instance — see [Two Redis instances](#two-redis-instances)                                                                |
 | `NODE_REDIS_CACHE_PREFIX`          | —                       | Namespaces every key, so two deployments may share one Redis                                                                           |
 | `NODE_REDIS_CACHE_DEV_TTL_MAX`     | `30`                    | Outside production, clamps every route's declared TTL — see [Writes that bypass the API](#writes-that-bypass-the-api)                  |
 | `NODE_REDIS_CACHE_MAX_BYTES`       | `262144` (256 KB)       | See [Entry size is bounded](#entry-size-is-bounded)                                                                                    |

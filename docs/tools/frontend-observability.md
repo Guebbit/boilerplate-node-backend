@@ -23,7 +23,8 @@ Grafana stack does well.
 
 ## What this repo recommends (lightweight)
 
-Two light additions cover both jobs while staying self-hosted and podman-friendly.
+Two light additions cover both jobs while staying self-hosted and podman-friendly. Both already
+ship in `docker-compose.yml` (`alloy`; `umami` behind the opt-in `analytics` profile).
 
 ### Errors + FE traces → Grafana Faro + Alloy
 
@@ -47,10 +48,10 @@ pageviews and basic events. Replaces PostHog cloud for the common case.
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 65}}}%%
 flowchart LR
     FE["Frontend\n(Faro Web SDK)"]
-    Alloy["Grafana Alloy\n(new, 1 container)"]
-    Umami["Umami / Plausible\n(new, 1 container + DB)"]
+    Alloy["Grafana Alloy\n(1 container)"]
+    Umami["Umami / Plausible\n(1 container + DB)"]
 
-    subgraph Existing["Already in this repo"]
+    subgraph Existing["Core observability stack"]
         Loki["Loki\nlogs/errors"]
         Tempo["Tempo\ntraces"]
         Prom["Prometheus\nweb-vitals"]
@@ -74,7 +75,7 @@ flowchart LR
     class Loki,Tempo,Prom,Grafana existing;
 ```
 
-**Cost:** ~2 new containers total, everything else reused. **Trade-off:** no polished
+**Cost:** 2 extra containers on top of the core stack, everything else reused. **Trade-off:** no polished
 "Issues" triage UI for errors (you build Grafana panels), and Umami is web analytics,
 not full product analytics (no rich funnels/retention/feature flags).
 

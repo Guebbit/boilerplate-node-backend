@@ -74,6 +74,11 @@ only when the two agree. No new server secret, unlike a signed token would need.
 - `httpOnly` / `sameSite: 'lax'`, `secure` in production — `createRefreshCookie`'s flags exactly.
 - Cleared by **both** a successful and a failed callback.
 
+A second cookie, `oauth_verifier`, rides beside it: the **PKCE** verifier (RFC 7636, `S256` only).
+`state` defeats a forged callback; the verifier defeats a stolen authorization code, since the
+code is redeemable only by whoever holds it. Same lifetime, flags and clearing points. The port's
+`authorizeUrl` takes the challenge and `exchangeCode` the verifier.
+
 ## What else rides the round trip: `continue` and `locale`
 
 The start route accepts two optional query params. Each is saved as a cookie beside `oauth_state`

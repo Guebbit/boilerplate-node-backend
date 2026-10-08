@@ -99,23 +99,19 @@ A key you can grep for by shape beats a key you have to know the default of — 
 `any` is noise on most of the file, since most families have no owner to be `self` about in the
 first place.
 
-**There is no wildcard of any kind.** A per-family `manage` used to expand to "every action a
-family declares", which made a wide read reachable only by also handing out delete — the fix this
-model exists to demonstrate, on `orders`/`payments`: the support desk needed to read an order that
-was never its own, and the only way to say that was `orders.manage`, which also grants deleting
-it. Breadth on the key itself says "read everyone's, change nothing" directly, with no wildcard
-involved. A SCOPE wildcard, `all.manage`, survived longer as `admin`'s one shortcut for "every
-declared key in this scope" — it is gone too. `admin` now holds every declared tenant key **by
-name**, spelled out in `shared/authorization-roles.yaml` exactly like every other role, so a key a
-new route needs is a line added to that file, not an assumption the wildcard was already covering
-it — see that file's own closing note for why.
+**There is no wildcard of any kind.** No per-family `manage`, no scope-wide `all.manage`. Breadth
+on the key itself says "read everyone's, change nothing" directly: the support desk reads an order
+that was never its own with `orders.any.read`, and that key grants no delete. `admin` holds every
+declared tenant key **by name** (bar the two `shopperOnly` basket keys), spelled out in
+`shared/authorization-roles.yaml` like every other role, so a key a new route needs is a line added
+to that file — the conformance suite refuses a declared key the list omits. See the file's own
+header note for why.
 
-**A family needs a concrete key for every action a route asks about.** `apikeys` once declared
-only a read and a `manage`, so "holds every concrete key in the family" reduced to "holds the
-read" — a read-only role satisfied a guard meant for a minter. The fix generalised: `manage` is
-gone, so every action a route can gate on is its own declared key. One collapse remains, on
-purpose: `holdsKey` (`kernel/ability.ts`) answers `can(action, subject)`, so `orders.self.read` and
-`orders.any.read` are the same question to a guard. Use `heldKeys` to enumerate what a caller holds.
+**A family needs a concrete key for every action a route asks about.** Every action a route can
+gate on is its own declared key, so a read-only role can never satisfy a guard meant for a minter.
+One collapse remains, on purpose: `holdsKey` (`kernel/ability.ts`) answers `can(action, subject)`,
+so `orders.self.read` and `orders.any.read` are the same question to a guard. Use `heldKeys` to
+enumerate what a caller holds.
 
 **Tenant keys are bare; platform keys are always prefixed.** That asymmetry is the whole safety
 property:

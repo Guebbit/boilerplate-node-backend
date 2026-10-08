@@ -25,16 +25,30 @@ language is kept per context rather than shared.
 | **Session**          | Proof of who is asking, carried in cookies. An access token to spend and a refresh token to renew it. |
 | **Access token**     | Short-lived bearer of identity. Never stored — if it is valid it is trusted.                          |
 | **Refresh token**    | Long-lived, revocable, stored on the User record. Losing it is what logging out means.                |
-| **Address**          | An entry in the account’s address book. The one collection this module owns outright.                 |
 | **Account deletion** | Two steps — a request that issues a token, and a confirm that destroys the record. Never one call.    |
+
+## `access`
+
+| Term           | What it means here                                                                                                                                 |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Tenant**     | The shop (or the platform) a role is held in. A membership is always one person, one tenant, one role.                                             |
+| **Membership** | The stored ASSIGNMENT of a role to a user in a tenant. A role's own permissions are never stored — they live in `shared/authorization-roles.yaml`. |
+| **Level**      | `admin`, `staff` or `user`: the rank a role carries. A write on someone else's thing needs the owner strictly below the caller.                    |
+
+## `addresses`
+
+| Term             | What it means here                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| **Address**      | An entry in a user's address book. The one collection this module owns outright.               |
+| **Address book** | One document per user, holding their saved shipping addresses; a checkout resolves against it. |
 
 ## `antibot`
 
-| Term             | What it means here                                                                                                                                            |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Provider**     | The active human-challenge implementation (`none`, `altcha`, `turnstile`) — this module publishes which one, it never runs the gate itself.                   |
-| **Verdict**      | `'ok'` or `'refused'`, what a guarded check (a challenge, an email policy) answers — never a raw boolean, so a caller cannot mistake `undefined` for a pass.  |
-| **Email policy** | How hard to look at a submitted address before trusting it: `off`, `disposable` (deny known throwaway domains) or `mx` (require a resolvable mail exchanger). |
+| Term             | What it means here                                                                                                                                                             |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Provider**     | The active human-challenge implementation (`none`, `altcha`, `turnstile`), picked by `NODE_ANTIBOT_PROVIDER` — this module publishes which one, it never runs the gate itself. |
+| **Verdict**      | `'ok'` or `'refused'`, what a guarded check (a challenge, an email policy) answers — never a raw boolean, so a caller cannot mistake `undefined` for a pass.                   |
+| **Email policy** | How hard to look at a submitted address before trusting it: `off`, `disposable` (deny known throwaway domains) or `mx` (require a resolvable mail exchanger).                  |
 
 ## `api-keys`
 
@@ -75,31 +89,46 @@ language is kept per context rather than shared.
 
 ## `feedback`
 
-| Term                | What it means here                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Contact request** | A message from anyone, account or not. Identified by the email on the form, never by a user reference. |
-| **Triage**          | The admin state of a request — read, handled, closed. The only thing about it that changes.            |
+| Term                | What it means here                                                                                                                                 |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Contact request** | A message from anyone, account or not. Identified by the email on the form, never by a user reference.                                             |
+| **Triage**          | The admin state of a request — `new`, `in_progress`, `resolved` or `spam`. The only thing about it that changes; staff may move it to any of them. |
 
 ## `inventory`
 
-| Term               | What it means here                                                                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.    |
-| **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                         |
-| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                 |
-| **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                               |
-| **Transition**     | One of the six ways a counter may move. Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row.    |
-| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing. |
-| **Sweep**          | The expiry tick. An operator is the cron — the application ships no scheduler of its own.                                                        |
+| Term               | What it means here                                                                                                                                                                                                         |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.                                                                              |
+| **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                                                                                                   |
+| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                                                                                           |
+| **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                                                                                                         |
+| **Transition**     | One of the seven ways a counter may move (`reserve`, `commit`, `release`, `expire`, `receive`, `adjust`, `restock`). Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row. |
+| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.                                                                           |
+| **Sweep**          | The expiry tick. An operator is the cron — the application ships no scheduler of its own.                                                                                                                                  |
+
+## `invoicing`
+
+| Term            | What it means here                                                                                                          |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| **Invoice**     | The legal record of a paid order, frozen at issue and never re-read from the order. Reached only as a rendered PDF.         |
+| **Credit note** | The reversal of ONE refund: a full refund mirrors the invoice, a partial one carries only the refunded share.               |
+| **Number**      | `{year}-{sequence}`, gap-free, one series per document kind — a credit note never borrows a number from the invoice series. |
 
 ## `locales`
 
-| Term           | What it means here                                                                                                                                        |
-| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Language**   | A tag this deployment offers, from either tier. Registering one in the database never teaches the API to answer in it — only a deployed file does that.   |
-| **Entry**      | One translated string: a language, a dotted key and its text. Stored one row per pair, so a key is editable on its own.                                   |
-| **Dictionary** | The nested tree a client consumes, built from entries on read. Never stored in that shape — the rows are flat because flat is what is editable.           |
-| **Scope**      | What a language can do here — answer API requests, offer a downloadable dictionary, or both. The two are independent facts and the manifest reports both. |
+| Term           | What it means here                                                                                                                                                                        |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Language**   | A tag this deployment offers, from either tier. Registering one in the database never teaches the API to answer in it — only a deployed file does that.                                   |
+| **Entry**      | One translated string: a language, a dotted key and its text. Stored one row per pair, so a key is editable on its own.                                                                   |
+| **Dictionary** | The nested tree a client consumes, built from entries on read. Never stored in that shape — the rows are flat because flat is what is editable.                                           |
+| **Tenants**    | What a language can do here — the `backend` tenant answers API requests, a frontend tenant offers a downloadable dictionary. The two are independent facts and the manifest reports both. |
+
+## `notifications`
+
+| Term             | What it means here                                                                                                            |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| **Notification** | One message in a user's inbox, written by a domain event. Stays until its owner deletes it or the per-user cap pushes it out. |
+| **Inbox**        | A user's notifications, newest `NODE_NOTIFICATIONS_MAX_PER_USER` kept, pushed live over SSE.                                  |
 
 ## `observability`
 
@@ -116,8 +145,8 @@ language is kept per context rather than shared.
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Order**        | What a customer bought, frozen. Immutable in substance: only its status moves.                                                                                                                                                     |
 | **Order item**   | A line holding an embedded copy of the product as it stood at purchase time, not a reference to it.                                                                                                                                |
-| **Status**       | Where an order is in its lifecycle. A closed set from the contract, moving along the edges `domain/lifecycle.ts` declares — every guard in this module and in `payments` reads that one table.                                     |
-| **Cancellation** | A status change that releases the order’s held units and triggers a refund. Legal from the statuses the lifecycle table gives a customer — `pending` and `paid`.                                                                   |
+| **Status**       | Where an order is in its lifecycle. A closed set from the contract, moving along the edges `domain/lifecycle.ts` declares — every guard in this module, and the ones its siblings ask through `orders`, read that one table.       |
+| **Cancellation** | A status change that releases the order’s held units and triggers a refund. Legal from the statuses the lifecycle table gives the actor — `pending` and `paid` for a customer, `processing` as well for staff.                     |
 | **Expiry**       | A cancellation the shop initiates because the order’s hold on its units ran out before payment did. Arrives as `inventory.reservation_expired`.                                                                                    |
 | **Total**        | Line price × quantity, summed in minor units and returned as a decimal. Computed, never stored as truth.                                                                                                                           |
 | **Override**     | A staff correction of the status outside the ordinary lifecycle table, always with a reason and always recorded on the order — see `delivery`'s own entry for the two shapes it takes. Never reaches `paid`, never moves backward. |
@@ -139,6 +168,14 @@ language is kept per context rather than shared.
 | **Available**   | A read-only cached copy of `inventory`'s own figure, kept in step by a synchronous call inside `applyTransition` — never written here. See `inventory`'s own entries for the source of truth. |
 | **Soft delete** | Withdrawal from sale, reversible. The row survives so orders that embedded it stay readable.                                                                                                  |
 
+## `returns`
+
+| Term           | What it means here                                                                                                              |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **Return**     | A request to send goods back, keyed by order and never by user, so erasing an account leaves it with no personal data.          |
+| **Status**     | `requested`, `approved`, `declined`, `received` or `closed`; each write is a conditional claim from a fixed set of statuses.    |
+| **Withdrawal** | The EU right to cancel a distance sale; the order carries the deadline (`withdrawUntil`) and a return can be raised against it. |
+
 ## `users`
 
 | Term            | What it means here                                                                                                               |
@@ -153,7 +190,7 @@ language is kept per context rather than shared.
 | Term             | What it means here                                                                                                                                                                                                        |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Subscription** | One endpoint, owned by whoever configured it, listening for a set of event types. The unit an auto-disable acts on.                                                                                                       |
-| **Delivery**     | One attempt to POST one event to one subscription. Tracked through `pending` → `in-flight` → `succeeded`/`failed`/`exhausted`.                                                                                            |
+| **Delivery**     | One attempt to POST one event to one subscription. Tracked through `pending` → `in-flight` → `succeeded`/`exhausted`.                                                                                                     |
 | **Lease**        | A visibility timeout on an `in-flight` delivery (`leaseExpiresAt` + a claim token) — only the holder may write the outcome, and an expired lease is picked up again, so a crash mid-delivery cannot strand a row forever. |
 | **Ladder**       | The five-step retry schedule (5s, 5m, 30m, 2h, 10h) a failing subscription climbs — about a subscriber being down, distinct from the broker's own short-lived job retries.                                                |
 | **Auto-disable** | What happens after `WEBHOOK_MAX_CONSECUTIVE_FAILURES` (5) consecutive exhausted chains — the subscription turns off and its owner is emailed.                                                                             |

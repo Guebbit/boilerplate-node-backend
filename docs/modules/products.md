@@ -49,7 +49,7 @@ The catalogue is the model every other context conforms to rather than translate
 order item, a stock movement — each is a statement about a product, which is why this module is
 `core` despite doing nothing more interesting than CRUD.
 
-**It depends on nothing, and staying that way was a deliberate decision.** Products genuinely needs
+**It depends on nothing, deliberately.** Products genuinely needs
 something back: when a product disappears, every cart and wishlist holding it has to drop the
 reference. As an import that would be a cycle. As `product.deleted` it is products announcing and
 two modules listening, and the arrow still points one way.
@@ -120,10 +120,11 @@ product can no longer be **newly** sold, and neither reaches back into an order 
 
 ## Configuration
 
-| Variable                | Default | Meaning                                                                                                                               |
-| ----------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_VAT_RATE_DEFAULT` | `0.22`  | The rate charged on a product with no `taxClass` — every product's fallback. Range-checked at boot: outside `[0, 1)` refuses to start |
-| `NODE_VAT_RATE_REDUCED` | `0.1`   | The rate charged on a product whose `taxClass` is `reduced`. Same boot-time range check as the default                                |
+| Variable                   | Default | Meaning                                                                                                                                                                                                          |
+| -------------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_VAT_RATE_DEFAULT`    | `0.22`  | The rate charged on a product with no `taxClass` — every product's fallback. Range-checked at boot: outside `[0, 1)` refuses to start                                                                            |
+| `NODE_VAT_RATE_REDUCED`    | `0.1`   | The rate charged on a product whose `taxClass` is `reduced`. Same boot-time range check as the default                                                                                                           |
+| `NODE_LOW_STOCK_THRESHOLD` | `5`     | Availability at or under which `lowStock` is true. The same variable `inventory` reads for its stock board (one `stockConfig` slice in `src/infrastructure/runtime/config.ts`), so the badge and the board agree |
 
 Both are read per call from one slice (`config.ts`), which parses a set value through a
 whole-string-decimal grammar and refuses anything outside `[0, 1)` — at boot, and by the slice itself

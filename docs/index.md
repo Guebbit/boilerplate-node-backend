@@ -146,10 +146,10 @@ flowchart LR
 
 ## Good starting points
 
-- Never run this repo before? Start at [Getting Started](./getting-started.md) — four commands to a browsable API.
+- Never run this repo before? Start at [Getting Started](./getting-started.md) — three commands to a browsable API.
 - Deploying instead of developing? [Getting Started — Production](./getting-started-production.md).
 - Not a developer, or explaining this to someone who is not? [Demo Shop](./demo-ecommerce/) — the whole application in five short pages.
-- Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same nine blocks every time.
+- Want to know what one domain does, end to end? [Modules](./modules/) — one page each, same shape every time.
 - Found a file and have no idea what it is? [File Glossary](./reference/) — one hop to an answer.
 - Edited a module's contract fragment and unsure what to rerun? [Regenerating After a Change](./api/regenerating.md).
 - Want the app shape? Start at [Theory Overview](./theory/) and [Layers](./theory/layers.md).

@@ -68,7 +68,7 @@ flowchart TD
     classDef test fill:#ede9fe,stroke:#7c3aed,color:#111827;
     classDef obs fill:#fce7f3,stroke:#db2777,color:#111827;
     class NODE,TS,EXPRESS run;
-    class MONGOOSE,MONGO,REDIS,RMQ,MIGRATE data;
+    class MONGOOSE,MONGO,REDIS,RMQ data;
     class HELMET,CORS,RATE,JWT,ZOD,MULTER sec;
     class ORVAL,SPECTRAL,MODELINA,PRISM contract;
     class JEST,SUPERTEST,MEMSERVER,FC,STRYKER,AUTOCANNON test;
@@ -148,7 +148,7 @@ prevent.
 
 **Problem it solves.** Without rate limiting, a single client can flood the API with requests, degrading it for everyone else or escalating a brute-force credential attack.
 
-**In this repo.** Applied globally in `src/app/security.ts`. Window and max-requests are configurable via `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
+**In this repo.** A global limiter is mounted in `src/app/security.ts`, with stricter per-route budgets declared by each module (the full table is generated in [Security](./security.md)). Window and max-requests of the global one come from `NODE_RATE_LIMIT_WINDOW_MS` and `NODE_RATE_LIMIT_MAX`.
 
 → [Security](./security.md)
 
@@ -186,7 +186,7 @@ prevent.
 
 **Problem it solves.** Serving the same expensive GET response (complex aggregation, multiple DB joins) repeatedly is wasteful. Without a cache, every request pays the full database cost. Redis stores computed responses with a TTL so repeated reads are served instantly without touching MongoDB.
 
-**In this repo.** Optional server-side response cache for GET endpoints. Each cached entry is scoped to the authenticated user (no cross-user leakage) and tagged by domain (`products`, `orders`, `users`). Writes invalidate related tags. Redis pub/sub synchronises eviction across all worker processes. When Redis is unavailable the API continues without caching.
+**In this repo.** Optional server-side response cache for public GET endpoints (products, locales). A route whose answer depends on who is asking is never cached server-side; entries are tagged by domain and a write invalidates its tags. All worker processes share one keyspace, so no broadcast is needed. A second, non-evicting Redis holds the rate-limit counters. When Redis is unavailable the API continues without caching.
 
 → [Redis Cache](./redis-cache.md)
 
@@ -198,7 +198,7 @@ prevent.
 
 **Problem it solves.** Some operations (sending email, generating a PDF) are slow or unreliable. Running them inside the HTTP handler means the client waits for them to finish — and if they fail, the request fails too. A message queue decouples the trigger from the work: the handler publishes a job and responds immediately; a separate consumer does the heavy work at its own pace and retries on failure.
 
-**In this repo.** Used for email delivery and async PDF generation. Controllers publish to the `emails` or `pdf` queue via `publishToQueue()`. Workers in `src/infrastructure/adapters/` consume those queues. When RabbitMQ is not configured all queue calls silently no-op.
+**In this repo.** Used for email delivery (`worker.email.send`), image digests, webhook delivery and account exports. Services publish through `enqueueEmail()` / `publishToQueue()`; consumers are registered at boot by `src/app/workers.ts` and by each module. Invoice PDFs are rendered synchronously, not queued. When RabbitMQ is not configured the queue calls fall back inline or no-op.
 
 → [RabbitMQ](./rabbitmq.md)
 
@@ -212,7 +212,7 @@ prevent.
 
 **Problem it solves.** Sending a formatted HTML email requires connecting to an SMTP relay, rendering a template, handling attachments, and dealing with SMTP errors. Nodemailer abstracts the transport; EJS handles the HTML so email markup stays in template files, not in code strings.
 
-**In this repo.** Used for password-reset emails, order confirmations, and contact-form notifications. Templates live in `src/modules/*/templates/*.ejs`, one directory per owning module — only the shared layout partials stay under `shared/templates/layouts/`. Calls go through `enqueueEmail()` which either publishes to RabbitMQ (if configured) or calls Nodemailer directly.
+**In this repo.** Used for password-reset emails, order confirmations, and contact-form notifications. Templates live in `src/modules/*/templates/*.ejs`, one directory per owning module — only the shared layout partials stay under `shared/templates/`. Calls go through `enqueueEmail()` which either publishes to RabbitMQ (if configured) or calls Nodemailer directly.
 
 → [Email & PDF Rendering](./email-and-rendering.md)
 
@@ -224,7 +224,7 @@ prevent.
 
 **Problem it solves.** Generating pixel-perfect, styled PDFs from HTML is hard with pure-JS libraries. Driving a real browser to render the HTML and export it as PDF produces output that matches what users would see in a browser tab — fonts, CSS grid, images and all.
 
-**In this repo.** Used for order invoice generation (`GET /orders/:id/invoice`). The Dockerfile pre-installs Chromium so the container has a browser available. Without `PUPPETEER_EXECUTABLE_PATH` pointing at a browser binary the invoice endpoint will error at request time; the rest of the API keeps running.
+**In this repo.** Used for invoice and credit-note PDFs (`GET /orders/:id/invoice`), rendered on first download. The Dockerfile pre-installs Chromium so the container has a browser available. Without `PUPPETEER_EXECUTABLE_PATH` pointing at a browser binary the invoice endpoint will error at request time; the rest of the API keeps running.
 
 → [Email & PDF Rendering](./email-and-rendering.md)
 
@@ -274,7 +274,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** `console.log` strings are hard to parse, filter, or correlate across requests. Structured JSON logs (one object per line) can be ingested by a log aggregator (Loki, Elasticsearch, CloudWatch) and queried with filters like `level=error AND service=api`.
 
-**In this repo.** Two loggers: `logger` for request/access logs and `auditLogger` for security events. Both write JSON to stdout. Every log line carries `trace_id` so a log entry can be linked back to its full trace in Grafana. Sensitive fields (`password`, `token`, `authorization`) are redacted before any log is written.
+**In this repo.** Two loggers: `logger` for request/access logs and the audit logger (`src/infrastructure/observability/audit.ts`) for security events. Both write JSON to stdout. Every log line carries `trace_id` so a log entry can be linked back to its full trace in Grafana. Sensitive fields (`password`, `token`, `authorization`) are redacted before any log is written.
 
 → [Winston & Audit Logs](./winston.md)
 
@@ -298,7 +298,7 @@ Observability is the ability to understand what a running system is doing from i
 
 **Problem it solves.** If Prometheus fired an alert directly to every receiver every 15 seconds during an outage you would be spammed with hundreds of identical messages. Alertmanager batches related alerts, applies repeat intervals, and applies silence rules — so on-call teams get one actionable notification, not a flood.
 
-**In this repo.** Local dev uses a `null` receiver so no real notifications are sent. Alert rules (`prometheus.alert-rules.yaml`) cover API down, high error rate, high latency, high in-flight count, and heap exhaustion. Replace the receiver with Slack or PagerDuty for staging/production.
+**In this repo.** Local dev uses a `null` receiver so no real notifications are sent. Alert rules (`prometheus.alert-rules.yaml`) cover availability, errors and latency, queue and outbox failures, stale scheduled jobs, and a `security.rules` group — the table is in [Prometheus](./prometheus.md#alert-rules). Replace the receiver with Slack or PagerDuty for staging/production.
 
 → [Prometheus](./prometheus.md) · [Observability Reference](./observability-reference.md)
 
@@ -404,7 +404,7 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 
 **Problem it solves.** Maintaining a typed API client by hand alongside the spec means they inevitably drift. Every time a route changes, the client must be manually updated — which is error-prone and slow. Code generation makes the client an output of the spec, not a separate thing to maintain.
 
-**In this repo.** `npm run gen:api` regenerates `api/` from `openapi.yaml`. The generated client is committed so the paired frontend boilerplate can import it directly.
+**In this repo.** `npm run gen:api` regenerates `api/` from `openapi.yaml`. `api/` is gitignored and rebuilt by `postinstall`; the paired frontend regenerates its own from the `openapi.yaml` that `sync:frontend` hands over.
 
 → [OpenAPI Workflow](../api/openapi-workflow.md)
 
@@ -416,7 +416,7 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 
 **Problem it solves.** A syntactically valid OpenAPI document can still be incomplete or inconsistent — no 401 response defined, optional fields with no description, enums without documentation. Spectral catches these issues in CI before they cause runtime surprises or confuse API consumers.
 
-**In this repo.** `npm run lint:openapi` runs Spectral against `openapi.yaml` using `shared/contracts/spectral.yaml`. Runs in CI after TypeScript type-check.
+**In this repo.** `npm run lint:openapi` runs Spectral against the bundled `openapi.yaml` with `shared/contracts/spectral.yaml`; `lint:openapi:modules` lints each module's own fragment. Runs in CI after TypeScript type-check.
 
 → [OpenAPI Workflow](../api/openapi-workflow.md)
 
@@ -428,6 +428,6 @@ derived from a schema — a rename, a backfill — are one-off scripts under `sc
 
 **Problem it solves.** Without automated tests, every change requires manual verification of every feature. Tests encode expectations about behaviour so regressions are caught automatically — and so future developers can refactor with confidence.
 
-**In this repo.** Two test suites: unit tests (`npm run test:unit`) for isolated logic and integration tests (`npm run test:integration`) for HTTP endpoints against a real database. Config lives in `jest.config.js` and `tsconfig.jest.json`.
+**In this repo.** Five suites — unit, cross-cutting, integration, contract and fuzz (`npm test` runs them all). Config lives in `jest.config.js` and `tsconfig.jest.json`; see [Testing & Docs](./testing-and-docs.md).
 
 → [Testing & Docs](./testing-and-docs.md)

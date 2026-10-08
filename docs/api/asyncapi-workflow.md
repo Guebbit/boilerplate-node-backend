@@ -9,9 +9,10 @@ For this boilerplate, keep REST and async contracts separate:
 
 Current scope of `asyncapi.yaml`:
 
-- SSE observability channels (`observability.*`)
+- SSE channels: `observability.*` and the per-user `notifications.*`
+- The webhook event catalogue (`order.*`, `payment.*`, `return.*`, ...), served by `GET /webhooks/events`
 - RabbitMQ worker queues: the domainless ones (`worker.email.send`, `worker.image.digest`) plus
-  each module's own (`webhooks`' `worker.webhook.deliver`, `account`'s `worker.account.export`, `orders`' `worker.orders.invoice-generate`)
+  each module's own (`webhooks`' `worker.webhook.deliver`, `account`'s `worker.account.export`)
 
 ## Two bundles: the whole contract, and the shared half
 
@@ -20,24 +21,22 @@ The async contract is published twice, from one set of sources:
 | File | Holds | Who reads it |
 | ---- | ----- | ------------ |
 | `asyncapi.yaml` | every channel — SSE **and** the queues | this repo: `gen:asyncapi`, `lint:asyncapi` |
-| `asyncapi.public.yaml` | the SSE channels only | the paired frontend, as its own `asyncapi.yaml` |
+| `asyncapi.public.yaml` | every channel except the queues | the paired frontend, as its own `asyncapi.yaml` |
 
 The queues are backend-only because a browser can neither publish to nor consume from RabbitMQ. A
 frontend holding `EmailJobPayload` would carry the shape of a message it cannot send, and read as a
-contract it is expected to honour. So the split is by SECTION — and by 2026-09, `SHARED_SECTIONS`
-in `scripts/contracts/asyncapi-bundles.ts` is no longer a hand-picked list, but derived from the
-file NAME a module chose:
+contract it is expected to honour. So the split is by SECTION. `SHARED_SECTIONS`
+in `scripts/contracts/asyncapi-bundles.ts` is derived from the file NAME a module chose:
 
 ```ts
 const SHARED_SECTIONS: ReadonlySet<AsyncSectionName> = new Set(resolveModuleAsyncSections());
 ```
 
 A module's top-level `asyncapi.yaml` IS its public event catalogue, by convention, and is shared
-automatically — `observability` and `webhooks` both qualify today, `webhooks`' the same way
-`observability`'s SSE channels do. A module's OWN queue, by contrast, lives in
-`asyncapi.internal.yaml` and never joins `SHARED_SECTIONS`, the same way `workers` does;
-`webhooks-internal` (`worker.webhook.deliver`) is the one example today, in
-`src/modules/webhooks/asyncapi.internal.yaml`.
+automatically — `observability`, `webhooks` and `notifications` qualify today. A module's OWN
+queue, by contrast, lives in `asyncapi.internal.yaml` and never joins `SHARED_SECTIONS`, the same
+way `workers` does; `webhooks-internal` (`worker.webhook.deliver`) and `account-internal`
+(`worker.account.export`) are the examples today.
 
 Both bundles merge the same section documents, so neither can describe a shared channel differently
 — `tests/cross-cutting/contract-bundles.test.ts` asserts the public one is a strict subset. Only
@@ -45,7 +44,7 @@ Both bundles merge the same section documents, so neither can describe a shared 
 against nothing.
 
 A server travels with the section whose channels bind to it — `sseLocal` is declared in the
-observability module, `rabbitmqLocal` in `asyncapi.workers.yaml` — which is what keeps the broker
+observability module, `sseNotificationsLocal` in the notifications one, `rabbitmqLocal` in `asyncapi.workers.yaml` — which is what keeps the broker
 out of the public bundle without a second list to maintain.
 
 ## Where to edit it
@@ -55,8 +54,10 @@ hand-edit it. Each section is a valid AsyncAPI document on its own, carrying its
 messages and payload schemas:
 
 ```
-src/modules/observability/asyncapi.yaml        the SSE stream — a module's own document,
+src/modules/<module>/asyncapi.yaml             a module's public events (observability, webhooks,
+                                               notifications) — a module's own document,
                                                exactly as it carries one openapi.yaml
+src/modules/<module>/asyncapi.internal.yaml    a module's own queue (webhooks, account)
 shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong to no domain
 shared/contracts/asyncapi.root.yaml            version, id, info, tags — no channels, no servers
 ```
@@ -65,15 +66,13 @@ Most worker queues are shared rather than owned by a module because the email an
 are substrate — `src/app/workers.ts` over `src/infrastructure/adapters/queue.ts` — enqueued by
 whichever domain needs one. It is the async twin of filing `GET /` under `system` in the REST
 contract. A queue a single module owns outright gets its own PRIVATE section instead:
-`webhooks`' `worker.webhook.deliver` (`src/modules/webhooks/asyncapi.internal.yaml`) is the one
-example today. It declares no `servers` of its own (its one channel binds to
-`shared/contracts/asyncapi.workers.yaml`'s `rabbitmqLocal`, so a second declaration here would
-collide when the two sections merge) and is left out of `lint:asyncapi:modules`'s glob for the
-same reason: it is valid only once bundled.
+`webhooks`' `worker.webhook.deliver` and `account`'s `worker.account.export`
+(`src/modules/<module>/asyncapi.internal.yaml`) are the examples today. It declares no `servers` of
+its own (its channel binds to `shared/contracts/asyncapi.workers.yaml`'s `rabbitmqLocal`, so a
+second declaration here would collide when the two sections merge) and is left out of
+`lint:asyncapi:modules`'s glob for the same reason: it is valid only once bundled.
 
-This replaced a three-fragment layout (`channels.yaml`, `messages.yaml`, `schemas.yaml` per section) <!-- doc-paths:ignore -->
-whose pieces were half-objects that parsed as nothing until concatenated in the right order at the
-right indentation. A whole document can be linted on its own:
+Each public section is a whole document, so it can be linted on its own:
 
 ```bash
 npm run contracts:bundle        # rebuild both asyncapi bundles (and every other) from their sources
@@ -97,6 +96,8 @@ including why each bundle uses the verb it does.
 | Name | Protocol | Purpose | Declared in | In the public bundle |
 |------|----------|---------|-------------|----------------------|
 | `sseLocal` | `http` | SSE observability stream | `src/modules/observability/asyncapi.yaml` | yes |
+| `sseNotificationsLocal` | `http` | Per-user notifications SSE stream | `src/modules/notifications/asyncapi.yaml` | yes |
+| `subscriberEndpoint` | `https` | A webhook subscriber's own URL (a variable server) | `src/modules/webhooks/asyncapi.yaml` | yes |
 | `rabbitmqLocal` | `amqp` | Async job queues (email, image digest, and each module's own) | `shared/contracts/asyncapi.workers.yaml` | no |
 
 ## Generated TypeScript types
@@ -127,15 +128,11 @@ way `mailer.ts` names its own `EmailJob` rather than a generated `EmailJobMessag
 
 3.0 made this the whole story: a channel declares its message once, so a queue's `...Publish` and
 `...Consume` operations point at the SAME message and there is only ever one alias to emit for it.
-Before the move to 3.0 that was not true — a queue's two operations each declared their own message
-for the one payload, so the generator carried a dedupe pass to stop that showing up as two aliases
-for one shape. Gone along with the duplicate declarations it existed for.
 
 ### Shared with the frontend
 
-This script **started** byte-identical to `scripts/contracts/generate-asyncapi-types.ts` in
-`boilerplate-vue-frontend`, and both still write the same path — but it is NOT byte-identical any
-more: the frontend's copy also emits an inlined-JSON-Schema map for its own runtime SSE-frame
+This script is NOT byte-identical to `scripts/contracts/generate-asyncapi-types.ts` in
+`boilerplate-vue-frontend`, though both write the same path: the frontend's copy also emits an inlined-JSON-Schema map for its own runtime SSE-frame
 validation, which this backend copy has no use for and emits queue-payload Zod validators instead.
 What both copies still share is the input format and the channel/message-naming machinery.
 
@@ -144,9 +141,9 @@ What both copies still share is the input format and the channel/message-naming 
 | Backend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | this repo's `asyncapi.yaml` — every channel |
 | Frontend | `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts` | its `asyncapi.yaml`, which is a copy of `asyncapi.public.yaml` |
 
-The INPUT still differs the way it always did: only this repo's output carries the queue payload
+The INPUT differs too: only this repo's output carries the queue payload
 types (`EmailJobPayload`, `ImageDigestJobPayload`, each module's own like
-`WebhookDeliverJobPayload` and `OrderInvoicePdfJobPayload`) and `WORKER_CHANNELS`, because only this
+`WebhookDeliverJobPayload` and `AccountExportJobPayload`) and `WORKER_CHANNELS`, because only this
 repo generates from the whole contract rather than the public subset.
 
 `asyncapi.public.yaml` is in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`), so
@@ -205,8 +202,8 @@ module reads its own channel directly off `WORKER_CHANNELS` the same way — so 
 publishes to and the string the contract declares are one string. The worker payload types and
 channel names are both derived from AsyncAPI — no hand-written duplicates.
 
-`EmailJob` in `adapters/mailer.ts` IS `EmailJobPayload`, deliberately rather than a local widening
-onto Nodemailer's full envelope. The contract declares `request` with `additionalProperties: false`,
+`adapters/mailer.ts` takes `EmailJobPayload['request']` as its envelope, deliberately rather than a
+local widening onto Nodemailer's full envelope. The contract declares `request` with `additionalProperties: false`,
 and every field it names survives `JSON.stringify` — which is what makes the queued path and the
 inline fallback the same call. A `Buffer` attachment does not survive it, so a wider type would
 compile, work in development where the broker is off, and corrupt the day it is switched on.
@@ -220,19 +217,19 @@ Redis is in this stack, but it is not in this contract. It is used as a **shared
 not as a message bus: every worker reads and writes the same keys, so a write that deletes them
 is already visible to every other worker. There is nothing to announce.
 
-A `cache.tags.invalidated` channel did live here and was removed — see
+See
 [Redis Cache → Why there is no cross-instance broadcast](../tools/redis-cache.md#why-there-is-no-cross-instance-broadcast)
-for the condition that would bring it back.
+for what a cross-instance broadcast would take.
 
 ## Naming convention
 
 Channels use dot-separated topic-style naming (for example `observability.metrics.updated`). These names are used as event identifiers at runtime (SSE event names, queue names).
 
-Every channel here describes something that actually crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue. An in-process notification is not a channel: an `ecommerce.cart.checked_out` channel was declared here for a checkout event that only ever dispatched to an in-process `EventTarget` with no listeners, and it was removed along with the event rather than left describing a wire nothing travels on.
+Every channel here describes something that actually crosses a process boundary — a frame on an SSE stream, a message on a RabbitMQ queue. An in-process notification is not a channel.
 
 ## Realtime event names
 
-All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.generated.ts` — the SSE frame names in `src/modules/observability/services/stream.ts`, the queue names in `src/infrastructure/adapters/queue.ts`.  
+All SSE and queue names used at runtime come from the `OBSERVABILITY_CHANNELS` and `WORKER_CHANNELS` constants generated into `src/types/asyncapi.generated.ts` — the SSE frame names in `src/modules/observability/services/stream.ts` (and the notifications module's own stream), the queue names in `src/infrastructure/adapters/queue.ts`.  
 There are no handwritten duplicate string constants — `asyncapi.yaml` is the single source of truth.
 
 ## CI enforcement

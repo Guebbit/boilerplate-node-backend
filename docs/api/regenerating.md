@@ -48,7 +48,7 @@ reversible by hand:
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart LR
     subgraph AUTH["you edit these"]
-        MF["src/modules/*/openapi/*.yaml"]
+        MF["src/modules/*/openapi.yaml"]
         SH["shared/contracts/*.yaml"]
         PR["src/modules/*/probes.ts"]
     end
@@ -166,8 +166,8 @@ subset, and the generated client collections cover the contract.
 
 ## The generated output and what is committed
 
-Not everything generated is a build artefact you can delete and forget — but as of `postinstall`,
-three of them are exactly that:
+Not everything generated is a build artefact you can delete and forget — but four of them are exactly
+that, rebuilt by `postinstall`:
 
 | Generated output                                                | Read by                                                    | Committed?                                                                                                                             |
 | ----------------------------------------------------------------| ------------------------------------------------------------------------------------------------------- | ---------- |
@@ -175,8 +175,9 @@ three of them are exactly that:
 | `api/models/` · `api/schemas.zod.ts`                            | `@types` and the services that validate input                                                            | no — gitignored, rebuilt by `postinstall` |
 | `api/permission-actions.ts`                                     | `kernel/permissions.ts` — the action vocabulary, from `shared/authorization-keys.yaml` (see [Permission Actions](../tools/permission-actions.md)) | no — gitignored, rebuilt by `postinstall` |
 | `src/types/asyncapi.generated.ts`                                | every SSE, domain-event and queue call site                                                              | no — gitignored, rebuilt by `postinstall` |
-| `asyncapi.yaml`                                                 | the AsyncAPI CLI · `gen:asyncapi`                                                                        | yes |
-| `asyncapi.public.yaml`                                          | the AsyncAPI CLI · the frontend's whole realtime pipeline                                                | yes |
+| `asyncapi.yaml`                                                 | `gen:asyncapi` · `lint:asyncapi`                                                                         | yes |
+| `asyncapi.public.yaml`                                          | the frontend's whole realtime pipeline · `GET /webhooks/events`                                          | yes |
+| `shared/authorization-keys.yaml`                                | `kernel/permissions.ts` at boot · the PHP twin — assembled by `authorization:bundle` from each module's `authorization.yaml` | yes |
 | `contract.{bruno,insomnia,mockoon,postman}.*`                   | you, and whoever explores the API without running it                                                     | no — generated on demand, see above |
 
 For the three gitignored ones: **never hand-edit anything under `api/`, `openapi.yaml`, or
@@ -218,12 +219,13 @@ and that check is the thing standing between you and a silent contract fork — 
 
 ## Adding a new module to the pipeline
 
-A module joins each bundle by dropping a fragment in the expected place and adding one line to that
-bundle's section list under `scripts/contracts/`:
+A module joins each bundle by dropping a fragment in the expected place — the bundlers discover
+sections from disk, so there is no section list to edit:
 
 ```
 src/modules/<name>/openapi.yaml      its operations, and the types only it uses
-src/modules/<name>/asyncapi.yaml     its server, channels, messages and schemas — one whole document
+src/modules/<name>/asyncapi.yaml     its public events and server — one whole document
+src/modules/<name>/asyncapi.internal.yaml  a queue it owns outright (backend-only)
 src/modules/<name>/analytics.ts      the events it emits
 src/modules/<name>/factories.ts       how demo/test records are built
 src/modules/<name>/probes.ts         the requests a spec cannot describe
@@ -233,7 +235,7 @@ scenarios/<name>.ts                  the demo records — outside src/, see Demo
 
 Every one is optional: a module with no HTTP surface contributes no OpenAPI fragment, and that is a
 good sign rather than an omission. Deleting a module is `rm -rf` of the folder, one line out of
-`src/modules.ts`, one line out of each section list it appeared in, and its entry out of
+`src/modules.ts`, and its entry out of
 `scenarios/index.ts`'s table — the last one is not colocated with the folder, so
 `tests/cross-cutting/scenario-fixtures.test.ts` is what catches a forgotten one. A module that
 declared probes is also named in `scripts/contracts/client-collections-bundle.ts`, and that one

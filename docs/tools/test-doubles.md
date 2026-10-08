@@ -59,7 +59,7 @@ a module before a test's `jest.mock` is hoisted. So `scenarios/support/doubles/r
 only the registries, and each double loads what it needs on its first call.
 
 The registries live on `globalThis` under a `Symbol.for` key (`createSharedProviderRegistry` in
-`src/infrastructure/runtime/provider-registry.ts`): 23 test files use `resetModules` or
+`src/infrastructure/runtime/provider-registry.ts`): dozens of test files use `resetModules` or
 `isolateModules`, and a module-local map would come back empty after one.
 
 ## What else is not in `src/`

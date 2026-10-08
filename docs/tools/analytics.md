@@ -103,17 +103,17 @@ start granting.
 
 ## Choosing a provider
 
-|                                     | `umami` (default)                            | `posthog`            | `none` |
-| ----------------------------------- | -------------------------------------------- | -------------------- | ------ |
-| Hosting                             | self-hosted, already in `docker-compose.yml` | cloud or self-hosted | —      |
-| Visitor identity                    | hash of IP + user-agent                      | `distinct_id`        | —      |
-| Identity-level funnels              | no                                           | yes                  | —      |
-| Shares a database with the frontend | yes                                          | no                   | —      |
+|                                     | `umami` (default)                                          | `posthog`            | `none` |
+| ----------------------------------- | ---------------------------------------------------------- | -------------------- | ------ |
+| Hosting                             | self-hosted, in `docker-compose.yml` (`analytics` profile) | cloud or self-hosted | —      |
+| Visitor identity                    | hash of IP + user-agent                                    | `distinct_id`        | —      |
+| Identity-level funnels              | no                                                         | yes                  | —      |
+| Shares a database with the frontend | yes                                                        | no                   | —      |
 
-`umami` is the default because it is the instance this repo's own compose stack starts, and the
-one the paired frontend reports to — so both halves of a shared funnel land in one database. The
-event catalogue is byte-identical across the two repos and guarded by `check:spec-identity`,
-which only means something if both halves arrive in the same place.
+`umami` is the code default because it is the instance this repo's own compose stack can start
+(opt-in `analytics` profile), and the one the paired frontend reports to — so both halves land in
+one database. The compose file itself defaults `NODE_ANALYTICS_PROVIDER` to `none` until that
+profile is running.
 
 Pick `posthog` when the funnel is identity-shaped. Umami keys visitors on a hash of IP and
 user-agent, so _"this logged-in user did X then Y"_ is not a question it can answer:

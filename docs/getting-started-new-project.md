@@ -6,7 +6,7 @@ What to do the day this boilerplate stops being a demo shop and starts being YOU
 **Template or clone, strip, no automatic upstream updates.** `npm run demo:remove` deletes the demo
 e-commerce domain from your own copy in one command — it does not turn this repo into a package you
 `npm update`, and it does not follow future fixes made upstream. A packaged, updatable version of
-the foundation is a later, bigger piece of work (tracked as FRAMEWORK in this repo's own planning);
+the foundation is a later, bigger piece of work;
 today, forking and stripping is the whole story.
 :::
 

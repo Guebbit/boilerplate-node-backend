@@ -28,11 +28,11 @@ was already a dependency.
 | Read the environment in one layer     | `no-restricted-properties` on `process.env` in `src/`, off only in `config.ts`      |
 | Validate once at boot, list every one | `assertConfig` from `registerModules`, `runScript` and the cluster primary          |
 | Parse once, expose a frozen object    | The store snapshots `process.env` at the first read; a slice parses once per change |
-| Everything else reads that object     | Getters such as `vatRateDefault()` keep their signature; only their body moved      |
+| Everything else reads that object     | Getters such as `vatRateDefault()` are the read door; their body reads the slice    |
 | Tests override config through a seam  | `tests/support/environment.ts`; lint refuses a `process.env` write in a test        |
 
 A junk value **refuses to boot**. It never falls back to the default:
-`NODE_MAX_UPLOAD_BYTES=5mb` used to become 5 MB, quietly. Blank counts as unset.
+`NODE_MAX_UPLOAD_BYTES=5mb` stops the boot; it is not read as 5 MB or as the default. Blank counts as unset.
 
 ## Who owns what
 
@@ -47,7 +47,7 @@ A junk value **refuses to boot**. It never falls back to the default:
 ## Add a variable
 
 1. Put it in **its owner's** `config.ts`, with a builder.
-2. Keep the getter's signature; read the slice inside it.
+2. Add a getter with a plain signature; read the slice inside it.
 3. A module lists the slice on its manifest (`config: [mySlice.slice]`). Infrastructure and app
    slices are listed in `src/app/config.ts`.
 4. Add its line to [`.env-example`](#env-example), in the section it belongs to, unless something
@@ -85,8 +85,38 @@ Hand-written, and the one list of variables an operator reads: `npm run setup` c
 reads a variable. Nothing checks it against the slices. A required variable it forgets still
 refuses boot, by name.
 
-A placeholder a slice refuses at boot is checked elsewhere: `tests/unit/scripts/setup/first-run.test.ts`
-fills every one from the file.
+## First run: `npm run setup`
+
+One command takes a fresh clone to a `.env` the boot gate accepts. Source: `scripts/setup/`.
+
+```mermaid
+flowchart TD
+    Start["npm run setup"] --> Has{".env exists?"}
+    Has -->|no| Copy[".env-example copied to .env<br/><i>never overwrites</i>"]
+    Has -->|yes| Read
+    Copy --> Read["read .env"]
+    Read --> Fill["fill each KEY=placeholder line<br/><i>exact match only</i>"]
+    Fill --> Any{"anything filled?"}
+    Any -->|yes| Write[".env rewritten<br/><i>temp file + rename, mode 0600</i>"]
+    Any -->|no| Skip[".env left untouched"]
+    Write --> Token
+    Skip --> Token["NODE_METRICS_TOKEN mirrored to<br/>tmp/secrets/prometheus-metrics-token"]
+```
+
+- **Which keys.** Read off the enabled modules' config slices and the app tier, not a list kept
+  here. A new module's secret is covered the day it declares one.
+- **Exact match only.** A line is replaced when it reads exactly `KEY=<placeholder>`. A value
+  already filled, or set to anything else, is never touched.
+- **Left to the operator.** A field with no placeholder (`NODE_URL`, `NODE_CORS_ORIGIN`) names no
+  wrong value to replace, only a missing one.
+- **Metrics token file.** Always written, even when `.env` needed nothing, so the Prometheus bind
+  mount finds a real file. An absent one is silently created as a directory by Docker/Podman.
+- **Output.** Key names are printed, never values.
+- **Re-running.** Once nothing reads a placeholder, `.env` is left as it is; the token file is
+  rewritten with the same value.
+
+`tests/unit/scripts/setup/first-run.test.ts` fills every placeholder a slice refuses at boot,
+straight from `.env-example`.
 
 ## Two kinds of rule
 

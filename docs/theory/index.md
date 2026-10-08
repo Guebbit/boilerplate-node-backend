@@ -72,7 +72,7 @@ flowchart TD
     class R,S,RP normal;
 ```
 
-(`cart` is the one that splits `service.ts` into a `services/` folder — same layer, more files.)
+(Most larger modules split `service.ts` into a `services/` folder, `cart` and `orders` among them — same layer, more files.)
 
 The word shows up in four senses across this documentation. They are related, but not the same:
 
@@ -131,19 +131,22 @@ surely as no barrel would, since there is nothing in it to reach for.
 
 ## Where each topic lives
 
-| Need                                                          | Go to                                                                       |
-| ------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| **Open the code for the first time**                          | **[Reading Path](./reading-path.md)**                                       |
-| Understand the big blocks and boundaries                      | [Architecture](./architecture.md)                                           |
-| Understand how domains stay separable                         | [Modules](./modules.md)                                                     |
-| Actually add or remove a domain                               | [Adding & Removing a Module](./module-lifecycle.md)                         |
-| Understand the domain-modelling stance                        | [Strategic DDD](./strategic-ddd.md), then [Tactical DDD](./tactical-ddd.md) |
-| Read the folder-by-folder explanation                         | [Layers](./layers.md)                                                       |
-| Follow one request end-to-end                                 | [Request Flow](./request-flow.md)                                           |
-| Know which sources an endpoint reads                          | [Request Input](./request-input.md)                                         |
-| Understand process model & shutdown                           | [Clustering & Shutdown](./clustering.md)                                    |
-| Know who may do what, and which rows they see                 | [Authorization](./authorization.md)                                         |
-| Know every attack a site can receive, and what stops each one | [Web Attacks & Defences](./defences/)                                       |
-| Know what personal data is processed, and under what basis    | [Data Protection](./data-protection.md)                                     |
-| Understand dependency choices                                 | [Tools](../tools/)                                                          |
-| Change contract, types, or mocks                              | [API](../api/)                                                              |
+| Need                                                               | Go to                                                                       |
+| ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| **Open the code for the first time**                               | **[Reading Path](./reading-path.md)**                                       |
+| Understand the big blocks and boundaries                           | [Architecture](./architecture.md)                                           |
+| Understand how domains stay separable                              | [Modules](./modules.md)                                                     |
+| Actually add or remove a domain                                    | [Adding & Removing a Module](./module-lifecycle.md)                         |
+| Understand the domain-modelling stance                             | [Strategic DDD](./strategic-ddd.md), then [Tactical DDD](./tactical-ddd.md) |
+| Read the folder-by-folder explanation                              | [Layers](./layers.md)                                                       |
+| Follow one request end-to-end                                      | [Request Flow](./request-flow.md)                                           |
+| Know which sources an endpoint reads                               | [Request Input](./request-input.md)                                         |
+| Understand process model & shutdown                                | [Clustering & Shutdown](./clustering.md)                                    |
+| Know how one shop becomes many, and what is deliberately not built | [Tenancy](./tenancy.md)                                                     |
+| Look up what a domain term means in one module                     | [Glossary](./glossary.md)                                                   |
+| Know who may do what, and which rows they see                      | [Authorization](./authorization.md)                                         |
+| Know every attack a site can receive, and what stops each one      | [Web Attacks & Defences](./defences/)                                       |
+| Know what personal data is processed, and under what basis         | [Data Protection](./data-protection.md)                                     |
+| Know why each piece of personal data is kept as long as it is      | [Data Retention](./data-retention.md)                                       |
+| Understand dependency choices                                      | [Tools](../tools/)                                                          |
+| Change contract, types, or mocks                                   | [API](../api/)                                                              |

@@ -59,19 +59,18 @@ that started from nothing. The checkout needs a customer account: an administrat
 
 ## Why the database is a replica set of one
 
-**Corrected from an earlier draft**, which claimed a replica set gives "PITR and transactions" —
-checked, and neither is quite right:
+A replica set is what the app needs, not a luxury:
 
-- **This app uses no transactions** — confirmed, no `startSession`/`withTransaction` anywhere in
-  `src/`.
+- **The app uses transactions.** `withTransaction` (`src/infrastructure/runtime/database.ts`) wraps
+  the outbox write, stock holds, product writes and the erasure cascade, and MongoDB refuses a
+  transaction on a standalone `mongod`.
 - **`mongodump --oplog` is not point-in-time recovery.** It gives one dump that is consistent
   ACROSS collections while writes keep arriving — real PITR needs continuous oplog capture
   ([Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/index.html)).
 
-What a replica set of one genuinely buys: MongoDB's own documented production topology, the only
-thing `--oplog` or PBM ever build on top of, and a `mongodump` that cannot capture an order without
-its payment mid-checkout. Converting a live standalone to a set later is a data-bearing migration;
-starting as a set of one is a handful of compose lines.
+It is also MongoDB's own documented production topology, and a `mongodump --oplog` that cannot
+capture an order without its payment mid-checkout. Converting a live standalone to a set later is
+a data-bearing migration; starting as a set of one is a handful of compose lines.
 
 **The mechanics, verified against this exact compose file:**
 
@@ -86,13 +85,10 @@ starting as a set of one is a handful of compose lines.
   that waits for the real mongod, initiates the set, and waits for PRIMARY before exiting.
   `setup` waits on it finishing before `db:sync`/`access:bootstrap` run.
 
-**A dependency-chain lesson, found while building this:** an earlier version generated the keyFile
-in its own one-shot service, a sibling `database` depended on. That broke every service depending
-on `database` in turn — podman-compose 1.6/libpod refuses to start anything that transitively
-requires an already-exited container. Folding the keyFile generation into `database`'s own
-entrypoint instead of a separate service removed the dependency chain entirely, and is simpler
-besides. Docker Compose itself (what a real host runs) does not have this restriction — it was
-found and fixed here because this experiment ran on podman.
+**Why the keyFile is not its own service.** A sibling one-shot service that `database` depended on
+breaks every service depending on `database` under podman-compose 1.6/libpod, which refuses to
+start anything that transitively requires an already-exited container. Generating it in
+`database`'s own entrypoint avoids the chain (Docker Compose has no such restriction).
 
 ## The two demonstrations
 

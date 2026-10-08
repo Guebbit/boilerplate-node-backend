@@ -204,6 +204,8 @@ const input = readInput(request, {
   through to the next source. A repeated key stays the array it arrived as, so the id check answers
   422 instead of silently picking an entry. Nothing is validated here.
   A repeated key on any other scalar parameter reaches the schema as an array and is a 422 too.
+- `csvLists` — fields (`sort`) whose query form is a comma-separated list: split on the query
+  transport, taken as sent from a JSON body.
 - `booleans` / `stringArrays` — fields whose type survives a JSON body but not a string transport.
   Decoded per the rule above. Anything unrecognisable is passed through so the validator
   downstream rejects it rather than this layer inventing a value.
@@ -213,7 +215,7 @@ const input = readInput(request, {
 
 One route may also state a flag in its path rather than as a value. `DELETE /products/:id/hard`
 means what `DELETE /products/:id?hardDelete=true` means; the `routeFlag('hardDelete')` middleware
-(`@middlewares/route-flag`) writes it onto `request.params` so the controller keeps a single
+(`@infrastructure/http/middlewares/route-flag`) writes it onto `request.params` so the controller keeps a single
 declaration instead of growing a second entry point. Being a param, it does **not** thereby
 outrank a query or body entry that contradicts it: `hardDelete` is declared `anyTrue`, so
 `/products/:id/hard` carrying `{"hardDelete": false}` hard-deletes because one source said
@@ -264,22 +266,11 @@ is the real defect — a controller reading a source **no** route it serves decl
 shape of all five closed discrepancies below. Splitting the declaration per operation is what
 would let it tighten to per-route, and is the remaining work.
 
-**A subset assertion over an empty set passes.** Both halves of that comparison are recovered by
-regex from source that is free to be re-spelled, and both have gone quiet here. The scanner looked
-for `sources: ['params', …]`, the spelling that predates the surface refactor; when the last of
-those disappeared it matched nothing, every controller read as declaring nothing, and the check
-passed for the whole repo without comparing a single declaration. It also read a `$ref`'d
-parameter's location off the reference NAME, on the claim that "every shared parameter in this
-spec is a path parameter" — which was never true (`PageParam`, `TextParam` and `IdParam` are all
-`in: query`) and survived only because every route using them also carried an inline query
-parameter to be found instead.
-
-Both are fixed — the scanner reads `surface:` and maps it through `SURFACE_SOURCES` parsed from
-`request.ts` itself, and references resolve against `components.parameters` — and the test now
-carries a tripwire that asserts it recovered the surface table and a declaration from more than
-ten controllers. Turning it back on immediately produced four findings, all the same shape: four
-GET-only list controllers declaring `search`, and so reading a body no route of theirs declares.
-That is what the `list` surface exists to say instead.
+**A subset assertion over an empty set passes,** so the test carries a tripwire: it asserts it
+recovered the surface table (`SURFACE_SOURCES`, parsed from `request.ts` itself) and a declaration
+from more than ten controllers, and `$ref`'d parameters resolve against `components.parameters`
+rather than by their reference name. A GET-only list controller declares `list`, never `search`,
+since it would otherwise read a body no route of its own declares.
 
 That test is also what makes generating the router safe. Routes written by hand sit next to a spec
 written by hand, so a mismatch at least shows up in a diff; routes generated from a descriptor do
@@ -288,76 +279,11 @@ client for.
 
 ## Known discrepancies
 
-None outstanding. Every one recorded here was resolved by correcting `openapi.yaml` — in both this
-repo and the paired frontend — or the declaration that disagreed with it. See the _Closed_ list
-below, which keeps each one's mechanism because every one of them names a way the same class of
-bug can return.
+None outstanding: `openapi.yaml` and the declarations agree, and `tests/contract/request-sources.test.ts`
+keeps it that way.
 
-The open item is not a discrepancy but a granularity: the comparison is per controller against the
-union of its routes, so a source declared on one route it serves excuses that source on all of
-them. `deleteUsers` is the live example — `DELETE /users/{id}` declares the `hardDelete` query
-parameter, which until now silently excused `DELETE /users` reading a query parameter it did not
-declare. That one is closed by declaring it (see below), but the mechanism that hid it is still
-there, and per-operation declarations are what would remove it.
-
-### Closed
-
-- **Four GET-only list controllers declared the `search` surface,** and so read a body none of
-  their routes declares: `GET /inventory/levels`, `GET /inventory/movements`,
-  `GET /locales/{locale}/entries` and `GET /observability/audit`. None is cached, so none carried
-  `GET /feedback`'s cache bug, but all four claimed a source no client can send. They declare
-  `list` now. The check that should have caught them was the one that had gone quiet.
-- **The collection deletes read `hardDelete` from a query they did not declare.** `DELETE /users`,
-  `DELETE /products` and `DELETE /orders` share their controller with the `{id}` forms, so
-  `surface: 'delete'` reads params, query and body on all three routes — but only the `{id}` forms
-  declared the query parameter, and the per-controller union is what let the omission pass. The
-  flag is now a shared `HardDeleteParam` referenced by all six delete operations, which is also
-  what stops a fourth soft-deleting domain from offering two of the three spellings.
-
-- **`GET /products` declared `productId` as its query filter while the controller read `id`.**
-  The generated client sent the parameter, the API ignored it, and filtering the catalogue by id
-  over the GET returned the unfiltered list — a filter that looked like it worked. The frontend
-  had grown a rename around it (`productId: currentFilters.id`) with a comment asserting the
-  opposite of the truth, and a unit test pinning the rename. The spec now declares `id`, matching
-  what `SearchProductsRequest` always said for `POST /products/search`; both the workaround and
-  the test that guarded it are gone.
-- **`category` and `tag` were body-only in the spec** while the controller accepted them from the
-  query on both `GET /products` and `POST /products/search`. Now declared as query parameters too.
-- **`active` was decoded, validated and stored on every user write route** while only
-  `CreateUserRequest` declared them. Added to `UpdateUserRequest`, `UpdateUserByIdRequest` and
-  both multipart variants. Not a privilege hole — every route in `/users` is behind `isAuthOrCredential` and
-  the matching `users.*` permission — but undeclared input all the same.
-- **The path-form deletes read `hardDelete` from a body they did not declare.** `DELETE
-/products/{id}` and `DELETE /users/{id}` now declare an optional `HardDeleteRequest` body. It
-  carries only the flag: `{id}` already supplies the id and the path param wins, so a body `id`
-  on those routes is unreachable rather than undocumented.
-- **`DELETE /cart/{productId}` read a body it could never use.** Same unreachability, but here the
-  spec was already right and the code was making the false claim, so the declaration lost `body`
-  rather than the spec gaining one. `PUT /cart/{productId}` lost its body `productId` the same way:
-  the path segment always won, so the field was declared and ignored.
-- **`GET /feedback` declared a JSON body and no query parameters** while the controller read both.
-  The query parameters were declared first and the body kept, on the reasoning that it was read and
-  had no `POST /feedback/search` sibling to carry the DTO form. That reasoning was wrong twice
-  over, and the body is now gone: no browser could have sent it (the Fetch spec rejects a body on
-  a GET), and `setCache(600, …)` keys on the declared **query** parameters, so a filter that did
-  arrive in a body was invisible to the key — two different searches by the same caller shared one
-  cached page for the cache's whole lifetime. The sibling exists now; `GET /feedback` is `list`.
-- **`hardDelete` treated presence as the switch,** so `DELETE /products/:id?hardDelete=false`
-  permanently deleted the product — the query value is the string `'false'`, which is truthy —
-  while the spec typed the parameter `boolean` with `default: false`. A caller could destroy data
-  by explicitly asking not to. It is now decoded and validated as the boolean it always was, and
-  an uninterpretable value answers 422 rather than defaulting to the destructive option.
-- **Pagination was bounded on three endpoints and not on the fourth.** `?pageSize=500` answered
-  422 on `GET /products`, `/users` and `/orders` and a silently clamped 200 on `GET /feedback`,
-  and neither answer was written down anywhere. All four now share `@infrastructure/http/schemas`.
-- **`request.params.id` was read by every list controller.** `GET /products/:id`,
-  `GET /users/:id` and `GET /orders/:id` route to the _item_ controllers;
-  `getProducts`/`getUsers`/`getOrders` are only ever mounted on the collection and on `/search`,
-  so that source could never fire. Dropped from their declarations, because a declaration naming
-  a source is a claim about the route.
-- **`hardDelete` was read from a `request.params` no route supplied.** It is a real param now:
-  `routeFlag` puts it there for the `/hard` path form.
-- **Nine operations answered 422 without declaring it.** `GET /products`, `/users`, `/orders`,
-  `/feedback` and five of the delete operations have returned 422 for as long as they have
-  validated anything; `openapi.yaml` listed only 200/401/403/404/500. Now declared, which is what
-  lets the contract suite assert those responses at all.
+What remains is a granularity, not a discrepancy. The comparison is per controller against the union
+of its routes, so a source declared on one route it serves excuses that source on all of them. A
+collection delete (`DELETE /users`) shares its controller with the `{id}` forms, so the `hardDelete`
+query parameter has to be declared on every one of them — it is a shared `HardDeleteParam` for that
+reason. Per-operation declarations are what would remove the blind spot.

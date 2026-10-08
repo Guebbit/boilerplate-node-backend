@@ -74,6 +74,7 @@ The paired frontend owns **`8080–8099`**.
 | Alertmanager                 | `9093`            | `ALERTMANAGER_PORT`                               |
 | Alloy (Faro receiver / UI)   | `12347` / `12345` | `ALLOY_FARO_PORT` / `ALLOY_UI_PORT`               |
 | MongoDB                      | `27017`           | `NODE_MONGODB_PORT`                               |
+| Redis (rate-limit counters)  | `6380`            | `NODE_LIMITS_REDIS_PORT`                          |
 
 New services belong inside `3000–3099`. Every entry is overridable through the env var in the
 right-hand column if a port is already taken.
@@ -88,8 +89,9 @@ because of it.
 
 `openapi.yaml` is the canonical contract for **both** repositories, and this one produces it.
 
-- After any contract edit, regenerate the derived artefacts (`npm run gen:api`) and commit the
-  generated `api/` changes — see [Regenerating After a Change](../api/regenerating.md).
+- After any contract edit, run `npm run regenerate`: it bundles, generates and hands the shared
+  documents to the frontend checkout. `api/` and `openapi.yaml` are gitignored, so there is nothing
+  generated to commit there — see [Regenerating After a Change](../api/regenerating.md).
 - Keep paired branches aligned before merging a contract change: a backend branch and the frontend
   branch that consumes it are one change in two repositories.
 - `npm run check:spec-identity` is the guard. It reports the shared bundles as forked when the two
@@ -153,7 +155,7 @@ password here and the paired suite follows on its next run, with nothing to edit
 
 The live profile has no such route — a real deployment mounts no `/__test/*` — so it gets the same
 answer as a file: `scenario:apply --describe-to=<file>` writes exactly what the route serves, and
-`LIVE_RESET_COMMAND` carries a `{describeTo}` placeholder for it.
+the frontend's `LIVE_RESET_COMMAND` carries a `{describeTo}` placeholder for it.
 
 See [Demo profile](./demo-profile.md#how-a-scenario-is-built).
 
@@ -178,9 +180,8 @@ diff looks like the backend broke something.
 | `shared/authorization-keys.yaml`                       | `<frontend>/contracts/authorization-keys.yaml` — read there only for `actions:`, see [Permission Actions](./permission-actions.md)                                                                                |
 | `scenarios/support/tls/webhook-sink-{ca,cert,key}.pem` | `<frontend>/scripts/e2e/tls/` — the demo webhook sink's test CA and leaf: this side trusts the CA, the frontend's Cypress sink serves the leaf. See [HTTPS in the demo](../modules/webhooks.md#https-in-the-demo) |
 
-A third entry used to sit here: the analytics event names the frontend emitted. It emits none any
-more — pageviews are automatic and everything with a request behind it is reported from the handler
-here that decided it — so there is no catalogue to publish and nothing to keep in step. See
+There is no analytics event catalogue on the list: pageviews are automatic and everything with a
+request behind it is reported from the handler here that decided it. See
 [Product Analytics](./analytics.md#one-namespace-two-repositories).
 
 **A `check:spec-identity` failure right after switching which backend you're pairing with is usually
@@ -201,16 +202,14 @@ fails on that trains people to ignore it.
 
 ### Convenience is not necessity
 
-The list used to carry a second kind of entry, flagged `owner: 'mirror'`: files both repos
-maintained by hand and kept identical because it was convenient — `shared/contracts/spectral.yaml` and three shared
-scripts (`check-baseline.ts`, `report-results.ts`, `generate-asyncapi-types.ts`). A fork in one of
-those was a question no script could answer, so `sync:frontend` could only report it and walk away.
+Files both repos maintain by hand and keep identical for convenience are not on the list —
+`shared/contracts/spectral.yaml` and a few shared scripts, for example. A fork in one of those is a
+question no script could answer, so `sync:frontend` could only report it and walk away.
 
-They were removed, and the flag with them. Nothing breaks _silently_ when two repos lint under
-rulesets that have drifted apart — one job is simply stricter, and it says so on the run. A gate
-that cannot resolve what it reports is a gate people learn to skip, and every entry on this list
-costs a manual step per contract change. The files still exist on both sides; nothing compares them
-any more, and nothing needs to.
+Nothing breaks _silently_ when two repos lint under rulesets that have drifted apart — one job is
+simply stricter, and it says so on the run. A gate that cannot resolve what it reports is a gate
+people learn to skip, and every entry on this list costs a manual step per contract change. Nothing
+compares those files, and nothing needs to.
 
 ### Nothing regenerable belongs on it
 

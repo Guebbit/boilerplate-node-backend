@@ -133,8 +133,8 @@ JSON one.
 
 ## Content-Type: 415
 
-The JSON body parser handles only the types it is told to, so a body in any other type used to arrive as
-`{}` — and an all-optional PATCH schema accepts `{}`: a 200 that changed nothing.
+The JSON body parser handles only the types it is told to, so a body in any other type would arrive as
+`{}` — and an all-optional PATCH schema accepts `{}`: a 200 that changed nothing. The guard refuses it instead.
 
 ```mermaid
 flowchart LR
@@ -230,6 +230,7 @@ and the bundler adds the header parameter, the 412 and the response header from 
 | user | `GET /users/{id}` | `PUT`, `PATCH`, `DELETE /users/{id}`, `DELETE /users/{id}/hard` |
 | order | `GET /orders/{id}` | `PUT`, `PATCH`, `DELETE /orders/{id}`, `DELETE /orders/{id}/hard` |
 | the caller's account | `GET /account` | `PUT`, `PATCH /account` |
+| example | `GET /examples/{id}` | `PUT`, `PATCH`, `DELETE /examples/{id}` |
 
 Not versioned: a resource with no item read to take a tag from (feedback, webhook subscriptions,
 locales, an address inside its book) and anything with its own concurrency rule (cart lines,
@@ -252,7 +253,7 @@ stock). A `PUT` or `DELETE` with `If-Match` on one of those is simply not declar
   an editor's edit passes `timestamps: false` and so never touches either: the stock mirror, the
   image digest, a session token. An admin's form is never invalidated by a customer logging in.
 - **Where the counter lives.** It is the schema's Mongoose version key (`editRevision`, replacing
-  `__v` on the four versioned schemas). It is not called `revision` because `locales` owns a wire
+  `__v` on every versioned schema). It is not called `revision` because `locales` owns a wire
   field of that name with another meaning. It is stripped from every response and carried beside
   the shaped object (`carryVersion`) so a presenter can reshape a row without losing its tag.
 - **An edit that changes nothing on the row still moves it, by stamping `updatedAt` by hand.**

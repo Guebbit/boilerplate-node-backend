@@ -44,10 +44,13 @@ Start the stack, then point a run at it:
 ```bash
 npm run compose:restart     # or: npm run dev
 npm run bench          # GET /products      — cached read path
-npm run bench:search   # POST /products/search — uncached, database-backed
+npm run bench:search   # POST /products/search — search query, fixed body
 ```
 
-Both use 20 connections for 30 seconds and print a latency histogram (`-l`). They read
+`bench:orders` and `bench:inventory` exist too, but those routes need a session and the scripts send
+no token: for them use a direct `autocannon` call with `-H 'Authorization: Bearer …'` (below).
+
+Each uses 20 connections for 30 seconds and prints a latency histogram (`-l`). They read
 `NODE_PORT`, defaulting to 3000.
 
 Anything else is a direct invocation — the npm scripts are starting points, not a wrapper:
@@ -57,17 +60,18 @@ npx autocannon -c 50 -d 60 -l http://localhost:3000/products/<id>
 npx autocannon -c 10 -d 20 -H 'Authorization: Bearer <token>' http://localhost:3000/orders
 ```
 
-## The two scripts are deliberately different paths
+## The two product scripts are different paths
 
-`bench` hits `GET /products`, which is cached (`setCache(3600, { tags: ['products'] })` in
-`src/modules/products/routes.ts`). After the first request nearly every response is a Redis hit, so it
+`bench` hits `GET /products`, which goes through `cacheProductsSearch` (`searchCache('products', …)`
+in `src/modules/products/routes.ts`). After the first request nearly every response is a Redis hit, so it
 measures the cache and the HTTP stack. Watch `x-cache: HIT` and expect low, flat latency.
 
-`bench:search` hits `POST /products/search`, which is **not** cached and runs a regex query
-against Mongo. This is the one that moves `http_request_duration_milliseconds` in an interesting
-way, and the one that shows database time inside a trace.
+`bench:search` hits `POST /products/search`, the same handler behind the same cache middleware, but
+with a text query. Its body is fixed, so with Redis on it too becomes a hit after the first
+request. To see database time inside a trace, run it with the cache off, or vary the body with a
+direct `npx autocannon` call.
 
-Running both back to back is the demo: the same service, two shapes.
+Running both back to back shows the same service in two shapes.
 
 ## What to look at while it runs
 

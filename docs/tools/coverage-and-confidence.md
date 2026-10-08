@@ -108,7 +108,7 @@ subsume unit; contract does not subsume integration.
 
 ---
 
-## 3. Mutation testing is the instrument here
+## 4. Mutation testing is the instrument here
 
 This is a decision, recorded so it is not re-litigated by accident.
 
@@ -137,7 +137,7 @@ mutants is a far stronger statement than executing 80% of lines would be.
 
 ---
 
-## 4. ⚠️ The blind spot that used to exist, and why closing it took a memory fix first
+## 5. ⚠️ The blind spot that used to exist, and why closing it took a memory fix first
 
 ::: warning Historical: mutation testing used to exclude the service layer entirely
 Until 2026-09-20 `stryker.config.json` mutated `src/modules/*/**/*.ts` — controllers, services, <!-- doc-paths:ignore -->
@@ -202,7 +202,7 @@ not an artefact of the ruler that used to skip those suites. The pending reseed
 comparable to that statement — until it runs, treat the committed file as stale.
 :::
 
-## 5. Where the number is currently trustworthy
+## 6. Where the number is currently trustworthy
 
 Honesty about instruments in use matters more than the instruments.
 

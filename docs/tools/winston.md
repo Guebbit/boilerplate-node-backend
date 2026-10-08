@@ -202,24 +202,20 @@ than one, from a generic helper that takes the target as a runtime parameter.
 
 Two destinations, from the single `emitAuditEvent` call:
 
-| Destination            | Role                                                              | Fails how                                                     |
-| ---------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------- |
-| `auditLogger` → stdout | the compliance record — append-only, shipped to [Loki](./loki.md) | a broken logger is a real problem                             |
-| Mongo `auditlogs`      | the queryable copy behind `GET /observability/audit`              | silently, into a warning — never fails the triggering request |
+| Destination            | Role                                                                                            | Fails how                                                     |
+| ---------------------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `auditLogger` → stdout | the compliance record — append-only, shipped to [Loki](./loki.md)                               | a broken logger is a real problem                             |
+| Mongo `auditlogs`      | the queryable copy behind `GET /observability/audit` and the `audit-logs` module's `GET /audit` | silently, into a warning — never fails the triggering request |
 
-The Mongo write goes through an `AuditSink` port that `app.ts` registers after the database
-connects. `src/infrastructure/**` may not import `@modules/*`, so the dependency is inverted rather
+The Mongo write goes through an `AuditSink` port that the `audit-logs` module registers
+(`registerAuditSink`) when it boots. `src/infrastructure/**` may not import `@modules/*`, so the dependency is inverted rather
 than smuggled — and the call sites that reach `recordAudit` know about neither destination.
-
-Before this, the endpoint read a 200-entry in-process ring buffer. It could not answer
-"what has this user done": 200 entries **in total** across every actor, a different slice in each
-cluster worker, and empty after a restart.
 
 ### Retention
 
-| Env var                     | Effect                                                                     |
-| --------------------------- | -------------------------------------------------------------------------- |
-| `NODE_AUDIT_RETENTION_DAYS` | how long the Mongo copy survives before its TTL index removes it (def. 90) |
+| Env var                     | Effect                                                                                                      |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `NODE_AUDIT_RETENTION_DAYS` | how long the Mongo copy survives before its TTL index removes it (def. 90, read by the `audit-logs` module) |
 
 Only the queryable copy expires — log retention is [Loki](./loki.md)'s business.
 
@@ -245,7 +241,7 @@ why `db:bootstrap` syncs before the server starts.
 
 ## Personal data
 
-A second, separate list — `PERSONAL_FIELDS` (`email`, `ip`, `phone`, `street`, `zip`, `fullName`) — covers fields that are personal data without being credentials. Data minimisation applies to logs the same as it applies to collections, and these flow into Winston, and from there into [Loki](./loki.md), same as everything else.
+A second, separate list — `PERSONAL_FIELDS` (`email`, `to`, `ip`, `phone`, `street`, `zip`, `fullname`) — covers fields that are personal data without being credentials. Data minimisation applies to logs the same as it applies to collections, and these flow into Winston, and from there into [Loki](./loki.md), same as everything else.
 
 Kept apart from `SENSITIVE_FIELDS` on purpose: a credential is always replaced outright, never kept in any form. A personal field defaults to **hashed** instead (`NODE_LOG_PERSONAL_FIELDS=hash`, HMAC-SHA256 under the `log` subkey of `NODE_PSEUDONYM_KEY`, truncated to 12 hex characters, `hmac:`-prefixed — not `sha256:`, since the algorithm name alone can't tell a reader the digest is keyed) — the same input always produces the same digest, so a trace stays followable ("did this user's requests all fail the same way") without the log line being readable on its own. The hash is keyed rather than bare: an unkeyed `sha256(email)` or `sha256(ip)` is brute-forced from a breach list or the whole IPv4 space in seconds, which is GDPR pseudonymisation in name only. `redact` drops it entirely, like a credential; `plain` leaves it untouched, for local development where the log never leaves the machine.
 

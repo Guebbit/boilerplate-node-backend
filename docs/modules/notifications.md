@@ -39,8 +39,8 @@ flowchart LR
 
 ## The story
 
-A cart line that disappears used to leave nothing behind. A product is deleted, `cart` and
-`wishlist` strip it from every list, and nobody is told. This module is where that message goes:
+A product is deleted, and `cart` and `wishlist` strip it from every list. This module is where
+the owner is told:
 a row in a per-user inbox that stays until the user deletes it.
 
 Two kinds of message exist, and only one lives here.

@@ -6,7 +6,7 @@ pretend money and a pretend courier.
 
 ::: tip Who this section is for
 People who need to understand **what the application does**, not how it is built. No code on any of
-these five pages. Every technical word is explained the first time it appears, and links point to
+these pages. Every technical word is explained the first time it appears, and links point to
 the deeper page if you ever want it.
 
 The rest of this site is written for developers. This part is not.
@@ -39,24 +39,31 @@ other page in this section is one of those boxes, opened up.
 
 ## What the shop sells
 
-134 products — a pet-supply retailer. Six are hand-picked, each there to show the shop behaving
+138 products — a pet-supply retailer. Ten are hand-picked, each there to show the shop behaving
 differently; the other 128 are a combinatorial grid (six animals × seven product types × three
 quality tiers) plus two downloadable guides, so lists, pagination and the category filters have
 enough real rows to work with. The grid carries shipping weights, and three of its product types
-have a VAT treatment of their own (supplements reduced, bowls zero-rated, dispensers exempt):
+have a VAT treatment of their own (supplements reduced, bowls zero-rated, dispensers exempt).
 
-| Product                                              | Price | In stock | Why it exists                                      |
-| ---------------------------------------------------- | ----- | -------- | -------------------------------------------------- |
-| Premium Grain-Free Dog Food, 15kg                    | €68   | 30       | a completely normal product                        |
-| Orthopedic Memory Foam Dog Bed                       | €84   | 45       | another normal one, so baskets can have two lines  |
-| Heavy-Duty Cat Scratching Post                       | €45   | **0**    | shows what "out of stock" looks like               |
-| Universal Small Animal Water Bottle                  | €9    | 100      | has only a name and a price, nothing else          |
-| 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted** — proves a deleted product disappears  |
-| Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off** — visible to staff, not to buyers |
-| _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier" |
+Every product starts with no stock. The shelf is filled the way a real shop's is: an opening stock
+receipt per product, recorded through the inventory module, so every unit is accounted for.
 
-So a visitor sees **132** products (the four ordinary ones above, plus all 128 generated).
-Staff see all 134. That difference is deliberate and it is explained on
+| Product                                              | Price | In stock | Why it exists                                         |
+| ---------------------------------------------------- | ----- | -------- | ----------------------------------------------------- |
+| Premium Grain-Free Dog Food, 15kg                    | €68   | 30       | a completely normal product                           |
+| Orthopedic Memory Foam Dog Bed                       | €84   | 45       | another normal one, so baskets can have two lines     |
+| Heavy-Duty Cat Scratching Post                       | €45   | **0**    | shows what "out of stock" looks like                  |
+| Universal Small Animal Water Bottle                  | €9    | 9        | has only a name and a price, nothing else             |
+| 150W Ceramic Heat Emitter                            | €55   | 12       | **deleted** — proves a deleted product disappears     |
+| Rabbit Starter Bundle — Hutch, Feeder & Water Bottle | €96   | 18       | **switched off** — visible to staff, not to buyers    |
+| Online Puppy Training Course — Video Access          | €29   | 50       | **digital** — never shipped                           |
+| Limited-Edition Brass Pet Bowl                       | €24   | **1**    | the last unit — one checkout holds it, a second fails |
+| Hand-Painted Personalised Pet Bowl                   | €80   | 20       | made to order — no right of withdrawal                |
+| Extra-Large Cat Tree, 12kg                           | €40   | 10       | too heavy for express delivery                        |
+| _...128 more_                                        | —     | —        | a generated catalogue, e.g. "Premium Bird Carrier"    |
+
+So a visitor sees **136** products (the eight public named ones, plus all 128 generated).
+Staff see all 138. That difference is deliberate and it is explained on
 [the shop manager's page](./manager.md).
 
 ## The people in it
@@ -69,6 +76,9 @@ Every account below comes with a password you can actually type in:
 | **The admin**     | `root@root.it`          | `Demo-Admin1!`     | everything, plus run the shop      |
 | **The editor**    | `editor@example.com`    | `Demo-Editor1!`    | the catalogue and every word in it |
 | **The moderator** | `moderator@example.com` | `Demo-Moderator1!` | accounts, orders, payments         |
+
+A few more accounts exist to show one state each: an unverified signup, one with two-factor on, one
+with an email change pending, one banned. They are listed in `scenarios/accounts.ts`.
 
 The manager, warehouse and support pages are jobs, not logins — the admin account does all three,
 and this section splits them up because it reads better, not because the software forces a
@@ -89,7 +99,7 @@ the ten; they exist to be _looked at_, not signed into.
 
 ## What each role may do
 
-Nine roles, each a job somebody actually does. They are described here rather than in the theory
+Ten roles, each a job somebody actually does. They are described here rather than in the theory
 pages because this is where you pick an account to log in as. Each one is defined in
 `shared/authorization-roles.yaml`, the same file the PHP twin seeds from — which is what makes both
 backends ship the same shop rather than two that merely pass the same tests.
@@ -98,16 +108,17 @@ backends ship the same shop rather than two that merely pass the same tests.
 and the floor every signed-in role is raised to: signing in can only ever widen what a person sees.
 Reads published products, the dictionary the shop is rendered in, and the delivery options.
 
-| Role            | What the job is                                                                                                                                                                                                                                                                                                                              |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`customer`**  | Someone buying things. Everything they may do to their own basket, wishlist, addresses and account follows from being signed in and needs no permission key at all — the keys they hold are only what they may read of the SHOP.                                                                                                             |
-| **`manager`**   | What is for sale, at what price, and what happens to an order after it arrives. Reads stock but does not move it; that is the warehouse's job, and its audit trail.                                                                                                                                                                          |
-| **`warehouse`** | Stock, and getting parcels out of the door. Records movements, and records one order's handover and arrival at a time; may not change what a thing costs or delete it from the catalogue.                                                                                                                                                    |
-| **`support`**   | Messages from people, and accounts that need help. May update a customer's account and may not erase or ban one — that is the admin's and the moderator's, and it expects a freshly proved session.                                                                                                                                          |
-| **`editor`**    | Everything the shop SAYS and SHOWS, in every registered language: the catalogue record itself (price included), the dictionary a shopper reads the shop in — including registering a language the shop has not spoken before — and the words on a product's title and description. Touches no stock, no delivery rule, no order, no account. |
-| **`moderator`** | Accounts, and the orders people place: sorting one out is updating it. May ban an account, reverse a bad charge, and read why either happened.                                                                                                                                                                                               |
-| **`admin`**     | Unrestricted within this shop, and only within it. It says nothing about the platform: one role cannot reach both scopes, which is the point.                                                                                                                                                                                                |
-| **`operator`**  | Runs the installation — health, metrics, the operational audit. Explicitly **not** a super-admin: it holds no shop key and therefore cannot read a single shop's orders, customers or messages. The conformance suite asserts both halves of that.                                                                                           |
+| Role             | What the job is                                                                                                                                                                                                                                                                                                                              |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`unverified`** | A fresh signup whose address is not proven yet: what `customer` is minus the ability to spend. Promoted to `customer` once the address is verified.                                                                                                                                                                                          |
+| **`customer`**   | Someone buying things. Everything they may do to their own basket, wishlist, addresses and account follows from being signed in and needs no permission key at all — the keys they hold are only what they may read of the SHOP.                                                                                                             |
+| **`manager`**    | What is for sale, at what price, and what happens to an order after it arrives. Reads stock but does not move it; that is the warehouse's job, and its audit trail.                                                                                                                                                                          |
+| **`warehouse`**  | Stock, and getting parcels out of the door. Records movements, and records one order's handover and arrival at a time; may not change what a thing costs or delete it from the catalogue.                                                                                                                                                    |
+| **`support`**    | Messages from people, and accounts that need help. May update a customer's account and may not erase or ban one — that is the admin's and the moderator's, and it expects a freshly proved session.                                                                                                                                          |
+| **`editor`**     | Everything the shop SAYS and SHOWS, in every registered language: the catalogue record itself (price included), the dictionary a shopper reads the shop in — including registering a language the shop has not spoken before — and the words on a product's title and description. Touches no stock, no delivery rule, no order, no account. |
+| **`moderator`**  | Accounts, and the orders people place: sorting one out is updating it. May ban an account, reverse a bad charge, and read why either happened.                                                                                                                                                                                               |
+| **`admin`**      | Unrestricted within this shop, and only within it. It says nothing about the platform: one role cannot reach both scopes, which is the point.                                                                                                                                                                                                |
+| **`operator`**   | Runs the installation — health, metrics, the operational audit. Explicitly **not** a super-admin: it holds no shop key and therefore cannot read a single shop's orders, customers or messages. The conformance suite asserts both halves of that.                                                                                           |
 
 Every role also has a **level**: `admin` (`admin`, `operator`), `staff` (`manager`, `warehouse`,
 `support`, `editor`, `moderator`) or `user` (`customer`). A write on someone else's thing needs the
@@ -151,14 +162,14 @@ The rules behind them, and why a role cannot span both scopes, are in
 
 Prices are in **euros**. Delivery is picked by the customer at checkout:
 
-| Delivery   | Costs | Note                         |
-| ---------- | ----- | ---------------------------- |
-| Standard   | €5    | **free** on orders over €100 |
-| Express    | €15   | always €15                   |
-| Pick it up | €0    | the customer collects it     |
+| Delivery   | Costs | Note                                      |
+| ---------- | ----- | ----------------------------------------- |
+| Standard   | €5    | **free** on orders over €100; up to 30 kg |
+| Express    | €15   | always €15; up to 5 kg                    |
+| Pick it up | €0    | the customer collects it                  |
 
-Paying is fake. There is no real card processing and no real money — a made-up card number is
-accepted, and one specific number (`4000000000000002`) is always refused, so the "your card was
+Paying is fake. There is no real card processing and no real money — any made-up card is
+accepted, and one specific test method (`pm_card_declined`) is always refused, so the "your card was
 declined" path can be shown on demand.
 
 ## Which page do you want
@@ -189,6 +200,6 @@ click can break anything permanently.
 
 ::: info This section describes _this_ shop
 The application underneath is a reusable starting point — a **boilerplate** — and this pet-supply
-shop is just the example built on top of it. These five pages describe the example. The pages under
+shop is just the example built on top of it. These pages describe the example. The pages under
 [Modules](../modules/) describe the parts it is assembled from, one per area of the business.
 :::

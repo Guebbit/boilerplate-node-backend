@@ -63,10 +63,8 @@ event in the database's history, so it has no business carrying a version or a f
 
 A migration tool models the opposite thing. `migrate-mongo` records what it has applied **by
 filename**, which is correct for a backfill that must happen exactly once and wrong for a desired
-state that must hold after every deploy. This repo previously generated a `…-baseline.js` from the
-schemas and fed it to that runner, and the mismatch cost a file every time: regenerating the
-baseline never re-ran it, so each newly declared index needed a second, hand-written migration
-creating the same key under the same name. Two authors for one index, kept in sync by hand.
+state that must hold after every deploy. Feeding it a baseline generated from the schemas would
+mean two authors for one index, kept in sync by hand.
 
 `syncIndexes()` has no such gap — there is one author, and convergence is re-applied rather than
 recorded.
@@ -102,8 +100,8 @@ a merge is a product decision, not one a script gets to make.
 
 ### TTL windows
 
-`auditlogs`, `carts`, `feedbackrequests` and `idempotencyrecords` expire rows with a TTL index
-whose `expireAfterSeconds` comes from an environment variable. Mongo will not modify an existing
+Every TTL index expires rows after a window that comes from an environment variable (listed in the
+[retention table](../theory/data-protection.md#processing-register-art-30)). Mongo will not modify an existing
 index's window in place, so:
 
 | Action after changing e.g. `NODE_AUDIT_RETENTION_DAYS` | In dev/test (`autoIndex` on)                                              | In production (`autoIndex` off)                       |
@@ -222,7 +220,8 @@ against a real database — from nothing, against drift, and twice over — and
 
 ## Tools
 
-| File                        | What it is                                                                                                                                                                                                                                                                                                    | Read next                                      |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `scripts/db/cache-clear.ts` | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: a `scripts/ops/` script, a manual edit, a restored dump.                                                          | [Redis Cache](../tools/redis-cache.md)         |
-| `scripts/run-script.ts`     | The entry-point wrapper the one-shot scripts in `scripts/db/` and `scripts/ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |
+| File                             | What it is                                                                                                                                                                                                                                                                                                    | Read next                                      |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `scripts/db/cache-clear.ts`      | Drops every cached response belonging to this app — `npm run db:cache:clear`. The API invalidates its own cache on every write it handles, so this is for the writes it did **not** handle: a `scripts/ops/` script, a manual edit, a restored dump.                                                          | [Redis Cache](../tools/redis-cache.md)         |
+| `scripts/db/bootstrap-access.ts` | Gives a fresh production database its shop — `npm run access:bootstrap`. An upsert keyed on the fixed deployment tenant id, so running it twice changes nothing; `deploy:setup` runs it after `db:sync`.                                                                                                      | [Ops](./ops.md)                                |
+| `scripts/run-script.ts`          | The entry-point wrapper the one-shot scripts in `scripts/db/` and `scripts/ops/` run through. Gives them the three things a bare promise chain does not: a connection opened and closed around the work, a non-zero exit on failure, and the failure printed rather than swallowed as an unhandled rejection. | [Package Scripts](../tools/package-scripts.md) |

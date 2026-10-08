@@ -11,7 +11,7 @@ plus deleting that line. Everything on this page exists to make those two senten
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 55, 'rankSpacing': 60}}}%%
 flowchart TD
-    A["<b>src/app</b><br/>this application: assembly<br/><i>bootstrap · system route</i>"]
+    A["<b>src/app</b><br/>this application: assembly<br/><i>security · errors · routes · workers</i>"]
     M["<b>src/modules/*</b><br/>one domain each, top to bottom<br/><i>products · orders · account · …</i>"]
     P["<b>src/kernel</b><br/>module system + authn/authz<br/><i>registry · events · auth port · guard</i>"]
     C["<b>src/infrastructure</b><br/>substrate — never knows modules exist<br/><i>adapters · http · persistence · i18n · runtime</i>"]
@@ -53,8 +53,8 @@ This is the boundary people trip on, so it gets one question and no adjectives:
 - **Yes, it still works** → `infrastructure`.
 - **No, it becomes meaningless** → `kernel`.
 
-`infrastructure` is not "framework-free" — it is the opposite. 22 files there import Express and 10
-import Mongoose, which is exactly right: `infrastructure/http/response.ts` is Express-coupled
+`infrastructure` is not "framework-free" — it is the opposite. Dozens of files there import Express
+or Mongoose, which is exactly right: `infrastructure/http/response.ts` is Express-coupled
 substrate and belongs where it is. The one thing it may never contain is the knowledge that a
 module system exists.
 
@@ -62,11 +62,10 @@ It also may not hold a **business rule**, even one that two modules share. That 
 tier invites, because "two modules need it" feels like a reason to push something down. It is not:
 the substrate is what the application runs ON, and none of it knows what an order or a price is. A
 shared rule belongs to whichever domain OWNS it, exported through that module's barrel — see
-`src/modules/orders/domain/totals.ts`, which sat here until the rename made the leak obvious.
+`src/modules/orders/domain/totals.ts`.
 
 So `kernel` holds only what would lose its reason to exist if modules did — which today is NOT
-just the module system machinery (`registry.ts`, `events.ts`): six of its ten files, and most of
-its code, are the authn/authz surface every module's guard shares. That is a real weight,
+just the module system machinery (`registry.ts`, `events.ts`): most of its code is the authn/authz surface every module's guard shares. That is a real weight,
 not an oversight — the table below is what earns each file its place, module system or not:
 
 | File                            | Why it cannot be infrastructure                                                                          |
@@ -108,8 +107,6 @@ The test that keeps this honest: a `kernel` file may be imported by a module, bu
 must dissolve if modules do. Being domain-free is not enough — most of `infrastructure` is
 domain-free too.
 
-Both tables describe the tree as it is.
-
 ### Why these names, and what everyone else calls them
 
 Separating a module system from its substrate is a well-established pattern. The **vocabulary is
@@ -125,11 +122,10 @@ not**, and that is the whole reason this section exists:
 | **this repo** | `kernel`               | `infrastructure`  |
 
 Read the table for what it actually shows: **`core` names both halves, depending on who you ask.**
-Nest and Angular use it for the DI container, Spring and Backstage for the substrate. This repo
-used it for the substrate, and the section above had to open with a standing disclaimer saying so
-— insisting, every time, that `core` did not mean what most readers assume.
+Nest and Angular use it for the DI container, Spring and Backstage for the substrate, so this repo
+avoids it.
 
-That is the argument in one line. A name needing a disclaimer does negative work: a NOVEL name
+A name needing a disclaimer does negative work: a NOVEL name
 makes a reader look it up, an OVERLOADED one makes them think they already know. The second failure
 is silent, and it is the expensive one.
 
@@ -137,27 +133,19 @@ is silent, and it is the expensive one.
 are what the word means in hexagonal architecture — the tradition this dependency rule already
 comes from. `common` and `base` were the other candidates and were rejected for the opposite
 reason: they describe nothing, and a folder that describes nothing accepts anything, which is
-exactly how the old `src/utils/` became a dumping ground. <!-- doc-paths:ignore -->
+exactly how a `utils/` becomes a dumping ground.
 
-**`platform` → `kernel` is the less obvious half, so here is the case against it first.** VS Code
-is a real precedent, and an earlier version of this page leaned on it to keep the name. Two things
-outweighed it. First, `vs/platform` is VS Code's _service and DI layer_ — a third meaning again, so
-the precedent supports "platform ≈ services", not "platform ≈ plugin host". Second, the word now
-belongs to platform engineering, where "the platform" is the base layer everything runs on. That is
-this repo's `infrastructure`. Read cold, the two old names pointed at each other's contents.
+**`kernel` over `platform`.** VS Code's `vs/platform` is its _service and DI layer_, and to platform
+engineering "the platform" is the base layer everything runs on, which is this repo's
+`infrastructure`. Read cold, `platform` and `infrastructure` would point at each other's contents.
 
 `kernel` carries none of that. These files are a **microkernel**: a small fixed host that
 loads, validates and connects plugins it has never heard of — the pattern under its textbook name.
-The folder says what it is, and so does the tier beneath it.
-
-These names are deliberately kept. The confusion this section exists to prevent was never caused by
-the words — it was caused by a criterion that did not match the code, and by files sitting in the
-wrong tier. Both are fixed above, and a rename would be motion rather than progress.
 
 ### Why "app" is a tier and not a leftovers drawer
 
-It holds the things that are allowed to know every domain: `bootstrap` (the `install(app)` steps),
-and the system route that belongs to no domain. `src/modules.ts` and `app.ts` sit beside it for the
+It holds the things that are allowed to know every domain: how the application is assembled
+(security, error handling, routes, workers) and the system route that belongs to no domain. `src/modules.ts` and `app.ts` sit beside it for the
 same reason — the registry names every enabled domain, which nothing below it may do.
 
 The test for whether something belongs here: **does it need to know which domains exist?** If yes,
@@ -201,7 +189,7 @@ In `account` it closes a `users → account → users` cycle, because `users`' o
 flowchart TD
     ENTRY["app.ts · cluster.ts<br/><i>process entry</i>"]
     REG["modules.ts<br/><i>THE enabled-domain list</i>"]
-    APP["app/<br/><i>bootstrap · system-routes</i>"]
+    APP["app/<br/><i>security · routes · workers</i>"]
     MODS["modules/*"]
     PLAT["kernel/<br/><i>registry · events<br/>auth port · guard</i>"]
     CORE["infrastructure/<br/><i>adapters · http · persistence<br/>i18n · runtime</i>"]
@@ -223,11 +211,10 @@ flowchart TD
 **One alias per tier**, so an import line states which tier it crosses: `@app/*`, `@modules/*`,
 `@kernel/*`, `@infrastructure/*`.
 
-Two naming details worth knowing, because both were confusing before:
+Two naming details worth knowing:
 
 - **`infrastructure/runtime`** starts the _process's_ resources — database connection, env validation, the
-  OTel SDK, signal handlers. No Express anywhere. It was once `core/bootstrap`, which made it look
-  like a twin of the app tier's boot steps; it never was.
+  OTel SDK, signal handlers. No Express anywhere, and not a twin of the app tier's assembly steps.
 - **a substrate queue consumer is `infrastructure`, not `kernel`.** Sending an email is a verb, not
   a domain, and does not stop making sense in an app with no modules — so its consumer sits beside
   the adapter it is the other half of. Only `registerWorkers()` is app-tier, because naming which
@@ -272,17 +259,17 @@ flowchart TD
 | File                                                 | Required?                                                              | What it is                                                                              |
 | ---------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | `module.ts`                                          | **yes**                                                                | the manifest — the only file `src/modules.ts` imports                                   |
-| `index.ts`                                           | only if a sibling imports this module                                  | the public barrel; a module nothing imports has none                                    |
+| `index.ts`                                           | **yes**                                                                | the public barrel, even when empty (`antibot`)                                          |
 | `routes.ts` + `controllers/`                         | only if the domain serves HTTP                                         | `audit-logs` has neither                                                                |
 | `service.ts` · `repository.ts` · `model.ts`          | only if it owns data                                                   | `observability` owns none — it serves URLs over other domains' data                     |
 | `services/`                                          | when `service.ts` outgrows one file                                    | see [Layers](./layers.md#when-service-ts-becomes-services)                              |
 | `presenter.ts` (`presenters.ts` for >1 resource)     | if it serves HTTP and owns a model                                     | the one place a document becomes wire shape — see [below](#the-module-template)         |
 | `domain/`                                            | only if the module has rules to prove, MANDATORY for a 3+-state status | see [Domain Layer](./domain-layer.md#mandatory-for-a-3-state-status-optional-otherwise) |
 | `openapi.yaml`                                       | if it serves HTTP                                                      | its standalone slice of the REST contract                                               |
-| `asyncapi.yaml`                                      | if it owns a channel                                                   | the same, for the async contract, server included — `observability` is the only one     |
+| `asyncapi.yaml`                                      | if it owns a channel                                                   | the same, for the async contract — `observability`, `webhooks`, `notifications`         |
 | `probes.ts`                                          | as needed                                                              | the requests a spec cannot describe — see below                                         |
-| `providers/`                                         | if the domain has an outbound port                                     | `payments` is the only one — see below                                                  |
-| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                                                              | the domain's slice of what used to be shared registries                                 |
+| `providers/`                                         | if the domain has an outbound port                                     | `payments` at the module root — see below                                               |
+| `audit.ts` · `metrics.ts` · `locales/` · `events.ts` | as needed                                                              | the domain's own slice of each cross-cutting declaration                                |
 | `analytics.ts` · `factories.ts`                      | as needed                                                              | the event names it emits; how its test/demo records are built                           |
 | `emails.ts`                                          | only if the domain sends email                                         | the finished copy of its emails — see below                                             |
 | `tests/unit/` · `tests/contract/`                    | yes, in practice                                                       | deleted with the module                                                                 |
@@ -293,15 +280,9 @@ rule, and `account` is the module that forced it to be written down:
 > A module root holds the manifest, the barrel, the contract files, the single-file layers and the
 > self-registering slots. Everything else goes in a folder named for what it holds.
 
-Under it, `account`'s eight loose root files sorted into three piles: `jwt.ts`, `cookies.ts` and
-`tokens.ts` were the token surface and became `session/` (with `tokens.ts` renamed `config.ts`, since
-it holds no token — it reads how long they live); `verification.ts`, `token-cleanup.ts` and
-`addresses-service.ts` were behaviour and joined `services/`, where `service.ts` had already been <!-- doc-paths:ignore -->
-split into `authentication.ts` and `profile.ts`; and `addresses-model.ts` / `addresses-repository.ts` <!-- doc-paths:ignore -->
-were simply this module's `model.ts` and `repository.ts` under a prefix that dated from when it had
-no collection at all. `users/validation.ts` merged into `users/model.ts` for the same reason. The <!-- doc-paths:ignore -->
-rule is what makes the table above readable as a shape rather than a suggestion: a file at the root
-is a layer, and a folder is a subject.
+Under it, `account`'s token surface sits in `session/`, its behaviour in `services/`, and its
+collection files are plainly `model.ts` and `repository.ts`. A file at the root is a layer, and a
+folder is a subject.
 
 Nothing central enumerates these. `audit.ts`, `metrics.ts` and `events.ts` register or augment
 themselves on import; `locales` is declared in the manifest so the i18n boot can walk the registry
@@ -311,7 +292,7 @@ without naming a domain.
 contain the calls the contract describes, and a contract describes valid calls and their declared
 answers — so the requests that prove the API _rejects_ things have nowhere to come from. A module
 declares those as data (method, path, headers, body, and a `why` that becomes the description) and
-the collection generator emits them after its contract-derived requests. Four modules carry one, and
+the collection generator emits them after its contract-derived requests. A handful of modules carry one, and
 a module deleted without removing its entry from `scripts/contracts/client-collections-bundle.ts` stops
 the build rather than shipping a short collection. See
 [Contract Ownership & Fragmentation](../api/contract-fragmentation.md#the-client-collections-generated).
@@ -326,7 +307,7 @@ substrate that knew what a charge was would be holding a business rule. The patt
 copied — `infrastructure/observability/analytics/index.ts` cites it by name for its own
 `NODE_ANALYTICS_PROVIDER` seam.
 
-`emails.ts` is the newest of them and exists for a boundary reason. An email is rendered by
+`emails.ts` exists for a boundary reason. An email is rendered by
 `infrastructure/adapters/email.worker.ts`, which drains a queue possibly in another process, long after
 the request that asked for the email ended — so there is no locale store there and nothing to
 resolve a translation key against. Rather than rebuild that context in the worker, each module
@@ -473,15 +454,11 @@ export default {
 Every field is read by something: the router is mounted at `basePath`, `locales` is handed to
 i18next, `subscribe` attaches the module's event handlers, `onRegistered` runs once every module is
 known — installing a kernel port, or resolving a cross-module lookup like `locales`'
-`translatables`. That is the bar for a field being here at all — the manifest used to also carry a
-`subdomain` string and a labelled `dependsOn` graph,
-which nothing read and three tests checked; it does not carry either any more. Both questions live
-next to the manifest instead, in the module's own `module.yaml` — one plain file, read by
-`.dependency-cruiser.cjs` as the enforced allow-list behind `check:dependencies`, not by the app at
-runtime — see [Strategic DDD](./strategic-ddd.md) §2 and §4 for why a sibling file succeeds where
-the old manifest field did not. It also used to carry `seeds`/`seedExport`/`demoShapes`: gone for a
-different reason — `scenarios/index.ts` reads a module's repository and factories directly, so a
-domain with no demo data carries nothing about demo data at all, not even an absent field.
+`translatables`. That is the bar for a field being here at all. The subdomain and the `dependsOn` graph live next to
+the manifest, in the module's own `module.yaml` — one plain file, read by `.dependency-cruiser.cjs`
+as the enforced allow-list behind `check:dependencies`, not by the app at runtime — see
+[Strategic DDD](./strategic-ddd.md) §2 and §4. Demo data is not on the manifest either:
+`scenarios/index.ts` reads a module's repository and factories directly.
 
 `basePath` and `routes` are both optional, so a domain that owns data but no URL is an ordinary
 entry rather than a special case — `access` declares neither and `app/routes.ts` mounts only
@@ -503,7 +480,7 @@ The `never`s are the point: declaring a router with no mount point, or a mount p
 mount, is a type error at the manifest rather than a route that silently never registers.
 
 **Keep it small.** A field only one module fills does not belong here — that module should do the
-thing itself. `subscribe` was the one field that broke it; six modules fill it today, which settled the question in favour of keeping it.
+thing itself. `subscribe` passes the bar: several modules fill it.
 
 ## The dependency graph
 
@@ -515,17 +492,15 @@ today's shape as an example.
 :::
 
 Every arrow is an import across a module boundary, through the target's barrel. `cart` is the
-busiest node on the graph, reaching `addresses`, `delivery`, `orders`, `payments`, `products` and
-`users` — six edges, and not a smell to refactor away: a checkout is the one operation that
+busiest node on the graph, reaching `addresses`, `delivery`, `inventory`, `orders`, `payments`,
+`products` and `users` — seven edges, and not a smell to refactor away: a checkout is the one operation that
 genuinely needs the catalogue, the customer, the order it becomes, the method and address it ships
 to, and the payment that settles it. `products` and `access` sit at the opposite end: reached by
 several modules, reaching none.
 
 `inventory` is worth reading as a shape rather than a node. It sits one level above `products` and
-two modules depend on it, because it owns the only writes to the two stock counters: `orders` asks
-it to hold units, `payments` asks it to turn a hold into a sale. It used to sit at the
-bottom as a passive listener while four modules each moved stock themselves — the module named
-`inventory` did not own inventory — and inverting that is what the arrows now record.
+`cart`, `orders` and `payments` depend on it, because it owns the only writes to the two stock
+counters: `orders` asks it to hold units, `payments` asks it to turn a hold into a sale.
 
 The reverse direction is domain events, and it is a **separate** graph on purpose — an event edge is
 exactly the edge that would have made the import graph a cycle:
@@ -540,7 +515,9 @@ exactly the edge that would have made the import graph a cycle:
 
 A user's hard delete is deliberately not in this table: it is not an event. Each module declares a
 `personalData.erase` hook and `users` runs them all inside one transaction, so a failing eraser
-aborts the whole erasure instead of being logged and skipped.
+aborts the whole erasure instead of being logged and skipped. The inactivity job's
+`personalData.minimise` hooks are the same shape without the transaction: each is idempotent, and
+the account is stamped minimised only once every hook succeeded, so a failure is retried next night.
 
 Note who emits: every one comes from a module low in the import graph telling a module above it
 something, because a module cannot import its own dependants. `inventory.reservation_expired` is the
@@ -548,12 +525,10 @@ clearest case — the sweep releases the units itself and needs nobody's help fo
 the order behind the hold belongs to `orders`, which already imports `inventory`. An import back
 would be the cycle the registry refuses to boot, so it is announced instead.
 
-There is deliberately **no** stock event, and there used to be. `product.stock_moved` was emitted by
-whoever had just changed a count, with `inventory` listening and writing a ledger row — which made
-the row a REACTION to the write rather than half of it, so every mover had to remember to announce
-on every path, and on the rollback paths they did not. A counter change nobody recorded is not a
-smaller feature, it is a corrupt audit trail. The row is now written by the same function call that
-moves the counter and cannot be forgotten, because there is nothing left to forget.
+There is deliberately **no** stock event. A ledger row written as a REACTION to a counter change
+would depend on every mover announcing it on every path, rollbacks included, and a counter change
+nobody recorded is a corrupt audit trail. The row is written by the same function call that moves
+the counter, so it cannot be forgotten.
 
 Every solid arrow is also one of four **kinds** — `conformist`, `customer-supplier`,
 `published-language` or `shared-kernel` — though nothing on the map labels which; naming the kind
@@ -632,28 +607,23 @@ three contract order lists name domains too, but only as a preferred position �
 off disk (`scripts/contracts/section-order.ts`), so they are not a census and never need an edit.
 
 **And it is measured, in both directions.** `wishlist` was added under it: one folder, one registry
-line, its section-order entries, and **zero** edits to any existing file.
+line, and **zero** edits to any existing file.
 
-Deleting `products`, `cart` and `orders` together, **re-measured 2026-08-16 at thirteen modules**:
-62 type errors across 26 files.
+Deleting a few depended-upon modules together gives these breaks:
 
-| Tier                  | Files that break | What they are                                                           |
-| --------------------- | ---------------- | ----------------------------------------------------------------------- |
-| `scripts/db/**`       | **0**            | —                                                                       |
-| `src/**` (production) | 10               | four modules that genuinely import it — a real coupling, failing loudly |
-| co-located specs      | 10               | five modules' own tests, reaching for a deleted domain's factories      |
-| `tests/**`            | 4                | central specs using a domain as sample data, or asserting one           |
-| `scripts/**`          | 2                | the section lists, announcing the entry you have not deleted yet        |
+| Tier                  | Files that break | What they are                                                       |
+| --------------------- | ---------------- | ------------------------------------------------------------------- |
+| `scripts/db/**`       | **0**            | —                                                                   |
+| `src/**` (production) | the dependants   | modules that genuinely import it — a real coupling, failing loudly  |
+| co-located specs      | the dependants'  | those modules' own tests, reaching for a deleted domain's factories |
+| `tests/**`            | a few            | central specs using a domain as sample data, or asserting one       |
+| `scripts/**`          | a few            | the section lists, announcing the entry you have not deleted yet    |
 
-**The `scripts/db/**`zero is the verdict**, and it is a narrower claim than the one this table used
-to make. An earlier run reported zero in`src/\*\*`too; that was true when`delivery`, `inventory`,
-`payments`and`wishlist` did not exist, and it was never the property being defended. Those four
-break because they genuinely import what was deleted — a compile error naming the file and the
-line, which is the failure a real coupling should produce. What must stay at zero is the tier that
-names domains it has no business naming, and it has.
+**The `scripts/db/**` zero is the verdict.\*\* Dependants break because they genuinely import what
+was deleted — a compile error naming the file and the line, which is the failure a real coupling
+should produce. What must stay at zero is the tier that names domains it has no business naming.
 
-The rest is residue in test and script code — the two `scripts/**` breaks are the hard errors the
-removal procedure tells you to fix in step 3, and some of the test breaks are **correct** and must
+The rest is residue in test and script code, and some of the test breaks are **correct** and must
 not be "fixed". Which is which, and how to re-run it, is
 [Re-running the deletability check](./module-lifecycle.md#re-running-the-deletability-check).
 

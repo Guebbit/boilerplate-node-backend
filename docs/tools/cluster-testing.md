@@ -87,6 +87,7 @@ the second with `Socket already opened`, and that failure path discarded the cli
 was still using, which then failed with `The client is closed`. Every request afterwards passed
 unbudgeted, and the log said Redis was unreachable while Redis was answering fine.
 
-The fix is the shared `connecting` promise in
-`src/infrastructure/http/middlewares/rate-limit-store.ts`: one connection needs one `connect()`.
+The fix is one shared in-flight connect promise (`connectPromise` in
+`src/infrastructure/adapters/managed-connection.ts`, which the limiter's Redis client goes through):
+one connection needs one `connect()`.
 Reverting it turns the first case red with `Expected 5, Received 30`.

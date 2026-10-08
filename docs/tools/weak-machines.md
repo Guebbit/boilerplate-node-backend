@@ -24,8 +24,9 @@ first before the second.
 ## Why shards and not a bigger heap
 
 Jest gives every test file a fresh module registry, but the **process** keeps what that registry
-allocated — measured at roughly 70 MB per file. Over the integration layer's ~75 files that is
-~5 GB of retention in one process, and the run dies long before the last file.
+allocated — measured at roughly 70 MB per file. Over the integration layer's ~180 test files that is
+
+> 10 GB of retention in one process, and the run dies long before the last file.
 
 `--max-old-space-size` moves the ceiling; it does not stop the climb. A process that **exits**
 every N files does, and `--shard` is jest's own way to say which N.
@@ -58,18 +59,18 @@ number that predicts whether the next worker survives.
 **Sharding only starts where the machine runs out.** The per-shard size is the budget, capped by a
 guard rail (`MAX_SHARD_PEAK_MB`, 8 GB) that exists only to stop a momentarily-idle machine sizing
 one enormous shard it cannot sustain an hour later. The rail sits high on purpose: 8 GB is ~101
-files per shard, more than any layer here holds, so a machine with real headroom runs the layer in
-**one** shard, `--shard` is never passed, and the run is exactly what it always was.
+files per shard, so a machine with real headroom runs the integration layer in two shards, and a
+layer with fewer files than that (cross-cutting, unit) in one, where `--shard` is never passed.
 
-| Machine                                 | files/shard | integration shards | sharding cost     |
-| --------------------------------------- | ----------- | ------------------ | ----------------- |
-| roomy box, several GB spare             | ~101        | **1**              | none              |
-| this one, unpinned (6.6 GB free)        | ~50         | 2                  | one extra boot    |
-| this one, `JEST_PROCESS_BUDGET_MB=2600` | ~21         | 4                  | three extra boots |
+| Machine                                     | files/shard | integration shards | sharding cost     |
+| ------------------------------------------- | ----------- | ------------------ | ----------------- |
+| roomy box, 8 GB or more spare               | ~101        | 2                  | one extra boot    |
+| a 6.6 GB-free box, unpinned                 | ~50         | 4                  | three extra boots |
+| the same box, `JEST_PROCESS_BUDGET_MB=2600` | ~21         | 9                  | eight extra boots |
 
 A constrained machine does not rely on the rail — it sets `JEST_PROCESS_BUDGET_MB` below it. 2600 is
 the figure measured green here: 19 files in one in-band shard peaked at 2407 MB RSS and passed,
-where all 75 in one process reached Node's heap ceiling and died at 448 s.
+where all 75 files of the layer, as it was then, in one process reached Node's heap ceiling and died at 448 s.
 
 ## Why in-band inside a shard
 
@@ -82,7 +83,7 @@ single file. The limit belongs above the baseline, as a backstop for a leak, not
 
 ## The depth knobs
 
-All four are read in `tests/support/knobs.ts` and promoted from `.env` by `jest.config.js` — an
+All four are read in `tests/support/knobs.ts` (`TEST_RACE_SIZE` in `tests/support/race.ts`) and promoted from `.env` by `jest.config.js` — an
 allowlist, never a wholesale merge, so a live rate limit in `.env` can never reach a worker.
 Nothing under `src/` reads them: **a knob changes what a suite asks, never what the code answers.**
 

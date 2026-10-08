@@ -6,13 +6,14 @@ to go back.
 Log in as `moderator@example.com` / `Demo-Moderator1!` — a real, narrower account, not the
 owner's.
 
-## Four keys, three jobs
+## Key families, three jobs
 
 | Key                                                                   | Buys                                                      |
 | --------------------------------------------------------------------- | --------------------------------------------------------- |
 | `users.any.read` / `.create` / `.update` / `.delete`, `users.any.ban` | Add, edit, erase an account — and ban one.                |
 | `orders.any.read` / `.update`                                         | Read and update any order in the shop, not only your own. |
 | `payments.any.read` / `.create` / `.update`                           | Read any payment, and refund it.                          |
+| `returns.any.read` / `.update`                                        | Read any return request, and approve or decline it.       |
 | `audit.any.read`                                                      | Read the history of what everyone with a key did.         |
 
 ## Banning is its own key

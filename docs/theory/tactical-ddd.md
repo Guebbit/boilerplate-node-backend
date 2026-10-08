@@ -4,8 +4,8 @@
 aggregates. [Strategic DDD](./strategic-ddd.md) covers the other half, which is adopted wholesale.
 
 Two tactical patterns are in the code. Both live in `src/modules/orders/domain/`, both are plain
-data with functions in front of them, and both were taken for the same reason: a rule was already
-written down in more than one place, and the copies had stopped agreeing.
+data with functions in front of them, and both exist for the same reason: a rule needed in more than
+one place gets one owner, so the copies cannot disagree.
 
 Everything else — aggregates, domain repositories, mappers, a read model — is deliberately absent,
 worth the cost only once a real core domain argues, by hand, about rules a plain function can no
@@ -20,7 +20,7 @@ here is narrow: **is the rule already duplicated, and do the copies disagree?**
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 45}}}%%
 flowchart TD
     Q1{"Is the rule written<br/>in more than one place?"}
-    Q1 -->|no| KEEP["leave it in the service<br/>✅ thirteen modules"]
+    Q1 -->|no| KEEP["leave it in the service<br/>✅ most modules"]
     Q1 -->|yes| Q2{"Do the copies<br/>already disagree?"}
     Q2 -->|no| WATCH["one function, one owner<br/>✅ sumLineItems, priceShipping"]
     Q2 -->|yes| Q3{"Does the rule need state<br/>a pure function cannot see?"}
@@ -56,10 +56,12 @@ stateDiagram-v2
     [*] --> pending
     pending --> paid: system
     pending --> cancelled: customer, admin
-    paid --> processing: admin
-    paid --> cancelled: customer, admin
+    pending --> cancelled: system (reservation expiry)
+    pending --> cancelled: withdrawal
+    paid --> processing: system
+    paid --> cancelled: customer, admin, withdrawal
     processing --> shipped: system
-    processing --> cancelled: admin
+    processing --> cancelled: admin, withdrawal
     shipped --> delivered: system
     delivered --> [*]
     cancelled --> [*]
@@ -68,10 +70,10 @@ stateDiagram-v2
 Three absences are load-bearing:
 
 - **Nothing reaches `paid` but `system`.** An operator cannot mark an order paid by hand — money
-  landing is a fact from outside the application. `payments/module.ts` has always stated this in its
-  glossary; the table is where it holds.
+  landing is a fact from outside the application. the table is where it holds.
 - **A customer's cancel stops at `paid`.** The refund listener is what makes `paid` cancellable;
-  past that the order is in the fulfilment queue and cancelling becomes an operator's decision.
+  past that the order is in the fulfilment queue and cancelling becomes an operator's decision (the
+  EU withdrawal right is its own actor, `withdrawal`, which can also cancel from `processing`).
 - **`shipped` has no cancel edge at all.** Goods in transit come back as a return, which is a flow
   of its own rather than a status the order rewinds into.
 
@@ -130,26 +132,18 @@ actor into a second table would let the two disagree, so it rides on the edge it
 
 `system` is not a privilege level above `admin`. It is **narrower**: the moves an operator may never
 make by hand, because something outside the application has to have happened first. Money landing
-is one; fulfilment starting (`paid → processing`) is the other, off `admin` onto its own
-`delivery`-owned start action (`POST /delivery/order/{id}/start`) — see "Action endpoints execute"
-below.
+is one; fulfilment starting (`paid → processing`) is the other, recorded through `delivery`'s own
+start action (`POST /delivery/order/{orderId}/start`) — see "Action endpoints execute" below.
 
-### What it replaced
+### What the table prevents
 
-Lifecycle knowledge used to live in three places that did not agree.
-
-| Where                             | What it encoded                                    | The problem                                          |
-| --------------------------------- | -------------------------------------------------- | ---------------------------------------------------- |
-| `orders/services/cancel.ts`       | `CANCELLABLE_ORDER_STATUSES = ['pending', 'paid']` | correct, but local                                   |
-| `payments/services/settlement.ts` | `if (order.status !== 'pending')`                  | a second module asserting the lifecycle from outside |
-| `orders/services/crud.ts`, admin  | `order.status = data.status`                       | **no guard at all**                                  |
-
-That third row was a live bug rather than an untidiness:
+Lifecycle knowledge in several places that can disagree is how an unguarded status write becomes a
+refund on delivered goods:
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 25, 'rankSpacing': 35}}}%%
 flowchart TD
-    A["admin writes<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancellable set"]
+    A["a status written by assignment<br/>delivered → pending"] --> B["order is back in the<br/>customer's cancellable set"]
     B --> C["customer clicks cancel"]
     C --> D["afterCancel runs"]
     D --> E2["ORDER_REFUND_OWED emitted"]
@@ -164,10 +158,11 @@ flowchart TD
     class H ok;
 ```
 
-Every individual write site in this codebase is defensively coded, which is why only one half of
-that sequence caused damage. `inventory` claims the reservation conditionally, so a stale release
-finds nothing. `payments` guards the refund on the payment's own status — but that payment really
-was `succeeded`, so the guard passed.
+Every individual write site is defensively coded, which is why only one half of that sequence would
+cause damage: `inventory` claims the reservation conditionally, so a stale release finds nothing,
+while `payments` guards the refund on the payment's own status — and that payment really was
+`succeeded`, so the guard passes. The table closes it at the source: no write site asserts a
+lifecycle edge of its own, they all ask.
 
 ### How it is enforced
 
@@ -175,18 +170,18 @@ was `succeeded`, so the guard passed.
 | --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `orders/services/cancel.ts` — `cancelById`                                              | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                                                  |
 | `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | `statusesLeadingTo(to, 'system')` — a single `from`, since the `system` actor has exactly one legal source per destination, read off the table rather than restated as a literal |
-| `payments/services/intent.ts`/`settlement.ts`                                           | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)                                  |
+| `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)                                  |
 | `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                                      |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
 
-### Action endpoints execute; `update` no longer decides
+### Action endpoints execute; `update` does not decide
 
 `orders/services/crud.ts`'s `update` carries no status logic at all: `UpdateOrderByIdRequest`
 declares `email` only, so there is no move left for it to refuse or apply, and no partial-write
-window between an email save and a status move to guard against — the shape this repo used to get
-wrong (see "What it replaced" above) is now impossible by construction rather than guarded.
+window between an email save and a status move to guard against — impossible by construction
+rather than guarded.
 
 `POST /orders/{id}/cancel` is the one path that runs a cancellation, for a customer and an operator
 alike: the hold is released, `ORDER_CANCELLED` is announced for the fact, and — separately —
@@ -196,10 +191,9 @@ kept and the stock held until the sweep.
 
 `shipped`/`delivered` are never a field an admin assigns either — they follow a parcel event
 `delivery` records, through `markShipped`/`markDelivered` (see "Who writes the status" above).
-`paid → processing` follows a fulfilment-start fact the same way, once
-`delivery` grows its own door for it. Until then, the admin override
-(`POST /orders/{id}/status-override`) is the only reachable path onto it — the same door a
-mis-scanned parcel or a manual correction already uses. `items`/`userId` are not in
+`paid → processing` follows a fulfilment-start fact the same way, through `markProcessing`.
+The admin override (`POST /orders/{id}/status-override`) is the door for a mis-scanned parcel or a
+manual correction. `items`/`userId` are not in
 `UpdateOrderByIdRequest` at all either — they stay `POST /orders` (create)-only. Rewriting a
 document that already carries a sequential invoice number has no safe meaning: EU VAT practice
 corrects an issued invoice with a credit note, not a rewrite, and a real order-edit flow (stock
@@ -235,7 +229,7 @@ which, and where that decision lives, is a separate question from which moves ar
 
 `order.cancelled` carries a `refund` flag rather than the listener inferring one — but the flag is
 for the record (and the customer-facing webhook), not for driving the refund itself. That is a
-second, separate event, `order.refund_owed`, emitted only when one is due (B6): re-announcing
+second, separate event, `order.refund_owed`, emitted only when one is due: re-announcing
 `order.cancelled` to retry a stuck refund would re-deliver that webhook to every subscriber each
 time the sweep ran.
 
@@ -374,15 +368,15 @@ flowchart LR
     class M exact;
 ```
 
-Two functions in, one out. Every intermediate is an integer, so the sum is exact and
+Two functions in (`toMinorUnits`, `toDecimalAmount`, both taking the currency they convert for),
+one out. Every intermediate is an integer, so the sum is exact and
 order-independent — no accumulator can round differently depending on the sequence it saw the lines
 in. The rounding rule exists once, in this file.
 
 `money.ts` owns ROUNDING; `totals.ts` owns COMPOSITION. `orderTotal({ items, shippingCost })` is
-what the customer owes, and its three callers — the order serializer, `payments.createIntent` and
-`orderConfirmEmail` — all read it rather than adding the two numbers themselves. That split matters:
-while only the serializer composed the total, the payment intent charged the lines and gave the
-shipping away on every non-free order.
+what the customer owes, and its callers — the order serializer, `payments.createIntent` and
+the confirmation email — all read it rather than adding the two numbers themselves, so the payment
+intent cannot charge the lines and forget the shipping.
 
 ### Why a brand rather than a class
 
@@ -476,21 +470,19 @@ fixed multi-rate, multi-line example each, not a single hand-picked total.
 The invoice needs a fourth shape `orderTaxBreakdown` also returns but the wire contract never
 sees: `shippingByRate`, shipping's slice of `taxSummary` broken back OUT per rate — "shipping,
 taxed at 22%: €4.10 net, €0.90 tax" as its own printed row. `model.ts` does not copy it onto a
-serialized order; only `orders/emails.ts`'s invoice builder reads it, straight off its own call to
+serialized order; only `invoicing/emails.ts`'s invoice builder reads it, straight off its own call to
 `orderTaxBreakdown`.
 
-### No currency in the type — yet
+### Currency is an argument, not part of the type
 
-The shop is single-currency per deployment: `payments/services/intent.ts` stamps `defaultCurrency()` on
-every payment, and `orders/emails.ts`'s invoice formats every amount in `invoiceCurrency()` — the
-same `NODE_DEFAULT_CURRENCY` read a second time, since `orders` cannot import `payments`
-(`orders → payments` is not an edge `module.yaml` allows). Nothing reads a second currency, in
-either module. A currency tag today would be a field with exactly one possible value, checked
-against itself.
+A currency's minor unit is not always a hundredth (JPY has none, KWD has three), so
+`toMinorUnits(value, currency)` and `toDecimalAmount(amount, currency)` take the code they convert
+for, and `orderTotal` takes the order's own `currency`. The `Money` brand itself carries no
+currency, so `addMoney` cannot refuse a mismatch: the shop is single-currency per deployment
+(`NODE_DEFAULT_CURRENCY`), and a tag on the type would have one possible value.
 
-The day a second currency exists it belongs **on this type** rather than beside the amount — an
-`addMoney` that refuses a mismatch is precisely the reason to put it here. `payments/repository.ts`
-currently takes `{ amount, currency }`, which is the shape that lets two currencies be added.
+The day two currencies mix in one sum, the currency belongs **on this type** rather than beside
+the amount — an `addMoney` that refuses a mismatch is precisely the reason to put it there.
 
 ---
 

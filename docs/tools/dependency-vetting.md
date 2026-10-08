@@ -92,7 +92,7 @@ own range bumped instead, so nothing in `dependencies` or `devDependencies` appe
 
 | Override                                 | Pins      | Closes                                                                                                                                                           |
 | ---------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ip-address`                             | `^10.5.0` | SSRF/trust-boundary advisories under `express-rate-limit`                                                                                                        |
+| `ip-address`                             | `^10.7.2` | SSRF/trust-boundary advisories under `express-rate-limit`                                                                                                        |
 | `jsonpath-plus`                          | `^10.4.0` | two CVSS 9.8 RCEs, reaching us through `@asyncapi/modelina` → `@asyncapi/multi-parser`, which aliases two old `@asyncapi/parser` builds that still ask for `7.x` |
 | `lodash`                                 | `^4.18.1` | prototype pollution and `_.template` code injection, via `postman-collection`'s hard pin at `4.17.21`                                                            |
 | `@faker-js/faker`                        | `^10.6.0` | `helpers.fake` arbitrary code execution, for `@stoplight/prism-http`, which asks for `^10.4.0` anyway                                                            |

@@ -2,7 +2,7 @@
 
 This page groups the `package.json` scripts by job instead of by raw list order.
 
-**The three you actually type every day**, in case you never read further:
+**The four you actually type every day**, in case you never read further:
 
 | Script                    | When                                                                                              |
 | ------------------------- | ------------------------------------------------------------------------------------------------- |
@@ -35,6 +35,7 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
 | `dev`                | watch-mode local runtime from `src/cluster.ts` — expects the compose hostnames from `.env`                                       | [Runtime](./runtime.md)                   |
 | `demo`               | the real API, self-contained: in-memory Mongo, seeded, cache/queue disabled — what the paired frontend's dev and e2e run against | [Demo profile](./demo-profile.md)         |
+| `e2e:serve`          | the clustered runtime with `NODE_E2E_RUN=1`, for the frontend's end-to-end runs                                                  | [Demo profile](./demo-profile.md)         |
 | `host`               | prefix wrapper: `npm run host -- dev` runs any script against `127.0.0.1` datastores                                             | [Runtime](./runtime.md)                   |
 | `start`              | start the clustered runtime without watch mode                                                                                   | [Runtime](./runtime.md)                   |
 | `debug`              | start with Node inspector break-on-start                                                                                         | [Runtime](./runtime.md)                   |
@@ -43,46 +44,46 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 
 ## Validation scripts
 
-| Script                            | Job                                                                                                                                           | Read more                                                                                                                                                           |
-| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `ts-check`                        | TypeScript no-emit type check                                                                                                                 | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `lint` / `lint:fix`               | ESLint check or autofix                                                                                                                       | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                                                     | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `build`                           | `ts-check` + `lint` composite gate                                                                                                            | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI                                   | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `check:dependencies`              | fail on a cycle, or on a tier that can REACH something it may not import — the transitive half of the walls, which ESLint cannot see          | [Dependency Graph](./dependency-graph.md)                                                                                                                           |
-| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                                                      | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                            | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `test:cluster`                    | boots `src/cluster.ts` with real forked workers and asserts one rate-limit budget across them; needs a Redis                                  | [Cluster Testing](./cluster-testing.md)                                                                                                                             |
-| `test:broker`                     | runs the queue adapter against a real RabbitMQ: topology, retry, parking, priority, prefetch, reconnect; needs a broker or a container engine | [Broker Testing](./broker-testing.md)                                                                                                                               |
-| `complete:light`                  | the fast subset pre-commit runs for now: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build` | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `complete:manual`                 | what the gate cannot run for you: `test:prism`, `test:cluster` and `test:broker`, which bind real ports                                       | [Testing & Docs](./testing-and-docs.md)                                                                                                                             |
-| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:`                               | [Load Testing](./load-testing.md)                                                                                                                                   |
-| `bench:orders`                    | measure                                                                                                                                       | the same, against `/orders` — the endpoint that embeds snapshots and derives totals                                                                                 | [Quick Start](./testing-quickstart.md) |
-| `bench:inventory`                 | measure                                                                                                                                       | the same, against `/inventory/levels`                                                                                                                               | [Quick Start](./testing-quickstart.md) |
-| `bench:k6`                        | measure                                                                                                                                       | ramping load over several endpoints, with thresholds — passes or fails rather than reporting. Runs `grafana/k6` through `CONTAINER_ENGINE`, not an installed binary | [Load Testing](./load-testing.md)      |
-| `bench:k6:checkout`               | measure                                                                                                                                       | the write path under contention: login, cart, checkout. **Writes** — throwaway database only                                                                        | [Load Testing](./load-testing.md)      |
+| Script                            | Job                                                                                                                                           | Read more                                 |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `ts-check`                        | TypeScript no-emit type check                                                                                                                 | [Testing & Docs](./testing-and-docs.md)   |
+| `lint` / `lint:fix`               | ESLint check or autofix                                                                                                                       | [Testing & Docs](./testing-and-docs.md)   |
+| `prettier:check` / `prettier:fix` | format inspect or rewrite                                                                                                                     | [Testing & Docs](./testing-and-docs.md)   |
+| `build`                           | `ts-check` + `lint` composite gate                                                                                                            | [Testing & Docs](./testing-and-docs.md)   |
+| `check:spec-identity`             | compare the shared contract files against the paired frontend; skips when it is not on disk, fatal under CI                                   | [Testing & Docs](./testing-and-docs.md)   |
+| `check:dependencies`              | fail on a cycle, or on a tier that can REACH something it may not import — the transitive half of the walls, which ESLint cannot see          | [Dependency Graph](./dependency-graph.md) |
+| `complete`                        | the gate: build + lint + both spec lints + prettier:check + every contract check + tests                                                      | [Testing & Docs](./testing-and-docs.md)   |
+| `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                            | [Testing & Docs](./testing-and-docs.md)   |
+| `test:cluster`                    | boots `src/cluster.ts` with real forked workers and asserts one rate-limit budget across them; needs a Redis                                  | [Cluster Testing](./cluster-testing.md)   |
+| `test:broker`                     | runs the queue adapter against a real RabbitMQ: topology, retry, parking, priority, prefetch, reconnect; needs a broker or a container engine | [Broker Testing](./broker-testing.md)     |
+| `complete:light`                  | the fast subset pre-commit runs for now: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build` | [Testing & Docs](./testing-and-docs.md)   |
+| `complete:manual`                 | what the gate cannot run for you: `test:prism`, `test:cluster` and `test:broker`, which bind real ports                                       | [Testing & Docs](./testing-and-docs.md)   |
+| `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:`                               | [Load Testing](./load-testing.md)         |
+| `bench:orders`                    | autocannon against `/orders` — the endpoint that embeds snapshots and derives totals                                                          | [Quick Start](./testing-quickstart.md)    |
+| `bench:inventory`                 | autocannon against `/inventory/levels`                                                                                                        | [Quick Start](./testing-quickstart.md)    |
+| `bench:k6`                        | ramping load over several endpoints, with thresholds — passes or fails rather than reporting. Runs `grafana/k6` through `CONTAINER_ENGINE`    | [Load Testing](./load-testing.md)         |
+| `bench:k6:checkout`               | the write path under contention: login, cart, checkout. **Writes** — throwaway database only                                                  | [Load Testing](./load-testing.md)         |
 
 ## Test scripts
 
-| Script               | Job                                                                                                       | Read more                                                                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
-| `test`               | run unit, cross-cutting, integration, then contract                                                       | [Testing & Docs](./testing-and-docs.md)                                                                                          |
-| `test:module`        | verify                                                                                                    | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database | [Quick Start](./testing-quickstart.md) |
-| `test:unit:report`   | verify                                                                                                    | the unit run again, writing `tmp/reports/test-report.json` for the reader below                                                  | [Quick Start](./testing-quickstart.md) |
-| `test:report`        | inspect                                                                                                   | per-module rollup, slowest suites, failures named by module                                                                      | [Quick Start](./testing-quickstart.md) |
-| `test:unit`          | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                       | [Testing & Docs](./testing-and-docs.md)                                                                                          |
-| `test:cross-cutting` | repo-wide invariants: bundle freshness, locale parity, no hardcoded user text, every controller catches   | [Regenerating](../api/regenerating.md)                                                                                           |
-| `test:integration`   | HTTP integration suite in-band                                                                            | [Testing & Docs](./testing-and-docs.md)                                                                                          |
-| `test:contract`      | validate real responses against `openapi.yaml`                                                            | [Contract Testing](./contract-testing.md)                                                                                        |
-| `test:fuzz`          | property/fuzz suite — nightly workflow, not the pre-commit gate                                           | [Fuzz Testing](./fuzz-testing.md)                                                                                                |
-| `mutation`           | Stryker, scoped to the files this branch changed, graded against the baseline — every pull request        | [Mutation Testing](./mutation-testing.md)                                                                                        |
-| `mutation:full`      | the whole repo, sharded, resumable across evenings — monthly in CI, or by hand                            | [Mutation Testing](./mutation-testing.md)                                                                                        |
-| `mutation:check`     | grade the last report against the committed per-file baseline; `-- --update` to record it                 | [Mutation Testing](./mutation-testing.md)                                                                                        |
-| `mutation:pull`      | fetch the newest baseline the GitHub sweep uploaded into `mutation-baseline.json` (needs `gh auth login`) | [Mutation Testing](./mutation-testing.md#the-github-sweep)                                                                       |
-| `test:prism`         | run a quick Prism mock smoke test from `openapi.yaml`                                                     | [OpenAPI Workflow](../api/openapi-workflow.md)                                                                                   |
-| `bench`              | autocannon against `GET /products` — the cached read path                                                 | [Load Testing](./load-testing.md)                                                                                                |
-| `bench:search`       | autocannon against `POST /products/search` — the uncached, database-backed path                           | [Load Testing](./load-testing.md)                                                                                                |
+| Script               | Job                                                                                                                              | Read more                                                  |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `test`               | run unit, cross-cutting, integration, contract, then fuzz                                                                        | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:module`        | one module's suites, every layer it owns — `-- src/modules/<name>`; serialised because contract and integration share a database | [Quick Start](./testing-quickstart.md)                     |
+| `test:unit:report`   | the unit and cross-cutting runs again, writing `tmp/reports/test-report.json` for the reader below                               | [Quick Start](./testing-quickstart.md)                     |
+| `test:report`        | per-module rollup, slowest suites, failures named by module                                                                      | [Quick Start](./testing-quickstart.md)                     |
+| `test:unit`          | `tests/unit` plus each module's own `tests/unit` — logic below HTTP                                                              | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:cross-cutting` | repo-wide invariants: locale parity, no hardcoded user text, every controller catches                                            | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:integration`   | HTTP integration suite against a real database                                                                                   | [Integration Testing](./integration-testing.md)            |
+| `test:contract`      | validate real responses against `openapi.yaml`                                                                                   | [Contract Testing](./contract-testing.md)                  |
+| `test:fuzz`          | property/fuzz suite — a small pass in the gate, a deep pass in the nightly workflow                                              | [Fuzz Testing](./fuzz-testing.md)                          |
+| `test:order-random`  | integration, contract and fuzz in one process with `--randomize --showSeed` — hunts order dependence                             | [Testing & Docs](./testing-and-docs.md)                    |
+| `test:prism`         | run a quick Prism mock smoke test from `openapi.yaml`                                                                            | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `mutation`           | Stryker, scoped to the files this branch changed, graded against the baseline — every pull request                               | [Mutation Testing](./mutation-testing.md)                  |
+| `mutation:full`      | the whole repo, sharded, resumable across evenings — monthly in CI, or by hand                                                   | [Mutation Testing](./mutation-testing.md)                  |
+| `mutation:check`     | grade the last report against the committed per-file baseline; `-- --update` to record it                                        | [Mutation Testing](./mutation-testing.md)                  |
+| `mutation:pull`      | fetch the newest baseline the GitHub sweep uploaded into `mutation-baseline.json` (needs `gh auth login`)                        | [Mutation Testing](./mutation-testing.md#the-github-sweep) |
+| `measure:scaffold`   | scaffold a module in a scratch copy and run the gate on it                                                                       | [Module scaffolder](./module-scaffolder.md)                |
 
 ## Contract scripts
 
@@ -90,29 +91,30 @@ Two stages, and they run in this order: **bundle** the committed documents from 
 fragments, then **generate** code from the bundles. Full cheat sheet in [Regenerating After a
 Change](../api/regenerating.md).
 
-| Script                   | Stage    | Job                                                                                                                                | Read more                                                  |
-| ------------------------ | -------- | ---------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `contracts:bundle`       | bundle   | rebuild all seven committed bundles from their fragments (to narrow, call `scripts/contracts/build-bundles.ts` directly)           | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `check:contracts-bundle` | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                                   | [Regenerating](../api/regenerating.md)                     |
-| `check:spec-identity`    | verify   | fail if the paired frontend holds different bytes of a shared document                                                             | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `gen:permission-actions` | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                    | [Permission Actions](permission-actions.md)                |
-| `gen:api`                | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes and the permission actions | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `gen:asyncapi`           | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                  | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:openapi`           | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                      | [OpenAPI Workflow](../api/openapi-workflow.md)             |
-| `lint:openapi:modules`   | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                            | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `lint:asyncapi`          | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                 | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `lint:asyncapi:modules`  | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
-| `sync:frontend`          | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                                 | [Contract Fragmentation](../api/contract-fragmentation.md) |
-| `regenerate`             | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input                | [Regenerating After a Change](../api/regenerating.md)      |
+| Script                       | Stage    | Job                                                                                                                                     | Read more                                                  |
+| ---------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `authorization:bundle`       | bundle   | `shared/authorization-keys.yaml` from one fragment per module; `regenerate` runs it first                                               |
+| `contracts:bundle`           | bundle   | rebuild the authored bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) from their fragments; name a target to narrow it | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `check:contracts-bundle`     | verify   | fail if a bundle is stale or a collection is out of date — the CI/`--check` twin                                                        | [Regenerating](../api/regenerating.md)                     |
+| `check:authorization-bundle` | verify   | fail if `shared/authorization-keys.yaml` is stale against its fragments                                                                 | [Regenerating](../api/regenerating.md)                     |
+| `check:asyncapi-breaking`    | verify   | fail if `asyncapi.public.yaml` drops or narrows something a subscriber relies on, diffed against `origin/main`                          | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `check:spec-identity`        | verify   | fail if the paired frontend holds different bytes of a shared document                                                                  | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `gen:permission-actions`     | generate | `api/permission-actions.ts` from `shared/authorization-keys.yaml`; `regenerate` runs it before the first bundle                         | [Permission Actions](permission-actions.md)                |
+| `gen:api`                    | generate | `rm -rf ./api`, then regenerate types + Zod schemas from `openapi.yaml` via orval, plus the error codes and the permission actions      | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `gen:asyncapi`               | generate | regenerate `src/types/asyncapi.generated.ts` from `asyncapi.yaml`                                                                       | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:openapi`               | verify   | lint the bundled `openapi.yaml` with Spectral                                                                                           | [OpenAPI Workflow](../api/openapi-workflow.md)             |
+| `lint:openapi:modules`       | verify   | lint each `src/modules/*/openapi.yaml` **on its own**, against `shared/contracts/spectral.modules.yaml`                                 | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `lint:asyncapi`              | verify   | validate both bundles — `asyncapi.yaml` and `asyncapi.public.yaml`                                                                      | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `lint:asyncapi:modules`      | verify   | the same for each section document, against `shared/contracts/spectral.asyncapi.modules.yaml`                                           | [AsyncAPI Workflow](../api/asyncapi-workflow.md)           |
+| `sync:frontend`              | generate | copy the shared documents into the paired frontend checkout, so `check:spec-identity` can go green                                      | [Contract Fragmentation](../api/contract-fragmentation.md) |
+| `regenerate`                 | generate | every generator above, in dependency order, then the sync — the one command to run after changing a generator input                     | [Regenerating After a Change](../api/regenerating.md)      |
 
-The `:modules` pair is the property the whole-document layout bought. Each module's contract is a
-valid document on its own, so it can be linted where it is written rather than only after bundling —
-which the old fragment layout could never do, because a fragment parsed as nothing until it was
-concatenated.
+The `:modules` pair exists because each module's contract is a valid document on its own, so it can
+be linted where it is written rather than only after bundling.
 
 `contracts:bundle` is safe to run at any time: it compares before it writes and touches only the
-bundles that actually drifted. A full run covers the committed documents plus `openapi.yaml`
-(no longer committed itself — see below), never the client collections. The client
+bundles that actually drifted. A full run covers the authored bundles (`openapi.yaml` is one, though gitignored — see below),
+never the client collections. The client
 collections are generated from `openapi.yaml` and `.gitignore`d, so they are produced by name —
 `npm run contracts:bundle -- bruno insomnia mockoon postman` — and `--check` refuses them, because an
 uncommitted file cannot be stale.
@@ -127,12 +129,15 @@ for exactly which is which.
 
 ## Docs scripts
 
-| Script                                          | Job                                                                                                                   | Read more                                         |
-| ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `docs:dev` / `docs:build` / `docs:preview`      | local docs authoring, production build, and preview                                                                   | [Testing & Docs](./testing-and-docs.md)           |
-| `docs:graph` / `check:docs-graph`               | the module graph in `docs/modules/`, from the real import graph                                                       | [Reference: Scripts](../reference/scripts.md)     |
-| `docs:roles` / `check:docs-roles`               | the effective role matrix in `docs/demo-ecommerce/`                                                                   | [Reference: Scripts](../reference/scripts.md)     |
-| `docs:dependencies` / `check:docs-dependencies` | the two tables in [Package Dependencies](./package-dependencies.md), from `package.json` and who imports each package | [Package Dependencies](./package-dependencies.md) |
+| Script                                            | Job                                                                                                                   | Read more                                         |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `docs:dev` / `docs:build` / `docs:preview`        | local docs authoring, production build, and preview                                                                   | [Testing & Docs](./testing-and-docs.md)           |
+| `docs:graph` / `check:docs-graph`                 | the module graph in `docs/modules/`, from the real import graph                                                       | [Reference: Scripts](../reference/scripts.md)     |
+| `docs:roles` / `check:docs-roles`                 | the effective role matrix in `docs/demo-ecommerce/`                                                                   | [Reference: Scripts](../reference/scripts.md)     |
+| `docs:dependencies` / `check:docs-dependencies`   | the two tables in [Package Dependencies](./package-dependencies.md), from `package.json` and who imports each package | [Package Dependencies](./package-dependencies.md) |
+| `docs:rate-limits` / `check:docs-rate-limits`     | the rate-limit budget table in [Security](./security.md), from every module's manifest                                | [Reference: Scripts](../reference/scripts.md)     |
+| `docs:audit-actions` / `check:docs-audit-actions` | the audit action table in [Winston](./winston.md), from every module's `audit.ts`                                     | [Winston](./winston.md)                           |
+| `check:docs-references`                           | fail when an inline code span in `docs/` names a file that does not exist                                             | [Reference: Scripts](../reference/scripts.md)     |
 
 ## Docker scripts
 
@@ -151,13 +156,17 @@ the order book by driving the real checkout, payment and shipping endpoints, so 
 the same database would give the shop a second history. It skips a database that already holds
 anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 
-| Script                 | Job                                                           | Read more                         |
-| ---------------------- | ------------------------------------------------------------- | --------------------------------- |
-| `db:sync`              | make every index match the schemas; `-- --check` plans only   | [Data](../reference/data.md)      |
-| `scenario:apply`       | build the demo dataset (skipped if anything is present)       | [Demo profile](./demo-profile.md) |
-| `scenario:apply:reset` | empty the database and the rate-limit counters, then build it | [Demo profile](./demo-profile.md) |
-| `db:cache:clear`       | drop every cached response under the app's prefix             | [Redis cache](./redis-cache.md)   |
-| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                        | runs on container boot            |
+| Script                 | Job                                                                                           | Read more                                         |
+| ---------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `db:sync`              | make every index match the schemas; `-- --check` plans only                                   | [Data](../reference/data.md)                      |
+| `scenario:apply`       | build the demo dataset (skipped if anything is present; refused outside `development`/`test`) | [Demo profile](./demo-profile.md)                 |
+| `scenario:apply:reset` | empty the database and the rate-limit counters, then build it                                 | [Demo profile](./demo-profile.md)                 |
+| `db:cache:clear`       | drop every cached response under the app's prefix                                             | [Redis cache](./redis-cache.md)                   |
+| `scenario:images`      | regenerate the seed thumbnails                                                                | [Demo profile](./demo-profile.md)                 |
+| `scenario:tls`         | regenerate the webhook sink's TLS material (`dev` trusts it via `NODE_EXTRA_CA_CERTS`)        | [Demo profile](./demo-profile.md)                 |
+| `db:bootstrap`         | `db:sync` followed by `scenario:apply`                                                        | runs on container boot                            |
+| `access:bootstrap`     | upsert the shop row; no accounts, no demo data                                                | [Deployment hardening](./deployment-hardening.md) |
+| `deploy:setup`         | `db:sync` followed by `access:bootstrap` — a deployment's first run                           | [Deployment hardening](./deployment-hardening.md) |
 
 `scenario:apply` calls `db:cache:clear`'s logic itself after building. Run the
 script by hand after editing the database another way (`mongosh`, a GUI) — those writes never
@@ -174,19 +183,20 @@ scripts only resolve from inside a container — see
 [Running on the host instead](../getting-started.md#running-on-the-host-instead).
 
 It deliberately does **not** spell out a URI. One that includes the database name overrides
-`NODE_MONGODB_NAME` without saying so, which is how these scripts used to seed a database nobody
-had configured. It is also deliberately **one** wrapper rather than a `:host` twin per script:
-those were seven copies of one `cross-env` prefix, and `db:cache:clear:host` had already drifted —
-it blanked Redis but not Mongo. `tests/unit/scripts/db/host-scripts.test.ts` fails if a second
+`NODE_MONGODB_NAME` without saying so, and the script would seed a database nobody configured. It
+is also deliberately **one** wrapper rather than a `:host` twin per script: copies of one
+`cross-env` prefix drift apart. `tests/unit/scripts/db/host-scripts.test.ts` fails if a second
 hostname-redirecting script appears.
 
 ## Container scripts
 
-Three verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
+Five verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
 Promtail override with `-f`, which is what gives Promtail a host log path to tail.
 
 | Script            | Job                                                                                   | Read more                                 |
 | ----------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `compose:up`      | start the stack detached                                                              | [Docker & Podman](./docker-and-podman.md) |
+| `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                    | [Docker & Podman](./docker-and-podman.md) |
 | `compose:restart` | restart the compose stack                                                             | [Docker & Podman](./docker-and-podman.md) |
 | `compose:rebuild` | rebuild images and restart the stack                                                  | [Docker & Podman](./docker-and-podman.md) |
 | `compose:kill`    | force-stop this project's compose containers                                          | [Docker & Podman](./docker-and-podman.md) |
@@ -198,18 +208,29 @@ CONTAINER_ENGINE=docker npm run compose:restart  # podman is the default
 npm run compose -- -f docker-compose.test.yml run --rm -T gate  # the wired gate — see Docker & Podman
 ```
 
-All four expand to `${CONTAINER_ENGINE:-podman} compose`. Export `CONTAINER_ENGINE` in your shell
+All of them expand to `${CONTAINER_ENGINE:-podman} compose`. Export `CONTAINER_ENGINE` in your shell
 to switch — a **shell** variable, not a `.env` entry, because npm never reads `.env` and so never
 sees what is written there. Compose does read it, which is why every other setting on this page can
 live in `.env` and this one cannot.
 
 ## Maintenance & publishing scripts
 
-| Script        | Job                                                                                                      | Read more                                                                                        |
-| ------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `update:all`  | bump dependency ranges with `npm-check-updates`                                                          | dependency maintenance                                                                           |
-| `postinstall` | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci` | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
-| `prepare`     | npm lifecycle hook — installs the husky hooks after `npm install`                                        | not run by hand                                                                                  |
+| Script               | Job                                                                                                       | Read more                                                                                        |
+| -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `setup`              | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                    | [First run](./configuration.md#first-run-npm-run-setup)                                          |
+| `scaffold:module`    | generate a new module's skeleton                                                                          | [Module scaffolder](./module-scaffolder.md)                                                      |
+| `demo:remove`        | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project | [Getting started: new project](../getting-started-new-project.md)                                |
+| `measure:demo-strip` | the report-only twin: run the strip in a scratch copy and run the gate on the result                      | [Getting started: new project](../getting-started-new-project.md)                                |
+| `update:all`         | bump dependency ranges with `npm-check-updates`                                                           | [Package Dependencies](./package-dependencies.md)                                                |
+| `postinstall`        | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`  | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
+| `prepare`            | npm lifecycle hook — installs the husky hooks after `npm install`                                         | not run by hand                                                                                  |
+
+## Periodic jobs
+
+`reap:*` (retention deletes), `sweep:*` (retry and repair loops), `reencrypt` and
+`refresh:breached-passwords` are the entry points the production crontab runs. Each is a script
+under `scripts/ops/`; the schedule table and what each one deletes live in
+[Ops](../reference/ops.md).
 
 ## Related pages
 

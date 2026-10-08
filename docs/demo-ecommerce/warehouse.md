@@ -17,7 +17,7 @@ flowchart LR
     C["a customer checks out"] -->|"set aside"| L
     D["they pay"] -->|"sold"| L
     E["they cancel"] -->|"back on the shelf"| L
-    F["they never paid<br/><i>30 minutes passed</i>"] -->|"back on the shelf"| L
+    F["they never paid<br/><i>15 minutes passed</i>"] -->|"back on the shelf"| L
 
     classDef you fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef auto fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -66,7 +66,7 @@ the manager.
 
 ## Clearing expired holds
 
-When a customer checks out but never pays, their goods sit "set aside" for 30 minutes and then need
+When a customer checks out but never pays, their goods sit "set aside" for 15 minutes (by default) and then need
 releasing.
 
 ::: warning This does not happen by itself
@@ -80,7 +80,7 @@ least as often as the hold lasts.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    A["the sweep runs"] --> B{"any holds<br/>older than 30 min?"}
+    A["the sweep runs"] --> B{"any holds<br/>older than<br/>the hold window?"}
     B -->|no| C["nothing to do"]
     B -->|yes| D["goods back on the shelf"]
     D --> E["the order is cancelled"]
@@ -127,16 +127,14 @@ flowchart LR
     class D,E,F,H auto;
 ```
 
-Only one shipping method in the demo actually needs a tracking code — the others move a parcel
+Only one shipping method in the demo (express) needs a tracking code — the others move a parcel
 along with nothing but the record of the handover itself. Either way, the three things after
 recording the handover all happen on their own: you do not separately create the parcel, or write
 the status field, or send the email.
 
 ::: tip Starting work on a paid order
-The diagram starts from "order is paid" because packing it is the same rule applied one step
-earlier: nobody sets `processing` directly either. There is no dedicated door for it yet — an
-admin's forced correction (→ [Correcting a mistake](./manager.md#correcting-a-mistake)) is the
-only way to reach it today, the same door a mis-scanned parcel uses.
+Packing starts with its own action — `POST /delivery/order/{orderId}/start` — which moves the order
+from paid to `processing`. Nobody sets `processing` directly: the same rule, one step earlier.
 :::
 
 **There is no courier simulation.** Recording the arrival is a real action on a real

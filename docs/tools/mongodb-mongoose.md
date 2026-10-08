@@ -44,7 +44,7 @@ npm run db:sync              # create what is missing, drop what no schema decla
 npm run db:sync -- --check   # print the plan, change nothing
 ```
 
-`scripts/db/index-sync.ts` imports the module registry — which registers every enabled module's models —
+`scripts/db/sync-indexes.ts` (the CLI; the reconciliation itself is `scripts/db/index-sync.ts`) imports the module registry — which registers every enabled module's models —
 and calls [`connection.syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>).
 Collections whose model is not registered are left alone, so disabling a module does not strip its
 indexes.
@@ -71,7 +71,7 @@ next sync drops it.
 
 **`autoIndex` is on in development and test**, and that is what gives the test suite its constraints
 for free: `mongodb-memory-server` starts empty and Mongoose builds every declared index on connect.
-Production turns it off (`src/app.ts`) and relies on `docker-compose.production.yml`'s one-shot
+Production turns it off (`configureMongoose()` in `src/infrastructure/runtime/database.ts`) and relies on `docker-compose.production.yml`'s one-shot
 `setup` service instead — it runs `db:sync` before `app`/`cron` ever start, so the index set is
 already in place by the time a connection with `autoIndex` off is opened.
 
@@ -161,26 +161,27 @@ values that reference REAL rows, but only ids and credentials:
 `scripts/contracts/client-collections-bundle.ts` reads those from `scenarios/subjects.ts` rather
 than importing a module's fixtures directly, which would reintroduce the same `@api/` import cycle
 `scripts/contracts/openapi-bundle.ts` had to stop triggering (see
-[Contract Ownership & Fragmentation](../api/contract-fragmentation.md)). A realistic title, price
-or description is no longer available to a generated example — `npm run demo` plus the API is how
-you see the whole shop.
+[Contract Ownership & Fragmentation](../api/contract-fragmentation.md)). A generated example carries no realistic title, price
+or description — `npm run demo` plus the API is how you see the whole shop.
 
 ### Commands
 
-| Script                         | What it does                                                        |
-| ------------------------------ | ------------------------------------------------------------------- |
-| `npm run scenario:apply`       | Insert seed documents (safe to run multiple times if IDs are fixed) |
-| `npm run scenario:apply:reset` | Empty the database first, then seed                                 |
+| Script                                | What it does                                                                                    |
+| ------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `npm run scenario:apply [name]`       | Seed an empty database with a scenario (`shop` by default, or `blank`). Refuses a non-empty one |
+| `npm run scenario:apply:reset [name]` | Empty the database first, then seed                                                             |
 
 ### What gets seeded
 
-The default seed creates:
+Two named scenarios, registered in `scenarios/index.ts`:
 
-- **2 users** — `root@root.it` (admin) and `customer@example.com` (regular user)
-- **1 cart** — the admin's, in the `carts` collection; `customer@example.com` gets none, because an empty cart and no cart are the same state
-- **5 products** — mix of active, inactive, and soft-deleted items
-- **2 wishlists** — one per user
-- **3 orders** — two the admin's, one the ordinary user's and soft-deleted, so "the owner cannot see their own deleted order" has a fixture behind it
+- **`shop`** (the default) — the access model, then every module's starting rows
+  (`scenarios/shop-modules.ts`), then a history DRIVEN through the real endpoints: orders, payments,
+  shipments, refunds. See [Demo profile](./demo-profile.md#how-a-scenario-is-built) and
+  [The flow runner](./flow-runner.md).
+- **`blank`** — the roles, the four named accounts and the locales only.
+
+The accounts each scenario creates are listed in [Demo profile](./demo-profile.md#the-named-accounts).
 
 Fixed `ObjectId` values are used so the data is repeatable and predictable across resets — and so
 each record can date itself, since an ObjectId's leading bytes are a timestamp.
@@ -193,7 +194,6 @@ each record can date itself, since an ObjectId's leading bytes are a timestamp.
 
 ## External references
 
-- [Mongoose plugins](https://mongoosejs.com/docs/plugins.html) — used in `src/infrastructure/runtime/database.ts` for query metrics
 - [Mongoose: `syncIndexes()`](<https://mongoosejs.com/docs/api/connection.html#Connection.prototype.syncIndexes()>)
 
 ## Related pages

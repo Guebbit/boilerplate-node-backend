@@ -173,45 +173,44 @@ barrel line and a hop.
 
 Both halves are live:
 
-| Kept              | Why it clears the floor                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| `sumLineItems`    | Two modules — `cart` totals itself through it, so a summary cannot disagree with the order it previews |
-| `orderTotal`      | Three callers owe the customer one number — the order, the payment intent and the confirmation email   |
-| `steppedQuantity` | One caller, but a real trap: the clamp catches a double click outrunning `:disabled`                   |
-| `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                 |
+| Kept              | Why it clears the floor                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `sumLineItems`    | Two modules — `cart` totals itself through it, so a summary cannot disagree with the order it previews             |
+| `orderTotal`      | Three callers owe the customer one number — the order, the payment intent and the confirmation email               |
+| `steppedQuantity` | Frontend (the paired repo's cart quantity helpers): one caller, but a real trap — the clamp catches a double click |
+| `checkOrderLines` | Ordered reasons that map to distinct status codes and analytics labels                                             |
 
 | Removed             | Why it did not                                                                |
 | ------------------- | ----------------------------------------------------------------------------- |
 | `nextDeletionState` | `deletedAt ? undefined : now`, one caller — the call site was shorter inlined |
 | `readScope`         | A tagged union its only caller destructured two lines later                   |
-| `canDecrement`      | `q > MIN_LINE_QUANTITY`, one template binding                                 |
+| `canDecrement`      | Frontend: `q > MIN_LINE_QUANTITY`, one template binding                       |
 
 ### Mandatory for a 3+-state status, optional otherwise
 
 **A module with a 3+-state status field must have a `domain/` folder.** A transition table catches
 real bugs a status literal scattered across services cannot — `orders/domain/lifecycle.ts` below is
-the worked example, and `payments`/`feedback` are the two modules this rule reaches beyond `orders`
-itself, past their own 6- and 4-state fields.
+the worked example, and `payments`, `feedback` and `returns` are the modules this rule reaches beyond `orders`
+itself (6, 4 and 5 states).
 
 Everywhere else the folder stays optional, and creating an empty one to match a shape is how
 ceremony starts — most modules here don't have one. Modules with a `domain/` folder today: `orders`,
-`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments` and `feedback`.
+`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns` and `example`.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
-two pure functions, `findShippingMethod` and `priceShipping`, and they are the module's _entire_
-barrel: a sibling prices a shipping method without learning that shipments, couriers or a
-`shipmentRepository` exist. That is what stops `cart`'s checkout and `GET /delivery/methods` from
+a few pure functions in `rates.ts` (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
+`cheapestStandardShipping`), re-exported through the module barrel: a sibling prices a shipping
+method without learning that shipments, couriers or a `shipmentRepository` exist. That is what stops `cart`'s checkout and `GET /delivery/methods` from
 ever quoting different numbers — there is one function and both call it — and it is a published
 language rather than a handle on this module's storage, which is the distinction
 [Strategic DDD](./strategic-ddd.md) draws between kinds of dependency edge.
 
-**`orders/domain/lifecycle.ts` is the case where the folder holds a rule that had no home.** It is
+**`orders/domain/lifecycle.ts` is the case where the folder holds a rule that has no other home.** It is
 one table saying which status may follow which, and who may make each move. The _set_ of statuses is
 not its business — `OrderStatus` is generated from `openapi.yaml`, so the values stay contract-first
-— but the edges between them were previously spelled out three times: a `CANCELLABLE_ORDER_STATUSES`
-literal in `orders/services/cancel.ts`, a bare `status !== 'pending'` in `payments/services/settlement.ts`, and, on the
-admin write, nothing at all. All three now read the table, which is the whole point of a domain
-folder: the rule exists once and the callers ask it.
+— but the edges between them live here once. The cancel (`orders/services/cancel.ts`), the system
+moves (`orders/services/status.ts`, `delivery`) and the admin override all read the table, which is
+the whole point of a domain folder: the rule exists once and the callers ask it.
 
 **`orders/domain/money.ts` is the case for a value type in a codebase that is not otherwise doing
 tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
@@ -222,7 +221,7 @@ that does money arithmetic — and because the lint rule below forbids a domain 
 a shared kernel, which is where a jointly-owned money type would otherwise live.
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
-itself.** It is one table (`counterDeltaFor`) mapping each of the seven stock transitions to the
+itself.** It is one table (`counterDeltaFor`) mapping each of the seven stock movement reasons to the
 pair of counter deltas it implies, plus the subtraction that defines availability. Nothing about it
 needs a database, and everything that does — the conditional writes, the ledger row, the
 reservation lifecycle — reads the table rather than restating it;

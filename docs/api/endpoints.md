@@ -46,7 +46,7 @@ Stock is read-only on this surface. `onHand`, `reserved` and `available` are ser
 
 > The domain behind these routes: [`cart`](../modules/cart.md) · routes and middleware: `src/modules/cart/routes.ts`
 
-Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart` is "add to cart": a new product gets a line (201), one already there grows (200). `PUT /cart/{productId}` sets a quantity. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `CHECKOUT_COMPLETED` analytics event.
+Per-user, server-side cart. Items are scoped to the authenticated user. `POST /cart` is "add to cart": a new product gets a line (201), one already there grows (200). `PUT /cart/{productId}` sets a quantity. `POST /cart/checkout` converts the cart into an order, clears the cart, records the `cartCheckoutTotal` metric and emits a `checkout_completed` analytics event.
 
 ## Wishlist
 
@@ -66,7 +66,7 @@ Orders are normally created via checkout but can also be created manually (a cor
 
 > The domain behind these routes: [`payments`](../modules/payments.md) · routes and middleware: `src/modules/payments/routes.ts`
 
-An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, no default: unset means no card payments, and the dev preload registers the `fake` [test double](../tools/test-doubles.md) — magic test cards, no outside calls). The intent freezes the order's total; the confirm charges and moves the order `pending → paid` atomically; cancelling a paid order refunds automatically, answering the `order.refund_owed` event rather than the customer-facing `order.cancelled` one `webhooks` fans out on. The fake provider declines exactly `4000000000000002` and accepts everything else.
+An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, no default: unset means no card payments, and the dev preload registers the `fake` [test double](../tools/test-doubles.md) — magic test cards, no outside calls). The intent freezes the order's total; the confirm charges and moves the order `pending → paid` atomically; cancelling a paid order refunds automatically, answering the `order.refund_owed` event rather than the customer-facing `order.cancelled` one `webhooks` fans out on. The fake provider declines exactly the method reference `pm_card_declined` and accepts any other, bar two that stay in flight (`pm_card_authentication_required`, `pm_card_processing`).
 
 ## Delivery
 
@@ -93,7 +93,7 @@ Six transitions move them, each a conditional write paired with the ledger row t
 
 A checkout is **all-or-nothing** — the shop never silently ships fewer units than were ordered, because an order is what the customer agreed to buy. What it does do is say exactly what blocked it: a refusal carries `errors[0].details.lines`, one entry per short line with `productId`, `title`, `requested` and `available`, so a basket is fixed in one pass rather than one refusal per line. That holds on both refusal paths — the pre-flight, and the conditional reserve that decides a race, where the reported figure is read back at the moment the write refused.
 
-Units therefore leave the shop only when they are paid for; an unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 30) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
+Units therefore leave the shop only when they are paid for; an unpaid order costs availability for the length of its window (`NODE_RESERVATION_TTL_MINUTES`, default 15) and nothing more. The application ships no scheduler, so the sweep is driven from outside — a cron entry, the platform's scheduled job, or an operator. Run it at least as often as the window, or holds outlive their deadline by the gap.
 
 Both reads page and report `meta.totalItems`, and neither is bounded in the service. The ledger is the record an audit works through, so a read answering only the newest rows would misreport history as complete; the board sorts on availability, which is derived, so mongod projects it in an aggregation rather than the service loading every product to sort in memory. The low-stock threshold (`NODE_LOW_STOCK_THRESHOLD`) is shared by the board's `lowOnly` filter and the `products_low_stock_total` gauge, but the two count different populations on purpose: the board spans the whole catalogue, because somebody restocking needs to see an inactive product's units, while the gauge counts only publicly visible products, because an alert about stock nobody can buy is noise. Both measure AVAILABILITY rather than units on hand.
 
@@ -123,9 +123,57 @@ responses are cached for an hour — the copy changes only on deploy.
 
 Contact form submissions from anonymous or authenticated users. Admins can list all submissions and update their status (e.g. mark as resolved). Submitting a contact form also triggers a confirmation email via the mail worker.
 
+## Addresses
+
+> The domain behind these routes: [`addresses`](../modules/addresses.md) · routes and middleware: `src/modules/addresses/routes.ts`
+
+The caller's own address book, mounted under `/account/addresses`. Every response is `no-store`. `PUT /account/addresses/{addressId}/default` makes one entry the book's default — an action of its own, because the pointer belongs to the book, not to one address.
+
+## Invoicing
+
+> The domain behind these routes: [`invoicing`](../modules/invoicing.md) · routes and middleware: `src/modules/invoicing/routes.ts`
+
+`GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes[/{creditNoteId}]`: the frozen PDF documents of an order, mounted under `/orders` but tagged `Invoicing`. The PDF routes are rate-limited because every render launches Chromium.
+
+## Returns
+
+> The domain behind these routes: [`returns`](../modules/returns.md) · routes and middleware: `src/modules/returns/routes.ts`
+
+A customer asks to send goods back (`POST /returns`, idempotent by key); staff holding `returns.any.update` approve or decline, then mark the goods received. Received goods go back on sale and the refund runs through `payments`.
+
+## Notifications
+
+> The domain behind these routes: [`notifications`](../modules/notifications.md) · routes and middleware: `src/modules/notifications/routes.ts`
+
+The caller's inbox: list, `read-all`, `dismiss-all`, delete one, and a per-user SSE stream at `GET /notifications/stream`. A frame reaches only the connections of the user it is about.
+
+## Webhooks
+
+> The domain behind these routes: [`webhooks`](../modules/webhooks.md) · routes and middleware: `src/modules/webhooks/routes.ts`
+
+Subscription CRUD (`/webhooks/subscriptions`, including secret rotation), the delivery log (`GET /webhooks/deliveries`) and the event catalogue (`GET /webhooks/events`, served from `asyncapi.public.yaml`). Reachable by a session or an API key.
+
+## API keys
+
+> The domain behind these routes: [`api-keys`](../modules/api-keys.md) · routes and middleware: `src/modules/api-keys/routes.ts`
+
+Mint, list and revoke machine credentials (`/api-keys`), each behind an `apikeys.any.*` key. Only a digest of the token is stored.
+
+## Audit
+
+> The domain behind these routes: [`audit-logs`](../modules/audit-logs.md) · routes and middleware: `src/modules/audit-logs/routes.ts`
+
+One read, `GET /audit`, behind `audit.any.read` — the queryable trail, kept for the window its TTL index enforces.
+
+## Antibot
+
+> The domain behind these routes: [`antibot`](../modules/antibot.md) · routes and middleware: `src/modules/antibot/routes.ts`
+
+`GET /antibot/config` says which human-challenge provider is active; `GET /antibot/challenge` issues the work a self-hosted provider asks for.
+
 ## Realtime
 
-Realtime is server → client only, via Server-Sent Events on `GET /observability/events` — an ordinary Express route, so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`; see [Observability Endpoints](./observability.md).
+Realtime is server → client only, via Server-Sent Events on `GET /observability/events` (and the per-user `GET /notifications/stream`) — ordinary Express routes, so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`; see [Observability Endpoints](./observability.md).
 
 There is no WebSocket endpoint. SSE covers the push case without upgrade handling and works unchanged under clustering, since each stream is served entirely by the worker that accepted it. Adding bidirectional messaging means adding `ws` plus an `'upgrade'` listener on the HTTP server in `src/app.ts` — and, if connections need to talk to each other, a Redis/NATS backplane, because a connection is pinned to one worker.
 

@@ -13,7 +13,7 @@ You query Tempo from Grafana — you do not query Tempo directly.
 App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  Grafana
 ```
 
-- The app exports OTLP/HTTP to `http://otel-collector:4318` (set in `docker-compose.yml`).
+- The app exports OTLP/HTTP to the endpoint in `OTEL_EXPORTER_OTLP_ENDPOINT` (`http://otel-collector:4318` under compose); unset, trace export is off. `docker-compose.yml` passes the variable through from `.env`.
 - The collector fans signals out to Tempo via internal gRPC.
 - Tempo runs in single-binary mode with local filesystem storage (`docker/observability/tempo.config.yaml`).
 - Grafana auto-provisions Tempo as the default datasource.
@@ -21,7 +21,7 @@ App  →  OTel Collector (OTLP/HTTP :4318)  →  Tempo (OTLP/gRPC :4317)  →  G
 ## Where to look
 
 - Grafana UI: `http://localhost:3001` → **Explore** → **Tempo**.
-- Search by `service.name = "api"`, by `trace_id`, by HTTP route, or by error.
+- Search by `service.name = "api"` (the `NODE_SERVICE_NAME` default), by `trace_id`, by HTTP route, or by error.
 
 ## Works with
 

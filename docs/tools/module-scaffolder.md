@@ -65,8 +65,8 @@ instead of leaving a half-written module.
 ## The central edits, and why there are still four
 
 [The lifecycle page](../theory/module-lifecycle.md) promises one registry line. That holds for
-routing, seeding, i18n, contracts and the docs index. Three hand-kept lists remain, each edited
-by the scaffolder, and each is a candidate for deletion rather than for more tooling:
+routing, seeding, i18n, contracts and the docs index. The fourth edit is that line, in `src/modules.ts`. Three hand-kept lists remain beyond it, each
+edited by the scaffolder, and each is a candidate for deletion rather than for more tooling:
 
 | File                                               | Why the module is named there                                                        |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------ |

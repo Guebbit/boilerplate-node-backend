@@ -93,9 +93,9 @@ sharing the same repository, not a second entry under the mongo profile's own `[
 It tars both trees straight out of the `app` container (`docker compose exec app tar`) and pipes
 the result to `restic backup --stdin`, the same shape the mongo dump already uses.
 
-**`storage/invoices/` is deliberately left out.** It is a render cache, not durable state — the PDF
-is a receipt now, rendered on demand, so losing the cache costs a re-render, never data. Only
-`mail-spool/` inside that volume is backed up.
+**`storage/documents/` is deliberately left out.** It holds rendered invoice and credit-note PDFs
+(`NODE_DOCUMENT_STORE_PATH`), a regenerable copy of the frozen rows, so losing it costs a re-render,
+never data. Only `mail-spool/` inside that volume is backed up.
 
 **Moving to a new host:** carry `uploads` and `storage` across the same way `mongo-data` already
 has to — a `docker run --rm -v <volume>:/from -v /dest:/to alpine cp -a /from/. /to/` per volume

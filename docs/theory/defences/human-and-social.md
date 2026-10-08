@@ -41,7 +41,7 @@ with the authority to disable it.
 
 Not much, and the honest framing is the deliverable:
 
-- **Nothing on this page is closed by code.** Every row's real control is a process — training,
+- **Almost nothing on this page is closed by code.** Every row's real control is a process — training,
   a verification script for support, a registrar lock.
 - **Three rows ARE closed**, and only because the feature they attack was never built: consent
   phishing, MFA fatigue and SIM swap. Not building a factor is a legitimate defence, and it is the

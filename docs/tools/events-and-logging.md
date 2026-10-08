@@ -62,7 +62,7 @@ Only the last two cross a process boundary. The rest are one-way recordings that
 - **"This work should not block the response."** Queue job.
 
 The overlap that catches people out is audit vs analytics. `USER_SIGNED_UP` (analytics) and
-`auth.signup.succeeded` (audit) describe the same instant, and both should exist: one answers
+`auth.signup` (audit) describe the same instant, and both should exist: one answers
 "how many signups this week", the other answers "who created this account, from which IP". They
 are different questions with different retention rules and different readers.
 
@@ -86,9 +86,10 @@ request continues and the log line has already gone out.
 
 Why a sink rather than a direct call — `src/infrastructure/**` is the bottom of the dependency graph and
 `eslint-plugin-boundaries` forbids it from reaching up into `@modules/*`, where the audit repository
-now lives. So `audit.ts` declares
-the port and `app.ts` supplies the implementation at boot, the same shape as `ImageStore`. The
-practical payoff: swapping the destination touches one line in `app.ts`, not the 53 call sites.
+lives. So `audit.ts` declares
+the port and the `audit-logs` module registers the implementation at boot
+(`registerAuditSink`), the same shape as `ImageStore`. The practical payoff: swapping the
+destination touches one line there, not every call site.
 
 ## The domain event bus, and what it is not
 
@@ -140,7 +141,7 @@ declared for something that actually travels on a wire.
 
 It drops every subscription, and it ships to production so that suites registering modules per case
 do not accumulate handlers. Nothing stops application code from calling it and silently
-unsubscribing every module; seven suites depend on it, so it is load-bearing rather than removable.
+unsubscribing every module; dozens of suites depend on it, so it is load-bearing rather than removable.
 
 The shape that would not need it is a bus **instance** owned by the registry — a fresh registry
 means a fresh bus, and the reset becomes the constructor. The cost is that `onDomainEvent` and

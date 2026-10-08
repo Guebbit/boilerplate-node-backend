@@ -21,7 +21,8 @@ flowchart TD
 ```
 
 - One **primary** supervises the cluster: forks workers, watches exits, and coordinates shutdown.
-- One **worker per CPU core** by default (`os.cpus().length`), each running the full Express app.
+- One **worker per available CPU** by default (`os.availableParallelism()`, which honours a container's CPU limit), each running the full Express app.
+- Before forking, the primary judges the whole environment once (`assertProcessConfig`). A bad variable is one clean error and exit 1, not N workers crash-looping.
 - Workers are independent processes; they do not share memory. State must live in Mongo or Redis.
 - Every worker opens its own connection to each, but they address the **same** database and the
   **same** Redis keyspace — which is why a cache invalidation done by one worker needs no
@@ -38,7 +39,7 @@ flowchart TD
 | `NODE_CLUSTER_CRASH_BACKOFF_MAX_MS`  | Maximum respawn delay (default 30 000 ms).                                                                                        |
 | `NODE_CLUSTER_CRASH_LIMIT`           | Crashes in one window before the primary gives up and exits 1 (default 10).                                                       |
 | `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`   | Hard kill timeout during shutdown (default 15 000 ms).                                                                            |
-| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout used by `src/app.ts`.                                                                               |
+| `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS`  | Worker-side hard exit timeout (default 15 000 ms), read by `registerSignalHandlers`; also scales the drain steps below.           |
 
 ## Crash backoff
 
@@ -63,8 +64,8 @@ sequenceDiagram
     P->>W: SIGTERM
     W->>H: stop accepting new connections
     H-->>W: in-flight requests finish
-    W->>W: stopCache(), stopDatabase()
-    W->>W: shutdownAnalytics(), shutdownTracing()
+    W->>W: queue, cache, database
+    W->>W: analytics, tracing
     W-->>P: exit 0
     P-->>OS: exit 0
 ```
@@ -72,18 +73,25 @@ sequenceDiagram
 Each worker's shutdown sequence lives in `createApp()`'s `stop` (`src/app.ts`, wired to the
 process signals by `src/serve.ts`):
 
-1. Close the HTTP server (no new connections; in-flight requests drain).
-2. `stopCache()` — disconnect Redis if it was started.
-3. `stopDatabase()` — disconnect Mongoose.
-4. `shutdownAnalytics()` — flush PostHog if configured.
-5. `shutdownTracing()` — flush remaining OTel spans to Tempo.
+1. Mark `GET /readyz` as draining (503) the moment the signal arrives.
+2. Close the HTTP server: no new connections, idle keep-alive sockets dropped, in-flight requests
+   drain. Anything still open at half the deadline (an SSE stream) is cut.
+3. Stop the locale-override refresh timer, then let started PDF renders and event deliveries
+   finish (`settleRenders`, `settleInFlight`).
+4. `stopQueue()` before `stopCache()`: a running job would otherwise reopen the cache connection.
+5. `stopLimitsRedis()`, then `stopDatabase()` — disconnect the stores.
+6. `shutdownAnalytics()` — flush PostHog if configured.
+7. `shutdownTracing()` — flush remaining OTel spans to Tempo.
+
+Each step swallows its own failure, so a broken Redis cannot stop the database from closing.
+The order lives in `shutdownInfra` (`src/infrastructure/runtime/server-lifecycle.ts`).
 
 If shutdown takes longer than the timeout, the worker (or the primary) force-exits.
 
 ## Why this matters
 
 - Workers are stateless: anything you store in memory dies on the next deploy or crash.
-- Background timers must be cleared in `stop`/`stopCache`/etc., otherwise the process never exits.
+- Background timers must be cleared in `stop` (or the `stop*` helper it calls), otherwise the process never exits.
 - OTel must be initialised **before** any other import; that is why both `src/cluster.ts` and `src/app.ts` call `startTracing()` first.
 
 ## Useful links

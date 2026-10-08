@@ -1,7 +1,7 @@
 # Dependency graph
 
 `npm run check:dependencies` — [dependency-cruiser](https://github.com/sverweij/dependency-cruiser)
-over `src/`, configured in `.dependency-cruiser.cjs`. Runs in `complete` and as its own CI job.
+over `src/` and `tests/`, configured in `.dependency-cruiser.cjs`. Runs in `complete` and as its own CI job.
 About 1.5 seconds.
 
 ## Why a second tool
@@ -34,15 +34,15 @@ rather than the edge:
 }
 ```
 
-Four rules use it: `infrastructure` against the domains above it, `src-cannot-reach-scenarios`,
-`unit-layer-stays-database-free`, and `foundation-cannot-reach-shop`.
+Six rules use it: `infrastructure` against the domains above it, `src-cannot-reach-scenarios`,
+`unit-layer-stays-database-free`, `foundation-cannot-reach-shop`, `nothing-reaches-example` and
+`example-cannot-reach-shop`.
 
-### Domain purity — an allow-list, not a deny-list (T11)
+### Domain purity — an allow-list, not a deny-list
 
-`domain/` is a different shape of the same question, and it used to be answered the wrong way
-round: naming what `domain/` may NOT reach (`mongoose`, `express`) let anything else — `redis`,
-`amqplib`, `node:fs` — straight through uncaught. One rule per module states the opposite instead,
-generated from which module folders actually carry a `domain/`:
+`domain/` is a different shape of the same question. Naming what `domain/` may NOT reach
+(`mongoose`, `express`) would let anything else — `redis`, `amqplib`, `node:fs` — straight through
+uncaught. So one rule per module states the opposite, generated from which module folders actually carry a `domain/`:
 
 ```js
 {
@@ -58,8 +58,8 @@ would have said nothing about `node:fs`; this one reports anything not on the li
 
 ### Unresolvable imports
 
-Nothing used to catch a specifier dependency-cruiser cannot resolve to a file on disk at all —
-`not-to-unresolvable` does, so a deleted module or package left behind by an incomplete rename
+`not-to-unresolvable` catches a specifier dependency-cruiser cannot resolve to a file on disk at
+all, so a deleted module or package left behind by an incomplete rename
 fails here instead of quietly compiling until someone hits the missing file at runtime.
 `tests/load/*.js` is exempted: k6 injects its own `k6`/`k6/http` globals at run time, and
 dependency-cruiser has no way to see them.
@@ -74,6 +74,7 @@ subdomain: core
 dependsOn:
     - addresses # the checkout's delivery address
     - delivery # shipping price, pure functions
+    - inventory # how much can be sold, read from the ledger
     - orders # placeOrder — the one function every order is written through
     - payments # listPaymentMethods, to validate the requested method
     - products # prices and availability
@@ -151,10 +152,10 @@ The fix for a real cycle is always the same: the sibling that has to reach back 
 the domain event bus (`kernel/events.ts`) instead — see `webhooks`, which reacts to
 `orders`' and `payments`' events without importing either.
 
-## Two settings that decide whether the rules mean anything
+## Three settings that decide whether the rules mean anything
 
-Both were wrong in the first working version, and both failed **open** — the run went green while
-checking nothing. They are worth knowing before editing the config.
+Each fails **open** when wrong — the run goes green while checking nothing. Know them before
+editing the config.
 
 | Setting                                                  | Why it is what it is                                                                                                                                                                                                                                                                                                                          |
 | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

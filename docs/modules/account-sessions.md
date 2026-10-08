@@ -3,7 +3,7 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Six files** — `config.ts` reads the lifetimes, `key-ring.ts` gives a secret its `kid`, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `login-observability.ts` records that a login happened.
+**Ten files** — `config.ts` reads the lifetimes, `key-ring.ts` gives a secret its `kid`, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `resolver.ts` turns claims into an `AuthContext`, `epoch.ts` holds the session-epoch rule, `prune.ts` sweeps one account's expired tokens, `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -110,7 +110,7 @@ flowchart LR
 newest first. `jwt.ts` signs with `ring[0]` and stamps a `kid` (`key-ring.ts#keyId`, a digest of
 the secret itself); verifying looks the token's `kid` up in the ring rather than assuming
 `ring[0]`, so a token signed moments before a rotation still verifies. Full rotation procedure:
-docs/tools/security.md#signing-key-rotation.
+[Security](../tools/security.md#signing-key-rotation).
 
 ## Freshness: how recently they proved it {#freshness-auth-time-and-amr}
 
@@ -174,7 +174,7 @@ flowchart TD
 - **`amr`.** The re-minted session claims ONLY what that call proved: `pwd` or the new `email`, plus
   `otp` when the body carried a verified second-factor code (`otp` means a second factor here, and a
   mailed code is not one). Proofs from the login are not carried over, so a password-only re-auth
-  no longer passes a route that demands `otp`.
+  does not pass a route that demands `otp`.
 
 ## Step-up for an account with a second factor
 
@@ -216,10 +216,15 @@ There is a second, deliberately **non-secure** cookie carrying nothing but a log
 client shell can render the right chrome before its first request answers. It holds no credential
 and is safe to read from script — that is its entire job.
 
+A third cookie is the **familiar-device** one (`session/device-cookie.ts`). It holds up to five
+HMACs of account emails under `NODE_DEVICE_COOKIE_SECRET`, names no one and proves no password.
+Holding one only skips the per-account failure budget, so an attacker spending that budget cannot
+lock the owner out of their own browser. The per-address and per-block budgets still apply.
+
 ## Why none of this is published
 
 ::: tip The barrel is one line wide
-`session/` used to be exported on the theory that authorization would need it. It does not.
+`session/` is not exported: authorization does not need it.
 `kernel/authentication.ts` is the port every request goes through, this module fills it from
 `module.ts` using its own relative imports, and **no sibling has ever reached for a token**.
 
@@ -229,8 +234,8 @@ walls may import it, so it needs no barrel of its own.
 :::
 
 `account`'s own barrel publishes nothing this page's flows produce either — `session/` stays
-entirely internal. What `account` used to publish, `addressForCheckout`, left with the address
-book when it moved to its own module — see [`addresses`](./addresses.md).
+entirely internal. The address book, and what checkout reads from it, belongs to
+[`addresses`](./addresses.md).
 
 ## The two shared tails
 
@@ -328,18 +333,16 @@ How long "eventually" is, is its own setting, and the separation is load-bearing
 | `NODE_TOKEN_ROTATION_GRACE_MS` | 10s     | Is this replay a benign race, to be reissued?                |
 | `NODE_TOKEN_REUSE_WINDOW_MS`   | 24h     | Do we still REMEMBER this token, so a replay reads as theft? |
 
-While the sweep used the grace window as its cutoff, the two were the same value — and its purge
-predicate (`supersededAt < now - grace`) was the exact complement of the detection predicate
-(`supersededMsAgo > grace`). A sweep that ran ahead of the rotation on the very request presenting
-the token deleted a stale token before the reuse check could recognise it. The check fell through
-to "genuinely absent", answered an ordinary 401, and revoked nothing. Nothing failed; the defence
-was simply unreachable.
+A sweep cutoff equal to the grace window would be the exact complement of the detection predicate
+(`supersededMsAgo > grace`). A sweep running ahead of the rotation, on the very request presenting
+the token, would delete a stale token before the reuse check could recognise it. The check would
+fall through to "genuinely absent", answer an ordinary 401, and revoke nothing. Nothing fails; the
+defence is simply unreachable.
 
 So every sweep uses the RETENTION window, and none runs AHEAD of a rotation: a refresh prunes its own
 account only after the rotation's lookup and the new token are written (`session/prune.ts`),
-and the whole-collection sweep is a nightly job. The sweep also no longer rides on login and refresh
-at all, because an unindexed collection-wide `updateMany` on an anonymous request's path let anyone
-schedule it.
+and the whole-collection sweep is a nightly job. A collection-wide `updateMany` is kept off the
+login and refresh path: unindexed, on an anonymous request, it would let anyone schedule it.
 
 `account`'s manifest refuses to boot unless retention exceeds grace (the check on `sessionConfig` in `session/config.ts`) — the failure is silent by
 nature, so it is made loud at the only moment it can be.

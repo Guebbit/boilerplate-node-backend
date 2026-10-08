@@ -9,7 +9,7 @@ This section explains the API contracts and the tools around them.
 flowchart LR
     Spec[openapi.yaml] --> Lint[Spectral]
     Spec --> Mock[Prism / Bruno / Mockoon]
-    Spec --> Types[OpenAPI Generator -> api/]
+    Spec --> Types[Orval -> api/]
     Spec --> Impl[Routes + controllers + services]
     Impl --> Tests[Tests keep behavior honest]
 

@@ -2,7 +2,7 @@
 
 Every uploaded image goes through a **digest pipeline** before it is ever served: metadata (EXIF
 GPS, camera serial, capture timestamp) is stripped, dimensions are capped, and the bytes are
-re-encoded through [sharp](https://sharp.pixelplumb.com/) — which is also the real content check
+re-encoded through [sharp](https://sharp.pixelplumbing.com/) — which is also the real content check
 `validateUploadedImages`'s magic-byte read cannot be. A WebP thumbnail is produced alongside it.
 Nothing reaches `public/` until both exist.
 
@@ -69,6 +69,7 @@ flowchart LR
 | Module writeback registration                    | `src/kernel/registry.ts` → `ImageTarget`, `resolveImageTargets`              |
 | `products` writeback                             | `src/modules/products/repository.ts` → `writebackImage`                      |
 | `users`/`account` writeback                      | `src/modules/users/repository.ts` → `writebackImage`                         |
+| `example` writeback (the copyable template)      | `src/modules/example/repository.ts` → `writebackImage`                       |
 | Quarantine reaper                                | `scripts/ops/reap-quarantine.ts`                                             |
 
 ## How it's used
@@ -115,9 +116,7 @@ themselves instead of needing a lock:
   still equals the job's key. A stale/duplicate delivery therefore matches nothing, and the worker
   unlinks the files it just promoted — safely, now that `promote`/`putDerivative` name a file from
   the RE-ENCODED bytes' own content hash rather than the quarantine key: a second upload is
-  different content, lands under a different name, and this cleanup can no longer touch it. Before
-  that fix, both uploads' files shared the same key-derived name, so this branch could delete the
-  newer upload's live file, not just the stale one's.
+  different content, lands under a different name, and this cleanup cannot touch it.
 - **Two documents sharing byte-identical images.** The content hash alone is not enough: two
   different products uploading the exact same picture would land on the same filename, and one
   document's delete or replace would silently remove the other's still-live file. `contentStem`

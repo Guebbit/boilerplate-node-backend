@@ -103,8 +103,8 @@ The four registries share a shape, so the work is the same each time:
 1. **Write the adapter** next to its siblings, implementing that port's interface.
 2. **Register it** in the registry's map, behind a check that its configuration is present — an
    unconfigured provider must resolve to `undefined`, never to a half-working object.
-3. **Set the env var.** The switches live in `.env-example`; that file is the list, and it is
-   checked, so this page does not copy the names.
+3. **Set the env var.** The switches live in `.env-example`; that file is the list an operator
+   reads, so this page does not copy the names.
 4. **Leave the default alone.** A provider-free default is a feature: it is what makes the repo
    clone-and-run, and what the test suite runs against.
 

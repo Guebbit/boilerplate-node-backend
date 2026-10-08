@@ -51,12 +51,12 @@ flowchart LR
 
 A payment is _about_ an order: the intent freezes its total, the confirm moves its status to
 `paid`. The arrow never comes back — [`orders`](./orders.md) announces `order.refund_owed` and this
-module answers with the refund. Split from `order.cancelled` itself (B6): retrying the refund must
+module answers with the refund. Separate from `order.cancelled` itself: retrying the refund must
 never re-deliver the customer-facing cancellation webhook every time a provider outage outlasts one
 sweep pass.
 
 This module also listens to `order.cancelled` itself, but for a different reason: closing a card
-intent nobody ever finished (E17), so an abandoned one cannot resolve at the provider days later
+intent nobody ever finished, so an abandoned one cannot resolve at the provider days later
 with no local row left to catch the charge it makes. Best-effort, and unrelated to the refund —
 a payment already `succeeded` is `order.refund_owed`'s to give back, never this listener's to close.
 
@@ -99,7 +99,7 @@ Both answer **200**, not an error: the browser has a next step, and a 4xx would 
 feel synchronous.
 
 **`processing` also extends the order's stock hold**, to `NODE_BANK_TRANSFER_HOLD_HOURS` from that
-moment (B3) — a SEPA debit or a bank redirect can take days, and the ordinary 15-minute window
+moment — a SEPA debit or a bank redirect can take days, and the ordinary 15-minute window
 would let [`inventory`](./inventory-reservations.md)'s reservation sweep cancel an order whose
 money is still on its way. `requires_action` gets no such grace: it means the browser has a
 challenge to answer, not the provider a payment to finish.
@@ -121,7 +121,7 @@ An unresolvable payer is logged rather than refused.
 database fact, not a check somebody has to remember.
 
 Delete this module and cancelling an order still releases its stock but returns no money — the
-cancel lifecycle itself (`statusesLeadingTo`, `domain/lifecycle.ts`) has no idea this module exists.
+cancel lifecycle itself (`statusesLeadingTo`, `orders/domain/lifecycle.ts`) has no idea this module exists.
 
 ## The pre-check, and the final write
 
@@ -203,7 +203,7 @@ that was lost — the refund path owns that.
 
 `requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
 provider reports is ever that value. From there, every non-terminal status can settle to any other
-non-terminal status: `CONFIRMABLE_PAYMENT_STATUSES` (`service.ts`) gates which ones `POST
+non-terminal status: `CONFIRMABLE_PAYMENT_STATUSES` (`domain/lifecycle.ts`) gates which ones `POST
 /payments/{id}/confirm` accepts as a starting point (`requires_confirmation`, `declined` — a
 decline is retryable with another method), and `SETTLEABLE_PAYMENT_STATUSES` gates which ones
 `settlePayment` will still write over (everything except the two terminal states below). `succeeded`
@@ -277,7 +277,7 @@ money that left the system by hand can only be confirmed returned by a person: t
 listener (a customer's own cancel) leaves the payment `succeeded` and writes an unattended
 `payment.refund_owed_by_hand` audit row instead of guessing; `refundByOrder` — already admin-only,
 with the same fresh-session tier as recording one — is the only door that may set
-`refundedByHand: true` (B1b). A cancelled hand-paid order therefore shows `succeeded` until an
+`refundedByHand: true`. A cancelled hand-paid order therefore shows `succeeded` until an
 operator confirms it, not "refunded" for money nobody actually moved.
 
 <a id="refund-records"></a>
@@ -328,9 +328,9 @@ sequenceDiagram
   `full`; `invoicing` issues from it ([`invoicing`](./invoicing.md)).
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
-the deployment's currently configured one (B1c) — so a refund of an older payment still reaches the
+the deployment's currently configured one — so a refund of an older payment still reaches the
 provider that actually took the money even after a deployment switches to another. The provider is
-asked BEFORE the status moves (B1): a rejection leaves the payment `succeeded`, so the retry sweep
+asked BEFORE the status moves: a rejection leaves the payment `succeeded`, so the retry sweep
 (`ORDER_REFUND_OWED`, above) can actually retry it, instead of a failed attempt being recorded as a
 successful one.
 
@@ -379,9 +379,8 @@ stateDiagram-v2
   never recomputed. Present only while `paymentMethod` is `bank_transfer` and `status` is
   `pending`. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
 - **`orders` owns the bank-transfer business rules outright**, `transferInstructions` and the
-  open-transfer cap alike — the reference-minting and open-transfer-cap config that used to sit in
-  `infrastructure` to dodge a cycle now lives in `orders/config.ts`, since `orders` is the entity
-  both rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
+  open-transfer cap alike — the reference-minting and open-transfer-cap config
+  live in `orders/config.ts`, since `orders` is the entity both rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
   keeps the `ibantools` validation, the one thing that stays genuinely its own. See
   [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
 - **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
@@ -450,7 +449,7 @@ Three entry points, one settlement. What differs between them is only how the pr
 flowchart LR
     A["create intent"] --> B["total frozen<br/><i>unique on orderId — one payment per order</i>"]
     B --> C["confirm<br/><i>method reference, never a card</i>"]
-    C --> D{"the provider port<br/><i>fake · stripe</i>"}
+    C --> D{"the provider port<br/><i>your adapter · test double in dev</i>"}
     D -.->|"requires_action<br/>processing"| S["browser finishes<br/><i>POST /:id/sync</i>"]
     W["provider webhook<br/><i>the authority</i>"] --> ST
     S --> ST["settlePayment<br/><i>the only place money is reconciled</i>"]
@@ -472,33 +471,32 @@ flowchart LR
 
 ## Configuration
 
-| Variable                                  | Default | Meaning                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                   | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
-| `NODE_PAYMENT_WEBHOOK_SECRET`             | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
-| `NODE_DEFAULT_CURRENCY`                   | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`   | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                                                                                                                                           |
-| `NODE_BANK_TRANSFER_BENEFICIARY`          | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
-| `NODE_BANK_TRANSFER_IBAN`                 | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
-| `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
-| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
-| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`       | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
-| `NODE_STRIPE_SECRET_KEY`                  | —       | Only checked at boot, outside development/test (staging included): refuses to start on a `sk_test_` key, since a real deployment silently running test-mode payments is worse than failing to boot                                                                                                             |
+| Variable                                    | Default | Meaning                                                                                                                                                                                                                                                                                                        |
+| ------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                     | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
+| `NODE_PAYMENT_WEBHOOK_SECRET`               | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
+| `NODE_DEFAULT_CURRENCY`                     | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`     | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                                                                                                                                           |
+| `NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS` | `30`    | How long a processed webhook event id is remembered before its ledger row expires (TTL index; changing it needs `npm run db:sync`). Keep it past the provider's retry window, a claim about a third party this deployment does not control.                                                                    |
+| `NODE_BANK_TRANSFER_BENEFICIARY`            | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
+| `NODE_BANK_TRANSFER_IBAN`                   | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
+| `NODE_BANK_TRANSFER_BIC`                    | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`             | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`   | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
+| `NODE_STRIPE_SECRET_KEY`                    | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion
 anywhere in this module: a deployment that needs several currencies needs a price per currency
 on the product, not a rate here.
 
-Two more, not environment variables — code constants in `providers/webhook-signature.ts` and
-`model.ts`, called out here because an operator debugging a webhook has no other reason to open
-either file:
+One more, not an environment variable — a code constant in `providers/webhook-signature.ts`,
+called out here because an operator debugging a webhook has no other reason to open the file:
 
-| Constant                       | Value | Meaning                                                                                                                                                                                   |
-| ------------------------------ | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TOLERANCE_SECONDS`            | 300   | How far a delivery's `t=` may drift from the server's clock before it is rejected as stale.                                                                                               |
-| `WEBHOOK_EVENT_RETENTION_DAYS` | 30    | How long a processed event id is remembered before its ledger row expires — chosen to sit past any provider's retry window, a claim about a third party this deployment does not control. |
+| Constant            | Value | Meaning                                                                                     |
+| ------------------- | ----- | ------------------------------------------------------------------------------------------- |
+| `TOLERANCE_SECONDS` | 300   | How far a delivery's `t=` may drift from the server's clock before it is rejected as stale. |
 
 ## Retention
 

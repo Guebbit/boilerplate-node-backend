@@ -142,16 +142,17 @@ What to put at the edge, in order of value:
 
 ## Egress filtering and cloud metadata
 
-This repo has no SSRF primitive: every outbound `fetch` has a hard-coded host
-([SSRF](../theory/defences/ssrf.md)). Egress filtering is the belt to that braces — it bounds the
-damage if that ever stops being true, or if a dependency is compromised.
+Outbound requests to a caller-supplied URL (webhook delivery, the OAuth avatar download) go through
+the SSRF guard; every other `fetch` has a hard-coded host ([SSRF](../theory/defences/ssrf.md)).
+Egress filtering is the belt to that braces — it bounds the damage if the guard is bypassed, or if a
+dependency is compromised.
 
-| Control             | Recipe                                                                                  |
-| ------------------- | --------------------------------------------------------------------------------------- |
-| Cloud metadata      | require IMDSv2 (token-based) and set the hop limit to 1, so a container cannot reach it |
-| Link-local          | block `169.254.0.0/16` and `fd00:ec2::254` outbound from the app's network              |
-| Private ranges      | block outbound to `10/8`, `172.16/12`, `192.168/16` except the compose network          |
-| Default-deny egress | allow only the OAuth providers, the SMTP host, and the analytics collector              |
+| Control             | Recipe                                                                                                     |
+| ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Cloud metadata      | require IMDSv2 (token-based) and set the hop limit to 1, so a container cannot reach it                    |
+| Link-local          | block `169.254.0.0/16` and `fd00:ec2::254` outbound from the app's network                                 |
+| Private ranges      | block outbound to `10/8`, `172.16/12`, `192.168/16` except the compose network                             |
+| Default-deny egress | allow only the OAuth providers, the SMTP host, the analytics collector, and the webhook subscribers' hosts |
 
 The allowlist is short precisely because the app's outbound surface is small — that is what makes
 default-deny practical here rather than aspirational.

@@ -67,12 +67,12 @@ flowchart LR
 
 Repo files: [`/docker/observability/prometheus.config.yaml`](../../docker/observability/prometheus.config.yaml), [`/docker/observability/prometheus.alert-rules.yaml`](../../docker/observability/prometheus.alert-rules.yaml)
 
-| Config section                                  | What it does                             | Why local value                                | Common tweak                   | Dev vs prod                             |
-| ----------------------------------------------- | ---------------------------------------- | ---------------------------------------------- | ------------------------------ | --------------------------------------- |
-| `global.scrape_interval`, `evaluation_interval` | scrape/evaluate cadence                  | `15s` keeps feedback quick                     | increase to reduce laptop load | prod often 15-60s by target criticality |
-| `scrape_configs`                                | scrape targets (`app`, `otel-collector`) | static docker service names are simple locally | add more jobs/targets          | prod usually uses service discovery     |
-| `rule_files`                                    | loads alert rules                        | keeps rules versioned in repo                  | split rules by domain          | prod often adds recording rules         |
-| `alerting.alertmanagers`                        | sends firing alerts                      | points to local Alertmanager                   | switch target/HA endpoints     | prod commonly has multiple replicas     |
+| Config section                                  | What it does                                                           | Why local value                                | Common tweak                   | Dev vs prod                             |
+| ----------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------ | --------------------------------------- |
+| `global.scrape_interval`, `evaluation_interval` | scrape/evaluate cadence                                                | `15s` keeps feedback quick                     | increase to reduce laptop load | prod often 15-60s by target criticality |
+| `scrape_configs`                                | scrape targets (`api`, `otel-collector`, `otel-collector-spanmetrics`) | static docker service names are simple locally | add more jobs/targets          | prod usually uses service discovery     |
+| `rule_files`                                    | loads alert rules                                                      | keeps rules versioned in repo                  | split rules by domain          | prod often adds recording rules         |
+| `alerting.alertmanagers`                        | sends firing alerts                                                    | points to local Alertmanager                   | switch target/HA endpoints     | prod commonly has multiple replicas     |
 
 ### Alertmanager
 
@@ -158,7 +158,7 @@ Repo file: [`/docker/observability/otel-collector.config.yaml`](../../docker/obs
 
 - **View traces:** [Grafana](./grafana.md) → Explore → [Tempo](./tempo.md) → query `service.name="api"`. See [TraceQL](https://grafana.com/docs/tempo/latest/traceql/) for advanced queries.
 - **Query metrics:** Grafana Explore ([Prometheus](./prometheus.md)) or `http://localhost:9090` with `up{job="api"}`. See [PromQL basics](https://prometheus.io/docs/prometheus/latest/querying/basics/) for query syntax.
-- **Filter logs:** Grafana Explore ([Loki](./loki.md)) with `{job="containerlogs"} |= "error"`. See [LogQL](https://grafana.com/docs/loki/latest/query/) for query syntax.
+- **Filter logs:** Grafana Explore ([Loki](./loki.md)) with `{job="docker"} |= "error"`. See [LogQL](https://grafana.com/docs/loki/latest/query/) for query syntax.
 - **Create alerts:** add/modify rules in [`prometheus.alert-rules.yaml`](../../docker/observability/prometheus.alert-rules.yaml), then reload/restart [Prometheus](./prometheus.md) and verify in Alertmanager UI (`http://localhost:9093`).
 
 ## FAQ / troubleshooting

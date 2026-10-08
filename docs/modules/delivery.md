@@ -48,11 +48,10 @@ exists: it receives vocabulary, not state, the narrowest an import can be.
 
 ::: tip What deleting this module actually costs
 The shipping selector, the parcel records and the costs go with it. Orders simply stop carrying a
-`shippingCost` — which is the state the shop was in before this module existed. That is a clean
-removal, not a broken build.
+`shippingCost`. That is a clean removal, not a broken build.
 :::
 
-There is no courier simulation any more — a parcel moves only when staff record it, through this
+There is no courier simulation: a parcel moves only when staff record it, through this
 module's own doors. `unique: true` on `orderId` keeps it to one parcel per order.
 
 Each shipping method (`domain/rates.ts`) says whether it is `tracked` — standard is untracked,
@@ -81,6 +80,7 @@ the status, never the other way around (see [Tactical DDD](../theory/tactical-dd
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     CA["cart<br/><i>pricing a checkout</i>"] -->|"findShippingMethod · priceShipping"| RA["pure rates<br/><i>domain/ — no HTTP, no record</i>"]
+    S0["staff<br/>POST .../start<br/><i>paid order</i>"] --> MP["orders.markProcessing"]
     S1["staff<br/>POST .../ship<br/>{trackingCode}"] --> SH["shipment created<br/><i>one per order</i>"]
     SH --> MS["orders.markShipped"]
     SH --> EM["shipped email<br/><i>in the recipient's language — via orders</i>"]
@@ -96,11 +96,12 @@ flowchart LR
     classDef override fill:#fef3c7,stroke:#d97706,color:#111827;
     class RA pure;
     class SH,EM,DV own;
-    class CA,S1,S2,S3,MS,MD,MF peer;
+    class CA,S0,S1,S2,S3,MP,MS,MD,MF peer;
     class OV override;
 ```
 
-Both doors take an optional `forced`/`reason` pair from a caller holding `orders.any.override`: the
+`POST /delivery/order/{orderId}/start` is the one door that moves a paid order to `processing`, before
+any parcel exists to record. `ship` and `deliver` take an optional `forced`/`reason` pair from a caller holding `orders.any.override`: the
 regular operation still runs — the parcel record, the tracking code if the method requires one, the
 email — but the status write skips the ordinary gate ("processing only", "shipped only") the way an
 uncorrected shipment cannot. See [orders](./orders.md#the-admin-override) for the two override
@@ -118,7 +119,7 @@ No `forced` variant: there is no ordinary gate here for an override to skip past
 The return address is [`orders`'s](./orders.md#shop-identity), not this module's: the placed-order
 email must name where goods go, and `orders` cannot import `delivery`. `returnAddress()` is the
 configured `NODE_RETURN_ADDRESS_*`, or the shop's legal address when none is fully set, so it is
-never absent. `GET /delivery/methods` serves it as `returnAddress`, and [`returns`](./returns.md)
+never absent. `GET /delivery/methods` serves it as `returnAddress` (beside `shipToCountries`), and [`returns`](./returns.md)
 names it in the approval notice.
 
 The same module answers "what would standard delivery have cost?" (`cheapestStandardShipping`,

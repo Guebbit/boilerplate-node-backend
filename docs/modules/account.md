@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). One collection of its own, `accountexports`; the address book that used to live here is [`addresses`](./addresses.md).
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). One collection of its own, `accountexports`; the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -43,23 +43,30 @@ This module answers the kernel's one question: **who is making this request?** I
 auth resolver from its own `onRegistered` hook — run once every enabled module is known, not
 merely on import — because installing a function touches no connection, and every guard in the
 application depends on it existing before the first request arrives. Registering there rather than
-at import time means importing this file for a type or a test no longer installs the resolver too.
+at import time means importing this file for a type or a test does not install the resolver.
 
 Its one collection is `accountexports`, a row per account that asked for its data
 ([below](#data-export)). The User record belongs to [`users`](./users.md) and is reached through
-that module's barrel; the address book that used to live here moved to its own module,
-[`addresses`](./addresses.md), once nothing else needed `account` to hold it — see that page for
-why.
+that module's barrel; the address book lives in its own module,
+[`addresses`](./addresses.md) — see that page for why.
 
-An account nobody has signed into in a long time is a live account with no live purpose —
-`npm run reap:inactive-accounts` (`docker/crontab`, nightly, disabled by default via
-`NODE_INACTIVE_ACCOUNT_DAYS=0`) warns, then soft-, then hard-deletes one, the hard delete running the
-same `personalData.erase` hooks [`addresses`](./addresses.md), `cart` and `wishlist` each declare
-for their own collection. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
+An account nobody has used in a long time — no login, no API-key use — is a live account with
+less and less live purpose. `npm run reap:inactive-accounts` (`docker/crontab`, nightly) handles it
+in two independent steps:
+
+- **Minimise**, on by default (`NODE_INACTIVE_MINIMISE_DAYS`, 1095): runs the `personalData.minimise`
+  hooks — [`addresses`](./addresses.md) deletes the book, [`orders`](./orders.md) starts each order's
+  PII clock. The login stays. Stamped `inactivityMinimisedAt`; an account that comes back and goes
+  quiet again is minimised again.
+- **Delete**, disabled by default (`NODE_INACTIVE_ACCOUNT_DAYS=0`): warns, then soft-, then
+  hard-deletes, the hard delete running the same `personalData.erase` hooks every module declares.
+
+Why minimise and not delete: [Data Retention](../theory/data-retention.md#inactive-accounts-minimise-don-t-delete).
+See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism.
 
 ::: tip The barrel is one line wide, and that is the story
 `session/`, `two-factor/` and `oauth/` are three folders and not one exported symbol between them.
-They used to look like something authorization would need. It does not: `kernel/authentication.ts`
+They might look like something authorization would need. It does not: `kernel/authentication.ts`
 is the port every request goes through, and this module fills it using its own relative imports. No
 sibling has ever reached for a token, a factor or a provider — and no staff route in
 [`users`](./users.md) touches a credential at all. Proving who somebody is _is_ what `account` is,
@@ -154,9 +161,9 @@ Three things in that diagram are decisions rather than mechanics:
   logout-everywhere, both of which already exist.
 - **Cancelling is its own explicit action, not a side effect of re-typing the current address.**
   `PUT /account`'s `email` is required — every replace, including a phone-only edit, names it — so
-  treating "same address" as "cancel" meant a routine save could silently drop a pending change
+  treating "same address" as "cancel" would let a routine save silently drop a pending change
   the caller never asked to drop. `DELETE /account/pending-email` is the only thing that cancels
-  one now.
+  one.
 - **Resending is its own action too, and it mails the new address only.** Sending the pending
   address again through `PUT`/`PATCH /account` is a no-op (a double-submitted save must not mail
   twice), so `POST /account/pending-email/resend` is the explicit way to ask for the link again.
@@ -229,7 +236,7 @@ Decisions rather than mechanics:
   so a ready file stays downloadable; asking while one is `building` is not charged.
 - **Peak memory is one section.** The worker collects the sections one at a time and appends each to
   the file as it arrives, so the largest section is the ceiling, not the sum. The audit section reads
-  by cursor on the `{ actor_user_id, timestamp }` index: no count and no skip per page, which made
+  by cursor on the `{ actor_user_id, timestamp }` index: no count and no skip per page, which would make
   reading a long trail cost work quadratic in its length.
 - **The job carries the subject the request saw**, including whether the address had been proven. A
   section that matches by address (`feedback`) answers only for a proven one, so the file says what

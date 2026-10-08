@@ -80,16 +80,14 @@ The demo ships Spanish, Italian, French and Japanese in deliberately different s
 completeness, for BOTH kinds of content, so a half-translated shop and a half-translated catalogue
 can each be seen behaving — fixing either is this role's job.
 
-::: warning This role used to be two
-`editor` and `translator` were separate, and the argument for the split was that "a mistranslation
-cannot become a mischarge" — a translator held the `translations.*` keys and never `products.*`,
-so no amount of rewriting could reach a price. They are one role now, and that guarantee no longer
-holds of any shipped account.
+::: warning One role holds both jobs
+`editor` holds the `products.*` keys and the `translations.*` keys together, so a mistranslation CAN
+become a mischarge: the same account that rewrites a title can reach the price.
 
-It still holds of the KEYS. `Translation` is its own CASL subject, entirely separate from
-`Product`, so `translations.any.update` grants no way to touch a price by itself — a deployment
-that wants a words-only person back cuts a role holding the `locales.*` and `translations.*` keys
-and gets exactly that. `shared/authorization-conformance.yaml` still pins it.
+The separation still exists at the level of KEYS. `Translation` is its own CASL subject, entirely
+separate from `Product`, so `translations.any.update` grants no way to touch a price by itself — a
+deployment that wants a words-only person cuts a role holding the `locales.*` and `translations.*`
+keys and gets exactly that. `shared/authorization-conformance.yaml` pins it.
 :::
 
 ## The words we used

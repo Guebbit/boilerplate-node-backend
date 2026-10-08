@@ -43,8 +43,8 @@ files decide what exists; the rows decide what it says.**
 
 ::: warning A language in the database does not mean the API can answer in it
 `GET /locales` reports `tenants` per language rather than a bare list of tags, so "may I send
-`Accept-Language: es`" and "may I download a Spanish dictionary" stay two questions. The demo
-dataset registers `es` with no `src/locales/es.json` behind it precisely so the answers really are <!-- doc-paths:ignore -->
+`Accept-Language: es`" and "may I download a Spanish dictionary" stay two questions. The seeded
+scenario (`scenarios/locales.ts`) registers `es` with no `src/locales/es.json` behind it precisely so the answers really are <!-- doc-paths:ignore -->
 _no_ and _yes_.
 :::
 
@@ -155,7 +155,7 @@ is a 422 too — deleting it would leave the entity with nothing to fall back to
 Deleting this module does not break the shop — it becomes monolingual. `@kernel/translation`
 ships its own fallback: a write naming only `NODE_FALLBACK_LOCALE`'s locale plans a single
 upsert straight through, and one naming any other locale, or leaving the fallback slot empty or
-deleted, is a 422 — never the 500 an unregistered port used to answer. Admin overrides, other
+deleted, is a 422. Admin overrides, other
 languages and `/locales*` are simply absent. A product's own row still carries its `title`/
 `description`, since the read path treats no provider as "nothing to overlay," not an error.
 

@@ -1,9 +1,9 @@
 # audit-logs
 
 ::: tip At a glance
-**Owns** — the queryable audit trail, kept for the ninety days its TTL index enforces.
+**Owns** — the queryable audit trail, kept for `NODE_AUDIT_RETENTION_DAYS` (90 by default), which its TTL index enforces.
 **Depends on** — nothing, for the write side: nothing imports this module, it installs a sink instead.
-**Breaks if you change** — the retention window on the `timestamp` index. It is the only thing deleting old entries.
+**Breaks if you change** — the retention window (`NODE_AUDIT_RETENTION_DAYS`) on the `timestamp` index. It is the only thing deleting old entries.
 :::
 
 ## Its neighbourhood
@@ -33,22 +33,21 @@ flowchart LR
 
 ## The story
 
-**One collection, two readers, and neither is this module's own write path.** The write side stays
-exactly as headless as it always was — see the tip below. The read side used to belong entirely to
-[`observability`](./observability.md)'s `GET /observability/audit`, gated on
+**One collection, two readers, and neither is this module's own write path.** The write side is headless — see the tip below. The read side has two doors.
+[`observability`](./observability.md)'s `GET /observability/audit` is gated on
 `platform.observability.any.read` — a key only the platform operator holds, and therefore useless to a
 shop's own staff.
 
-This module now owns a second, tenant-facing door onto the same collection: `GET /audit`, gated on
-`audit.any.read` — held by `manager` and `moderator` in the demo. Same rows, same shape,
-different audience: `observability`'s route answers "what happened across every shop", this
-module's own route answers "what happened in mine". Enabling this module without `observability`
-now gives you a working `GET /audit` and no platform-wide view — still a legitimate build, just a
+This module owns the tenant-facing door onto the same collection: `GET /audit`, gated on
+`audit.any.read` — held by `manager`, `moderator` and `admin` in `shared/authorization-roles.yaml`.
+Same rows, same shape, different audience: `observability`'s route answers "what happened across
+every shop", this module's own route answers "what happened in mine". Enabling this module without
+`observability` gives a working `GET /audit` and no platform-wide view — a legitimate build, just a
 narrower one.
 
-::: tip How ~53 call sites reach a module nothing imports, for the WRITE
-They do not — and this is still true despite the module now having a router. Every
-`emitAuditEvent` call in the app talks to `@infrastructure/observability/audit`, which knows only
+::: tip How every call site reaches a module nothing imports, for the WRITE
+They do not, even though the module has a router. Every
+`recordAudit` / `emitAuditEvent` call in the app talks to `@infrastructure/observability/audit`, which knows only
 that a sink _may_ exist. **This module installs that sink itself, from its own `onRegistered`
 hook** — run once every enabled module is known, not merely on import, the same way it hands
 `basePath`/`routes` to the app tier for the read side.
@@ -56,13 +55,15 @@ hook** — run once every enabled module is known, not merely on import, the sam
 Registering a function is not a database call: `record` is fire-and-forget and only touches Mongo
 when an entry actually fires, which cannot happen before the app serves a request. Doing it here
 rather than in `app.ts` is what keeps the assembly file from naming a domain, and doing it from
-`onRegistered` rather than at import time means importing this file for a type or a test no longer
-installs the sink too. With this module deleted, the audit trail stops being stored and everything
+`onRegistered` rather than at import time means importing this file for a type or a test does not
+install the sink. With this module deleted, the audit trail stops being stored and everything
 else still builds.
 :::
 
-Retention is a database fact, not a cron job: `expireAfterSeconds: 7776000` on `timestamp` is
-ninety days, enforced by Mongo. The two compound indexes are the two questions anyone asks of a
+Retention is a database fact, not a cron job: `expireAfterSeconds` on `timestamp` is
+`NODE_AUDIT_RETENTION_DAYS` days (90 by default), enforced by Mongo. Mongo will not change an
+existing TTL index's window in place: a new value fails the boot until `npm run db:sync` rebuilds
+the index. The two compound indexes are the two questions anyone asks of a
 trail — everything one actor did, and everyone who did one thing.
 
 Field names are `snake_case` here and `camelCase` everywhere else, because an audit row is a log
@@ -83,11 +84,9 @@ the queryable convenience on top of it. Buffering cannot save an entry that matt
 converts "not persisted, logged, moved on" into a pending timer per audited request, held for ten
 seconds each, for as long as Mongo is away.
 
-It showed up as a test that would not exit: `tests/integration/locale.test.ts` drives
-`POST /account/signup` and deliberately runs with no database, so every rejected signup emitted
-`auth.signup.failed`, buffered the insert, and left a 10s timer holding the worker's event loop
-open. Jest waited its one second and force-killed the worker — `A worker process has failed to
-exit gracefully` — which names the symptom and not this.
+A suite that runs with no database, such as `tests/integration/locale.test.ts`, shows the cost:
+each rejected signup emits `auth.signup.failed`, and a buffered insert would leave a 10s timer
+holding the worker's event loop open.
 
 ## The pipeline
 
@@ -98,10 +97,10 @@ ordinary routes, in two different modules, over one collection.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    C["~53 call sites<br/><i>emitAuditEvent</i>"] --> P["@infrastructure/observability/audit<br/><i>knows only that a sink may exist</i>"]
+    C["every call site<br/><i>recordAudit</i>"] --> P["@infrastructure/observability/audit<br/><i>knows only that a sink may exist</i>"]
     P -.->|"the sink, installed by onRegistered"| R["record<br/><i>fire-and-forget</i>"]
     R --> M[("auditlogs")]
-    M -->|"TTL · expireAfterSeconds 7776000"| X(("gone after<br/>90 days"))
+    M -->|"TTL · NODE_AUDIT_RETENTION_DAYS"| X(("gone after<br/>retention"))
     O["observability<br/><i>GET /observability/audit</i><br/>platform.observability.any.read"] --> M
     S["this module's own route<br/><i>GET /audit</i><br/>audit.any.read"] --> M
 

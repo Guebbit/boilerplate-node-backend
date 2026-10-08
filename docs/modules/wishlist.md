@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — one wishlist per user, holding product references and nothing else.
 **Depends on** — [`products`](./products.md), [`cart`](./cart.md).
-**Breaks if you change** — nothing outside this folder. No module depends on it.
+**Breaks if you change** — `WISHLIST_ITEMS_REMOVED`. [`notifications`](./notifications.md) imports that event name; nothing else depends on it.
 :::
 
 ## Its neighbourhood
@@ -48,10 +48,10 @@ Its three arrows are the same one-way arrows the cart declares, for the same rea
 is meaningless without the product it points at; the list belongs to an account; and the
 move-to-cart exit writes a cart line, which is a `customer-supplier` demand on the cart's store.
 
-::: tip It is depended on by nothing
-Which makes it the cheapest module in the repo to delete — `rm -rf` plus one line in
-`src/modules.ts`, and nothing else notices. If you want to see the deletability claim hold, try it
-here first.
+::: tip Almost nothing depends on it
+Only `notifications` imports it, for the `wishlist.items_removed` event name. Deleting it means
+dropping that listener too — follow [Removing a module](../theory/module-lifecycle.md#removing-a-module);
+`tsc` points at the import.
 :::
 
 Products and users reach back the same way they reach the cart: a deleted product must leave every
@@ -65,7 +65,7 @@ the inbox.
 
 ## The pipeline
 
-The whole module. Three arrows out, two events in — and nothing at all pointing back at it.
+The whole module. Three arrows out, two events in, one event out.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%

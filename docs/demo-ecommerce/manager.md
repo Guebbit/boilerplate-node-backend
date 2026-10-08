@@ -19,7 +19,7 @@ flowchart LR
     PA -->|"🧑‍💼 you start packing"| PR["being prepared"]
     PR -->|"📦 warehouse records<br/>the parcel's handover"| SH["shipped"]
     SH -->|"📦 warehouse records<br/>the parcel's arrival"| DE["delivered"]
-    P -.->|"customer cancels,<br/>or 30 min passed"| CA["cancelled"]
+    P -.->|"customer cancels,<br/>or 15 min passed"| CA["cancelled"]
     PA -.->|"🧑‍💼 you cancel it"| CA
     CA -.->|"money goes back<br/>unless you say otherwise"| RF["refunded"]
 
@@ -120,7 +120,7 @@ There is a separate, permanent delete for when a record genuinely has to go.
 
 ## Hidden two different ways
 
-The demo has one of each, which is why the shop shows 132 products but the manager sees all 134:
+The demo has one of each, which is why the shop shows 136 products but the manager sees all 138:
 
 | Product                                              | State            | What it means                                           |
 | ---------------------------------------------------- | ---------------- | ------------------------------------------------------- |
@@ -148,7 +148,7 @@ Product prices are set per product. Delivery prices are fixed rules, not setting
 | Delivery   | Costs | Rule                             |
 | ---------- | ----- | -------------------------------- |
 | Standard   | €5    | free once the basket passes €100 |
-| Express    | €15   | —                                |
+| Express    | €15   | only for baskets up to 5 kg      |
 | Pick it up | €0    | —                                |
 
 The customer's basket is priced by those same rules, so what they are quoted at checkout and what

@@ -53,10 +53,6 @@ flowchart LR
     class B,EL,G check;
 ```
 
-An earlier version of this page described two manifest fields and three tests instead. They are
-gone: see §2 and §4 below for what each was and why prose next to the imports turned out to be the
-better home for it.
-
 ---
 
 ## 1. Bounded context — the folder
@@ -98,17 +94,11 @@ its own `module.yaml#dependsOn` — a plain array of names, one per module folde
 of reach each edge is, and why it exists, stays in prose at the top of `module.ts`, next to the
 imports it describes.
 
-An earlier version of this idea — a typed `dependsOn: { module, as, because }[]` field carrying both
-questions at once, with a 217-line cross-cutting test holding each edge to the four kinds above — was
-removed, for reasons worth restating now that a `dependsOn` field is back in a different shape:
+A typed `dependsOn: { module, as, because }[]` manifest field is deliberately not used: nothing
+would read it at runtime and nothing would enforce it, and it would duplicate the relationship KIND
+this table already classifies.
 
-- **Nothing read it at runtime, and nothing enforced it.** Not the registry, not the router, not
-  `check:dependencies` — it was documentation with a type annotation, reconciled against real
-  imports only by a test a developer could forget to keep passing meaningfully.
-- **It duplicated the relationship KIND**, which this table already classifies, without adding
-  information a reader could not get from the docblock prose next to it.
-
-`module.yaml#dependsOn` avoids both: it carries the edge ONLY, no kind and no prose, and
+`module.yaml#dependsOn` carries the edge ONLY, no kind and no prose, and
 `.dependency-cruiser.cjs` reads it directly as the rule it enforces — an import outside a module's
 own `dependsOn` fails `check:dependencies`, the same gate CI runs. There is no second copy to drift:
 the file the config reads IS the map. The reasoning behind an edge — which of the four kinds
@@ -126,11 +116,11 @@ why the same field is documentation here and load-bearing there.
 
 ### Reading the map
 
-`cart` reaches six modules, and that is not a smell to refactor away — a checkout is the one place
+`cart` reaches seven modules, and that is not a smell to refactor away — a checkout is the one place
 where price, stock, address, shipping and the resulting order all have to agree at once. Its
 docblock says _how_ it depends on each — a `published-language` read of `products`, a
 `customer-supplier` call into `orders`, and so on. `delivery` is the cheapest relationship to
-name and the one to copy: it publishes two pure functions and no storage at all.
+name and the one to copy: it publishes a few pure functions and no storage at all.
 
 ## 3. Ubiquitous language — per context, not per app
 
@@ -146,11 +136,10 @@ destroyed account in `users`. Two different things, correctly. A single flat glo
 collapse them into one entry that is wrong in both places, and **that divergence is the
 bounded-context pattern**.
 
-::: tip It used to be a manifest field
-Each module declared a `language: {}` map. It was removed: nothing read it, nothing checked it was
-true, and it sat in `module.ts` rather than beside the model field or serializer each entry actually
-described — so the constraint-bearing definitions were furthest from the code they constrained. The
-prose moved to the glossary page; the constraints belong on the symbols.
+::: tip Not a manifest field
+A `language: {}` map on `module.ts` would be read by nothing and checked by nothing, and would sit
+furthest from the symbol each entry constrains. The prose lives in the glossary page; the
+constraints belong on the symbols.
 :::
 
 ## 4. Subdomain distillation — where to spend effort
@@ -158,11 +147,11 @@ prose moved to the glossary page; the constraints belong on the symbols.
 DDD's own advice is the part most often skipped: tactical patterns belong in the **core** domain, and
 everything else should use the simplest thing that works.
 
-| Subdomain    | Meaning                                                         | Here                                                                                                      |
-| ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                                                              |
-| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`                                              |
-| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys` |
+| Subdomain    | Meaning                                                         | Here                                                                                                                  |
+| ------------ | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `core`       | the reason the product exists — worth entities and invariants   | `products`, `orders`, `cart`                                                                                          |
+| `supporting` | specific to this business, not a differentiator — keep it plain | `payments`, `delivery`, `inventory`, `wishlist`, `invoicing`, `returns`, `notifications`, `addresses`                 |
+| `generic`    | a solved problem, interchangeable with something bought         | `antibot`, `audit-logs`, `locales`, `observability`, `feedback`, `access`, `users`, `account`, `api-keys`, `webhooks` |
 
 The rule of thumb that follows: **a `generic` module should not carry a `domain/` folder**, with
 one exception — a 3+-state status field earns the folder regardless of subdomain, which is why
@@ -181,8 +170,7 @@ This table keeps the definitions; the values themselves live on each module's ow
 `module.yaml#subdomain` and are read from there into the generated map at `docs/modules/index.md`
 (`npm run docs:graph`) — so the table above is illustrative, not the source of truth for any one
 module's label. `tests/cross-cutting/module-descriptors.test.ts` only holds `subdomain` to being one
-of the three names; it does not — and an earlier version of this field, removed for exactly this
-reason, could not either — check that a classification stays HONEST (nothing stops every module
+of the three names; it does not check that a classification stays HONEST (nothing stops every module
 drifting to `core`), or that a `generic` module carries no `domain/` folder. Placing the value with
 the module it describes is still worth doing, since a doc table can go stale the moment a new module
 lands and nothing points back at it; it is not a claim that the label is enforced beyond its spelling.
@@ -224,8 +212,7 @@ manual walkthrough — see `npm run measure:demo-strip`.
 module has one, structurally, so there is no "no barrel, therefore unreachable" escape hatch left.
 
 The convention is a **convenience barrel with a short, structural deny-list**, not the narrower
-"publish only what a sibling imports today" this repo used to run. That narrower form has exactly
-one failure in practice: the list is short, a sibling's need is real, and copying the logic,
+"publish only what a sibling imports today". That narrower form has exactly one failure in practice: the list is short, a sibling's need is real, and copying the logic,
 redeclaring the type, or casting around the gap is cheaper than adding the export. A convenience
 barrel removes the incentive to route around it, at the cost of three things
 this repo already pays for elsewhere: a write handle leaking through a published repository (closed
@@ -289,8 +276,8 @@ Everything above is about **boundaries and vocabulary**. None of it makes an inv
 unconstructable, and none of it gives a repository a domain object to return. Those are tactical
 patterns and they are genuinely absent.
 
-Two exceptions, both taken because the rule was already written down in several places and had
-stopped agreeing with itself: `Money` and the order lifecycle table. Neither needs an aggregate, and
+Two exceptions, both taken because the rule was written down in several places and would
+otherwise stop agreeing with itself: `Money` and the order lifecycle table. Neither needs an aggregate, and
 neither is a step toward one — [Tactical DDD](./tactical-ddd.md) has both.
 
 See [Domain layer](./domain-layer.md) for the `domain/` folder as it stands, and what going

@@ -28,7 +28,7 @@ case-insensitively (`Apple` before `banana`).
 ## Who can be sorted, by what
 
 The list is an **enum per resource** in that module's `openapi.yaml` (`ProductSort`, `UserSort`,
-`OrderSort`, `FeedbackRequestSort`). It is a whitelist on purpose: an unindexed or derived field
+`OrderSort`, `FeedbackRequestSort`, `ExampleSort`). It is a whitelist on purpose: an unindexed or derived field
 would let a stranger ask for a collection scan.
 
 | Resource | Sortable fields |
@@ -37,6 +37,7 @@ would let a stranger ask for a collection scan.
 | Users | `createdAt` · `email` · `username` |
 | Orders | `createdAt` · `status` · `email` — `totalPrice` is derived, not a column |
 | Feedback | `createdAt` · `status` · `email` |
+| Examples | `createdAt` · `title` · `status` |
 
 ## How it flows
 

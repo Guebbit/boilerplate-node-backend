@@ -33,9 +33,9 @@ flowchart LR
 
 ## The story
 
-This module owns **URLs, not data**. The readiness fold, job health, the process reader, the SSE
+This module owns **URLs, not data**. The readiness fold, job health, dead-letter depth, the process reader, the health payload, the SSE
 hub and the scrape guard are its own files (`dependency-health.ts`, `job-health.ts`,
-`process-snapshot.ts`, `stream.ts`, `metrics-scraper.ts`) — only the shared Prometheus registry and
+`parked-jobs.ts`, `process-snapshot.ts`, `health.ts`, `stream.ts`, `metrics-scraper.ts`) — only the shared Prometheus registry and
 the HTTP request counters stay in `infrastructure/observability`, since every module registers its
 own counters against that same registry (`metrics-registry.ts`, `metrics-http.ts`); this module's
 own `http-readback.ts` turns those counters into the overview endpoint's and the SSE stream's

@@ -24,7 +24,9 @@ public write route is the only unauthenticated write in the application.
 The status enum _is_ the triage workflow: `new → in_progress → resolved`, with `spam` as the exit
 that is neither. `adminNotes` is the operator's side of the record: it is served to staff only and
 left out of the data export (Art. 15(4) protects whoever wrote the note). `status` and `respondedAt`
-are the filer's own data, and the export, the filer's only read of a ticket, includes them.
+are the filer's own data, and the export, the filer's only read of a ticket, includes them. The
+`feedback` section is opt-in (`NODE_EXPORT_INCLUDE_FEEDBACK`, off by default) and matches by email,
+so only an account whose address is verified gets it.
 
 ::: tip A leaf in both directions
 Zero dependencies and zero dependents. Together with [`wishlist`](./wishlist.md) it is the pair to

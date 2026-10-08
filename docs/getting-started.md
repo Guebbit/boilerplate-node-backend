@@ -4,7 +4,7 @@ From a fresh clone to a browsable API with demo data. Five minutes, three comman
 editing.
 
 This stack is **container-first**: the shipped `.env` uses compose service hostnames. The default
-profile is lean — 5 containers (`app`, `cron`, `database`, `redis`, `rabbitmq`) — with Tempo, Loki,
+profile is lean — 6 containers (`app`, `cron`, `database`, `redis`, `limits`, `rabbitmq`) — with Tempo, Loki,
 Prometheus, Grafana, Alloy and Umami opt-in behind the `observability`/`analytics` profiles
 (`npm run compose:up:full`, or `COMPOSE_PROFILES` in `.env` to keep them across every restart). Host
 mode is supported and has its own scripts; it is the secondary path.
@@ -30,6 +30,9 @@ npm install
 npm run setup                    # creates .env from .env-example, fills every secret it refuses to boot without
 npm run compose:up               # the lean default, or: npm run compose:up:full
 ```
+
+What `setup` touches, and what it leaves for you, is on
+[First run: `npm run setup`](./tools/configuration.md#first-run-npm-run-setup).
 
 On Podman, also set `CONTAINER_LOGS_PATH`, `PROMTAIL_CONFIG` and `CONTAINER_LOG_DRIVER` in `.env`
 (see `.env-example` → _Promtail Log Collection_) — only read once the `observability` profile is

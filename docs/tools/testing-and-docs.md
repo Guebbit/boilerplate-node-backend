@@ -7,7 +7,7 @@ This page is the map. Each layer has its own detail page — code, tools, patter
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 50, 'rankSpacing': 60}}}%%
 flowchart TB
-    Unit["Unit\nJest, no database\nservices · repositories · models"]
+    Unit["Unit\nJest, no database\ndomain rules · presenters · middlewares"]
     Property["Property\nfast-check\nfor EVERY input, not one"]
     Integration["Integration\nsupertest(app)\nrouting · middleware wiring"]
     Concurrency["Concurrency\nN requests at once\nraces the serial suite cannot see"]
@@ -73,23 +73,22 @@ The five layers answer "did it break". None answers **which module owns the brea
 
 Plus slowest suites, slowest tests, and every failure named by the module that owns it.
 
-`scripts/testing/report-results.ts` is **kept identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both. By convention now, not by gate: it was on the shared-file list until the list narrowed to the three documents this repo produces and the frontend consumes.
+`scripts/testing/report-results.ts` is **kept identical in the paired frontend** — Vitest's `json` reporter emits the shape Jest's `--json` does, so one reader genuinely serves both. By convention, not by gate: the shared-file list holds only what this repo produces and the frontend consumes.
 
 ## Where test data comes from
 
 Several things can hand you an entity, and it is reasonable to wonder whether that is too many. It is not: each answers a question the others cannot. The demo data itself has ONE home — this repo's module seeds — and the paired frontend consumes it by running this very backend (the [demo profile](./demo-profile.md)), so there is no second copy left to drift.
 
-| Source                            | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                                                                   |
-| --------------------------------- | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scenarios/<name>.ts`             | BE   | **The records themselves** — the demo catalogue, the named accounts, the address books and wishlists. One per module, outside `src/` entirely; tabled by `scenarios/index.ts`'s `shopModules` and walked by `scenario:apply`. Orders, payments, shipments and audit entries are deliberately absent from this table — `scenarios/flows/` PRODUCES those by driving the seeded shop, not by seeding rows for them |
-| `src/modules/<name>/factories.ts` | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factories.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift                                           |
-| `tests/support/contract-data.ts`  | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a factory                                                                                                                                              |
+| Source                            | Repo | What it is for                                                                                                                                                                                                                                                                                                                                                                                                          |
+| --------------------------------- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scenarios/<name>.ts`             | BE   | **The records themselves** — the demo catalogue, the named accounts, the address books and wishlists. One per module, outside `src/` entirely; tabled by `scenarios/shop-modules.ts`'s `shopModules` and walked by `scenario:apply`. Orders, payments, shipments and audit entries are deliberately absent from this table — `scenarios/flows/` PRODUCES those by driving the seeded shop, not by seeding rows for them |
+| `src/modules/<name>/factories.ts` | BE   | **Arbitrary throwaway entities** — "give me _a_ product, I do not care which, and let me override one field". The opposite need to a fixed demo dataset. `make*` builds a payload; `src/modules/<name>/tests/factories.ts` beside it adds `create*`, which persists so the model's hooks run. The same builder the demo records use, which is why the two cannot drift                                                  |
+| `tests/support/contract-data.ts`  | BE   | **Payloads derived from the zod schemas**, valid and — uniquely — invalid, each violating exactly one declared constraint. The only source that can produce something the API is supposed to _reject_, which is what makes it a contract test rather than a factory                                                                                                                                                     |
 
 Reading it as a shape: the demo records, checked against the API's own serializers by
 `tests/integration/scenarios/shop.test.ts` rather than published as a file — and the two
 generators that exist because "some data" and "deliberately illegal data" are different questions
-from "the demo data". There used to be two mappers, one per runtime, over a shared file of facts.
-That is the drift this layout removed.
+from "the demo data".
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
@@ -119,7 +118,7 @@ flowchart TB
 - **"Give me _the_ demo data."** → `scenarios/<name>.ts`, seeded by `scenario:apply` and checked by `shop.test.ts`. Not in `SHARED_FILES`, so the paired frontend keeps no copy and reads this repo's API instead. Fixed, and the one a human sees on screen. The frontend's `cy.loginAs('user')` types its credentials into a real form served by this repo's demo profile, so it cannot be randomised or generated.
 - **"Give me _a_ product, I do not care which."** → the module's `factories.ts`. The opposite need: fresh, isolated, overridable per test, and never the demo data — 25 test files would interfere with each other if they shared rows. It is the same builder the demo records go through, so "a product" and "the demo product" cannot disagree about what a product is.
 - **"Give me one the API must _reject_."** → `contract-data.ts`. Derived from the zod schemas so each payload violates exactly one declared constraint. Nothing else here can produce something deliberately illegal, which is the difference between a contract test and a factory.
-  Merging any two would mean one of those questions stops being asked. The merge that _was_ worth doing — the demo dataset, previously written out by hand on both sides — is the one already done.
+  Merging any two would mean one of those questions stops being asked. The one merge worth doing — the demo dataset, once written out by hand on both sides — is the one already done: it has a single home here.
 
 ## What each layer can and cannot catch
 
@@ -208,7 +207,7 @@ flowchart LR
     class Review finish;
 ```
 
-`npm run test` runs `test:unit`, `test:integration` and `test:contract` — the three layers fast and deterministic enough to gate a PR. Mutation testing runs separately, nightly; see its own page for why.
+`npm run test` runs `test:unit`, `test:cross-cutting`, `test:integration`, `test:contract` and `test:fuzz` (a small pass; the deep one is nightly). Mutation testing runs separately — diff-scoped on every PR, whole-repo monthly; see its own page for why.
 
 ## Documentation rule of thumb
 
@@ -229,7 +228,7 @@ Worth naming explicitly, because it decides where a suite runs and how a failure
 
 A **gate** answers a yes/no question fast enough to block a merge. Unit, integration, concurrency and contract are gates: they run on every push, and a failure means "do not merge this".
 
-A **hunter** goes looking for problems nobody has asked about. Mutation and fuzzing are hunters: they are slow, they run nightly, and a failure is usually a **finding to read** rather than a merge to stop. A hunter wired as a gate gets switched off the first week it is inconvenient — which is why both live in their own workflow files where they cannot become PR gates by accident.
+A **hunter** goes looking for problems nobody has asked about. Mutation and the deep fuzz pass are hunters: they are slow, they run on a schedule or per diff, and a failure is usually a **finding to read** rather than a merge to stop. A hunter wired as a gate gets switched off the first week it is inconvenient — which is why both live in their own workflow files where they cannot become PR gates by accident.
 
 The corollary is that a green pull request is not a claim the hunters agree. That is what the nightlies are for.
 
@@ -312,8 +311,7 @@ that point the exported types become the contract and this is the layer that gua
 **What it is.** Stryker can cache per-mutant results (`incremental: true`) and, on the next run,
 re-test only the mutants a diff could plausibly have affected — turning a full run into a short one.
 
-**Why it is not here.** The full nightly run fits in roughly 36 minutes, which is comfortably inside
-the window it has. Against that, the cache invalidates far more broadly than intuition suggests — a
+**Why it is not here.** The pull-request run is already scoped to the changed files, and the whole-repo run is sharded and monthly (`mutation:full`), so no run needs the cache to fit its window. Against that, the cache invalidates far more broadly than intuition suggests — a
 change to a widely-imported module re-tests most of its dependents — so the saving is unpredictable
 rather than proportional to the diff. And a stale-but-trusted cache is a quiet failure: it reports
 green for mutants nobody re-ran.

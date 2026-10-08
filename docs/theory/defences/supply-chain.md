@@ -38,12 +38,12 @@ it. Fewer dependencies is the primary defence; every row above is what is left o
 
 ## Things served from elsewhere
 
-| Attack                  | How it works                                                | This boilerplate                                                                                                                                            |
-| ----------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Third-party scripts     | tag managers, analytics and chat widgets run in your origin | No surface on this side: this process serves JSON and its own static files, and loads no remote script. The frontend owns its half.                         |
-| CDN compromise          | a served file altered, with no Subresource Integrity        | Same — nothing is loaded from a CDN here.                                                                                                                   |
-| Browser extension abuse | the user's extension reads the page                         | Outside anyone's control; it is the reason client-side secrets are worth little — see [Client-side](client-side.md#data-the-browser-holds).                 |
-| Vendor / SaaS breach    | an integrated service leaks your data                       | The integrations are two OAuth providers and a self-hostable analytics collector. Nothing is shared with a vendor that is not needed to answer the request. |
+| Attack                  | How it works                                                | This boilerplate                                                                                                                                                                                    |
+| ----------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Third-party scripts     | tag managers, analytics and chat widgets run in your origin | No surface on this side: this process serves JSON and its own static files, and loads no remote script. The frontend owns its half.                                                                 |
+| CDN compromise          | a served file altered, with no Subresource Integrity        | Same — nothing is loaded from a CDN here.                                                                                                                                                           |
+| Browser extension abuse | the user's extension reads the page                         | Outside anyone's control; it is the reason client-side secrets are worth little — see [Client-side](client-side.md#data-the-browser-holds).                                                         |
+| Vendor / SaaS breach    | an integrated service leaks your data                       | The integrations are the OAuth providers, a self-hostable analytics collector, and the optional HIBP and Turnstile calls. Nothing is shared with a vendor that is not needed to answer the request. |
 
 ## Why an unreachable advisory still gets fixed
 

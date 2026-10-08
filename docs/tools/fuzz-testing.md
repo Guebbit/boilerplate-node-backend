@@ -201,10 +201,10 @@ with many more requests per operation and a fresh seed — that is the hunter, a
 
 ## Commands
 
-| Command                                   | Effect                                            |
-| ----------------------------------------- | ------------------------------------------------- |
-| `npm run test:fuzz`                       | Run the whole fuzzer. Not part of `npm run test`. |
-| `npx jest tests/fuzz -t 'POST /products'` | Fuzz one operation while working on it            |
+| Command                                   | Effect                                                 |
+| ----------------------------------------- | ------------------------------------------------------ |
+| `npm run test:fuzz`                       | Run the whole fuzz suite. Also part of `npm run test`. |
+| `npx jest tests/fuzz -t 'POST /products'` | Fuzz one operation while working on it                 |
 
 The run is **seeded**, so a failure is reproducible rather than a story about something that happened once. A counterexample printed by `fast-check` can be pasted straight into a regression test.
 

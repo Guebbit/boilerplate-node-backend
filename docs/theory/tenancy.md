@@ -85,6 +85,7 @@ flowchart TB
         App --> DB[("database\nreplica set rs0")]
         Cron --> DB
         App --> Cache[("cache — Redis, optional")]
+        App --> Limits[("limits — Redis, optional")]
         App --> Queue["queue — RabbitMQ, optional"]
         App --> Uploads[("uploads volume")]
     end
@@ -94,10 +95,12 @@ flowchart TB
     classDef data fill:#dcfce7,stroke:#16a34a,color:#111827;
     class Setup oneshot;
     class App,Cron app;
-    class DB,Cache,Queue,Uploads data;
+    class DB,Cache,Limits,Queue,Uploads data;
 ```
 
-Five services, four named volumes (database, its keyFile, the cache, uploads), one published port —
+The app, a one-shot `setup` and a `cron` container, plus the stores behind the `bundled` profile
+(database, cache, rate-limit Redis, queue) and an optional `monitoring` profile. Named volumes hold
+the stores and the uploads; one published port —
 or none, once the [Traefik overlay](../tools/two-client-stacks.md#many-clients-behind-one-proxy)
 fronts several stacks on one host. `COMPOSE_PROJECT_NAME` is the only thing that changes between
 clients: it namespaces every container, network and volume, and selects that client's `.env`.
@@ -109,7 +112,7 @@ clients: it namespaces every container, network and volume, and selects that cli
 ```mermaid
 sequenceDiagram
     participant C as Caller
-    participant R as account/module.ts resolve()
+    participant R as account/session/resolver.ts
     participant U as userService
     participant S as access/service.ts rolesOf()
     participant P as kernel/permissions.ts callerInScope()
@@ -149,7 +152,7 @@ Three collections still carry an explicit column, and each earns it:
 | `webhooksubscriptions`, `webhookdeliveries` | Silo doesn't remove the concept of "whose subscription this is," it just means there's one shop's worth                       |
 | `apikeys`                                   | The minter's CURRENT roles are re-derived from memberships stored under this id on every check — load-bearing, not decoration |
 
-Neither is on either public API contract — keeping the column costs nothing outside the backend,
+None of them is on either public API contract — keeping the column costs nothing outside the backend,
 and removing it would be a two-module refactor with no functional gain.
 [API Keys](../modules/api-keys.md#the-story) already states the tenant-scoped-only design in full;
 this section doesn't restate it.
@@ -197,7 +200,7 @@ Until then, the answer to "should this be pooled multi-tenant?" is **no, on purp
 
 **Pooled multi-tenancy** — one process, one database, every row tagged `tenantId`, a CASL filter on
 every read. It is real work: only a few modules compile a scoped read filter today
-(`products`, `orders`, `payments`, `locales`) — every other one would need one added — and only
+(`products`, `orders`, `payments`, `locales`, `example`) — every other one would need one added — and only
 a few Mongoose models carry an organisation column.
 
 **A concrete example of what "declined, not merely undone" means:** the webhooks fan-out matches

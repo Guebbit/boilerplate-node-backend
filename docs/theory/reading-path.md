@@ -28,11 +28,11 @@ sentence and a link, carry on with what you were doing.
 flowchart TD
     A["1 · src/app.ts<br/><i>the boot sequence</i>"] --> B["2 · src/modules.ts<br/><i>what is enabled</i>"]
     B --> C["3 · src/kernel/registry.ts<br/><i>what a module IS</i>"]
-    C --> D["4 · modules/feedback/module.ts<br/><i>one module, declared</i>"]
-    D --> E["5 · modules/feedback/routes.ts<br/><i>the URL surface</i>"]
-    E --> F["6 · controllers/post-feedback-contact.ts<br/><i>one request, end to end</i>"]
-    F --> G["7 · feedback/service.ts<br/><i>the domain decision</i>"]
-    G --> H["8 · feedback/repository.ts<br/><i>the database</i>"]
+    C --> D["4 · modules/example/module.ts<br/><i>one module, declared</i>"]
+    D --> E["5 · modules/example/routes.ts<br/><i>the URL surface</i>"]
+    E --> F["6 · controllers/post-example.ts<br/><i>one request, end to end</i>"]
+    F --> G["7 · example/services/crud.ts<br/><i>the domain decision</i>"]
+    G --> H["8 · example/repository.ts<br/><i>the database</i>"]
     H --> I["9 · infrastructure/http/response.ts<br/><i>what every answer looks like</i>"]
 
     classDef boot fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -48,11 +48,11 @@ flowchart TD
 ### 1 · `src/app.ts` — how the server starts
 
 `createApp()` is the only function that knows the boot order. Read the bottom half of its
-body first: the six `install*` calls **are** the middleware stack, in the order a request travels
+body first: the `install*` calls **are** the middleware stack, in the order a request travels
 it. Calling `createApp()` is the side effect, not importing the file — `src/serve.ts` is what
 actually starts one listening.
 
-**Take away:** security → request context → telemetry → static → routes → error handling. That
+**Take away:** security → static → request parsing → request context → telemetry → routes → error handling. That
 order is behaviour, not documentation.
 
 ### 2 · `src/modules.ts` — what this build serves
@@ -70,13 +70,12 @@ it declares.
 
 **Take away:** every field on `AppModule` is read by something — `basePath` and `routes` by
 `app/routes.ts`, `locales` by i18next, `subscribe` by `registerModules`, `scenario` by
-`scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax,
-which is why several used to be here and are not.
+`scenarios/check.ts`'s guarantee comparison. A field nothing reads is a comment with extra syntax.
 
 ### 4 · `src/modules/example/module.ts` — one module, declared
 
 **`example` is the module to copy** — when you add a domain, start from this one. It has its own
-group (`npm run demo:remove` deletes it too — copy it first) and depends only on `users`, so it shows the shape without
+group (`npm run demo:remove` deletes it too — copy it first) and depends only on `access` and `users`, so it shows the shape without
 the complications. Start the tour here rather than in a shop module for the same reason. It has no
 docs page on purpose: the header of each of its files says its role in any module, and
 [the module template](./modules.md#the-module-template) lists what each optional capability costs.
@@ -98,14 +97,14 @@ Express matches them as ids. Several routes also point at the same controller on
 The most important single file on this list. Every controller in every module has this shape:
 
 ```
-parseBody(schema, request.body, response)   ← validate against the contract
+parseBody(schema, readInput(request, …), response)   ← validate against the contract
   ↳ on failure: a 422 is already sent, return
 service.doTheThing(...)                     ← the actual work
-  ↳ then:  createdResponse(...) / successResponse(...)
+  ↳ then:  refused(response, result) → stop, else createdResponse(...) / successResponse(...)
   ↳ catch: catchAs(response, 'name')
 ```
 
-**Take away:** once you have read one controller, you have read all 60. The variation between them
+**Take away:** once you have read one controller, you have read nearly all of them. The variation between them
 is the schema and the service call.
 
 ### 7 · `src/modules/example/services/crud.ts` — the domain decision
@@ -151,8 +150,8 @@ all of it is easier to read once you have one.
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | `src/infrastructure/adapters/*` (cache, queue, storage, mailer, pdf) | You need that specific capability. Each is self-contained.                                                                 |
 | `src/infrastructure/observability/*`                                 | You are debugging a trace or adding a metric.                                                                              |
-| `src/modules/*/openapi/*`                                            | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
-| `src/modules/account/*`                                              | It is the biggest and least typical module (21 routes, JWT, cookies, sessions, tokens). Read `example` first.              |
+| `src/modules/*/openapi.yaml`                                         | The contract, one module at a time. Authored — see [Contract Ownership & Fragmentation](../api/contract-fragmentation.md). |
+| `src/modules/account/*`                                              | It is the biggest and least typical module (JWT, cookies, sessions, tokens, 2FA, OAuth). Read `example` first.             |
 | `src/cluster.ts`                                                     | You are changing process management. See [Clustering & Shutdown](./clustering.md).                                         |
 | `eslint.config.ts`, `stryker.json`, `jest.config.js`                 | You are changing the gate itself.                                                                                          |
 

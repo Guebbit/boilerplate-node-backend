@@ -1,8 +1,9 @@
 # antibot
 
 ::: tip At a glance
-**Owns** — rung 3 of the anti-automation ladder: the human-challenge port, and the endpoint that
-tells a frontend which provider is active.
+**Owns** — rung 3 of the anti-automation ladder: the human-challenge port, and the two endpoints
+a frontend uses: `GET /antibot/config` (which provider is active) and `GET /antibot/challenge`
+(the work a self-hosted provider issues).
 **Depends on** — nothing, and nothing depends on it. `account` and `feedback` reach
 `infrastructure/adapters/antibot-providers` directly, through `humanChallengeGate` — a
 cross-cutting middleware, not an import of this module.
@@ -34,12 +35,17 @@ and the middleware directly, which is why the neighbourhood diagram above shows 
 throws instead of falling back to `none`, on the same reasoning as `NODE_ANTIBOT_EMAIL_POLICY`: a
 deployment's misspelling must not read as "protection off".
 
-**The endpoint always answers, on or off, and reports every rung, not just this one.**
+**The config endpoint always answers, on or off, and reports every rung, not just this one.**
 `GET /antibot/config` reports `provider: "none"` with an empty parameter map rather than 404 or an
 empty body, so the frontend can call it unconditionally and decide what to render from the response
 alone. Its `rungs` object adds rung 1's status (`identityBudgets`, always `true`) and rung 2's
 active posture (`emailPolicy` — `off`/`disposable`/`mx`), so "what is active on this deployment" has
 one answer instead of three.
+
+**The challenge endpoint answers only for a provider that issues one.** `GET /antibot/challenge`
+returns the work a self-hosted provider (`altcha`) hands its widget. For `none` and for
+vendor-hosted ones (`turnstile`) there is nothing to fetch, so it answers `404`
+`ANTIBOT_NO_CHALLENGE`: a truthful answer about the deployment, not a fault.
 
 **A provider that cannot answer is a refusal, never a pass.** A non-200, a timeout or a malformed
 body from the vendor all resolve to `refused`. The alternative — failing open when the vendor is
@@ -47,8 +53,9 @@ down — would make an outage at Cloudflare into an open door here.
 
 ## Choosing a provider
 
-`turnstile` ships as the worked example, documented as an example rather than a recommendation.
-Adding another is one file and one line in the registry.
+Three implementations ship in the registry: `none`, `turnstile` (vendor-hosted, documented as an
+example rather than a recommendation) and `altcha` (self-hosted proof-of-work). Adding another is
+one file and one line in the registry.
 
 | Provider                                       | Licence / cost                 | What it costs you                                                                 |
 | ---------------------------------------------- | ------------------------------ | --------------------------------------------------------------------------------- |
@@ -59,12 +66,12 @@ Adding another is one file and one line in the registry.
 | [Cap](https://github.com/tiagozip/cap)         | Apache-2.0, self-hosted        | same shape as ALTCHA, younger project                                             |
 | mCaptcha                                       | AGPL, self-hosted              | a separate Rust service to operate                                                |
 
-**Proof-of-work belongs behind this port, not beside it.** An earlier draft of the ladder had it as
-its own rung with a hand-rolled hashcash protocol — a challenge format, a difficulty dial, a
-single-use store and a browser solver, all maintained here. ALTCHA and Cap already ship that
-protocol together with the widget that solves it, under permissive licences and with no third-party
-service involved. If this deployment ever wants the no-vendor option, it arrives as another entry
-in the registry above, not as a second seam.
+**Proof-of-work belongs behind this port, not beside it.** A hand-rolled hashcash protocol would
+mean a challenge format, a difficulty dial, a single-use store and a browser solver, all
+maintained here. ALTCHA and Cap already ship that protocol together with the widget that solves
+it, under permissive licences and with no third-party service involved. `altcha` is the no-vendor
+option wired in (`altcha-lib`, tuned by `NODE_ANTIBOT_ALTCHA_SECRET` and `NODE_ANTIBOT_ALTCHA_COST`);
+another one arrives as another entry in the registry, not as a second seam.
 
 ## ALTCHA: verify first, claim after
 

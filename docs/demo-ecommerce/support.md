@@ -149,8 +149,8 @@ Worth knowing before promising anything to a customer:
 
 | Thing              | In the demo                                                     |
 | ------------------ | --------------------------------------------------------------- |
-| Card payments      | Fake. No money moves. One card number always refuses.           |
-| The courier        | Fake. A button marks parcels delivered.                         |
+| Card payments      | Fake. No money moves. One test method always refuses.           |
+| The courier        | Fake. Staff record the handover and the arrival by hand.        |
 | Emails             | Not actually sent — they are collected where you can read them. |
 | The whole database | Thrown away when the demo stops.                                |
 

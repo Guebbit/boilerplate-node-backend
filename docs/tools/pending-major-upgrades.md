@@ -27,16 +27,16 @@ flowchart LR
 
 ## dotenv 18
 
-| Question          | Answer                                                                                                                                                                                             |
-| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Breaking change   | Preloading (`node -r dotenv/config`) removed, `.env.vault` removed, the "injected env" line moves from stdout to stderr and the tips are gone.                                                     |
-| Added             | A `dotenv run -- cmd` CLI, and an opt-in `fast: true` parser.                                                                                                                                      |
-| Touches this repo | Nothing. `import 'dotenv/config'` is still an export (22 import sites); no vault, no preload flag, no CLI use.                                                                                     |
-| What it buys      | Nothing this repo uses. That is why 18 was left alone.                                                                                                                                             |
-| Better option     | Node 24 has `process.loadEnvFile()`, which also leaves an already-set variable alone — dotenv's own default. It would remove a dependency (CLAUDE.md: the runtime over a library).                 |
-| Risk of that      | Parser differences on multi-line values, `export ` prefixes and inline comments. `.env-example` would need a read-through, and `tests/support/setup.ts` relies on the `dotenv/config` side effect. |
-| Recommendation    | Do not take 18 for its own sake. If the dependency is wanted gone, that is a separate S-sized change with a test over `.env-example`.                                                              |
-| Effort            | S either way.                                                                                                                                                                                      |
+| Question          | Answer                                                                                                                                                                                                                           |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Breaking change   | Preloading (`node -r dotenv/config`) removed, `.env.vault` removed, the "injected env" line moves from stdout to stderr and the tips are gone.                                                                                   |
+| Added             | A `dotenv run -- cmd` CLI, and an opt-in `fast: true` parser.                                                                                                                                                                    |
+| Touches this repo | Nothing. `import 'dotenv/config'` is still an export (one site, `src/infrastructure/config/dotenv.ts`, which every entry point imports); `parse` is imported by two files. No vault, no preload flag, no CLI use.                |
+| What it buys      | Nothing this repo uses. That is why 18 was left alone.                                                                                                                                                                           |
+| Better option     | Node 24 has `process.loadEnvFile()`, which also leaves an already-set variable alone — dotenv's own default. It would remove a dependency (CLAUDE.md: the runtime over a library).                                               |
+| Risk of that      | Parser differences on multi-line values, `export ` prefixes and inline comments. `.env-example` would need a read-through, and the two `parse` imports (`scenarios/run-server.ts`, one unit test) would move to `util.parseEnv`. |
+| Recommendation    | Do not take 18 for its own sake. If the dependency is wanted gone, that is a separate S-sized change with a test over `.env-example`.                                                                                            |
+| Effort            | S either way.                                                                                                                                                                                                                    |
 
 ## TypeScript 7
 

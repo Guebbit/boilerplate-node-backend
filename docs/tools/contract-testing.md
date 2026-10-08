@@ -2,7 +2,7 @@
 
 The layer that answers: **does the wire response match `openapi.yaml`, exactly?** Not "does the business logic look right" (that's [Unit Testing](./unit-testing.md)) and not "is the right middleware mounted" (that's [Integration Testing](./integration-testing.md)) — specifically, does the _serialized JSON_ match the contract other services and the paired frontend are written against, including the fields that must **not** be there.
 
-This is one half of "contract testing" in this codebase. The other half — does a _request_ the contract declares legal actually get accepted — is [Contract-Derived Request Data](./contract-request-data.md), a newer and structurally different layer. This page is about responses.
+This is one half of "contract testing" in this codebase. The other half — does a _request_ the contract declares legal actually get accepted — is [Contract-Derived Request Data](./contract-request-data.md), a structurally different layer. This page is about responses.
 
 ## Tools
 
@@ -73,7 +73,7 @@ Every file also drives the 401/403/404/422 branches through the real route: the 
 ## File map
 
 **A module's contract suite is co-located with the module**, one file per domain, so it is deleted
-along with it. Only the specs that belong to no domain stayed central.
+along with it. Only the specs that belong to no domain live centrally.
 
 | Path                                                     | Contents                                                                                                             |
 | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
@@ -89,9 +89,9 @@ along with it. Only the specs that belong to no domain stayed central.
 
 ## Commands
 
-| Command                 | Effect                                                            |
-| ----------------------- | ----------------------------------------------------------------- |
-| `npm run test:contract` | `jest tests/contract 'src/modules/.*/tests/contract' --runInBand` |
+| Command                 | Effect                                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `npm run test:contract` | `tsx scripts/testing/run-suite.ts contract` — jest over `tests/contract` and every `src/modules/*/tests/contract` |
 
 ## Related pages
 
