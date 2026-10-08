@@ -275,9 +275,8 @@ const toExportFeedback = (ticket: Lean<FeedbackRequestDocument>): ExportFeedback
 });
 
 /**
- * {@link findOwnTickets}, shaped for the account data export — the field mapping `module.ts` used
- * to carry inline, moved beside the read it maps. The `NODE_EXPORT_INCLUDE_FEEDBACK` gate stays in
- * `module.ts`: whether to call this at all is a wiring decision, not this function's to make.
+ * {@link findOwnTickets}, shaped for the account data export. The `NODE_EXPORT_INCLUDE_FEEDBACK`
+ * gate lives in `module.ts`: whether to call this at all is a wiring decision, not this one's.
  *
  * @param email - the caller's own email, matched exactly
  */

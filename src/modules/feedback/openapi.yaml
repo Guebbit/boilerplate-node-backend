@@ -360,8 +360,7 @@ components:
         # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — `adminNotes` is
         # deliberately absent: that field is staff's internal assessment of the ticket, not the
         # submitter's data, and Art. 15(4) protects the rights of others (whoever wrote the note)
-        # the same way it protects the submitter's own. See `module.ts`'s `toExportFeedback` for
-        # where this gets built.
+        # the same way it protects the submitter's own. `toExportFeedback` in `service.ts` builds it.
         ExportFeedbackTicket:
             type: object
             additionalProperties: false
@@ -378,7 +377,7 @@ components:
                 message:
                     type: string
                 status:
-                    type: string
+                    $ref: '#/components/schemas/FeedbackRequestStatus'
                 respondedAt:
                     type: string
                     format: date-time

@@ -9,7 +9,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { create } from '@modules/feedback/service';
+import { create, updateStatus } from '@modules/feedback/service';
 import feedbackModule from '@modules/feedback/module';
 
 setupTestDb();
@@ -44,6 +44,18 @@ describe('the feedback section of an export', () => {
         const section = (await collect(subject(true))) as { message: string }[];
 
         expect(section.map((ticket) => ticket.message)).toEqual(['my private complaint']);
+    });
+
+    it('exports status and respondedAt but never the staff-only adminNotes', async () => {
+        const ticket = await fileTicket();
+        await updateStatus(ticket, { status: 'resolved', adminNotes: 'internal assessment' });
+
+        const section = await collect(subject(true));
+        const exported = section?.[0];
+
+        expect(exported).toMatchObject({ status: 'resolved' });
+        expect(exported).toHaveProperty('respondedAt');
+        expect(exported).not.toHaveProperty('adminNotes');
     });
 
     it('omits the section for an account whose address is unproven, tickets or not', async () => {

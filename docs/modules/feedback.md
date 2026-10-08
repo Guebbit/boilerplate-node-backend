@@ -22,8 +22,9 @@ from [`users`](./users.md), deleting an account leaves that person's feedback st
 public write route is the only unauthenticated write in the application.
 
 The status enum _is_ the triage workflow: `new → in_progress → resolved`, with `spam` as the exit
-that is neither. `adminNotes` and `respondedAt` are the operator's side of the record, never served
-to the person who filed it.
+that is neither. `adminNotes` is the operator's side of the record: it is served to staff only and
+left out of the data export (Art. 15(4) protects whoever wrote the note). `status` and `respondedAt`
+are the filer's own data, and the export, the filer's only read of a ticket, includes them.
 
 ::: tip A leaf in both directions
 Zero dependencies and zero dependents. Together with [`wishlist`](./wishlist.md) it is the pair to
@@ -83,7 +84,7 @@ flowchart LR
 ## Related pages
 
 - [Modules overview](./index.md) — the whole context map
-- [Email & PDF Rendering](../tools/email-and-rendering.md) — the acknowledgement and the triage notification
+- [Email & PDF Rendering](../tools/email-and-rendering.md) — the triage notification
 - [Security](../tools/security.md) — the rate-limit budgets, including this module's own
 - [Winston & Audit Logs](../tools/winston.md) — what a triage action records
 - [Ops & Assets](../reference/ops.md) — the retention window and why changing it needs `db:sync`
