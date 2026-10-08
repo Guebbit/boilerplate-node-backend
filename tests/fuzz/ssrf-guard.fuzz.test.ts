@@ -143,7 +143,7 @@ describe('resolveSafeOutboundTarget — a hostname whose DNS answer is private s
     });
 
     it('refuses when the v4 answer is private even though the v6 one is not', async () => {
-        mockDns(['10.1.2.3'], ['2001:db8::1']);
+        mockDns(['10.1.2.3'], ['2606:4700::1111']);
 
         await expect(
             resolveSafeOutboundTarget('https://mixed-family.example.test/hook')

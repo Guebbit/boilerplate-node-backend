@@ -226,7 +226,7 @@ export const KEYED_BY_ADDRESS_BLOCK = 'address block (IPv4 /24, IPv6 /64)';
 
 /** `keyedBy` label for a budget bucketed on a submitted email — see {@link identityOf}. */
 export const KEYED_BY_SUBMITTED_EMAIL =
-    'the submitted email, normalised and pseudonymised (falls back to address block when absent)';
+    'the submitted email or username, normalised and pseudonymised (falls back to address block when absent)';
 
 /** `keyedBy` label for a budget bucketed on the caller's authenticated account. */
 export const KEYED_BY_AUTHENTICATED_ACCOUNT = 'the authenticated account';

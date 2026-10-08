@@ -30,7 +30,7 @@ export interface RequestImage {
     /**
      * The url to persist: this request's upload if it carried one and it was digested inline
      * (no broker configured), the pending-image placeholder if a broker will digest it later, or
-     * the body's `imageUrl` otherwise — `null` (the caller removing the image) or absent. A string
+     * otherwise `null` when the body asked to remove the image, else `undefined`. A url string
      * from the body is never passed on. An upload always wins over a body `null` when both are
      * present: the caller sent bytes, which is a stronger statement of intent.
      */

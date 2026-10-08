@@ -193,7 +193,8 @@ claim themselves. The hour of grace in the reaper covers an upload promoted but 
   exist, so `npm install` needs no compiler, but sharp's own docs flag allocator fragmentation
   under musl for long-running processes — worth a `k6` soak test before relying on it at scale.
 - **Remote and default images get no thumbnail.** `thumbnailUrl` stays absent when `imageUrl` is a
-  body-supplied or default url rather than an upload; there is nothing local to derive one from.
+  default url rather than an upload; there is nothing local to derive one from. A body can only
+  clear the image (`imageUrl: null`), never name a url.
 - **A dead broker logs at `error`, not `warn`.** Unlike Redis (a pure optimisation loss),
   `queue.ts`'s `unavailableLevel: 'error'` reflects that losing RabbitMQ here changes real
   behavior — every image upload starts paying the full inline digest cost — so it's worth routing

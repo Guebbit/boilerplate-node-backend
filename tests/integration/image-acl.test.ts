@@ -262,7 +262,7 @@ describe('imageUrl is never a client-named path', () => {
             expect(fileExists(ownUrl)).toBe(false);
         });
 
-        it('a multipart upload sets the image, and wins over a null in the same request', async () => {
+        it('a multipart upload sets the image', async () => {
             const response = await api()
                 .patch('/account')
                 .set('Authorization', userBearer)
