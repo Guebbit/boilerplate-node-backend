@@ -21,9 +21,17 @@ import {
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
     DEFAULT_UPLOAD_RATE_LIMIT_MAX,
     INFRASTRUCTURE_RATE_LIMITS,
+    KEYED_BY_ADDRESS,
+    KEYED_BY_ADDRESS_BLOCK,
+    KEYED_BY_AUTHENTICATED_ACCOUNT,
+    KEYED_BY_CHALLENGE,
+    KEYED_BY_SUBMITTED_EMAIL,
+    accountIdOf,
+    readBodyField,
     refuseRateLimited
 } from '@infrastructure/http/middlewares/rate-limit';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
 
@@ -265,5 +273,121 @@ describe('refuseRateLimited — the answer a caller and the audit trail see', ()
             expect.anything(),
             expect.objectContaining({ status_code: 429 })
         );
+    });
+});
+
+/** The infrastructure budget with this `name`. */
+const budgetNamed = (name: string) => {
+    const found = INFRASTRUCTURE_RATE_LIMITS.find((budget) => budget.name === name);
+    if (!found) throw new Error(`no budget named ${name}`);
+    return found;
+};
+
+describe('the three budgets this file owns — what each one declares', () => {
+    it.each([
+        ['Browsing (global)', 'global', 'NODE_RATE_LIMIT_MAX', DEFAULT_RATE_LIMIT_MAX, false],
+        [
+            'Api-key requests',
+            'api-key',
+            'NODE_API_KEY_RATE_LIMIT_MAX',
+            DEFAULT_API_KEY_RATE_LIMIT_MAX,
+            true
+        ],
+        [
+            'Image uploads',
+            'uploads',
+            'NODE_UPLOAD_RATE_LIMIT_MAX',
+            DEFAULT_UPLOAD_RATE_LIMIT_MAX,
+            true
+        ]
+    ])(
+        '%s: namespace, variable, default, shared window, audit',
+        (name, namespace, variable, max, audited) => {
+            const budget = budgetNamed(name);
+
+            expect(budget).toMatchObject({
+                namespace,
+                environmentVariable: variable,
+                defaultMax: max,
+                windowMs: 'shared',
+                audited
+            });
+            expect(budget.bounds).toMatch(/\S/);
+            expect(budget.keyedBy).toMatch(/\S/);
+        }
+    );
+
+    it('lets only the global brake pass while its store is down', () => {
+        expect(budgetNamed('Browsing (global)').onStoreError).toBe('pass');
+        expect(budgetNamed('Api-key requests').onStoreError).toBeUndefined();
+        expect(budgetNamed('Image uploads').onStoreError).toBeUndefined();
+    });
+
+    it('keys the global and upload budgets on the address, the api-key budget on its credential', () => {
+        expect(budgetNamed('Browsing (global)').keyedBy).toBe(KEYED_BY_ADDRESS);
+        expect(budgetNamed('Image uploads').keyedBy).toBe(KEYED_BY_ADDRESS);
+        expect(budgetNamed('Api-key requests').keyedBy).toMatch(/credential/);
+        expect(
+            budgetNamed('Api-key requests').keyGenerator?.(
+                asStub<Request>({ credentialId: 'key-1' })
+            )
+        ).toBe('key-1');
+    });
+
+    it('gives every keyedBy label words, and no two labels the same words', () => {
+        const labels = [
+            KEYED_BY_ADDRESS,
+            KEYED_BY_ADDRESS_BLOCK,
+            KEYED_BY_SUBMITTED_EMAIL,
+            KEYED_BY_AUTHENTICATED_ACCOUNT,
+            KEYED_BY_CHALLENGE
+        ];
+
+        for (const label of labels) expect(label).toMatch(/\S/);
+        expect(new Set(labels).size).toBe(labels.length);
+    });
+});
+
+describe('accountIdOf and readBodyField', () => {
+    it("keys on the caller's authenticated account", () => {
+        expect(accountIdOf(asStub<Request>({ authContext: { id: 'acc-1' } }))).toBe('acc-1');
+    });
+
+    it.each([[null], ['text'], [42], [undefined]])(
+        'reads no field off a body that is %p',
+        (body) => {
+            expect(readBodyField(asStub<Request>({ body }), 'email')).toBeUndefined();
+        }
+    );
+
+    it('reads a string field and ignores a non-string one', () => {
+        const request = asStub<Request>({ body: { email: 'a@b.c', age: 3 } });
+
+        expect(readBodyField(request, 'email')).toBe('a@b.c');
+        expect(readBodyField(request, 'age')).toBeUndefined();
+    });
+});
+
+describe('refuseRateLimited — what the refusal says', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('names the rate-limit rung in the log and sends the localised message', () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+        const { response, json } = capturingResponse();
+
+        refuseRateLimited({ namespace: 'say-test', audited: false })(routeRequest(), response);
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ rung: 'rate-limit' })
+        );
+        expect(json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                errors: [expect.objectContaining({ message: t('generic.error-rate-limited') })]
+            })
+        );
+        expect(t('generic.error-rate-limited')).toMatch(/\S/);
     });
 });
