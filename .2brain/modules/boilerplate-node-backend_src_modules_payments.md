@@ -5,78 +5,79 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/payments/
-files: 56
-updated: 2026-10-01T14:29:13.648926+00:00
+files: 60
+updated: 2026-10-08T00:00:07.735579+00:00
 ---
 
 # src/modules/payments/
 
 ## Purpose
 
-The payments module owns the full monetary lifecycle of a shop order: discovering available payment methods, creating and confirming payment intents at a pluggable payment-service provider (PSP), reconciling provider webhooks, settling or refunding money, and recording offline (non-card) payments. It also centralises the module's observability surface (analytics events, audit actions, Prometheus counters), rate-limit budgets, provider-agnostic error types, and the Mongoose schema for the `Payment` collection.
+The payments module owns the full money-in / money-out lifecycle: creating and confirming payment intents at a pluggable PSP, reconciling outcomes via webhook, browser sync, or confirm calls, recording offline (non-card) payments, issuing refunds, and sweeping abandoned attempts. It is a self-contained bounded context that exposes a single barrel (`index.ts`) as its only import surface to sibling modules.
 
 ## Key parts
 
-- **Domain & persistence** — `model.ts` (Mongoose schema, status vocabulary, wire-visibility rules), `domain/` (lifecycle helpers), `events.ts` (two domain events registered via module augmentation), `config.ts` (method list, grace window, Stripe key gate, bank-transfer validation), `repository.ts` (guarded writes, ownership scoping, idempotency).
-- **Services (business logic)** — `services/` is split by concern: `intent.ts` (create/refresh/cancel intents), `settlement.ts` (single reconciliation point for all settle triggers), `refunds.ts` (the only path that moves money out), `offline.ts` (non-card settlement), `effects.ts` (crash-recovery sweep), `retention.ts` (data-export, erasure, abandoned-attempt sweep), `scope.ts` (row-level access rule), `lookup.ts` (RF reference → order), `errors.ts` (canonical 409 leaf), and `index.ts` (barrel re-export).
-- **HTTP controllers & routing** — `controllers/` (one file per endpoint: methods, intent, confirm, webhook, sync, refund, offline, get-by-order, get-by-reference), `routes.ts` (middleware ordering: auth, step-up, idempotency, rate-limit), `rate-limits.ts` (webhook, confirm-attempt, and decline budgets plus a human-challenge escalation gate).
-- **Provider port** — `providers/index.ts` (the `PaymentProvider` interface + registry), `providers/fake.ts` (full-featured stub for tests and demos), `providers/webhook-signature.ts` (shared HMAC scheme), `providers/errors.ts` (port-level error types, split out to break a circular import).
-- **Observability & contracts** — `analytics.ts`, `audit.ts`, `metrics.ts` (each registered into a shared map or registry via augmentation), `openapi.yaml` (API contract), `presenter.ts` (response shaping).
-- **Module wiring** — `module.ts` (the `AppModule` manifest consumed by the kernel at boot), `index.ts` (the only public import surface, enforcing the strategic-DDD boundary), `globals.d.ts` (payments-local Express request augmentation).
+- **HTTP layer** — `routes.ts` wires every endpoint with the correct auth, rate-limit, and idempotency middleware; the `controllers/` directory holds one thin handler per route (intent, confirm, sync, webhook, refund, offline, lookup). `rate-limits.ts` defines the three velocity budgets and the post-decline challenge gate.
+- **Service layer** (`services/`) — `intent.ts` opens/refreshes a payment intent; `settlement.ts` is the single reconciliation point that commits stock or refunds at most once; `refunds.ts` is the only path that moves money out; `offline.ts` records non-card payments through the same settlement pipeline; `effects.ts` is the crash-recovery sweep for the succeeded→commit window; `retention.ts` handles erasure, export, and expired-attempt deletion; `scope.ts` centralises row-level access rules; `lookup.ts` resolves RF bank-transfer references to orders.
+- **Data & domain** — `model.ts` defines the Mongoose schema, status vocabulary, and serialization contract for the `Payment` and `PaymentWebhookEvent` collections; `domain/lifecycle.ts` encodes the state machine; `repository.ts` wraps the shared factory with ownership-scoped, idempotent writes; `events.ts` registers the module's two domain events into the kernel's `DomainEventMap`.
+- **Provider port** (`providers/`) — `index.ts` defines the PSP interface and registry (the single seam for plugging in a live provider); `webhook-signature.ts` shares the HMAC-SHA256 sign/verify scheme between tests and the controller; `errors.ts` isolates provider-specific error types to break a circular import.
+- **Module plumbing** — `module.ts` is the registration manifest (routes, subscriptions, permissions, config validation, personal-data hooks); `index.ts` is the barrel enforcing the strategic-DDD import boundary; `config.ts` centralises payment-specific settings read per-call; `globals.d.ts` adds a payments-specific Express request flag.
+- **Observability & contracts** — `analytics.ts`, `audit.ts`, and `metrics.ts` register event names and Prometheus counters owned by this module; `openapi.yaml` is the OpenAPI 3.0.3 contract for the full payment API surface.
 
 ## How it connects
 
-- **`src/modules/orders/`** — A payment intent is tied to a specific order; settlement (`settlement.ts`) fires order domain events and checks the order's `pending` gate before committing.
-- **`src/modules/inventory/`** — On successful settlement the module commits stock; on refund or the `orderLost` effect branch it refunds stock.
-- **`src/modules/users/` / `src/modules/account/`** — Authentication and step-up authorisation gate the money-moving routes; retention services detach payer identity on account erasure and support data export.
-- **`src/infrastructure/`** — Supplies the shared HTTP helper, the `createRepository` factory used by `repository.ts`, the `buildRateLimiter` factory used by `rate-limits.ts`, and the observability registry that `metrics.ts` writes into.
-- **`src/modules/webhooks/`** — The module registers its webhook event mappings in `module.ts` so the kernel can route provider notifications.
-- **`src/modules/returns/` / `src/modules/invoicing/`** — Refunds and settled-payment records are consumed downstream for return processing and invoice generation.
-- **`scenarios/` / `scripts/ops/`** — E2E scenarios exercise the `providers/fake.ts` stub; ops scripts import service operations through the `services/` barrel.
+- **`src/modules/orders/`** — Payments settle orders (`pending → paid`); the order module owns the order aggregate and emits events (e.g. `ORDER_REFUND_OWED`) that payments listens to for refund triggers.
+- **`src/modules/inventory/`** — Settlement (in `settlement.ts` and `effects.ts`) commits stock on a successful payment; the inventory module owns the stock write.
+- **`src/modules/returns/`** — Refund flows coordinate with returns; the `refunds.ts` service is the sole monetary-out path that returns can invoke.
+- **`src/modules/account/` / `src/modules/users/`** — Payer identity resolution, step-up authentication, and personal-data hooks (erasure, export) depend on these modules.
+- **`src/modules/invoicing/`** — Invoicing consumes settled-payment data to generate invoices.
+- **`src/infrastructure/`** — Provides the shared `createRepository` factory, `buildRateLimiter`, HTTP utilities, and the kernel event registry that the module's `module.ts` plugs into at boot.
+- **`scripts/ops/`** — Operational scripts import the service barrel for ad-hoc settlement, refund, or retention-sweep tasks.
+- **`scenarios/`** — End-to-end and integration scenarios exercise the full intent → confirm → webhook → settle path against a demo provider.
 
 ## Where to start
 
-1. **`src/modules/payments/services/index.ts`** — the barrel that re-exports every service operation; reading its exports gives you the full list of business capabilities in one screen and shows how the services are grouped.
-2. **`src/modules/payments/model.ts`** — the Mongoose schema and status vocabulary; understanding the `Payment` document shape (statuses, visibility rules, the webhook idempotency ledger) makes every service and controller file much easier to follow.
+1. **`index.ts`** — the barrel. Reading it shows exactly what the module exposes to the rest of the codebase and what stays internal, giving you the boundary before diving in.
+2. **`services/intent.ts`** — described as the entry point for the money-moving flow. Tracing one request from `routes.ts` → `controllers/post-payment-intent.ts` → `services/intent.ts` → `repository.ts` → `model.ts` takes you through every layer of the module in a single pass.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_payments["src/modules/payments/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_scripts_ops["scripts/ops/<br/>19 files"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_account["src/modules/account/<br/>81 files"]
-    m_src_modules_cart["src/modules/cart/<br/>39 files"]
-    m_src_modules_inventory["src/modules/inventory/<br/>33 files"]
-    m_src_modules_invoicing["src/modules/invoicing/<br/>27 files"]
-    m_src_modules_orders["src/modules/orders/<br/>68 files"]
-    m_src_modules_orders_services["src/modules/orders/services/<br/>14 files"]
-    m_src_modules_products["src/modules/products/<br/>51 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_scripts_ops["scripts/ops/<br/>24 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules["src/modules/<br/>32 files"]
+    m_src_modules_account["src/modules/account/<br/>107 files"]
+    m_src_modules_cart["src/modules/cart/<br/>56 files"]
+    m_src_modules_inventory["src/modules/inventory/<br/>37 files"]
+    m_src_modules_invoicing["src/modules/invoicing/<br/>33 files"]
+    m_src_modules_orders["src/modules/orders/<br/>91 files"]
+    m_src_modules_products["src/modules/products/<br/>57 files"]
     m_src_modules_returns["src/modules/returns/<br/>40 files"]
-    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_src_modules_users["src/modules/users/<br/>49 files"]
     m_src_modules_payments --- m_scenarios
     m_src_modules_payments --- m_scripts_ops
     m_src_modules_payments --- m_src
     m_src_modules_payments --- m_src_infrastructure
     m_src_modules_payments --- m_src_infrastructure_adapters
     m_src_modules_payments --- m_src_infrastructure_http
+    m_src_modules_payments --- m_src_modules
     m_src_modules_payments --- m_src_modules_account
     m_src_modules_payments --- m_src_modules_cart
     m_src_modules_payments --- m_src_modules_inventory
     m_src_modules_payments --- m_src_modules_invoicing
     m_src_modules_payments --- m_src_modules_orders
-    m_src_modules_payments --- m_src_modules_orders_services
     m_src_modules_payments --- m_src_modules_products
     m_src_modules_payments --- m_src_modules_returns
     m_src_modules_payments --- m_src_modules_users
     style m_src_modules_payments stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_invoicing|src/modules/invoicing/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]] · … and 2 more
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_inventory|src/modules/inventory/]] · [[boilerplate-node-backend_src_modules_invoicing|src/modules/invoicing/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]] · … and 1 more
 
 ## Files
 - `src/modules/payments/analytics.ts` — Defines the canonical analytics event names for the payments module and registers them into the shared `AnalyticsEventMap` via TypeScript module augmentation, so that any consumer typing an event name against the `payments` channel gets autocomplete and compile-time safety without importing a duplicated list.
@@ -102,8 +103,8 @@ flowchart LR
 - `src/modules/payments/openapi.yaml` — OpenAPI 3.0.3 contract for the payments module. It defines the full API surface a client needs to discover payment methods, create and confirm a payment intent tied to a pending order, look up payment state by order, and (admin-only) refund, record offline payment, or resolve an RF creditor reference back to an order.
 - `src/modules/payments/presenter.ts`
 - `src/modules/payments/providers/errors.ts` — Houses the error type(s) thrown by the payment provider port, isolated into their own module so implementations can import and throw them without pulling in `index.ts` (the port interface), which itself imports every implementation. This split exists specifically to break a circular-dependency cycle that previously arose when the error lived inside `index.ts`.
-- `src/modules/payments/providers/fake.ts` — A stub payment-service-provider (PSP) that implements the full `PaymentProvider` interface without any external network calls. It exists so demos, e2e suites, and integration tests can exercise the 3-D Secure flow, asynchronous settlement states, refund/cancel paths, and webhook signature verification without a real provider account or sandbox.
 - `src/modules/payments/providers/index.ts` — Defines the **payment provider port** — the interface every PSP implementation must satisfy — along with the provider registry and two resolution functions. It is the single seam where a real payment service plugs in: a live project adds one implementation file and one line to the `PROVIDERS` record, and no other call-site changes.
+- `src/modules/payments/providers/registry.ts`
 - `src/modules/payments/providers/webhook-signature.ts` — Defines the shared HMAC-SHA256 signature scheme for PSP webhook deliveries: sign as `<timestamp>.<raw body>`, transmit in a single header, verify in constant time, and reject stale timestamps. It lives in its own file because the signing half is needed by the demo and test suites while the verifying half is needed by the controller, and because a real provider's own verifier (e.g. `stripe.webhooks.constructEvent`) replaces only the verify side.
 - `src/modules/payments/rate-limits.ts` — Defines the three rate-limit budgets for the payments module (webhook deliveries, confirm attempts, confirm declines) and turns each into an Express middleware via the shared `buildRateLimiter` factory. It also exports a small gate that escalates to a human challenge once an account has a prior decline on record.
 - `src/modules/payments/repository.ts` — Data-access layer for the payments aggregate. Wraps the shared `createRepository` factory with domain-specific lookups and guarded writes (intent upsert, offline upsert, status transitions, retention sweeps). Exists so service-layer code never touches Mongoose directly and all ownership scoping, idempotency, and duplicate-key semantics live in one place.
@@ -122,12 +123,16 @@ flowchart LR
 - `src/modules/payments/services/view.ts` — Read-side service for payments: retrieves the payment linked to an order and enriches it with the set of actions (`pay`, `refund`) the caller is permitted to take. This is the data contract behind the order page's payment panel, mirroring the `OrderActions` shape the orders module publishes.
 - `src/modules/payments/tests/contract/api.contract.test.ts` — HTTP-level contract tests for the `/payments` API. Each test fires a real request through the running server and asserts both the semantic shape of the response and conformance to the OpenAPI spec (`toSatisfyApiSpec()`). The goal is to prove that every documented branch — 201 intent, 200 confirm, the three distinct 409s, 404s, 422s — is actually reachable over the wire, without re-testing the business rules (those live in the unit suite).
 - `src/modules/payments/tests/integration/announce.test.ts`
+- `src/modules/payments/tests/integration/intent-provider-ref.test.ts`
 - `src/modules/payments/tests/integration/lookup.test.ts` — Integration test for the admin's bank-transfer reference lookup (`getOrderByReference`) and its immediate downstream settle step (`recordOfflinePayment`). It pins the contract that a reference minted at checkout resolves to its own order, that any miss (typo, unmatched, malformed) yields a uniform 404 with no oracle, and that the order the lookup returns is the one the existing offline endpoint settles — with no new settlement logic in between.
 - `src/modules/payments/tests/integration/payment-velocity.test.ts` — Integration tests for the three payment-confirm rate limiters (`attempt`, `decline`, `challenge gate`) mounted on `POST /payments/:id/confirm`. The tests exercise the limiters directly against trivial Express handlers rather than the real payment route, because the property under test belongs to the limiters themselves and a real route would add a database round-trip to every attempt. Route-mounting correctness is covered separately in `payments/tests/unit/routes.test.ts`.
+- `src/modules/payments/tests/integration/refund-email.test.ts`
 - `src/modules/payments/tests/integration/refunds.test.ts`
 - `src/modules/payments/tests/integration/retention.test.ts` — Integration tests for two payment-retention behaviors: (1) **account erasure** — hard-deleting a user detaches `userId` from the associated payment (and order) without deleting the payment record itself, and (2) **abandoned-payment reaping** — the `reapAbandonedPayments` sweep deletes unsettled attempts past a configurable retention window while never touching settled payments. Both suites exercise real module wiring via `registerCheckoutModules([paymentsModule])`.
 - `src/modules/payments/tests/integration/service.test.ts` — Integration tests that pin the core invariants of the payments service: an intent freezes the order's published total (shipping included), a confirm transitions the order `pending → paid` before the payment row is marked `succeeded`, a decline leaves the payment retryable, and a refund is at-most-once. The tests run against a real MongoDB instance and the project's `fake` payment provider (not a mock), because the guarantees under test are the conditional database writes themselves.
 - `src/modules/payments/tests/integration/settlement-email.test.ts` — Integration test that pins the post-settlement email contract: when `confirmPayment` settles a payment to `succeeded` and stock commits, the buyer receives exactly one `orders.order-paid` email. It also asserts the email is **not** sent on a declined attempt and **not** re-sent when `confirmPayment` is called again for an already-settled payment.
+- `src/modules/payments/tests/integration/settlement-mismatch.test.ts`
+- `src/modules/payments/tests/integration/webhook-strand.test.ts`
 - `src/modules/payments/tests/unit/config.test.ts` — Unit tests for the three pure, environment-driven exports in `src/modules/payments/config.ts` (`listPaymentMethods`, `validateBankTransferConfig`, `validateStripeSecretKey`). These cover the logic behind `GET /payments/methods` and the boot-time `customCheck` validation, requiring no database.
 - `src/modules/payments/tests/unit/module.test.ts` — Boot-time validation tests for the payments module's manifest `customCheck`, specifically the provider-selector half (which provider name is accepted) and the single wiring-proof case for the Stripe secret key gate. It verifies that `assertRequiredConfig` throws at boot for misconfigured providers/keys rather than deferring failure to the first payment.
 - `src/modules/payments/tests/unit/providers.test.ts` — Unit tests for the payment provider port's **fake** implementation, the shared webhook-signature utilities, and the provider resolver. Deliberately kept out of `tests/integration/` because none of these code paths touch Mongo; `service.test.ts` (which persists a payment document) lives there instead.

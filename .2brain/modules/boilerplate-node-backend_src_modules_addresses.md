@@ -5,51 +5,52 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/addresses/
-files: 21
-updated: 2026-10-01T14:26:12.804887+00:00
+files: 24
+updated: 2026-10-07T23:56:24.303283+00:00
 ---
 
 # src/modules/addresses/
 
 ## Purpose
 
-The addresses module implements a per-user address book: CRUD over a list of shipping/billing addresses, enforcement of the "exactly one default" invariant, PII encryption at rest, and a public wire format that other modules (primarily cart at checkout) can consume to resolve the shipping destination.
+The **addresses** module owns the per-user address book: creating, listing, updating, and deleting shipping/delivery addresses, enforcing the invariant that a non-empty book always has exactly one entry flagged `default`, and exposing that default as the ship-to slot during checkout. It handles PII encryption transparently so callers see plaintext, and it registers itself as a standalone module so sibling modules (cart, users) never need to import the `account` module to reach address data.
 
 ## Key parts
 
-- **HTTP surface** — `routes.ts` defines the Express router (mounted at `/account`); the `controllers/` directory holds one thin adapter per verb (`get-addresses`, `post-address`, `update-address`, `delete-address`, `put-address-default`). Each extracts auth context and delegates to the service; none contain domain logic.
-- **Service & repository** — `service.ts` translates controller intents into repository calls and shapes the `AddressesView` response. `repository.ts` owns read-modify-write access to the Mongoose document, enforces the single-default invariant, and wraps PII encryption/decryption so callers always see plaintext.
-- **Persistence model** — `model.ts` defines the Mongoose schema (one document per user, array of sub-document entries each with its own `_id`). `pii.ts` centralises per-field encrypt/decrypt for the six PII columns.
-- **Module wiring & contract** — `module.ts` registers routes, personal-data lifecycle hooks, and locale path with the app kernel. `index.ts` is the sole public import surface (strategic-DDD boundary). `openapi.yaml` is the API contract. `presenter.ts` and `factories.ts` handle view-shaping and test-fixture construction respectively.
-- **Tests** — `tests/unit/` pins the schema shape, factory output, and route/middleware contract. `tests/integration/` verifies cross-cutting invariants (single default, cross-tenant 404, checkout resolution, PII round-trip).
+- **HTTP layer** — `routes.ts` mounts the Express router at `/account`; the five controllers (`get-addresses`, `post-address`, `update-address`, `delete-address`, `put-address-default`) are thin adapters that extract the user ID, delegate to the service, and serialise the response.
+- **Service & domain** — `service.ts` translates controller intents into repository calls and shapes the `AddressesView` wire format. `module.ts` is the kernel registration: routes, personal-data lifecycle hooks, and locale path.
+- **Persistence** — `model.ts` defines the Mongoose schema (one document per user, items as subdocuments with their own `_id`). `repository.ts` implements read-modify-write CRUD, enforces the single-default invariant, and coordinates PII encrypt/decrypt. `pii.ts` centralises per-field encryption; `reencrypt.ts` handles key-rotation re-encryption.
+- **Supporting infrastructure** — `config.ts` (module config), `factories.ts` (domain-to-Mongoose shape mapping), `presenter.ts` (view shaping), `openapi.yaml` (API contract), `index.ts` (the barrel facade that enforces the strategic-DDD import boundary).
+- **Tests** — Integration suites cover cross-cutting invariants (single-default, cross-user 404, checkout resolver, PII round-trip). Unit tests pin the router contract, schema shape, and fixture-builder correctness.
 
 ## How it connects
 
-- **`src/modules/cart/`** — The only sibling consumer. Cart's checkout resolver calls into this module (via the `index.ts` barrel) to fetch the default or a named address when the user has not pinned one explicitly at checkout.
-- **`src/modules/users/`** — Triggers this module's `personalData.erase` hook (registered in `module.ts`) when an account is deleted, causing the address document to be hard-deleted.
-- **`src/modules/account/`** — The addresses router is mounted alongside the account router under the same `/account` prefix; `account` does not import `addresses` directly—`cart` and `users` go through this module's barrel instead.
-- **`src/infrastructure/http/`** — Provides the Express app, auth middleware, and no-cache guards that `routes.ts` applies per-route.
-- **`src/modules/orders/`** — Indirectly coupled: an order's shipping address is resolved from this module at checkout time before the order is created.
+- **`src/modules/account/`** — The addresses router is mounted under `/account` alongside the account module's own router. The addresses module exists so that address concerns are decoupled from the account module's internal surface.
+- **`src/modules/cart/`** — The only sibling consumer of the addresses module's public API (via `index.ts`). Cart reads the default or a named address at checkout time.
+- **`src/modules/users/`** — Reaches address data solely through the `personalData.erase` hook declared in `module.ts`, never by importing the module directly.
+- **`src/infrastructure/http/`** — Provides the Express router, middleware (auth, no-cache), and response helpers that `routes.ts` and the controllers consume.
+- **`src/modules/orders/`** — The checkout/shipping flow consumes the address book's default (or explicitly selected) entry as the delivery destination.
 
 ## Where to start
 
-1. **`service.ts`** — Reading this first gives you the full request-to-response flow (intent → repository → `AddressesView`) and makes the invariant handling visible in one place.
-2. **`openapi.yaml`** — A compact, normative description of every endpoint, the default-address rule, and the module's public contract; pairs naturally with the service code to close the loop.
+Read `openapi.yaml` first — it states the full REST surface and the single-default invariant in one page, giving you the "what" before the "how." Then move to `repository.ts`; it is the file where the invariant logic, PII handling, and Mongoose read-modify-write cycle all converge, and understanding it makes the service and controller layers straightforward.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_addresses["src/modules/addresses/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_account["src/modules/account/<br/>81 files"]
-    m_src_modules_cart["src/modules/cart/<br/>39 files"]
-    m_src_modules_orders["src/modules/orders/<br/>68 files"]
-    m_src_modules_products["src/modules/products/<br/>51 files"]
-    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_scripts_ops["scripts/ops/<br/>24 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules_account["src/modules/account/<br/>107 files"]
+    m_src_modules_cart["src/modules/cart/<br/>56 files"]
+    m_src_modules_orders["src/modules/orders/<br/>91 files"]
+    m_src_modules_products["src/modules/products/<br/>57 files"]
+    m_src_modules_users["src/modules/users/<br/>49 files"]
     m_src_modules_addresses --- m_scenarios
+    m_src_modules_addresses --- m_scripts_ops
     m_src_modules_addresses --- m_src
     m_src_modules_addresses --- m_src_infrastructure
     m_src_modules_addresses --- m_src_infrastructure_http
@@ -61,9 +62,10 @@ flowchart LR
     style m_src_modules_addresses stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
+- `src/modules/addresses/config.ts`
 - `src/modules/addresses/controllers/delete-address.ts` — Thin HTTP adapter for `DELETE /account/addresses/:addressId`. Extracts the authenticated user ID and target address ID from the request, delegates all business logic to the `addressRemove` service, and translates the result into an Express response.
 - `src/modules/addresses/controllers/get-addresses.ts` — Express controller that handles `GET /account/addresses`. It is a thin HTTP adapter: it extracts the caller's id from the auth context, delegates to the service layer, and serialises the result. It exists to separate transport concerns (Express request/response) from domain logic in the addresses service.
 - `src/modules/addresses/controllers/post-address.ts` — HTTP handler for `POST /account/addresses`. Validates the request body, delegates to the address service, and shapes the JSON response. It is the "create" half of the address-book CRUD set (sibling files handle read, update, delete).
@@ -76,9 +78,11 @@ flowchart LR
 - `src/modules/addresses/openapi.yaml` — OpenAPI 3.0.3 contract for the **addresses** module. It specifies the REST surface for managing a per-user address book (list, add, replace, patch, remove) and encodes the module's core invariant: a non-empty book always has exactly one entry flagged `default`, which is the slot checkout ships to when no explicit `addressId` is supplied.
 - `src/modules/addresses/pii.ts` — Centralizes per-field PII encryption and decryption for address-book entries (`fullName`, `street`, `city`, `zip`, `country`, `phone`). It exists so `./repository` can encrypt whole entries on write and decrypt them on read without duplicating six-field logic at each call site.
 - `src/modules/addresses/presenter.ts`
+- `src/modules/addresses/reencrypt.ts`
 - `src/modules/addresses/repository.ts` — Read-modify-write repository for a user's address book. It owns the full CRUD surface (find, add, update, remove, hard-delete), enforces the "exactly one default" invariant across the entire `items` array, and handles PII encryption on write / decryption on read so that every caller sees plaintext.
 - `src/modules/addresses/routes.ts` — Defines the Express router for the address-book CRUD endpoints. It is mounted at `/account` alongside the account module's own router (see `module.ts`) and wires each HTTP verb to a thin controller, guarded by auth and no-cache middleware.
 - `src/modules/addresses/service.ts` — Service layer for the address book. It translates controller intents into repository calls, maps stored documents to the public `AddressesView` wire format, and wraps results in standardized success/reject responses. All endpoints answer the whole book (never a single entry) because the "exactly one default" invariant is a property of the list.
+- `src/modules/addresses/tests/factories.ts`
 - `src/modules/addresses/tests/integration/addresses.test.ts` — Integration test suite for the address book module. It verifies four cross-cutting invariants: (1) a non-empty book always has exactly one default, (2) another user's entry is indistinguishable from a non-existent one (404), (3) the checkout resolver's three-way answer (default, named, or absent) and its failure modes, and (4) PII fields are stored encrypted and round-trip correctly through the repository.
 - `src/modules/addresses/tests/integration/checkout.test.ts`
 - `src/modules/addresses/tests/integration/fixtures.ts`

@@ -5,62 +5,55 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/webhooks/
-files: 49
-updated: 2026-10-01T14:30:20.357428+00:00
+files: 50
+updated: 2026-10-08T00:01:15.298130+00:00
 ---
 
 # src/modules/webhooks/
 
 ## Purpose
 
-The webhooks module lets external subscribers register an HTTPS endpoint to receive signed HTTP POST notifications about domain events (order placed, payment succeeded, etc.). It owns the full lifecycle: subscription CRUD with a versioned secret-ring for signing, event fan-out from the domain-event bus, queued delivery with retry/backoff, a delivery log with replay, and the public event catalogue. It is the only module that performs outbound HTTP calls to third-party endpoints on behalf of the platform.
+The webhooks module manages the full lifecycle of outbound webhook subscriptions and their deliveries. It lets tenants register endpoints to receive platform events, handles secure signing-secret management (including rotation), fans out domain events to matching subscribers, performs SSRF-guarded HTTP delivery with retry/backoff, and exposes an auditable delivery log with synchronous replay.
 
 ## Key parts
 
-- **Domain rules** (`domain/`) — Pure, I/O-free logic: retry-backoff schedule and auto-disable threshold (`backoff.ts`), and the exact-membership / `*`-wildcard event-type filter (`event-filter.ts`). Shared by the sweep worker, the attempt service, and unit tests.
-- **Models & repository** (`model.ts`, `repository.ts`) — Mongoose schemas for `webhooksubscriptions` and `webhookdeliveries` (indexes, TTL, serialization transforms), plus the data-access layer with domain-specific queries (atomic lease claims, streak tracking, tenant-scoped lookups, due-row reads for the sweep).
-- **Services** (`services/`) — The business-logic layer:
-  - `publish.ts` subscribes to domain events and fans out one delivery row + queue message per matching subscription.
-  - `attempt.ts` signs the payload, performs the SSRF-guarded POST, and records the outcome.
-  - `sweep.ts` finds due/expired rows and enqueues them for retry.
-  - `enqueue.ts` publishes a delivery-row `_id` to the RabbitMQ queue (Claim Check pattern).
-  - `subscriptions.ts` / `deliveries.ts` — Tenant-scoped CRUD, secret-ring management, log listing, and replay.
-  - `catalogue.ts` — Reads the local `asyncapi.yaml` to build the in-memory event list.
-- **Secrets** (`secrets.ts`) — Single point for minting, rotating, and dropping signing secrets via versioned AES-256-GCM. Plaintext exists only in memory.
-- **HTTP surface** (`routes.ts`, `controllers/`) — Express router under `/webhooks` exposing subscription CRUD, secret rotation/removal, delivery log, replay, and the public event catalogue.
-- **Contracts** (`asyncapi.yaml`, `asyncapi.internal.yaml`, `openapi.yaml`) — Public AsyncAPI event catalogue (served at `GET /webhooks/events`), private internal queue contract, and the OpenAPI REST spec.
-- **Module wiring** (`module.ts`, `config.ts`, `index.ts`) — `AppModule` manifest (event listeners, queue consumer, routes, permissions), env-derived config accessors, and the public barrel (the only import surface for sibling modules).
-- **Cross-cutting** (`audit.ts`, `metrics.ts`, `emails.ts`) — Audit-action vocabulary, two fleet-wide Prometheus alerts, and the auto-disable notice email.
-- **Tests** (`tests/`) — Contract tests against `openapi.yaml`, schema-drift guards, SSRF fuzz tests, and integration tests (delivery pipeline, subscription race guard, sweep handoff) run against a real database.
+- **Module manifest & routing** — `module.ts` wires everything together (event listeners, queue consumer, routes, permissions); `routes.ts` and `controllers/` define the REST surface (subscription CRUD, secret rotation, delivery log, replay, event catalogue).
+- **Domain rules** — `domain/backoff.ts` (retry schedule, max attempts, auto-disable threshold) and `domain/event-filter.ts` (wildcard/exact membership matching) are pure functions shared by the sweep worker, attempt service, and tests.
+- **Service layer** — `services/publish.ts` (domain-event fan-out), `services/attempt.ts` (single delivery code path: sign → POST → record), `services/sweep.ts` (periodic retry sweep), `services/subscriptions.ts` (CRUD + secret ring), `services/deliveries.ts` (log + replay), `services/enqueue.ts` (queue publish, Claim Check pattern).
+- **Secrets & crypto** — `secrets.ts` owns the versioned AES-256-GCM secret-ring lifecycle; plaintext secrets exist only in memory during mint/rotation responses.
+- **Data layer** — `model.ts` (Mongoose schemas, indexes, TTL, serialization) and `repository.ts` (tenant-scoped queries, lease-based claims, streak writes).
+- **Contracts & specs** — `asyncapi.yaml` (public event catalogue served at `GET /webhooks/events`), `asyncapi.internal.yaml` (private RabbitMQ queue contract), `openapi.yaml` (REST contract for the admin surface).
+- **Supporting** — `config.ts` (env accessors read at call time), `audit.ts` (audit-action vocabulary), `emails.ts` (auto-disable notification copy), `metrics.ts` (fleet-wide Prometheus alerts), `presenters.ts`, `index.ts` (public barrel).
+- **Tests** — Contract tests (`tests/contract/`), integration tests against a real DB + local HTTPS listener (`tests/integration/`), and SSRF/delivery-path fuzz tests (`tests/fuzz/`).
 
 ## How it connects
 
-- **`src/` (kernel)** — `module.ts` registers the module's `AppModule` (event listeners, queue consumer, routes, permissions) with the application bootstrap. `audit.ts` augments the shared `AuditActionMap`. `publish.ts` consumes domain events dispatched by feature modules through the kernel event bus.
-- **`src/modules/payments/`, `src/modules/account/`** — These are upstream event *producers*: they dispatch domain events (e.g., payment succeeded) that `publish.ts` listens to. The dependency is strictly one-directional via the kernel; webhooks never imports from them. `emails.ts` follows the same `EmailContent` convention established by `account/emails`.
-- **`src/infrastructure/` & `src/infrastructure/adapters/`** — Provide the shared RabbitMQ queue adapter (used by `enqueue.ts` and the worker in `module.ts`), the SSRF-guarded `deliverWebhook` HTTP helper called by `attempt.ts`, the `metricsRegistry` for Prometheus metrics, and the email-sending transport.
-- **`scripts/contracts/`** — Generates or validates the `openapi.yaml` / `asyncapi.yaml` contract files so that the served catalogue and the implementation stay in lockstep.
-- **`scenarios/`** — End-to-end scenario tests that exercise webhook delivery through the full application stack (subscription → event → signed POST → subscriber endpoint).
+- **`src/infrastructure/http/`** — Provides the Express app, middleware, and request/response plumbing that `routes.ts` and the controllers plug into.
+- **`src/infrastructure/adapters/`** — Supplies shared adapters (e.g., the SSRF guard, HTTP client for `deliverWebhook`, queue broker client) that the services consume.
+- **`src/modules/account/`** — The `emails.ts` file follows the same `EmailContent` convention established in `account/emails`; the auto-disable notice is delivered through the same email pipeline.
+- **`src/modules/users/`** — Subscription ownership is keyed to a user; `ownerUserId` is persisted at creation and used for tenant-scoped queries.
+- **`scripts/contracts/` & `scripts/ops/`** — Contract-generation and operational scripts consume `openapi.yaml` / `asyncapi.yaml` to produce client SDKs, validate drift, and drive CI gates.
+- **`scenarios/`** — End-to-end scenario tests that exercise webhook delivery through the full stack.
 
 ## Where to start
 
-1. **`module.ts`** — The single `AppModule` object shows every wire: which events are subscribed, which queue is consumed, which routes are mounted, and which permissions gate access. Reading it first gives you the full map of the module's surface area.
-2. **`services/publish.ts`** → **`services/attempt.ts`** — These two files together tell the entire delivery story: a domain event arrives, gets matched against subscription filters, a row is written and enqueued; then the worker picks it up, signs the payload, fires the POST, and records the outcome. Tracing that path from event to HTTP response covers the module's core responsibility in one read.
+1. **`module.ts`** — Reading this single file shows how the module declares its event listeners, queue consumer, routes, and permissions in one `AppModule` object, giving you the map of everything the module does.
+2. **`services/attempt.ts`** — This is the heart of delivery: sign, POST, record outcome. Understanding this path makes the sweep, enqueue, and replay flows click immediately.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_webhooks["src/modules/webhooks/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_scripts["scripts/<br/>67 files"]
-    m_scripts_contracts["scripts/contracts/<br/>16 files"]
-    m_scripts_ops["scripts/ops/<br/>19 files"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_account["src/modules/account/<br/>81 files"]
-    m_src_modules_payments["src/modules/payments/<br/>56 files"]
-    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_scripts["scripts/<br/>66 files"]
+    m_scripts_contracts["scripts/contracts/<br/>18 files"]
+    m_scripts_ops["scripts/ops/<br/>24 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules_account["src/modules/account/<br/>107 files"]
+    m_src_modules_users["src/modules/users/<br/>49 files"]
     m_src_modules_webhooks --- m_scenarios
     m_src_modules_webhooks --- m_scripts
     m_src_modules_webhooks --- m_scripts_contracts
@@ -70,12 +63,11 @@ flowchart LR
     m_src_modules_webhooks --- m_src_infrastructure_adapters
     m_src_modules_webhooks --- m_src_infrastructure_http
     m_src_modules_webhooks --- m_src_modules_account
-    m_src_modules_webhooks --- m_src_modules_payments
     m_src_modules_webhooks --- m_src_modules_users
     style m_src_modules_webhooks stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_scripts_contracts|scripts/contracts/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_scripts_contracts|scripts/contracts/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
 - `src/modules/webhooks/asyncapi.internal.yaml` — Declares the webhooks module's **private** RabbitMQ delivery-queue contract (channel, operations, and message shape) in AsyncAPI. It is a `backend`-only fragment that is merged into `./asyncapi.yaml` but deliberately excluded from any public bundle, so the paired frontend never sees the internal worker queue.
@@ -110,6 +102,7 @@ flowchart LR
 - `src/modules/webhooks/services/enqueue.ts` — Single shared function that publishes a delivery-row's next attempt onto the worker queue. Both the fast path (`publish.ts`, right after a row is created) and the retry sweep (`sweep.ts`, for a row already due) call this same helper. It implements the **Claim Check** pattern: the message carries only the delivery row's `_id`, because the row itself is the source of truth for everything an attempt needs.
 - `src/modules/webhooks/services/index.ts` — Barrel/index file for the webhooks module's service layer. It re-exports the public functions and types from the individual service files and assembles the admin-facing operations (`subscriptions.*`, `deliveries.*`) into a single `webhooksService` object, giving controllers one stable import point.
 - `src/modules/webhooks/services/publish.ts` — Domain-event subscriber for the webhooks module. It registers one `onDomainEvent` listener per public-event target declared by any enabled module, projects each incoming domain-event payload into a public event, matches it against every enabled subscription's filter, and fans out one delivery row plus one queue message per match. It exists so that `webhooks` never imports from feature modules like `orders` or `payments`; the reverse edge is a domain event dispatched through the kernel.
+- `src/modules/webhooks/services/reencrypt.ts`
 - `src/modules/webhooks/services/subscriptions.ts` — Tenant-scoped CRUD and secret-ring management for webhook subscriptions. Handles listing, creation (with a race-safe per-tenant cap), state updates, secret rotation/removal, and deletion. The secret ring is the core abstraction: each subscription carries one or more signing secrets, and the plaintext is returned exactly once at creation or rotation time.
 - `src/modules/webhooks/services/sweep.ts` — Implements the periodic retry sweep for webhook deliveries: it finds every delivery row that is due for another attempt (including stranded `in-flight` rows whose lease has expired) and enqueues them for processing. It deliberately publishes *without* claiming a lease, so overlapping or duplicate sweeps are safe—only the worker in `attempt.ts` claims and performs the actual HTTP call.
 - `src/modules/webhooks/tests/contract/schema-drift.test.ts` — Guards against schema drift between `WebhookSubscription` and `WebhookSubscriptionCreated` in the module's local `openapi.yaml`. Because the two schemas must be written as flat, closed (`additionalProperties: false`) objects—rather than composed with `allOf`—their property lists are duplicated by hand with nothing else enforcing consistency. This test is that enforcement: it fails the moment a field is added, removed, or renamed in one schema but not the other.

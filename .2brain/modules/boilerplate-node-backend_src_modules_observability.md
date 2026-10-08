@@ -5,64 +5,64 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/observability/
-files: 33
-updated: 2026-10-01T14:28:27.155901+00:00
+files: 34
+updated: 2026-10-07T23:59:26.069123+00:00
 ---
 
 # src/modules/observability/
 
 ## Purpose
 
-The observability module is the service's single read-only window for operators, dashboards, and monitoring systems. It exposes five endpoints—health, Prometheus metrics, a JSON metrics summary, a live SSE metrics stream, and filtered audit-log queries—so that external tooling can inspect operational state without any business module coupling directly to monitoring concerns.
+The observability module is the service's single operational dashboard surface. It exposes five read-only HTTP endpoints—detailed health, a Prometheus scrape target, a JSON metrics summary, a live SSE metrics stream, and a filtered audit-log view—so that operator dashboards, monitoring scrapers, and API consumers can interrogate the process's state without coupling to any business domain.
 
 ## Key parts
 
-- **Module manifest & routing** — `module.ts` declares identity, base path, permission, and route table to the kernel registry; `routes.ts` wires each endpoint to the correct auth guard (cookie, static bearer, or admin JWT); `index.ts` is the sole public barrel other modules may import from.
-- **Services layer** (`services/`) — `health.ts` composes the full `GET /health` payload; `dependency-health.ts` folds DB/cache/queue adapter state into an `ok`/`degraded` verdict; `job-health.ts` reports crontab outcomes from the leases collection; `parked-jobs.ts` reads dead-letter queue depths from the broker; `process-snapshot.ts` gives one atomic memory/uptime read shared by all three metric consumers; `stream.ts` implements the 5-second SSE loop with periodic permission rechecks.
-- **HTTP controllers** (`controllers/`) — Thin Express handlers that delegate to the services layer. `get-observability-metrics.ts` serves the Prometheus scrape target; `get-observability-metrics-overview.ts` resolves domain counters by name from the shared prom-client registry (so deleting a domain module doesn't break this endpoint); `get-observability-audit.ts` queries the shared audit-logs collection with filters and pagination.
-- **Supporting utilities** — `metrics-scraper.ts` provides a static-bearer guard for the scrape route (Prometheus can't hold a session token); `http-readback.ts` converts raw Prometheus histogram buckets into p50/p95 for UI-facing code; `config.ts` holds module-specific configuration.
-- **API contracts** — `openapi.yaml` (OpenAPI 3.0.3) pins response schemas for the five REST endpoints; `asyncapi.yaml` (AsyncAPI 3.0.0) documents the SSE stream independently and is later merged into the repo-root contract.
-- **Tests** — Contract tests pin JSON response shapes; unit tests lock down wire-format details (e.g. ISO-8601 strings vs `Date`), security properties of the scraper guard, percentile calculation, and SSE lifecycle behavior.
+- **Controllers** (`controllers/`) — One thin Express handler per endpoint: `get-observability-health.ts`, `get-observability-metrics.ts` (Prometheus text), `get-observability-metrics-overview.ts` (JSON summary), `get-observability-events.ts` (SSE), and `get-observability-audit.ts` (paginated audit queries). Each delegates to a service and wraps results in the project's standard response helpers.
+- **Services** (`services/`) — The business logic behind those endpoints. `health.ts` composes the full health payload; `dependency-health.ts` folds adapter connection states into an ok/degraded verdict; `job-health.ts` reads crontab outcomes from the leases collection; `parked-jobs.ts` queries dead-letter depths from the broker; `process-snapshot.ts` provides an atomic memory/uptime read shared by three consumers; `stream.ts` implements the 5-second SSE push loop with permission rechecks.
+- **Cross-cutting plumbing** — `metrics-scraper.ts` (bearer-token guard for the Prometheus route), `http-readback.ts` (translates raw Prometheus histogram buckets into p50/p95 for UI-facing code), `routes.ts` (the Express router with per-route auth guards), `config.ts` (module-scoped configuration).
+- **Contracts** — `openapi.yaml` (OpenAPI 3.0.3 for the five REST endpoints) and `asyncapi.yaml` (AsyncAPI 3.0.0 for the SSE stream), both independently lintable and later merged into the repo-root contract by a bundler.
+- **Module registration** — `module.ts` declares identity, base path, permission, routes, and personal-data posture to the kernel registry. `index.ts` is the sole public barrel a sibling module may import from.
+- **Tests** (`tests/`) — A contract test pinning JSON response shapes, plus unit suites covering health fold logic, SSE wire format and lifecycle, Prometheus error-body guarantees, bearer-token edge cases, histogram percentile math, and router structure.
 
 ## How it connects
 
-- **`src/modules/audit-logs/`** — `get-observability-audit.ts` reads the shared audit-logs collection so dashboards can query historical events without importing the audit-logs module directly.
-- **`src/infrastructure/adapters/`** — `dependency-health.ts` performs a synchronous memory read of each adapter's (database, cache, queue) tracked connection state to build the readiness verdict.
-- **`src/infrastructure/http/`** — `http-readback.ts` reads the shared prom-client HTTP counters and duration histogram to produce aggregate numbers for the overview and SSE endpoints.
-- **Business modules (`account`, `cart`, `orders`, `users`)** — The metrics-overview controller resolves each domain's counters *by name* from the shared prom-client registry rather than importing them, so this module survives the deletion of any business domain.
-- **Repository root** — `asyncapi.yaml` is designed to be merged (by a bundler) into the repo-root AsyncAPI contract alongside other modules' channels.
-- **`src/` (module barrel convention)** — Per the strategic DDD convention, sibling modules import observability services exclusively through `index.ts`, never via a deep path into `./services`.
+- **Root / `src/` kernel** — The root registers `module.ts` and mounts the router at `/observability`. The module's `index.ts` barrel is the only path a sibling module may import, per the strategic DDD convention.
+- **`src/infrastructure/adapters/`** — `dependency-health.ts` reads already-tracked connection state from the database, cache, and queue adapters (synchronous memory reads, no new I/O). `parked-jobs.ts` does perform live I/O against the queue broker for dead-letter counts.
+- **`src/infrastructure/http/`** — The module's Express controllers and `metrics-scraper.ts` middleware rely on the shared HTTP layer for routing, response helpers, and the prom-client HTTP counters/duration histogram that `http-readback.ts` translates.
+- **Business modules (`account`, `cart`, `orders`, `users`)** — These register their counters and gauges into the shared prom-client registry. The observability module resolves them **by metric name** in `get-observability-metrics-overview.ts`, so it never imports a business domain directly and survives the deletion of any one of them.
+- **Audit-logs collection** — `get-observability-audit.ts` is the sole point where observability reads beyond its own process, querying a shared audit-logs collection filtered by actor, action, outcome, and time range.
 
 ## Where to start
 
-Read `routes.ts` first to see the five endpoints, their order, and which auth guard protects each one. Then read `services/health.ts` to understand how the health payload is assembled from its three sub-services (dependency, job, and parked-job health). Together they give you the module's shape: thin controllers → focused services → infrastructure adapters.
+1. **`module.ts`** — a short file that names every route, the required permission, the config keys, and the module's identity. Reading it first gives you the map of what the module promises to the rest of the service.
+2. **`services/health.ts`** — the most representative service: it shows how the module composes sub-services (dependency health, job health, process snapshot) into a single payload, and how the controller stays thin. From there, `stream.ts` and `http-readback.ts` are the natural next reads if you want to see the live-streaming and metrics-aggregation paths.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_observability["src/modules/observability/"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_account["src/modules/account/<br/>81 files"]
-    m_src_modules_audit_logs["src/modules/audit-logs/<br/>15 files"]
-    m_src_modules_cart["src/modules/cart/<br/>39 files"]
-    m_src_modules_orders["src/modules/orders/<br/>68 files"]
-    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules["src/modules/<br/>32 files"]
+    m_src_modules_account["src/modules/account/<br/>107 files"]
+    m_src_modules_cart["src/modules/cart/<br/>56 files"]
+    m_src_modules_orders["src/modules/orders/<br/>91 files"]
+    m_src_modules_users["src/modules/users/<br/>49 files"]
     m_src_modules_observability --- m_src
     m_src_modules_observability --- m_src_infrastructure
     m_src_modules_observability --- m_src_infrastructure_adapters
     m_src_modules_observability --- m_src_infrastructure_http
+    m_src_modules_observability --- m_src_modules
     m_src_modules_observability --- m_src_modules_account
-    m_src_modules_observability --- m_src_modules_audit_logs
     m_src_modules_observability --- m_src_modules_cart
     m_src_modules_observability --- m_src_modules_orders
     m_src_modules_observability --- m_src_modules_users
     style m_src_modules_observability stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_audit-logs|src/modules/audit-logs/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
 - `src/modules/observability/asyncapi.yaml` — Self-contained AsyncAPI 3.0.0 document that specifies the SSE stream served at `/observability/events`. It exists as a lintable, independently readable slice of the service's async contract; a bundler later merges its servers, channels, operations, and components into the repo-root contract.
@@ -89,6 +89,7 @@ flowchart LR
 - `src/modules/observability/tests/unit/dependency-health.test.ts` — Unit tests for the dependency-health readiness fold. Pins the mapping from each dependency's raw connection state to its semantic word (`ready`, `connecting`, `unavailable`, `disabled`) and verifies the `overallStatus` aggregation rule — specifically that `disabled` never degrades a service while `connecting` and `unavailable` always do. Exists because a contract/integration test can only assert the payload shape; this file is where the _meaning_ of each state is locked down.
 - `src/modules/observability/tests/unit/get-observability-events.test.ts` — Unit tests for the `getObservabilityEvents` Express handler. They verify that the handler does not write to the response itself (SSE owns it) and that it hands the streamer a permission-recheck closure wired to the correct key and cookie value.
 - `src/modules/observability/tests/unit/get-observability-metrics.test.ts` — Unit tests for the `GET /observability/metrics` Prometheus scrape handler. Covers the happy path (exposition body + registry content type), the failure path (500 + valid empty exposition comment), and the error-logging contract. Exists to guarantee that a collection failure still returns a body a Prometheus scraper can parse, avoiding a secondary format-error log on top of the outage.
+- `src/modules/observability/tests/unit/health-identity.test.ts`
 - `src/modules/observability/tests/unit/http-readback.test.ts` — Unit tests for the `percentileFromHistogramBuckets` helper, verifying that it correctly maps a target percentile to an upper-bound value from a list of histogram buckets.
 - `src/modules/observability/tests/unit/job-health.test.ts` — Unit tests for the `jobHealth` service that back the jobs half of `GET /observability/health`. The entire suite guards one wire-shape contract: `lastSuccessAt` must be an ISO-8601 **string** in the response, not a `Date` object. Because `JSON.stringify` produces identical output for both, the failure would be invisible to a passing contract test and only surface when a consumer reads the field directly.
 - `src/modules/observability/tests/unit/metrics-overview-shop.test.ts`

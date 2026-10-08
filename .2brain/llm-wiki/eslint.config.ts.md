@@ -1,7 +1,7 @@
 ---
 source: eslint.config.ts
-sha256: 99917fc64510a0baaf3da28d94e0d35930625c622e70152f235dc785e4bed3aa
-generated_at: 2026-10-01T12:18:40.983168+00:00
+sha256: 46097738c45e91e506f588a201a665f64ccad763d5ffabada104fdc70f11b1cc
+generated_at: 2026-10-07T23:49:02.970137+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The flat ESLint configuration for the project. It assembles the full rule set from multiple plugins (typescript-eslint, Unicorn, Jest, JSDoc, boundaries, Prettier), defines project-specific bans via `no-restricted-syntax` / `no-restricted-imports`, and delegates file-scoped overrides to `scripts/eslint/index.ts`.
+The project's flat ESLint configuration. It assembles the full lint rule set (base presets, type-checked tiers, plugin rules, and project-specific bans) into a single array consumed by `npm run lint`. It exists so that type-aware linting, house-style conventions, and architectural guardrails (e.g. no double-casts, no `process.env` writes in tests, no `factories.ts` imports in production) are enforced uniformly across all source files.
 
 ## Key elements
 
-- **`bannedDoubleCasts`** — two `no-restricted-syntax` selectors that forbid `as unknown as T` and `as any as T`. Must be re-spread in every config block that touches `no-restricted-syntax` (that rule does not merge across blocks).
-- **`bannedTryCatch`** — a `TryStatement` selector restricting production try/catch to narrow, justified spots. Same re-spread requirement.
-- **`factoriesImportPattern`** — a `no-restricted-imports` regex banning `./factories`, `../factories`, and `@modules/<name>/factories` in production code.
-- **`globalIgnores([...])`** — excludes foreign-runtime files (k6, mongosh), generated output (`api/`, `asyncapi.generated.ts`), build artifacts, `tmp/`, `.claude/` worktrees, and `node_modules`/`dist`.
-- **`tseslint.configs.strictTypeChecked` + `stylisticTypeChecked`** — enables type-aware rules (`no-floating-promises`, `no-unnecessary-condition`, etc.) across the codebase.
-- **Unicorn rule overrides** — ~40 rules explicitly set to `'off'` with inline rationale (conflicts with house style, deliberate test patterns, or opinion with no underlying bug).
-- **`localRules` (from `./scripts/eslint`)** — imported and spread into the final config array; provides per-directory scoped blocks (tool configs, `src/modules/**`, `scripts/ops/**`) that re-apply the banned-syntax/import constants for their respective `no-restricted-*` entries.
-- **Default export** — `tseslint.config(...)` producing the flat config array consumed by ESLint.
+- **`bannedDoubleCasts`** — `no-restricted-syntax` selectors banning `as unknown as T` and `as any as T`; must be re-spread into every config block that sets `no-restricted-syntax` (see Notes).
+- **`bannedEnvironmentWrites`** — `no-restricted-syntax` selectors banning assignment, `delete`, and `Object.assign` onto `process.env` in tests; directs developers to `tests/support/environment.ts` helpers instead.
+- **`bannedTryCatch`** — `no-restricted-syntax` selector banning `TryStatement` in production code, with an opt-out escape hatch via inline `eslint-disable`.
+- **`factoriesImportPattern`** — `no-restricted-imports` regex matching any import path ending in `factories`; prevents production code from importing test-only builder modules.
+- **`globalIgnores([...])`** — Excludes generated output (`api/`, `dist/`, `tmp/`), foreign-runtime files (k6, mongosh, Docker build scripts), and tooling working directories (`.claude/`, `.dev/`, `.prism/`) from linting.
+- **`tseslint.configs.strictTypeChecked` / `stylisticTypeChecked`** — Enables the type-aware rule tiers that power `no-floating-promises`, `no-unnecessary-condition`, etc.
+- **`pluginUnicorn.configs['flat/recommended']`** plus a large block of rules explicitly set to `'off'` (contradictions, deliberate choices, and opinion-level rules).
+- **`localRules` (imported from `./scripts/eslint`)** — Project-specific custom rules/plugins spread into the config.
+- **`export default tseslint.config(...)`** — The assembled flat-config array; `tseslint.config` only types and flattens the arguments.
 
 ## Relationships
 
-- **`scripts/eslint/index.ts`** — the sole non-npm import in this file. It exports the `localRules` array that is spread into the final config. That module contains the directory-scoped blocks (tool-config files, `src/modules/**`, `scripts/ops/**`) which must re-spread `bannedDoubleCasts`, `bannedTryCatch`, and `factoriesImportPattern` because `no-restricted-syntax` / `no-restricted-imports` replace rather than merge across config blocks.
+- **`scripts/eslint/index.ts`** — Imported as `localRules`; provides custom ESLint rules or shared rule fragments that are spread into the main config array. It is the single source for project-specific lint logic beyond the constants defined locally in this file.
 
 ## Notes
 
-- **`no-restricted-syntax` and `no-restricted-imports` do not merge across flat-config blocks.** The nearest matching block's list *replaces* the outer one. Any new block that configures those rules must explicitly spread the shared constants or the ban silently lifts for the files that block covers.
-- **Unicorn 76 migration:** the large block of `'off'` rules was added when adopting Unicorn 76 (~190 new recommended rules). The three groups (conflicts, deliberate, opinion) and their rationale are documented inline—do not re-enable without re-reading those comments.
-- **`globalIgnores` vs. scoped blocks:** tool configs and CLI scripts are *not* ignored; they are linted through dedicated scoped blocks in `scripts/eslint/index.ts` that disable `parserOptions.project` (type-aware parsing) for just those files.
-- **`tmp/` exclusion:** critical for Stryker mutation testing and Jest in-memory Mongo; without it, lint fails on sandbox copies that live outside the `tsconfig` project.
+- **`no-restricted-syntax` does not merge across config blocks.** The nearest matching block *replaces* the entire list rather than appending. Every scoped block that configures this rule must re-spread `bannedDoubleCasts`, `bannedEnvironmentWrites`, or `bannedTryCatch`, or the ban silently lifts for exactly the files that block covers.
+- **`no-restricted-imports` follows the same non-merging semantics.** The `factoriesImportPattern` entry must be re-included in every block that sets that rule for production files.
+- **Ignore list is intentionally narrow.** The bar for adding an entry is "linting is impossible or meaningless" (foreign runtime, generated output, tooling sandbox), not merely "inconvenient." Tool configs and CLI scripts that live outside `tsconfig` are linted via scoped blocks that disable the type-aware program, not by ignoring them.
+- **Prettier's off-switch (`eslint-config-prettier`) is placed last** in the array to ensure it overrides any conflicting formatting rules from plugins listed earlier.
+- **Unicorn 76 off-list is exhaustive by design.** Any rule not listed either passes as-is or was fixed at adoption time; adding new off-rules should be accompanied by a justification matching one of the three documented categories (contradiction, deliberate, opinion).

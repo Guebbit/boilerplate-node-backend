@@ -1,7 +1,7 @@
 ---
 source: docker/mongo-init.js
-sha256: 3c0966cd48d59d8ecc8a9b323b7718d55a827e5e59f1ced3512c83b8d69b49db
-generated_at: 2026-09-23T17:12:35.425659+00:00
+sha256: e98b9f7beb50d65bac2e5216a7d413cde39f726c61b15b400bb096848426367d
+generated_at: 2026-10-07T23:47:56.173609+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,19 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A one-shot MongoDB bootstrap script executed automatically by the official `mongo` image on first container start (via `docker-entrypoint-initdb.d`). It creates a least-privilege `readWrite` user scoped to the application database, so the app authenticates as itself rather than as the instance root account.
+One-shot MongoDB initialization script (executed by the official MongoDB image via `docker-entrypoint-initdb.d`) that creates an application-scoped `readWrite` user on a **fresh, empty** data volume. It exists so the app authenticates as a least-privilege role rather than as the instance's root account, limiting the blast radius of a leaked connection string.
 
 ## Key elements
 
-- **`db.getSiblingDB(process.env.MONGO_INITDB_DATABASE)`** — Switches the shell context from `admin` (the default `mongosh` DB during init) to the app database named by the `MONGO_INITDB_DATABASE` env var.
-- **`db.createUser(...)`** — Creates a user (`MONGO_APP_USER` / `MONGO_APP_PASSWORD`) with a single `readWrite` role limited to that same database. No `root`, no cross-DB privileges.
+- **`appPassword` (const)** — Read from the file path in `process.env.MONGO_APP_PASSWORD_FILE` via mongosh's `require('fs').readFileSync`. Shared with the application by mounting the same secret file.
+- **`db.getSiblingDB(process.env.MONGO_INITDB_DATABASE)`** — Switches the shell's current database to the app's database (the shell starts on `test`).
+- **`db.createUser({ user, pwd, roles })`** — Creates the user named by `MONGO_APP_USER` with a single `readWrite` role scoped to `MONGO_INITDB_DATABASE`. No admin or cross-database privileges are granted.
 
 ## Relationships
 
-No graph neighbors. This file is a standalone, one-time-executed script with no imports or exports; it is invoked implicitly by the MongoDB container entrypoint.
+No graph neighbors. This script is a leaf in the dependency graph: it is invoked by the MongoDB image's entrypoint, not by any application code.
 
 ## Notes
 
-- **First-run only.** The script runs exclusively against an empty data directory. Changing `MONGO_APP_PASSWORD` later has no effect on an existing volume; you must either delete the volume or update the password manually via `mongosh`.
-- **Env vars required at first boot:** `MONGO_INITDB_DATABASE`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD`. (The image also expects `MONGO_INITDB_ROOT_USERNAME` / `MONGO_INITDB_ROOT_PASSWORD` for the initial root account, but those are not referenced in this file.)
-- The script relies on the convention that `mongosh` is already authenticated as the root user when `docker-entrypoint-initdb.d` scripts run.
+- **Runs only on an empty data directory.** Changing the password file later does **not** re-run this script against an existing volume. To re-initialize, delete the volume; to change the password on a live volume, do it manually in `mongosh`.
+- The script relies on mongosh-specific globals (`require`, `db`) — it is not plain Node.js.
+- The official image's built-in `_FILE` mechanism covers only `MONGO_INITDB_ROOT_*`; this script reads its own `_FILE` for the app password, hence the manual `readFileSync`.
+- All three env vars (`MONGO_APP_USER`, `MONGO_APP_PASSWORD_FILE`, `MONGO_INITDB_DATABASE`) must be set in the container environment before the image starts, or the script will fail.

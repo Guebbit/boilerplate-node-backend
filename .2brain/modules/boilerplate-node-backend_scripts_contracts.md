@@ -5,55 +5,58 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: scripts/contracts/
-files: 16
-updated: 2026-10-01T14:24:24.004807+00:00
+files: 18
+updated: 2026-10-07T23:53:26.155175+00:00
 ---
 
 # scripts/contracts/
 
 ## Purpose
 
-`scripts/contracts/` is the build, validation, and code-generation pipeline for the repo's published API contracts. It takes per-module source fragments (one OpenAPI file, one AsyncAPI file, one authorization fragment per module) and assembles them into the committed bundles at the repo root, runs CI gates against those bundles, and emits the TypeScript types the application code imports. All downstream tooling—Spectral, Orval, Prism, the 415 guard middleware, and the paired frontend—consumes the artifacts this module produces.
+`scripts/contracts/` is the build, validation, and code-generation pipeline for the repository's API contracts. It assembles per-module OpenAPI and AsyncAPI fragments into the committed bundle documents (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`, `shared/authorization-keys.yaml`), generates the TypeScript type modules that runtime code imports, and provides the CI gates that enforce contract stability across pull requests.
 
 ## Key parts
 
-- **Bundle assembly** — `build-bundles.ts` is the CLI entry (`npm run contracts:bundle`). It iterates the `bundle-registry.ts` list, invoking each bundle's builder: `openapi-bundle.ts` (shells out to `redocly bundle`, then applies cross-cutting post-passes), `asyncapi-bundles.ts` (shallow-merges per-section AsyncAPI docs into public and internal bundles), and `authorization-bundle.ts` (text-splices per-module `authorization.yaml` fragments into the shared file). `root-assembly.ts` keeps the root OpenAPI document's `$ref` list in sync with folders on disk; `section-order.ts` keeps display order stable across edits.
-- **Bundle contracts & registry** — `bundle-kinds.ts` defines the `ContractBundle` interface (compiled vs. generated distinction, read/compare primitives) and `bundle-registry.ts` is the single list every tool iterates, so a new contract is one entry plus its spec file.
-- **Code generation from contracts** — `generate-asyncapi-types.ts` emits `src/types/asyncapi.generated.ts`; `generate-error-codes.ts` emits the `ERROR_CODES` const + union; `generate-permission-actions.ts` + `permission-actions-render.ts` (pure renderer, no I/O) emit the shared permission-action module; `generate-request-content-types.ts` emits the map the 415 guard middleware reads.
-- **Validation & CI gates** — `validate-asyncapi.ts` is a lightweight drop-in for the retired `asyncapi validate` CLI. `check-asyncapi-breaking.ts` diffs the public AsyncAPI bundle against a base ref to block breaking webhook changes.
-- **Client collections** — `client-collections-bundle.ts` supplies repo-specific config (path-to-module ownership, seed values, rejection probes) to `@guebbit/openapi-runnable-collections`, producing Bruno/Insomnia/Mockoon/Postman files on demand.
+- **Bundle building** – `build-bundles.ts` is the CLI entry point (`npm run contracts:bundle`). It iterates the central list in `bundle-registry.ts`, using the shared type/helpers in `bundle-kinds.ts`. `openapi-bundle.ts` compiles the REST spec via `redocly bundle` and post-processes responses, headers, and error codes; `asyncapi-bundles.ts` merges the event documents into the public and internal AsyncAPI bundles; `root-assembly.ts` keeps the root OpenAPI document's `$ref`/tag list in sync with modules on disk; `section-order.ts` pins a stable display order so diffs stay minimal.
+- **Authorization key bundling** – `authorization-bundle.ts` splices one fragment per module plus the `core` fragment into `shared/authorization-keys.yaml`, guaranteeing a module's keys disappear when its folder is removed.
+- **TypeScript code generation** – `generate-asyncapi-types.ts` emits `src/types/asyncapi.generated.ts` (payload interfaces, channel namespaces, Zod validators); `generate-error-codes.ts` produces the `ERROR_CODES` const object from the OpenAPI `x-error-codes` extension; `generate-permission-actions.ts` (with the pure renderer `permission-actions-render.ts`) turns the authorization YAML's `actions:` block into a shared string-union module; `generate-request-content-types.ts` maps operations to accepted media types for the 415 guard middleware.
+- **Validation & CI gates** – `check-asyncapi-breaking.ts` (and its helper `asyncapi-breaking.ts`) fails a PR when the public AsyncAPI bundle narrows a subscriber-facing surface; `validate-asyncapi.ts` is a lightweight drop-in for `asyncapi validate`.
+- **Client collections** – `client-collections-bundle.ts` supplies repo-specific metadata (path-to-module ownership, seed bodies, rejection probes) so Bruno, Insomnia, Mockoon, and Postman collections can be regenerated on demand.
+- **Shared utility** – `generated-file.ts` provides the common "write a generated file with a header comment" helper used by every generator above.
 
 ## How it connects
 
-- **Repository root** — All committed bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`, `shared/authorization-keys.yaml`) and the optional client-collection files are written to the repo root. The `npm run` scripts that invoke this module are defined in the root `package.json`.
-- **`scripts/`** — This directory lives under `scripts/`; the parent's `package.json` declares the `contracts:bundle`, `authorization:bundle`, and related npm scripts that dispatch into this module's entry points.
-- **`src/modules/webhooks/`** — The webhooks module contributes its own `openapi.yaml`, AsyncAPI section document, and `authorization.yaml` fragment, which this module reads, bundles, and validates. The `check-asyncapi-breaking.ts` gate exists specifically to protect the public contract surface that the webhooks module exposes to subscribers.
-- **`src/infrastructure/adapters/`** — Generated artifacts (AsyncAPI payload types, error-code constants, content-type maps) are consumed by infrastructure adapters at runtime; this module is the producer side of that contract.
-- **`scenarios/`** — Scenario test suites consume the committed `openapi.yaml` / `asyncapi.public.yaml` bundles at the repo root; they are downstream readers of this module's output rather than inputs to its build.
+- **Repository root** – This module is the sole writer of the root-level contract bundles (`openapi.yaml`, `asyncapi.yaml`, `asyncapi.public.yaml`) and `shared/authorization-keys.yaml`, and it emits the TypeScript files under `src/types/` that the rest of the codebase imports.
+- **`src/modules/account/`, `src/modules/webhooks/`** (and every other module) – Each module directory holds the source fragments (`openapi.yaml`, `asyncapi.yaml`, `authorization.yaml`) that this module reads. Adding or removing a module folder is the only change needed; the bundles and generated types follow automatically.
+- **`src/infrastructure/adapters/`** – Adapters consume the generated artifacts: the AsyncAPI type module for event payload shapes, the request-content-type map for the 415 guard, and the permission-actions union for authorization checks.
+- **`scripts/`** – This directory is the contracts sub-tree of the broader `scripts/` collection; sibling scripts (lint, test, deploy) are independent, but CI orchestration typically invokes `npm run contracts:bundle` and the breaking-change check before running them.
+- **`scenarios/`** – The client-collection emitters reference the repo's scenario files to supply realistic seed request bodies and rejection probes, tying the collections to the same behavioural examples used in integration tests.
 
 ## Where to start
 
-1. **`bundle-registry.ts`** — a short file that names every contract bundle, its kind (compiled/generated), and its build entry. Reading it first gives you the full inventory of what this module produces and where each one lands.
-2. **`openapi-bundle.ts`** — the most complex builder and the one that touches the most cross-cutting logic (post-bundle passes, section discovery, module stamps). Understanding its flow makes the simpler AsyncAPI and authorization bundles read almost trivially.
+Read `bundle-registry.ts` first — it is the one-line-per-bundle list that tells you exactly which documents exist, where their source fragments live, and which generator builds each one. Then open `build-bundles.ts` to see the ~30-line CLI that wires the registry, the staleness check, and the individual bundle builders together. Together they give you the full map before you dive into any single generator.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_scripts_contracts["scripts/contracts/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_scripts["scripts/<br/>67 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_modules_webhooks["src/modules/webhooks/<br/>49 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_scripts["scripts/<br/>66 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_modules_account["src/modules/account/<br/>107 files"]
+    m_src_modules_webhooks["src/modules/webhooks/<br/>50 files"]
     m_scripts_contracts --- m_scenarios
     m_scripts_contracts --- m_scripts
     m_scripts_contracts --- m_src_infrastructure_adapters
+    m_scripts_contracts --- m_src_modules_account
     m_scripts_contracts --- m_src_modules_webhooks
     style m_scripts_contracts stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules_webhooks|src/modules/webhooks/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts|scripts/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_modules_account|src/modules/account/]] · [[boilerplate-node-backend_src_modules_webhooks|src/modules/webhooks/]]
 
 ## Files
+- `scripts/contracts/asyncapi-breaking.ts`
 - `scripts/contracts/asyncapi-bundles.ts` — Merges one AsyncAPI document per section into two committed bundles: `asyncapi.yaml` (every channel the service has) and `asyncapi.public.yaml` (only channels an API client can reach). The split is driven by a per-section `scope` convention (top-level `asyncapi.yaml` = public, `asyncapi.internal.yaml` = backend-only), so both bundles come from the same source documents and can never disagree. This file performs a shallow copy of five known maps into a root skeleton document, deliberately avoiding `asyncapi bundle`'s `$ref` dereferencing to keep refs intact for the downstream type generator.
 - `scripts/contracts/authorization-bundle.ts` — Assembles the committed `shared/authorization-keys.yaml` by text-splicing a root residual file with one fragment per module (`src/modules/<name>/authorization.yaml`) plus the app-level `core` fragment. Replaces the earlier pattern where permission-key definitions lived centrally *and* were hand-listed in each module's manifest; the fragment itself is now the single source of truth, and the bundle guarantees a module's keys vanish when its folder does. Runs via `npm run authorization:bundle`; supports `--check` for CI staleness detection.
 - `scripts/contracts/build-bundles.ts` — CLI entry point (`npm run contracts:bundle`) that rebuilds the repo's published API contract bundles from their source fragments. Fragments are the source of truth; the resulting `openapi.yaml`, `asyncapi.yaml`, and `asyncapi.public.yaml` are what downstream tools (spectral, orval, Prism, `check:spec-identity`) consume. Supports a `--check` mode that asserts freshness without writing, and name-based selection to narrow the run.
@@ -65,6 +68,7 @@ flowchart LR
 - `scripts/contracts/generate-error-codes.ts` — Generates a TypeScript `error-codes.ts` module (a `const` object + union type) from the `x-error-codes` extension in the shared `openapi.yaml`. It exists so call sites can reference `ERROR_CODES.CART_EMPTY` instead of retyping raw strings, while the contract itself keeps `errors[].code` as an open `string` (CT-D5 / Zalando guideline #112) so adding a code is never a breaking change.
 - `scripts/contracts/generate-permission-actions.ts` — CLI script that turns the `actions:` block of an `authorization-keys.yaml` document into a TypeScript module (a runtime string array plus a derived union type). It exists so both repos in the paired frontend/backend setup can generate an identical `permission-actions` module from the same logical YAML source.
 - `scripts/contracts/generate-request-content-types.ts` — Generates a TypeScript export (`REQUEST_CONTENT_TYPES`) mapping each OpenAPI operation that declares a `requestBody` to its accepted media types. The output feeds the 415 content-type guard middleware so that request bodies with undeclared types are rejected rather than silently parsed as empty objects. Backend-only; the frontend has no server to guard.
+- `scripts/contracts/generated-file.ts`
 - `scripts/contracts/openapi-bundle.ts` — Compiles the REST OpenAPI contract from one standalone `openapi.yaml` per module (plus a shared root document) into the single `openapi.yaml` committed at the repo root. It shells out to `redocly bundle`, then runs four post-bundle passes that merge cross-cutting responses, versioning headers, module stamps, and an error-code catalogue into every operation. It also exposes the section/path discovery helpers that other contract tooling (client collections, CI checks) rely on to answer "which module owns which URL?" without re-parsing.
 - `scripts/contracts/permission-actions-render.ts` — Pure (filesystem-free) half of the permission-action generator. It validates the `actions:` list out of the shared authorization YAML document and renders the TypeScript source (a const array plus a derived union type) that carries those actions into consuming code. Keeping I/O out of this file lets unit tests exercise the logic without touching disk.
 - `scripts/contracts/root-assembly.ts` — Reconciles the root OpenAPI document (`shared/contracts/openapi.root.yaml`) with the module fragments that exist on disk, so that adding or removing a module requires no manual edit outside that module's folder. It prunes stale `$ref` entries, appends new path refs and tags, and returns the corrected YAML text ready for `redocly bundle`.

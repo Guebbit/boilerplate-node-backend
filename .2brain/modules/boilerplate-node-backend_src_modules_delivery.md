@@ -6,53 +6,52 @@ tags:
 type: module
 module: src/modules/delivery/
 files: 27
-updated: 2026-10-01T14:27:14.186311+00:00
+updated: 2026-10-07T23:57:23.163518+00:00
 ---
 
 # src/modules/delivery/
 
 ## Purpose
 
-The delivery module owns the physical-parcel lifecycle and shipping-rate pricing. It drives the four order status transitions that move a paid order through fulfilment (`paid → processing → shipped → delivered`), provides a digital-only shortcut for non-physical goods, exposes the public shipping-method catalogue used at checkout, and emits the customer-facing "your parcel has shipped" email. All persistence, HTTP wiring, and domain rules live behind a single public barrel so sibling modules never reach into internal files.
+The delivery module owns the post-payment shipment lifecycle: transitioning an order from `paid` through `processing`, `shipped`, and finally `delivered` (or, for digital-only orders, straight to `delivered`). It provides the shipping-method catalogue used at checkout, tracks the single parcel record per order, and emits the customer-facing "your item has shipped" notification.
 
 ## Key parts
 
-- **HTTP surface** — `routes.ts` wires the six endpoints (public method catalogue, per-order shipment read, and four staff-scoped write transitions). Each endpoint maps to a thin controller in `controllers/` that validates the request and delegates to the service. `openapi.yaml` is the shared contract that the UI, API consumers, and contract tests all agree on.
-- **Service & domain** — `service.ts` orchestrates the status doors and owns the shipping-method list logic. `domain/rates.ts` is a pure, side-effect-free pricing table (three methods, free-above-threshold rule) that every consumer imports for quotes. `domain/index.ts` re-exports just the rates API so the domain layer stays independently importable.
-- **Persistence** — `model.ts` defines the Mongoose `Shipment` schema (one document per order, unique `orderId` index). `repository.ts` adds the domain-specific lookups: idempotent creation, batch retrieval, and the atomic conditional status transition.
-- **Module wiring** — `module.ts` is the manifest the kernel registers (identity, routes, permission keys, locale path). `index.ts` is the **only** public import surface. `audit.ts` declares the four audit-action constants and registers them into the global `AuditActionMap`. `emails.ts` resolves locale-specific `EmailContent` objects for the shipped-notification.
-- **Tests** — `tests/unit/` covers pure logic (rates, schema shape, route guards, email rendering). `tests/integration/service.test.ts` exercises the full shipment lifecycle against a real Mongo instance. `tests/contract/` pins every route's wire-level shape and auth audience.
+- **HTTP layer** — `routes.ts` wires the six endpoints with per-route auth guards; `controllers/` holds one thin handler per endpoint (start, ship, deliver, fulfill, get-by-order, get-methods). `openapi.yaml` is the machine-readable contract all of them must satisfy.
+- **Service** — `service.ts` orchestrates the three status doors and delegates every order-status write to the `orders` module. It also exposes the shipping-method list and the forced-override permission gate.
+- **Domain** — `domain/rates.ts` is a pure, side-effect-free pricing table (three methods, flat-rate and free-above-threshold tiers) importable without pulling in any HTTP or service code.
+- **Persistence** — `model.ts` defines the Mongoose `Shipment` schema (one doc per order, unique `orderId`); `repository.ts` adds the domain-specific queries (idempotent create, atomic conditional status update, batch lookup).
+- **Emails** — `emails.ts` resolves locale-specific, fully-translated `EmailContent` for the shipment notification, decoupled from the template engine.
+- **Wiring & public surface** — `module.ts` is the `AppModule` manifest (routes, permissions, locale path); `index.ts` is the **only** barrel sibling modules may import (DDD boundary rule); `audit.ts` registers the four delivery audit-action strings into the global `AuditActionMap`.
+- **Tests** — `tests/` splits into contract (wire-level spec compliance), integration (real Mongo, cross-module status transitions), and unit (pure rates, email rendering, schema shape, route table, property-based invariants).
 
 ## How it connects
 
-- **`src/modules/orders/` & `src/modules/orders/services/`** — The delivery service never mutates order status directly; after writing (or confirming) a shipment record it delegates every `paid→processing`, `processing→shipped`, and `shipped→delivered` transition to the orders service, which owns the canonical order state machine.
-- **`src/modules/cart/`** — Cart's checkout calls the delivery domain's `rates.ts` through the public barrel to compute a shipping quote for the user before an order is even placed.
-- **`src/modules/products/`** — Product data (weight, dimensions) feeds the rates logic so the three-method table can price per-item or per-order totals.
-- **`src/modules/returns/`** — Return flows reference the same shipment/parcel record (tracking code, carrier) to coordinate reverse logistics.
-- **`src/modules/users/`** — The delivery module collects personal data (shipping address) and addresses the shipped-notification email to the user's preferred locale, pulling that preference from the users domain.
-- **`src/infrastructure/`** (including `adapters/` and `http/`) — Provides the shared Express app, Mongoose connection, mailer adapter, and logger that the delivery module consumes rather than re-implements.
-- **`scenarios/`** — End-to-end scenario tests drive the delivery endpoints in sequence to verify the full `paid → delivered` journey across modules.
+- **`src/modules/orders/`** — The delivery service never mutates order status itself; it calls the orders module for every transition (`paid→processing`, `processing→shipped`, `shipped→delivered`, `processing→delivered`). This keeps the single source of truth for order state in one place.
+- **`src/modules/cart/`** — Cart's checkout step imports the shipping-method catalogue and pricing functions through delivery's public `index.ts` barrel to show costs before purchase.
+- **`src/infrastructure/`** — Shared HTTP utilities, the audit-event emitter, and the mail-transport adapter are consumed here; `audit.ts` plugs delivery's action strings into the global observability map.
+- **`src/modules/users/`** — Customer address and locale data (used for email personalisation and shipping-cost lookups) originate in the users module and flow into delivery's email builder.
+- **`scenarios/`** — End-to-end scenario tests exercise the delivery endpoints as part of full purchase-to-delivery flows.
 
 ## Where to start
 
-1. **`domain/rates.ts`** — Twelve lines of pure functions over a static table. No imports, no DB, no HTTP. Read it first to understand the pricing vocabulary (`ShippingMethod`, `quoteFor`) that every other file builds on.
-2. **`service.ts`** — The orchestration core. Once you know the rate vocabulary, this file shows the three status doors, how the repository is called, and exactly where control is handed off to the orders module for each transition.
+1. **`domain/rates.ts`** — A short, dependency-free file that shows the three shipping methods and the pricing logic. Reading it first gives you the core business rule without any framework noise.
+2. **`service.ts`** — The orchestration heart of the module: you'll see how each status door writes the parcel record, calls the orders module, triggers the email, and emits an audit event. Everything else in the directory is a thinner layer around these functions.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_delivery["src/modules/delivery/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_cart["src/modules/cart/<br/>39 files"]
-    m_src_modules_orders["src/modules/orders/<br/>68 files"]
-    m_src_modules_orders_services["src/modules/orders/services/<br/>14 files"]
-    m_src_modules_products["src/modules/products/<br/>51 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules_cart["src/modules/cart/<br/>56 files"]
+    m_src_modules_orders["src/modules/orders/<br/>91 files"]
+    m_src_modules_products["src/modules/products/<br/>57 files"]
     m_src_modules_returns["src/modules/returns/<br/>40 files"]
-    m_src_modules_users["src/modules/users/<br/>48 files"]
+    m_src_modules_users["src/modules/users/<br/>49 files"]
     m_src_modules_delivery --- m_scenarios
     m_src_modules_delivery --- m_src
     m_src_modules_delivery --- m_src_infrastructure
@@ -60,18 +59,16 @@ flowchart LR
     m_src_modules_delivery --- m_src_infrastructure_http
     m_src_modules_delivery --- m_src_modules_cart
     m_src_modules_delivery --- m_src_modules_orders
-    m_src_modules_delivery --- m_src_modules_orders_services
     m_src_modules_delivery --- m_src_modules_products
     m_src_modules_delivery --- m_src_modules_returns
     m_src_modules_delivery --- m_src_modules_users
     style m_src_modules_delivery stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]]
 
 ## Files
 - `src/modules/delivery/audit.ts` — Declares the four audit-action string constants that the delivery domain emits and registers them into the shared `AuditActionMap` interface via TypeScript module augmentation. This keeps the audit vocabulary colocated with the domain that produces it while remaining visible to the global observability infrastructure.
-- `src/modules/delivery/config.ts`
 - `src/modules/delivery/controllers/get-shipment-by-order.ts` — Controller for `GET /delivery/order/:orderId`. Returns the parcel associated with a given order — its tracking code and arrival status — consumed by the order page's shipping panel once the order status is `shipped`.
 - `src/modules/delivery/controllers/get-shipping-methods.ts` — Express route handler for `GET /delivery/methods`. Returns the shop's full list of available shipping methods (flat rates and free-above-threshold tiers). It is intentionally public so that guests can see shipping costs before signing up.
 - `src/modules/delivery/controllers/post-deliver-order.ts` — HTTP controller for `POST /delivery/order/:orderId/deliver`. Validates the request body against a Zod schema, then delegates to the delivery service to record a parcel's arrival — the sole transition that moves an order from `shipped` to `delivered`.
@@ -92,6 +89,7 @@ flowchart LR
 - `src/modules/delivery/tests/contract/api.contract.test.ts` — Contract tests for the five `/delivery` HTTP routes across three authentication audiences (public, owner, staff). Each test asserts the response satisfies the API spec (`toSatisfyApiSpec`) and pins the correct status code and audience-level access. Business-logic rules are intentionally left to unit and integration suites; this file only verifies the wire-level contract is reachable and well-formed.
 - `src/modules/delivery/tests/integration/service.test.ts` — Integration tests for the delivery module covering two concerns: the rates domain (pricing rules and method metadata) and the shipment lifecycle service (`recordShipment`, `recordDelivery`, `getForOrder`). Runs against a real Mongo instance (`setupTestDb`) so that repository writes and cross-module order-status transitions are exercised end-to-end; only the mailer and (in one case) the logger are mocked.
 - `src/modules/delivery/tests/unit/emails.test.ts` — Unit test for the `shipmentShippedEmail` builder. It verifies that the dispatch email renders correctly: the tracking code is interpolated (never left as a raw `{{…}}` token), the customer's name appears in the greeting, every copy slot is resolved to real text rather than an i18n key, and locale selection drives actual translation differences.
+- `src/modules/delivery/tests/unit/export-shipment-contract.test.ts`
 - `src/modules/delivery/tests/unit/rates.property.test.ts` — Property-based tests (via `fast-check`) for the shipping-rate domain module. Where `rates.test.ts` pins three fixed points around the free-shipping threshold, this file checks invariants across _all_ valid item totals, using a fixed seed so any counterexample is reproducible and can be promoted back to a concrete example in the fixed-point suite.
 - `src/modules/delivery/tests/unit/rates.test.ts` — Unit tests for the pure-function pricing and weight logic in the delivery domain. The file header explicitly separates these from the integration-level `service.test.ts` (which requires a database): here there are no mocks, no DB — only assertions over a static table and three small functions.
 - `src/modules/delivery/tests/unit/return-address.test.ts`

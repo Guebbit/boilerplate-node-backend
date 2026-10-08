@@ -1,36 +1,46 @@
 ---
-generated_at: 2026-10-01T14:23:06.096301+00:00
+generated_at: 2026-10-07T23:52:03.159314+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # Repository Overview
 
-## What this repository is
+## What This Is
 
-A TypeScript (Node.js) backend platform with a modular, domain-driven architecture. It exposes both a REST API (`openapi.yaml`, client generated via Orval) and an event/webhook surface (`asyncapi.yaml` / `asyncapi.public.yaml`). Evidence points to a multi-tenant shop/e-commerce management system: domain modules include users, shop modules, products, accounts, addresses, webhooks, rate limiting, and scheduled jobs (supercronic). Persistence is MongoDB. The project follows **Strategic Domain-Driven Design** (see `docs/theory/strategic-ddd.md`).
+A TypeScript/Node.js multi-tenant platform (evidenced by shop, product, account, and application domains) built with MongoDB, Docker, and an event-driven messaging layer. It follows a Domain-Driven Design (strategic DDD) structure with explicit infrastructure and module boundaries.
 
-## Main areas and how they relate
+## Architecture at a Glance
 
-| Area | Path / Files | Role |
-|---|---|---|
-| **Domain modules** | `src/modules/**` (e.g. `users`, webhooks, shop-modules, …) | Bounded contexts. Each owns its entities, services, and controllers. |
-| **Infrastructure** | `src/infrastructure/{http, i18n, adapters, …}` | Cross-cutting concerns: HTTP controller/request/response pipeline, i18n context, logger, and adapters. Widely imported (100+ dependents each). |
-| **Shared types** | `src/types/index.ts`, `src/types/auth-context.ts` | Central type contracts; `types/index.ts` connects to ~307 files and is the single most-connected source file. |
-| **Scenarios & flows** | `scenarios/` | Local dev server, DB seeding, product/account data fillers, business-flow scripts (actions, backdate, shop-history, loopback), and rate-limit helpers. |
-| **Testing** | `tests/`, `jest.config.*.js`, `docs/reference/tests.md` | Jest unit/integration suites, a cluster config, and a mutation-testing setup (`jest.config.mutation.js`, `docs/tools/mutation-testing.md`). |
-| **API contracts** | `openapi.yaml`, `asyncapi.yaml`, `orval.config.ts`, `docs/api/` | Source-of-truth specs; Orval generates the typed client. |
-| **Deployment & observability** | `docker-compose*.yml`, `docker/`, `docker/observability/` | Multi-service Docker stacks (app, Mongo replica-set, proxy). Full observability: OpenTelemetry Collector → Prometheus + Alertmanager (metrics), Loki + Promtail (logs), Tempo (traces), Grafana dashboards, Umami (product analytics). |
-| **Docs & AI guidance** | `docs/` (VitePress site), `CLAUDE.md`, `README.md`, `SECURITY.md` | Project documentation, AI-assistant instructions, and security policy. |
+| Layer | Key evidence |
+|---|---|
+| **Domain modules** | `src/modules/*` (e.g. `users`); documented in `docs/theory/strategic-ddd.md` |
+| **Infrastructure** | `src/infrastructure/http/` (controller, request, response), `src/infrastructure/i18n/`, `src/infrastructure/adapters/` |
+| **Shared types** | `src/types/index.ts` (fan-out to 363 files) |
+| **API contracts** | `openapi.yaml` (REST), `asyncapi.yaml` / `asyncapi.public.yaml` (events), `orval.config.ts` (client generation) |
+| **Messaging / jobs** | `jest.config.broker.js`, SuperCronic installer (`docker/install-supercronic.mjs`) |
+| **Observability** | Prometheus, Grafana, Loki, Tempo, OpenTelemetry, Alertmanager, Umami (all under `docker/observability/`) |
+| **Deployment** | `docker-compose.yml` (dev), `docker-compose.production.yml`, `docker-compose.proxy.yml`, `docker-compose.test.yml` |
 
-**Relationship:** Domain modules depend on shared types and infrastructure layers; they never import each other directly. Scenarios orchestrate multiple modules for local runs and seeding. Contract files (`openapi`/`asyncapi`) are the external interface; Orval and the scenario scripts are the internal consumers.
+## Main Areas and How They Relate
 
-## Where to start reading
+1. **`src/modules/`** – Bounded domain modules (users, products, shops, applications, …). Each module owns its business logic and exposes use cases to the HTTP/event layers.
+2. **`src/infrastructure/`** – Cross-cutting concerns: HTTP transport, i18n, logging adapters. Modules depend on these; infrastructure does not depend on modules.
+3. **`src/types/`** – Shared TypeScript contracts; the single largest fan-out node in the graph.
+4. **`scenarios/`** – End-to-end test fixtures and flow definitions (accounts, products, shops, backdating, rate-limits, jobs). Consumed by the Jest suite.
+5. **`tests/`** – Test harness (`setup-test-db.ts`, `environment.ts`) plus mutation-testing config (`jest.config.mutation.js`).
+6. **`docker/` + `docker/observability/`** – Containerised runtime (MongoDB replica set, app, scheduler) and a full monitoring stack.
+7. **`docs/`** – VitePress-based documentation covering API contracts, webhooks, DDD theory, and testing tooling.
+8. **Top-level specs** – `openapi.yaml`, `asyncapi.yaml`, `package.json`, `CLAUDE.md`.
 
-1. **`README.md`** and **`CLAUDE.md`** – project purpose, commands, conventions.
-2. **`docs/theory/strategic-ddd.md`** – the architectural model the codebase follows.
-3. **`src/types/index.ts`** – the central type hub; understanding it unlocks most modules.
-4. **`src/infrastructure/http/controller.ts`** → `request.ts` → `response.ts` – the HTTP request/response pipeline every module plugs into.
-5. **`openapi.yaml`** (REST) and **`asyncapi.yaml`** (events/webhooks) – the external API surface.
-6. **`scenarios/config.ts`** and **`scenarios/run-server.ts`** – how the local/dev environment is wired together.
+## Where to Start Reading
 
-> All claims above are inferred from the file inventory and dependency-graph summary provided; no source code was inspected.
+1. **`README.md`** – Project intro and quick-start.
+2. **`CLAUDE.md`** – Conventions and AI-assistant guidance (useful orientation).
+3. **`package.json`** – Scripts, dependencies, and the module map.
+4. **`openapi.yaml` / `asyncapi.yaml`** – The external contract; read before any source.
+5. **`src/types/index.ts`** – Central type definitions that most files import.
+6. **`src/infrastructure/http/controller.ts`** – The HTTP entry-point pattern.
+7. **`src/modules/users/`** – A representative module to see the DDD structure in practice.
+8. **`docs/theory/strategic-ddd.md`** – The architectural rationale.
+9. **`scenarios/index.ts`** – How integration tests are composed.
+10. **`docker-compose.yml`** – How all pieces are wired together at runtime.

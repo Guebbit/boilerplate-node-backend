@@ -1,30 +1,27 @@
 ---
 source: docker/install-supercronic.mjs
-sha256: 289ff6345adc4b7e1fd7357d204d3dd58389b0ed5b26a5562cb6d0b1463a4f02
-generated_at: 2026-09-27T13:47:29.645813+00:00
+sha256: 853f299d192981e3ef08c06b863bb1ec67d8cf8b4ded0b7b656abbae0446771c
+generated_at: 2026-10-07T23:47:35.868824+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # docker/install-supercronic.mjs
 
 ## Purpose
-
-Downloads the [supercronic](https://github.com/aptible/supercronic) scheduler binary from its GitHub release, verifies the SHA-256 checksum, and installs it to `/usr/local/bin/supercronic` at Docker image build time. Supercronic replaces busybox `crond` because crond resets supplementary groups before each job run (requiring `CAP_SETGID`), which causes every job to fail under the unprivileged `node` user. Node is used instead of a shell script because it is the one HTTP-capable tool present in both Alpine (has `wget`) and Debian slim (has neither `wget` nor `curl`).
+Downloads, verifies, and installs the [supercronic](https://github.com/aptible/supercronic) cron scheduler binary into `/usr/local/bin` during Docker image builds. It exists because busybox `crond` resets supplementary groups before each job (requiring `CAP_SETGID`), which breaks under the unprivileged `node` user; supercronic runs jobs as-is. Written in Node (rather than shell) because Node is the one download tool guaranteed on both Alpine and Debian slim base images.
 
 ## Key elements
-
-- **`VERSION`** — Pinned supercronic release (`v0.2.49`); changing this requires updating the digests below.
-- **`SHA256`** — Maps `process.arch` (`x64` → `amd64`, `arm64` → `arm64`) to the expected GitHub asset name and its SHA-256 hex digest.
-- **`TARGET`** — Install path: `/usr/local/bin/supercronic`.
-- **Top-level `await` block** — Fetches the binary, computes its SHA-256 via `node:crypto`, compares against the pinned digest (build fails on mismatch), writes the file, and `chmod 0o755`s it. Throws on unsupported architecture, non-2xx HTTP response, or checksum mismatch.
+- **`VERSION`** – Pinned supercronic release tag (`v0.2.49`). Must be bumped together with the digest table.
+- **`SHA256`** – Map of `process.arch` → `{ asset, digest }` for the two supported architectures (`x64`/`amd64`, `arm64`/`arm64`). An unsupported arch throws at import time.
+- **`TARGET`** – Install path: `/usr/local/bin/supercronic`.
+- **Top-level logic (no exported functions)** – Sequential steps: resolve URL → `fetch` the release asset → SHA-256 verify against the pinned digest → `writeFile` → `chmod 0o755`. Any failure throws and aborts the build.
 
 ## Relationships
-
-- Consumed by `docker/Dockerfile` and `docker/Dockerfile.production` at build time (per the file's own doc comment). No other graph neighbors are recorded.
+No in-repo graph neighbors. The file is invoked by `docker/Dockerfile` and `docker/Dockerfile.production` at build time (via a `RUN node docker/install-supercronic.mjs` step) and is otherwise standalone.
 
 ## Notes
-
-- Uses **top-level `await`**, so it must run under ESM (`node --input-type=module` or `.mjs` extension) on Node ≥ 18.
-- Only `x64` and `arm64` are supported; any other `process.arch` throws immediately.
-- The download is **not cached** in this script—each build re-fetches the binary. Deduplication (if any) is the Dockerfile's concern.
-- The script is intentionally side-effect-only: it has no exports and no CLI argument parsing.
+- **Top-level `await`** – The file relies on ESM top-level await (`import` + `await fetch`), so it must be run as an ES module (`.mjs` extension / `"type": "module"` context).
+- **No `package.json` dependency** – Uses only Node built-ins (`node:crypto`, `node:fs/promises`, global `fetch`/`Buffer`). No `npm install` needed before running.
+- **Checksum is the security gate** – A mismatched SHA-256 fails the build; the digest is the *only* integrity check (no TLS-pinning or GPG signature step).
+- **Architecture coverage** – Only `x64` and `arm64` are pinned; any other `process.arch` (e.g., `ia32`, `riscv64`) throws immediately with a descriptive message.
+- **Idempotency** – Re-running simply overwrites the binary and re-sets permissions; no "already installed" short-circuit.

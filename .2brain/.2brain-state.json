@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-01T21:28:58.574623+00:00",
-  "head": "9574ae12071f19ea8514818664f83641050c94fb",
+  "generated_at": "2026-10-08T17:49:54.249661+00:00",
+  "head": "6913ef751f7fbee168c861b3ee2e5e25daa5e145",
   "threshold": 5,
   "layers": {
     "execution": {
@@ -15,10 +15,10 @@
     },
     "index": {
       "artifact": ".2brain/repo-index.json",
-      "revision": "f22e4be64c45e1d427b46b670dbc0c28d0640d2fa198989b4fb569e03359f466",
-      "chunk_count": 7090,
-      "artifact_count": 1180,
-      "artifact_digest": "47badb1ac4d8447df6eb14450acaa2d24e3255b1f061a76debc33db9f60e5b15"
+      "revision": "6e19fd950e10d530f15db64271e3099b5396935dfba0a358fe2837dc0ea46afa",
+      "chunk_count": 8361,
+      "artifact_count": 1189,
+      "artifact_digest": "043a0d5f273ec7676e4a5edfb964d0be397bf5d47d026dd573a34167422b94ec"
     },
     "context": {
       "artifact": ".2brain/REPO_CONTEXT.md",
@@ -26,7 +26,13 @@
       "ai_target": "claude",
       "provider": "ollama",
       "model": "qwen3.8:27b",
-      "mode": "wiki"
+      "mode": "arch"
+    },
+    "arch": {
+      "file_count": 1632,
+      "elapsed_seconds": 25630.5,
+      "seconds_per_file": 15.705,
+      "recorded_at": "2026-10-08T17:49:54.248805+00:00"
     }
   }
 }

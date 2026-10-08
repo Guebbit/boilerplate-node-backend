@@ -1,7 +1,7 @@
 ---
 source: docker-compose.test.yml
-sha256: f83e5bfeff9228b0493c6f0e9dfd5f302deffde7b1d867509641c6199ee5a370
-generated_at: 2026-09-27T13:47:03.834871+00:00
+sha256: e5b7616f1cc1fa73794afc3366793c5deb56a04953f0ae97849e2a8a5433b345
+generated_at: 2026-10-07T23:46:55.946836+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Proves the "wired" half of the container story: that the app's env-var branches (`NODE_TEST_MONGO_URI`, `NODE_TEST_REDIS_URL`) work end-to-end against externally-provided Mongo and Redis, the same shape CI `services:` blocks supply. It complements the hermetic CI gate (build image, run with no services) which proves the image is self-contained. Intended as a manual pre-merge check, not a second CI job.
+Composable gate stack that proves the external-service code path (`NODE_TEST_MONGO_URI` / `NODE_TEST_REDIS_URL`) works end-to-end against services the app container did not start itself. It is the "wired" counterpart to the hermetic CI gate (which builds the image and runs `npm run complete` with no external services). Intended for manual pre-merge verification, not as a second CI job.
 
 ## Key elements
 
-- **`name: boilerplate-node-backend-gate`** — Explicit compose project name. Without it, Compose derives the name from the working directory, colliding with `docker-compose.yml` and clobbering its containers. Do not remove.
-- **`mongo` service** — `mongo:8` started as a single-member replica set (`rs0`). The healthcheck self-initiates `rs.initiate()` with the host pinned to `mongo:27017` (not `localhost`) so the `gate` container can reach it by service name. No named volume, no seed data — scratch space for one run.
-- **`redis` service** — `redis:7-alpine` with a `redis-cli ping` healthcheck.
-- **`gate` service** — Builds `docker/Dockerfile`, runs `npm run complete` with `NODE_TEST_MONGO_URI` and `NODE_TEST_REDIS_URL` pointing at the sibling services. `JEST_WORKERS` defaults to 8 to prevent OOM-kills from the host's memory-based worker sizing. `depends_on` both services with `condition: service_healthy`. No bind mounts; output is streamed to the terminal.
+- **`name: boilerplate-node-backend-gate`** — explicit compose project name. Without it, Compose derives the name from the current directory, colliding with `docker-compose.yml` and causing container-name conflicts (shared `redis`/`database` names).
+- **`services.mongo`** — `mongo:8` (pinned by digest) running as a single-member replica set (`--replSet rs0`). No named volume (ephemeral scratch). The healthcheck performs `rs.initiate` with host `mongo:27017` (service name, not `localhost`) so the `gate` container can reach it.
+- **`services.redis`** — `redis:7-alpine` (pinned by digest) with a `redis-cli ping` healthcheck.
+- **`services.gate`** — builds from `docker/Dockerfile`, sets `NODE_TEST_MONGO_URI`, `NODE_TEST_REDIS_URL`, and `JEST_WORKERS` (default 8), then runs `npm run complete`. `depends_on` both services with `condition: service_healthy`. No bind mounts (deliberate; see Notes).
+- **Invocation** — `npm run compose -- -f docker-compose.test.yml run --rm -T gate` (the `-T` flag is mandatory; see Notes).
 
 ## Relationships
 
-- **`docker-compose.production.yml`** — Sibling compose file in the same project. This file is deliberately scoped to a single `gate` run and has no dependency on, or dependency on, the production stack; they are independent deployments of the same image.
+- **`docker-compose.production.yml`** — shares the same `docker/Dockerfile` build context. The explicit `name:` field ensures this stack's containers are namespaced separately from every other compose file in the repo (dev, production), so running the gate never tears down or duplicates sibling stacks.
 
 ## Notes
 
-- **`-T` is mandatory** in the `run` invocation. `podman-compose run` allocates a PTY regardless of any `tty:` key in the file, and the resulting spinner-repainting degraded an 8-second `docs:build` to 15+ minutes. `docker run` (used by CI) doesn't allocate one unless asked, which is why this only bites in compose-driven mode.
-- **No bind mounts, by design.** A rootless-Podman UID fix (`--userns=keep-id`) conflicts with the image's root-owned `/app` — adding a bind mount makes the in-container process lose write access to `dist/`. The env-var branch is verified through live stdout instead.
-- **`JEST_WORKERS` override** is read from the host `.env` (Compose interpolates it). On a dev box already running the main stack, the default memory-based sizing over-commits and the kernel OOM-kills a Jest worker mid-suite.
-- **Not a CI gate.** The hermetic single-image proof in CI is the stronger, more portable claim. This file exercises the everyday-developer shape of external services and is a manual sanity check before merging.
+- **`-T` is not optional.** `podman-compose run` allocates a PTY by default regardless of any `tty:` key in the file. Under a PTY, the VitePress build-progress spinner redraws per file, turning an ~8 s `docs:build` into a 15+ min CPU-bound loop. `docker run` (CI's direct path) is unaffected.
+- **Do not remove `name:`.** Verified failure mode: running this file without it stops and recreates the main dev stack's `redis`/`database` containers.
+- **No bind mounts, by design.** A bind mount + `--userns=keep-id` (rootless-Podman fix) remaps the in-container process uid, which then loses write access to the image's root-owned `/app` (e.g. `tsc`'s `dist/`). The two workarounds conflict, so the gate proves the path via streamed stdout instead of a mounted file.
+- **`JEST_WORKERS` is capped at 8 by default.** The suite's worker-pool sizing script (`scripts/testing/machine-budget.ts`) reads host free memory; on a dev box already running the main stack this over-commits and the kernel OOM-kills a worker mid-suite (confirmed via `dmesg`). Override via `.env` if needed.
+- **Mongo healthcheck has a side effect.** The `mongosh` eval both checks readiness and initiates the replica set on first pass (`rs.initiate` in a `try/catch`). Subsequent checks just `ping`.

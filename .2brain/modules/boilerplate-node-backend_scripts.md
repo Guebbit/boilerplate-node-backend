@@ -5,53 +5,52 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: scripts/
-files: 67
-updated: 2026-10-01T14:24:04.624109+00:00
+files: 66
+updated: 2026-10-07T23:53:04.241153+00:00
 ---
 
 # scripts/
 
 ## Purpose
 
-`scripts/` is the repository's operational tooling layer: it contains every CLI, CI helper, custom lint rule, and documentation generator that runs *outside* the application runtime. Nothing here is imported by `src/` at request time; instead these scripts are invoked via `npm run` aliases, GitHub Actions workflows, or pre-commit hooks to keep the database, docs, dependency surface, and mutation-test baseline in sync with the codebase.
+`scripts/` is the operational and tooling layer of the repository. It holds every piece of automation that runs *around* the application: deploy-time database seeding, index reconciliation, cache invalidation, documentation generation and linting, custom ESLint rules that enforce architectural boundaries, mutation-testing CI orchestration, and cross-repo contract verification. Nothing here is imported by the runtime; it is invoked via `npm run` scripts, CI workflows, or local developer commands.
 
 ## Key parts
 
-- **`scripts/db/`** — Database lifecycle operations: granting roles to existing accounts (`grant-access.ts` / `access-grant.ts`), seeding the production shop tenant (`bootstrap-access.ts`), flushing Redis after out-of-band writes (`cache-clear.ts`), and declarative index reconciliation against Mongoose schemas (`sync-indexes.ts` / `index-sync.ts`). Each pair separates pure logic from CLI wiring so integration tests can drive the logic without opening a live connection.
-- **`scripts/docs/`** — A family of generators that keep documentation tables (config reference, dependency map, rate-limit budgets, role-permission matrix, audit actions, module catalogue, module graph) in lockstep with source code. `marker-block.ts` provides the shared mechanism for rewriting only the machine-generated section inside a hand-written Markdown page. `check-references.ts` and `repo-references.ts` lint dead path citations in prose and source comments.
-- **`scripts/eslint/`** — Project-local ESLint rules that encode architectural boundaries: barrel-export restrictions, the single-door persistence boundary, mandatory `.catch()` on controller chains, i18n-only user-facing strings, and stale comment-link detection. Aggregated through `index.ts` for one-liner import in `eslint.config.ts`.
-- **`scripts/mutation/`** — The entire mutation-testing pipeline: scope resolution (`mutate-scope.ts`), bin-packed sharding (`sharding.ts`), per-file score ratchet (`baseline.ts` / `check-baseline.ts`), local full-sweep and diff-scoped entry points (`run-shards.ts` / `run-diff.ts`), a machine-aware Stryker wrapper (`stryker-run.ts`), and the GitHub Actions CI orchestration (wave planning, slice-ignorer plugin, shard merge).
-- **`scripts/pairing/`** — Cross-repo contract integrity checks between this backend and the paired frontend repository (spec-identity verification, linked-worktree detection).
-- **`scripts/docker/`** — Generates `Dockerfile.dockerignore` from the root `.dockerignore` to eliminate hand-kept duplication, with a `--check` drift mode.
-- **`scripts/git-base.ts`** — Shared git merge-base utilities reused by diff-scoped mutation runs and pairing checks.
+- **`scripts/db/`** — Database lifecycle. `bootstrap-access.ts` seeds the production shop tenant idempotently; `index-sync.ts` / `sync-indexes.ts` reconcile live MongoDB indexes with Mongoose schema declarations (the repo's entire "migration" mechanism); `cache-clear.ts` purges stale Redis entries left by writes that bypass the HTTP API.
+- **`scripts/docs/`** — Documentation generation and integrity. A family of generators (`generate-module-graph`, `generate-dependency-map`, `generate-rate-limit-budgets`, `generate-role-matrix`, `generate-audit-actions`, `module-catalogue`) keep derived tables and diagrams in lockstep with source. `check-references.ts` lints dead path citations. `marker-block.ts` and `module-descriptor.ts` are shared utilities those generators rely on.
+- **`scripts/eslint/`** — Custom ESLint rules encoding project architecture: `no-persistence-imports` enforces the repository boundary, `barrel-allowed-sources` constrains what a module's `index.ts` may re-export, `controller-chain-must-catch` and `no-hardcoded-user-text` guard handler hygiene. `index.ts` is the single barrel that `eslint.config.ts` imports.
+- **`scripts/mutation/`** — Mutation-testing infrastructure. `sharding.ts` / `mutate-scope.ts` partition the Stryker scope; `run-shards.ts` / `run-diff.ts` are the local and branch-scoped entry points; `ci/` contains the wave-planning, slice-ignorer plugin, and shard-merge logic for the GitHub Actions sweep; `baseline.ts` / `check-baseline.ts` implement the per-file ratchet gate.
+- **`scripts/pairing/` + `scripts/contracts/`** — Cross-repo contract tooling. `check-spec-identity.ts` verifies shared contract files are byte-identical with the paired frontend; `paired-frontend-path.ts` and `linked-worktree.ts` resolve the frontend checkout safely.
+- **`scripts/docker/`** — `generate-dockerfile-dockerignore.ts` keeps the Docker-specific `.dockerignore` in sync with the root one.
+- **`scripts/git-base.ts`** — Small shared helper for computing merge-base and safe git invocations used across scripts.
 
 ## How it connects
 
-- **`src/` and `src/infrastructure/`** — The docs generators read module manifests, `defineConfig` slices, `RateLimitBudget` entries, and audit-action declarations directly from `src/` to produce up-to-date reference tables. `scripts/db/` opens connections to the same MongoDB and Redis instances the app uses at runtime. `scripts/eslint/` rules inspect and constrain imports within `src/` (e.g., `no-persistence-imports` guards `src/modules/*/repository.ts`).
-- **`scenarios/`** — `scenario:apply` calls `scripts/db/cache-clear.ts` after writing demo data, and `scripts/db/bootstrap-access.ts` is explicitly positioned as the safe, idempotent alternative to `scenarios/apply.ts` in production.
-- **`scripts/contracts/`** — `scripts/pairing/check-spec-identity.ts` byte-compares the shared contract files here against their counterparts in the paired frontend repo.
-- **`scripts/ops/`** — One-off data operations (renames, backfills, dedupes) live under `ops/` by convention; `scripts/db/cache-clear.ts` exists specifically because those operations bypass the HTTP cache-invalidation middleware.
-- **`src/modules/` (returns, users, webhooks)** — Individual module manifests and role-key declarations in these directories are the data source for the role-matrix, audit-action, and rate-limit generators in `scripts/docs/`.
-- **`src/infrastructure/http/`** — The `controller-chain-must-catch` ESLint rule targets the controller/handler pattern defined there.
+- **`src/modules/` & `src/infrastructure/`** — The primary consumers. `index-sync.ts` reads each module's `model.ts` for declared indexes; docs generators read `module.yaml`, manifests, and Mongoose schemas; ESLint rules restrict what `src/` files may import and export. The role-matrix generator calls the kernel's `heldKeys` from `src/infrastructure`.
+- **`scenarios/`** — `bootstrap-access.ts` is the production-safe counterpart to `scenarios/apply.ts` (which is blocked in prod); `scenario:apply` calls `cache-clear.ts` automatically.
+- **`scripts/ops/`** — `cache-clear.ts` exists partly because direct-database scripts under `ops/` skip the `invalidateCache` middleware; `index-sync.ts` explicitly excludes one-off data migrations that belong in `ops/`.
+- **`scripts/contracts/`** — `pairing/check-spec-identity.ts` reads the contract files stored here and compares them against the paired frontend checkout.
+- **`/` (repository root)** — Scripts read `package.json`, `stryker.json`, `.dockerignore`, `eslint.config.ts`, and VitePress config from the root; several docs generators write back into `docs/**`.
 
 ## Where to start
 
-Read `scripts/db/index-sync.ts` (or its pure-logic sibling `index-sync.ts`) first: it is short, self-contained, and illustrates the repo's core philosophy—desired state re-applied on every deploy, no migration history. Then open `scripts/eslint/index.ts` to see the barrel of custom rules; it names every architectural boundary the project enforces mechanically and links each rule back to the relevant design doc, giving a newcomer a compact map of "what this codebase considers wrong."
+1. **`scripts/eslint/index.ts`** — A short barrel that lists every custom rule with a one-line rationale. Reading it gives you the architectural invariants the project enforces mechanically, which orients you to how `src/` is expected to be structured.
+2. **`scripts/db/index-sync.ts`** — The entire schema-migration mechanism in ~a few dozen lines. Understanding that "desired state is re-applied on every deploy, no changelog" removes a common source of confusion about why there is no migrations directory.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_scripts["scripts/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_scripts_contracts["scripts/contracts/<br/>16 files"]
-    m_scripts_ops["scripts/ops/<br/>19 files"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_returns["src/modules/returns/<br/>40 files"]
-    m_src_modules_users["src/modules/users/<br/>48 files"]
-    m_src_modules_webhooks["src/modules/webhooks/<br/>49 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_scripts_contracts["scripts/contracts/<br/>18 files"]
+    m_scripts_ops["scripts/ops/<br/>24 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules["src/modules/<br/>32 files"]
+    m_src_modules_webhooks["src/modules/webhooks/<br/>50 files"]
     m_scripts --- m_scenarios
     m_scripts --- m_scripts_contracts
     m_scripts --- m_scripts_ops
@@ -59,26 +58,22 @@ flowchart LR
     m_scripts --- m_src_infrastructure
     m_scripts --- m_src_infrastructure_adapters
     m_scripts --- m_src_infrastructure_http
-    m_scripts --- m_src_modules_returns
-    m_scripts --- m_src_modules_users
+    m_scripts --- m_src_modules
     m_scripts --- m_src_modules_webhooks
     style m_scripts stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_contracts|scripts/contracts/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]] · [[boilerplate-node-backend_src_modules_users|src/modules/users/]] · [[boilerplate-node-backend_src_modules_webhooks|src/modules/webhooks/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_contracts|scripts/contracts/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules|src/modules/]] · [[boilerplate-node-backend_src_modules_webhooks|src/modules/webhooks/]]
 
 ## Files
-- `scripts/db/access-grant.ts` — The connection-free core logic for granting a role to an **existing** account by email. It is split out of `grant-access.ts` (the CLI wrapper) so that integration tests can import and drive it per-case without the wrapper's side-effects (opening a DB connection, parsing `process.argv`) firing on import.
 - `scripts/db/bootstrap-access.ts` — Deploy-time script (`npm run access:bootstrap`) that seeds a fresh production database with the shop tenant. It is an idempotent upsert keyed on the fixed `DEPLOYMENT_TENANT_ID`, making it safe to re-run against an already-seeded database—unlike `scenarios/apply.ts`, which creates non-reproducible demo accounts and is therefore blocked in production.
 - `scripts/db/cache-clear.ts` — Drops every cached response belonging to this app from Redis. It exists because writes that bypass the HTTP API (manual `mongosh` sessions, one-off scripts under `ops/`) skip the normal `invalidateCache` middleware, leaving stale answers in the cache until TTL expiry. `scenario:apply` calls this automatically; otherwise run it by hand after any direct database edit.
-- `scripts/db/grant-access.ts` — CLI entry point for granting a role to an existing account (e.g., promoting the first signup to `owner`). It exists as a thin shell around the pure logic in `access-grant.ts`, handling only argument parsing, database connection lifecycle, and the log message. The separation allows the grant logic to be unit-tested without a live connection.
 - `scripts/db/index-sync.ts` — Declarative index reconciliation: compares what MongoDB stores against what Mongoose schemas declare, then creates missing indexes and drops undeclared ones. This is the entire "schema migration" mechanism in this repo — no changelog, no versioning; the desired state is re-applied on every deploy. One-off data operations (renames, backfills, dedupes) are out of scope and live under `ops/`. Split out of `sync-indexes.ts` so an integration test can drive reconciliation per case without opening a live connection.
 - `scripts/db/sync-indexes.ts` — Reconciles the live database's indexes with those declared in each module's `model.ts`. Idempotent — safe to run on every boot and deploy. It both creates missing indexes and **drops** any index not declared in a schema (treated as drift). Serves as the project's replacement for a migration tool's index half.
 - `scripts/docker/generate-dockerfile-dockerignore.ts` — Generates `docker/Dockerfile.dockerignore` from the root `.dockerignore`, applying one deliberate modification (keeping `.git` included). Exists to eliminate hand-kept duplication that previously drifted silently. Runnable in two modes: rewrite (default) or drift-check (`--check`).
 - `scripts/docs/check-references.ts` — A documentation linter (run via `npm run check:docs-references`) that verifies every file path cited in inline code spans within `docs/**.md` pages actually resolves to a tracked file or directory in this repo (or the paired frontend repo). It catches "dead facts" — paths in prose that no longer match the tree — which `docs:build`'s link checker does not cover because those are not hyperlinks.
 - `scripts/docs/dependency-groups.ts` — The hand-maintained data source for `docs/tools/package-dependencies.md`: it declares which npm package belongs to which functional family (runtime or dev) and *why* it is there. The complementary half of that page — which packages exist and who imports them — is derived by `generate-dependency-map.ts` and intentionally kept out of this file to avoid drift.
 - `scripts/docs/generate-audit-actions.ts` — Generates (or checks) the audit-action reference table embedded in `docs/tools/winston.md`. It collects every declared audit action from infrastructure and all modules, discovers each action's `target_type` by scanning call-site source text, and renders a Markdown table between marker comments. Running with `--check` reports drift without writing, making the committed doc itself the regression guard for the audit vocabulary.
-- `scripts/docs/generate-config-reference.ts` — Generates the configuration reference table in `docs/tools/configuration.md` by reading every environment variable definition straight from the app's `defineConfig` slices (plus the seeder's own slice). It exists so the variable list cannot go stale: the source of truth is the same code the boot gate validates, and ESLint's `no-restricted-properties` rule forbids raw `process.env` reads in `src/`, making the list complete by construction.
 - `scripts/docs/generate-dependency-map.ts` — Generates the two dependency tables (Runtime and Dev) in `docs/tools/package-dependencies.md` by reading `package.json`, scanning production source files for import specifiers, and cross-referencing hand-kept group assignments. It runs in write mode (default) or `--check` mode (CI / `complete`), where it reports drift without modifying the page. The script exists to keep the published package list and ownership mapping accurate automatically—eliminating the stale hand-written tables that previously missed 32 of 99 packages.
 - `scripts/docs/generate-module-graph.ts` — Generates two pieces of documentation from the live dependency graph: a whole-repo import graph (mermaid) and a grouped module list in `docs/modules/index.md`, plus one per-module neighbourhood diagram on each module page. It reads the real graph via `dependency-cruiser` and supplements it with domain-event edges (the return path an import graph cannot see), so the diagrams stay correct after any import or subscription change without hand-maintenance.
 - `scripts/docs/generate-rate-limit-budgets.ts` — Generates the rate-limit budget table in `docs/tools/security.md` by reading `RateLimitBudget` data from every enabled module's manifest and from `INFRASTRUCTURE_RATE_LIMITS`. It exists so the table stays in sync with code automatically—eliminating the silent staleness that a hand-maintained table would accumulate when a budget's default, window, or env var changes. Runs as part of the `complete` pipeline (via the `docs:rate-limits` script).
@@ -100,8 +95,10 @@ flowchart LR
 - `scripts/mutation/ci/merge.ts` — Folds Stryker mutation-test reports from multiple CI shards into a single unified report — one HTML page, one `mutation.json` for the ratchet baseline, and one GitHub-flavoured Markdown summary. It resolves slice-ignored mutants, re-keys per-report test IDs, detects files no finished shard covered, and renders the final artifacts.
 - `scripts/mutation/ci/slice-ignorer.ts` — A Stryker ignore-plugin that constrains a single mutation run to a line range (slice) of a file. It exists so the GitHub CI sweep can split a file that would exceed one 6-hour job into smaller runs without losing or double-counting mutants at slice boundaries. Instead of Stryker's built-in `--mutate file:10-50` (which skips nodes *crossing* a boundary), this plugin keeps any node that *touches* the range, leaving deduplication to `merge.ts`.
 - `scripts/mutation/ci/waves.ts` — Pure planning logic for the GitHub mutation-testing sweep. Given a set of files (or line-slices) and the outcomes of the previous wave, it decides what each wave's matrix of shards will run, how a timed-out shard is split smaller, and when a shard is abandoned. The module performs no I/O; all file reading and artifact writing lives in the CLI.
+- `scripts/mutation/github-artifacts.ts`
 - `scripts/mutation/local-policy.ts` — Pure decision logic that decides which mutation-testing shards a local evening should run, given which shards already have reports on disk. It is extracted from `run-shards.ts` so the resumability rule can be unit-tested in isolation from CLI wiring.
 - `scripts/mutation/mutate-scope.ts` — Determines the mutation-testing scope by reading `stryker.json`'s `mutate` globs directly (rather than maintaining a hand-copied module list) and exposing the set of mutable `.ts` files with line counts. Exists so that sharding, diff filtering, and CI orchestration all agree on *what* Stryker will measure, without re-globbing independently.
+- `scripts/mutation/pull-baseline.ts`
 - `scripts/mutation/run-diff.ts` — Runs Stryker mutation testing scoped to the files a branch changed (default base: `origin/main`), then grades the result against the per-file baseline ratchet. Exists to give reviewers a fast, actionable mutation score in minutes rather than waiting for the weekly full sweep.
 - `scripts/mutation/run-shards.ts` — CLI entry point (`npm run mutation:full`) that runs the entire mutation scope in bin-packed shards, one at a time, banking each shard's report to disk after it completes. It exists because Stryker writes no report when killed mid-run; an unsharded multi-hour pass would lose everything on interruption, whereas per-shard reports survive and can be resumed across sessions.
 - `scripts/mutation/sharding.ts` — Defines how the local full mutation sweep (`npm run mutation:full`) partitions its mutate scope into shards of roughly equal size, using line count as the balancing metric. The design avoids a hand-maintained module list (which drifted and left five modules unmeasured for a month) by deriving shards from whatever scope `mutate-scope.ts` resolves at run time.
@@ -127,6 +124,7 @@ flowchart LR
 - `scripts/setup/environment-file.ts` — Pure text-level helpers for manipulating a dotenv file's string content: replacing placeholder values with generated secrets and reading a key's current value back. It deliberately performs **no** filesystem I/O — that responsibility belongs to `scripts/setup/index.ts`. Separating text logic from disk I/O keeps these operations trivially testable and reusable.
 - `scripts/setup/index.ts` — Entry point for `npm run setup`. Bootstraps a fresh clone into a runnable state in one command: creates `.env` from `.env-example` (never overwriting an existing one), replaces every still-placeholder secret with a fresh 32-byte random value, and writes the Prometheus `NODE_METRICS_TOKEN` to its dedicated file so the container bind-mount always finds a real file.
 - `scripts/setup/required-keys.ts` — Derives the authoritative list of environment variables that `npm run setup` may populate, by reading each enabled module's and the app's config field declarations. Because the list is computed from the config schema rather than hard-coded, a newly added module secret is automatically included without touching this file.
+- `scripts/testing/demo-module-names.ts`
 - `scripts/testing/machine-budget.ts` — Single source of truth for how hard test runners may push the current machine. It translates available RAM and declared per-unit costs into concrete worker counts, per-process heap caps, and shard counts—always yielding to an explicit environment variable set by the operator.
 - `scripts/testing/measure-demo-strip.ts` — G-D2 step 1: a report-only measurement script that applies a module-removal recipe to a **scratch copy** of the checkout and then runs a fixed set of checks (regenerate, `ts-check`, cross-cutting tests, docs build) to surface what still couples the rest of the repo to the removed module. Failures are the "punch list," not a CI gate.
 - `scripts/testing/measure-scaffold.ts` — Integration-style verification that a freshly scaffolded module passes every quality gate the repo enforces (type-check, lint, format, unit tests, cross-cutting rules, docs build). It runs against a full copy of the checkout in a temp directory so the generated code is exercised in context. Report-only — intentionally excluded from the commit gate because it takes minutes. Run after touching `scripts/scaffold/` or any shared file the scaffolder emits.
@@ -134,7 +132,6 @@ flowchart LR
 - `scripts/testing/run-prism-smoke-test.ts` — Boots the `prism` mock server against the repo's `openapi.yaml`, then issues a single HTTP GET to confirm the server parsed the spec and can serve examples. It validates the **contract document itself** (completeness, parseability) rather than any application logic. Run via `npm run test:prism`; it is deliberately kept out of the pre-commit gate because it binds a real port.
 - `scripts/testing/run-suite.ts` — A CLI wrapper around `npx jest` that runs a single test layer as a series of **sequential** jest processes (shards) to bound per-process memory retention on memory-constrained machines. It exists because jest's per-file module-registry retention (~70 MB/file) would exhaust a single process's heap on large suites, and `--max-old-space-size` only raises the ceiling without stopping the climb.
 - `scripts/testing/scratch-copy.ts` — Builds a disposable copy of the checkout into a scratch directory so that `measure:*` scripts can destructively mutate it (strip the shop, scaffold a module) and then run the repo's own checks against the result—without touching the real working tree.
-- `scripts/testing/shop-module-names.ts` — Single shared reader that answers "which module folders are `group: shop` today?" by reading each module's own `module.yaml` descriptor. It exists so that `measure-demo-strip.ts` (report-only) and `demo-remove.ts` (the actual G-D2 step-3 strip) ask the same question with one implementation, meaning a relabelled module changes both callers without editing either.
 
 ---
 [[boilerplate-node-backend_INDEX|← boilerplate-node-backend index]]

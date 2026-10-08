@@ -5,44 +5,47 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/feedback/
-files: 28
-updated: 2026-10-01T14:27:29.027097+00:00
+files: 29
+updated: 2026-10-07T23:57:54.536568+00:00
 ---
 
 # src/modules/feedback/
 
 ## Purpose
 
-The feedback module implements the site's public contact form and the admin triage workflow behind it. It owns the full lifecycle of a `FeedbackRequest` ticket — anonymous submission, operator notification, status triage, and hard deletion — as a self-contained DDD bounded context. Because submitters have no account, records store a stranger's email address and free text, which drives the module's stricter audit and rate-limiting posture.
+The feedback module implements the public contact form and the admin triage workflow for submitted feedback tickets. It owns the full lifecycle of an anonymous user's submission—from rate-limited intake and operator notification through admin search, status/notes updates, and hard deletion—while treating the stored email address as personal data that requires audit logging on reads as well as writes.
 
 ## Key parts
 
-- **Domain & model** — `model.ts` (Mongoose schema, indexes, serialization transform), `domain/lifecycle.ts` (status state machine), `domain/index.ts` (shared domain types). These define *what* a feedback ticket is and how it can transition.
-- **Service & repository** — `service.ts` owns all business rules (normalisation, spam detection, `respondedAt` semantics, atomic persist-then-notify). `repository.ts` is a thin `createRepository` instantiation that shields the service from persistence details.
-- **HTTP surface** — `routes.ts` mounts one public route above an auth gate so everything below is admin-only. The four controllers in `controllers/` (post-contact, get/search, update-status, delete) are deliberately thin, delegating to the service via shared controller factories.
-- **Module wiring & cross-cutting concerns** — `module.ts` registers routes, permissions, rate-limit budgets, data-export hook, and locale path into `AppModule`. `audit.ts` augments the app-wide `AuditActionMap`. `rate-limits.ts` declares three budgets and builds Express middleware. `emails.ts` renders the operator notification. `config.ts` holds module-level constants. `index.ts` is the sole public barrel (enforced by the strategic-DDD import rule).
-- **Contract & tests** — `openapi.yaml` is the API contract; `tests/` covers unit (schema, emails, rate-limit numerics, router structure), integration (service invariants, rate-limit wiring, model serialization), and contract (OpenAPI conformance per route) tiers.
+- **Domain & data** — `model.ts` (Mongoose schema, serialization transform, indexes), `domain/` (lifecycle state machine and types), `repository.ts` (thin CRUD wrapper over the shared `createRepository` factory), `config.ts`.
+- **Business logic** — `service.ts` is the single orchestrator for create, search, update-status, remove, and caller-scoped data export; `presenter.ts` shapes service output into API payloads.
+- **HTTP surface** — `routes.ts` defines the route table with a positional auth gate separating the one public endpoint from the admin group; `controllers/` contains thin handlers (`post-feedback-contact`, `get-feedback`, `update-feedback-status`, `delete-feedback`); `rate-limits.ts` declares the three-budget limiter for the public form.
+- **Cross-cutting & integration** — `audit.ts` registers the module's read-and-write audit vocabulary; `emails.ts` builds the operator notification email; `module.ts` is the manifest that registers routes, permissions, rate limits, export hook, and locale path into the `AppModule` contract; `index.ts` is the sole public barrel; `openapi.yaml` is the endpoint contract.
+- **Tests** — `tests/unit/` pins schema shape, email content, rate-limit relationships, and router structure; `tests/integration/` covers service invariants, serialization, rate-limit enforcement, and data export against a real database; `tests/contract/` verifies every response against the OpenAPI spec.
 
 ## How it connects
 
-- **`src/infrastructure/http/`** supplies the shared Express utilities the controllers rely on: the `createSearchController`, `createUpdateController`, and `createDeleteController` factories, plus the `buildRateLimiter` middleware builder used by `rate-limits.ts`. The feedback module never reimplements HTTP plumbing.
-- **`src/infrastructure/adapters/`** provides the Mongoose adapter that `model.ts` and `repository.ts` persist through. The feedback module defines *what* to store; the adapter layer handles *how* it reaches MongoDB.
-- **`src/`** (shared application layer) hosts the `AppModule` contract that `module.ts` registers into, the app-wide `AuditActionMap` that `audit.ts` augments, and the shared `createRepository` factory that `repository.ts` instantiates.
-- **Repository root / `docs/theory/strategic-ddd.md`** defines the import rule that restricts sibling modules to importing feedback's public API exclusively through `index.ts`, preserving the module boundary.
+- **`src/infrastructure/http/`** — The module consumes the shared controller factories (`createUpdateController`, `createSearchController`) and the `buildRateLimiter` helper so its HTTP layer stays consistent with other modules without re-implementing Express plumbing.
+- **`src/infrastructure/`** — Provides the `createRepository` factory and Mongoose connection/adapter that `repository.ts` and `model.ts` build on.
+- **`src/infrastructure/adapters/`** — Supplies the email-sending adapter used when the service fires the operator notification, and the Mongoose driver behind persistence.
+- **`src/`** — The module registers itself into the app-wide `AppModule` contract (via `module.ts`) and augments the global `AuditActionMap` (via `audit.ts`), tying it into the shared type system and DI wiring.
+- **`scripts/ops/`** — Operational tooling (e.g., data-migration or retention scripts) may target the `feedbackrequest` collection this module owns.
+- **`/` (repo root)** — The OpenAPI spec and the strategic-DDD import rule (`docs/theory/strategic-ddd.md`) live at the root and govern this module's public surface and import boundaries.
 
 ## Where to start
 
-1. **`src/modules/feedback/service.ts`** — reading the service first shows you the full ticket lifecycle (create → notify → search → triage → delete) and the invariants that every controller enforces, without any HTTP noise.
-2. **`src/modules/feedback/routes.ts`** — the route table is short; it makes the public-vs-admin split, the positional auth gate, and the rate-limiter placement immediately visible, giving you the "map" of every endpoint before you drill into individual controllers.
+Read **`service.ts`** first: it is the one place the full ticket lifecycle (create → notify → triage → delete → export) is expressed, and every controller above it is a thin HTTP wrapper around it. Then skim **`routes.ts`** to see how the single public endpoint is separated from the admin group purely by mount position, which is the key security invariant the positional tests in `tests/unit/routes.test.ts` guard.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_feedback["src/modules/feedback/"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
+    m_scripts_ops["scripts/ops/<br/>24 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules_feedback --- m_scripts_ops
     m_src_modules_feedback --- m_src
     m_src_modules_feedback --- m_src_infrastructure
     m_src_modules_feedback --- m_src_infrastructure_adapters
@@ -50,7 +53,7 @@ flowchart LR
     style m_src_modules_feedback stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]]
 
 ## Files
 - `src/modules/feedback/audit.ts` — Declares the feedback module's audit-action vocabulary and registers it into the app-wide `AuditActionMap` via TypeScript module augmentation. Feedback rows carry a stranger's email address and free text, so _reads_ (not just mutations) are audit-relevant here — a data-protection concern that does not apply to, e.g., the public product catalogue.
@@ -73,6 +76,7 @@ flowchart LR
 - `src/modules/feedback/service.ts` — Business-logic service for the feedback (contact-request) module. It owns the full lifecycle of a feedback ticket — creation with operator notification, paginated search, status/notes triage, hard deletion, and a caller-scoped data export — and is the single place where the "one event" of a customer reaching out (persist + notify) stays atomic. Controllers above it handle HTTP concerns; the repository below handles persistence.
 - `src/modules/feedback/tests/contract/api.contract.test.ts` — Contract tests for every `/feedback` route, asserting that both success and error responses conform to the OpenAPI spec (`toSatisfyApiSpec()`). Covers the single public write endpoint (`POST /feedback/contact`), two admin-only read/search endpoints (`GET /feedback`, `POST /feedback/search`), and two admin mutation endpoints (`PUT`/`PATCH /feedback/{id}`). Also guards that the public response leaks no admin fields and that admin routes reject unauthenticated callers.
 - `src/modules/feedback/tests/integration/contact-identity-rate-limit.test.ts` — Integration test for the identity-keyed dimension of the contact-form rate limiter (`contactLimiters`). It verifies that the submitted-email budget (`NODE_SUBMISSION_RATE_LIMIT_EMAIL_MAX`) is enforced independently of the per-address budget, and that the limiter is actually wired into the `POST /feedback/contact` route. The per-address-only case is covered in `submission-rate-limit.test.ts`.
+- `src/modules/feedback/tests/integration/export.test.ts`
 - `src/modules/feedback/tests/integration/model.test.ts` — Integration test that enforces the serialization contract for feedback requests: the internal MongoDB fields `_id` and `__v` must never appear in a consumer-facing payload, whether the data arrives as a hydrated Mongoose document (`toJSON`) or as a `.lean()` list mapped through the service layer.
 - `src/modules/feedback/tests/integration/schema-contract.test.ts` — Schema contract tests for the feedback-request Mongoose schema. Unlike sibling transform specs, this file asserts what Mongoose itself enforces at the schema level (serialization shape, defaults, required fields, `select: false`). It runs against a real MongoDB because a mocked model would only restate the mock's assumptions about Mongoose semantics.
 - `src/modules/feedback/tests/integration/service.test.ts` — Integration test suite for the feedback request service (`create`, `search`, `updateStatus`, `remove`). Runs against a real test database to pin service-level invariants: input normalisation (lowercase email, trimmed fields, blank name → `undefined`), honeypot and disposable-email spam detection, `respondedAt` stamp-once semantics, pagination meta coherence, and status narrowing via `toFeedbackStatus`.

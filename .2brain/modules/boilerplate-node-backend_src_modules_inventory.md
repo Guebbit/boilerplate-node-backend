@@ -5,56 +5,55 @@ tags:
   - project/boilerplate-node-backend
 type: module
 module: src/modules/inventory/
-files: 33
-updated: 2026-10-01T14:27:46.226338+00:00
+files: 37
+updated: 2026-10-07T23:58:16.052274+00:00
 ---
 
 # src/modules/inventory/
 
 ## Purpose
 
-The inventory module owns the shop's stock: the per-product `onHand` / `reserved` counters, the append-only movement ledger, and per-order reservation holds. It is the **sole writer** of those counters—every unit that enters, leaves, or is temporarily held in the shop flows through this module's audited transitions. It exposes a narrow public surface (service + domain + events) so sibling modules can request a named transition without touching internal stock mechanics.
+The inventory module owns the shop's stock lifecycle: receiving goods, recording stocktake adjustments, holding (reserving) units against pending orders, and expiring those holds. It is the sole writer of the `Product.onHand` and `Product.reserved` counters and maintains an append-only movement ledger as the audit trail for every counter change.
 
 ## Key parts
 
-- **Domain rules** – `domain/transitions.ts` is the single source of truth for the seven stock transitions (reserve, release, commit, receive, adjust, restock, expire). It is pure: no DB, no HTTP, no i18n. `domain/index.ts` re-exports it for a clean import path.
-- **Service layer** – `services/` splits responsibilities into `reserve`, `holds`, `admin` (receipts / adjustments), `sweep` (reservation expiry), `returns`, `levels`, and a shared `transition` orchestrator. `services/types.ts` defines the cross-cutting types.
-- **Persistence** – `model.ts` declares the three Mongoose schemas (stock levels, movement ledger, reservations). `repository.ts` wraps them in typed repositories whose conditional writes encode all counter-safety guards, keeping the service layer free of raw Mongo filters.
-- **HTTP surface** – `routes.ts` mounts five staff-only endpoints behind auth + permission guards. `controllers/` holds one thin handler per endpoint (stock levels, movements, receipts, adjustments, sweep trigger). `openapi.yaml` is the published contract.
-- **Module wiring** – `module.ts` is the manifest: identity, permission keys, route registration, and the `PRODUCT_CREATED` / `PRODUCT_DELETED` event subscriptions that keep the stock-level collection in sync with the product document. `index.ts` is the **only** entry point siblings may import from (strategic-DDBD rule). `events.ts`, `metrics.ts`, `config.ts`, and `audit.ts` are side-effect or shared-constant files loaded at boot.
-- **Tests** – `tests/unit/` pins transition invariants, route security, and schema contracts. `tests/integration/` verifies conditional-write correctness against real Mongo (service edges, repository aggregates, ledger replay). `tests/contract/` asserts every HTTP response satisfies the OpenAPI spec.
+- **Domain layer** (`domain/`) — A pure, framework-free transition table (`transitions.ts`) that maps each of the seven stock-movement reasons to signed deltas on `onHand` and `reserved`. No DB, no HTTP, no i18n, so the ledger can be replayed deterministically.
+- **Service layer** (`services/`) — Orchestrates the business operations: `reserve.ts` / `holds.ts` for order holds, `admin.ts` for receipts and adjustments, `sweep.ts` for reservation expiry, `levels.ts` for stock-board reads, `transition.ts` for the shared counter-mutation primitive, and `returns.ts` for release paths. `types.ts` defines the shared service interfaces.
+- **Persistence** (`repository.ts`, `model.ts`) — Three Mongoose schemas (stock-movement ledger, per-product counters, per-order reservations) and three typed repositories that encode all conditional-write guard logic, keeping the service layer free of raw Mongo filters.
+- **HTTP surface** (`routes.ts`, `controllers/`) — Five staff-only endpoints (read levels, read movements, post receipt, post adjustment, trigger sweep), each gated behind auth and permission checks. No customer-facing routes exist here by design.
+- **Module wiring** (`module.ts`, `index.ts`, `config.ts`, `events.ts`, `metrics.ts`, `audit.ts`) — `module.ts` declares identity, routes, permissions, and the `PRODUCT_CREATED`/`PRODUCT_DELETED` subscriptions. `index.ts` is the sole public barrel siblings may import. `events.ts` emits `inventory.reservation_expired` into the kernel event map. `metrics.ts` registers two Prometheus gauges. `config.ts` centralises the reservation TTL and low-stock threshold. `audit.ts` registers the module's four audit actions into the application-wide `AuditActionMap`.
+- **API contract** (`openapi.yaml`) — OpenAPI 3.0.3 spec (v2.0.0) defining the admin-facing surface for reading stock, auditing the ledger, and performing the three counter mutations.
+- **Tests** (`tests/`) — Unit tests pin the transition table invariants, route security, and schema constraints. Integration tests verify conditional-write guarantees (exactly-once claims, ledger-replay property, multi-line races) against real MongoDB. Contract tests assert every response conforms to the OpenAPI spec.
 
 ## How it connects
 
-- **`src/modules/products/`** – Inventory is the sole writer of `Product.onHand` and `Product.reserved`. `module.ts` subscribes to `PRODUCT_CREATED` and `PRODUCT_DELETED` to keep the stock-level collection and the mirrored product fields in lockstep.
-- **`src/modules/orders/`** – The `orders` module reacts to the `inventory.reservation_expired` domain event (declared in `events.ts`) to handle a hold expiring without a circular import. Order-commit and release paths call back into the inventory service for `commit` and `release` transitions.
-- **`src/modules/cart/`** – Cart integration tests (`cart/tests/integration/stock.test.ts`) exercise the cross-module lifecycle of reservations against inventory's hold service.
-- **`src/modules/returns/`** – Return events flow through `services/returns.ts`, which records the stock-movement ledger entry and adjusts counters via the standard transition path.
-- **`scripts/ops/`** – The recurring reservation-expiry sweep (`npm run sweep:reservations`) calls the inventory service directly; the HTTP sweep endpoint exists as an on-demand fallback for operators.
-- **`src/infrastructure/http/`** – Provides the shared Express plumbing (middleware, error handlers) that the inventory controllers build on.
-- **`scenarios/`** – End-to-end scenarios that drive multi-module flows (order → payment → commit → stock movement) through the inventory service.
+- **`src/modules/products/`** — Inventory subscribes to `PRODUCT_CREATED` and `PRODUCT_DELETED` (wired in `module.ts`) to create and remove stock-level rows, keeping the `onHand`/`reserved` mirror on the product document in sync. Inventory is the sole writer of those two product fields.
+- **`src/modules/orders/`** — Orders request reservations via the inventory service; when a hold expires, inventory emits `inventory.reservation_expired` so the orders module can release the line without importing inventory internals (avoids a circular dependency).
+- **`src/modules/cart/`** — Cart integration tests (`cart/tests/integration/stock.test.ts`) exercise the cross-module stock lifecycle (reserve → commit / release) that spans both modules.
+- **`src/modules/returns/`** — Return processing triggers the release/expire transitions in inventory's transition table, undoing a prior reservation.
+- **`src/infrastructure/http/`** — Controllers and routes build on the shared Express adapter and middleware provided by this layer.
+- **`scripts/ops/`** — The recurring reservation sweep (`npm run sweep:reservations`) is driven from operational scripts that call the inventory service directly, bypassing the HTTP route.
 
 ## Where to start
 
-1. **`services/transition.ts`** (or the barrel `services/index.ts` to find it) — this is the orchestrator that every public operation funnels through; reading it reveals the guard order, the audit hook, and how a domain transition becomes a conditional write.
-2. **`domain/transitions.ts`** — a short, pure file that lays out the seven reason→delta rules in one table. Pairing it with `tests/unit/transitions.test.ts` gives you the full invariant set in under five minutes.
+1. **`domain/transitions.ts`** — Seven lines of intent. Read this first to understand *what* the module does to its two counters for each reason code, with zero framework noise.
+2. **`services/reserve.ts`** (and `services/types.ts`) — Shows how the transition table is invoked inside a real conditional write, what the repository guard looks like, and how the service returns a simple boolean to callers. Together they reveal the full request → domain-rule → persistence → result path in ~100 lines.
 
 ## Connected modules
 ```mermaid
 flowchart LR
     m_src_modules_inventory["src/modules/inventory/"]
-    m_scenarios["scenarios/<br/>30 files"]
-    m_scripts_ops["scripts/ops/<br/>19 files"]
-    m_src["src/<br/>48 files"]
-    m_src_infrastructure["src/infrastructure/<br/>58 files"]
-    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>26 files"]
-    m_src_infrastructure_http["src/infrastructure/http/<br/>22 files"]
-    m_src_modules_cart["src/modules/cart/<br/>39 files"]
-    m_src_modules_invoicing["src/modules/invoicing/<br/>27 files"]
-    m_src_modules_orders["src/modules/orders/<br/>68 files"]
-    m_src_modules_orders_services["src/modules/orders/services/<br/>14 files"]
-    m_src_modules_payments["src/modules/payments/<br/>56 files"]
-    m_src_modules_products["src/modules/products/<br/>51 files"]
+    m_scenarios["scenarios/<br/>42 files"]
+    m_scripts_ops["scripts/ops/<br/>24 files"]
+    m_src["src/<br/>34 files"]
+    m_src_infrastructure["src/infrastructure/<br/>67 files"]
+    m_src_infrastructure_adapters["src/infrastructure/adapters/<br/>32 files"]
+    m_src_infrastructure_http["src/infrastructure/http/<br/>29 files"]
+    m_src_modules_cart["src/modules/cart/<br/>56 files"]
+    m_src_modules_invoicing["src/modules/invoicing/<br/>33 files"]
+    m_src_modules_orders["src/modules/orders/<br/>91 files"]
+    m_src_modules_payments["src/modules/payments/<br/>60 files"]
+    m_src_modules_products["src/modules/products/<br/>57 files"]
     m_src_modules_returns["src/modules/returns/<br/>40 files"]
     m_src_modules_inventory --- m_scenarios
     m_src_modules_inventory --- m_scripts_ops
@@ -65,14 +64,13 @@ flowchart LR
     m_src_modules_inventory --- m_src_modules_cart
     m_src_modules_inventory --- m_src_modules_invoicing
     m_src_modules_inventory --- m_src_modules_orders
-    m_src_modules_inventory --- m_src_modules_orders_services
     m_src_modules_inventory --- m_src_modules_payments
     m_src_modules_inventory --- m_src_modules_products
     m_src_modules_inventory --- m_src_modules_returns
     style m_src_modules_inventory stroke-width:3px
 ```
 
-[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_invoicing|src/modules/invoicing/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_orders_services|src/modules/orders/services/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]]
+[[boilerplate-node-backend_ROOT|/ (repository root)]] · [[boilerplate-node-backend_scenarios|scenarios/]] · [[boilerplate-node-backend_scripts_ops|scripts/ops/]] · [[boilerplate-node-backend_src|src/]] · [[boilerplate-node-backend_src_infrastructure|src/infrastructure/]] · [[boilerplate-node-backend_src_infrastructure_adapters|src/infrastructure/adapters/]] · [[boilerplate-node-backend_src_infrastructure_http|src/infrastructure/http/]] · [[boilerplate-node-backend_src_modules_cart|src/modules/cart/]] · [[boilerplate-node-backend_src_modules_invoicing|src/modules/invoicing/]] · [[boilerplate-node-backend_src_modules_orders|src/modules/orders/]] · [[boilerplate-node-backend_src_modules_payments|src/modules/payments/]] · [[boilerplate-node-backend_src_modules_products|src/modules/products/]] · [[boilerplate-node-backend_src_modules_returns|src/modules/returns/]]
 
 ## Files
 - `src/modules/inventory/audit.ts` — Defines the inventory module's audit action vocabulary and registers it into the application-wide `AuditActionMap` type. The four actions cover admin-level stock operations and one module-owned invariant-failure case (`ADMIN_COMMIT_ORPHANED`) that cannot be attributed to a caller's lifecycle audit.
@@ -102,7 +100,11 @@ flowchart LR
 - `src/modules/inventory/services/transition.ts`
 - `src/modules/inventory/services/types.ts`
 - `src/modules/inventory/tests/contract/api.contract.test.ts` — Contract tests for the `/inventory` HTTP surface. Each test drives a real request through the app and asserts both the business-level response (status, body shape, counters) and that the entire payload conforms to the published API spec via `toSatisfyApiSpec()`. The file covers the two read endpoints, the two write transitions (receipts, adjustments) with their success and error branches (404, 409, 422), and the reservations sweep. Transition *rules* (e.g. how `onHand` is computed) are delegated to the unit suite; this file only pins the wire contract.
+- `src/modules/inventory/tests/integration/cache-invalidation.test.ts`
+- `src/modules/inventory/tests/integration/hold-crash-window.test.ts`
 - `src/modules/inventory/tests/integration/ledger.property.test.ts` — Property-based integration test that verifies the core invariant of the inventory module: replaying every stock-movement ledger row for a product reproduces its stored `onHand` and `reserved` counters exactly, for _all_ generated sequences of transitions rather than a fixed set of examples. It runs against a real MongoDB instance so that the conditional-write coupling between ledger rows and counter updates is exercised end-to-end.
+- `src/modules/inventory/tests/integration/multi-line-race.test.ts`
+- `src/modules/inventory/tests/integration/multi-line-reserve.property.test.ts`
 - `src/modules/inventory/tests/integration/repository.test.ts` — Integration tests for `stockLevelRepository`'s aggregate read methods (`sumReserved`, `stockBoard`, `lowAvailabilityProductIds`) against a real MongoDB instance. Its primary concern is asserting the `.at(0)` fallback path: a `$group`/`$facet` pipeline on an empty collection yields zero rows rather than a zeroed row, so the guard the calling code relies on is verified explicitly. Transition-path methods (`applyDelta`, `ensure`) are intentionally out of scope here — they belong to the service tests.
 - `src/modules/inventory/tests/integration/service.test.ts` — Integration tests for the inventory service's own module edges: exactly-once reservation claims, admin transitions (receive/adjust) and their refusals, and the reservation sweep. Cross-module lifecycle is delegated to `cart/tests/integration/stock.test.ts` and replay invariants to `ledger.property.test.ts`. All tests run against a real Mongo instance because every guarantee under test is a conditional write.
 - `src/modules/inventory/tests/unit/routes.test.ts` — Unit test that pins the inventory module's route table to a documented set of five endpoints and asserts every one is gated behind `getAuth` + `requirePermissionGuard`. It exists to catch the two failure modes the module's security model depends on: a route accidentally mounted above the auth middleware, or a mount losing its permission check — either of which would expose internal counters and the movement ledger to unauthenticated callers.
