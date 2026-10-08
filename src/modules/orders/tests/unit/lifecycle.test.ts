@@ -17,6 +17,8 @@ import {
     orderActionsFor,
     statusesLeadingTo,
     statusesReachableFrom,
+    stockCommitted,
+    overridableTargetsFrom,
     type OrderActor
 } from '../../domain/lifecycle';
 
@@ -367,5 +369,82 @@ describe("statusesOverridableInto — the conditional write's own `from` set", (
 
     it('is empty for a destination outside the overridable sequence', () => {
         expect(statusesOverridableInto(OrderStatus.cancelled)).toEqual([]);
+    });
+});
+
+describe('stockCommitted — stock has left the shelf from `paid` onwards', () => {
+    it('is true exactly for the statuses from `paid` on in the fulfilment sequence', () => {
+        const fromPaid = FULFILMENT_SEQUENCE.slice(FULFILMENT_SEQUENCE.indexOf(OrderStatus.paid));
+
+        for (const status of EVERY_STATUS)
+            expect(stockCommitted(status)).toBe(fromPaid.includes(status));
+    });
+
+    it('is false for pending (only held) and cancelled (given back)', () => {
+        expect(stockCommitted(OrderStatus.pending)).toBe(false);
+        expect(stockCommitted(OrderStatus.cancelled)).toBe(false);
+    });
+
+    it('holds at every override destination', () => {
+        for (const from of EVERY_STATUS)
+            for (const to of overridableTargetsFrom(from)) expect(stockCommitted(to)).toBe(true);
+    });
+
+    it('is never undone by a move, except a cancel', () => {
+        for (const from of EVERY_STATUS.filter(stockCommitted))
+            for (const actor of EVERY_ACTOR)
+                for (const to of statusesReachableFrom(from, actor))
+                    expect(stockCommitted(to) || to === OrderStatus.cancelled).toBe(true);
+    });
+
+    it('never holds for a status that can still be paid', () => {
+        for (const status of EVERY_STATUS)
+            expect(isPayable(status) && stockCommitted(status)).toBe(false);
+    });
+});
+
+describe('overridableTargetsFrom — what an admin override could land on', () => {
+    it('only moves forward along the fulfilment sequence, in sequence order', () => {
+        for (const from of EVERY_STATUS) {
+            const targets = overridableTargetsFrom(from);
+            const fromIndex = FULFILMENT_SEQUENCE.indexOf(from);
+            const indices = targets.map((to) => FULFILMENT_SEQUENCE.indexOf(to));
+
+            expect(indices.every((index) => index > fromIndex)).toBe(true);
+            expect(indices).toEqual(indices.toSorted((a, b) => a - b));
+        }
+    });
+
+    it('is empty outside the sequence', () => {
+        expect(overridableTargetsFrom(OrderStatus.cancelled)).toEqual([]);
+    });
+
+    it('never offers pending, cancelled or the order own status', () => {
+        for (const from of EVERY_STATUS) {
+            const targets = overridableTargetsFrom(from);
+
+            expect(targets).not.toContain(OrderStatus.pending);
+            expect(targets).not.toContain(OrderStatus.cancelled);
+            expect(targets).not.toContain(from);
+        }
+    });
+
+    it('matches the literal anchors', () => {
+        expect(overridableTargetsFrom(OrderStatus.paid)).toEqual([
+            OrderStatus.processing,
+            OrderStatus.shipped,
+            OrderStatus.delivered
+        ]);
+        expect(overridableTargetsFrom(OrderStatus.shipped)).toEqual([OrderStatus.delivered]);
+        expect(overridableTargetsFrom(OrderStatus.delivered)).toEqual([]);
+        expect(overridableTargetsFrom(OrderStatus.pending)).toEqual([]);
+    });
+
+    it('agrees with statusesOverridableInto in both directions', () => {
+        for (const from of EVERY_STATUS)
+            for (const to of EVERY_STATUS)
+                expect(overridableTargetsFrom(from).includes(to)).toBe(
+                    statusesOverridableInto(to).includes(from)
+                );
     });
 });
