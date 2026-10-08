@@ -93,6 +93,43 @@ describe('resolveSafeOutboundTarget — the port rule', () => {
     });
 });
 
+describe('resolveSafeOutboundTarget — scheme and credentials, refused before any DNS', () => {
+    it.each(['not a url', 'https://', 'https://host.test:bad/x'])(
+        'refuses the unparseable %j as invalid-url',
+        async (url) => {
+            await expect(resolveSafeOutboundTarget(url)).rejects.toMatchObject({
+                reason: 'invalid-url'
+            });
+        }
+    );
+
+    it('refuses a non-https scheme as insecure-scheme without asking DNS', async () => {
+        await expect(resolveSafeOutboundTarget('http://8.8.8.8/x')).rejects.toMatchObject({
+            reason: 'insecure-scheme'
+        });
+        expect(dns.v4).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a username and password', 'https://user:secret@8.8.8.8/x'],
+        ['a username only', 'https://user@8.8.8.8/x'],
+        ['a password only', 'https://:secret@8.8.8.8/x']
+    ])('refuses %s in the URL as credentials-in-url', async (_label, url) => {
+        await expect(resolveSafeOutboundTarget(url)).rejects.toMatchObject({
+            reason: 'credentials-in-url'
+        });
+    });
+
+    it('refuses credentials even on an exempt origin', async () => {
+        registerSsrfExemptOrigin('https://sink.test');
+
+        await expect(resolveSafeOutboundTarget('https://user@sink.test/x')).rejects.toMatchObject({
+            reason: 'credentials-in-url'
+        });
+        clearSsrfExemptOrigins();
+    });
+});
+
 describe('resolveSafeOutboundTarget — embedding forms and IPv4-mapped literals', () => {
     it.each([
         ['6to4', 'https://[2002:5db8:d707::]/x'],
@@ -264,6 +301,36 @@ describe('resolveSafeOutboundTarget — the abort signal', () => {
         controller.abort(reason);
 
         await expect(pending).rejects.toBe(reason);
+    });
+
+    it('rejects with a name-and-message abort reason as it is, whichever realm minted it', async () => {
+        mockDns(['93.184.215.7']);
+        const reason = { name: 'TimeoutError', message: 'too slow' };
+
+        await expect(
+            resolveSafeOutboundTarget('https://slow.test/x', AbortSignal.abort(reason))
+        ).rejects.toBe(reason);
+    });
+
+    it.each([
+        ['a name-only object', { name: 'X' }],
+        ['a message-only object', { message: 'm' }],
+        ['a non-string name', { name: 1, message: 'm' }],
+        ['a non-string message', { name: 'X', message: 2 }]
+    ])('wraps %s abort reason in an Error', async (_label, reason) => {
+        mockDns(['93.184.215.7']);
+
+        await expect(
+            resolveSafeOutboundTarget('https://slow.test/x', AbortSignal.abort(reason))
+        ).rejects.toBeInstanceOf(Error);
+    });
+
+    it('wraps a null abort reason in an Error', async () => {
+        mockDns(['93.184.215.7']);
+
+        await expect(
+            resolveSafeOutboundTarget('https://slow.test/x', AbortSignal.abort(null))
+        ).rejects.toEqual(expect.objectContaining({ message: 'null' }));
     });
 
     it('changes nothing when the signal never fires', async () => {

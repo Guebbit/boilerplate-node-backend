@@ -93,6 +93,23 @@ describe('createSearchController — the module overlay', () => {
     });
 });
 
+describe('createSearchController — the answer', () => {
+    it('answers 200 with the search result in a success envelope', async () => {
+        const response = makeResponse();
+
+        await createSearchController({
+            entity: 'widgets',
+            schema: sortSchema,
+            runSearch: jest.fn().mockResolvedValue({ items: ['a'] })
+        })(makeRequest({}), response);
+
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(response.json).toHaveBeenCalledWith(
+            expect.objectContaining({ success: true, data: { items: ['a'] } })
+        );
+    });
+});
+
 describe('createSearchController — refusals and failures', () => {
     it('answers 422 and never searches for a body sort of []', async () => {
         const runSearch = jest.fn();
