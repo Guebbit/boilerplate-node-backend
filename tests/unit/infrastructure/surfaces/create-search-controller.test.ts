@@ -1,7 +1,7 @@
 /**
- * `createSearchController` — the search-controller shape shared by `products`, `users` and
- * `orders`. `id` is declared once here, in the factory, so this is the one place worth pinning
- * that a repeated key reaches `runSearch` as a batch, not collapsed to its first entry.
+ * `createSearchController` — the search-controller shape every list-and-search module shares.
+ * Pins what the factory owns: `id` as a batch (a repeated key is not collapsed to its first
+ * entry), the sort grammar, the module overlay, and the refusal and failure answers.
  */
 import { z } from 'zod';
 import type { Request, Response } from 'express';
@@ -66,13 +66,13 @@ describe('createSearchController — the module overlay', () => {
         const handler = createSearchController({
             entity: 'widgets',
             schema: sortSchema,
-            extendInput: () => ({ userId: undefined }),
+            extendInput: () => ({ userId: 'from-session' }),
             runSearch
         });
 
         await handler(makeRequest({ userId: 'someone-else' }), makeResponse());
 
-        expect(runSearch.mock.calls[0]?.[0]).toEqual({ userId: undefined });
+        expect(runSearch.mock.calls[0]?.[0]).toEqual({ userId: 'from-session' });
     });
 
     it('hands the overlay split sort tokens, not the raw CSV', async () => {
@@ -138,6 +138,7 @@ describe('createSearchController — refusals and failures', () => {
         expect(response.status).toHaveBeenCalledTimes(1);
         expect(response.status).toHaveBeenCalledWith(500);
         expect(response.status).not.toHaveBeenCalledWith(200);
+        expect(response.json).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
     });
 
     it.each([',', ' '])('passes a blank sort %p on with no sort key at all', async (blank) => {

@@ -17,7 +17,6 @@ import { withoutEnvironment } from '@tests/environment';
 import {
     addressBlockOf,
     identityOf,
-    rateLimitInfoOf,
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
     DEFAULT_UPLOAD_RATE_LIMIT_MAX,
@@ -159,11 +158,11 @@ const refusalsOf = (namespace: string) =>
             (metric) => metric.values.find((value) => value.labels.budget === namespace)?.value ?? 0
         );
 
-/** A response stub whose `status().json()` chain answers, enough for the shared envelope. */
-const responseStub = () => {
+/** A response stub that keeps what the envelope sent. */
+const capturingResponse = () => {
     const json = jest.fn();
     const status = jest.fn(() => ({ json }));
-    return asStub<Response>({ status });
+    return { response: asStub<Response>({ status }), status, json };
 };
 
 describe('refuseRateLimited', () => {
@@ -171,8 +170,8 @@ describe('refuseRateLimited', () => {
         const before = await refusalsOf('metric-test-global');
         const handler = refuseRateLimited({ namespace: 'metric-test-global', audited: false });
 
-        handler(requestFor('GET', '/x'), responseStub());
-        handler(requestFor('GET', '/x'), responseStub());
+        handler(requestFor('GET', '/x'), capturingResponse().response);
+        handler(requestFor('GET', '/x'), capturingResponse().response);
 
         expect(await refusalsOf('metric-test-global')).toBe(before + 2);
     });
@@ -182,7 +181,7 @@ describe('refuseRateLimited', () => {
 
         refuseRateLimited({ namespace: 'metric-test-global', audited: false })(
             requestFor('GET', '/x'),
-            responseStub()
+            capturingResponse().response
         );
 
         expect(await refusalsOf('metric-test-other')).toBe(before);
@@ -205,28 +204,15 @@ describe('identityOf — what a credential attempt names', () => {
     });
 });
 
-describe('rateLimitInfoOf', () => {
-    it('reads the info a limiter stored under its property, and undefined for one that never ran', () => {
-        const info = { limit: 5, used: 1, remaining: 4, resetTime: undefined };
-        const request = asStub<Request>({ credentialLimit: info });
-
-        expect(rateLimitInfoOf(request, 'credentialLimit')).toBe(info);
-        expect(rateLimitInfoOf(request, 'otherLimit')).toBeUndefined();
-    });
-});
-
-/** A response stub that keeps what the envelope sent. */
-const capturingResponse = () => {
-    const json = jest.fn();
-    const status = jest.fn(() => ({ json }));
-    return { response: asStub<Response>({ status }), status, json };
-};
-
 /** A request on a route, for the audit metadata. */
 const routeRequest = () =>
     asStub<Request>({ method: 'POST', path: '/upload', ip: '1.2.3.4', headers: {} });
 
 describe('refuseRateLimited — the answer a caller and the audit trail see', () => {
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     it('records one failed SECURITY_RATE_LIMIT_HIT audit for an audited budget', () => {
         refuseRateLimited({ namespace: 'audited-test', audited: true })(
             routeRequest(),
@@ -279,6 +265,5 @@ describe('refuseRateLimited — the answer a caller and the audit trail see', ()
             expect.anything(),
             expect.objectContaining({ status_code: 429 })
         );
-        warn.mockRestore();
     });
 });

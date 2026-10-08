@@ -1,9 +1,8 @@
 /**
  * @module
- * The search-controller shape shared by the list-and-search modules (`products`, `users`, `orders`,
- * `feedback`, `example`), each exposing `GET /x` and `POST /x/search` behind one controller:
- * `readInput(surface:'search')` → merge in
- * whatever the module needs decoded → `parseBody` against its own schema → run the search →
+ * The search-controller shape shared by every list-and-search module, each exposing `GET /x` and
+ * `POST /x/search` behind one controller: `readInput(surface:'search')` → merge in whatever the
+ * module needs decoded → `parseBody` against its own schema → run the search →
  * `successResponse` → `catchAs`. Only the extra query fields and the search itself differ per
  * module.
  */
@@ -58,7 +57,7 @@ export const mergedSearchInput = (
     // `sort` arrives as JSON:API CSV in a query and as an array in a body; one list either
     // way, so the schema's enum validates each token. Blank is absent: no `sort` key at all.
     const { sort: rawSort, ...rest } = read;
-    const sort = 'sort' in read ? splitSortParameter(rawSort) : undefined;
+    const sort = splitSortParameter(rawSort);
     const input = sort === undefined ? rest : { ...rest, sort };
     // extendInput: the module's own overlay — coercions or request-derived values a plain
     // field list can't express.

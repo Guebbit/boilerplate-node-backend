@@ -19,6 +19,14 @@ import {
     writeWithUploadedImage
 } from '@infrastructure/http/uploads';
 
+/*
+ * Image-store calls are mocked: the undo is asserted by WHICH store door it opens (`remove` for a
+ * promoted file, `removeQuarantined` for a pending one), never by touching a disk.
+ */
+jest.mock('@infrastructure/adapters/image-store', () => ({
+    imageStore: { remove: jest.fn(), removeQuarantined: jest.fn() }
+}));
+
 /** A multer file stub — `path` is the only field these helpers touch. */
 const uploaded = (path: string) => ({ path }) as Express.Multer.File;
 
@@ -89,14 +97,7 @@ describe('readUploadedImage', () => {
     });
 });
 
-/*
- * Image-store calls are mocked: the undo is asserted by WHICH store door it opens (`remove` for a
- * promoted file, `removeQuarantined` for a pending one), never by touching a disk.
- */
-jest.mock('@infrastructure/adapters/image-store', () => ({
-    imageStore: { remove: jest.fn(), removeQuarantined: jest.fn() }
-}));
-
+/** The mocked store, typed so a case can assert which door the undo opened. */
 const store = jest.mocked(imageStore);
 
 /** A request that carries the given upload-middleware record and body. */

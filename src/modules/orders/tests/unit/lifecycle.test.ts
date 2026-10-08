@@ -22,6 +22,7 @@ import {
     type OrderActor
 } from '../../domain/lifecycle';
 
+/** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(OrderStatus);
 const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'withdrawal'];
 
@@ -380,11 +381,6 @@ describe('stockCommitted — stock has left the shelf from `paid` onwards', () =
             expect(stockCommitted(status)).toBe(fromPaid.includes(status));
     });
 
-    it('is false for pending (only held) and cancelled (given back)', () => {
-        expect(stockCommitted(OrderStatus.pending)).toBe(false);
-        expect(stockCommitted(OrderStatus.cancelled)).toBe(false);
-    });
-
     it('holds at every override destination', () => {
         for (const from of EVERY_STATUS)
             for (const to of overridableTargetsFrom(from)) expect(stockCommitted(to)).toBe(true);
@@ -432,6 +428,10 @@ describe('overridableTargetsFrom — what an admin override could land on', () =
     it('matches the literal anchors', () => {
         expect(overridableTargetsFrom(OrderStatus.paid)).toEqual([
             OrderStatus.processing,
+            OrderStatus.shipped,
+            OrderStatus.delivered
+        ]);
+        expect(overridableTargetsFrom(OrderStatus.processing)).toEqual([
             OrderStatus.shipped,
             OrderStatus.delivered
         ]);

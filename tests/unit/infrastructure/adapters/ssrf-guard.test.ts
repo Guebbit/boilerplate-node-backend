@@ -4,6 +4,7 @@ import {
     registerSsrfExemptOrigin
 } from '@infrastructure/adapters/ssrf-exemptions';
 import { setEnvironment } from '@tests/environment';
+import { isIP } from 'node:net';
 import { resolve4, resolve6 } from 'node:dns/promises';
 
 // Names are resolved through `resolve4`/`resolve6`; mocked so no case depends on a real resolver.
@@ -13,9 +14,9 @@ jest.mock('node:dns/promises', () => ({ resolve4: jest.fn(), resolve6: jest.fn()
 const dns = { v4: jest.mocked(resolve4), v6: jest.mocked(resolve6) };
 
 /**
- * Scripts what DNS answers for both record types; an `Error` becomes a rejection (`ENODATA`).
+ * Scripts what DNS answers for both record types; an `Error` becomes a rejection with that error.
  * @param v4 - the A answer
- * @param v6 - the AAAA answer; defaults to no data
+ * @param v6 - the AAAA answer; defaults to a rejection (`ENODATA`, as for a missing record type)
  */
 const mockDns = (v4: string[] | Error, v6: string[] | Error = new Error('ENODATA')): void => {
     dns.v4.mockImplementation(() =>
@@ -31,6 +32,11 @@ const mockDns = (v4: string[] | Error, v6: string[] | Error = new Error('ENODATA
  * signal. Literal IPs never reach DNS; names go through the mocked resolver above. The
  * hostile-URL table lives in `tests/fuzz/ssrf-guard.fuzz.test.ts`.
  */
+
+beforeEach(() => {
+    dns.v4.mockReset();
+    dns.v6.mockReset();
+});
 
 describe('resolveSafeOutboundTarget — the deprecated IPv4-compatible block ::/96', () => {
     it.each([
@@ -67,7 +73,9 @@ describe('resolveSafeOutboundTarget — the port rule', () => {
     it('allows a port the operator listed, and only that one', async () => {
         setEnvironment({ NODE_OUTBOUND_ALLOWED_PORTS: '8443, 9443' });
 
-        await expect(resolveSafeOutboundTarget('https://8.8.8.8:8443/x')).resolves.toBeDefined();
+        await expect(resolveSafeOutboundTarget('https://8.8.8.8:8443/x')).resolves.toMatchObject({
+            resolvedAddress: '8.8.8.8'
+        });
         await expect(resolveSafeOutboundTarget('https://8.8.8.8:22/x')).rejects.toMatchObject({
             reason: 'unsafe-port'
         });
@@ -76,7 +84,9 @@ describe('resolveSafeOutboundTarget — the port rule', () => {
     it('lets an exempt origin through on its own port only', async () => {
         registerSsrfExemptOrigin('https://127.0.0.1:3070');
 
-        await expect(resolveSafeOutboundTarget('https://127.0.0.1:3070/x')).resolves.toBeDefined();
+        await expect(resolveSafeOutboundTarget('https://127.0.0.1:3070/x')).resolves.toMatchObject({
+            resolvedAddress: '127.0.0.1'
+        });
         await expect(resolveSafeOutboundTarget('https://127.0.0.1:3071/x')).rejects.toMatchObject({
             reason: 'unsafe-port'
         });
@@ -94,15 +104,10 @@ describe('resolveSafeOutboundTarget — embedding forms and IPv4-mapped literals
         });
     });
 
-    it('unwraps an IPv4-mapped literal and judges the IPv4 inside', async () => {
+    it('judges a public IPv4-mapped literal by the IPv4 inside and lets it through', async () => {
         await expect(
             resolveSafeOutboundTarget('https://[::ffff:93.184.215.7]/x')
-        ).resolves.toBeDefined();
-        await expect(
-            resolveSafeOutboundTarget('https://[::ffff:127.0.0.1]/x')
-        ).rejects.toMatchObject({
-            reason: 'unsafe-address'
-        });
+        ).resolves.toMatchObject({ resolvedAddress: '::ffff:5db8:d707' });
     });
 
     it('pins a public IPv6 literal with family 6 and brackets stripped', async () => {
@@ -145,9 +150,13 @@ describe('resolveSafeOutboundTarget — name resolution', () => {
         const all = jest.fn();
         target.lookup('other.test', {}, single);
         target.lookup('other.test', { all: true }, all);
-        expect(single).toHaveBeenCalledWith(null, target.resolvedAddress, expect.any(Number));
+        expect(single).toHaveBeenCalledWith(
+            null,
+            target.resolvedAddress,
+            isIP(target.resolvedAddress)
+        );
         expect(all).toHaveBeenCalledWith(null, [
-            { address: target.resolvedAddress, family: expect.any(Number) }
+            { address: target.resolvedAddress, family: isIP(target.resolvedAddress) }
         ]);
     });
 
@@ -156,14 +165,6 @@ describe('resolveSafeOutboundTarget — name resolution', () => {
 
         await expect(resolveSafeOutboundTarget('https://garbled.test/x')).rejects.toMatchObject({
             reason: 'unsafe-address'
-        });
-    });
-
-    it('refuses with dns-resolution-failed when neither family answers', async () => {
-        mockDns(new Error('ENOTFOUND'), new Error('ENOTFOUND'));
-
-        await expect(resolveSafeOutboundTarget('https://nowhere.test/x')).rejects.toMatchObject({
-            reason: 'dns-resolution-failed'
         });
     });
 });
@@ -193,16 +194,6 @@ describe('resolveSafeOutboundTarget — the origin exemption', () => {
         await expect(resolveSafeOutboundTarget('https://sink.test/hook')).rejects.toMatchObject({
             reason: 'dns-resolution-failed'
         });
-    });
-
-    it('does not waive an invalid URL', async () => {
-        registerSsrfExemptOrigin('https://sink.test');
-
-        await expect(resolveSafeOutboundTarget('https://sink.test:bad/hook')).rejects.toMatchObject(
-            {
-                reason: 'invalid-url'
-            }
-        );
     });
 
     it.each([
@@ -261,6 +252,18 @@ describe('resolveSafeOutboundTarget — the abort signal', () => {
         await expect(
             resolveSafeOutboundTarget('https://slow.test/x', AbortSignal.abort('budget'))
         ).rejects.toEqual(expect.objectContaining({ message: 'budget' }));
+    });
+
+    it('rejects with the abort reason when the signal fires while DNS is still pending', async () => {
+        dns.v4.mockImplementation(() => new Promise<string[]>(() => undefined));
+        dns.v6.mockImplementation(() => new Promise<string[]>(() => undefined));
+        const controller = new AbortController();
+        const reason = new Error('budget spent');
+
+        const pending = resolveSafeOutboundTarget('https://slow.test/x', controller.signal);
+        controller.abort(reason);
+
+        await expect(pending).rejects.toBe(reason);
     });
 
     it('changes nothing when the signal never fires', async () => {

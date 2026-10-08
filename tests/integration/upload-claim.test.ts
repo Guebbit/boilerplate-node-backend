@@ -7,6 +7,8 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { MISSING_ID } from '@tests/ids';
 import { createExample } from '@modules/example/tests/factories';
 import { currentEnvironment } from '@infrastructure/config/store';
 
@@ -92,6 +94,47 @@ describe('POST /products', () => {
         await settled(() => uploadedFiles().length === 0);
 
         expect(response.status).toBe(422);
+        expect(uploadedFiles()).toEqual([]);
+    });
+});
+
+describe('PUT /products/:id', () => {
+    it('keeps the upload of a product that was updated', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .field('translations', JSON.stringify({ en: { title: 'Updated product' } }))
+            .field('price', '12')
+            .field('active', 'true')
+            .field('requiresShipping', 'true')
+            .field('categories', '[]')
+            .field('tags', '[]')
+            .attach('imageUpload', PNG_BYTES, IMAGE);
+        await settled(() => false);
+
+        expect(response.status).toBe(200);
+        expect(uploadedFiles()).toHaveLength(1);
+    });
+
+    it('deletes the upload for a product that does not exist', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .put(`/products/${MISSING_ID}`)
+            .set('Authorization', bearer)
+            .field('translations', JSON.stringify({ en: { title: 'Updated product' } }))
+            .field('price', '12')
+            .field('active', 'true')
+            .field('requiresShipping', 'true')
+            .field('categories', '[]')
+            .field('tags', '[]')
+            .attach('imageUpload', PNG_BYTES, IMAGE);
+        await settled(() => uploadedFiles().length === 0);
+
+        expect(response.status).toBe(404);
         expect(uploadedFiles()).toEqual([]);
     });
 });

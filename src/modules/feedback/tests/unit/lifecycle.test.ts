@@ -11,6 +11,7 @@ import {
     toFeedbackStatus
 } from '../../domain/lifecycle';
 
+/** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(FeedbackRequestStatus);
 
 describe('toFeedbackStatus — a status string narrows onto the closed set', () => {
@@ -27,12 +28,20 @@ describe('toFeedbackStatus — a status string narrows onto the closed set', () 
 });
 
 describe('shouldStampRespondedAt — the first resolution only', () => {
-    it('is true only when a ticket becomes resolved for the first time', () => {
-        for (const status of EVERY_STATUS)
-            for (const alreadyResponded of [true, false])
-                expect(shouldStampRespondedAt(status, alreadyResponded)).toBe(
-                    status === FeedbackRequestStatus.resolved && !alreadyResponded
-                );
+    it.each([
+        [FeedbackRequestStatus.resolved, false, true],
+        [FeedbackRequestStatus.resolved, true, false],
+        [FeedbackRequestStatus.new, false, false],
+        [FeedbackRequestStatus.new, true, false],
+        [FeedbackRequestStatus.spam, false, false],
+        [FeedbackRequestStatus.spam, true, false]
+    ])('for status %s and alreadyResponded=%s answers %s', (status, alreadyResponded, expected) => {
+        expect(shouldStampRespondedAt(status, alreadyResponded)).toBe(expected);
+    });
+
+    it('stamps for no status other than resolved', () => {
+        for (const status of EVERY_STATUS.filter((s) => s !== FeedbackRequestStatus.resolved))
+            expect(shouldStampRespondedAt(status, false)).toBe(false);
     });
 
     it('is false when the write leaves status untouched', () => {
