@@ -63,6 +63,7 @@ export interface SafeOutboundTarget {
 
 /** An IPv6 hostname from `URL.hostname` is bracketed (`[::1]`); every other check needs it bare. */
 const stripBrackets = (hostname: string): string =>
+    // Stryker disable next-line LogicalOperator: equivalent, `URL.hostname` brackets both ends or neither.
     hostname.startsWith('[') && hostname.endsWith(']') ? hostname.slice(1, -1) : hostname;
 
 /**
@@ -212,6 +213,7 @@ const rejectOnAbort = <T>(signal: AbortSignal): Promise<T> =>
             reject(abortReason(signal));
             return;
         }
+        // Stryker disable next-line ObjectLiteral,BooleanLiteral: equivalent, a signal fires once and a later `reject` is a no-op.
         signal.addEventListener('abort', () => reject(abortReason(signal)), { once: true });
     });
 

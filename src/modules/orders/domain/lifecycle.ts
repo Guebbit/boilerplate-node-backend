@@ -120,6 +120,7 @@ const OVERRIDABLE_SEQUENCE: readonly OrderStatus[] = [
  * @returns whether the move is a legal forward override
  */
 export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
+    // Stryker disable next-line ConditionalExpression: equivalent, `paid`/`pending`/`cancelled` fail the index test below anyway.
     if (to !== OrderStatus.processing && to !== OrderStatus.shipped && to !== OrderStatus.delivered)
         return false;
 

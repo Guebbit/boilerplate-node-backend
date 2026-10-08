@@ -298,6 +298,12 @@ describe('resolveSafeOutboundTarget — the abort signal', () => {
         const reason = new Error('budget spent');
 
         const pending = resolveSafeOutboundTarget('https://slow.test/x', controller.signal);
+        // Abort only once the lookup is under way: aborting at once takes the already-aborted
+        // branch and never reaches the listener this case is about.
+        await new Promise((resolve) => {
+            setImmediate(resolve);
+        });
+        expect(dns.v4).toHaveBeenCalled();
         controller.abort(reason);
 
         await expect(pending).rejects.toBe(reason);
