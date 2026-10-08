@@ -18,6 +18,7 @@ and not just the ten rows on screen. One parameter, one grammar, everywhere.
 | Direction | `field` ascending, `-field` descending |
 | Several fields | the earlier one ranks first; at most 3 |
 | Absent or blank | the resource's default order, newest first. Blank means absent on the **query only** (`?sort=`); a blank body `sort` is a 422 |
+| A repeated field | the first mention wins: `price,-price` sorts by price ascending |
 | A CSV inside a body item | **422** — only the query string is split on commas |
 | A field outside the list | **422** — the contract enum refuses it |
 
