@@ -31,21 +31,15 @@ export const productsConfig = defineConfig({
             default: 0.22,
             min: 0,
             lessThan: 1,
-            required: { minLength: 1 },
-            describe: 'The VAT rate of a product with no tax class (0.22 is 22%).'
+            required: { minLength: 1 }
         }),
         NODE_VAT_RATE_REDUCED: decimal({
             default: 0.1,
             min: 0,
             lessThan: 1,
-            required: { minLength: 1 },
-            describe: 'The VAT rate of a product whose tax class is `reduced`.'
+            required: { minLength: 1 }
         }),
-        NODE_LOW_STOCK_THRESHOLD: int({
-            default: 5,
-            min: 0,
-            describe: 'Availability at or under which a product wants restocking.'
-        })
+        NODE_LOW_STOCK_THRESHOLD: int({ default: 5, min: 0 })
     }
 });
 

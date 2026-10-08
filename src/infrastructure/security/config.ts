@@ -20,9 +20,7 @@ export const pseudonymConfig = defineConfig({
             minLength: 16,
             minBytes: 32,
             placeholder: 'your-pseudonym-key-here',
-            productionOnly: true,
-            describe:
-                'Root secret for keyed hashes of personal data in logs and fingerprints. Every digest throws without it.'
+            productionOnly: true
         })
     }
 });
@@ -31,9 +29,7 @@ export const pseudonymConfig = defineConfig({
  * The PII field-encryption ring. Shape-only here: which module REQUIRES it is that module's
  * decision (`users`), so deleting the module deletes the requirement.
  */
-export const PII_ENCRYPTION_KEY_FIELD = versionedKeyRing({
-    describe: 'Key ring encrypting personal fields at rest (addresses, phone numbers).'
-});
+export const PII_ENCRYPTION_KEY_FIELD = versionedKeyRing();
 
 /** The slice the encryption helper reads. */
 export const piiConfig = defineConfig({
@@ -45,18 +41,8 @@ export const piiConfig = defineConfig({
 export const breachedPasswordsConfig = defineConfig({
     name: 'breached-passwords',
     shape: {
-        NODE_PASSWORD_BREACH_LIST: flag({
-            default: true,
-            describe: 'Refuse a password on the bundled breach list.'
-        }),
-        NODE_PASSWORD_BREACH_HIBP: flag({
-            default: false,
-            describe: 'Also ask Have I Been Pwned (k-anonymity range lookup). Fails open.'
-        }),
-        NODE_PASSWORD_BREACH_HIBP_TIMEOUT_MS: int({
-            default: 1500,
-            min: 1,
-            describe: 'How long the HIBP lookup may take before it is skipped.'
-        })
+        NODE_PASSWORD_BREACH_LIST: flag({ default: true }),
+        NODE_PASSWORD_BREACH_HIBP: flag({ default: false }),
+        NODE_PASSWORD_BREACH_HIBP_TIMEOUT_MS: int({ default: 1500, min: 1 })
     }
 });

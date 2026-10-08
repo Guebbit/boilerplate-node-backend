@@ -28,15 +28,6 @@ const FILE_SUFFIX = '_FILE';
 const OWNED_PREFIX = 'NODE_';
 
 /**
- * The variable that reads `name` from a file instead, if `name` is in the namespace this resolves.
- *
- * @param name - a variable a slice declares
- * @returns `NODE_X_FILE` for `NODE_X`; `undefined` for a variable the loader leaves alone
- */
-export const fileFormOf = (name: string): string | undefined =>
-    name.startsWith(OWNED_PREFIX) ? `${name}${FILE_SUFFIX}` : undefined;
-
-/**
  * Each connection URL and the variable holding its password. The URL stays in the environment
  * WITHOUT a password; the password arrives as a file and is merged in here, so a client's
  * hostname and options live in plain config and only the credential is a secret.

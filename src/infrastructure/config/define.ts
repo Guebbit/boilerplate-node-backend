@@ -11,7 +11,7 @@
  * See: docs/tools/configuration.md
  */
 
-import type { Field, FieldDocument, Presence } from './fields';
+import type { Field, Presence } from './fields';
 import { currentEnvironment, environmentVersion, type Environment } from './store';
 
 /** The fields of one slice, keyed by the environment variable each one reads. */
@@ -22,12 +22,10 @@ export type Parsed<TShape extends Shape> = {
     readonly [K in keyof TShape]: TShape[K] extends Field<infer T> ? T : never;
 };
 
-/** What the docs generator and the boot gate need to know about one field. */
+/** What the boot gate needs to know about one field. */
 export interface FieldInfo {
     /** The variable name. */
     name: string;
-    /** Generated-page facts. */
-    doc: FieldDocument;
     /** Boot-time presence rule, if any. */
     presence?: Presence;
     /** Whether the value is a credential. */
@@ -44,9 +42,9 @@ export interface SliceProblems {
     checks: string[];
 }
 
-/** Type-erased view of a slice — what a list of slices, the gate and the docs page all share. */
+/** Type-erased view of a slice — what a list of slices and the boot gate share. */
 export interface ConfigSlice {
-    /** Owner-scoped name, e.g. `products`; shown in the generated page. */
+    /** Owner-scoped name, e.g. `products`. */
     readonly name: string;
     /** Every field, in declaration order. */
     readonly fields: readonly FieldInfo[];
@@ -152,7 +150,6 @@ const presenceBroken = (rule: Presence, raw: string | undefined): boolean => {
 const describeShape = (shape: Shape): FieldInfo[] =>
     Object.entries(shape).map(([name, field]) => ({
         name,
-        doc: field.doc,
         ...(field.presence && { presence: field.presence }),
         sensitive: field.sensitive
     }));

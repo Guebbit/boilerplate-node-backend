@@ -22,11 +22,7 @@ import { text } from '@infrastructure/config/fields';
  * @param fallback - the committed password used when the variable is unset
  */
 const seedPassword = (account: string, fallback: string) =>
-    text({
-        default: fallback,
-        sensitive: true,
-        describe: `The ${account} seed account's password. Keep it identical to the paired frontend's own \`.env\`.`
-    });
+    text({ default: fallback, sensitive: true });
 
 /** The seed accounts' passwords. */
 export const seedPasswordsConfig = defineConfig({
@@ -62,9 +58,6 @@ export const seedPasswordsConfig = defineConfig({
 export const demoSinkConfig = defineConfig({
     name: 'scenario-webhook-sink',
     shape: {
-        NODE_WEBHOOK_DEMO_SINK_URL: text({
-            describe:
-                'The demo webhook sink (https), seeded as a subscription. Its origin is exempt from the SSRF private-address check in a process that loads the dev preload.'
-        })
+        NODE_WEBHOOK_DEMO_SINK_URL: text()
     }
 });

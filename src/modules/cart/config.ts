@@ -12,18 +12,8 @@ import { int } from '@infrastructure/config/fields';
 export const cartConfig = defineConfig({
     name: 'cart',
     shape: {
-        NODE_CART_RETENTION_DAYS: int({
-            default: 365,
-            min: 1,
-            describe: 'Days an untouched cart is kept. Changing it needs `db:sync`.'
-        }),
-        NODE_CART_LINE_MAX: int({
-            default: 10,
-            min: 1,
-            max: 999,
-            describe:
-                'Units of one product a cart line (so one order) may hold. The contract keeps 999 as the hard ceiling; this is the shop’s own, lower, number, so one account cannot reserve a whole product at once.'
-        })
+        NODE_CART_RETENTION_DAYS: int({ default: 365, min: 1 }),
+        NODE_CART_LINE_MAX: int({ default: 10, min: 1, max: 999 })
     }
 });
 

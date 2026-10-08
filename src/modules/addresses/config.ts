@@ -12,12 +12,7 @@ import { int } from '@infrastructure/config/fields';
 export const addressesConfig = defineConfig({
     name: 'addresses',
     shape: {
-        NODE_ADDRESS_BOOK_MAX: int({
-            default: 20,
-            min: 1,
-            describe:
-                'Entries one account’s address book may hold. A book is one document, so an unbounded one grows toward the 16 MB document limit and breaks that account’s own writes.'
-        })
+        NODE_ADDRESS_BOOK_MAX: int({ default: 20, min: 1 })
     }
 });
 

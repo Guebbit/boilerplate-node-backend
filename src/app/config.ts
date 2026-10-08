@@ -66,39 +66,14 @@ import { enabledModules } from '../modules';
 export const appConfig = defineConfig({
     name: 'app',
     shape: {
-        NODE_JSON_BODY_LIMIT: text({
-            default: '100kb',
-            describe:
-                'Largest JSON or form body, as `bytes`-style text. Explicit rather than express’s implicit default.'
-        }),
-        NODE_HTTP_HEADERS_TIMEOUT_MS: int({
-            default: 15_000,
-            min: 1,
-            describe: 'How long a client may take to send its headers (slowloris bound).'
-        }),
-        NODE_HTTP_REQUEST_TIMEOUT_MS: int({
-            default: 120_000,
-            min: 1,
-            describe: 'How long a client may take to send a whole request, body included.'
-        }),
-        NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS: int({
-            default: 5000,
-            min: 1,
-            describe: 'Idle keep-alive lifetime. Raise it above the proxy’s own idle timeout.'
-        }),
-        NODE_TRUST_PROXY_HOPS: int({
-            default: 0,
-            min: 0,
-            describe:
-                'Reverse proxies in front of the API. Too low buckets callers together; too high lets one forge X-Forwarded-For.'
-        }),
-        NODE_SECURITY_CONTACT: text({
-            describe: 'security.txt Contact (RFC 9116). Unset publishes nothing.'
-        }),
-        NODE_SECURITY_EXPIRES: text({
-            describe: 'security.txt Expires, an ISO date. Unset publishes nothing.'
-        }),
-        NODE_SECURITY_POLICY_URL: text({ describe: 'security.txt Policy link.' })
+        NODE_JSON_BODY_LIMIT: text({ default: '100kb' }),
+        NODE_HTTP_HEADERS_TIMEOUT_MS: int({ default: 15_000, min: 1 }),
+        NODE_HTTP_REQUEST_TIMEOUT_MS: int({ default: 120_000, min: 1 }),
+        NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS: int({ default: 5000, min: 1 }),
+        NODE_TRUST_PROXY_HOPS: int({ default: 0, min: 0 }),
+        NODE_SECURITY_CONTACT: text(),
+        NODE_SECURITY_EXPIRES: text(),
+        NODE_SECURITY_POLICY_URL: text()
     }
 });
 

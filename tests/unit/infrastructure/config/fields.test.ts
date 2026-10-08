@@ -42,11 +42,6 @@ describe('int', () => {
 
     it('has no default when none is given', () => {
         expect(int().schema.parse(undefined)).toBeUndefined();
-        expect(int().doc.default).toBeUndefined();
-    });
-
-    it('describes itself for the generated page', () => {
-        expect(field.doc).toEqual({ type: 'whole number >= 1', default: '30' });
     });
 });
 
@@ -87,9 +82,9 @@ describe('flag', () => {
         expect(field.schema.safeParse('maybe').success).toBe(false);
     });
 
-    it('takes the default when unset, and renders it as on/off', () => {
+    it('takes the default when unset', () => {
         expect(field.schema.parse(undefined)).toBe(false);
-        expect(flag({ default: true }).doc.default).toBe('on');
+        expect(flag({ default: true }).schema.parse(undefined)).toBe(true);
     });
 });
 
@@ -155,14 +150,6 @@ describe('text and secret', () => {
     });
 });
 
-describe('setBy', () => {
-    it('reaches the field document, and is absent when not given', () => {
-        expect(text({ setBy: 'npm' }).doc.setBy).toBe('npm');
-        expect(flag({ default: false, setBy: 'e2e:serve' }).doc.setBy).toBe('e2e:serve');
-        expect(text().doc).not.toHaveProperty('setBy');
-    });
-});
-
 describe('csv and key rings', () => {
     it('splits, trims and drops blank members', () => {
         expect(csv().schema.parse(' a, b ,, c,')).toEqual(['a', 'b', 'c']);
@@ -172,11 +159,10 @@ describe('csv and key rings', () => {
         expect(csv().schema.parse(undefined)).toEqual([]);
     });
 
-    it('takes its default when unset, and shows it on the page', () => {
+    it('takes its default when unset', () => {
         const field = csv({ default: ['a', 'b'] });
         expect(field.schema.parse(undefined)).toEqual(['a', 'b']);
         expect(field.schema.parse('c')).toEqual(['c']);
-        expect(field.doc.default).toBe('a,b');
     });
 
     it('normalises each member when asked', () => {

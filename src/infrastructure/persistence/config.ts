@@ -12,15 +12,7 @@ import { int } from '@infrastructure/config/fields';
 export const persistenceConfig = defineConfig({
     name: 'persistence',
     shape: {
-        NODE_SETTINGS_PAGINATION_PAGE_SIZE: int({
-            default: 10,
-            min: 1,
-            describe: 'Page size when the caller asks for none. Capped at 100.'
-        }),
-        NODE_LEASE_RETENTION_DAYS: int({
-            default: 30,
-            min: 1,
-            describe: 'Days an untouched job-lease document survives. Changing it needs `db:sync`.'
-        })
+        NODE_SETTINGS_PAGINATION_PAGE_SIZE: int({ default: 10, min: 1 }),
+        NODE_LEASE_RETENTION_DAYS: int({ default: 30, min: 1 })
     }
 });

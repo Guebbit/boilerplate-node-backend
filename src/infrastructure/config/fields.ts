@@ -39,27 +39,12 @@ export interface Presence {
     productionOnly?: boolean;
 }
 
-/** What a field says about itself to the generated configuration page. */
-export interface FieldDocument {
-    /** The shape in words: `whole number >= 1`, `switch`, `one of a, b`. */
-    type: string;
-    /** The value a deployment gets when it sets nothing, rendered; absent when there is none. */
-    default?: string;
-    /** One line on what the variable does. */
-    describe?: string;
-    /** Who sets it when it is not the operator (`npm`, `e2e:serve`); `.env-example` omits it. */
-    setBy?: string;
-}
-
 /**
- * One environment variable's rules: how to read it, what to tell the docs, and whether it may
- * be absent or present.
+ * One environment variable's rules: how to read it, and whether it may be absent or present.
  */
 export interface Field<T> {
     /** Parses the raw string (or `undefined` when unset or blank) into the typed value. */
     readonly schema: z.ZodType<T>;
-    /** What the generated page shows. */
-    readonly doc: FieldDocument;
     /** Boot-time presence rule, when the variable has one. */
     readonly presence?: Presence;
     /** `true` for a credential: its value is never echoed into an error message. */
@@ -68,10 +53,6 @@ export interface Field<T> {
 
 /** Options every builder accepts. */
 export interface CommonOptions {
-    /** One line for the generated page. */
-    describe?: string;
-    /** Who sets it when it is not the operator: the variable then has no line in `.env-example`. */
-    setBy?: string;
     /** Boot-time presence rule. */
     required?: Presence;
     /** Never echo the value into an error. */
@@ -100,8 +81,6 @@ const DECIMAL = /^[+-]?\d+(\.\d+)?$/;
 interface BuildOptions<T> extends CommonOptions {
     /** The value an unset variable takes. */
     default?: T;
-    /** How the default reads on the generated page; `String` when absent. */
-    renderDefault?: (value: T) => string;
     /** Skip the trim-and-blank step, for a value whose exact bytes are the point. */
     verbatim?: boolean;
 }
@@ -111,39 +90,19 @@ interface BuildOptions<T> extends CommonOptions {
  * in for an unset value.
  *
  * @param inner - the rule for a set value
- * @param type - the shape, in words
  * @param options - the builder's options, `default` included
  * @returns the field
  */
-function build<T>(
-    inner: z.ZodType<T>,
-    type: string,
-    options: BuildOptions<T> & { default: T }
-): Field<T>;
-function build<T>(
-    inner: z.ZodType<T>,
-    type: string,
-    options: BuildOptions<T>
-): Field<T | undefined>;
-function build<T>(
-    inner: z.ZodType<T>,
-    type: string,
-    options: BuildOptions<T>
-): Field<T | undefined> {
+function build<T>(inner: z.ZodType<T>, options: BuildOptions<T> & { default: T }): Field<T>;
+function build<T>(inner: z.ZodType<T>, options: BuildOptions<T>): Field<T | undefined>;
+function build<T>(inner: z.ZodType<T>, options: BuildOptions<T>): Field<T | undefined> {
     const fallback = options.default;
     // Zod: `.optional()` lets `undefined` through; the transform then puts the default in.
     // Not `.default()`: its typing refuses a generic `T`. https://zod.dev/api#optionals
     const rule = inner.optional().transform((value) => value ?? fallback);
-    const render = options.renderDefault ?? String;
     return {
         // preprocess: run `blankAsUnset` first, then the rule above. https://zod.dev/api#preprocess
         schema: z.preprocess(options.verbatim ? (value: unknown) => value : blankAsUnset, rule),
-        doc: {
-            type,
-            ...(fallback !== undefined && { default: render(fallback) }),
-            ...(options.describe && { describe: options.describe }),
-            ...(options.setBy && { setBy: options.setBy })
-        },
         ...(options.required && { presence: options.required }),
         sensitive: options.sensitive ?? false
     };
@@ -205,7 +164,6 @@ export function int(options: RangeOptions & { default?: number } = {}): Field<nu
             // `parseInt(x, 10)`: base 10, so a zero-padded `0900` is 900, not octal.
             .transform((text) => Number.parseInt(text, 10))
             .pipe(boundedNumber(label, options).int(label)),
-        label,
         options
     );
 }
@@ -229,7 +187,6 @@ export function decimal(
             .regex(DECIMAL, label)
             .transform((text) => Number.parseFloat(text))
             .pipe(boundedNumber(label, options)),
-        label,
         options
     );
 }
@@ -253,8 +210,7 @@ export function flag(
             case: 'insensitive',
             error: label
         }),
-        'switch',
-        { ...options, renderDefault: (value) => (value ? 'on' : 'off') }
+        options
     );
 }
 
@@ -293,7 +249,6 @@ export function choice<const T extends string>(
                     { error: () => `one of ${members().join(', ')}` }
                 )
             ),
-        `one of ${typeof allowed === 'function' ? 'the registered providers' : allowed.join(', ')}`,
         options
     );
 }
@@ -331,7 +286,6 @@ export function text(options: TextOptions & { default?: string } = {}): Field<st
     // Zod: `.transform` maps the validated string through `applyCase`. https://zod.dev/api#transform
     return build(
         z.string().transform((value) => applyCase(value, options.case)),
-        'text',
         options
     );
 }
@@ -347,14 +301,14 @@ export function email(
     options: CommonOptions & { default?: string } = {}
 ): Field<string | undefined> {
     // Zod: `z.email` is the library's own address rule, no hand-written pattern. https://zod.dev/api#emails
-    return build(z.email('email address'), 'email address', options);
+    return build(z.email('email address'), options);
 }
 
 /**
  * Free text that is a credential: never echoed into an error, and (through `required`) checked for
  * length and for still being the `.env-example` placeholder at boot.
  *
- * @param options - the presence rule, and `describe`
+ * @param options - the presence rule
  */
 export const secret = (options: CommonOptions & Presence): Field<string | undefined> => {
     const { minLength, placeholder, productionOnly, minBytes, ...rest } = options;
@@ -396,42 +350,35 @@ const listRule = (normalise: (member: string) => string): z.ZodType<string[]> =>
 /**
  * A comma-separated list. Unset is the empty list, unless a `default` says otherwise.
  *
- * @param options - `describe`, `case` to normalise each member, `default` for an unset value
+ * @param options - `case` to normalise each member, `default` for an unset value
  */
 export const csv = (options: CsvOptions = {}): Field<string[]> =>
     build(
         listRule((member) => applyCase(member, options.case)),
-        'comma-separated list',
-        {
-            ...options,
-            default: [...(options.default ?? [])],
-            renderDefault: (members) => (members.length > 0 ? members.join(',') : 'empty')
-        }
+        { ...options, default: [...(options.default ?? [])] }
     );
 
 /**
  * A key ring of plain secrets, newest first: `new,old` while a rotation is in flight, one entry
  * once it is done. Never echoed. Unset is the empty ring.
  *
- * @param options - the presence rule and `describe`
+ * @param options - the presence rule
  */
 export const keyRing = (options: CommonOptions = {}): Field<string[]> =>
     build(
         listRule((member) => member),
-        'key ring (comma-separated, newest first)',
-        { ...options, sensitive: true, default: [], renderDefault: () => 'empty' }
+        { ...options, sensitive: true, default: [] }
     );
 
 /**
  * A key ring of versioned secrets — `v2:new,v1:old`, a bare value being `v1`. Never echoed.
  *
- * @param options - the presence rule and `describe`
+ * @param options - the presence rule
  */
 export const versionedKeyRing = (options: CommonOptions = {}): Field<VersionedKey[]> =>
     build(
         z.string().transform((raw) => parseVersionedKeyRing(raw)),
-        'versioned key ring (`version:key`, comma-separated, newest first)',
-        { ...options, sensitive: true, default: [], renderDefault: () => 'empty' }
+        { ...options, sensitive: true, default: [] }
     );
 
 /**

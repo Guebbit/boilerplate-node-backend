@@ -26,52 +26,16 @@ export type AccountLinkKind = 'verify' | 'reset' | 'delete' | 'email-change' | '
 export const accountConfig = defineConfig({
     name: 'account',
     shape: {
-        NODE_FRONTEND_LINK_VERIFY: text({
-            default: 'verify-email/confirm#token={token}',
-            describe: 'Template of the email-verification link.'
-        }),
-        NODE_FRONTEND_LINK_RESET: text({
-            default: 'password-reset/confirm#token={token}',
-            describe: 'Template of the password-reset link.'
-        }),
-        NODE_FRONTEND_LINK_DELETE: text({
-            default: 'account-delete/confirm#token={token}',
-            describe: 'Template of the account-deletion link.'
-        }),
-        NODE_FRONTEND_LINK_EMAIL_CHANGE: text({
-            default: 'email-change/confirm#token={token}',
-            describe: 'Template of the email-change link.'
-        }),
-        NODE_FRONTEND_LINK_EMAIL_UNDO: text({
-            default: 'email-change/undo#token={token}',
-            describe: 'Template of the link in the old-address notice that undoes an email change.'
-        }),
-        NODE_FRONTEND_LINK_EXPORT: text({
-            default: 'account-export/{id}',
-            describe: 'Template of the link in the "your data export is ready" mail.'
-        }),
-        NODE_PASSWORD_RESET_TTL_MS: int({
-            default: 3_600_000,
-            min: 1,
-            describe: 'How long a reset link works. Shorter is safer.'
-        }),
-        NODE_INACTIVE_ACCOUNT_DAYS: int({
-            default: 0,
-            min: 0,
-            describe:
-                'Days of inactivity before the reaper warns, then deletes, a customer account (never staff or an administrator). 0 disables it.'
-        }),
-        NODE_EMAIL_VERIFY_TTL_MS: int({
-            default: 86_400_000,
-            min: 1,
-            describe: 'How long a verification link works.'
-        }),
-        NODE_ACCOUNT_EXPORT_TTL_DAYS: int({
-            default: 7,
-            min: 1,
-            describe:
-                'Days a built data export stays downloadable. After that the nightly reaper deletes the file and the account can ask for a new one.'
-        })
+        NODE_FRONTEND_LINK_VERIFY: text({ default: 'verify-email/confirm#token={token}' }),
+        NODE_FRONTEND_LINK_RESET: text({ default: 'password-reset/confirm#token={token}' }),
+        NODE_FRONTEND_LINK_DELETE: text({ default: 'account-delete/confirm#token={token}' }),
+        NODE_FRONTEND_LINK_EMAIL_CHANGE: text({ default: 'email-change/confirm#token={token}' }),
+        NODE_FRONTEND_LINK_EMAIL_UNDO: text({ default: 'email-change/undo#token={token}' }),
+        NODE_FRONTEND_LINK_EXPORT: text({ default: 'account-export/{id}' }),
+        NODE_PASSWORD_RESET_TTL_MS: int({ default: 3_600_000, min: 1 }),
+        NODE_INACTIVE_ACCOUNT_DAYS: int({ default: 0, min: 0 }),
+        NODE_EMAIL_VERIFY_TTL_MS: int({ default: 86_400_000, min: 1 }),
+        NODE_ACCOUNT_EXPORT_TTL_DAYS: int({ default: 7, min: 1 })
     }
 });
 

@@ -23,25 +23,11 @@ export const webhooksConfig = defineConfig({
                 minLength: 16,
                 minBytes: 32,
                 placeholder: 'your-webhook-secret-encryption-key-here'
-            },
-            describe: 'Ring encrypting stored subscription secrets, `version:key`, newest first.'
+            }
         }),
-        NODE_WEBHOOK_SUBSCRIPTION_CAP: int({
-            default: 20,
-            min: 1,
-            describe: 'Subscriptions one tenant may hold — the fan-out guard.'
-        }),
-        NODE_WEBHOOK_SECRET_OVERLAP_HOURS: int({
-            default: 24,
-            min: 1,
-            describe:
-                'Hours a superseded secret keeps signing after a rotation. A ring holds at most two.'
-        }),
-        NODE_WEBHOOK_DELIVERY_RETENTION_DAYS: int({
-            default: 30,
-            min: 1,
-            describe: 'Days a delivery row is kept. Changing it needs `db:sync`.'
-        })
+        NODE_WEBHOOK_SUBSCRIPTION_CAP: int({ default: 20, min: 1 }),
+        NODE_WEBHOOK_SECRET_OVERLAP_HOURS: int({ default: 24, min: 1 }),
+        NODE_WEBHOOK_DELIVERY_RETENTION_DAYS: int({ default: 30, min: 1 })
     }
 });
 

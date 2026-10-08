@@ -18,9 +18,7 @@ export const siteConfig = defineConfig({
     shape: {
         NODE_URL: text({
             default: 'http://localhost:3000',
-            required: { minLength: 1 },
-            describe:
-                'This API’s public origin. OAuth redirect URIs and security.txt are built from it.'
+            required: { minLength: 1 }
         }),
         NODE_FRONTEND_URL: text({
             default: 'http://localhost:8080',
@@ -28,15 +26,11 @@ export const siteConfig = defineConfig({
             // reset, verify, delete and email-change link, and the OAuth landing page, would point
             // at `localhost` and the app's own flows would break. The check reads the raw
             // variable, so the default does not satisfy it.
-            required: { minLength: 1, productionOnly: true },
-            describe:
-                'The paired frontend’s origin. Links in mail and the OAuth callback point here. Unset allows `http://localhost:8080` in development and test only.'
+            required: { minLength: 1, productionOnly: true }
         }),
         NODE_CORS_ORIGIN: csv({
             default: ['http://localhost:8080'],
-            required: { minLength: 1, productionOnly: true },
-            describe:
-                'Origins allowed to call this API with credentials, comma-separated. Unset allows `http://localhost:8080`.'
+            required: { minLength: 1, productionOnly: true }
         })
     }
 });
@@ -48,25 +42,10 @@ export const siteConfig = defineConfig({
 export const rateLimitConfig = defineConfig({
     name: 'rate-limit',
     shape: {
-        NODE_RATE_LIMIT_WINDOW_MS: int({
-            default: 60_000,
-            min: 1,
-            describe: 'The window every `shared` budget counts over.'
-        }),
-        NODE_RATE_LIMIT_REDIS_URL: text({
-            sensitive: true,
-            describe:
-                'The `limits` Redis: rate-limit counters and single-use claims, on its own instance (`noeviction`), never the cache’s. Unset counts in this process only.'
-        }),
-        NODE_RATE_LIMIT_REDIS_PASSWORD: text({
-            sensitive: true,
-            describe:
-                'Password merged into `NODE_RATE_LIMIT_REDIS_URL`, replacing any it carries. Read from `NODE_RATE_LIMIT_REDIS_PASSWORD_FILE` in a deployment.'
-        }),
-        NODE_RATE_LIMIT_REDIS_PREFIX: text({
-            default: 'rate-limit',
-            describe: 'Key namespace of every counter and claim on the `limits` Redis.'
-        })
+        NODE_RATE_LIMIT_WINDOW_MS: int({ default: 60_000, min: 1 }),
+        NODE_RATE_LIMIT_REDIS_URL: text({ sensitive: true }),
+        NODE_RATE_LIMIT_REDIS_PASSWORD: text({ sensitive: true }),
+        NODE_RATE_LIMIT_REDIS_PREFIX: text({ default: 'rate-limit' })
     }
 });
 
@@ -74,24 +53,10 @@ export const rateLimitConfig = defineConfig({
 export const uploadConfig = defineConfig({
     name: 'uploads',
     shape: {
-        NODE_MAX_UPLOAD_BYTES: int({
-            default: 5 * 1024 * 1024,
-            min: 1,
-            describe: 'Largest accepted upload, in bytes.'
-        }),
-        NODE_UPLOAD_STAGING_PATH: text({
-            default: path.join(tmpdir(), 'node-api-uploads'),
-            describe:
-                'Where multer writes before the content checks. Set when temp is small or read-only.'
-        }),
-        NODE_PENDING_IMAGE_URL: text({
-            default: '/images/system/pending.png',
-            describe: 'The placeholder image shown until a digest job finishes.'
-        }),
-        NODE_PENDING_THUMBNAIL_URL: text({
-            default: '/images/system/pending-thumb.webp',
-            describe: 'The placeholder thumbnail shown until a digest job finishes.'
-        })
+        NODE_MAX_UPLOAD_BYTES: int({ default: 5 * 1024 * 1024, min: 1 }),
+        NODE_UPLOAD_STAGING_PATH: text({ default: path.join(tmpdir(), 'node-api-uploads') }),
+        NODE_PENDING_IMAGE_URL: text({ default: '/images/system/pending.png' }),
+        NODE_PENDING_THUMBNAIL_URL: text({ default: '/images/system/pending-thumb.webp' })
     }
 });
 
@@ -99,17 +64,8 @@ export const uploadConfig = defineConfig({
 export const responseCacheConfig = defineConfig({
     name: 'response-cache',
     shape: {
-        NODE_REDIS_CACHE_DEV_TTL_MAX: int({
-            default: 30,
-            min: 0,
-            describe:
-                'Caps a route’s cache TTL, in seconds, on a developer machine. 0 lifts the cap.'
-        }),
-        NODE_REDIS_CACHE_MAX_BYTES: int({
-            default: 256 * 1024,
-            min: 1,
-            describe: 'Largest response body the cache will store.'
-        })
+        NODE_REDIS_CACHE_DEV_TTL_MAX: int({ default: 30, min: 0 }),
+        NODE_REDIS_CACHE_MAX_BYTES: int({ default: 256 * 1024, min: 1 })
     }
 });
 
@@ -117,12 +73,7 @@ export const responseCacheConfig = defineConfig({
 export const idempotencyConfig = defineConfig({
     name: 'idempotency',
     shape: {
-        NODE_IDEMPOTENCY_RETENTION_HOURS: int({
-            default: 24,
-            min: 1,
-            describe:
-                'How long a stored idempotent response is replayable. Changing it needs `db:sync`.'
-        })
+        NODE_IDEMPOTENCY_RETENTION_HOURS: int({ default: 24, min: 1 })
     }
 });
 
@@ -140,11 +91,7 @@ export const rateLimitBudgetConfig = (name: string, budgets: readonly RateLimitB
         shape: Object.fromEntries(
             budgets.map((budget) => [
                 budget.environmentVariable,
-                int({
-                    default: budget.defaultMax,
-                    min: 1,
-                    describe: `${budget.name}: ${budget.bounds}`
-                })
+                int({ default: budget.defaultMax, min: 1 })
             ])
         )
     });
