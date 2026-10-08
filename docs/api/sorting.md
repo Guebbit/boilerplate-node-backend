@@ -13,11 +13,12 @@ and not just the ten rows on screen. One parameter, one grammar, everywhere.
 | | |
 | --- | --- |
 | Parameter | `sort` — in the query of `GET /x` **and** in the body of `POST /x/search` |
-| Query form | `?sort=-price,title` — comma-separated |
-| Body form | `{ "sort": ["-price", "title"] }` — an array of the same tokens |
+| Query form | `?sort=-price,title` — comma-separated; a repeated key (`?sort=a&sort=b`) is accepted too |
+| Body form | `{ "sort": ["-price", "title"] }` — one token per item, exactly as sent |
 | Direction | `field` ascending, `-field` descending |
 | Several fields | the earlier one ranks first; at most 3 |
-| Absent or blank | the resource's default order, newest first |
+| Absent or blank | the resource's default order, newest first. Blank means absent on the **query only** (`?sort=`); a blank body `sort` is a 422 |
+| A CSV inside a body item | **422** — only the query string is split on commas |
 | A field outside the list | **422** — the contract enum refuses it |
 
 Ties always end on the id, so page 2 never repeats or skips a row of page 1. Text fields compare
@@ -40,8 +41,9 @@ would let a stranger ask for a collection scan.
 
 ```mermaid
 flowchart LR
-    Q["GET ?sort=-price,title"] --> S["createSearchController<br/>splitSortParameter: one token list"]
-    B["POST body sort: [...]"] --> S
+    Q["GET ?sort=-price,title"] --> D["readInput csvLists<br/>query only: split on commas, blank = absent"]
+    B["POST body sort: [...]"] -->|"taken as sent"| S["createSearchController"]
+    D --> S
     S --> Z["Zod schema from the contract<br/>enum refuses unknown tokens: 422"]
     Z --> R["repository.search<br/>resolveSort through searchable.sortable"]
     R --> M["Mongo sort + id tiebreak<br/>collation strength 2"]
@@ -54,4 +56,5 @@ flowchart LR
 3. `npm run regenerate`. Nothing else: the controller, the cache key and the frontend's types
    follow from the contract.
 
-The pieces live in `src/infrastructure/persistence/search.ts` (`splitSortParameter`, `resolveSort`).
+The pieces live in `src/infrastructure/http/request.ts` (`parseFormCsvList`, the query decode) and
+`src/infrastructure/persistence/search.ts` (`resolveSort`).

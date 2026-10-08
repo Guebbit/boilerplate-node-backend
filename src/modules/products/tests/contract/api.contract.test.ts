@@ -273,6 +273,16 @@ describe('sort — GET /products?sort= and POST /products/search { sort }', () =
         expect(response.status).toBe(422);
     });
 
+    // Only the query string is a CSV; a body carries one token per array item, exactly as sent.
+    it.each([[['-price,title']], [[' price']], ['-price'], ['']])(
+        'answers 422 for a body sort that is not one clean token per item: %j',
+        async (sort) => {
+            const response = await api().post('/products/search').send({ sort });
+
+            expect(response.status).toBe(422);
+        }
+    );
+
     it('does not let two different sorts share one cached answer', async () => {
         const up = await api().get('/products?sort=price,title');
         const down = await api().get('/products?sort=-price,-title');

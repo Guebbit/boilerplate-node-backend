@@ -11,7 +11,6 @@ import type { Request, Response } from 'express';
 import type { ZodType } from 'zod';
 import { successResponse } from '@infrastructure/http/response';
 import { readInput } from '@infrastructure/http/request';
-import { splitSortParameter } from '@infrastructure/persistence/search';
 import { catchAs, namedHandler, operationName, parseBody } from '@infrastructure/http/controller';
 
 /** What makes one entity's search different from another's. */
@@ -53,12 +52,13 @@ export const mergedSearchInput = (
     // goes through `stringArrays`, not `ids` — `ids` collapses a repeated key to its first
     // entry, which is correct for `update`/`delete` (one row) but would silently turn
     // `?id=a&id=b` into `?id=a` here.
-    const read = readInput(request, { surface: 'search', stringArrays: ['id'] });
-    // `sort` arrives as JSON:API CSV in a query and as an array in a body; one list either
-    // way, so the schema's enum validates each token. Blank is absent: no `sort` key at all.
-    const { sort: rawSort, ...rest } = read;
-    const sort = splitSortParameter(rawSort);
-    const input = sort === undefined ? rest : { ...rest, sort };
+    // `sort` is a CSV in a query and an array in a body: `csvLists` splits only the query's, so a
+    // body CSV is refused by the schema's enum instead of silently accepted.
+    const input = readInput(request, {
+        surface: 'search',
+        stringArrays: ['id'],
+        csvLists: ['sort']
+    });
     // extendInput: the module's own overlay — coercions or request-derived values a plain
     // field list can't express.
     return extendInput ? { ...input, ...extendInput(input, request) } : input;

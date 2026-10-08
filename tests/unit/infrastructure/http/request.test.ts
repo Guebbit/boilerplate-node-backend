@@ -14,7 +14,12 @@ import { asStub } from '@tests/stub';
 import type { Request } from 'express';
 import { asCustomer } from '../../../support/callers';
 import { callerInScope } from '@kernel/permissions';
-import { callerContextOf, parseFormBoolean, readInput } from '@infrastructure/http/request';
+import {
+    callerContextOf,
+    parseFormBoolean,
+    parseFormCsvList,
+    readInput
+} from '@infrastructure/http/request';
 
 /** A valid 24-hex ObjectId, used wherever the format has to pass. */
 const OBJECT_ID = '65dc8a99604c307b702b5ccc';
@@ -540,6 +545,68 @@ describe('readInput', () => {
         it('decodes the string transports without a separate booleans declaration', () => {
             expect(read(makeRequest({ query: { hardDelete: 'true' } }))).toBe(true);
         });
+    });
+});
+
+describe('parseFormCsvList', () => {
+    it.each([
+        ['a CSV', '-price,title', ['-price', 'title']],
+        ['a repeated key', ['-price', 'title'], ['-price', 'title']],
+        [
+            'a CSV inside a repeated key',
+            ['-price,title', 'createdAt'],
+            ['-price', 'title', 'createdAt']
+        ],
+        ['whitespace around a token', ' -price , title ', ['-price', 'title']],
+        ['a single token', 'price', ['price']]
+    ])('reads %s', (_label, input, expected) => {
+        expect(parseFormCsvList(input)).toEqual(expected);
+    });
+
+    it.each([[''], [' '], [','], [['', ' ']]])('reads %j as not sent', (input) => {
+        expect(parseFormCsvList(input)).toBeUndefined();
+    });
+
+    it('returns a non-string value untouched, for the validator to refuse', () => {
+        const nested = { a: 'b' };
+
+        expect(parseFormCsvList(nested)).toBe(nested);
+        expect(parseFormCsvList(['price', 7])).toEqual(['price', 7]);
+    });
+});
+
+describe('readInput — csvLists', () => {
+    const declaration = { surface: 'search', csvLists: ['sort'] } as const;
+
+    it('splits the same CSV in a query but refuses to split it in a JSON body', () => {
+        const fromQuery = readInput(makeRequest({ query: { sort: '-price,title' } }), declaration);
+        const fromBody = readInput(
+            makeRequest({ body: { sort: ['-price,title'] }, contentType: JSON_TYPE }),
+            declaration
+        );
+
+        expect(fromQuery.sort).toEqual(['-price', 'title']);
+        expect(fromBody.sort).toEqual(['-price,title']);
+    });
+
+    it('leaves a JSON body string and an empty array exactly as sent', () => {
+        const asString = readInput(
+            makeRequest({ body: { sort: '-price' }, contentType: JSON_TYPE }),
+            declaration
+        );
+        const asEmpty = readInput(
+            makeRequest({ body: { sort: [] }, contentType: JSON_TYPE }),
+            declaration
+        );
+
+        expect(asString.sort).toBe('-price');
+        expect(asEmpty.sort).toEqual([]);
+    });
+
+    it('drops a blank query sort altogether, leaving no sort key', () => {
+        expect(readInput(makeRequest({ query: { sort: '' } }), declaration)).not.toHaveProperty(
+            'sort'
+        );
     });
 });
 

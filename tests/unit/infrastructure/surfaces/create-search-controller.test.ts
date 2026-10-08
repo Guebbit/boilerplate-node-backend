@@ -101,7 +101,7 @@ describe('createSearchController — refusals and failures', () => {
             params: {},
             query: {},
             body: { sort: [] },
-            is: () => true
+            is: () => false
         });
 
         await createSearchController({ entity: 'widgets', schema: sortSchema, runSearch })(
@@ -111,6 +111,39 @@ describe('createSearchController — refusals and failures', () => {
 
         expect(response.status).toHaveBeenCalledWith(422);
         expect(runSearch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a CSV inside an item', ['-price,title']],
+        ['a padded token', [' price']],
+        ['a bare string', '-price'],
+        ['an empty string', '']
+    ])('answers 422 for a body sort of %s: only the query is split', async (_label, sort) => {
+        const runSearch = jest.fn();
+        const response = makeResponse();
+        const request = asStub<Request>({ params: {}, query: {}, body: { sort }, is: () => false });
+
+        await createSearchController({ entity: 'widgets', schema: sortSchema, runSearch })(
+            request,
+            response
+        );
+
+        expect(response.status).toHaveBeenCalledWith(422);
+        expect(runSearch).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ['a CSV', '-price,title', ['-price', 'title']],
+        ['a repeated key', ['price', 'title'], ['price', 'title']]
+    ])('searches for a query sort of %s', async (_label, sort, expected) => {
+        const runSearch = jest.fn().mockResolvedValue({ items: [] });
+
+        await createSearchController({ entity: 'widgets', schema: sortSchema, runSearch })(
+            makeRequest({ sort }),
+            makeResponse()
+        );
+
+        expect(runSearch.mock.calls[0]?.[0]).toMatchObject({ sort: expected });
     });
 
     it('answers 422 and never searches for a token outside the enum', async () => {

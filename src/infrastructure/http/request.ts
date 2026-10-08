@@ -64,6 +64,23 @@ export const parseFormJson = (value: unknown): unknown => {
     return parsed === undefined ? value : parsed;
 };
 
+/**
+ * Parse a string-transported comma-separated list (JSON:API `sort=-price,title`) into tokens.
+ *
+ * A repeated key arrives as an array and each entry is split too. Blank (no token at all) comes
+ * back `undefined`, so `?sort=` means "not sent", never a refused empty list. A value that is not
+ * strings all the way down (`?sort[a]=b`) is returned untouched for the validator to refuse.
+ */
+export const parseFormCsvList = (value: unknown): unknown => {
+    const entries: unknown[] = Array.isArray(value) ? value : [value];
+    if (!entries.every((entry): entry is string => typeof entry === 'string')) return value;
+    const tokens = entries
+        .flatMap((entry) => entry.split(','))
+        .map((token) => token.trim())
+        .filter((token) => token !== '');
+    return tokens.length > 0 ? tokens : undefined;
+};
+
 /** The three places a value can arrive from. Named so a route can declare which ones it reads. */
 export type RequestInputSource = 'params' | 'body' | 'query';
 
@@ -128,6 +145,12 @@ export interface RequestInputDeclaration<TId extends string> {
     /** Fields declared `string[]` by the contract — decoded on the string transports. */
     stringArrays?: readonly string[];
     /**
+     * Fields declared `string[]` that a query spells as a comma-separated list — `sort` is the one.
+     * Decoded with {@link parseFormCsvList} on the string transports only: a JSON body's array is
+     * taken as sent, one token per item, so a CSV inside an item is refused rather than split.
+     */
+    csvLists?: readonly string[];
+    /**
      * Fields carrying a JSON-encoded nested value on the string transports — a multipart body has
      * no way to send an object except as a string in one field. Decoded with {@link parseFormJson};
      * a JSON body's own object is left untouched, same as every other decode kind here.
@@ -182,11 +205,13 @@ export const readInput = <TId extends string = never>(
     const numbers = declaration.numbers ?? [];
     const stringArrays = declaration.stringArrays ?? [];
     const jsonFields = declaration.jsonFields ?? [];
+    const csvLists = declaration.csvLists ?? [];
     const decodes =
         booleans.length > 0 ||
         numbers.length > 0 ||
         stringArrays.length > 0 ||
-        jsonFields.length > 0;
+        jsonFields.length > 0 ||
+        csvLists.length > 0;
 
     /**
      * Decoding happens per source rather than on the merged result, because whether a value needs
@@ -202,6 +227,8 @@ export const readInput = <TId extends string = never>(
             if (key in decoded) decoded[key] = coerceStringArray(decoded[key]);
         for (const key of jsonFields)
             if (key in decoded) decoded[key] = parseFormJson(decoded[key]);
+        for (const key of csvLists)
+            if (key in decoded) decoded[key] = parseFormCsvList(decoded[key]);
         return decoded;
     };
 
