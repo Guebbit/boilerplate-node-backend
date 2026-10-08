@@ -17,13 +17,22 @@ import { withoutEnvironment } from '@tests/environment';
 import {
     addressBlockOf,
     identityOf,
+    rateLimitInfoOf,
     DEFAULT_RATE_LIMIT_MAX,
     DEFAULT_API_KEY_RATE_LIMIT_MAX,
     DEFAULT_UPLOAD_RATE_LIMIT_MAX,
     INFRASTRUCTURE_RATE_LIMITS,
     refuseRateLimited
 } from '@infrastructure/http/middlewares/rate-limit';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
+import { logger } from '@infrastructure/adapters/logger';
 import { rateLimitRefusalsTotal } from '@infrastructure/observability/metrics-rate-limit';
+
+// Only the audit write is replaced; the action names stay real so a renamed action fails here.
+jest.mock('@infrastructure/observability/audit', () => ({
+    ...jest.requireActual<object>('@infrastructure/observability/audit'),
+    recordAudit: jest.fn()
+}));
 
 describe('rate limit defaults', () => {
     it('measures the browsing budget per minute', () =>
@@ -177,5 +186,99 @@ describe('refuseRateLimited', () => {
         );
 
         expect(await refusalsOf('metric-test-other')).toBe(before);
+    });
+});
+
+describe('identityOf — what a credential attempt names', () => {
+    it('falls back to the address block for a non-string or blank email', () => {
+        const fallback = identityOf(requestWith({}, '1.2.3.4'));
+
+        expect(identityOf(requestWith({ email: 42 }, '1.2.3.4'))).toBe(fallback);
+        expect(identityOf(requestWith({ email: '   ' }, '1.2.3.4'))).toBe(fallback);
+        expect(fallback).toBe('anon:1.2.3.0/24');
+    });
+
+    it('keys on username when email is absent, folded the same way', () => {
+        expect(identityOf(requestWith({ username: ' Ada@Example.com' }, '1.2.3.4'))).toBe(
+            identityOf(requestWith({ email: 'ada@example.com' }, '9.9.9.9'))
+        );
+    });
+});
+
+describe('rateLimitInfoOf', () => {
+    it('reads the info a limiter stored under its property, and undefined for one that never ran', () => {
+        const info = { limit: 5, used: 1, remaining: 4, resetTime: undefined };
+        const request = asStub<Request>({ credentialLimit: info });
+
+        expect(rateLimitInfoOf(request, 'credentialLimit')).toBe(info);
+        expect(rateLimitInfoOf(request, 'otherLimit')).toBeUndefined();
+    });
+});
+
+/** A response stub that keeps what the envelope sent. */
+const capturingResponse = () => {
+    const json = jest.fn();
+    const status = jest.fn(() => ({ json }));
+    return { response: asStub<Response>({ status }), status, json };
+};
+
+/** A request on a route, for the audit metadata. */
+const routeRequest = () =>
+    asStub<Request>({ method: 'POST', path: '/upload', ip: '1.2.3.4', headers: {} });
+
+describe('refuseRateLimited — the answer a caller and the audit trail see', () => {
+    it('records one failed SECURITY_RATE_LIMIT_HIT audit for an audited budget', () => {
+        refuseRateLimited({ namespace: 'audited-test', audited: true })(
+            routeRequest(),
+            capturingResponse().response
+        );
+
+        expect(recordAudit).toHaveBeenCalledTimes(1);
+        expect(recordAudit).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+                action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
+                outcome: 'failure',
+                metadata: { route: '/upload', method: 'POST' }
+            })
+        );
+    });
+
+    it('records no audit for an unaudited budget, and still answers 429', () => {
+        const { response, status } = capturingResponse();
+
+        refuseRateLimited({ namespace: 'quiet-test', audited: false })(routeRequest(), response);
+
+        expect(recordAudit).not.toHaveBeenCalled();
+        expect(status).toHaveBeenCalledWith(429);
+    });
+
+    it('answers the shared error envelope with the RATE_LIMITED code', () => {
+        const { response, json } = capturingResponse();
+
+        refuseRateLimited({ namespace: 'envelope-test', audited: false })(routeRequest(), response);
+
+        expect(json).toHaveBeenCalledWith(
+            expect.objectContaining({
+                success: false,
+                status: 429,
+                errors: [expect.objectContaining({ code: 'RATE_LIMITED' })]
+            })
+        );
+    });
+
+    it('logs the refusal even when it is not audited', () => {
+        const warn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
+
+        refuseRateLimited({ namespace: 'log-test', audited: false })(
+            routeRequest(),
+            capturingResponse().response
+        );
+
+        expect(warn).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ status_code: 429 })
+        );
+        warn.mockRestore();
     });
 });

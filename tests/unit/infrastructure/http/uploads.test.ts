@@ -11,7 +11,13 @@
  */
 
 import type { Request } from 'express';
-import { getFormFiles, readUploadedImage } from '@infrastructure/http/uploads';
+import { imageStore } from '@infrastructure/adapters/image-store';
+import { uploadConfig } from '@infrastructure/http/config';
+import {
+    getFormFiles,
+    readUploadedImage,
+    writeWithUploadedImage
+} from '@infrastructure/http/uploads';
 
 /** A multer file stub — `path` is the only field these helpers touch. */
 const uploaded = (path: string) => ({ path }) as Express.Multer.File;
@@ -80,5 +86,166 @@ describe('readUploadedImage', () => {
                 requestWith({ file: { path: '/tmp/staging/a.png' } as Express.Multer.File })
             ).imageUrl
         ).toBeUndefined();
+    });
+});
+
+/*
+ * Image-store calls are mocked: the undo is asserted by WHICH store door it opens (`remove` for a
+ * promoted file, `removeQuarantined` for a pending one), never by touching a disk.
+ */
+jest.mock('@infrastructure/adapters/image-store', () => ({
+    imageStore: { remove: jest.fn(), removeQuarantined: jest.fn() }
+}));
+
+const store = jest.mocked(imageStore);
+
+/** A request that carries the given upload-middleware record and body. */
+const withUpload = (parts: Partial<Request>) =>
+    requestWith({ storedThumbnailUrls: undefined, ...parts });
+
+describe('readUploadedImage — the pending and promoted paths', () => {
+    beforeEach(() => {
+        store.remove.mockResolvedValue(true);
+        store.removeQuarantined.mockResolvedValue(true);
+    });
+
+    it('answers the configured placeholders and the quarantine key for a pending upload', () => {
+        const image = readUploadedImage(withUpload({ quarantinedImageKeys: ['q1'] }));
+
+        expect(image).toMatchObject({
+            imageUrl: uploadConfig().NODE_PENDING_IMAGE_URL,
+            thumbnailUrl: uploadConfig().NODE_PENDING_THUMBNAIL_URL,
+            pendingImageKey: 'q1'
+        });
+    });
+
+    it('undoes a pending upload by removing the quarantined file only', async () => {
+        await readUploadedImage(withUpload({ quarantinedImageKeys: ['q1'] })).deleteUpload();
+
+        expect(store.removeQuarantined).toHaveBeenCalledWith('q1');
+        expect(store.remove).not.toHaveBeenCalled();
+    });
+
+    it('answers the stored thumbnail and no pending key for a promoted upload', () => {
+        const image = readUploadedImage(
+            withUpload({
+                storedImageUrls: ['/images/a.png'],
+                storedThumbnailUrls: ['/images/a.thumb.png']
+            })
+        );
+
+        expect(image).toMatchObject({
+            imageUrl: '/images/a.png',
+            thumbnailUrl: '/images/a.thumb.png',
+            pendingImageKey: undefined
+        });
+    });
+
+    it('undoes a promoted upload by removing the stored url', async () => {
+        await readUploadedImage(withUpload({ storedImageUrls: ['/images/a.png'] })).deleteUpload();
+
+        expect(store.remove).toHaveBeenCalledWith('/images/a.png');
+        expect(store.removeQuarantined).not.toHaveBeenCalled();
+    });
+
+    it('drops a body string imageUrl, and its undo touches no file', async () => {
+        const image = readUploadedImage(requestWith({ body: { imageUrl: '/images/victim.png' } }));
+
+        expect(image.imageUrl).toBeUndefined();
+        expect(image.thumbnailUrl).toBeUndefined();
+        await expect(image.deleteUpload()).resolves.toBe(false);
+        expect(store.remove).not.toHaveBeenCalled();
+        expect(store.removeQuarantined).not.toHaveBeenCalled();
+    });
+
+    it('keeps a body null as the caller removing the image', () => {
+        expect(readUploadedImage(requestWith({ body: { imageUrl: null } })).imageUrl).toBeNull();
+    });
+
+    it('lets an upload beat a body string, and the undo targets the upload, never the victim', async () => {
+        const image = readUploadedImage(
+            requestWith({
+                storedImageUrls: ['/images/mine.png'],
+                body: { imageUrl: '/images/victim.png' }
+            })
+        );
+
+        expect(image.imageUrl).toBe('/images/mine.png');
+        await image.deleteUpload();
+        expect(store.remove).toHaveBeenCalledTimes(1);
+        expect(store.remove).toHaveBeenCalledWith('/images/mine.png');
+    });
+
+    it('lets an upload beat a body null', () => {
+        expect(
+            readUploadedImage(
+                requestWith({ storedImageUrls: ['/images/mine.png'], body: { imageUrl: null } })
+            ).imageUrl
+        ).toBe('/images/mine.png');
+    });
+
+    it('does not throw when the request has no body at all', () => {
+        expect(readUploadedImage(requestWith({ body: undefined })).imageUrl).toBeUndefined();
+    });
+});
+
+/** A request carrying a promoted upload that no write has claimed yet. */
+const promoted = () => ({
+    ...withUpload({ storedImageUrls: ['/images/a.png'] }),
+    uploadClaimed: false
+});
+
+describe('writeWithUploadedImage — claim on success, leave to the close hook otherwise', () => {
+    it('passes a successful write through and claims the upload', async () => {
+        const request = promoted();
+        const write = jest.fn().mockResolvedValue({ success: true, id: 7 });
+
+        await expect(writeWithUploadedImage(request, undefined, write)).resolves.toEqual({
+            success: true,
+            id: 7
+        });
+        expect(request.uploadClaimed).toBe(true);
+        expect(write).toHaveBeenCalledWith(
+            expect.objectContaining({ imageUrl: '/images/a.png', pendingImageKey: undefined })
+        );
+    });
+
+    it('leaves a refused write unclaimed and returns it unchanged', async () => {
+        const request = promoted();
+        const refusal = { success: false, status: 409 };
+
+        await expect(
+            writeWithUploadedImage(request, undefined, () => Promise.resolve(refusal))
+        ).resolves.toBe(refusal);
+        expect(request.uploadClaimed).toBe(false);
+    });
+
+    it('leaves a throwing write unclaimed and rejects with the identical error', async () => {
+        const request = promoted();
+        const failure = new Error('db down');
+
+        await expect(
+            writeWithUploadedImage(request, undefined, () => Promise.reject(failure))
+        ).rejects.toBe(failure);
+        expect(request.uploadClaimed).toBe(false);
+    });
+
+    it('hands the write the PUT fill null when nothing was uploaded', async () => {
+        const write = jest.fn().mockResolvedValue({ success: true });
+
+        await writeWithUploadedImage(withUpload({}), null, write);
+
+        expect(write).toHaveBeenCalledWith(expect.objectContaining({ imageUrl: null }));
+    });
+
+    it.each([
+        ['promoted', { storedImageUrls: ['/images/a.png'] }, '/images/a.png'],
+        ['pending', { quarantinedImageKeys: ['q1'] }, uploadConfig().NODE_PENDING_IMAGE_URL]
+    ])('lets a %s upload beat the PUT fill null', async (_label, parts, expected) => {
+        const write = jest.fn().mockResolvedValue({ success: true });
+
+        await writeWithUploadedImage(withUpload(parts), null, write);
+
+        expect(write).toHaveBeenCalledWith(expect.objectContaining({ imageUrl: expected }));
     });
 });
