@@ -65,6 +65,16 @@ describe('GET /audit', () => {
         expect(response.body.data.items[0].actor_role_name).toBe('moderator');
     });
 
+    it('422s a repeated scalar filter instead of silently picking one entry', async () => {
+        const { bearer } = await authenticateInRole('moderator');
+
+        const response = await api()
+            .get('/audit?since=2026-01-01T00:00:00Z&since=2026-02-01T00:00:00Z')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+    });
+
     it('422s a since filter that is not a valid timestamp', async () => {
         const { bearer } = await authenticateInRole('moderator');
 

@@ -110,7 +110,7 @@ declaring a body on its GET.
 |                                                                         | `page`, `pageSize`, `reason`                    | query                                      | then Zod                                                                                  |
 | `GET /locales/{locale}/entries`                                         | `page`, `pageSize`, `text`, `tenant`            | query                                      | then the shared pagination schema                                                         |
 | `GET /locales/{locale}/tenants/{tenant}/entries`                        | `tenant`                                        | params                                     | overrides any `?tenant=`; the rest as above                                               |
-| `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                                      | first non-empty wins                                                                      |
+| `GET /observability/audit`                                              | `actor`, `action`, `outcome`, `since`           | query                                      | then Zod; a repeated key is a 422                                                         |
 |                                                                         | `page`, `pageSize`                              | query                                      | then the shared pagination schema                                                         |
 
 Pagination has exactly two authorities, and they answer different questions. `@infrastructure/http/schemas`
@@ -200,8 +200,10 @@ const input = readInput(request, {
 - `surface` — which route surface this is, and therefore which of `params`/`body`/`query` it reads
   and in what order (see the surface table above). Every key found in any of them ends up on the
   result; the categories below only change how _specific_ keys are resolved or typed.
-- `ids` — scalar identifiers. A repeated key arrives as an array, so the first entry is taken, and
-  the `||` chain above applies. Typed `string | undefined`; nothing is validated here.
+- `ids` — real identifiers, and only those. The `||` chain above applies: an empty value falls
+  through to the next source. A repeated key stays the array it arrived as, so the id check answers
+  422 instead of silently picking an entry. Nothing is validated here.
+  A repeated key on any other scalar parameter reaches the schema as an array and is a 422 too.
 - `booleans` / `stringArrays` — fields whose type survives a JSON body but not a string transport.
   Decoded per the rule above. Anything unrecognisable is passed through so the validator
   downstream rejects it rather than this layer inventing a value.

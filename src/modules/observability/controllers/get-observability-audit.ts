@@ -27,7 +27,6 @@ export const getObservabilityAuditLogs = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    input: { ids: ['actor', 'action', 'outcome', 'since'] },
     runList: (parsed) =>
         auditLogService.searchIncidents({
             ...parsed,

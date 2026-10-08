@@ -126,7 +126,7 @@ const SURFACE_SOURCES: Record<RequestSurface, readonly RequestInputSource[]> = {
 export interface RequestInputDeclaration<TId extends string> {
     /** Which route surface this is, and therefore which sources it reads. */
     surface: RequestSurface;
-    /** Scalar identifiers: a repeated key collapses to its first entry. */
+    /** Real identifiers: an empty value falls through to the next source. A repeated key stays an array and fails as a malformed id. */
     ids?: readonly TId[];
     /** Fields declared boolean by the contract — decoded on the string transports. */
     booleans?: readonly string[];
@@ -261,9 +261,9 @@ export const readInput = <TId extends string = never>(
     for (const key of declaration.ids ?? []) {
         let resolved: unknown;
         for (const source of sources) {
-            // A repeated key arrives as an array; scalar fields take the first entry.
-            const raw: unknown = source[key];
-            const value: unknown = Array.isArray(raw) ? raw[0] : raw;
+            // A repeated key arrives as an array and stays one, so it fails as a malformed id (422)
+            // instead of silently picking an entry.
+            const value: unknown = source[key];
             if (value) {
                 resolved = value;
                 break;

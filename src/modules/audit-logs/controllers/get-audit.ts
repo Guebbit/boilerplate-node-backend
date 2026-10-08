@@ -22,7 +22,6 @@ export const getAudit = createListController({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),
-    input: { ids: ['actor', 'action', 'outcome', 'target', 'since'] },
     runList: (parsed) =>
         auditLogService.search({
             ...parsed,

@@ -195,15 +195,18 @@ describe('readInput', () => {
             expect(readInput(request, { surface: 'search', ids: ['id'] }).id).toBe('');
         });
 
-        // Taking the first entry rather than stringifying the whole array: the latter can never
-        // be a valid ObjectId.
-        it('takes the first entry when a repeated key arrives as an array', () => {
+        // A repeated id is a malformed id: it stays an array, so the id check answers 422 instead
+        // of silently picking an entry.
+        it('keeps a repeated key as the array it arrived as', () => {
             const request = makeRequest({
                 body: { id: [OBJECT_ID, 'second'] },
                 contentType: JSON_TYPE
             });
 
-            expect(readInput(request, { surface: 'search', ids: ['id'] }).id).toBe(OBJECT_ID);
+            expect(readInput(request, { surface: 'search', ids: ['id'] }).id).toEqual([
+                OBJECT_ID,
+                'second'
+            ]);
         });
 
         it('leaves the key absent when no source carries it', () => {
