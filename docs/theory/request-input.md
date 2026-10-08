@@ -122,11 +122,11 @@ request is rejected, not quietly turned into a different request.
 
 ## The rules behind the table
 
-**Precedence is a `||` chain over the surface's sources.** An empty value falls through as if the
-key were absent, so `?id=` on a route that also has a body `id` reads the body's. This is the one
-place the migration to `readInput` unified two spellings that used to differ: `extractCustomId`
-used `||` (empty falls through) while the id helper used `??` (empty wins). No endpoint's
-declared contract distinguishes the two, and no test did either.
+**Precedence goes by presence.** The highest source that carries a key wins, whatever its
+value: `false`, `0`, `""` and `null` all count as stated. So `?title=` on a route that also has
+a body `title` reads the query's empty string, not the body's. Declared `ids` are the one
+exception, a `||` chain: an empty id falls through to the next source, because a blank id names
+nothing. No endpoint's contract distinguishes the two for anything but ids.
 
 **Explicit `undefined` keys are dropped.** An object spread _keeps_ a key whose value is
 `undefined`, and such a key handed to Mongoose becomes a `field: undefined` filter clause rather

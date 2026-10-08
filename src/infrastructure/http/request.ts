@@ -159,7 +159,8 @@ export const bodyRecordOf = (request: Pick<Request, 'body'>): Record<string, unk
  * Read a route's input according to one declaration, so the multi-source rules aren't
  * re-assembled at every call site.
  *
- * Four rules: precedence is a `||` chain over the surface's sources, highest first; an explicit
+ * Four rules: precedence goes by presence over the surface's sources, highest first (the highest
+ * source carrying a key wins, whatever its value; declared `ids` are the one `||` chain); an explicit
  * `undefined` key is dropped rather than spread through as a Mongoose filter clause; absent stays
  * absent rather than defaulting to `false`/`[]`, so a partial update can't wipe what wasn't sent;
  * and only string transports (params, query, or a multipart body) get decoded — a JSON body keeps
