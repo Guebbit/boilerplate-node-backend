@@ -186,6 +186,11 @@ shallow pass at `TEST_FUZZ_RUNS`' default. `.github/workflows/fuzz.yml` runs the
 with many more requests per operation and a fresh seed — that is the hunter, and a red night is a
 **finding** for a person to read. The seed is printed first; `RANDOM_DATA_SEED=<seed>` reproduces it.
 
+The limiters stay mounted, with budgets raised in `tests/support/setup-environment.ts`: the shared
+credential address bucket takes about 29 failures per `TEST_FUZZ_RUNS`, so the 10000 there lasts to
+roughly 300. Past that, raise the credential budgets too: a 429 is declared by every operation, so
+it passes the oracle, but it locks `authenticateAs` out and the fuzzing quietly turns shallow.
+
 ## File map
 
 | Path                                 | Contents                                                                                                   |

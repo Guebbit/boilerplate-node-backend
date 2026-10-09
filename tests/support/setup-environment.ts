@@ -36,7 +36,7 @@ import path from 'node:path';
  * points here rather than at anything real — if a future module tips it again, raise it again; a
  * rate limit is not what the fuzz suite is testing.
  */
-process.env.NODE_RATE_LIMIT_MAX ??= '20000';
+process.env.NODE_RATE_LIMIT_MAX ??= '100000';
 
 /**
  * Same reasoning for the two credential budgets (`credentialLimiters`), which are deliberately much
@@ -44,15 +44,19 @@ process.env.NODE_RATE_LIMIT_MAX ??= '20000';
  * reset far harder than a person does, from one address, and the concurrency test alone fires
  * twenty deliberately-invalid signups at once.
  *
- * BOTH are raised, or raising one just moves which of them the suite trips over.
+ * ALL FOUR are raised, or raising one just moves which of them the suite trips over.
+ *
+ * The room is deliberate: a 429 IS declared by every operation, so it passes the fuzz oracle, but
+ * it locks `authenticateAs` out and silently makes the fuzzing shallow. The shared address bucket
+ * sees about 29 failures per run, so 10000 covers `TEST_FUZZ_RUNS` up to roughly 300.
  *
  * Raised rather than disabled, so a test that accidentally loops on a credential endpoint still
  * terminates — and so the limiters' own tests can still reach them by setting a lower value.
  */
-process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '1000';
-process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '1000';
-process.env.NODE_AUTH_RATE_LIMIT_BLOCK_MAX ??= '1000';
-process.env.NODE_AUTH_RATE_LIMIT_DEVICE_MAX ??= '1000';
+process.env.NODE_AUTH_RATE_LIMIT_MAX ??= '10000';
+process.env.NODE_AUTH_RATE_LIMIT_ADDRESS_MAX ??= '10000';
+process.env.NODE_AUTH_RATE_LIMIT_BLOCK_MAX ??= '10000';
+process.env.NODE_AUTH_RATE_LIMIT_DEVICE_MAX ??= '10000';
 
 /**
  * `submissionLimiter` (`POST /feedback/contact`) needs the same treatment, for a sharper reason
