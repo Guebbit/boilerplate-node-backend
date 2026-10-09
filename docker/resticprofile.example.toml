@@ -88,8 +88,8 @@
         stdin = true
         stdin-filename = 'acme-uploads.tar.gz'
         # Only the durable half of `storage/`: `mail-spool/` is queued outbound mail a restart
-        # must not lose. The sibling `invoices/` render cache is deliberately left out — SH2 made
-        # the PDF a receipt, rendered on demand, so losing the cache costs nothing but a re-render.
+        # must not lose. The sibling `documents/` (rendered invoice PDFs) is left out on
+        # purpose: it is a regenerable copy of the frozen rows, so losing it costs only a re-render.
         # `-C /app <path> <path>` keeps both trees' relative layout in the one archive; restoring
         # extracts them back under the same two mount points, `uploads:` and `storage:mail-spool/`.
         stdin-command = '''

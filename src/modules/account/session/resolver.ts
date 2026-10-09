@@ -2,8 +2,8 @@
  * @module
  * The kernel's `AuthResolver`, built from this module's two JWT verifiers — turns a verified
  * access/refresh token's claims into the `AuthContext` a guard checks. `module.ts` installs
- * {@link accountAuthResolver} via `registerAuthResolver` at import time; the resolution logic
- * itself lives here, alongside the rest of the session machinery.
+ * {@link accountAuthResolver} via `registerAuthResolver` in its `onRegistered` hook; the
+ * resolution logic itself lives here, alongside the rest of the session machinery.
  *
  * See: docs/modules/account-sessions.md
  */
@@ -119,7 +119,7 @@ const resolve =
 
 /**
  * This module's answer to the kernel's "who is making this request" port — see `module.ts`'s own
- * comment for why it is registered at import time.
+ * comment for why it is registered in `onRegistered`, not at import time.
  */
 export const accountAuthResolver: AuthResolver = {
     fromAccessToken: resolve(verifyAccessToken),
