@@ -19,8 +19,7 @@ import {
     getAuth,
     isAuth,
     requireFreshAuth,
-    requirePermission,
-    REAUTH_TIME_CRITICAL
+    requirePermission
 } from '@kernel/middlewares/authorizations';
 import { getCart } from './controllers/get-cart';
 import { getCartSummary } from './controllers/get-cart-summary';
@@ -53,7 +52,7 @@ router.get('/summary', getCartSummary);
 // checkout after a lost response must replay the order it already placed, never mint a second one.
 router.post(
     '/checkout',
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireFreshAuth('critical'),
     requirePermission('cart.self.checkout'),
     // After the permission, so a refused caller never spends it; before the idempotency ledger, so
     // a replayed request still counts (a loop of retries is the thing being bounded).

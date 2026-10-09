@@ -15,7 +15,7 @@ import { createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories'
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { deliveryService } from '@modules/delivery/service';
-import { REAUTH_TIME_CRITICAL } from '@kernel/middlewares/authorizations';
+import { reauthWindowSeconds } from '@kernel/config';
 import { OrderStatus } from '@types';
 
 setupTestDb();
@@ -369,12 +369,12 @@ const loginAdminRemembered = async () => {
 };
 
 /**
- * Beyond `REAUTH_TIME_CRITICAL`, but still holding a USABLE access token — `auth_time` is copied
+ * Beyond the critical window, but still holding a USABLE access token — `auth_time` is copied
  * forward on refresh, never re-stamped, so a refreshed token is exactly what a stolen-but-stale
  * session looks like.
  */
 const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
-    advanceDate((REAUTH_TIME_CRITICAL + 1) * 1000);
+    advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
     const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
     return `Bearer ${refreshed.body.data.token as string}`;
 };

@@ -28,9 +28,7 @@ import {
     getAuth,
     isAuth,
     requireFreshAuth,
-    requireFreshAuthWhen,
-    REAUTH_TIME_CRITICAL,
-    REAUTH_TIME_SENSITIVE
+    requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
 import { upload } from '@infrastructure/http/middlewares/upload';
 import { getAccount } from './controllers/get-account';
@@ -150,8 +148,8 @@ router.put(
     upload.image(),
     // The otp guard first: a stale armed session is challenged ONCE, with `details.methods`, and
     // the plain recency guard below it only ever sees accounts without a second factor.
-    requireFreshAuthWhen(isChangingEmailWithTwoFactor, REAUTH_TIME_SENSITIVE, OTP_PROOF),
-    requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
+    requireFreshAuthWhen(isChangingEmailWithTwoFactor, 'sensitive', OTP_PROOF),
+    requireFreshAuthWhen(isChangingEmail, 'sensitive'),
     replaceAccount
 );
 
@@ -161,8 +159,8 @@ router.patch(
     uploadLimiter,
     isAuth,
     upload.image(),
-    requireFreshAuthWhen(isChangingEmailWithTwoFactor, REAUTH_TIME_SENSITIVE, OTP_PROOF),
-    requireFreshAuthWhen(isChangingEmail, REAUTH_TIME_SENSITIVE),
+    requireFreshAuthWhen(isChangingEmailWithTwoFactor, 'sensitive', OTP_PROOF),
+    requireFreshAuthWhen(isChangingEmail, 'sensitive'),
     updateAccount
 );
 
@@ -181,8 +179,8 @@ router.post('/pending-email/resend', isAuth, credentialLimiters, postPendingEmai
 router.delete(
     '/',
     isAuth,
-    requireFreshAuthWhen(callerHasTwoFactor, REAUTH_TIME_CRITICAL, OTP_PROOF),
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireFreshAuthWhen(callerHasTwoFactor, 'critical', OTP_PROOF),
+    requireFreshAuth('critical'),
     deleteAccountRequest
 );
 
@@ -229,7 +227,7 @@ router.post('/reset-confirm', credentialLimiters, postResetConfirm);
 router.post(
     '/password',
     isAuth,
-    requireFreshAuthWhen(callerHasTwoFactor, REAUTH_TIME_SENSITIVE, OTP_PROOF),
+    requireFreshAuthWhen(callerHasTwoFactor, 'sensitive', OTP_PROOF),
     credentialLimiters,
     postPasswordChange
 );
@@ -274,19 +272,14 @@ router.post('/logout', requireAllowedOrigin, postLogout);
 
 // POST /account/logout-all — revoke all refresh tokens (requires auth). Sensitive: evicting the
 // owner is an attack, not just an action, if a stolen-but-unfresh session could do it.
-router.post('/logout-all', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), postLogoutEverywhere);
+router.post('/logout-all', isAuth, requireFreshAuth('sensitive'), postLogoutEverywhere);
 
 // GET /account/sessions — list live refresh tokens as sessions (requires auth)
 router.get('/sessions', isAuth, getSessions);
 
 // DELETE /account/sessions/:sessionId — revoke one session (requires auth). Sensitive, same
 // reasoning as logout-all.
-router.delete(
-    '/sessions/:sessionId',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_SENSITIVE),
-    deleteSession
-);
+router.delete('/sessions/:sessionId', isAuth, requireFreshAuth('sensitive'), deleteSession);
 
 // POST /account/verify-request — re-send the verification email (requires auth)
 router.post('/verify-request', isAuth, credentialLimiters, postVerifyRequest);
@@ -305,11 +298,11 @@ router.post('/email-change-undo', credentialLimiters, postEmailChangeUndo);
 // POST /account/export — ask for the caller's full data export; 202, built in the background.
 // Sensitive tier: requireFreshAuth is the identity proof here, not a bespoke password check in the
 // body.
-router.post('/export', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), postAccountExport);
+router.post('/export', isAuth, requireFreshAuth('sensitive'), postAccountExport);
 
 // GET /account/export/:id — download the finished export. Same tier as the request: the mailed
 // link only opens a page, and the data leaves only for a session that is fresh.
-router.get('/export/:id', isAuth, requireFreshAuth(REAUTH_TIME_SENSITIVE), getAccountExport);
+router.get('/export/:id', isAuth, requireFreshAuth('sensitive'), getAccountExport);
 
 // POST /account/login/2fa/send — mail a login code. Registered ABOVE `/login/2fa` so the more
 // specific path is matched first. Public like /login, and limited twice over: this is the only
@@ -328,16 +321,11 @@ router.get('/2fa', isAuth, get2fa);
 // DELETE /account/2fa — drop every factor. Critical fresh auth AND a valid code in the body:
 // disabling from a stolen-but-fresh session is otherwise the cheapest way around the feature.
 // The wrong-code cap lives in the service (`reserveMfaAttempt`), on the account, not in a limiter.
-router.delete('/2fa', isAuth, requireFreshAuth(REAUTH_TIME_CRITICAL), delete2fa);
+router.delete('/2fa', isAuth, requireFreshAuth('critical'), delete2fa);
 
 // POST /account/2fa/methods/:method/setup — start (or restart) one method's enrollment. Critical
 // tier: a restart disarms a factor that was already working.
-router.post(
-    '/2fa/methods/:method/setup',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
-    post2faSetup
-);
+router.post('/2fa/methods/:method/setup', isAuth, requireFreshAuth('critical'), post2faSetup);
 
 // POST /account/2fa/methods/:method/send — mail a signed-in caller a code for an ARMED delivered
 // method, so an email-only account can prove itself before changing its factors. Critical tier,
@@ -345,37 +333,22 @@ router.post(
 router.post(
     '/2fa/methods/:method/send',
     isAuth,
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireFreshAuth('critical'),
     accountCodeSendLimiter,
     post2faMethodSend
 );
 
 // POST /account/2fa/methods/:method/confirm — arm the pending method. Critical, same reasoning.
-router.post(
-    '/2fa/methods/:method/confirm',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
-    post2faConfirm
-);
+router.post('/2fa/methods/:method/confirm', isAuth, requireFreshAuth('critical'), post2faConfirm);
 
 // DELETE /account/2fa/methods/:method — drop one factor, keep the rest. Registered LAST of the
 // three so the two longer paths above are matched first.
-router.delete(
-    '/2fa/methods/:method',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
-    delete2faMethod
-);
+router.delete('/2fa/methods/:method', isAuth, requireFreshAuth('critical'), delete2faMethod);
 
 // POST /account/2fa/backup-codes — mint a fresh set of ten, discarding the old ones. Critical
 // tier, same reasoning as disable: the old set stops being a stolen-but-fresh session's shortcut
 // around whichever factor is actually armed.
-router.post(
-    '/2fa/backup-codes',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
-    post2faBackupCodes
-);
+router.post('/2fa/backup-codes', isAuth, requireFreshAuth('critical'), post2faBackupCodes);
 
 // GET /account/oauth/providers — which providers this deployment has credentials for. Public,
 // informational; registered ABOVE the `:provider` route below so it isn't swallowed by it.
@@ -387,12 +360,7 @@ router.get('/oauth/links', isAuth, getOAuthLinks);
 
 // DELETE /account/oauth/links/:provider — disconnect one provider. Sensitive tier: it removes a way
 // into the account, an identity change like the email.
-router.delete(
-    '/oauth/links/:provider',
-    isAuth,
-    requireFreshAuth(REAUTH_TIME_SENSITIVE),
-    deleteOAuthLink
-);
+router.delete('/oauth/links/:provider', isAuth, requireFreshAuth('sensitive'), deleteOAuthLink);
 
 // GET /account/oauth/:provider — 302 to the provider's consent screen. Public: this is how an
 // OAuth session begins, same footing as /login and /signup.

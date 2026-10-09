@@ -9,6 +9,7 @@
 
 import { defineConfig } from '@infrastructure/config/define';
 import { int } from '@infrastructure/config/fields';
+import type { StepUpTier } from '@kernel/permissions';
 
 /** How recently a sign-in must be for a sensitive action. */
 export const reauthConfig = defineConfig({
@@ -18,6 +19,17 @@ export const reauthConfig = defineConfig({
         NODE_REAUTH_TIME_SENSITIVE: int({ default: 900, min: 0 })
     }
 });
+
+/**
+ * How many seconds a step-up tier allows since the caller last proved themselves.
+ * Read per call, so a guard built when a router loads still sees the live setting.
+ * @param tier - `critical` (money, destructive) or `sensitive` (identity, sessions)
+ * @returns the freshness window in seconds
+ */
+export const reauthWindowSeconds = (tier: StepUpTier): number =>
+    tier === 'critical'
+        ? reauthConfig().NODE_REAUTH_TIME_CRITICAL
+        : reauthConfig().NODE_REAUTH_TIME_SENSITIVE;
 
 /** The transactional outbox. */
 export const outboxConfig = defineConfig({

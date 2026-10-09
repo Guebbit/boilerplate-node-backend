@@ -36,6 +36,7 @@
  */
 import type { Router } from 'express';
 import { asStub } from '@tests/stub';
+import type { StepUpTier } from '@kernel/permissions';
 
 /** Where a mocked factory records the call that produced a middleware. Internal: see finding 3. */
 const ROUTE_LABEL = Symbol.for('tests.routeLabel');
@@ -236,7 +237,7 @@ export const routeFlagMock = () => ({
  *
  * `isAuth`/`requirePermission`/`getAuth` pass through unchanged from the actual module — they are declared
  * functions and already arrive named. Only `requireFreshAuth`/`requireFreshAuthWhen` are
- * factories, and the tier (`maxAgeSeconds`) each call closes over is exactly the argument a
+ * factories, and the tier each call closes over is exactly the argument a
  * step-up-auth assertion needs to see: which routes are gated is only half the property, the
  * other half is gated at the RIGHT tier.
  */
@@ -248,9 +249,9 @@ export const authGuardsMock = () => {
     return {
         ...actual,
         __esModule: true,
-        requireFreshAuth: (maxAgeSeconds: number) => labelled(`requireFreshAuth(${maxAgeSeconds})`),
-        requireFreshAuthWhen: (_predicate: unknown, maxAgeSeconds: number) =>
-            labelled(`requireFreshAuthWhen(${maxAgeSeconds})`)
+        requireFreshAuth: (tier: StepUpTier) => labelled(`requireFreshAuth(${tier})`),
+        requireFreshAuthWhen: (_predicate: unknown, tier: StepUpTier) =>
+            labelled(`requireFreshAuthWhen(${tier})`)
     };
 };
 

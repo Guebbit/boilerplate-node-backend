@@ -19,6 +19,7 @@ import { asCustomer, asAdmin } from '../../support/callers';
 import { callerInScope } from '@kernel/permissions';
 import type { AuthContext } from '@types';
 import { requirePermission } from '@kernel/middlewares/authorizations';
+import { withEnvironment } from '@tests/environment';
 
 const emitAuditEvent = jest.fn();
 
@@ -92,6 +93,25 @@ describe('a key that demands step-up', () => {
         expect(response.status).toHaveBeenCalledWith(401);
         expect(next).not.toHaveBeenCalled();
     });
+
+    it('reads the tier window per request, so a changed setting moves the line', () =>
+        withEnvironment('NODE_REAUTH_TIME_CRITICAL', '60', () => {
+            const response = makeResponse();
+
+            requirePermission('users.any.delete')(
+                makeRequest({ ...asAdmin('u1'), authTime: NOW() - 61 }),
+                response,
+                asStub<NextFunction>(jest.fn())
+            );
+
+            expect(response.json).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    errors: [expect.objectContaining({ details: { maxAge: 60 } })]
+                })
+            );
+
+            return Promise.resolve();
+        }));
 
     it('carries both dialects of the challenge', () => {
         const response = makeResponse();

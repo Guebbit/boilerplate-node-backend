@@ -118,7 +118,7 @@ const send = (
  * Through the endpoint, never a hand-signed token: a flow-produced dataset is only worth more
  * than a written one if every row really did come through the code a browser reaches, and the
  * session is the first link of that chain. It also makes the caller FRESH, which
- * `requireFreshAuth(REAUTH_TIME_CRITICAL)` on checkout and on every payment route demands.
+ * `requireFreshAuth('critical')` on checkout and on every payment route demands.
  *
  * @param baseUrl - where the app is listening, without a trailing slash
  * @param email - the account to sign in as

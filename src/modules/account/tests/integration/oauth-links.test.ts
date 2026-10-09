@@ -8,7 +8,7 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { freezeDate, advanceDate } from '@tests/clock';
-import { REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
+import { reauthWindowSeconds } from '@kernel/config';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { cookieHeader } from '@tests/cookies';
@@ -134,7 +134,7 @@ describe('DELETE /account/oauth/links/{provider}', () => {
     it('needs a fresh session', async () => {
         freezeDate();
         const { cookie } = await linkedAccount();
-        advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
+        advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         // The access token expired along the way; the refresh cookie mints one whose `auth_time` is old.
         const refreshed = await api().post('/account/refresh').set('Cookie', cookie);
 

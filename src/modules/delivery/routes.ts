@@ -12,8 +12,7 @@ import {
     getAuth,
     isAuth,
     requirePermission,
-    requireFreshAuthWhen,
-    REAUTH_TIME_CRITICAL
+    requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
 import { getShippingMethods } from './controllers/get-shipping-methods';
 import { getShipmentByOrder } from './controllers/get-shipment-by-order';
@@ -59,7 +58,7 @@ router.post(
     getAuth,
     isAuth,
     requirePermission('delivery.any.update'),
-    requireFreshAuthWhen(isForcedRequest, REAUTH_TIME_CRITICAL),
+    requireFreshAuthWhen(isForcedRequest, 'critical'),
     postShipOrder
 );
 
@@ -70,7 +69,7 @@ router.post(
     getAuth,
     isAuth,
     requirePermission('delivery.any.update'),
-    requireFreshAuthWhen(isForcedRequest, REAUTH_TIME_CRITICAL),
+    requireFreshAuthWhen(isForcedRequest, 'critical'),
     postDeliverOrder
 );
 

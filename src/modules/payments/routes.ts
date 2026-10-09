@@ -10,7 +10,7 @@
  *                self-service withdrawal, or a self-reported "I paid", if left open to any caller,
  *                versus an intent or confirm locked to admins being a checkout nobody can
  *                complete.
- * Fresh session: every route that moves money requires `requireFreshAuth(REAUTH_TIME_CRITICAL)` —
+ * Fresh session: every route that moves money requires `requireFreshAuth('critical')` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password.
  * Verified:      the three routes the customer drives directly also require the `cart.self.checkout`
@@ -27,8 +27,7 @@ import {
     getAuth,
     isAuth,
     requirePermission,
-    requireFreshAuth,
-    REAUTH_TIME_CRITICAL
+    requireFreshAuth
 } from '@kernel/middlewares/authorizations';
 import {
     webhookLimiter,
@@ -75,7 +74,7 @@ router.use(getAuth, isAuth);
 // `clientSecret` included. `paymentIntentLimiter` is shared with `/sync` below.
 router.post(
     '/intent',
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireFreshAuth('critical'),
     requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentIntentLimiter,
@@ -118,7 +117,7 @@ router.post(
 // `credentialLimiters`/`loginChallengeGate` sit on `POST /account/login`.
 router.post(
     '/:id/confirm',
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireFreshAuth('critical'),
     requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentConfirmAttemptLimiter,
@@ -135,7 +134,7 @@ router.post(
 // second one. It spends the same per-account budget as `/intent`: both end in a provider call.
 router.post(
     '/:id/sync',
-    requireFreshAuth(REAUTH_TIME_CRITICAL),
+    requireFreshAuth('critical'),
     requirePermission('cart.self.update'),
     requirePermission('cart.self.checkout'),
     paymentIntentLimiter,

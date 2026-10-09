@@ -80,7 +80,7 @@ scopes:
 #
 # A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
 # caller proved themselves within that window before it lets them through. The tiers are the ones
-# `REAUTH_TIME_CRITICAL` / `REAUTH_TIME_SENSITIVE` already name, so this adds a place to say WHICH
+# `NODE_REAUTH_TIME_CRITICAL` / `NODE_REAUTH_TIME_SENSITIVE` set, so this adds a place to say WHICH
 # actions are worth a challenge, not a second mechanism for making one.
 #
 # On the key and not the route because the key is what the action IS: erasing somebody's account

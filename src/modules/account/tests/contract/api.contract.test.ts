@@ -30,7 +30,7 @@ import {
 } from '@modules/account/session/config';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate, advanceDate } from '@tests/clock';
-import { REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
+import { reauthWindowSeconds } from '@kernel/config';
 
 setupTestDb();
 
@@ -395,12 +395,12 @@ const loginRemembered = async () => {
 };
 
 /**
- * Beyond `REAUTH_TIME_SENSITIVE`, but still holding a USABLE access token: `auth_time` is
+ * Beyond the sensitive window, but still holding a USABLE access token: `auth_time` is
  * copied forward on every refresh, never re-stamped (`session/jwt.ts`), so a refreshed token
  * is exactly what a long-lived-but-stale session looks like.
  */
 const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
-    advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
+    advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
     const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
     return `Bearer ${refreshed.body.data.token as string}`;
 };

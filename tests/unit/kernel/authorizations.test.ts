@@ -909,7 +909,7 @@ describe('requireFreshAuth', () => {
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() } }),
             response,
             next
@@ -923,7 +923,7 @@ describe('requireFreshAuth', () => {
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 301 } }),
             response,
             next
@@ -937,7 +937,7 @@ describe('requireFreshAuth', () => {
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 300 } }),
             response,
             next
@@ -949,7 +949,7 @@ describe('requireFreshAuth', () => {
     it('carries REAUTH_REQUIRED and the tier in the error envelope', () => {
         const response = makeStepUpResponseStub();
 
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } }),
             response,
             jest.fn()
@@ -970,7 +970,7 @@ describe('requireFreshAuth', () => {
     it('sets WWW-Authenticate for anything that speaks OAuth', () => {
         const response = makeStepUpResponseStub();
 
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } }),
             response,
             jest.fn()
@@ -988,7 +988,7 @@ describe('requireFreshAuth', () => {
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 
-        requireFreshAuth(300)(makeRequest(), response, next);
+        requireFreshAuth('critical')(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
@@ -1000,7 +1000,7 @@ describe('requireFreshAuth', () => {
      * declared-stepUp path, which already emits the same action.
      */
     it('audits the refusal with SECURITY_REAUTH_REQUIRED, same as the declared-stepUp path', () => {
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() - 999 } }),
             makeStepUpResponseStub(),
             jest.fn()
@@ -1016,7 +1016,7 @@ describe('requireFreshAuth', () => {
     });
 
     it('does not audit a session that passes the freshness check', () => {
-        requireFreshAuth(300)(
+        requireFreshAuth('critical')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() } }),
             makeStepUpResponseStub(),
             jest.fn()
@@ -1033,7 +1033,7 @@ describe('requireFreshAuthWhen', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireFreshAuthWhen(() => false, 900)(staleRequest(), response, next);
+        requireFreshAuthWhen(() => false, 'sensitive')(staleRequest(), response, next);
 
         expect(next).toHaveBeenCalledTimes(1);
         expect(response.status).not.toHaveBeenCalled();
@@ -1043,7 +1043,7 @@ describe('requireFreshAuthWhen', () => {
         const next = jest.fn();
         const response = makeStepUpResponseStub();
 
-        requireFreshAuthWhen(() => true, 900)(staleRequest(), response, next);
+        requireFreshAuthWhen(() => true, 'sensitive')(staleRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
@@ -1053,7 +1053,7 @@ describe('requireFreshAuthWhen', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requireFreshAuthWhen(() => true, 900)(
+        requireFreshAuthWhen(() => true, 'sensitive')(
             makeRequest({ authContext: { ...asCustomer('user-1'), authTime: nowSeconds() } }),
             response,
             next

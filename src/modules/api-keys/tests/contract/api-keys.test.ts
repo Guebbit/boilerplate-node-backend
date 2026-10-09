@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { ensureTenant, DEPLOYMENT_TENANT_SLUG } from '@modules/access';
 import { freezeDate, advanceDate } from '@tests/clock';
-import { REAUTH_TIME_CRITICAL } from '@kernel/middlewares/authorizations';
+import { reauthWindowSeconds } from '@kernel/config';
 
 setupTestDb();
 
@@ -133,7 +133,7 @@ describe('POST /api-keys', () => {
     it('401s REAUTH_REQUIRED for a session that has not proved itself lately: a key outlives it', async () => {
         freezeDate();
         const { bearer } = await authenticateAsRole('admin');
-        advanceDate((REAUTH_TIME_CRITICAL + 1) * 1000);
+        advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
 
         const response = await api()
             .post('/api-keys')

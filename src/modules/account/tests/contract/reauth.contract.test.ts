@@ -12,7 +12,7 @@ import { setEnvironment } from '@tests/environment';
 import { api } from '@tests/http';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
+import { reauthWindowSeconds } from '@kernel/config';
 import { createAccessToken, createRefreshToken } from '../../session/jwt';
 import { settleInlineExports } from '../../services/export';
 
@@ -250,7 +250,7 @@ describe('POST /account/reauth with a mailed code', () => {
     it('lets a stale session with no password get fresh again', async () => {
         freezeDate();
         const { bearer, jwtCookie } = await sessionFor(['google'], false);
-        advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
+        advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
         const staleBearer = `Bearer ${stale.body.data.token as string}`;
         expect(bearer).not.toBe(staleBearer);
@@ -274,7 +274,7 @@ describe('POST /account/reauth with a mailed code', () => {
     it('asks a stale session to prove itself again before a download, too', async () => {
         freezeDate();
         const { jwtCookie } = await sessionFor(['pwd'], true);
-        advanceDate((REAUTH_TIME_SENSITIVE + 1) * 1000);
+        advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
 
         const response = await api()
@@ -282,6 +282,24 @@ describe('POST /account/reauth with a mailed code', () => {
             .set('Authorization', `Bearer ${stale.body.data.token as string}`);
 
         expect(response.status).toBe(401);
+    });
+});
+
+describe('the step-up window', () => {
+    it('is read per request, so a changed NODE_REAUTH_TIME_SENSITIVE moves the line', async () => {
+        setEnvironment({ NODE_REAUTH_TIME_SENSITIVE: '60' });
+        freezeDate();
+        const { jwtCookie } = await sessionFor(['pwd'], true);
+        advanceDate(61 * 1000);
+        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
+
+        const response = await api()
+            .post('/account/logout-all')
+            .set('Authorization', `Bearer ${stale.body.data.token as string}`)
+            .send();
+
+        expect(response.status).toBe(401);
+        expect(response.body.errors[0].details).toEqual({ maxAge: 60 });
     });
 });
 

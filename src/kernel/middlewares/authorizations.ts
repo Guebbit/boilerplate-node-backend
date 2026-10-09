@@ -50,7 +50,7 @@ import {
     staleCredentialsTotal,
     type SecurityEventAction
 } from '@infrastructure/observability/security-events';
-import { reauthConfig } from '@kernel/config';
+import { reauthWindowSeconds } from '@kernel/config';
 
 /**
  * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
@@ -326,10 +326,6 @@ export const isAuthOrCredential = (request: Request, response: Response, next: N
     next();
 };
 
-/** How many seconds a tier allows since the caller last proved themselves. */
-const tierSeconds = (tier: StepUpTier): number =>
-    tier === 'critical' ? REAUTH_TIME_CRITICAL : REAUTH_TIME_SENSITIVE;
-
 /**
  * Did this caller prove themselves recently enough for the tier?
  *
@@ -339,7 +335,8 @@ const tierSeconds = (tier: StepUpTier): number =>
  * high-risk action rather than being treated as freshly authenticated.
  */
 const provedRecentlyEnough = (request: Request, tier: StepUpTier): boolean =>
-    Math.floor(Date.now() / 1000) - (request.authContext?.authTime ?? 0) <= tierSeconds(tier);
+    Math.floor(Date.now() / 1000) - (request.authContext?.authTime ?? 0) <=
+    reauthWindowSeconds(tier);
 
 /**
  * Answer the step-up challenge — 401, not 403, and the status names the client's next move.
@@ -463,7 +460,7 @@ export const requirePermission = (key: string) => {
                 actor_scope: scope,
                 metadata: { reason: 'step_up_required', permission: key, tier: declared.stepUp }
             });
-            challengeForFreshAuth(response, tierSeconds(declared.stepUp));
+            challengeForFreshAuth(response, reauthWindowSeconds(declared.stepUp));
 
             return;
         }
@@ -594,22 +591,11 @@ export const stillHoldsKeyViaCookie = (
         .then((user) => user !== undefined)
         .catch(() => false);
 
-/**
- * The two step-up tiers (`NODE_REAUTH_TIME_*`), read through the kernel's config slice.
- * Kernel-level, not `account`'s: `requireFreshAuth` is mounted
- * by any module with a money or identity route — `cart`, `payments`, `account` itself — and none
- * of them may reach into a sibling's config to get at it.
- */
-export const REAUTH_TIME_CRITICAL = reauthConfig().NODE_REAUTH_TIME_CRITICAL;
-
-/** Identity changes, session management — the lighter of the two tiers. */
-export const REAUTH_TIME_SENSITIVE = reauthConfig().NODE_REAUTH_TIME_SENSITIVE;
-
 /** What {@link requireFreshAuth} may additionally demand, beyond how recently. */
 export interface FreshAuthOptions {
     /**
      * Every one of these RFC 8176 values must appear in `authContext.amr` — fresh AND
-     * second-factored. `requireFreshAuth(CRITICAL, { methods: ['otp'] })` is the payoff for
+     * second-factored. `requireFreshAuth('critical', { methods: ['otp'] })` is the payoff for
      * carrying `amr` as an array instead of a boolean: a future WebAuthn passkey is `amr: ['hwk']`
      * and a new caller of this option, no guard or route changes.
      */
@@ -617,7 +603,7 @@ export interface FreshAuthOptions {
 }
 
 /**
- * Reject with a step-up challenge unless the caller proved themselves within `maxAgeSeconds`,
+ * Reject with a step-up challenge unless the caller proved themselves within the tier's window,
  * and (when `options.methods` is given) unless every one of those methods is in their `amr`.
  * MUST run after `isAuth`.
  *
@@ -627,13 +613,15 @@ export interface FreshAuthOptions {
  * anything that speaks OAuth, this app's own `errors[].code` envelope for its own clients, which
  * read `errors[].code` and never the header.
  *
- * @param maxAgeSeconds - how recently `authContext.authTime` must have been set —
- *   {@link REAUTH_TIME_CRITICAL} or {@link REAUTH_TIME_SENSITIVE}
+ * @param tier - how recently `authContext.authTime` must have been set; the seconds are read
+ *   per request from `NODE_REAUTH_TIME_<TIER>`, never frozen when the router loads
  * @param options - additional requirements beyond recency — see {@link FreshAuthOptions}
  */
 export const requireFreshAuth =
-    (maxAgeSeconds: number, options: FreshAuthOptions = {}) =>
+    (tier: StepUpTier, options: FreshAuthOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
+        const maxAgeSeconds = reauthWindowSeconds(tier);
+
         // Defensive, not the expected path: a route mounting this without `isAuth` first would
         // otherwise read `undefined.authTime` and throw. Same shape as `requirePermission`'s guard above.
         if (!request.authContext) {
@@ -657,7 +645,7 @@ export const requireFreshAuth =
         // per this file's own module doc — challenged with no trail at all.
         auditRefusal(request, {
             action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
-            metadata: { reason: 'fresh_auth_required', maxAgeSeconds }
+            metadata: { reason: 'fresh_auth_required', tier, maxAgeSeconds }
         });
         challengeForFreshAuth(response, maxAgeSeconds, options.methods);
     };
@@ -675,19 +663,15 @@ export const requireFreshAuth =
  * whatever populates the body the predicate reads.
  *
  * @param predicate - reads the request and decides whether THIS one needs a fresh session
- * @param maxAgeSeconds - passed through to {@link requireFreshAuth} when the predicate is true
+ * @param tier - passed through to {@link requireFreshAuth} when the predicate is true
  * @param options - passed through too: what the fresh session must additionally have proved
  */
 export const requireFreshAuthWhen =
-    (
-        predicate: (request: Request) => boolean,
-        maxAgeSeconds: number,
-        options: FreshAuthOptions = {}
-    ) =>
+    (predicate: (request: Request) => boolean, tier: StepUpTier, options: FreshAuthOptions = {}) =>
     (request: Request, response: Response, next: NextFunction) => {
         if (!predicate(request)) {
             next();
             return;
         }
-        requireFreshAuth(maxAgeSeconds, options)(request, response, next);
+        requireFreshAuth(tier, options)(request, response, next);
     };

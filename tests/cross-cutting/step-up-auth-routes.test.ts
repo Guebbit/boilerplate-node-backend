@@ -31,7 +31,6 @@ jest.mock('@kernel/middlewares/authorizations', () =>
     jest.requireActual<typeof import('@tests/routes')>('@tests/routes').authGuardsMock()
 );
 
-import { REAUTH_TIME_CRITICAL, REAUTH_TIME_SENSITIVE } from '@kernel/middlewares/authorizations';
 import { router as accountRouter } from '@modules/account/routes';
 import { router as cartRouter } from '@modules/cart/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
@@ -51,44 +50,44 @@ const ROUTERS: Record<string, Router> = {
  * conditional (`requireFreshAuthWhen`) for the one route where freshness depends on what changed.
  */
 const STEP_UP_ROUTES: Record<string, string> = {
-    'cart POST /checkout': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'payments POST /intent': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'payments POST /:id/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'cart POST /checkout': `requireFreshAuth(critical)`,
+    'payments POST /intent': `requireFreshAuth(critical)`,
+    'payments POST /:id/confirm': `requireFreshAuth(critical)`,
     // The sync settles money just as the confirm does, from the provider's answer rather than
     // from a method the caller supplied — so it sits at the same tier, not a lower one.
-    'payments POST /:id/sync': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'payments POST /:id/sync': `requireFreshAuth(critical)`,
     // The first guard recorded is the conditional one: an account with a second factor must also
     // have proved an `otp`. The unconditional critical guard follows it on the same route.
-    'account DELETE /': `requireFreshAuthWhen(${REAUTH_TIME_CRITICAL})`,
+    'account DELETE /': `requireFreshAuthWhen(critical)`,
     // Only for an account with a second factor armed (the otp demand): the plain password change
     // of an account without one is gated by the current password alone, as before.
-    'account POST /password': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
-    'account PUT /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
-    'account PATCH /': `requireFreshAuthWhen(${REAUTH_TIME_SENSITIVE})`,
-    'account POST /logout-all': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    'account POST /password': `requireFreshAuthWhen(sensitive)`,
+    'account PUT /': `requireFreshAuthWhen(sensitive)`,
+    'account PATCH /': `requireFreshAuthWhen(sensitive)`,
+    'account POST /logout-all': `requireFreshAuth(sensitive)`,
     // Disconnecting a provider removes a way into the account: an identity change, sensitive tier.
-    'account DELETE /oauth/links/:provider': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
-    'account DELETE /sessions/:sessionId': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    'account DELETE /oauth/links/:provider': `requireFreshAuth(sensitive)`,
+    'account DELETE /sessions/:sessionId': `requireFreshAuth(sensitive)`,
     // The data export adopts this same guard in place of a bespoke password check — see the
     // route's own comment in `account/routes.ts`.
-    'account POST /export': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
-    'account GET /export/:id': `requireFreshAuth(${REAUTH_TIME_SENSITIVE})`,
+    'account POST /export': `requireFreshAuth(sensitive)`,
+    'account GET /export/:id': `requireFreshAuth(sensitive)`,
     // Enrolling, confirming or disabling a second factor is itself a sensitive action —
     // critical tier, same as `DELETE /` and the checkout/payment routes above.
-    'account POST /2fa/methods/:method/setup': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account POST /2fa/methods/:method/send': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account POST /2fa/methods/:method/confirm': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account DELETE /2fa/methods/:method': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
-    'account DELETE /2fa': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account POST /2fa/methods/:method/setup': `requireFreshAuth(critical)`,
+    'account POST /2fa/methods/:method/send': `requireFreshAuth(critical)`,
+    'account POST /2fa/methods/:method/confirm': `requireFreshAuth(critical)`,
+    'account DELETE /2fa/methods/:method': `requireFreshAuth(critical)`,
+    'account DELETE /2fa': `requireFreshAuth(critical)`,
     // Regenerating backup codes discards the old set — the same stolen-but-fresh-session risk
     // as disabling a factor.
-    'account POST /2fa/backup-codes': `requireFreshAuth(${REAUTH_TIME_CRITICAL})`,
+    'account POST /2fa/backup-codes': `requireFreshAuth(critical)`,
     // Freshness here is a property of the REQUEST, not the route: a plain ship/deliver never
     // needs it, a `forced: true` one does — the same `orders.any.override` tier the direct
     // status-override route inherits automatically through `requirePermission`, restated here
     // because `service.ts`'s own permission check has no way to demand a step-up on its own.
-    'delivery POST /order/:orderId/ship': `requireFreshAuthWhen(${REAUTH_TIME_CRITICAL})`,
-    'delivery POST /order/:orderId/deliver': `requireFreshAuthWhen(${REAUTH_TIME_CRITICAL})`
+    'delivery POST /order/:orderId/ship': `requireFreshAuthWhen(critical)`,
+    'delivery POST /order/:orderId/deliver': `requireFreshAuthWhen(critical)`
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */
@@ -128,11 +127,5 @@ describe('step-up auth guards exactly the routes it is declared for', () => {
 
     it('mounts the guard on exactly this table — nowhere else, at no other tier', () => {
         expect(mountedStepUps()).toEqual(STEP_UP_ROUTES);
-    });
-
-    it('never confuses the two tiers', () => {
-        // Guards the table itself: a critical route hand-typed with the sensitive constant (or
-        // vice versa) would still pass every check above, since both are just numbers to Jest.
-        expect(REAUTH_TIME_CRITICAL).toBeLessThan(REAUTH_TIME_SENSITIVE);
     });
 });
