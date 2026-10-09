@@ -31,6 +31,7 @@ import { asReject } from '@tests/response';
 import { approveReturn, createReturn, receiveReturn } from '../../services';
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
+import { findCreditNotesForOrder, type CreditNoteDocument } from '@modules/invoicing';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -63,15 +64,24 @@ const waitFor = async (check: () => Promise<boolean>): Promise<void> => {
 let customers = 0;
 
 /**
- * A customer who bought two shirts (30.00 each) and a mug (10.00) with `shipping` on top, paid for
- * it by card, and has since received it. Stock is held and sold for real, so a restock has
+ * A customer who bought two shirts (30.00 each) and a mug (10.00, at the reduced VAT rate when
+ * `mugTaxClass` says so) with `shipping` on top, paid for it by card, and has since received it. Stock is held and sold for real, so a restock has
  * something to give back.
  */
-const paidAndDelivered = async (shipping = 0, shippingMethod = 'standard') => {
+const paidAndDelivered = async (
+    shipping = 0,
+    shippingMethod = 'standard',
+    mugTaxClass?: 'reduced'
+) => {
     customers += 1;
     const user = await createUser({ email: `buyer-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
-    const mug = await createProduct({ title: 'Mug', price: 10, onHand: 10 });
+    const mug = await createProduct({
+        title: 'Mug',
+        price: 10,
+        onHand: 10,
+        ...(mugTaxClass ? { taxClass: mugTaxClass } : {})
+    });
     const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
         ...(shipping > 0 ? { shippingMethod, shippingCost: shipping } : {})
     });
@@ -411,5 +421,40 @@ describe('what the customer gets back', () => {
         expect(payment.status).toBe('refunded');
         expect(payment.refunds.map((refund) => refund.amount)).toEqual([40, 30]);
         expect(result.success && result.data.status).toBe('closed');
+    });
+});
+
+describe('the credit note a received return issues', () => {
+    it('credits the returned goods at the VAT rate they were sold at', async () => {
+        // Shirts at 22%, the mug at 10%: the mug's 10.00 must not be spread over the shirts' rate.
+        const fixture = await paidAndDelivered(0, 'standard', 'reduced');
+        const id = await approvedReturn(fixture, 'withdrawal', [
+            { productId: String(fixture.mug._id), quantity: 1 }
+        ]);
+
+        await receiveReturn(id, {}, callerContextAs('admin'));
+        let notes: CreditNoteDocument[] = [];
+        await waitFor(async () => {
+            notes = await findCreditNotesForOrder(fixture.orderId);
+            return notes.length > 0;
+        });
+
+        expect(notes[0].toObject().taxSummary).toEqual([
+            { rate: 0.1, netAmount: 9.09, taxAmount: 0.91, grossAmount: 10 }
+        ]);
+    });
+
+    it("keeps the refund's goods off the wire — they are the credit note's input only", async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture, 'withdrawal', [
+            { productId: String(fixture.mug._id), quantity: 1 }
+        ]);
+
+        await receiveReturn(id, {}, callerContextAs('admin'));
+        const payment = await paymentOf(fixture.orderId);
+        const [refund] = payment.refunds;
+
+        expect(refund).not.toHaveProperty('lines');
+        expect(refund).not.toHaveProperty('shipping');
     });
 });

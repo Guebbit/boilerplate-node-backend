@@ -15,6 +15,18 @@ import { PaymentStatus, PaymentMethod, RefundReason, RefundStatus } from '@types
 import { paymentWebhookEventRetentionDays } from './config';
 
 /**
+ * One returned product line a refund pays back — Shopify's `refund_line_items`, reduced to what a
+ * credit note needs to find the line's VAT rate. Plain ids: `payments` knows nothing of `returns`
+ * or `invoicing`.
+ */
+export interface RefundLine {
+    /** The product the order line was for. */
+    productId: string;
+    /** How many of its units come back. */
+    quantity: number;
+}
+
+/**
  * One attempt to give money back — a record per attempt, the way Stripe keeps a `Refund` per
  * request. The payment's own `status` says whether it is fully returned; these say how, when and
  * how much each time.
@@ -38,6 +50,14 @@ export interface RefundRecord {
      * not a reference: `payments` knows nothing of `returns`.
      */
     returnId?: string;
+    /**
+     * The goods this refund pays back, when it pays for specific ones (a return). Absent for a
+     * goodwill or cancellation refund. `invoicing` credits these lines at their own VAT rates.
+     * Never published: it is the credit note's input, not a client's.
+     */
+    lines?: RefundLine[];
+    /** The delivery cost inside `amount`, beside `lines` — a decimal. Never published. */
+    shipping?: number;
     /** The provider's id for the refund, once it answered. Never published, like `providerRef`. */
     providerRefundRef?: string;
     /** What the provider last said when it refused. Never published: it is the provider's wording. */
@@ -133,6 +153,19 @@ const refundSchema = new Schema<RefundRecord>(
         reason: { type: String, enum: Object.values(RefundReason), required: true },
         idempotencyKey: { type: String, required: true },
         returnId: { type: String },
+        lines: {
+            type: [
+                new Schema<RefundLine>(
+                    {
+                        productId: { type: String, required: true },
+                        quantity: { type: Number, required: true, min: 1 }
+                    },
+                    { _id: false }
+                )
+            ],
+            default: undefined
+        },
+        shipping: { type: Number, min: 0 },
         providerRefundRef: { type: String },
         lastError: { type: String },
         settledAt: { type: Date }
@@ -228,11 +261,19 @@ paymentSchema.index(
 );
 
 /** The keys of an embedded refund that never reach the wire. */
-const REFUND_INTERNAL_KEYS = ['_id', 'providerRefundRef', 'idempotencyKey', 'lastError'] as const;
+const REFUND_INTERNAL_KEYS = [
+    '_id',
+    'providerRefundRef',
+    'idempotencyKey',
+    'lastError',
+    'lines',
+    'shipping'
+] as const;
 
 /**
  * A refund record as the contract publishes it: `_id` → `id`, and the provider-facing bookkeeping
- * (its own refund id, the idempotency key, its error wording) left behind.
+ * (its own refund id, the idempotency key, its error wording) and the credit note's input left
+ * behind.
  *
  * @param refund - one embedded refund, as a plain object
  * @returns the same record without the fields no client operation reads

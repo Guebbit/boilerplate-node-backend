@@ -39,6 +39,7 @@ const frozenSeller = (): InvoiceSeller => {
  */
 const frozenLines = (order: OrderDocument): InvoiceLine[] =>
     order.items.map((item) => ({
+        productId: item.product._id,
         title: item.product.title,
         quantity: item.quantity,
         unitPrice: item.product.price,

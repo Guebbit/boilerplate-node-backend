@@ -17,7 +17,7 @@ import { invoicingRepository } from '../repository';
 import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
 import { findInvoiceForOrder } from './issue-invoice';
 import { allocateCreditNoteNumber } from './numbering';
-import { partialCredit } from './partial-credit';
+import { partialCredit, type RefundedGoods } from './partial-credit';
 import type { CreditNoteDocument, InvoiceDocument } from '../model';
 
 /** The refund a credit note is issued for — `PAYMENT_REFUNDED`'s payload, as this module needs it. */
@@ -28,11 +28,13 @@ export interface RefundedInput {
     amount: number;
     /** Whether this refund is the whole payment — the one case that mirrors the invoice. */
     full: boolean;
+    /** The goods and delivery it pays back, when it pays for specific ones — see `./partial-credit.ts`. */
+    goods?: RefundedGoods;
 }
 
 /**
  * The frozen figures a credit note carries: the invoice's own for a full refund, or the refunded
- * share re-derived across its VAT rates for a partial one.
+ * share re-derived across the VAT rates of what it pays back for a partial one.
  *
  * @param invoice - the invoice being reversed
  * @param input - the refund
@@ -67,7 +69,8 @@ const reversedFigures = (
     const { lines, breakdown } = partialCredit(
         invoice,
         input.amount,
-        translator(invoice.locale)('invoicing.document.partial-refund-line')
+        translator(invoice.locale)('invoicing.document.partial-refund-line'),
+        input.goods
     );
     return {
         lines,

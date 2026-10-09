@@ -11,6 +11,8 @@ import { partialCredit } from '../../services/partial-credit';
 /** An invoice of 122.00 at 22% and 110.00 at 10% — 232.00 gross in all. */
 const invoice = asStub<InvoiceDocument>({
     currency: 'EUR',
+    lines: [],
+    shippingByRate: [],
     taxSummary: [
         { rate: 0.1, netAmount: 100, taxAmount: 10, grossAmount: 110 },
         { rate: 0.22, netAmount: 100, taxAmount: 22, grossAmount: 122 }
@@ -94,5 +96,77 @@ describe('partialCredit — worked examples, VAT rounded once per rate', () => {
         expect(breakdown.taxSummary).toEqual([
             { rate: 0.08, netAmount: 97, taxAmount: 8, grossAmount: 105 }
         ]);
+    });
+});
+
+describe('partialCredit — a refund for specific goods', () => {
+    const BOOK = '64b64c4f4f4f4f4f4f4f4f01';
+    const LAMP = '64b64c4f4f4f4f4f4f4f4f02';
+
+    /**
+     * A book at 10% (2 x 11.00) and a lamp at 22% (1 x 61.00), with 12.20 of delivery split
+     * 2.20 / 10.00 between the two rates.
+     */
+    const mixed = asStub<InvoiceDocument>({
+        currency: 'EUR',
+        lines: [
+            { productId: BOOK, title: 'Book', quantity: 2, unitPrice: 11, taxRate: 0.1 },
+            { productId: LAMP, title: 'Lamp', quantity: 1, unitPrice: 61, taxRate: 0.22 }
+        ],
+        shippingByRate: [
+            { rate: 0.1, netAmount: 2, taxAmount: 0.2, grossAmount: 2.2 },
+            { rate: 0.22, netAmount: 8.2, taxAmount: 1.8, grossAmount: 10 }
+        ],
+        taxSummary: [
+            { rate: 0.1, netAmount: 22, taxAmount: 2.2, grossAmount: 24.2 },
+            { rate: 0.22, netAmount: 58.2, taxAmount: 12.8, grossAmount: 71 }
+        ]
+    });
+
+    it("credits a returned book at the book's rate only", () => {
+        const { lines, breakdown } = partialCredit(mixed, 11, 'Refund', {
+            lines: [{ productId: BOOK, quantity: 1 }],
+            shipping: 0
+        });
+
+        expect(lines).toEqual([{ title: 'Refund', quantity: 1, unitPrice: 11, taxRate: 0.1 }]);
+        expect(breakdown.taxSummary).toEqual([
+            { rate: 0.1, netAmount: 10, taxAmount: 1, grossAmount: 11 }
+        ]);
+    });
+
+    it('credits refunded delivery at the rates the invoice charged it at', () => {
+        // Weights: 10% = 2 x 11.00 + 2.20 = 24.20; 22% = 61.00 + 10.00 = 71.00 — the whole invoice.
+        const { lines } = partialCredit(mixed, 95.2, 'Refund', {
+            lines: [
+                { productId: BOOK, quantity: 2 },
+                { productId: LAMP, quantity: 1 }
+            ],
+            shipping: 12.2
+        });
+
+        expect(lines.map((line) => [line.taxRate, line.unitPrice])).toEqual([
+            [0.1, 24.2],
+            [0.22, 71]
+        ]);
+    });
+
+    it('splits a refund smaller than its goods (a deduction) across their rates only', () => {
+        // The lamp alone came back, 6.00 kept for handling: 55.00 refunded, all of it at 22%.
+        const { lines } = partialCredit(mixed, 55, 'Refund', {
+            lines: [{ productId: LAMP, quantity: 1 }],
+            shipping: 0
+        });
+
+        expect(lines).toEqual([{ title: 'Refund', quantity: 1, unitPrice: 55, taxRate: 0.22 }]);
+    });
+
+    it('falls back to every rate when no returned line is on the invoice', () => {
+        const { lines } = partialCredit(mixed, 95.2, 'Refund', {
+            lines: [{ productId: '64b64c4f4f4f4f4f4f4f4fff', quantity: 1 }],
+            shipping: 0
+        });
+
+        expect(lines.map((line) => line.unitPrice)).toEqual([24.2, 71]);
     });
 });

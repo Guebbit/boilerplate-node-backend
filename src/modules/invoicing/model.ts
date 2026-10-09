@@ -26,6 +26,11 @@ import type { ShopIdentity } from '@modules/orders';
  * from the line alone.
  */
 export interface InvoiceLine {
+    /**
+     * The product the order line was for — how a credit note for returned goods finds the rate
+     * each one was sold at. Absent on a credit note's own lines.
+     */
+    productId?: Types.ObjectId;
     title: string;
     quantity: number;
     /** Gross (VAT-inclusive) unit price, exactly as `OrderLineProduct.price` freezes it. */
@@ -141,6 +146,7 @@ const sellerSchema = new Schema<InvoiceSeller>(
 /** One frozen line, embedded — `_id: false`, nothing ever addresses a line by its own id. */
 const lineSchema = new Schema<InvoiceLine>(
     {
+        productId: { type: Schema.Types.ObjectId },
         title: { type: String, required: true },
         quantity: { type: Number, required: true },
         unitPrice: { type: Number, required: true },

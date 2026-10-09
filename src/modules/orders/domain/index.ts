@@ -10,8 +10,8 @@
 export { sumLineItems, orderTotal } from './totals';
 
 /**
- * Integer money arithmetic, published because `payments` and `returns` both do sums on refunds
- * and must not redo them in floating point: a decimal amount goes in through `toMinorUnits`, comes
+ * Integer money arithmetic, published because `payments`, `returns` and `invoicing` all do sums on
+ * refunds and must not redo them in floating point: a decimal amount goes in through `toMinorUnits`, comes
  * out through `toDecimalAmount`, and everything between stays exact.
  */
 export {
@@ -19,6 +19,7 @@ export {
     toDecimalAmount,
     addMoney,
     subtractMoney,
+    scaleMoney,
     apportion,
     NO_MONEY
 } from './money';

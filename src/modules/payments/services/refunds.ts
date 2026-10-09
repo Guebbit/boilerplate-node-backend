@@ -48,7 +48,7 @@ import { paymentsAuditActions } from '../audit';
 import { providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
-import type { PaymentDocument, RefundRecord } from '../model';
+import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
 import { REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { callerScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
@@ -61,6 +61,10 @@ export interface RefundRequest {
     reason: RefundReason;
     /** The return this pays for, when `reason` is `return` — recorded so it can be closed later. */
     returnId?: string;
+    /** The goods this pays back, when it pays for specific ones — see `RefundRecord.lines`. */
+    lines?: RefundLine[];
+    /** The delivery cost inside the amount, beside `lines` — a decimal. */
+    shipping?: number;
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
@@ -142,6 +146,7 @@ const openRefund = (
         status: 'pending' as const,
         reason: request.reason,
         ...(request.returnId ? { returnId: request.returnId } : {}),
+        ...(request.lines ? { lines: request.lines, shipping: request.shipping ?? 0 } : {}),
         // One key per RECORD, not per payment: two different partial refunds must not be taken
         // for one by the provider, while a retry of this one must be.
         idempotencyKey: `refund:${String(paymentId)}:${String(refundId)}`
@@ -291,6 +296,14 @@ const refundedPayload = (
     orderId: String(payment.orderId),
     refundId: String(refund._id),
     ...(refund.returnId ? { returnId: refund.returnId } : {}),
+    ...(refund.lines?.length
+        ? {
+              goods: {
+                  lines: refund.lines.map(({ productId, quantity }) => ({ productId, quantity })),
+                  shipping: refund.shipping ?? 0
+              }
+          }
+        : {}),
     amount: refund.amount,
     currency: refund.currency,
     full:
@@ -625,14 +638,15 @@ export const refundForOrder = (orderId: string): Promise<void> =>
  * `returns` will hear of it then.
  *
  * @param orderId - the returned order
- * @param input - which return this pays for, and how much (a decimal in the payment's currency)
+ * @param input - which return this pays for, how much (a decimal in the payment's currency), and
+ *   which goods and delivery that amount covers — what the credit note credits at their own rates
  * @param context - the staff member who received the goods, audited on the refund
  * @returns the payment as it now stands, or `null` when there is nothing to return — no succeeded
  *   payment, nothing left of it, or a zero amount
  */
 export const refundForReturn = (
     orderId: string,
-    input: { returnId: string; amount: number },
+    input: { returnId: string; amount: number; lines: RefundLine[]; shipping: number },
     context: CallerContext
 ): Promise<PaymentDocument | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
@@ -646,6 +660,8 @@ export const refundForReturn = (
         return performRefund(orderId, context, {
             amount: toDecimalAmount(amount, payment.currency),
             reason: 'return',
-            returnId: input.returnId
+            returnId: input.returnId,
+            lines: input.lines,
+            shipping: input.shipping
         });
     });

@@ -122,7 +122,7 @@ describe('a refund that must not mail', () => {
 
         await refundForReturn(
             orderId,
-            { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50 },
+            { returnId: '64b64c4f4f4f4f4f4f4f4f4f', amount: 50, lines: [], shipping: 0 },
             testCallerContext
         );
         await settleQuietly();

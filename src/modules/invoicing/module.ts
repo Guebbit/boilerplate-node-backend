@@ -57,8 +57,8 @@ export default {
             // currency to freeze onto the invoice.
             return getOrderById(orderId).then((order) => (order ? issueInvoice(order) : undefined));
         });
-        onDomainEvent(PAYMENT_REFUNDED, ({ orderId, refundId, amount, full }) =>
-            issueCreditNote({ orderId, refundId, amount, full })
+        onDomainEvent(PAYMENT_REFUNDED, ({ orderId, refundId, amount, full, goods }) =>
+            issueCreditNote({ orderId, refundId, amount, full, ...(goods ? { goods } : {}) })
         );
     },
     locales: path.join(__dirname, 'locales'),

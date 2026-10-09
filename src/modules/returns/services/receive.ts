@@ -128,11 +128,13 @@ const claimAndRestock = (
  * is on the payment as `failed`, the sweep retries it, and the return closes when it lands.
  *
  * @param received - the return, just received
+ * @param shipping - the delivery cost inside the refund, so the credit note can rate it apart
  * @param context - the staff member, audited on the refund
  * @returns the return as it now stands — `closed` if the money went back, else still `received`
  */
 const refundAndClose = (
     received: ReturnDocument,
+    shipping: number,
     context: CallerContext
 ): Promise<ReturnDocument> => {
     const owed = received.refundAmount ?? 0;
@@ -146,7 +148,15 @@ const refundAndClose = (
         paymentService
             .refundForReturn(
                 String(received.orderId),
-                { returnId: String(received._id), amount: owed },
+                {
+                    returnId: String(received._id),
+                    amount: owed,
+                    lines: received.lines.map(({ productId, quantity }) => ({
+                        productId: String(productId),
+                        quantity
+                    })),
+                    shipping
+                },
                 context
             )
             // `null` means there was nothing to return — no succeeded payment, or nothing left of it —
@@ -214,7 +224,7 @@ const receiveFor = (
                     returnId: id,
                     orderId: String(received.orderId)
                 });
-                return refundAndClose(received, context);
+                return refundAndClose(received, verdict.breakdown.shipping, context);
             })
             .then((after) => generateSuccess(after, 200, t('returns.received')));
     });

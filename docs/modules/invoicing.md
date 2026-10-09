@@ -90,11 +90,20 @@ order carries one, chosen at checkout — "same as shipping" by default, so a di
 which has no ship-to address at all, is still invoiced to someone), the seller's own identity (`config.ts`), and the order's own frozen
 `currency`/`orderNumber`/`locale`.
 `issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
-(`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount` and `full`). A full refund mirrors the
-invoice it corrects wholesale. A partial one carries only the refunded share: `src/modules/invoicing/services/partial-credit.ts`
-spreads the amount over the invoice's VAT rates in proportion to what each collected (goods and
-shipping together), one line per rate, and the VAT is extracted the way the invoice's own was — so
-the credit note reconciles to the cent and only ever names rates the invoice charged. An order
+(`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount`, `full`, and — for a return — the
+`goods` it pays back). A full refund mirrors the invoice it corrects wholesale. A partial one
+carries only the refunded share: `src/modules/invoicing/services/partial-credit.ts` spreads the
+amount over the invoice's VAT rates, one line per rate, and the VAT is extracted the way the
+invoice's own was — so the credit note reconciles to the cent and only ever names rates the
+invoice charged. What each rate weighs depends on the refund:
+
+| Refund                                              | Weights                                                                                                                  | Why                                                                                                     |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| For specific goods (a return)                       | the returned lines at their own rates (matched by `productId`), plus the refunded delivery split as the invoice split it | VAT Directive Art. 90: the goods that came back reduce the taxable amount at the rate they were sold at |
+| Tied to no goods (goodwill, cancellation remainder) | every rate, by what it collected                                                                                         | the pro-rata rule for a price reduction across a mixed-rate invoice                                     |
+
+A handling deduction, or an earlier partial refund that left less to return, makes the refund
+smaller than its goods: the weights then split what was actually refunded. An order
 refunded in parts therefore has several credit notes; `refundId` is unique, which is what makes a
 redelivered event issue nothing twice.
 
@@ -203,7 +212,7 @@ largest weight. The line rows on a printed document are re-derived from the froz
 field.
 
 Credit notes follow the same rule: a full refund mirrors the invoice's frozen figures; a partial
-one is split across the invoice's rates, and each rate's share has its VAT extracted and rounded
+one is split across the rates of what it pays back, and each rate's share has its VAT extracted and rounded
 once (`services/partial-credit.ts`). Several partial notes each round their own share, so their
 VAT can differ from the invoice's by a minor unit in total; every document is self-consistent.
 

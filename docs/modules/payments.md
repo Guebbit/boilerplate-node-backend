@@ -325,7 +325,10 @@ sequenceDiagram
   payment has left. `payment.refunded` carries the `returnId`, so `returns` closes the return when
   the refund lands — including later, when the sweep completes one the provider first refused.
 - **A credit note per refund.** `payment.refunded` carries `refundId`, this refund's `amount` and
-  `full`; `invoicing` issues from it ([`invoicing`](./invoicing.md)).
+  `full`; `invoicing` issues from it ([`invoicing`](./invoicing.md)). A return's refund also
+  records the goods it pays back (`lines`: product and quantity, plus the `shipping` inside the
+  amount, Shopify's `refund_line_items`) and announces them as `goods`, so the credit note
+  credits each line at its own VAT rate. Neither field is published on the wire.
 
 Every other refund dispatches to the provider named on the payment's own `provider` field — never
 the deployment's currently configured one — so a refund of an older payment still reaches the

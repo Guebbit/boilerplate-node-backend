@@ -51,6 +51,16 @@ declare module '@kernel/events' {
             refundId: string;
             /** The return this refund pays for, when it is one — `returns` closes it on this. */
             returnId?: string;
+            /**
+             * The goods and delivery this refund pays back, when it pays for specific ones — so
+             * `invoicing` credits each line at its own VAT rate. Absent for goodwill and
+             * cancellation refunds, which a credit note spreads across every rate instead.
+             */
+            goods?: {
+                lines: { productId: string; quantity: number }[];
+                /** The delivery cost inside `amount`, a decimal. */
+                shipping: number;
+            };
             amount: number;
             currency: string;
             full: boolean;
