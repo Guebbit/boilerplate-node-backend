@@ -14,8 +14,9 @@
  * the order in the same write that cancels it; this script is the other half, re-announcing for
  * whatever is still standing.
  *
- * Meant to run periodically (the same cron container as the `reap:*` scripts), never on every
- * boot. Idempotent: `payments`' conditional refund means a second pass over an order that already
+ * Meant to run every 5 minutes (the same cron container as the `reap:*` scripts), matching the
+ * `NODE_ORDER_EFFECT_RETRY_MINUTES` grace window — nightly would leave a refund owed up to 24 hours.
+ * Never on every boot. Idempotent: `payments`' conditional refund means a second pass over an order that already
  * settled does nothing.
  *
  * Removal: owned by `orders` — deletes with the module, along with the `sweep:order-effects` npm

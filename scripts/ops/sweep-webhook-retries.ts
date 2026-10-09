@@ -8,7 +8,7 @@
  * delay queue. This sweep is what turns "due" back into a delivered attempt —
  * `sweepDueWebhookDeliveries` (`src/modules/webhooks/services/sweep.ts`) publishes each due row,
  * or, with no broker, sends it itself under the same claim a worker takes. A sweep overlapping its
- * own previous run — this schedule is per-minute, unlike the nightly `reap:*`/`sweep:order-effects`
+ * own previous run — this schedule is per-minute, unlike the nightly `reap:*`
  * jobs — is safe: the claim lets one HTTP attempt through. No domain event is emitted here
  * (unlike `sweep-order-effects.ts`), so unlike that script this one has no listener to register
  * modules for.
