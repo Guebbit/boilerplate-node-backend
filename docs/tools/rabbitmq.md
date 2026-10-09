@@ -153,6 +153,10 @@ falls back to `false` if it never arrives). `sendToQueue` returning `false` on i
 local write buffer is full, wait for `drain`" — never "failed" — so a caller reading THAT boolean
 directly would run its inline fallback alongside a publish that was going to succeed anyway.
 
+**A late confirm sends the mail twice.** An unconfirmed publish (the 5s timeout) falls back to the
+inline send, and a confirm that arrives after it means the broker has the message as well. This is
+chosen on purpose: delivery is at-least-once, and a duplicate beats a lost mail.
+
 ### Consuming messages
 
 ```ts
