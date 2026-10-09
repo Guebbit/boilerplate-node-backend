@@ -88,6 +88,19 @@ export const currencyConfig = defineConfig({
     }
 });
 
+/**
+ * The restock mark, declared once. Infrastructure, not a module's, because `inventory` (its stock
+ * board) and `products` (the storefront's `lowStock` flag) both read it, and `inventory` depends
+ * on `products`, so neither may import the other's config. One declaration keeps the badge and
+ * the board agreeing on what "low" means.
+ */
+export const stockConfig = defineConfig({
+    name: 'stock',
+    shape: {
+        NODE_LOW_STOCK_THRESHOLD: int({ default: 5, min: 0 })
+    }
+});
+
 /** Trace export, whether inbound trace context is trusted, and the version stamped on it. */
 export const tracingConfig = defineConfig({
     name: 'tracing',

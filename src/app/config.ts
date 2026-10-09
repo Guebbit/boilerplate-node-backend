@@ -46,6 +46,7 @@ import {
     loggingConfig,
     nodeEnvironmentConfig,
     serverConfig,
+    stockConfig,
     tracingConfig
 } from '@infrastructure/runtime/config';
 import {
@@ -104,6 +105,7 @@ export const APP_CONFIG_SLICES: readonly ConfigSlice[] = [
     serverConfig,
     clusterConfig,
     currencyConfig,
+    stockConfig,
     databaseConfig,
     tracingConfig,
     pseudonymConfig,

@@ -10,19 +10,15 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { decimal, int } from '@infrastructure/config/fields';
-import { currencyConfig } from '@infrastructure/runtime/config';
+import { decimal } from '@infrastructure/config/fields';
+import { currencyConfig, stockConfig } from '@infrastructure/runtime/config';
 
 /**
- * The two VAT rates and the low-stock threshold.
+ * The two VAT rates.
  *
  * A rate is valid only inside `[0, 1)` — 1 (100%) or more is certainly a typo. Both are required
  * at boot; the defaults here are for `NODE_ENV=test`, which skips that check — the demo profile
  * does not: it sets both rates itself, the same as any other deployment must.
- *
- * The low-stock threshold is the variable `@modules/inventory` reads for its restock board,
- * declared again here: `inventory` depends on `products`, so this module cannot import it. It is what turns an exact count into the `lowStock` flag a
- * shopper may see.
  */
 export const productsConfig = defineConfig({
     name: 'products',
@@ -38,8 +34,7 @@ export const productsConfig = defineConfig({
             min: 0,
             lessThan: 1,
             required: { minLength: 1 }
-        }),
-        NODE_LOW_STOCK_THRESHOLD: int({ default: 5, min: 0 })
+        })
     }
 });
 
@@ -65,9 +60,9 @@ export const vatRateReduced = (): number => productsConfig().NODE_VAT_RATE_REDUC
 export const productCurrency = (): string => currencyConfig().NODE_DEFAULT_CURRENCY;
 
 /**
- * The availability at or under which a product reads as low on stock — the same
- * `NODE_LOW_STOCK_THRESHOLD` `@modules/inventory` flags a restock with, so the storefront's badge
- * and the stock board agree.
+ * The availability at or under which a product reads as low on stock — the infrastructure's
+ * `stockConfig`, which `inventory` flags a restock with too, so the storefront's badge and the
+ * stock board agree. It turns an exact count into the `lowStock` flag a shopper may see.
  * @returns the configured threshold, in units
  */
-export const lowStockThreshold = (): number => productsConfig().NODE_LOW_STOCK_THRESHOLD;
+export const lowStockThreshold = (): number => stockConfig().NODE_LOW_STOCK_THRESHOLD;
