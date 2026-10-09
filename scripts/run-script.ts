@@ -92,7 +92,7 @@ const runChecked = async (
  *
  * @param name    - this job's identity, the same string across every run — the npm script name
  *                  (`reap:orders`), so it reads the same in `docker/crontab`,
- *                  `job_last_success_timestamp_seconds{job="…"}` and an operator's own shell
+ *                  `job_last_success_timestamp_seconds{task="…"}` and an operator's own shell
  *                  history. `undefined` for a one-off `db:*`/`access:*` setup script: it has no
  *                  scheduled interval to alert on, and `db:cache:clear` never opens Mongo at all,
  *                  so writing a lease row for it would fail outright

@@ -240,6 +240,12 @@ export const authOneTimeTokenRejectedTotal = new Counter({
     registers: [metricsRegistry]
 });
 
+// Zero from startup, so an `increase()` alert sees the first refusal after a restart. The flows
+// are `OneTimeTokenFlow` (`services/tokens.ts`).
+// https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+for (const flow of ['password_reset', 'email_verify', 'email_change', 'account_delete'])
+    authOneTimeTokenRejectedTotal.inc({ flow }, 0);
+
 /**
  * Refresh tokens presented after rotation, outside the grace window: the token value leaked.
  * Every increment also revoked the account's whole refresh set.

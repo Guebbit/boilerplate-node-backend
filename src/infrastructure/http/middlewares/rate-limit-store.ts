@@ -122,6 +122,8 @@ const failoverStore = (
     onStoreError: NonNullable<RateLimitBudget['onStoreError']>
 ): Store => {
     const fallback = new MemoryStore();
+    // Zero from startup, so the `increase()` alert sees the first fallback after a restart.
+    rateLimitStoreFallbackTotal.inc({ namespace }, 0);
 
     /** Serve one operation without Redis, per the budget's policy. */
     const withoutRedis = <T>(use: (store: Store) => T | Promise<T>): Promise<T> => {

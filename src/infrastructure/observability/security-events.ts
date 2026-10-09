@@ -35,12 +35,20 @@ export const staleCredentialsTotal = new Counter({
 });
 
 /** The `security.*` actions {@link recordSecurityEvent} accepts. */
-export type SecurityEventAction =
-    | typeof coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE
-    | typeof coreAuditActions.SECURITY_TOKEN_MALFORMED
-    | typeof coreAuditActions.SECURITY_API_KEY_REVOKED
-    | typeof coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE
-    | typeof coreAuditActions.SECURITY_METRICS_TOKEN_INVALID;
+const SECURITY_EVENT_ACTIONS = [
+    coreAuditActions.SECURITY_TOKEN_INVALID_SIGNATURE,
+    coreAuditActions.SECURITY_TOKEN_MALFORMED,
+    coreAuditActions.SECURITY_API_KEY_REVOKED,
+    coreAuditActions.SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE,
+    coreAuditActions.SECURITY_METRICS_TOKEN_INVALID
+] as const;
+
+/** One of {@link SECURITY_EVENT_ACTIONS}. */
+export type SecurityEventAction = (typeof SECURITY_EVENT_ACTIONS)[number];
+
+// Each series exists at 0 from startup, so an `increase()` alert sees the first event after a
+// restart. https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+for (const event of SECURITY_EVENT_ACTIONS) securityEventsTotal.inc({ event }, 0);
 
 /**
  * Audit one attack and count it.

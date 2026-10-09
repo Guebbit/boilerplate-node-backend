@@ -132,7 +132,7 @@ work in `withLease` too.
 success, `lastError` on a throw — onto the same `leases` document `withLease` itself writes when a
 job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any
 crontab job silently failing or silently not running at all is visible on the probe an operator
-already looks at. `job_last_success_timestamp_seconds{job="…"}` (`infrastructure/observability/metrics-registry.ts`)
+already looks at. `job_last_success_timestamp_seconds{task="…"}` (`infrastructure/observability/metrics-registry.ts`)
 exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
 fires when a nightly job's last success is more than 48 hours old. The 5-minute-or-faster
 jobs are excluded from that alert, each covered by its own faster-firing one instead:

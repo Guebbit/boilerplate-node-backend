@@ -19,9 +19,9 @@ groups:
           - alert: HighErrorRate
             expr: |
                 (
-                    rate(http_request_errors_total[5m])
+                    sum(rate(http_request_errors_total[5m]))
                     /
-                    rate(http_requests_total[5m])
+                    sum(rate(http_requests_total[5m]))
                 ) > 0.05
             for: 5m
             labels:
@@ -35,7 +35,7 @@ groups:
             expr: |
                 histogram_quantile(
                     0.95,
-                    rate(http_request_duration_milliseconds_bucket[5m])
+                    sum by (le) (rate(http_request_duration_milliseconds_bucket[5m]))
                 ) > 2000
             for: 5m
             labels:
@@ -105,10 +105,13 @@ groups:
           # attempts keep landing is our-side (egress, DNS, signing), never one subscriber's
           # endpoint — that stays quiet by design, see `docs/modules/webhooks.md`.
           - alert: WebhookDeliveriesFailingEverywhere
+            # `outcome` differs on each side, so each side is summed down to one value first: an
+            # `and` between the raw series never matched. `or vector(0)` covers a success series
+            # that never existed at all.
             expr: |
-                increase(webhook_delivery_attempts_total{outcome="success"}[30m]) == 0
+                (sum(increase(webhook_delivery_attempts_total{outcome="success"}[30m])) or vector(0)) == 0
                 and
-                increase(webhook_delivery_attempts_total{outcome="failure"}[30m]) > 10
+                sum(increase(webhook_delivery_attempts_total{outcome="failure"}[30m])) > 10
             for: 0m
             labels:
                 severity: critical
@@ -141,13 +144,13 @@ groups:
           # counter alone would miss the second.
           - alert: ScheduledJobStale
             expr: |
-                time() - job_last_success_timestamp_seconds{job!~"sweep:webhook-retries|sweep:outbox|sweep:payment-effects|sweep:reservations|sweep:order-effects"} > 2 * 86400
+                time() - job_last_success_timestamp_seconds{task!~"sweep:webhook-retries|sweep:outbox|sweep:payment-effects|sweep:reservations|sweep:order-effects"} > 2 * 86400
             for: 0m
             labels:
                 severity: warning
             annotations:
                 summary: 'A scheduled job has not succeeded in over 48 hours'
-                description: '{{ $labels.job }} has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
+                description: '{{ $labels.task }} has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
 
           # `sweep:outbox` (every minute), `sweep:payment-effects`, `sweep:reservations` and
           # `sweep:order-effects` (every 5 minutes; `docker/crontab`) are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
@@ -157,13 +160,13 @@ groups:
           # refund or a stale hold.
           - alert: FrequentSweepStale
             expr: |
-                time() - job_last_success_timestamp_seconds{job=~"sweep:outbox|sweep:payment-effects|sweep:reservations|sweep:order-effects"} > 30 * 60
+                time() - job_last_success_timestamp_seconds{task=~"sweep:outbox|sweep:payment-effects|sweep:reservations|sweep:order-effects"} > 30 * 60
             for: 0m
             labels:
                 severity: warning
             annotations:
                 summary: 'A 5-minute sweep has not succeeded in 30 minutes'
-                description: '{{ $labels.job }} has not recorded a success in 30 minutes — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
+                description: '{{ $labels.task }} has not recorded a success in 30 minutes — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
 
     # Security signals. Every threshold below is a starting point sized for a quiet shop:
     # "tune to your traffic" before trusting it. A busy deployment raises the rates; a quiet one

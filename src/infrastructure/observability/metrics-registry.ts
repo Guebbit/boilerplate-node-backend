@@ -71,6 +71,9 @@ const _heapSizeLimitGauge = new Gauge({
  * succeeded is left unset, not `0` — the Unix epoch would fire a staleness alert on a fresh
  * deployment's first scrape, before the job ever had a chance to run.
  *
+ * The label is `task`, not `job`: the scrape adds its own `job="api"`, and a clashing label would
+ * be renamed `exported_job`, which no rule would match.
+ *
  * Skips the query entirely while Mongo is not connected rather than letting mongoose buffer it: an
  * unconnected model queues a command and waits out the driver's own buffering timeout before
  * rejecting, and a scrape must answer fast regardless of one dependency's state —
@@ -79,7 +82,7 @@ const _heapSizeLimitGauge = new Gauge({
 const _jobLastSuccessGauge = new Gauge({
     name: 'job_last_success_timestamp_seconds',
     help: "Unix time of each crontab job's last recorded success.",
-    labelNames: ['job'],
+    labelNames: ['task'],
     registers: [metricsRegistry],
     collect() {
         this.reset();
@@ -88,7 +91,7 @@ const _jobLastSuccessGauge = new Gauge({
             .then((summaries) => {
                 for (const summary of summaries)
                     if (summary.lastSuccessAt)
-                        this.set({ job: summary.name }, summary.lastSuccessAt.getTime() / 1000);
+                        this.set({ task: summary.name }, summary.lastSuccessAt.getTime() / 1000);
             })
             .catch(() => undefined);
     }

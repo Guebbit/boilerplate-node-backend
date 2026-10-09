@@ -7,6 +7,8 @@
  */
 
 import { createHash, createHmac } from 'node:crypto';
+import { getPrometheusMetrics } from '@infrastructure/observability/metrics-registry';
+import '../../two-factor/registry';
 import { getTotpEncryptionKeyRing } from '../../session/config';
 import { generate, generateSecret } from 'otplib';
 import type { TwoFactorMethodRecord } from '@modules/users';
@@ -218,5 +220,15 @@ describe('delivered codes — the shared machinery behind email, and every chann
             .digest('hex');
 
         expect(hashDeliveredCode('123456')).not.toBe(rawKeyMac);
+    });
+});
+
+describe('the disable counter', () => {
+    it('starts at 0 for every method, so the failure alert sees the first one after a restart', async () => {
+        const metrics = await getPrometheusMetrics();
+
+        expect(metrics).toMatch(
+            /^auth_two_factor_disable_total\{method="totp",status="failure"\} 0$/m
+        );
     });
 });

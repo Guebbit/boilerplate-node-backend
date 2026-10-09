@@ -11,6 +11,7 @@ import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
 import type { TwoFactorDelivery, TwoFactorSetup } from '@types';
 import { totpMethod } from './methods/totp';
 import { emailMethod } from './methods/email';
+import { authTwoFactorDisableTotal } from '../metrics';
 
 /** Whether one account may add one method right now, and the sentence to show when it may not. */
 export interface MethodEligibility {
@@ -72,6 +73,12 @@ export interface TwoFactorMethodHandler {
  * of these the account has armed.
  */
 const HANDLERS: readonly TwoFactorMethodHandler[] = [totpMethod, emailMethod];
+
+// Zero from startup (every method, plus the `all` of the full disable), so the failure alert sees
+// the first failure after a restart. https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+for (const method of ['all', ...HANDLERS.map((handler) => handler.name)])
+    for (const status of ['success', 'failure'])
+        authTwoFactorDisableTotal.inc({ method, status }, 0);
 
 /** The handlers this deployment can actually run. */
 export const availableTwoFactorMethods = (): TwoFactorMethodHandler[] =>

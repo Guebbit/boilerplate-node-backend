@@ -52,9 +52,9 @@ describe('job_last_success_timestamp_seconds — D9', () => {
         const metrics = await getPrometheusMetrics();
 
         expect(metrics).toContain(
-            'job_last_success_timestamp_seconds{job="reap:orders"} 1767225600'
+            'job_last_success_timestamp_seconds{task="reap:orders"} 1767225600'
         );
-        expect(metrics).not.toContain('job="reap:quarantine"');
+        expect(metrics).not.toContain('task="reap:quarantine"');
     });
 
     it('resolves the whole scrape, rather than rejecting, when the query itself fails', async () => {
@@ -65,5 +65,18 @@ describe('job_last_success_timestamp_seconds — D9', () => {
 
         expect(metrics).toContain('# HELP process_uptime_seconds');
         expect(metrics).not.toMatch(/^job_last_success_timestamp_seconds{/m);
+    });
+});
+
+describe('labelled alert counters', () => {
+    it('start at 0, so an increase() alert sees the first event after a restart', async () => {
+        await import('@infrastructure/observability/security-events');
+        await import('@modules/account/metrics');
+        withReadyState(0);
+
+        const metrics = await getPrometheusMetrics();
+
+        expect(metrics).toMatch(/^security_events_total\{event="security\.api_key\.revoked"\} 0$/m);
+        expect(metrics).toMatch(/^auth_one_time_token_rejected_total\{flow="email_change"\} 0$/m);
     });
 });
