@@ -6,11 +6,9 @@
 import { getCurrentLocale, localeCandidatesFor } from '@infrastructure/i18n';
 import { applyTranslations, searchTranslatedEntityIds } from '@kernel/translation';
 import type { SearchProductsRequest, Product, FacetCount, CallerContext } from '@types';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { toSearchPattern } from '@infrastructure/persistence/search';
 import { toObjectId, withScope } from '@infrastructure/persistence/create-repository';
-import { productsAnalyticsEvents } from '../analytics';
 import { productRepository } from '../repository';
 import { canSeeStock, redactStock } from './stock-view';
 
@@ -93,29 +91,19 @@ const searchWithTranslatedText = (
 };
 
 /**
- * `GET /products` / `POST /products/search` — search, and report that a search happened.
+ * `GET /products` / `POST /products/search` — search, as `context.caller` may see it: the exact
+ * stock counters stay for a holder of `inventory.any.read` — see `./stock-view`.
  *
  * Wraps rather than folds into `search()`: every other caller — unit tests, `facets` below — reads
- * the catalogue without a `CallerContext` to give and without it being a `products_searched`
- * moment.
+ * the catalogue without a `CallerContext` to give. A search is NOT reported from here: the
+ * response cache hides most reads, so the browser reports it (`modules/analytics`).
  */
-export const searchViewed = (
+export const searchForCaller = (
     filters: SearchProductsRequest,
     scope: Record<string, unknown> | undefined,
     context: CallerContext
 ): Promise<{ items: Product[]; meta: PaginatedMeta }> =>
     search(filters, scope).then((result) => {
-        emitAnalyticsEvent({
-            ...buildAnalyticsBase(context),
-            event: productsAnalyticsEvents.PRODUCTS_SEARCHED,
-            properties: {
-                text: filters.text,
-                page: result.meta.page,
-                pageSize: result.meta.pageSize,
-                result_count: result.items.length
-            }
-        });
-        // The exact counters go only to a caller holding `inventory.any.read` — see `./stock-view`.
         const seesStock = canSeeStock(context.caller);
         return {
             ...result,

@@ -13,6 +13,7 @@ import type { AppModule } from '@kernel/registry';
 import access from './modules/access/module';
 import account from './modules/account/module';
 import addresses from './modules/addresses/module';
+import analytics from './modules/analytics/module';
 import antibot from './modules/antibot/module';
 import apiKeys from './modules/api-keys/module';
 import auditLogs from './modules/audit-logs/module';
@@ -38,6 +39,7 @@ export const enabledModules: AppModule[] = [
     access,
     account,
     addresses,
+    analytics,
     antibot,
     apiKeys,
     auditLogs,
@@ -87,6 +89,7 @@ export type ModuleName =
     | 'access'
     | 'account'
     | 'addresses'
+    | 'analytics'
     | 'antibot'
     | 'api-keys'
     | 'audit-logs'

@@ -58,6 +58,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: false,
         reason: 'the visitor contact form, mounted above the keyed gate on purpose'
     },
+    'analytics POST /events': {
+        requiresAuth: false,
+        reason: 'a browser reporting a page view, open to guests; without consent the event is dropped'
+    },
     'products POST /search': {
         requiresAuth: false,
         reason: 'a read wearing a POST, because a GET body is invisible to the cache key'

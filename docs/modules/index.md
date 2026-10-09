@@ -43,6 +43,7 @@ flowchart TD
     access
     account
     addresses
+    analytics
     antibot
     api_keys["api-keys"]
     audit_logs["audit-logs"]
@@ -107,7 +108,7 @@ flowchart TD
     class cart,orders,products core;
     class addresses,delivery,inventory,invoicing,notifications,payments,returns,wishlist supporting;
     class access,account,api_keys,audit_logs,example,observability,users,webhooks generic;
-    class antibot,feedback,locales isolated;
+    class analytics,antibot,feedback,locales isolated;
 ```
 
 |                 | Reaches                                                           | Reached by                                                   |
@@ -131,6 +132,7 @@ flowchart TD
 | `audit-logs`    | —                                                                 | observability                                                |
 | `observability` | audit-logs                                                        | —                                                            |
 | `webhooks`      | users                                                             | —                                                            |
+| `analytics`     | —                                                                 | —                                                            |
 | `antibot`       | —                                                                 | —                                                            |
 | `feedback`      | —                                                                 | —                                                            |
 | `locales`       | —                                                                 | —                                                            |
@@ -191,6 +193,7 @@ Ships with every deployment, whatever the project becomes.
 - [`access`](./access.md) — Headless. The tenant and membership model every role check reads, owned apart from account and users so neither has to.
 - [`account`](./account.md) — Who is making this request: signup, login, sessions, two-factor, OAuth and the account lifecycle. Deeper: [OAuth](./account-oauth.md), [Sessions](./account-sessions.md), [Two-factor authentication](./account-two-factor.md).
 - [`addresses`](./addresses.md) — The address book, its own module so the cart's checkout can reach it without importing account.
+- [`analytics`](./analytics.md) — The relay a browser uses to report browsing events (a product viewed, a search made) once the visitor has agreed to be measured.
 - [`antibot`](./antibot.md) — The human-challenge port, and the endpoint that tells a frontend which provider is active.
 - [`api-keys`](./api-keys.md) — Long-lived programmatic credentials, scoped to the same permission model a session uses.
 - [`audit-logs`](./audit-logs.md) — Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability.

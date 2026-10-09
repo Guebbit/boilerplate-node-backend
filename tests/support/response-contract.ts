@@ -117,6 +117,16 @@ export const assertResponseMatchesContract = (response: Response): void => {
             `${method.toUpperCase()} ${pathname} (${String(response.status)}) is missing the \`${missingHeader}\` header ${operationId} documents as required`
         );
 
+    // A 204 has no body by definition (RFC 9110 §15.3.5): the generated schema is `void`, which
+    // an empty parsed body (`{}`) would fail, so the check is that nothing was sent.
+    if (response.status === 204) {
+        if (response.text !== '')
+            throw new Error(
+                `${method.toUpperCase()} ${pathname} answered 204 with a body, which HTTP forbids`
+            );
+        return;
+    }
+
     // supertest/superagent only fill `.body` for a JSON (or urlencoded) response; a `text/plain`
     // one — the Prometheus exposition text — lands in `.text` instead, and `.body` stays `{}`.
     const body = response.type.startsWith('text/') ? response.text : response.body;

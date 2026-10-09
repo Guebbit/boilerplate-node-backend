@@ -96,7 +96,7 @@ export const getProducts = createSearchController({
     schema: searchProductsQuerySchema,
     extendInput: extendSearchInput,
     runSearch: (parsed, request) =>
-        productService.searchViewed(
+        productService.searchForCaller(
             parsed,
             productService.callerScope(request.caller),
             callerContextOf(request)

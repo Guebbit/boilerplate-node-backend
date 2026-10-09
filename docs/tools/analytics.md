@@ -13,8 +13,10 @@ Every module emits through one helper, and none of them knows where the event la
 
 ```mermaid
 flowchart LR
-    UserAction[User or business action] --> Service
+    UserAction[Business action] --> Service
     Service --> Emit["emitAnalyticsEvent()"]
+    Browse["Browsing, in the browser<br/>(after consent)"] --> Relay["POST /analytics/events"]
+    Relay --> Emit
     Emit --> Port{"NODE_ANALYTICS_PROVIDER"}
     Port -->|umami, default| Umami["Umami — POST /api/send"]
     Port -->|posthog| PostHog["PostHog — buffered capture()"]
@@ -25,7 +27,25 @@ Which implementation answers is a deployment decision, not a code path — the s
 `NODE_PAYMENT_PROVIDER` uses in `@modules/payments/providers`. A name this build does not carry
 throws at the first event rather than recording nothing quietly.
 
-## Where an event is emitted from
+## Who sends which event {#who-sends-which-event}
+
+One rule, two senders. The reason is what each kind of event needs to be true.
+
+| Kind                                                               | Sent by                                                           | Why                                                                                                                                    |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| **Browsing** (a product page opened, a search made)                | The browser, through `POST /analytics/events`, only after consent | The response cache (Redis, and the browser's own for searches) answers most reads without reaching the server, so it under-counts them |
+| **Business facts** (cart, checkout, order, payment, signup, login) | The BE service that makes the fact true, never the browser        | A fact must be exact, unblockable by an extension and unforgeable from a console                                                       |
+
+The lists are not copied here, so they cannot go stale: the BE events are each module's
+`analytics.ts`, and the browsing events the relay accepts are the `AnalyticsEventRequest` enum in
+[the contract](../modules/analytics.md). The relayed names are still declared in
+`products/analytics.ts`, so `tests/cross-cutting/analytics-events.test.ts` owns the namespace.
+
+The browser sends nothing before the visitor accepts analytics, and queues nothing from before
+that moment. The server checks consent again (see [Consent](#consent)), so a page that forgot to
+look is still not measured.
+
+## Where a business event is emitted from
 
 **From the service that performs the operation, always.** The controller layer emits per
 _route_; the service layer emits per _operation_ — and where more than one route reaches one
@@ -85,6 +105,9 @@ join back to the person intact. It would also break the default provider: Umami 
 an IP + user-agent hash, and an event sent without `X-Forwarded-For` is attributed to the API's
 own address, collapsing all such traffic onto one "visitor". If you want counts that do not
 depend on consent, add a Prometheus counter next to the emit — see `docs/tools/prometheus.md`.
+
+The relay applies the same gate: `POST /analytics/events` builds the caller context from the request
+and emits through `emitAnalyticsEvent`, so without consent it answers `204` and records nothing.
 
 Consent travels through `CallerContext` the same way `ip`/`userAgent` do. For a logged-in caller
 it is the stored `users.analyticsConsent` (boolean, `false` covering both "denied" and "never
@@ -176,22 +199,22 @@ series and starts another. Decide the name once, here, rather than after a dashb
 
 ### Where a name lives
 
-With the code that emits it — `src/modules/<name>/analytics.ts`, one module, one owner. There is no
-second place: the paired frontend emits no custom events, so every name in the shared Umami website
-is written here. `tests/cross-cutting/analytics-events.test.ts` sweeps the module folders and fails
+With the code that emits it, or relays it — `src/modules/<name>/analytics.ts`, one module, one owner.
+There is no second place: the paired frontend only sends the names declared here (through
+[the relay](#who-sends-which-event)), so every custom name in the shared Umami website is declared here. `tests/cross-cutting/analytics-events.test.ts` sweeps the module folders and fails
 when two of them claim one name or one value.
 
 ## One namespace, two repositories
 
-The backend and the paired frontend write into ONE Umami website. The frontend's half of that used
-to be a published catalogue, checked against this one; it is now empty by construction, which is a
-stronger guarantee than any check was.
+The backend and the paired frontend write into ONE Umami website. The frontend declares no names of
+its own.
 
-**The frontend emits nothing custom.** Its pageviews — including SPA route changes — are written by
-the Umami tag itself, and everything with an API request behind it is emitted here, from the handler
-that decided it: where it cannot be blocked by an extension, lost with the tab, or forged from a
-console. So every custom name in the website has exactly one emitter, and no fact can be counted
-twice.
+**The frontend sends browsing events only, and only names declared here.** Its pageviews — including
+SPA route changes — are written by the Umami tag itself. A product view or a search is reported by
+the page through the relay, and everything with an API request behind it that is a business fact is
+emitted here, from the handler that decided it: where it cannot be blocked by an extension, lost with
+the tab, or forged from a console. So every custom name has exactly one sender, and no fact can be
+counted twice.
 
 **This repository refuses a collision inside itself.** `tests/cross-cutting/analytics-events.test.ts`
 fails when two modules claim one constant name or one event string, and when a module declares names

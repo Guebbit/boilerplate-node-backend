@@ -18,7 +18,7 @@ export const getProductItem = createItemController({
     notFoundKey: 'products.not-found',
     // Which rows this caller may read — `getAuth` resolves a session or an API key to `request.caller`.
     fetch: (id, request) =>
-        productService.getByIdViewed(
+        productService.getByIdForCaller(
             id,
             productService.callerScope(request.caller),
             callerContextOf(request)

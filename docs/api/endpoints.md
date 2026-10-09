@@ -171,6 +171,12 @@ One read, `GET /audit`, behind `audit.any.read` — the queryable trail, kept fo
 
 `GET /antibot/config` says which human-challenge provider is active; `GET /antibot/challenge` issues the work a self-hosted provider asks for.
 
+## Analytics
+
+> The domain behind these routes: [`analytics`](../modules/analytics.md) · routes and middleware: `src/modules/analytics/routes.ts`
+
+`POST /analytics/events` takes one browsing event (`product_viewed`, `products_searched`) from a page whose visitor accepted analytics, and answers `204` whether or not it was recorded.
+
 ## Realtime
 
 Realtime is server → client only, via Server-Sent Events on `GET /observability/events` (and the per-user `GET /notifications/stream`) — ordinary Express routes, so all the usual middleware applies. Event names and payload shapes come from `asyncapi.yaml`; see [Observability Endpoints](./observability.md).

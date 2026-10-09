@@ -1,0 +1,79 @@
+openapi: 3.0.3
+info:
+    title: analytics — module contract
+    version: '0.1.0'
+
+paths:
+    /analytics/events:
+        post:
+            tags: [Analytics]
+            summary: Report one browsing event
+            description: >
+                The relay for events a browser sees and the server cannot: the response cache
+                answers most reads without reaching the application. The set is closed
+                (`product_viewed`, `products_searched`); a business fact (cart, checkout, order,
+                payment, signup, login) is never accepted here, it is emitted by the service that
+                makes it true. A visitor who has not agreed to analytics is not measured: the
+                answer is the same `204`, and nothing is recorded or forwarded. A page should not
+                call this before the visitor has agreed.
+            operationId: createAnalyticsEvent
+            security: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/AnalyticsEventRequest'
+            responses:
+                '204':
+                    description: Accepted. Whether it was recorded depends on consent, and the answer does not say.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    schemas:
+        # ---------- analytics — the schemas only this module's paths reference. ----------
+        AnalyticsEventRequest:
+            oneOf:
+                - $ref: '#/components/schemas/ProductViewedEvent'
+                - $ref: '#/components/schemas/ProductsSearchedEvent'
+            discriminator:
+                propertyName: event
+                mapping:
+                    product_viewed: '#/components/schemas/ProductViewedEvent'
+                    products_searched: '#/components/schemas/ProductsSearchedEvent'
+
+        ProductViewedEvent:
+            type: object
+            additionalProperties: false
+            required: [event, productId]
+            properties:
+                event:
+                    type: string
+                    enum: [product_viewed]
+                productId:
+                    type: string
+                    minLength: 1
+                    maxLength: 64
+                    description: The product whose page was opened.
+
+        ProductsSearchedEvent:
+            type: object
+            additionalProperties: false
+            required: [event, resultCount, page]
+            properties:
+                event:
+                    type: string
+                    enum: [products_searched]
+                text:
+                    type: string
+                    maxLength: 200
+                    description: The free-text term searched for, when there was one.
+                resultCount:
+                    type: integer
+                    minimum: 0
+                    maximum: 100000
+                    description: How many products the search found.
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'

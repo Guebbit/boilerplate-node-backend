@@ -12,10 +12,8 @@ import type {
     CallerContext,
     Caller
 } from '@types';
-import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
-import { productsAnalyticsEvents } from '../analytics';
 import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
 import { productRepository } from '../repository';
@@ -61,27 +59,21 @@ export const getById = (
 };
 
 /**
- * `GET /products/:id` — get a product, and report that it was viewed.
+ * `GET /products/:id` — get a product, as `context.caller` may see it: the exact stock counters
+ * stay for a holder of `inventory.any.read` — see `./stock-view`.
  *
- * Wraps rather than folds into `getById()`, for the same reason `searchViewed` does: most callers
- * (unit tests, other services resolving a product they already know about) have no `CallerContext`
- * and are not a `product_viewed` moment.
+ * Wraps rather than folds into `getById()`: most callers (unit tests, other services resolving a
+ * product they already know about) have no `CallerContext`. A view is NOT reported from here: the
+ * response cache hides most reads, so the browser reports it (`modules/analytics`).
  */
-export const getByIdViewed = (
+export const getByIdForCaller = (
     id: string | undefined,
     scope: Record<string, unknown> | undefined,
     context: CallerContext
 ) =>
-    getById(id, scope).then((product) => {
-        if (product)
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event: productsAnalyticsEvents.PRODUCT_VIEWED,
-                properties: { product_id: id }
-            });
-        // The exact counters go only to a caller holding `inventory.any.read` — see `./stock-view`.
-        return product ? redactStock(product, canSeeStock(context.caller)) : product;
-    });
+    getById(id, scope).then((product) =>
+        product ? redactStock(product, canSeeStock(context.caller)) : product
+    );
 
 /**
  * `GET /products/{id}/admin` — a product with every language it has a row for, for the editor's

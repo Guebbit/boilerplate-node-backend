@@ -49,6 +49,7 @@ const MODULE_ORDER: readonly string[] = [
     'observability',
     'audit-logs',
     'antibot',
+    'analytics',
     'account',
     'addresses',
     'users',

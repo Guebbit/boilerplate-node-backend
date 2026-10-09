@@ -178,6 +178,7 @@ x-app-level-responses:
 tags:
     - name: Auth
     - name: Antibot
+    - name: Analytics
     - name: Account
     - name: Users
     - name: Products
@@ -2004,6 +2005,10 @@ paths:
         $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1config'
     /antibot/challenge:
         $ref: '../../src/modules/antibot/openapi.yaml#/paths/~1antibot~1challenge'
+
+    # ---------- analytics ----------
+    /analytics/events:
+        $ref: '../../src/modules/analytics/openapi.yaml#/paths/~1analytics~1events'
 
     # ---------- account ----------
     /account:

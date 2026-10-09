@@ -1,0 +1,8 @@
+summary: 'The relay a browser uses to report browsing events (a product viewed, a search made) once the visitor has agreed to be measured.'
+subdomain: generic
+group: foundation
+dependsOn: []
+noAudit: 'Records nothing of its own: an event goes to the analytics provider, and only when the visitor consented. There is no resource and no state change for an audit row to name.'
+frontend:
+    counterparts: []
+    why: 'It has no screen: the observability store reports browsing events through it, and only after the visitor accepts analytics.'

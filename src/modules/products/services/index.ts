@@ -15,8 +15,8 @@ import type { ProductDocument } from '../model';
 import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
 import { validateCreateData, validateUpdateData } from './validation';
-import { search, searchViewed, facets } from './search';
-import { callerScope, getById, getByIdViewed, getAdmin } from './read';
+import { search, searchForCaller, facets } from './search';
+import { callerScope, getById, getByIdForCaller, getAdmin } from './read';
 import { create, update, updateById } from './crud';
 import { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
 import { remove, removeById, restoreById } from './remove';
@@ -35,8 +35,8 @@ import {
  * them directly, and the barrel's surface must not shrink when a file moves.
  */
 export { validateCreateData, validateUpdateData } from './validation';
-export { search, searchViewed } from './search';
-export { callerScope, getById, getByIdViewed, getAdmin } from './read';
+export { search, searchForCaller } from './search';
+export { callerScope, getById, getByIdForCaller, getAdmin } from './read';
 export { create, update, updateById } from './crud';
 export { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
 export { remove, removeById, restoreById } from './remove';
@@ -60,10 +60,10 @@ export const productService = {
     validateUpdateData,
     callerScope,
     search,
-    searchViewed,
+    searchForCaller,
     facets,
     getById,
-    getByIdViewed,
+    getByIdForCaller,
     getAdmin,
     create,
     update,
