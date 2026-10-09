@@ -45,10 +45,12 @@ are on [Ops & Assets](./ops.md).
 
 ### Comment links
 
-`local/comment-links` refuses a Markdown reference in a comment that is not under `docs/`.
-A root-level plan or audit doc is written for one change and deleted when it lands, so every
-comment naming one becomes a dangling pointer. External URLs are exempt — a link to a library's
-own documentation is the thing the third-party-comment convention asks for.
+`local/comment-links` checks the `.ts`/`.tsx` paths a comment names against the tracked files. It does
+not check Markdown at all. `.gitignore` is the guard for that: a root-level plan or audit doc is
+written for one change and deleted when it lands, so a comment naming one becomes a dangling
+pointer. The stable Markdown targets are `docs/*` and the tracked root `CLAUDE.md`, `README.md` and
+`SECURITY.md`. External URLs are exempt — a link to a library's own documentation is the thing the
+third-party-comment convention asks for.
 
 ## Test runners
 

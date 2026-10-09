@@ -199,10 +199,11 @@ The rest:
   to the line instead of the declaration.
 - Never narrate history — no "this used to...", "previously...", "was renamed from...". A comment
   describes the code as it is now; git log is where the past lives.
-- Never reference a `.md` file outside `docs/*`, by link OR by name — a root-level plan, audit or
-  report doc is ephemeral; only `docs/` is a stable target. Nothing enforces this: root-level
-  Markdown is `.gitignore`d, so such a doc is not in the repo at all and a comment naming it is
-  dangling for everyone but its author. `local/comment-links` checks `.ts` references only.
+- Never reference an untracked `.md` file, by link OR by name — a root plan, audit or report doc is
+  gitignored and deleted when its change lands, so a comment naming one is dangling for everyone
+  but its author. Stable targets: `docs/*` and the tracked root `CLAUDE.md`, `README.md` and
+  `SECURITY.md`. Nothing enforces this beyond `.gitignore`: `local/comment-links` checks `.ts`
+  references only.
 
 MUST: every exported function, interface, type and enum carries a docblock — `jsdoc/require-jsdoc`.
 An interface says its purpose and what each field means; a function adds `@param`/`@returns`/
