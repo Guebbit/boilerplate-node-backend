@@ -41,6 +41,9 @@ export { create, update, updateById } from './crud';
 export { writeCreate, writeUpdate, clearOmittedLocales } from './translated-write';
 export { remove, removeById, restoreById } from './remove';
 
+/** Whether a caller may read exact stock — published so a sibling's refusal can say the same. */
+export { canSeeStock } from './stock-view';
+
 /**
  * A product document as the wire shape `caller` may see — the counters only for a holder of
  * `inventory.any.read`, the `inStock`/`lowStock` flags for everyone.

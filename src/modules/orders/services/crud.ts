@@ -16,7 +16,7 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
-import { productService } from '@modules/products';
+import { productService, canSeeStock } from '@modules/products';
 import { userService } from '@modules/users';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -135,8 +135,13 @@ export const create = async (
             {
                 code: ERROR_CODES.ORDER_INSUFFICIENT_STOCK,
                 message: t('orders.insufficient-stock'),
-                // Which line blocked it, and what is actually on the shelf.
-                details: { lines: outcome.shortfalls }
+                // Which line blocked it, and what was asked for. What is on the shelf (`available`)
+                // goes only to a caller who may read stock: a refusal must not widen that read.
+                details: {
+                    lines: outcome.shortfalls.map(({ available, ...line }) =>
+                        canSeeStock(context.caller) ? { ...line, available } : line
+                    )
+                }
             }
         ]);
     }

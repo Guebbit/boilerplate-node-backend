@@ -29,7 +29,8 @@ import {
 import { orderRepository } from '../../repository';
 import { inventoryService } from '@modules/inventory';
 import { asReject, asSuccess } from '@tests/response';
-import { asCustomer, asAdmin, callerContextAs, testCallerContext } from '@tests/callers';
+import { asCustomer, asAdmin, callerAs, callerContextAs, testCallerContext } from '@tests/callers';
+import type { CallerContext } from '@types';
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate } from '@tests/clock';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -47,6 +48,26 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
 setupTestDb();
+
+/** The `details.lines` of a refused order for 5 units of a 1-unit product, as `caller` sees them. */
+const refusedLines = async (
+    caller: CallerContext['caller']
+): Promise<Record<string, unknown>[]> => {
+    const user = await createUser();
+    const scarce = await createProduct({ onHand: 1 });
+
+    const result = await create(
+        user.id,
+        user.email,
+        [{ productId: String(scarce._id), quantity: 5 }],
+        { caller, analyticsConsent: false }
+    );
+
+    // `as`: the envelope types `details` loosely; this 409 always carries `lines` as objects.
+    return (
+        (!result.success && (result.errors[0]?.details?.lines as Record<string, unknown>[])) || []
+    );
+};
 
 afterEach(() => {
     jest.restoreAllMocks();
@@ -299,6 +320,27 @@ describe('create', () => {
         expect(createSpy).not.toHaveBeenCalled();
         expect(counterSpy).not.toHaveBeenCalled();
         expect(await countOrders({ userId: user._id })).toBe(0);
+    });
+
+    describe('the stock refusal', () => {
+        it('says how many are left to a caller who reads stock', async () => {
+            await expect(refusedLines(callerAs('manager'))).resolves.toEqual([
+                expect.objectContaining({ requested: 5, available: 1 })
+            ]);
+        });
+
+        it('leaves the number out for a caller who may create orders but not read stock', async () => {
+            const manager = callerAs('manager');
+            const blind = {
+                ...manager,
+                permissions: manager.permissions.filter((key) => key !== 'inventory.any.read')
+            };
+
+            const lines = await refusedLines(blind);
+
+            expect(lines).toEqual([expect.objectContaining({ requested: 5 })]);
+            expect(lines[0]).not.toHaveProperty('available');
+        });
     });
 
     /*
