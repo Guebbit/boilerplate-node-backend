@@ -13,61 +13,64 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { isMap, isSeq, parseDocument } from 'yaml';
 import type { RemovalNote } from './demo-remove-registry';
 
 /**
- * Edit `AccountExportResponse` in `shared/contracts/openapi.root.yaml`: drop the fields seven shop
- * modules contribute (`orders`, `payments`, `shipments`, `cart`, `wishlist`, `invoicing`, `returns`) and the example module's `examples` from both
- * `required` and `properties` — `account`'s own export service already reads its section list off
- * `enabledModules` (`src/modules/account/services/personal-data-registry.ts`) and simply omits a
- * section no module registers, so only the CONTRACT is behind once those modules are gone.
+ * The export sections a `group: shop` or `group: example` module contributes. Every other section
+ * (`profile`, `roles`, `addresses`, `sessions`, `auditLog`, `apiKeys`) belongs to a foundation
+ * module and stays.
+ */
+const DEMO_EXPORT_SECTIONS = [
+    'orders',
+    'payments',
+    'shipments',
+    'cart',
+    'wishlist',
+    'invoicing',
+    'returns',
+    'examples',
+    'notifications'
+] as const;
+
+/**
+ * Edit `AccountExportResponse` in `shared/contracts/openapi.root.yaml`: drop the sections the shop
+ * modules and the example module contribute from both `required` and `properties`.
+ *
+ * Edited as a YAML document, by key, so a section appended to the schema later or a reordered
+ * `required` list does not break the strip (an exact-text match did). `account`'s own export
+ * service already reads its section list off `enabledModules`
+ * (`src/modules/account/services/personal-data-registry.ts`) and omits a section no module
+ * registers, so only the CONTRACT is behind once those modules are gone.
+ *
+ * @param repoRoot - the repository root
+ * @throws {Error} when the schema is not where the strip expects it
  */
 export const stripAccountExportSchema = (repoRoot: string): RemovalNote => {
     const file = path.join(repoRoot, 'shared', 'contracts', 'openapi.root.yaml');
     const label = 'shared/contracts/openapi.root.yaml';
-    let content = readFileSync(file, 'utf8');
+    // yaml: a Document keeps comments and key order, unlike `parse`. https://eemeli.org/yaml/#documents
+    const document = parseDocument(readFileSync(file, 'utf8'));
 
-    const mustReplace = (search: string, replace: string): void => {
-        if (!content.includes(search))
-            throw new Error(
-                `[demo-remove] expected AccountExportResponse text not found in ${label}`
-            );
-        // A function replacer: a string one would read `$&` / `$1` in `replace` as patterns.
-        content = content.replace(search, () => replace);
-    };
+    const schema = document.getIn(['components', 'schemas', 'AccountExportResponse'], true);
+    if (!isMap(schema))
+        throw new Error(`[demo-remove] AccountExportResponse not found in ${label}`);
+    const properties = schema.get('properties', true);
+    const required = schema.get('required', true);
+    if (!isMap(properties) || !isSeq(required))
+        throw new Error(
+            `[demo-remove] AccountExportResponse has no properties/required in ${label}`
+        );
 
-    mustReplace(
-        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    orders,\n                    payments,\n                    shipments,\n                    cart,\n                    wishlist,\n                    sessions,\n                    auditLog,\n                    apiKeys,\n                    invoicing,\n                    returns,\n                    examples\n                ]',
-        '                    exportedAt,\n                    profile,\n                    roles,\n                    addresses,\n                    sessions,\n                    auditLog,\n                    apiKeys\n                ]'
-    );
-    mustReplace(
-        "                orders:\n                    type: array\n                    items:\n                        $ref: '#/components/schemas/Order'\n",
-        ''
-    );
-    mustReplace(
-        "                payments:\n                    type: array\n                    items:\n                        $ref: '../../src/modules/payments/openapi.yaml#/components/schemas/ExportPayment'\n",
-        ''
-    );
-    mustReplace(
-        "                shipments:\n                    type: array\n                    items:\n                        $ref: '../../src/modules/delivery/openapi.yaml#/components/schemas/ExportShipment'\n",
-        ''
-    );
-    mustReplace(
-        "                cart:\n                    type: array\n                    items:\n                        $ref: '#/components/schemas/CartItem'\n",
-        ''
-    );
-    mustReplace(
-        "                wishlist:\n                    type: array\n                    items:\n                        type: object\n                        additionalProperties: false\n                        required: [productId]\n                        properties:\n                            productId:\n                                $ref: '#/components/schemas/Id'\n",
-        ''
-    );
-    mustReplace(
-        "                # Every invoice/credit note issued for one of this account's OWN orders — collected\n                # by `orderId`, since neither collection is itself keyed by `userId`. Empty arrays,\n                # never absent, for an account with no paid orders yet.\n                invoicing:\n                    type: object\n                    additionalProperties: false\n                    required: [invoices, creditNotes]\n                    properties:\n                        invoices:\n                            type: array\n                            items:\n                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'\n                        creditNotes:\n                            type: array\n                            items:\n                                $ref: '../../src/modules/invoicing/openapi.yaml#/components/schemas/ExportInvoiceDocument'\n                # Every return on one of this account's OWN orders — a withdrawal included — found by\n                # `orderId`, since a return is keyed by the order and never by the user. Empty, never\n                # absent, for an account that has returned nothing.\n                returns:\n                    type: array\n                    items:\n                        $ref: '../../src/modules/returns/openapi.yaml#/components/schemas/ExportReturn'\n                # Every example this account owns, drafts and archived included. Empty, never absent.\n                examples:\n                    type: array\n                    items:\n                        $ref: '../../src/modules/example/openapi.yaml#/components/schemas/Example'\n",
-        ''
+    const dropped = DEMO_EXPORT_SECTIONS.filter((section) => properties.delete(section));
+    required.items = required.items.filter(
+        (item) => !(DEMO_EXPORT_SECTIONS as readonly unknown[]).includes(String(item))
     );
 
-    writeFileSync(file, content);
+    // lineWidth 0: never re-wrap a long description; indent 4: the file's own style.
+    writeFileSync(file, document.toString({ lineWidth: 0, indent: 4 }));
     return {
         file: label,
-        detail: 'dropped orders/payments/shipments/cart/wishlist/invoicing/returns/examples from AccountExportResponse'
+        detail: `dropped ${dropped.join('/')} from AccountExportResponse`
     };
 };
