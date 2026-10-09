@@ -11,7 +11,8 @@ import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
 import * as userService from '@modules/users/services';
 import { userService as userServiceObject } from '../../services';
-import { TokenType, normalizeEmail } from '../../model';
+import { TokenType } from '../../model';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 setupTestDb();
 

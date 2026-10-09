@@ -15,7 +15,7 @@
 import { createHmac } from 'node:crypto';
 import type { Request, Response } from 'express';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
-import { normalizeEmail } from '@modules/users';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { readBodyField } from '@infrastructure/http/middlewares/rate-limit';
 import { secureCookieOptions } from './cookies';
 import { sessionConfig } from './config';

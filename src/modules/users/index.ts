@@ -15,6 +15,6 @@ export * from './services';
 export * from './events';
 
 /** The schema, the token-type enum, and the pure helpers that travel with them. */
-export { TokenType, zodUserSchema, hashToken, isLiveRefreshSession, normalizeEmail } from './model';
+export { TokenType, zodUserSchema, hashToken, isLiveRefreshSession } from './model';
 
 export type * from './model';

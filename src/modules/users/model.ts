@@ -49,17 +49,6 @@ export const hashToken = (token: string): string =>
     createHash('sha256').update(token).digest('hex');
 
 /**
- * Compare two addresses the way the `email`/`pendingEmail` schema paths themselves do —
- * case-insensitively, ignoring surrounding whitespace (`@infrastructure/persistence/normalize-email`).
- * The schema's `lowercase`/`trim` casters cover every database read and write for free (equality,
- * `$or`, `$in`, `$set`); this covers the two in-memory comparisons that never touch a query:
- * `account/services/profile.ts`'s "is this the current address" check and `account/routes.ts`'s
- * `isChangingEmail` guard. Re-exported here so every existing caller of `@modules/users`'s barrel
- * keeps working unchanged.
- */
-export { normalizeEmail } from '@infrastructure/persistence/normalize-email';
-
-/**
  * User tokens
  * Token is like an ID, but not really an ID
  */

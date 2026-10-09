@@ -76,7 +76,7 @@ import { getOAuthCallback } from './controllers/get-oauth-callback';
 import { noStore } from '@infrastructure/http/middlewares/cache';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import { getMyAbilities } from './controllers/get-my-abilities';
-import { normalizeEmail } from '@modules/users';
+import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 /**
  * Whether THIS request is changing the caller's email — the one field `requireFreshAuthWhen`
