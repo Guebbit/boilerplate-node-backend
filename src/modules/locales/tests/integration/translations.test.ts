@@ -124,6 +124,30 @@ describe('upsertEntityTranslations', () => {
         expect(rows).toEqual([]);
     });
 
+    it('writes no row when the tag bump fails, since the two share one transaction', async () => {
+        const product = await createProduct();
+        const id = String(product._id);
+        const real = resolveTranslatables(enabledModules);
+        const realProduct = real.product;
+        if (!realProduct) throw new Error('the product translatable target is not registered');
+        localeService.setTranslatables({
+            ...real,
+            product: {
+                ...realProduct,
+                markEdited: () => Promise.reject(new Error('tag bump failed'))
+            }
+        });
+
+        await expect(
+            localeService.upsertEntityTranslations('product', id, {
+                [FALLBACK]: { fields: { title: 'Cozy Bed' } }
+            })
+        ).rejects.toThrow('tag bump failed');
+
+        expect(await translationRepository.findEntityTranslations('product', id)).toEqual([]);
+        localeService.setTranslatables(real);
+    });
+
     it('refuses a locale that is not active', async () => {
         const product = await createProduct();
         await givenLocale('it', { active: false });

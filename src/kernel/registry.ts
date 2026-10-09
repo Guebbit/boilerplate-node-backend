@@ -136,8 +136,9 @@ export interface TranslatableTarget {
      * edit changes rows OUTSIDE the document, and {@link writeDerived} only runs when the fallback
      * locale changed — without this, an editor holding the old tag could still replace the
      * translations another editor just wrote. Supplied by the OWNING module, like the rest.
+     * `session` joins the write to the caller's transaction, so the rows and the tag move together.
      */
-    markEdited: (entityId: string) => Promise<void>;
+    markEdited: (entityId: string, session?: ClientSession) => Promise<void>;
 
     /**
      * The OWNING module's own rules for a locale's field values — the same ones its own write

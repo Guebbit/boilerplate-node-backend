@@ -34,7 +34,7 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
         fields: Record<string, string | null>,
         session?: ClientSession
     ) => Promise<void>;
-    markEdited: (id: string) => Promise<void>;
+    markEdited: (id: string, session?: ClientSession) => Promise<void>;
     writebackImage: ImageWriteback;
 } = {
     ...createRepository<ExampleDocument, ExampleRow>(exampleModel, {
@@ -115,13 +115,14 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
      * counter reads (`persistence/revision-plugin`).
      *
      * @param id - the example whose translations were just written
+     * @param session - joins the translation rows' transaction; omitted, the write stands alone
      */
-    markEdited: (id) =>
+    markEdited: (id, session) =>
         exampleModel
             .updateOne(
                 { _id: toObjectId(id) },
                 { $set: { updatedAt: new Date() } },
-                { timestamps: false }
+                { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),

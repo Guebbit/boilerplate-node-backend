@@ -47,7 +47,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
         fields: Record<string, string | null>,
         session?: ClientSession
     ) => Promise<void>;
-    markEdited: (productId: string) => Promise<void>;
+    markEdited: (productId: string, session?: ClientSession) => Promise<void>;
     existsById: (productId: string) => Promise<boolean>;
     writebackImage: ImageWriteback;
 } = {
@@ -185,13 +185,14 @@ export const productRepository: Repository<ProductDocument, Product> & {
      * the stamp is what the edit counter reads (`persistence/revision-plugin`), so it moves too.
      *
      * @param productId - the product whose translations were just written
+     * @param session - joins the translation rows' transaction; omitted, the write stands alone
      */
-    markEdited: (productId: string) =>
+    markEdited: (productId: string, session?: ClientSession) =>
         productModel
             .updateOne(
                 { _id: toObjectId(productId) },
                 { $set: { updatedAt: new Date() } },
-                { timestamps: false }
+                { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),

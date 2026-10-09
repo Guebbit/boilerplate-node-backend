@@ -23,6 +23,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
+import { withTransaction } from '@infrastructure/runtime/database';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
@@ -327,10 +328,20 @@ const applyTranslationBatch = async (
     if (!(await target.exists(entityId))) return entityNotFound(entityType, entityId);
 
     const translatedBy = context?.caller.id ?? undefined;
-    // Writes the rows AND the derived index column — see `writePlannedTranslations`'s docblock.
-    await writePlannedTranslations(entityType, entityId, fallbackLocale, planned, translatedBy);
-    // Rows outside the document changed, so the document's own tag must move with them.
-    await target.markEdited(entityId);
+    // One transaction: the rows, the derived index column (see `writePlannedTranslations`'s
+    // docblock) and the document's tag. Rows outside the document changed, so its tag must move
+    // with them, and no `PUT` carrying the still-valid tag may land between the two writes.
+    await withTransaction(async (session) => {
+        await writePlannedTranslations(
+            entityType,
+            entityId,
+            fallbackLocale,
+            planned,
+            translatedBy,
+            session
+        );
+        await target.markEdited(entityId, session);
+    });
 
     await invalidateCacheTagsLogged([target.cacheTag]);
 
