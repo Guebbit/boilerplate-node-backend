@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import mongoose from 'mongoose';
-import { configureMongoose } from '@infrastructure/runtime/database';
+import { COMMAND_MONITORING, configureMongoose } from '@infrastructure/runtime/database';
+import { observeDatabaseCommands } from '@infrastructure/persistence/command-metrics';
 
 /**
  * Connects this test file to the jest instance's shared in-memory Mongo.
@@ -39,7 +40,11 @@ export const connect = async () => {
     configureMongoose();
 
     // Unique per call, and `connect` is called once per file, so this is effectively per-file.
-    await mongoose.connect(uri, { dbName: `test-${randomUUID().slice(0, 8)}` });
+    await mongoose.connect(uri, {
+        dbName: `test-${randomUUID().slice(0, 8)}`,
+        ...COMMAND_MONITORING
+    });
+    observeDatabaseCommands(mongoose.connection);
 
     /*
      * Wait for every registered model's indexes to exist before the first case runs.

@@ -22,30 +22,30 @@ Liveness and readiness are separate: `/livez` and `/readyz`, see [Health Checks]
 
 ## What `/observability/metrics` exposes
 
-| Metric                                                    | Why it is here                                                |
-| --------------------------------------------------------- | ------------------------------------------------------------- |
-| `http_requests_total`                                     | request rate, split by method/route/status                    |
-| `http_request_duration_milliseconds`                      | latency histogram for p50/p95/p99                             |
-| `http_request_errors_total`                               | 4xx/5xx counts                                                |
-| `http_requests_in_flight`                                 | concurrency at a glance                                       |
-| `cache_invalidation_failures_total`                       | writes whose stale cached response survived                   |
-| `cache_requests_total`                                    | `setCache` lookups by outcome — hit/miss/stale/refresh        |
-| `rate_limit_store_fallback_total`                         | limiter operations served without the `limits` Redis          |
-| `rate_limit_refusals_total`                               | requests refused with 429, by budget                          |
-| `process_unhandled_rejections_total`                      | promise rejections nobody handled (the process keeps running) |
-| `queue_jobs_dead_lettered_total`                          | jobs parked in a `<queue>.dead`, by queue name                |
-| `webhook_delivery_attempts_total`                         | outbound webhook delivery attempts, by outcome                |
-| `webhook_subscriptions_auto_disabled_total`               | subscriptions auto-disabled for sustained failure             |
-| `webhook_deliveries_overdue`                              | pending deliveries more than 10 min past due                  |
-| `security_events_total`                                   | forged or guessed credentials, by `security.*` action         |
-| `auth_stale_credentials_total`                            | expired or revoked credentials presented, by kind             |
-| `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/delete links, by flow       |
-| `auth_refresh_token_reuse_detected_total`                 | refresh tokens replayed after rotation                        |
-| `audit_sink_failures_total`                               | audit entries that could not be persisted                     |
-| `outbox_events_published_total` (+ `_retried_`, `_dead_`) | [outbox](./outbox.md) delivery outcomes                       |
-| `db_queries_total`, `db_errors_total`                     | database operations and failures                              |
-| `auth_login_total`, `cart_checkout_total`, …              | business counters                                             |
-| `process_*` and `nodejs_*`                                | default `prom-client` runtime metrics                         |
+| Metric                                                    | Why it is here                                                         |
+| --------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `http_requests_total`                                     | request rate, split by method/route/status                             |
+| `http_request_duration_milliseconds`                      | latency histogram for p50/p95/p99                                      |
+| `http_request_errors_total`                               | 4xx/5xx counts                                                         |
+| `http_requests_in_flight`                                 | concurrency at a glance                                                |
+| `cache_invalidation_failures_total`                       | writes whose stale cached response survived                            |
+| `cache_requests_total`                                    | `setCache` lookups by outcome — hit/miss/stale/refresh                 |
+| `rate_limit_store_fallback_total`                         | limiter operations served without the `limits` Redis                   |
+| `rate_limit_refusals_total`                               | requests refused with 429, by budget                                   |
+| `process_unhandled_rejections_total`                      | promise rejections nobody handled (the process keeps running)          |
+| `queue_jobs_dead_lettered_total`                          | jobs parked in a `<queue>.dead`, by queue name                         |
+| `webhook_delivery_attempts_total`                         | outbound webhook delivery attempts, by outcome                         |
+| `webhook_subscriptions_auto_disabled_total`               | subscriptions auto-disabled for sustained failure                      |
+| `webhook_deliveries_overdue`                              | pending deliveries more than 10 min past due                           |
+| `security_events_total`                                   | forged or guessed credentials, by `security.*` action                  |
+| `auth_stale_credentials_total`                            | expired or revoked credentials presented, by kind                      |
+| `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/delete links, by flow                |
+| `auth_refresh_token_reuse_detected_total`                 | refresh tokens replayed after rotation                                 |
+| `audit_sink_failures_total`                               | audit entries that could not be persisted                              |
+| `outbox_events_published_total` (+ `_retried_`, `_dead_`) | [outbox](./outbox.md) delivery outcomes                                |
+| `db_client_operation_duration_seconds`                    | histogram of every database command, by collection, operation, outcome |
+| `auth_login_total`, `cart_checkout_total`, …              | business counters                                                      |
+| `process_*` and `nodejs_*`                                | default `prom-client` runtime metrics                                  |
 
 The `route` label is the template Express matched — `/orders/:id` — read on `finish`, or
 `unmatched` for a request that reached no handler. Never a requested path: prom-client evicts

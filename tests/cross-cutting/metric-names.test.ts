@@ -53,12 +53,12 @@ const withoutComments = (source: string): string =>
     source.replaceAll(/\/\*[\S\s]*?\*\//g, '').replaceAll(/^[^\S\n]*\/\/.*$/gm, '');
 
 /**
- * `db_queries_total`/`db_errors_total` are infrastructure-owned, not domain-owned — every
- * repository counts toward them, so no single module can claim them — but the overview endpoint
- * still reads them by name like every other row, so the sweep below has to find them too.
+ * `db_client_operation_duration_seconds` is infrastructure-owned, not domain-owned — every module's
+ * queries feed it, so no single module can claim it — but the overview endpoint still reads it by
+ * name like every other row, so the sweep below has to find it too.
  */
 const INFRASTRUCTURE_METRIC_FILES = [
-    path.join(__dirname, '../../src/infrastructure/persistence/metrics.ts')
+    path.join(__dirname, '../../src/infrastructure/persistence/command-metrics.ts')
 ];
 
 /** Every `src/modules/<name>/metrics.ts`, discovered rather than listed, plus the above. */

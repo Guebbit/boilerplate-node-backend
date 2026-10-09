@@ -11,7 +11,13 @@ import {
     startJob,
     stopDatabase
 } from '@infrastructure/runtime/database';
+import { observeDatabaseCommands } from '@infrastructure/persistence/command-metrics';
 import { setEnvironment, withoutEnvironment } from '@tests/environment';
+
+// `connect` is mocked below, so there is no driver client for the real observer to listen to.
+jest.mock('@infrastructure/persistence/command-metrics', () => ({
+    observeDatabaseCommands: jest.fn()
+}));
 
 describe('isPermanentConnectError', () => {
     it.each([
@@ -82,6 +88,16 @@ describe('start', () => {
 
         await expect(start()).rejects.toThrow(/not retrying/);
         expect(connect).toHaveBeenCalledTimes(1);
+        connect.mockRestore();
+    });
+
+    it('turns on command monitoring and starts timing commands once connected', async () => {
+        const connect = jest.spyOn(mongoose, 'connect').mockResolvedValue(mongoose);
+
+        await start();
+
+        expect(connect).toHaveBeenCalledWith(expect.any(String), { monitorCommands: true });
+        expect(observeDatabaseCommands).toHaveBeenCalledWith(mongoose.connection);
         connect.mockRestore();
     });
 

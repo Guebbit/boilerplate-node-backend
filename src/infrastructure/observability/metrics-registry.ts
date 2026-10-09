@@ -12,7 +12,6 @@ import { getHeapStatistics } from 'node:v8';
 import mongoose from 'mongoose';
 import { register, Gauge, collectDefaultMetrics } from 'prom-client';
 import { listLeaseSummaries } from '@infrastructure/persistence/lease';
-import { connection } from '@infrastructure/runtime/database';
 
 /**
  * Shared prom-client registry. `register` is the library's default global registry, the
@@ -86,7 +85,7 @@ const _jobLastSuccessGauge = new Gauge({
     registers: [metricsRegistry],
     collect() {
         this.reset();
-        if (connection.readyState !== mongoose.ConnectionStates.connected) return;
+        if (mongoose.connection.readyState !== mongoose.ConnectionStates.connected) return;
         return listLeaseSummaries()
             .then((summaries) => {
                 for (const summary of summaries)

@@ -14,6 +14,14 @@ import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { databaseConfig, isRelaxedEnvironment } from '@infrastructure/runtime/config';
 import { applyMongooseDefaults } from '@infrastructure/runtime/mongoose-defaults';
+import { observeDatabaseCommands } from '@infrastructure/persistence/command-metrics';
+
+/**
+ * Connect option that makes the driver emit `commandStarted`, `commandSucceeded` and
+ * `commandFailed`, which `src/infrastructure/persistence/command-metrics.ts` times. Off by default in the driver.
+ * https://www.mongodb.com/docs/drivers/node/current/fundamentals/monitoring/command-monitoring/
+ */
+export const COMMAND_MONITORING = { monitorCommands: true } as const;
 
 /** Give up after this many attempts so a misconfigured URI fails the deploy instead of retrying forever. */
 const MAX_RETRIES = 10;
@@ -125,9 +133,9 @@ export const start = (maxTimeMs?: number) => {
     const attemptConnect = (attempt: number): Promise<void> =>
         // `mongoose.connect()` resolves once the driver has completed the handshake. It also
         // sets `mongoose.connection`, so everything else in the app is wired up as a side effect.
-        mongoose.connect(getDatabaseUri()).then(
-            // Swallow the resolved Mongoose instance: callers only need "connected", not the handle.
-            () => undefined,
+        mongoose.connect(getDatabaseUri(), COMMAND_MONITORING).then(
+            // Callers only need "connected", not the Mongoose handle: start timing commands and drop it.
+            () => observeDatabaseCommands(mongoose.connection),
             (error: unknown) => {
                 if (isPermanentConnectError(error))
                     throw new Error('DB connection refused by configuration; not retrying.', {

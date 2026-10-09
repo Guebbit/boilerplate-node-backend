@@ -23,7 +23,6 @@ import {
     sortOf,
     type PaginatedMeta
 } from './search';
-import { trackDatabaseQuery } from './metrics';
 import { checkedDelete, fencedSave, type DeleteOutcome } from './versioning';
 import type { SerializeTransform } from './serialize';
 
@@ -445,20 +444,16 @@ export function createRepository<TDocument extends Document, TWire>(
     };
 
     return {
-        // Wrapped so every query this factory makes counts toward `db_queries_total` /
-        // `db_errors_total` — see `./metrics`. `normalize` and `buildWhere` never touch Mongoose.
-        findById: trackDatabaseQuery(findById),
-        findOne: trackDatabaseQuery(findOne),
-        findByIdRaw: trackDatabaseQuery(findByIdRaw),
-        findAll: trackDatabaseQuery(findAll),
-        count: trackDatabaseQuery(count),
-        create: trackDatabaseQuery(create),
-        save: trackDatabaseQuery(save),
-        // Not wrapped: it never queries the database, so there is nothing for `db_queries_total`
-        // to count.
+        findById,
+        findOne,
+        findByIdRaw,
+        findAll,
+        count,
+        create,
+        save,
         build,
-        deleteOne: trackDatabaseQuery(deleteOne),
-        search: trackDatabaseQuery(search),
+        deleteOne,
+        search,
         normalize,
         // Bound to this collection's spec, so callers pass filters only.
         buildWhere: (filters: object) => buildWhere(filters, searchable)

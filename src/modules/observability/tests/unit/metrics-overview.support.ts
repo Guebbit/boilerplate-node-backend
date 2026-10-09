@@ -28,6 +28,12 @@ export const counter = (name: string) =>
         inc: (labelsOrValue?: Record<string, string> | number, value?: number) => void;
     }>(metricsRegistry.getSingleMetric(name));
 
+/** A registered histogram, resolved by metric NAME like {@link counter}. */
+export const histogram = (name: string) =>
+    asStub<{ observe: (labels: Record<string, string>, value: number) => void }>(
+        metricsRegistry.getSingleMetric(name)
+    );
+
 /** Run the controller and return the payload it handed to `successResponse`. */
 export const runOverview = async (): Promise<Overview> => {
     await getObservabilityMetricsOverview({} as never, {} as never);

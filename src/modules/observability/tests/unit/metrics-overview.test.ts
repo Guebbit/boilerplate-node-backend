@@ -8,7 +8,7 @@
  */
 
 import { metricsRegistry } from '@infrastructure/observability/metrics-registry';
-import { counter, runOverview } from './metrics-overview.support';
+import { counter, histogram, runOverview } from './metrics-overview.support';
 
 /*
  * Loading the MANIFESTS, not the counters.
@@ -20,6 +20,7 @@ import { counter, runOverview } from './metrics-overview.support';
  * domain being deleted.
  */
 import '@modules/account/module';
+import '@infrastructure/persistence/command-metrics';
 
 jest.mock('@infrastructure/http/response', () => ({
     __esModule: true,
@@ -49,15 +50,17 @@ describe('observability metrics overview', () => {
         expect(after.auth.signupSuccess).toBe(before.auth.signupSuccess + 1);
     });
 
-    it('reports database query and error totals from the persistence layer counters', async () => {
+    it('reports database command and error totals from the command histogram', async () => {
         const before = await runOverview();
 
-        counter('db_queries_total').inc(7);
-        counter('db_errors_total').inc(2);
+        const duration = histogram('db_client_operation_duration_seconds');
+        duration.observe({ collection: 'users', operation: 'find', outcome: 'success' }, 0.01);
+        duration.observe({ collection: 'users', operation: 'find', outcome: 'success' }, 0.02);
+        duration.observe({ collection: 'orders', operation: 'update', outcome: 'error' }, 0.5);
 
         const after = await runOverview();
-        expect(after.database.queriesTotal).toBe(before.database.queriesTotal + 7);
-        expect(after.database.errorsTotal).toBe(before.database.errorsTotal + 2);
+        expect(after.database.queriesTotal).toBe(before.database.queriesTotal + 3);
+        expect(after.database.errorsTotal).toBe(before.database.errorsTotal + 1);
     });
 
     it('leaves the business block out when no shop module registered a metric', async () => {

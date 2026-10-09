@@ -37,11 +37,16 @@ interface MetricSample {
  * `business` block, which `openapi.yaml` makes optional: it is left out when none of its counters
  * exist, see {@link SHOP_METRIC_NAMES}.
  */
-const readCounter = (name: string): Promise<MetricSample[]> => {
+const readCounter = (name: string): Promise<(MetricSample & { metricName?: string })[]> => {
     const metric = metricsRegistry.getSingleMetric(name);
     if (!metric) return Promise.resolve([]);
 
-    return metric.get().then((result) => (result as { values?: MetricSample[] }).values ?? []);
+    return metric
+        .get()
+        .then(
+            (result) =>
+                (result as { values?: (MetricSample & { metricName?: string })[] }).values ?? []
+        );
 };
 
 /**
@@ -58,6 +63,13 @@ const SHOP_METRIC_NAMES = [
 /** Whether any shop module registered a metric this overview reads. */
 const hasShopMetrics = (): boolean =>
     SHOP_METRIC_NAMES.some((name) => metricsRegistry.getSingleMetric(name) !== undefined);
+
+/**
+ * The `_count` rows of a histogram's samples: one per label combination, each the number of
+ * observations. The bucket, `_sum` and `+Inf` rows would inflate any total taken over them.
+ */
+const histogramCounts = (values: (MetricSample & { metricName?: string })[]): MetricSample[] =>
+    values.filter(({ metricName }) => metricName?.endsWith('_count'));
 
 /**
  * Sum values matching every label in `filter` across a prom-client metric result.
@@ -84,8 +96,7 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
         // (inventory module deleted) reads as zero like every other row here.
         readCounter('products_low_stock_total'),
         readCounter('inventory_reserved_units_total'),
-        readCounter('db_queries_total'),
-        readCounter('db_errors_total')
+        readCounter('db_client_operation_duration_seconds')
     ])
         .then(
             ([
@@ -98,10 +109,10 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                 orderValues,
                 lowStockValues,
                 reservedValues,
-                databaseQueryValues,
-                databaseErrorValues
+                databaseCommandValues
             ]) => {
                 const snapshot = processSnapshot();
+                const databaseCommands = histogramCounts(databaseCommandValues);
                 const inFlight = sumMetricValues(inflightMetric.values);
 
                 const data: ObservabilityMetricsSummary = {
@@ -126,8 +137,10 @@ export const getObservabilityMetricsOverview = (_request: Request, response: Res
                         }
                     }),
                     database: {
-                        queriesTotal: sumMetricValues(databaseQueryValues),
-                        errorsTotal: sumMetricValues(databaseErrorValues)
+                        queriesTotal: sumMetricValues(databaseCommands),
+                        errorsTotal: sumMetricValues(
+                            databaseCommands.filter(({ labels }) => labels.outcome === 'error')
+                        )
                     },
                     process: {
                         uptimeSeconds: snapshot.uptimeSeconds,
