@@ -4,7 +4,7 @@
  * public — an unauthenticated client is exactly who needs a dictionary — with only the
  * manifest taking `getAuth`, to include inactive languages for admins. Every write is gated per
  * mount (`getAuth, isAuthOrCredential, requirePermission(...)` spelled on each route, not a
- * shared `router.use`) and invalidates the shared Redis cache. Route order matters: `/tenants`
+ * shared `router.use`) and invalidates the shared Redis cache. Route order matters: `/apps`
  * and `/:locale/messages` must be declared before `/:locale`, or Express's first-match wins the
  * wildcard instead.
  */
@@ -17,11 +17,11 @@ import { hasAnonymousReadScope } from '@kernel/access/query';
 import { localeService } from './services';
 import { getLocales, getLocaleDictionary } from './controllers/get-locales';
 import { getLocaleMessages } from './controllers/get-locale-messages';
-import { getLocaleTenants } from './controllers/get-locale-tenants';
+import { getLocaleApps } from './controllers/get-locale-apps';
 import { createLocale } from './controllers/create-locale';
 import { replaceLocale, updateLocale } from './controllers/update-locale';
 import { deleteLocale } from './controllers/delete-locale';
-import { getLocaleEntries, getTenantLocaleEntries } from './controllers/get-locale-entries';
+import { getLocaleEntries, getAppLocaleEntries } from './controllers/get-locale-entries';
 import {
     createLocaleEntry,
     updateLocaleEntry,
@@ -41,12 +41,12 @@ import {
 export const router = Router();
 
 /**
- * `/:locale/messages` answers per `?tenant=` — a dictionary is a tenant's own — so the tenant
+ * `/:locale/messages` answers per `?app=` — a dictionary is an app's own — so the app
  * is part of its cache key where the other public reads have none.
  */
 const messagesCache = setCache(3600, {
     tags: ['locales'],
-    keyParameters: ['tenant'],
+    keyParameters: ['app'],
     browserRevalidate: true,
     scopeKey: (request: Request) =>
         hasAnonymousReadScope(localeService.callerScope, request.authContext)
@@ -77,8 +77,8 @@ const publicLocaleCache = setCache(3600, {
 // inactive rows a visitor is not offered. Before the cache, whose `scopeKey` reads that caller.
 router.get('/', getAuth, publicLocaleCache, getLocales);
 
-// GET /locales/tenants — the keyspaces an entry can belong to. Before `/:locale`, see above.
-router.get('/tenants', publicLocaleCache, getLocaleTenants);
+// GET /locales/apps — the keyspaces an entry can belong to. Before `/:locale`, see above.
+router.get('/apps', publicLocaleCache, getLocaleApps);
 
 // GET /locales/:locale/messages — the client's dictionary, out of the database
 router.get('/:locale/messages', messagesCache, getLocaleMessages);
@@ -140,19 +140,19 @@ router.get(
     requirePermission('locales.any.update'),
     getLocaleEntries
 );
-// One tenant's slice of the entries is a resource of its own — the tenant is a path segment, so a
+// One app's slice of the entries is a resource of its own — the app is a path segment, so a
 // PUT replaces exactly what the GET on the same URI lists. See `controllers/write-locale-entries.ts`.
 router.get(
-    '/:locale/tenants/:tenant/entries',
+    '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.update'),
-    getTenantLocaleEntries
+    getAppLocaleEntries
 );
 
-// POST /locales/:locale/tenants/:tenant/entries — add one entry to the tenant's slice.
+// POST /locales/:locale/apps/:app/entries — add one entry to the app's slice.
 router.post(
-    '/:locale/tenants/:tenant/entries',
+    '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.create'),
@@ -160,9 +160,9 @@ router.post(
     createLocaleEntry
 );
 
-// PUT /locales/:locale/tenants/:tenant/entries — replace the tenant's whole slice.
+// PUT /locales/:locale/apps/:app/entries — replace the app's whole slice.
 router.put(
-    '/:locale/tenants/:tenant/entries',
+    '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.update'),
@@ -170,9 +170,9 @@ router.put(
     replaceLocaleEntries
 );
 
-// PATCH /locales/:locale/tenants/:tenant/entries — merge the entries sent.
+// PATCH /locales/:locale/apps/:app/entries — merge the entries sent.
 router.patch(
-    '/:locale/tenants/:tenant/entries',
+    '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.update'),
@@ -180,9 +180,9 @@ router.patch(
     mergeLocaleEntries
 );
 
-// PUT /locales/:locale/entries/:entryId — change one entry.
+// PUT /locales/:locale/apps/:app/entries/:entryId — change one entry.
 router.put(
-    '/:locale/entries/:entryId',
+    '/:locale/apps/:app/entries/:entryId',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.update'),
@@ -190,9 +190,9 @@ router.put(
     updateLocaleEntry
 );
 
-// DELETE /locales/:locale/entries/:entryId — remove one entry.
+// DELETE /locales/:locale/apps/:app/entries/:entryId — remove one entry.
 router.delete(
-    '/:locale/entries/:entryId',
+    '/:locale/apps/:app/entries/:entryId',
     getAuth,
     isAuthOrCredential,
     requirePermission('locales.any.delete'),

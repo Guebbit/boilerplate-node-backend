@@ -2,8 +2,8 @@
  * @module
  * The language rows — registering one, editing it, and removing it with everything under it. Also
  * the home of the rule the other files share: a language nobody has registered, and what an
- * unknown tenant means on a write — refused, since it would store invisible copy. A read narrowed
- * by an unknown tenant needs no such rule: filtering by an id nothing was ever written under
+ * unknown app means on a write — refused, since it would store invisible copy. A read narrowed
+ * by an unknown app needs no such rule: filtering by an id nothing was ever written under
  * already answers an empty page on its own.
  */
 
@@ -17,7 +17,7 @@ import {
 } from '@infrastructure/http/response';
 import { normalizeTag, type LocaleDocument } from '../model';
 import { localeRepository } from '../repository';
-import { isKnownTenant } from '../tenants';
+import { isKnownApp } from '../apps';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
@@ -37,11 +37,9 @@ const rejectFallbackLocale = (tag: string): ResponseReject | undefined =>
         ? generateReject(409, [t('locales.error-language-is-fallback')])
         : undefined;
 
-/** A tenant this deployment does not know — refused before anything is written under it. */
-export const rejectUnknownTenant = (tenant: string): ResponseReject | undefined =>
-    isKnownTenant(tenant)
-        ? undefined
-        : generateReject(422, [t('locales.error-tenant-unknown', { tenant })]);
+/** An app this deployment does not know — refused before anything is written under it. */
+export const rejectUnknownApp = (app: string): ResponseReject | undefined =>
+    isKnownApp(app) ? undefined : generateReject(422, [t('locales.error-app-unknown', { app })]);
 
 /**
  * Register a language in the dynamic tier.

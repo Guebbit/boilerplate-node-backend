@@ -17,7 +17,7 @@ import type { AuthContext } from '@types';
 import { accessibleFilter } from '@kernel/access/query';
 import { deriveBaseLanguage, type LocaleDocument } from '../model';
 import { localeEntryRepository, localeRepository } from '../repository';
-import { backendTenant, frontendTenant } from '../tenants';
+import { backendApp, frontendApp } from '../apps';
 
 /**
  * Base languages written right to left, consulted only for STATIC languages — a registered
@@ -66,9 +66,9 @@ export const staticCapability = (tag: string): LocaleCapability => ({
     direction: isRightToLeft(tag) ? LocaleDirection.rtl : LocaleDirection.ltr,
     // A deployed file has no off switch: a static language is always selectable.
     active: true,
-    // The backend tenant and only that: the API can answer in it, and there is no dictionary to
+    // The backend app and only that: the API can answer in it, and there is no dictionary to
     // download.
-    tenants: [backendTenant()],
+    apps: [backendApp()],
     source: LocaleSource.static,
     entryCount: 0,
     revision: 0
@@ -87,14 +87,14 @@ export const dynamicCapability = (
     nativeName: language.nativeName,
     direction: language.direction,
     active: language.active,
-    tenants: [frontendTenant()],
+    apps: [frontendApp()],
     source: LocaleSource.dynamic,
     entryCount,
     revision: language.revision
 });
 
 /**
- * The two tiers as one list. A tag in both merges into ONE row carrying BOTH tenants, using the
+ * The two tiers as one list. A tag in both merges into ONE row carrying BOTH apps, using the
  * dynamic side's display fields — the only side that has any. Sorted by tag so the response is
  * stable across diffs.
  */
@@ -114,7 +114,7 @@ export const mergeCapabilities = (
             rows.has(language.tag)
                 ? {
                       ...dynamic,
-                      tenants: [backendTenant(), frontendTenant()],
+                      apps: [backendApp(), frontendApp()],
                       source: LocaleSource.both
                   }
                 : dynamic

@@ -2,7 +2,7 @@
  * @module
  * Languages: which ones this deployment speaks, and the dictionaries a client downloads. Two
  * tiers that never merge — deployed files loaded into i18next at boot, and runtime overrides this
- * module owns, one row per (language, tenant, key) — and neither is ever awaited on the request
+ * module owns, one row per (language, app, key) — and neither is ever awaited on the request
  * path, so a database outage costs only a stale overlay. `./index.ts` publishes `localeService`
  * and the model types, but nothing outside this module imports them: everything else reaches
  * i18n through `@infrastructure/i18n` — the one exception is the `app` tier, which alone may see
@@ -32,7 +32,7 @@ import { localesConfig } from './config';
  * @param modules - every enabled module, this module's own included
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
-    // The backend tenant's share of this module's collection, handed to `@infrastructure/i18n` so
+    // The backend app's share of this module's collection, handed to `@infrastructure/i18n` so
     // an override typed into the admin screens reaches `t()`. Touches no database:
     // `readApiOverrides` only runs on the refresh.
     registerLocaleOverrideProvider(() => localeService.readApiOverrides());

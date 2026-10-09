@@ -29,7 +29,7 @@ import {
     callerScope,
     listCapabilities
 } from './capabilities';
-import { listTenants } from '../tenants';
+import { listApps } from '../apps';
 import { createLanguage, updateLanguage, deleteLanguage } from './languages';
 import { searchEntries, createEntry, updateEntry, deleteEntry, importEntries } from './entries';
 import { readMessages, readApiOverrides } from './messages';
@@ -51,7 +51,7 @@ export const localeService = {
     readDynamicTier,
     callerScope,
     listCapabilities,
-    listTenants,
+    listApps,
     buildMessageTree,
     findUnsafeKeySegment,
     findKeyCollision,

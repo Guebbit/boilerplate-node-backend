@@ -381,13 +381,13 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
  * (operation, parameter) pairs where a declared enum/pattern violation does NOT answer 422 today
  * — verified live, not assumed:
  *
- * - `GET /locales/{locale}/messages` `tenant`: NOT a bug — `services/messages.ts#readMessages`
- *   answers 404 for anything that isn't a configured frontend tenant, malformed or merely unknown
- *   alike, so a 403 or an empty 200 for "wrong kind of tenant" can't leak that a draft translation
- *   exists under a different (backend) tenant. A malformed id is just one more way to not be a
- *   frontend tenant.
+ * - `GET /locales/{locale}/messages` `app`: NOT a bug — `services/messages.ts#readMessages`
+ *   answers 404 for anything that isn't a configured frontend app, malformed or merely unknown
+ *   alike, so a 403 or an empty 200 for "wrong kind of app" can't leak that a draft translation
+ *   exists under a different (backend) app. A malformed id is just one more way to not be a
+ *   frontend app.
  */
-const KNOWN_GAPS = new Set(['GET /locales/{locale}/messages::tenant']);
+const KNOWN_GAPS = new Set(['GET /locales/{locale}/messages::app']);
 
 /** A value that violates `schema`'s `enum` or `pattern` — whichever the field declares. */
 const invalidQueryValue = (schema: SchemaNode): string => {

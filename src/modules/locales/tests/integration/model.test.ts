@@ -59,7 +59,7 @@ describe('entry serialization', () => {
         await localeRepository.create({ tag: 'es', name: 'Spanish', nativeName: 'Español' });
         await localeEntryRepository.create({
             locale: 'es',
-            tenant: 'demo-fe',
+            app: 'demo-fe',
             key: 'cart.title',
             value: 'Carrito'
         });
@@ -77,7 +77,7 @@ describe('entry serialization', () => {
         // and the contract still requires the field on the wire, which the default guarantees.
         const entry = await localeEntryRepository.create({
             locale: 'es',
-            tenant: 'demo-fe',
+            app: 'demo-fe',
             key: 'cart.title'
         });
 

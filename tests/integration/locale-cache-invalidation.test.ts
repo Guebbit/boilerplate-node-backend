@@ -84,9 +84,9 @@ const givenPublishedLanguage = async (bearer: string) => {
         .send({ tag: 'pt', name: 'Portuguese', nativeName: 'Português' });
 
     await api()
-        // `demo-fe`: the frontend tenant, which is the half `GET /locales/:locale/messages`
+        // `demo-fe`: the frontend app, which is the half `GET /locales/:locale/messages`
         // serves and therefore the half whose cached copy this test is about.
-        .post('/locales/pt/tenants/demo-fe/entries')
+        .post('/locales/pt/apps/demo-fe/entries')
         .set('Authorization', bearer)
         .send({ key: 'cart.title', value: 'Carrinho' });
 };
@@ -112,7 +112,7 @@ describe('an admin write invalidates the cached public dictionary', () => {
         const entryId = listed.body.data.items[0].id;
 
         await api()
-            .put(`/locales/pt/entries/${entryId}`)
+            .put(`/locales/pt/apps/demo-fe/entries/${entryId}`)
             .set('Authorization', bearer)
             .send({ value: 'O seu carrinho' });
 
@@ -163,23 +163,23 @@ describe('an admin write invalidates the cached public dictionary', () => {
     });
 });
 
-describe('the cached dictionary is per tenant', () => {
-    it("answers ?tenant=b with b's dictionary after a warm read of a", async () => {
-        // A second frontend tenant, so the query parameter has something to choose between.
-        setEnvironment({ NODE_LOCALE_TENANTS_EXTRA: 'kiosk=Kiosk' });
+describe('the cached dictionary is per app', () => {
+    it("answers ?app=b with b's dictionary after a warm read of a", async () => {
+        // A second frontend app, so the query parameter has something to choose between.
+        setEnvironment({ NODE_LOCALE_APPS_EXTRA: 'kiosk=Kiosk' });
         const { bearer } = await authenticateAs('admin');
         await givenPublishedLanguage(bearer);
         await api()
-            .post('/locales/pt/tenants/kiosk/entries')
+            .post('/locales/pt/apps/kiosk/entries')
             .set('Authorization', bearer)
             .send({ key: 'cart.title', value: 'Quiosque' });
 
-        const warm = await api().get('/locales/pt/messages?tenant=demo-fe');
+        const warm = await api().get('/locales/pt/messages?app=demo-fe');
         expect(warm.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
-        const again = await api().get('/locales/pt/messages?tenant=demo-fe');
+        const again = await api().get('/locales/pt/messages?app=demo-fe');
         expect(again.headers['x-cache']).toBe('HIT');
 
-        const other = await api().get('/locales/pt/messages?tenant=kiosk');
+        const other = await api().get('/locales/pt/messages?app=kiosk');
 
         expect(other.headers['x-cache']).toBe('MISS');
         expect(other.body.data.messages).toEqual({ cart: { title: 'Quiosque' } });

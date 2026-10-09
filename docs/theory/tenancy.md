@@ -162,20 +162,17 @@ this section doesn't restate it.
 with no tenant filter at all. Correct here — there is only one shop's subscriptions to match. See
 [§10](#_10-·-what-we-deliberately-did-not-build) for what pooled would have to fix about exactly this.
 
-## 7 · The glossary of the three "tenants"
+## 7 · The glossary of the two "tenants"
 
-The word means three different things in this codebase, and confusing them costs a bad afternoon:
+The word means two different things in this codebase, and confusing them costs a bad afternoon:
 
-1. **`locales.tenant`** — a translation KEYSPACE (`demo-be`, `demo-fe`, `mobile`), enumerated in
-   `src/modules/locales/tenants.ts` and published at `GET /locales/tenants`. Nothing to do with an
-   organisation.
-2. **`roles.tenantId` / `memberships.tenantId` / `webhooks.tenant` / `apikeys.tenant`** — the
+1. **`roles.tenantId` / `memberships.tenantId` / `webhooks.tenant` / `apikeys.tenant`** — the
    organisation this whole page is about.
-3. **The industry sense** — a customer of a SaaS product, the sense every section above uses.
+2. **The industry sense** — a customer of a SaaS product, the sense every section above uses.
 
-Under silo this is a comprehension problem, never a correctness one: nothing conflates the two
-concepts at runtime. It becomes a rename candidate only if `/locales/tenants` is ever versioned for
-an unrelated reason — renaming it today would be a breaking contract change for no functional gain.
+The translation keyspace (`demo-be`, `demo-fe`, `mobile`) is not a tenant at all: it is an `app`,
+enumerated in `src/modules/locales/apps.ts` and published at `GET /locales/apps`. Nothing to do
+with an organisation.
 
 ## 8 · Hands-on: two clients on your laptop
 

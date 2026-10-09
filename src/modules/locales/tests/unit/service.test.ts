@@ -8,7 +8,7 @@
  */
 
 import { LocaleDirection, LocaleSource } from '@types';
-import { BACKEND, FRONTEND } from './tenants.fixture';
+import { BACKEND, FRONTEND } from './apps.fixture';
 import { localeService } from '../../services';
 import type { LocaleDocument } from '../../model';
 
@@ -159,7 +159,7 @@ describe('mergeCapabilities', () => {
 
         expect(row).toMatchObject({
             tag: 'en',
-            tenants: [BACKEND],
+            apps: [BACKEND],
             source: LocaleSource.static,
             entryCount: 0,
             revision: 0
@@ -186,7 +186,7 @@ describe('mergeCapabilities', () => {
                 nativeName: 'Português',
                 direction: LocaleDirection.ltr,
                 active: true,
-                tenants: [FRONTEND],
+                apps: [FRONTEND],
                 source: LocaleSource.dynamic,
                 entryCount: 12,
                 revision: 3
@@ -214,7 +214,7 @@ describe('mergeCapabilities', () => {
      * it is one language with both capabilities — not two entries, and not one entry claiming the
      * union of two things a client cannot tell apart.
      */
-    it('merges a language present in both tiers into one row carrying both tenants', () => {
+    it('merges a language present in both tiers into one row carrying both apps', () => {
         const rows = localeService.mergeCapabilities(
             ['en', 'es'],
             [language({ tag: 'es', name: 'Spanish', nativeName: 'Español', revision: 7 })],
@@ -224,7 +224,7 @@ describe('mergeCapabilities', () => {
         expect(rows).toHaveLength(2);
         expect(rows[1]).toMatchObject({
             tag: 'es',
-            tenants: [BACKEND, FRONTEND],
+            apps: [BACKEND, FRONTEND],
             source: LocaleSource.both,
             entryCount: 214,
             revision: 7

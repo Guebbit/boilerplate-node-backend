@@ -23,7 +23,7 @@ jest.mock('@infrastructure/http/middlewares/cache', () =>
 import { router } from '@modules/locales/routes';
 
 /** The four reads any visitor may make. */
-const PUBLIC = ['GET /', 'GET /tenants', 'GET /:locale/messages', 'GET /:locale'];
+const PUBLIC = ['GET /', 'GET /apps', 'GET /:locale/messages', 'GET /:locale'];
 
 /** Everything that administers the dynamic tier, including the screen the writes are made from. */
 const ADMIN = [
@@ -32,19 +32,19 @@ const ADMIN = [
     'PATCH /:locale',
     'DELETE /:locale',
     'GET /:locale/entries',
-    'GET /:locale/tenants/:tenant/entries',
-    'POST /:locale/tenants/:tenant/entries',
-    'PUT /:locale/tenants/:tenant/entries',
-    'PATCH /:locale/tenants/:tenant/entries',
-    'PUT /:locale/entries/:entryId',
-    'DELETE /:locale/entries/:entryId',
+    'GET /:locale/apps/:app/entries',
+    'POST /:locale/apps/:app/entries',
+    'PUT /:locale/apps/:app/entries',
+    'PATCH /:locale/apps/:app/entries',
+    'PUT /:locale/apps/:app/entries/:entryId',
+    'DELETE /:locale/apps/:app/entries/:entryId',
     'GET /translations/:entityType/:id',
     'PUT /translations/:entityType/:id',
     'PATCH /translations/:entityType/:id'
 ];
 
 /** The two entry reads — the editing screen, uncached, and never a reason to invalidate. */
-const ENTRY_READS = new Set(['GET /:locale/entries', 'GET /:locale/tenants/:tenant/entries']);
+const ENTRY_READS = new Set(['GET /:locale/entries', 'GET /:locale/apps/:app/entries']);
 
 /**
  * The three translator-door routes: uncached like `GET /:locale/entries` (the editing screen), and
@@ -62,12 +62,12 @@ describe('locale routes — what is mounted', () => {
         expect(routeSignatures(router)).toEqual([...PUBLIC, ...ADMIN]);
     });
 
-    it('declares /tenants before /:locale, so it is reachable at all', () => {
+    it('declares /apps before /:locale, so it is reachable at all', () => {
         const paths = routeTable(router).map(({ path }) => path);
 
-        // Both are one segment and Express takes the first match: reversed, `GET /locales/tenants`
-        // becomes a dictionary lookup for a language called "tenants" and 404s.
-        expect(paths.indexOf('/tenants')).toBeLessThan(paths.indexOf('/:locale'));
+        // Both are one segment and Express takes the first match: reversed, `GET /locales/apps`
+        // becomes a dictionary lookup for a language called "apps" and 404s.
+        expect(paths.indexOf('/apps')).toBeLessThan(paths.indexOf('/:locale'));
     });
 });
 

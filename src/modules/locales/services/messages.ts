@@ -2,10 +2,10 @@
  * @module
  * The two reads that hand out stored copy — a frontend's downloadable overrides, and the API's own
  * overlay. Both expand flat rows through {@link buildMessageTree}, differing in exactly one thing:
- * which tenant's keyspace each is allowed to serve.
+ * which app's keyspace each is allowed to serve.
  */
 
-import type { LocaleMessages, LocaleTenant } from '@types';
+import type { LocaleMessages, LocaleApp } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import {
     generateSuccess,
@@ -13,31 +13,31 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { localeEntryRepository, localeRepository } from '../repository';
-import { backendTenant, frontendTenant, isFrontendTenant } from '../tenants';
+import { backendApp, frontendApp, isFrontendApp } from '../apps';
 import { buildMessageTree } from './keys';
 import { languageNotFound } from './languages';
 
 /**
- * The OVERRIDES a client downloads for one language — one frontend tenant's rows, never the
+ * The OVERRIDES a client downloads for one language — one frontend app's rows, never the
  * backend's. Not a dictionary: a client merges this over what it bundles, key by key, so a
  * language nobody has finished falls back per key.
  *
- * The backend tenant, an unconfigured id, and an INACTIVE language all answer 404 exactly as an
+ * The backend app, an unconfigured id, and an INACTIVE language all answer 404 exactly as an
  * unknown language does — a 403 or empty 200 for "inactive" would leak that a draft translation
  * exists.
  *
- * @param tenant - whose dictionary; omitted, the deployment's default frontend tenant
+ * @param app - whose dictionary; omitted, the deployment's default frontend app
  */
 export const readMessages = (
     tag: string,
-    tenant: LocaleTenant = frontendTenant()
+    app: LocaleApp = frontendApp()
 ): Promise<ResponseSuccess<LocaleMessages> | ResponseReject> => {
-    if (!isFrontendTenant(tenant)) return Promise.resolve(languageNotFound());
+    if (!isFrontendApp(app)) return Promise.resolve(languageNotFound());
 
     return localeRepository.findByTag(tag).then((language) => {
         if (!language?.active) return languageNotFound();
 
-        return localeEntryRepository.listEntries(language.tag, tenant).then((entries) =>
+        return localeEntryRepository.listEntries(language.tag, app).then((entries) =>
             generateSuccess({
                 locale: language.tag,
                 revision: language.revision,
@@ -48,7 +48,7 @@ export const readMessages = (
 };
 
 /**
- * Every override of the BACKEND tenant, grouped by language and expanded into trees. The provider
+ * Every override of the BACKEND app, grouped by language and expanded into trees. The provider
  * `@infrastructure/i18n` calls to rebuild its overlay.
  *
  * INACTIVE languages are included on purpose: `active` governs what the PUBLIC can see, and an
@@ -58,7 +58,7 @@ export const readMessages = (
  * malformed dictionary does not take the whole refresh down.
  */
 export const readApiOverrides = (): Promise<Record<string, Record<string, unknown>>> =>
-    localeEntryRepository.listEntriesByTenant(backendTenant()).then((rows) => {
+    localeEntryRepository.listEntriesByApp(backendApp()).then((rows) => {
         const byLocale = new Map<string, { key: string; value: string }[]>();
         for (const { locale, key, value } of rows) {
             const entries = byLocale.get(locale) ?? [];

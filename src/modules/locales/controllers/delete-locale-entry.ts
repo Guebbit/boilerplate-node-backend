@@ -1,6 +1,6 @@
 /**
  * @module
- * `DELETE /locales/:locale/entries/:entryId` controller — thin HTTP adapter over
+ * `DELETE /locales/:locale/apps/:app/entries/:entryId` controller — thin HTTP adapter over
  * `localeService.deleteEntry`.
  */
 
@@ -12,13 +12,13 @@ import { localeService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /**
- * DELETE /locales/:locale/entries/:entryId (admin)
+ * DELETE /locales/:locale/apps/:app/entries/:entryId (admin)
  * Remove one key from one language — other languages keep their own row for that key.
  * No response body; the removed key is recorded in the audit trail instead. The service
  * itself refreshes the overlay on success — see `services/overlay.ts`.
  */
 export const deleteLocaleEntry = (
-    request: Request<{ locale: string; entryId: string }>,
+    request: Request<{ locale: string; app: string; entryId: string }>,
     response: Response
 ) => {
     const entryId = requireId(request, response, {
@@ -28,7 +28,7 @@ export const deleteLocaleEntry = (
     if (!entryId) return Promise.resolve();
 
     return localeService
-        .deleteEntry(request.params.locale, entryId, callerContextOf(request))
+        .deleteEntry(request.params.locale, request.params.app, entryId, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 

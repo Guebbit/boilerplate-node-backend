@@ -6,7 +6,7 @@
  * normally bumps it.
  */
 
-import { backendTenant, frontendTenant } from '@modules/locales/tenants';
+import { backendApp, frontendApp } from '@modules/locales/apps';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
 import { localeRepository, localeEntryRepository } from '@modules/locales/repository';
 import { insertIfAbsent, type SeedOutcome } from '@scenarios/seed';
@@ -83,11 +83,11 @@ export const localeFixtures = [
     })
 ];
 
-/** One entry, as `[id, locale, tenant, key, value]` — see the groups in {@link LOCALE_ENTRIES}. */
+/** One entry, as `[id, locale, app, key, value]` — see the groups in {@link LOCALE_ENTRIES}. */
 type LocaleEntryRow = [
     id: string,
     locale: keyof typeof SEED_LOCALE_TAGS,
-    tenant: 'frontend' | 'backend',
+    app: 'frontend' | 'backend',
     key: string,
     value: string
 ];
@@ -163,8 +163,8 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
     /*
      * The API's own half, for the same language — STORED, VALID, AND NOT APPLIED. Spanish has no
      * deployed dictionary, so `applyLocaleOverrides` skips and logs these: the fixture for a
-     * backend translated ahead of its file. Also proves tenants are separate keyspaces: the same
-     * keys exist for the frontend tenant above without colliding.
+     * backend translated ahead of its file. Also proves apps are separate keyspaces: the same
+     * keys exist for the frontend app above without colliding.
      */
     [
         '65e0200a9a7d4b2e1c0f3001',
@@ -206,11 +206,11 @@ const LOCALE_ENTRIES: LocaleEntryRow[] = [
 ];
 
 /** {@link LOCALE_ENTRIES}, built into fixtures. */
-export const localeEntryFixtures = LOCALE_ENTRIES.map(([id, locale, tenant, key, value]) =>
+export const localeEntryFixtures = LOCALE_ENTRIES.map(([id, locale, app, key, value]) =>
     makeLocaleEntry({
         id,
         locale: SEED_LOCALE_TAGS[locale],
-        tenant: tenant === 'backend' ? backendTenant() : frontendTenant(),
+        app: app === 'backend' ? backendApp() : frontendApp(),
         key,
         value
     })
@@ -246,7 +246,11 @@ export const seedLocalesCollection = async (): Promise<SeedOutcome[]> => {
  */
 export const driveLocaleEntryEdit = (owner: Caller): Promise<void> =>
     owner
-        .call('PUT', `/locales/${SEED_LOCALE_TAGS.answerable}/entries/65e0200a9a7d4b2e1c0f3101`, {
-            value: 'Sessione scaduta. Effettua di nuovo l’accesso.'
-        })
+        .call(
+            'PUT',
+            `/locales/${SEED_LOCALE_TAGS.answerable}/apps/${backendApp()}/entries/65e0200a9a7d4b2e1c0f3101`,
+            {
+                value: 'Sessione scaduta. Effettua di nuovo l’accesso.'
+            }
+        )
         .then(() => undefined);

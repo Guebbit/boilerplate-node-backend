@@ -24,16 +24,16 @@ const createEntry = async (
     tag: string,
     key: string,
     value: string,
-    tenant = 'demo-fe'
+    app = 'demo-fe'
 ) => {
     const response = await api()
-        .post(`/locales/${tag}/tenants/${tenant}/entries`)
+        .post(`/locales/${tag}/apps/${app}/entries`)
         .set('Authorization', bearer)
         .send({ key, value });
 
     if (response.status !== 201)
         throw new Error(
-            `entry setup failed: POST /locales/${tag}/tenants/${tenant}/entries returned ${response.status} — ` +
+            `entry setup failed: POST /locales/${tag}/apps/${app}/entries returned ${response.status} — ` +
                 JSON.stringify(response.body)
         );
 
@@ -53,7 +53,7 @@ describe('GET /locales', () => {
         expect(response.body.data.locales.map(({ tag }: { tag: string }) => tag)).toEqual(
             listSupportedLocales()
         );
-        for (const row of response.body.data.locales) expect(row.tenants).toContain('demo-be');
+        for (const row of response.body.data.locales) expect(row.apps).toContain('demo-be');
 
         expect(response.body.data.default).toBe(getDefaultLocale());
         expect(response.body.data.fallback).toBe(getFallbackLocale());
@@ -73,11 +73,11 @@ describe('GET /locales', () => {
             ({ tag }: { tag: string }) => tag === 'pt'
         );
 
-        expect(portuguese.tenants).toEqual(['demo-fe']);
+        expect(portuguese.apps).toEqual(['demo-fe']);
         expect(portuguese.source).toBe('dynamic');
     });
 
-    it('merges a language present in both tiers into one row with both tenants', async () => {
+    it('merges a language present in both tiers into one row with both apps', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer, { tag: 'it', name: 'Italian', nativeName: 'Italiano' });
 
@@ -87,7 +87,7 @@ describe('GET /locales', () => {
         );
 
         expect(italian).toHaveLength(1);
-        expect(italian[0].tenants).toEqual(['demo-be', 'demo-fe']);
+        expect(italian[0].apps).toEqual(['demo-be', 'demo-fe']);
         expect(italian[0].source).toBe('both');
     });
 
@@ -536,38 +536,50 @@ describe('GET /locales/:locale/entries', () => {
         expect(response.status).toBe(403);
     });
 
-    it('answers an empty page for a tenant nobody configured, rather than every tenant', async () => {
-        const { bearer } = await authenticateAs('admin');
-        await createLanguage(bearer);
-        await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
-
-        const response = await api()
-            .get('/locales/pt/entries?tenant=nobody')
-            .set('Authorization', bearer);
-
-        expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([]);
-    });
-
-    it('422s a tenant outside the id pattern, instead of dropping the filter', async () => {
+    it('422s a stale ?app= filter, instead of widening it to every app', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .get('/locales/pt/entries?tenant=Not Valid')
+            .get('/locales/pt/entries?app=demo-fe')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
     });
 });
 
-describe('POST /locales/:locale/tenants/:tenant/entries', () => {
+describe('GET /locales/:locale/apps/:app/entries', () => {
+    it('422s an app nobody configured, rather than answering an empty page', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
+
+        const response = await api()
+            .get('/locales/pt/apps/nobody/entries')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+    });
+
+    it('422s an app outside the id pattern', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const response = await api()
+            .get('/locales/pt/apps/Not%20Valid/entries')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(422);
+    });
+});
+
+describe('POST /locales/:locale/apps/:app/entries', () => {
     it('matches the contract', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: 'cart.title', value: 'Carrinho' });
 
@@ -580,7 +592,7 @@ describe('POST /locales/:locale/tenants/:tenant/entries', () => {
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: 'cart.title', value: 'Outro' });
 
@@ -597,7 +609,7 @@ describe('POST /locales/:locale/tenants/:tenant/entries', () => {
         await createEntry(bearer, 'pt', 'products.list.title', 'Catálogo');
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: 'products.list', value: 'Lista' });
 
@@ -610,7 +622,7 @@ describe('POST /locales/:locale/tenants/:tenant/entries', () => {
         await createEntry(bearer, 'pt', 'products.list', 'Lista');
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: 'products.list.title', value: 'Catálogo' });
 
@@ -622,7 +634,7 @@ describe('POST /locales/:locale/tenants/:tenant/entries', () => {
         await createLanguage(bearer);
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: '', value: 'x' });
 
@@ -633,7 +645,7 @@ describe('POST /locales/:locale/tenants/:tenant/entries', () => {
         const { bearer } = await authenticateAs('admin');
 
         const response = await api()
-            .post('/locales/zz/tenants/demo-fe/entries')
+            .post('/locales/zz/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: 'cart.title', value: 'x' });
 
@@ -641,14 +653,14 @@ describe('POST /locales/:locale/tenants/:tenant/entries', () => {
     });
 });
 
-describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
+describe('PUT and DELETE /locales/:locale/apps/:app/entries/:entryId', () => {
     it('matches the contract when editing a value', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
         const response = await api()
-            .put(`/locales/pt/entries/${entryId}`)
+            .put(`/locales/pt/apps/demo-fe/entries/${entryId}`)
             .set('Authorization', bearer)
             .send({ value: 'O seu carrinho' });
 
@@ -662,7 +674,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
 
         const response = await api()
-            .delete(`/locales/pt/entries/${entryId}`)
+            .delete(`/locales/pt/apps/demo-fe/entries/${entryId}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
@@ -671,12 +683,50 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         expect(dictionary.body.data.messages).toEqual({});
     });
 
+    it('404s when the entry belongs to another app than the one in the path', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const entryId = await createEntry(bearer, 'pt', 'cart.title', 'Carrinho', 'demo-fe');
+
+        const edited = await api()
+            .put(`/locales/pt/apps/demo-be/entries/${entryId}`)
+            .set('Authorization', bearer)
+            .send({ value: 'x' });
+        const removed = await api()
+            .delete(`/locales/pt/apps/demo-be/entries/${entryId}`)
+            .set('Authorization', bearer);
+
+        expect([edited.status, removed.status]).toEqual([404, 404]);
+
+        const listed = await api()
+            .get('/locales/pt/apps/demo-fe/entries')
+            .set('Authorization', bearer);
+        expect(listed.body.data.items.map(({ value }: { value: string }) => value)).toEqual([
+            'Carrinho'
+        ]);
+    });
+
+    it('422s an app nobody configured', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+
+        const edited = await api()
+            .put(`/locales/pt/apps/nobody/entries/${MISSING_ID}`)
+            .set('Authorization', bearer)
+            .send({ value: 'x' });
+        const removed = await api()
+            .delete(`/locales/pt/apps/nobody/entries/${MISSING_ID}`)
+            .set('Authorization', bearer);
+
+        expect([edited.status, removed.status]).toEqual([422, 422]);
+    });
+
     it('404s for an entry that does not exist', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .put(`/locales/pt/entries/${MISSING_ID}`)
+            .put(`/locales/pt/apps/demo-fe/entries/${MISSING_ID}`)
             .set('Authorization', bearer)
             .send({ value: 'x' });
 
@@ -688,7 +738,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         await createLanguage(bearer);
 
         const response = await api()
-            .put('/locales/pt/entries/not-an-id')
+            .put('/locales/pt/apps/demo-fe/entries/not-an-id')
             .set('Authorization', bearer)
             .send({ value: 'x' });
 
@@ -700,7 +750,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         await createLanguage(bearer);
 
         const response = await api()
-            .delete('/locales/pt/entries/not-an-id')
+            .delete('/locales/pt/apps/demo-fe/entries/not-an-id')
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
@@ -710,7 +760,7 @@ describe('PUT and DELETE /locales/:locale/entries/:entryId', () => {
         const { bearer } = await authenticateAs('user');
 
         const response = await api()
-            .delete(`/locales/pt/entries/${MISSING_ID}`)
+            .delete(`/locales/pt/apps/demo-fe/entries/${MISSING_ID}`)
             .set('Authorization', bearer);
 
         expect(response.status).toBe(403);
@@ -729,34 +779,34 @@ const seedTwoKeys = async (bearer: string) => {
  * semantic most likely implemented backwards, and either half alone passes against a build that
  * ignores the distinction. Together they cannot.
  */
-describe('the tenant is the path', () => {
+describe('the app is the path', () => {
     it('sends the created entry Location, addressed by its id', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ key: 'cart.title', value: 'Carrinho' });
 
         expect(response.headers.location).toBe(
-            `/locales/pt/entries/${String(response.body.data.id)}`
+            `/locales/pt/apps/demo-fe/entries/${String(response.body.data.id)}`
         );
     });
 
     // A PUT replaces exactly what the GET on the same URI lists — the point of the path segment.
-    it('lists at the same address it replaces, and leaves the other tenants alone', async () => {
+    it('lists at the same address it replaces, and leaves the other apps alone', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho');
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho (be)', 'demo-be');
 
         const replaced = await api()
-            .put('/locales/pt/tenants/demo-fe/entries')
+            .put('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ entries: [{ key: 'cart.empty', value: 'Vazio' }] });
         const slice = await api()
-            .get('/locales/pt/tenants/demo-fe/entries')
+            .get('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer);
         const everything = await api().get('/locales/pt/entries').set('Authorization', bearer);
 
@@ -767,38 +817,38 @@ describe('the tenant is the path', () => {
         expect(everything.body.data.items).toHaveLength(2);
     });
 
-    it('422s a tenant the deployment does not configure', async () => {
+    it('422s an app the deployment does not configure', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .put('/locales/pt/tenants/nobody/entries')
+            .put('/locales/pt/apps/nobody/entries')
             .set('Authorization', bearer)
             .send({ entries: [] });
 
         expect(response.status).toBe(422);
     });
 
-    it('refuses a tenant in the body — it is no longer a field', async () => {
+    it('refuses an app in the body — it is no longer a field', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .post('/locales/pt/tenants/demo-fe/entries')
+            .post('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
-            .send({ tenant: 'demo-fe', key: 'cart.title', value: 'x' });
+            .send({ app: 'demo-fe', key: 'cart.title', value: 'x' });
 
         expect(response.status).toBe(422);
     });
 });
 
-describe('PUT vs PATCH /locales/:locale/tenants/:tenant/entries', () => {
+describe('PUT vs PATCH /locales/:locale/apps/:app/entries', () => {
     it('PUT removes what was not sent', async () => {
         const { bearer } = await authenticateAs('admin');
         await seedTwoKeys(bearer);
 
         const response = await api()
-            .put('/locales/pt/tenants/demo-fe/entries')
+            .put('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
 
@@ -814,7 +864,7 @@ describe('PUT vs PATCH /locales/:locale/tenants/:tenant/entries', () => {
         await seedTwoKeys(bearer);
 
         const response = await api()
-            .patch('/locales/pt/tenants/demo-fe/entries')
+            .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ entries: [{ key: 'cart.title', value: 'O seu carrinho' }] });
 
@@ -832,7 +882,7 @@ describe('PUT vs PATCH /locales/:locale/tenants/:tenant/entries', () => {
         await createLanguage(bearer);
 
         const response = await api()
-            .patch('/locales/pt/tenants/demo-fe/entries')
+            .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ entries: [{ key: 'cart.title', value: 'Carrinho' }] });
 
@@ -844,7 +894,7 @@ describe('PUT vs PATCH /locales/:locale/tenants/:tenant/entries', () => {
         await createLanguage(bearer);
 
         const response = await api()
-            .patch('/locales/pt/tenants/demo-fe/entries')
+            .patch('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({
                 entries: [
@@ -861,7 +911,7 @@ describe('PUT vs PATCH /locales/:locale/tenants/:tenant/entries', () => {
         await createLanguage(bearer);
 
         const response = await api()
-            .put('/locales/pt/tenants/demo-fe/entries')
+            .put('/locales/pt/apps/demo-fe/entries')
             .set('Authorization', bearer)
             .send({ entries: [{ key: 'cart.title' }] });
 
@@ -869,9 +919,7 @@ describe('PUT vs PATCH /locales/:locale/tenants/:tenant/entries', () => {
     });
 
     it('401s unauthenticated', async () => {
-        const response = await api()
-            .put('/locales/pt/tenants/demo-fe/entries')
-            .send({ entries: [] });
+        const response = await api().put('/locales/pt/apps/demo-fe/entries').send({ entries: [] });
 
         expect(response.status).toBe(401);
     });
@@ -919,44 +967,44 @@ describe('a locale only the API has', () => {
     });
 });
 
-describe('GET /locales/tenants', () => {
+describe('GET /locales/apps', () => {
     it('matches the contract and lists the demo pair, the backend first', async () => {
-        const response = await api().get('/locales/tenants');
+        const response = await api().get('/locales/apps');
 
         expect(response.status).toBe(200);
-        expect(response.body.data.tenants).toEqual([
+        expect(response.body.data.apps).toEqual([
             { id: 'demo-be', label: 'API', kind: 'backend' },
             { id: 'demo-fe', label: 'Frontend', kind: 'frontend' }
         ]);
     });
 
-    it('is not a language called "tenants" — the static route wins over the parameter', async () => {
+    it('is not a language called "apps" — the static route wins over the parameter', async () => {
         // The one ordering mistake the router comment warns about.
-        const response = await api().get('/locales/tenants');
+        const response = await api().get('/locales/apps');
 
         expect(response.body.data.messages).toBeUndefined();
     });
 });
 
-describe('tenants on the write routes', () => {
-    it('refuses an entry for a tenant nobody configured, with a 422', async () => {
+describe('apps on the write routes', () => {
+    it('refuses an entry for an app nobody configured, with a 422', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .post('/locales/pt/tenants/nobody/entries')
+            .post('/locales/pt/apps/nobody/entries')
             .set('Authorization', bearer)
             .send({ key: 'cart.title', value: 'Carrinho' });
 
         expect(response.status).toBe(422);
     });
 
-    it('refuses a bulk import for a tenant nobody configured, before writing anything', async () => {
+    it('refuses a bulk import for an app nobody configured, before writing anything', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 
         const response = await api()
-            .patch('/locales/pt/tenants/nobody/entries')
+            .patch('/locales/pt/apps/nobody/entries')
             .set('Authorization', bearer)
             .send({ entries: [{ key: 'cart.title', value: 'Carrinho' }] });
 
@@ -966,14 +1014,14 @@ describe('tenants on the write routes', () => {
         expect(listed.body.data.items).toEqual([]);
     });
 
-    it('keeps the same key apart across two tenants', async () => {
+    it('keeps the same key apart across two apps', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'generic.title', 'do frontend', 'demo-fe');
         await createEntry(bearer, 'pt', 'generic.title', 'do backend', 'demo-be');
 
         const listed = await api()
-            .get('/locales/pt/entries?tenant=demo-be')
+            .get('/locales/pt/apps/demo-be/entries')
             .set('Authorization', bearer);
 
         expect(listed.body.data.items.map(({ value }: { value: string }) => value)).toEqual([
@@ -982,29 +1030,29 @@ describe('tenants on the write routes', () => {
     });
 });
 
-describe('GET /locales/:locale/messages?tenant=', () => {
-    it('serves the named frontend tenant and never the backend one', async () => {
+describe('GET /locales/:locale/messages?app=', () => {
+    it('serves the named frontend app and never the backend one', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
         await createEntry(bearer, 'pt', 'cart.title', 'Carrinho', 'demo-fe');
         await createEntry(bearer, 'pt', 'generic.error-internal', 'Falha', 'demo-be');
 
-        const named = await api().get('/locales/pt/messages?tenant=demo-fe');
+        const named = await api().get('/locales/pt/messages?app=demo-fe');
         expect(named.status).toBe(200);
         expect(named.body.data.messages).toEqual({ cart: { title: 'Carrinho' } });
 
         // The backend's rows are layered internally; asking for them is asking for nothing.
-        const backend = await api().get('/locales/pt/messages?tenant=demo-be');
+        const backend = await api().get('/locales/pt/messages?app=demo-be');
         expect(backend.status).toBe(404);
 
-        const stranger = await api().get('/locales/pt/messages?tenant=nobody');
+        const stranger = await api().get('/locales/pt/messages?app=nobody');
         expect(stranger.status).toBe(404);
     });
 
     it.each([
-        ['a repeated parameter', '?tenant=demo-fe&tenant=demo-be'],
-        ['an empty value, which is not "the default"', '?tenant='],
-        ['a value that is not a tenant id', '?tenant=NOT%20AN%20ID']
+        ['a repeated parameter', '?app=demo-fe&app=demo-be'],
+        ['an empty value, which is not "the default"', '?app='],
+        ['a value that is not an app id', '?app=NOT%20AN%20ID']
     ])('answers 422 for %s, never 500', async (_label, query) => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
@@ -1014,7 +1062,7 @@ describe('GET /locales/:locale/messages?tenant=', () => {
         expect(response.status).toBe(422);
     });
 
-    it('still serves the default tenant when the parameter is omitted', async () => {
+    it('still serves the default app when the parameter is omitted', async () => {
         const { bearer } = await authenticateAs('admin');
         await createLanguage(bearer);
 

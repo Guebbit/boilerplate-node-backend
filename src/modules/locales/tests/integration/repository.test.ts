@@ -6,7 +6,7 @@
  * collections, an import's effect on rows it was not given.
  */
 
-import { BACKEND, FRONTEND } from '../unit/tenants.fixture';
+import { BACKEND, FRONTEND } from '../unit/apps.fixture';
 import { setupTestDb } from '@tests/setup-test-db';
 import { makeLocale, makeLocaleEntry } from '@modules/locales/factories';
 import {
@@ -34,15 +34,15 @@ const givenLanguage = async (
 
     for (const [key, value] of Object.entries(entries))
         await localeEntryRepository.create(
-            makeLocaleEntry({ locale: tag, tenant: FRONTEND, key, value })
+            makeLocaleEntry({ locale: tag, app: FRONTEND, key, value })
         );
 
     return language;
 };
 
-/** One row in one tenant, written past the service so the tenant is exactly what a test says. */
-const givenEntry = (locale: string, tenant: string, key: string, value: string) =>
-    localeEntryRepository.create(makeLocaleEntry({ locale, tenant, key, value }));
+/** One row in one app, written past the service so the app is exactly what a test says. */
+const givenEntry = (locale: string, app: string, key: string, value: string) =>
+    localeEntryRepository.create(makeLocaleEntry({ locale, app, key, value }));
 
 /** The language's revision as stored right now. */
 const revisionOf = async (tag: string): Promise<number> => {
@@ -700,10 +700,10 @@ describe('updateEntry and deleteEntry', () => {
         await givenLanguage('it');
         const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
-        const updated = await localeService.updateEntry('it', String(entry!._id), {
+        const updated = await localeService.updateEntry('it', FRONTEND, String(entry!._id), {
             value: 'Carrello'
         });
-        const deleted = await localeService.deleteEntry('it', String(entry!._id));
+        const deleted = await localeService.deleteEntry('it', FRONTEND, String(entry!._id));
 
         expect(updated.status).toBe(404);
         expect(deleted.status).toBe(404);
@@ -714,12 +714,41 @@ describe('updateEntry and deleteEntry', () => {
         await givenLanguage('es', { 'cart.title': 'Carrito' });
         const entry = await localeEntryRepository.findOne({ locale: 'es' });
 
-        const result = await localeService.updateEntry('es', String(entry!._id), {
+        const result = await localeService.updateEntry('es', FRONTEND, String(entry!._id), {
             value: 'Tu carrito'
         });
 
         expect(result.data?.value).toBe('Tu carrito');
         expect(result.data?.key).toBe('cart.title');
+    });
+
+    it('refuses to reach a row through another app’s path', async () => {
+        // The app in the URI is part of the row's address, like the language: a known app that
+        // does not own the row is a 404, never an edit of another keyspace.
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
+
+        const updated = await localeService.updateEntry('es', BACKEND, String(entry!._id), {
+            value: 'Tu carrito'
+        });
+        const deleted = await localeService.deleteEntry('es', BACKEND, String(entry!._id));
+
+        expect(updated.status).toBe(404);
+        expect(deleted.status).toBe(404);
+        expect(await localeEntryRepository.listKeys('es', FRONTEND)).toEqual(['cart.title']);
+    });
+
+    it('refuses an app the deployment does not configure with a 422', async () => {
+        await givenLanguage('es', { 'cart.title': 'Carrito' });
+        const entry = await localeEntryRepository.findOne({ locale: 'es' });
+
+        const updated = await localeService.updateEntry('es', 'nope', String(entry!._id), {
+            value: 'x'
+        });
+        const deleted = await localeService.deleteEntry('es', 'nope', String(entry!._id));
+        const listed = await localeService.searchEntries('es', { app: 'nope' });
+
+        expect([updated.status, deleted.status, listed.status]).toEqual([422, 422, 422]);
     });
 });
 
@@ -804,7 +833,7 @@ describe('list', () => {
 /**
  * The provider `@infrastructure/i18n` rebuilds its overlay from. Driven against the database
  * because the property that matters is the SPLIT: the same key exists on both sides, and a query
- * that forgot the tenant would hand the API's overlay the frontend's words.
+ * that forgot the app would hand the API's overlay the frontend's words.
  */
 describe('readApiOverrides', () => {
     it('returns only the API’s half, nested', async () => {
@@ -818,7 +847,7 @@ describe('readApiOverrides', () => {
     });
 
     /**
-     * The sharpest case the tenant column exists for: one key, two dictionaries, two different
+     * The sharpest case the app column exists for: one key, two dictionaries, two different
      * strings. Without the split one would answer for both.
      */
     it('keeps the two sides apart when they share a key', async () => {

@@ -7,7 +7,7 @@
         "error-key-exists": "La chiave {{key}} è già tradotta in questa lingua.",
         "error-key-collision": "La chiave {{key}} non può coesistere con {{existing}}: una delle due dovrebbe essere insieme un testo e un gruppo di testi.",
         "error-key-invalid": "La chiave {{key}} non è utilizzabile come chiave di traduzione.",
-        "error-tenant-unknown": "Il tenant {{tenant}} non è tra quelli serviti da questa installazione — vedi GET /locales/tenants.",
+        "error-app-unknown": "Il app {{app}} non è tra quelli serviti da questa installazione — vedi GET /locales/apps.",
         "error-language-is-fallback": "La lingua di fallback {{tag}} non può essere disattivata né eliminata: è dove vive la riga sorgente di ogni entità traducibile.",
         "error-entity-type-unknown": "{{entityType}} non è un tipo di entità traducibile registrato.",
         "error-entity-not-found": "Nessun {{entityType}} esiste con id {{entityId}}.",

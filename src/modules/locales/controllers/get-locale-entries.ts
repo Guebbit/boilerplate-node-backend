@@ -1,6 +1,6 @@
 /**
  * @module
- * `GET /locales/:locale/entries` and `GET /locales/:locale/tenants/:tenant/entries` controllers — thin HTTP adapter over `localeService.searchEntries`.
+ * `GET /locales/:locale/entries` and `GET /locales/:locale/apps/:app/entries` controllers — thin HTTP adapter over `localeService.searchEntries`.
  */
 
 import { z } from 'zod';
@@ -8,47 +8,58 @@ import type { Request, Response } from 'express';
 import type { LocaleEntriesResponse } from '@types';
 import { readInput } from '@infrastructure/http/request';
 import { blankToUndefined, pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
-import { ListLocaleEntriesQueryParams } from '@api/schemas.zod';
+import { ListAppLocaleEntriesQueryParams, ListLocaleEntriesQueryParams } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { localeService } from '../services';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
- * The generated query schema, relaxed the way every list controller relaxes it: `page`/`pageSize`
+ * Relaxes a generated list query schema the way every list controller does: `page`/`pageSize`
  * swapped for the coercing infra pair, and `text` blank-to-undefined so `?text=` reads as "no
- * filter" rather than tripping the generated `.min(1)`. A malformed `tenant` (outside
- * `^[a-z0-9][a-z0-9-]*$`) still 422s here; an unrecognised-but-well-formed one reaches the
- * repository unchanged and simply matches no row — see `searchEntries`.
+ * filter" rather than tripping the generated `.min(1)`. Both list routes take the same three
+ * filters, so one builder serves both.
+ *
+ * @param generated - the operation's generated query schema
+ * @returns the relaxed schema
  */
-const listLocaleEntriesQuerySchema = ListLocaleEntriesQueryParams.extend({
-    page: pageSchema,
-    pageSize: pageSizeSchema,
-    text: z.preprocess(blankToUndefined, ListLocaleEntriesQueryParams.shape.text)
-}).partial();
+const relaxedQuery = (
+    generated: typeof ListLocaleEntriesQueryParams | typeof ListAppLocaleEntriesQueryParams
+) =>
+    generated
+        .extend({
+            page: pageSchema,
+            pageSize: pageSizeSchema,
+            text: z.preprocess(blankToUndefined, generated.shape.text)
+        })
+        .partial();
+
+/** The all-apps list's query; a stale `?app=` is a 422, since the schema is strict. */
+const listLocaleEntriesQuerySchema = relaxedQuery(ListLocaleEntriesQueryParams);
+
+/** The one-app list's query; the app comes from the path. */
+const listAppLocaleEntriesQuerySchema = relaxedQuery(ListAppLocaleEntriesQueryParams);
 
 /**
- * Lists one language's rows, optionally narrowed to a tenant — the one reader both routes share.
+ * Lists one language's rows, optionally narrowed to an app — the one reader both routes share.
  *
  * @param request - the request; its query carries the filters
  * @param response - the express response
- * @param tenant - the tenant the URI names, when it names one; overrides any `?tenant=`
+ * @param schema - the route's own query schema
+ * @param app - the app the path names, when it names one
  */
 const listEntries = (
     request: Request<{ locale: string }, unknown, unknown, Record<string, string>>,
     response: Response,
-    tenant?: string
+    schema: typeof listLocaleEntriesQuerySchema,
+    app?: string
 ) => {
     // Query params only — a GET has no body to carry a search payload.
     // See docs/theory/request-input.md.
-    const parsed = parseBody(
-        listLocaleEntriesQuerySchema,
-        readInput(request, { surface: 'list' }),
-        response
-    );
+    const parsed = parseBody(schema, readInput(request, { surface: 'list' }), response);
     if (!parsed) return Promise.resolve();
 
     return localeService
-        .searchEntries(request.params.locale, tenant === undefined ? parsed : { ...parsed, tenant })
+        .searchEntries(request.params.locale, app === undefined ? parsed : { ...parsed, app })
         .then((result) => {
             if (refused(response, result)) return;
             // `search()`'s `TWire` is `LocaleEntry` itself, so `result.data.items` is already the
@@ -60,22 +71,21 @@ const listEntries = (
 
 /**
  * GET /locales/:locale/entries (admin)
- * Flat, paginated rows for one language's dictionary — every tenant's, unless `?tenant=` narrows
- * them. What a translation screen edits. The nested tree a client consumes is served separately
- * by GET /locales/:locale/messages. Deliberately not cached: this is the screen a translator is
- * actively typing into.
+ * Flat, paginated rows for one language's dictionary — every app's. What a translation screen
+ * edits. The nested tree a client consumes is served separately by GET /locales/:locale/messages.
+ * Deliberately not cached: this is the screen a translator is actively typing into.
  */
 export const getLocaleEntries = (
     request: Request<{ locale: string }, unknown, unknown, Record<string, string>>,
     response: Response
-) => listEntries(request, response);
+) => listEntries(request, response, listLocaleEntriesQuerySchema);
 
 /**
- * GET /locales/:locale/tenants/:tenant/entries (admin)
- * The same rows, at the address the writes target: one tenant's slice of the language, so a PUT
- * there replaces exactly what this lists.
+ * GET /locales/:locale/apps/:app/entries (admin)
+ * One app's slice of the language, at the address the writes target, so a PUT there replaces
+ * exactly what this lists.
  */
-export const getTenantLocaleEntries = (
-    request: Request<{ locale: string; tenant: string }, unknown, unknown, Record<string, string>>,
+export const getAppLocaleEntries = (
+    request: Request<{ locale: string; app: string }, unknown, unknown, Record<string, string>>,
     response: Response
-) => listEntries(request, response, request.params.tenant);
+) => listEntries(request, response, listAppLocaleEntriesQuerySchema, request.params.app);

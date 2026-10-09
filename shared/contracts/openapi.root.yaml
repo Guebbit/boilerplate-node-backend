@@ -1969,18 +1969,18 @@ paths:
     # ---------- locales ----------
     /locales:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales'
-    /locales/tenants:
-        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1tenants'
+    /locales/apps:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1apps'
     /locales/{locale}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}'
     /locales/{locale}/messages:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1messages'
     /locales/{locale}/entries:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries'
-    /locales/{locale}/tenants/{tenant}/entries:
-        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1tenants~1{tenant}~1entries'
-    /locales/{locale}/entries/{entryId}:
-        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1entries~1{entryId}'
+    /locales/{locale}/apps/{app}/entries:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1apps~1{app}~1entries'
+    /locales/{locale}/apps/{app}/entries/{entryId}:
+        $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1{locale}~1apps~1{app}~1entries~1{entryId}'
     /locales/translations/{entityType}/{id}:
         $ref: '../../src/modules/locales/openapi.yaml#/paths/~1locales~1translations~1{entityType}~1{id}'
 

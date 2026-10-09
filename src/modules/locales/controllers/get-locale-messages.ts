@@ -20,16 +20,16 @@ export const getLocaleMessages = (
     request: Request<{ locale: string }, unknown, unknown, unknown>,
     response: Response
 ) => {
-    // Parsed, not read: `?tenant=a&tenant=b` arrives as an array and `?tenant=` as an empty string,
-    // and neither is a tenant. A blank value is refused (422) rather than read as "the default",
+    // Parsed, not read: `?app=a&app=b` arrives as an array and `?app=` as an empty string,
+    // and neither is an app. A blank value is refused (422) rather than read as "the default",
     // on purpose: omitting the parameter is how a client asks for the default.
     const query = parseBody(GetLocaleMessagesQueryParams, request.query, response);
     if (!query) return;
 
     return (
         localeService
-            // `?tenant=` names which frontend's copy; omitted, the deployment's default one.
-            .readMessages(request.params.locale, query.tenant)
+            // `?app=` names which frontend's copy; omitted, the deployment's default one.
+            .readMessages(request.params.locale, query.app)
             .then((result) => {
                 if (refused(response, result)) return;
                 return successResponse<LocaleMessages>(response, result.data);

@@ -24,12 +24,12 @@ import { setAndUnset } from '@infrastructure/persistence/changes';
 import type {
     Language,
     LocaleEntry,
-    LocaleTenant,
+    LocaleApp,
     Translation,
     TranslationFields,
     TranslationOrigin
 } from '@types';
-import { frontendTenantIds } from './tenants';
+import { frontendAppIds } from './apps';
 import { withTransaction } from '@infrastructure/runtime/database';
 
 /** One key and its translation, as a write supplies them. */
@@ -64,8 +64,8 @@ const entryBase = createRepository<LocaleEntryDocument, LocaleEntry>(localeEntry
          * `key=` and `value=` would only make the caller guess which one they are doing.
          */
         text: ['key', 'value'],
-        // Which tenant to list. Absent means every tenant, which is what an admin screen opens on.
-        exact: { tenant: 'tenant' }
+        // Which app to list. Absent means every app, which is what an admin screen opens on.
+        exact: { app: 'app' }
     }
 });
 
@@ -91,7 +91,7 @@ const list = (scope?: Record<string, unknown>): Promise<LocaleDocument[]> =>
 /**
  * How many DOWNLOADABLE entries each language has, in one query rather than one per language.
  *
- * Frontend tenants' rows only: this feeds the manifest's `entryCount`, and counting the API's own
+ * Frontend apps' rows only: this feeds the manifest's `entryCount`, and counting the API's own
  * overrides would advertise a language as having strings a client cannot actually download.
  */
 const countEntriesByLocale = (): Promise<Map<string, number>> =>
@@ -100,35 +100,31 @@ const countEntriesByLocale = (): Promise<Map<string, number>> =>
             _id: string;
             count: number;
         }>([
-            { $match: { tenant: { $in: frontendTenantIds() } } },
+            { $match: { app: { $in: frontendAppIds() } } },
             { $group: { _id: '$locale', count: { $sum: 1 } } }
         ])
         .exec()
         .then((rows) => new Map(rows.map(({ _id, count }) => [_id, count])));
 
 /**
- * Every row for one language and one tenant, sorted by key so a build is byte-stable.
+ * Every row for one language and one app, sorted by key so a build is byte-stable.
  *
- * Narrowed here rather than filtered by the caller: tenants share key names, so a build that
- * received every tenant would nest the API's `generic` over a client's and hand a frontend strings
- * it never authored. `(locale, tenant)` is a prefix of the unique index, so this stays one lookup.
+ * Narrowed here rather than filtered by the caller: apps share key names, so a build that
+ * received every app would nest the API's `generic` over a client's and hand a frontend strings
+ * it never authored. `(locale, app)` is a prefix of the unique index, so this stays one lookup.
  */
-const listEntries = (locale: string, tenant: LocaleTenant): Promise<LocaleEntryDocument[]> =>
-    localeEntryModel.find({ locale, tenant }).sort({ key: 1 }).lean<LocaleEntryDocument[]>().exec();
+const listEntries = (locale: string, app: LocaleApp): Promise<LocaleEntryDocument[]> =>
+    localeEntryModel.find({ locale, app }).sort({ key: 1 }).lean<LocaleEntryDocument[]>().exec();
 
 /**
- * Every row of one tenant, across every language, for the override overlay.
+ * Every row of one app, across every language, for the override overlay.
  *
- * One query rather than one per language: the backend tenant's share of this collection is a
+ * One query rather than one per language: the backend app's share of this collection is a
  * handful of rows by construction. Sorted by `(locale, key)` so a rebuilt overlay is
  * byte-identical to the last one when nothing changed.
  */
-const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleEntryDocument[]> =>
-    localeEntryModel
-        .find({ tenant })
-        .sort({ locale: 1, key: 1 })
-        .lean<LocaleEntryDocument[]>()
-        .exec();
+const listEntriesByApp = (app: LocaleApp): Promise<LocaleEntryDocument[]> =>
+    localeEntryModel.find({ app }).sort({ locale: 1, key: 1 }).lean<LocaleEntryDocument[]>().exec();
 
 /**
  * Just the keys of one language.
@@ -136,9 +132,9 @@ const listEntriesByTenant = (tenant: LocaleTenant): Promise<LocaleEntryDocument[
  * Its own query rather than a `listEntries().map()`: the collision check runs on every single
  * write, and it has no use for the values — which are the whole weight of the collection.
  */
-const listKeys = (locale: string, tenant: LocaleTenant): Promise<string[]> =>
+const listKeys = (locale: string, app: LocaleApp): Promise<string[]> =>
     localeEntryModel
-        .find({ locale, tenant })
+        .find({ locale, app })
         .select({ key: 1, _id: 0 })
         .lean<{ key: string }[]>()
         .exec()
@@ -161,9 +157,9 @@ const bumpRevision = (tag: string): Promise<number> =>
  * Every key of one language, with the value it holds — what an import diffs against, so a key
  * re-sent with its current value is neither written nor counted.
  */
-const valuesByKey = (locale: string, tenant: LocaleTenant): Promise<Map<string, string>> =>
+const valuesByKey = (locale: string, app: LocaleApp): Promise<Map<string, string>> =>
     localeEntryModel
-        .find({ locale, tenant })
+        .find({ locale, app })
         .select({ key: 1, value: 1, _id: 0 })
         .lean<{ key: string; value: string }[]>()
         .exec()
@@ -184,13 +180,13 @@ const currentRevision = (tag: string): Promise<number> =>
 /** Insert one entry, and bump. */
 const createEntry = (
     locale: string,
-    tenant: LocaleTenant,
+    app: LocaleApp,
     input: EntryInput
 ): Promise<{ entry: LocaleEntryDocument; revision: number }> =>
     entryBase
         .create({
             locale,
-            tenant,
+            app,
             ...input
         })
         .then((entry) => bumpRevision(locale).then((revision) => ({ entry, revision })));
@@ -230,11 +226,11 @@ const removeEntry = (entry: LocaleEntryDocument): Promise<number> =>
  */
 const importEntries = async (
     locale: string,
-    tenant: LocaleTenant,
+    app: LocaleApp,
     inputs: EntryInput[],
     { replace }: { replace: boolean }
 ): Promise<{ counts: ImportCounts; revision: number }> => {
-    const existing = await valuesByKey(locale, tenant);
+    const existing = await valuesByKey(locale, app);
     const incoming = new Map(inputs.map(({ key, value }) => [key, value]));
 
     const removedKeys = replace ? [...existing.keys()].filter((key) => !incoming.has(key)) : [];
@@ -249,8 +245,8 @@ const importEntries = async (
             await localeEntryModel.bulkWrite(
                 changedEntries.map(([key, value]) => ({
                     updateOne: {
-                        filter: { locale, tenant, key },
-                        update: { $set: { value }, $setOnInsert: { locale, tenant, key } },
+                        filter: { locale, app, key },
+                        update: { $set: { value }, $setOnInsert: { locale, app, key } },
                         upsert: true
                     }
                 })),
@@ -259,7 +255,7 @@ const importEntries = async (
 
         if (removedKeys.length > 0)
             await localeEntryModel
-                .deleteMany({ locale, tenant, key: { $in: removedKeys } }, { session })
+                .deleteMany({ locale, app, key: { $in: removedKeys } }, { session })
                 .exec();
     });
 
@@ -511,12 +507,12 @@ export const localeRepository: Repository<LocaleDocument, Language> & {
 /** The words. */
 export const localeEntryRepository: Repository<LocaleEntryDocument, LocaleEntry> & {
     countEntriesByLocale: () => Promise<Map<string, number>>;
-    listEntries: (locale: string, tenant: LocaleTenant) => Promise<LocaleEntryDocument[]>;
-    listEntriesByTenant: (tenant: LocaleTenant) => Promise<LocaleEntryDocument[]>;
-    listKeys: (locale: string, tenant: LocaleTenant) => Promise<string[]>;
+    listEntries: (locale: string, app: LocaleApp) => Promise<LocaleEntryDocument[]>;
+    listEntriesByApp: (app: LocaleApp) => Promise<LocaleEntryDocument[]>;
+    listKeys: (locale: string, app: LocaleApp) => Promise<string[]>;
     createEntry: (
         locale: string,
-        tenant: LocaleTenant,
+        app: LocaleApp,
         input: EntryInput
     ) => Promise<{ entry: LocaleEntryDocument; revision: number }>;
     saveEntryValue: (
@@ -526,7 +522,7 @@ export const localeEntryRepository: Repository<LocaleEntryDocument, LocaleEntry>
     removeEntry: (entry: LocaleEntryDocument) => Promise<number>;
     importEntries: (
         locale: string,
-        tenant: LocaleTenant,
+        app: LocaleApp,
         inputs: EntryInput[],
         options: { replace: boolean }
     ) => Promise<{ counts: ImportCounts; revision: number }>;
@@ -534,7 +530,7 @@ export const localeEntryRepository: Repository<LocaleEntryDocument, LocaleEntry>
     ...entryBase,
     countEntriesByLocale,
     listEntries,
-    listEntriesByTenant,
+    listEntriesByApp,
     listKeys,
     createEntry,
     saveEntryValue,

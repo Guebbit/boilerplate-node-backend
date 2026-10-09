@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — which languages this deployment speaks, and the runtime overrides layered over the bundled copy.
 **Depends on** — nothing. It carries the convenience barrel every module does, but nothing imports it: no sibling needs a translated dictionary directly.
-**Breaks if you change** — the `tenant` field. It decides which of two dictionaries a row patches.
+**Breaks if you change** — the `app` field. It decides which of two dictionaries a row patches.
 :::
 
 ## Its neighbourhood
@@ -26,15 +26,15 @@ the filesystem permanently. It exists so a client can render copy _when no respo
 putting it behind a database would make it unavailable in exactly the outage it was created for.
 
 _Tier 2 is the overrides_ — the two collections this module owns, edited at runtime by people who do
-not open a code editor. One row per `(locale, tenant, key)`, and `tenant` says which dictionary it
-patches — a keyspace, not a customer: `NODE_LOCALE_TENANT_BACKEND`/`_FRONTEND` name the two this
-deployment starts with, and `NODE_LOCALE_TENANTS_EXTRA` may add more frontend ones (a mobile app, a
+not open a code editor. One row per `(locale, app, key)`, and `app` says which dictionary it
+patches — a keyspace, not a customer: `NODE_LOCALE_APP_BACKEND`/`_FRONTEND` name the two this
+deployment starts with, and `NODE_LOCALE_APPS_EXTRA` may add more frontend ones (a mobile app, a
 kiosk) that share the same rows and never collide with each other's keys:
 
-| Tenant kind | Served by                           | Merged where                                                         |
-| ----------- | ----------------------------------- | -------------------------------------------------------------------- |
-| `frontend`  | `GET /locales/:locale/messages`     | the frontend, over what it bundles, key by key                       |
-| `backend`   | nothing — never leaves this service | layered over tier 1 at boot, on a timer, and after every admin write |
+| App kind   | Served by                           | Merged where                                                         |
+| ---------- | ----------------------------------- | -------------------------------------------------------------------- |
+| `frontend` | `GET /locales/:locale/messages`     | the frontend, over what it bundles, key by key                       |
+| `backend`  | nothing — never leaves this service | layered over tier 1 at boot, on a timer, and after every admin write |
 
 ::: warning Both halves are overrides, never dictionaries
 Neither side may introduce a key its files do not already define and expect it to render. **The
@@ -42,7 +42,7 @@ files decide what exists; the rows decide what it says.**
 :::
 
 ::: warning A language in the database does not mean the API can answer in it
-`GET /locales` reports `tenants` per language rather than a bare list of tags, so "may I send
+`GET /locales` reports `apps` per language rather than a bare list of tags, so "may I send
 `Accept-Language: es`" and "may I download a Spanish dictionary" stay two questions. The seeded
 scenario (`scenarios/locales.ts`) registers `es` with no `src/locales/es.json` behind it precisely so the answers really are <!-- doc-paths:ignore -->
 _no_ and _yes_.
@@ -54,15 +54,15 @@ response still resolves its copy from the files.
 
 ## The pipeline
 
-The two tiers, and the two sinks they never share. Follow `tenant` and the whole module falls out.
+The two tiers, and the two sinks they never share. Follow `app` and the whole module falls out.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 28, 'rankSpacing': 60}}}%%
 flowchart LR
     F["src/locales/*.json<br/><i>+ every module's locales/ — the files decide what EXISTS</i>"] --> I["i18next at boot<br/><i>tier 1 · what t() resolves</i>"]
-    AD["admin<br/><i>never opens a code editor</i>"] --> DB[("override rows<br/><i>tier 2 · one per locale·tenant·key</i>")]
-    DB -->|"tenant: backend<br/><i>re-layered at boot · on a timer · after every write</i>"| I
-    DB -->|"tenant: frontend"| HT["GET /locales/:locale/messages"]
+    AD["admin<br/><i>never opens a code editor</i>"] --> DB[("override rows<br/><i>tier 2 · one per locale·app·key</i>")]
+    DB -->|"app: backend<br/><i>re-layered at boot · on a timer · after every write</i>"| I
+    DB -->|"app: frontend"| HT["GET /locales/:locale/messages"]
     HT --> FE["the frontend<br/><i>merges over what it bundles</i>"]
     I --> RS["every response<br/><i>copy · Content-Language</i>"]
 
@@ -115,7 +115,7 @@ write can never vary by caller.
 `translatables` declares — words only, any registered entity, and it has no way to touch anything
 else about that entity. PUT replaces the whole set (a stored locale the body doesn't name is
 deleted, and the fallback locale is required), PATCH merges — the same replace/merge split
-`/locales/{locale}/tenants/{tenant}/entries` already uses for its own bulk import. A product also has its own write
+`/locales/{locale}/apps/{app}/entries` already uses for its own bulk import. A product also has its own write
 surface, [`POST /products` / `PUT`/`PATCH /products/{id}`](./products.md#writing-translated-content),
 which writes the SAME rows but alongside price, stock flags and the image, in one request.
 

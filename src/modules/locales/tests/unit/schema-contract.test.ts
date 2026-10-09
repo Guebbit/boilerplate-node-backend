@@ -2,7 +2,7 @@
  * @module
  * The locale schemas' contracts, and the base-language derivation in front of them. Two unique
  * indexes make the translation tier addressable: `locales_tag` gives one row per language tag,
- * and `localeEntries_locale_tenant_key` gives one value per (locale, tenant, key) — letting a
+ * and `localeEntries_locale_app_key` gives one value per (locale, app, key) — letting a
  * merge be an upsert. The `lowercase: true` flags guard the same index: `EN-gb` and `en-GB` must
  * not occupy two rows.
  */
@@ -83,26 +83,26 @@ describe('localeEntrySchema', () => {
     it('requires the full compound identity of a translation', () => {
         // `value` is not required: an empty string is a legitimate translation — it is how a
         // string is deliberately blanked — and the default below makes that the initial state.
-        expect(requiredPaths(localeEntrySchema)).toEqual(['key', 'locale', 'tenant']);
+        expect(requiredPaths(localeEntrySchema)).toEqual(['app', 'key', 'locale']);
     });
 
-    it('makes one value per locale, tenant and key a database fact', () => {
+    it('makes one value per locale, app and key a database fact', () => {
         // The compound identity. This is what lets a merge be an upsert rather than a
         // read-modify-write, and what stops a re-save from shadowing the original with a copy.
         expect(indexSpecs(localeEntrySchema)).toEqual([
-            'localeEntries_locale_tenant_key: locale+1, tenant+1, key+1'
+            'localeEntries_locale_app_key: locale+1, app+1, key+1'
         ]);
         expect(indexOptionSpecs(localeEntrySchema)).toEqual([
-            'localeEntries_locale_tenant_key: unique=true'
+            'localeEntries_locale_app_key: unique=true'
         ]);
     });
 
-    it('normalises the locale and tenant but not the key', () => {
-        // Locale and tenant are addresses and are case-insensitive; a KEY is not. `Cart.Empty`
+    it('normalises the locale and app but not the key', () => {
+        // Locale and app are addresses and are case-insensitive; a KEY is not. `Cart.Empty`
         // and `cart.empty` are different keys, and lower-casing them would silently merge two
         // strings into one.
         expect(normalises(localeEntrySchema, 'locale')).toMatchObject({ lowercase: true });
-        expect(normalises(localeEntrySchema, 'tenant')).toMatchObject({ lowercase: true });
+        expect(normalises(localeEntrySchema, 'app')).toMatchObject({ lowercase: true });
         expect(normalises(localeEntrySchema, 'key').lowercase).toBeUndefined();
         expect(normalises(localeEntrySchema, 'key')).toMatchObject({ trim: true });
     });

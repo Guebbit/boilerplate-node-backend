@@ -141,7 +141,7 @@ export const findDuplicateKey = (keys: readonly string[]): string | undefined =>
  * everything already stored, for a bulk replace it is only the rest of the batch.
  *
  * Does NOT check that the key is one anything renders — entries may add keys a dictionary never
- * defined (by design), or belong to a frontend tenant's own keyspace this API cannot see (by
+ * defined (by design), or belong to a frontend app's own keyspace this API cannot see (by
  * necessity). A typo saves cleanly and renders nowhere; the checks below guard against actual
  * damage instead: an unstorable key, and one that collides with a key already stored.
  */

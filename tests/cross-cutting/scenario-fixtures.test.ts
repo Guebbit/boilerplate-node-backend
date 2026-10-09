@@ -9,7 +9,7 @@
  * | ------------------------------------------ | ---------------------------------------------------- |
  * | every `scenario.shop` guarantee is seeded | `tests/integration/scenarios/shop.test.ts`         |
  * | a seeded row parses as its response shape | `tests/integration/scenarios/shop.test.ts`         |
- * | `(locale, tenant, key)` is unique          | `localeEntries_locale_tenant_key`, a unique index  |
+ * | `(locale, app, key)` is unique          | `localeEntries_locale_app_key`, a unique index  |
  * | published credentials match the accounts  | `tests/unit/scenarios/accounts.test.ts`            |
  * | a product has its fallback-locale row      | `planTranslations` refuses to write one without it |
  * | no shop module names an unmounted domain   | TypeScript — `shopModules`' key type, `ModuleName` |
@@ -40,13 +40,13 @@ it('gives every seeded locale entry a language the dataset also registers', () =
  * `GET /locales/:locale/messages` THROWS for a language holding the pair. Not a duplicate key, so
  * the unique index does not fire.
  *
- * Grouped by `(locale, tenant)` — the scope `@modules/locales/repository` actually builds a tree
- * over, so two tenants may each hold a key the other prefixes.
+ * Grouped by `(locale, app)` — the scope `@modules/locales/repository` actually builds a tree
+ * over, so two apps may each hold a key the other prefixes.
  */
 it('never lets one locale entry key prefix another in the same tree', () => {
     const trees = new Map<string, string[]>();
-    for (const { locale, tenant, key } of localeEntryFixtures) {
-        const tree = `${locale}/${tenant ?? ''}`;
+    for (const { locale, app, key } of localeEntryFixtures) {
+        const tree = `${locale}/${app ?? ''}`;
         const keys = trees.get(tree) ?? [];
         keys.push(key);
         trees.set(tree, keys);

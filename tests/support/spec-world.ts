@@ -44,8 +44,8 @@ const LITERAL_PARAMETERS: Record<string, string> = {
     entityType: 'product',
     method: 'totp',
     provider: 'fake',
-    // A tenant this deployment serves — an unknown one is refused before the body is read.
-    tenant: 'demo-be'
+    // An app this deployment serves — an unknown one is refused before the body is read.
+    app: 'demo-be'
 };
 
 /**

@@ -1,7 +1,7 @@
 /**
  * @module
  * The two collections behind the OVERRIDE tier — both dictionaries' runtime edits. Nothing here is
- * ever AWAITED on the request path: `t()` reaches the backend tenant's rows only through an
+ * ever AWAITED on the request path: `t()` reaches the backend app's rows only through an
  * overlay `@infrastructure/i18n` rebuilds at boot, on a timer, and after a write. Mongo down or a
  * malformed key costs only that overlay going stale, never a request failing to resolve its own
  * copy. See `openapi.yaml` for the tier split.
@@ -157,7 +157,7 @@ localeSchema.pre('validate', function derivesBaseLanguage() {
  */
 localeSchema.index({ tag: 1 }, { name: 'locales_tag', unique: true });
 
-/** The words. One row per (language, tenant, key). */
+/** The words. One row per (language, app, key). */
 export const localeEntrySchema = new Schema<LocaleEntryDocument, LocaleEntryModel>(
     {
         /*
@@ -172,14 +172,14 @@ export const localeEntrySchema = new Schema<LocaleEntryDocument, LocaleEntryMode
             trim: true
         },
         /*
-         * Whose dictionary this row overrides — a tenant id, see `./tenants`. Part of the row's
-         * IDENTITY (see the unique index below), not a label: two tenants may both declare a
+         * Whose dictionary this row overrides — an app id, see `./apps`. Part of the row's
+         * IDENTITY (see the unique index below), not a label: two apps may both declare a
          * top-level `generic`, so a key alone cannot tell them apart.
          *
-         * A plain string, not an enum: which tenants exist is configuration (`./tenants`), and the
+         * A plain string, not an enum: which apps exist is configuration (`./apps`), and the
          * service refuses an unknown one with 422 before a row is written.
          */
-        tenant: {
+        app: {
             type: String,
             required: true,
             lowercase: true,
@@ -215,13 +215,13 @@ export const localeEntrySchema = new Schema<LocaleEntryDocument, LocaleEntryMode
  * UNIQUE, so a duplicate key is a database guarantee, not a service-layer hope: two concurrent
  * imports of the same key would otherwise both read "absent".
  *
- * `tenant` sits in the middle, not the end: a compound index serves any PREFIX of its keys, so
- * this one answers both `find({ locale, tenant })` (the per-download read) and `find({ locale })`
+ * `app` sits in the middle, not the end: a compound index serves any PREFIX of its keys, so
+ * this one answers both `find({ locale, app })` (the per-download read) and `find({ locale })`
  * (the admin listing) without a scan. No separate `locale`-only index for that reason.
  */
 localeEntrySchema.index(
-    { locale: 1, tenant: 1, key: 1 },
-    { name: 'localeEntries_locale_tenant_key', unique: true }
+    { locale: 1, app: 1, key: 1 },
+    { name: 'localeEntries_locale_app_key', unique: true }
 );
 
 /**
@@ -300,7 +300,7 @@ export const applyTranslationTransform = applySerialization(translationSchema);
 export const localeModel = model<LocaleDocument, LocaleModel>('Locale', localeSchema);
 
 /**
- * Entry model entrypoint. One row per (language, tenant, key) — the stored dictionary, as opposed
+ * Entry model entrypoint. One row per (language, app, key) — the stored dictionary, as opposed
  * to `LocaleMessages`, which is the flat map assembled from these rows and served to a client.
  *
  * Mongoose derives the collection name by lowercasing and pluralising, so this is `localeentries`

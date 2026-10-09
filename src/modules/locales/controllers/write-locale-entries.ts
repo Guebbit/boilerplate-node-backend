@@ -1,7 +1,7 @@
 /**
  * @module
- * The write routes on a language's entries: one key at a time, plus two bulk imports. The tenant is
- * a path segment (`/locales/:locale/tenants/:tenant/entries`), so a PUT replaces exactly what the
+ * The write routes on a language's entries: one key at a time, plus two bulk imports. The app is
+ * a path segment (`/locales/:locale/apps/:app/entries`), so a PUT replaces exactly what the
  * GET on the same URI lists. The bulk routes are two methods rather than one route with a flag —
  * PUT replaces (what isn't sent is deleted), PATCH merges (what isn't sent is left alone) — so a
  * mis-set boolean can't silently empty a dictionary.
@@ -32,11 +32,11 @@ import { presentLocaleEntry } from '../presenters';
 import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
 
 /**
- * POST /locales/:locale/tenants/:tenant/entries (admin)
- * Add one key to the tenant's dictionary.
+ * POST /locales/:locale/apps/:app/entries (admin)
+ * Add one key to the app's dictionary.
  */
 export const createLocaleEntry = (
-    request: Request<{ locale: string; tenant: string }, unknown, CreateLocaleEntryRequest>,
+    request: Request<{ locale: string; app: string }, unknown, CreateLocaleEntryRequest>,
     response: Response
 ) => {
     const parseResult = CreateLocaleEntryBody.safeParse(request.body);
@@ -45,7 +45,7 @@ export const createLocaleEntry = (
     return localeService
         .createEntry(
             request.params.locale,
-            request.params.tenant,
+            request.params.app,
             parseResult.data,
             callerContextOf(request)
         )
@@ -56,19 +56,23 @@ export const createLocaleEntry = (
             return createdResponse<LocaleEntry>(
                 response,
                 entry,
-                `/locales/${request.params.locale}/entries/${entry.id}`
+                `/locales/${request.params.locale}/apps/${request.params.app}/entries/${entry.id}`
             );
         })
         .catch(catchAs(response, 'createLocaleEntry'));
 };
 
 /**
- * PUT /locales/:locale/entries/:entryId (admin)
+ * PUT /locales/:locale/apps/:app/entries/:entryId (admin)
  * Edit one value. The key is not editable — it's the identity a client looks the string
  * up by, so changing it is a delete plus an add, not an update.
  */
 export const updateLocaleEntry = (
-    request: Request<{ locale: string; entryId: string }, unknown, UpdateLocaleEntryRequest>,
+    request: Request<
+        { locale: string; app: string; entryId: string },
+        unknown,
+        UpdateLocaleEntryRequest
+    >,
     response: Response
 ) => {
     const entryId = requireId(request, response, {
@@ -81,7 +85,13 @@ export const updateLocaleEntry = (
     if (!parseResult.success) return rejectValidation(response, parseResult.error);
 
     return localeService
-        .updateEntry(request.params.locale, entryId, parseResult.data, callerContextOf(request))
+        .updateEntry(
+            request.params.locale,
+            request.params.app,
+            entryId,
+            parseResult.data,
+            callerContextOf(request)
+        )
         .then((result) => {
             if (refused(response, result)) return;
 
@@ -101,7 +111,7 @@ const importEntries =
     (mode: 'replace' | 'merge', schema: ZodType<{ entries: LocaleEntryInput[] }>) =>
     (
         request: Request<
-            { locale: string; tenant: string },
+            { locale: string; app: string },
             unknown,
             ReplaceLocaleEntriesRequest | MergeLocaleEntriesRequest
         >,
@@ -113,7 +123,7 @@ const importEntries =
         return localeService
             .importEntries(
                 request.params.locale,
-                request.params.tenant,
+                request.params.app,
                 parseResult.data.entries,
                 mode,
                 callerContextOf(request)
@@ -127,13 +137,13 @@ const importEntries =
     };
 
 /**
- * PUT /locales/:locale/tenants/:tenant/entries (admin)
- * Replace the tenant's whole set — anything stored under it and not sent is deleted.
+ * PUT /locales/:locale/apps/:app/entries (admin)
+ * Replace the app's whole set — anything stored under it and not sent is deleted.
  */
 export const replaceLocaleEntries = importEntries('replace', ReplaceLocaleEntriesBody);
 
 /**
- * PATCH /locales/:locale/tenants/:tenant/entries (admin)
+ * PATCH /locales/:locale/apps/:app/entries (admin)
  * Upsert what is sent, leave the rest alone. Nothing is ever deleted by this route.
  */
 export const mergeLocaleEntries = importEntries('merge', MergeLocaleEntriesBody);
