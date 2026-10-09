@@ -14,6 +14,7 @@ import { exampleService } from '../services';
 
 /** `PUT` and `PATCH /examples/:id` — one handler pair over `exampleService.update`. */
 export const { replace: replaceExample, update: updateExample } = createUpdateController({
+    versioned: true,
     entity: 'example',
     notFoundKey: 'example.not-found',
     replaceSchema: ReplaceExampleByIdBody,

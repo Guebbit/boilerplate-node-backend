@@ -17,6 +17,7 @@ import { presentWebhookSubscription } from '../presenters';
  */
 export const { replace: replaceWebhookSubscription, update: updateWebhookSubscription } =
     createUpdateController({
+        versioned: false,
         entity: 'webhookSubscription',
         notFoundKey: 'generic.error-not-found',
         replaceSchema: ReplaceWebhookSubscriptionBody,

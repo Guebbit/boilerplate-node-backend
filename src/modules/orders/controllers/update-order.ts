@@ -16,6 +16,7 @@ import { callerContextOf } from '@infrastructure/http/request';
  * owns the 404 check and the audit emit.
  */
 export const { replace: replaceOrderById, update: updateOrderById } = createUpdateController({
+    versioned: true,
     entity: 'orderById',
     notFoundKey: 'orders.not-found',
     replaceSchema: ReplaceOrderByIdBody,

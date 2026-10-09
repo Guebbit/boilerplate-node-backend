@@ -50,6 +50,7 @@ const NOT_FOUND_KEY = 'widgets.not-found';
 const makeController = (overrides: WidgetOverrides = {}, idSource?: UpdateIdSource) =>
     createUpdateController({
         entity: 'widget',
+        versioned: true,
         replaceSchema,
         patchSchema,
         update: jest.fn().mockResolvedValue(generateSuccess({ title: 'x' })),
@@ -302,6 +303,20 @@ describe('createUpdateController — conditional writes', () => {
             makeRequest({ title: 'x' }, VALID_ID, false, etagOf(LOADED_REVISION)),
             response
         );
+
+        expect(response.status).toHaveBeenCalledWith(200);
+        expect(write).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores a stale If-Match on an unversioned resource, since its contract declares no 412', async () => {
+        const write = jest.fn().mockResolvedValue(undefined);
+        const { update: patch } = makeController({
+            versioned: false,
+            update: savingUpdate(write)
+        });
+        const response = makeResponse();
+
+        await patch(makeRequest({ title: 'x' }, VALID_ID, false, '"1"'), response);
 
         expect(response.status).toHaveBeenCalledWith(200);
         expect(write).toHaveBeenCalledTimes(1);

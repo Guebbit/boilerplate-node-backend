@@ -21,6 +21,7 @@ import { productService } from '../services';
  * rather than a generic one from a schema `writeUpdate` would otherwise have to re-check.
  */
 export const { replace: replaceProduct, update: updateProduct } = createUpdateController({
+    versioned: true,
     entity: 'productById',
     notFoundKey: 'products.not-found',
     replaceSchema: productService.zodProductReplaceSchema,

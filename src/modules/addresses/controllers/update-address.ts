@@ -17,6 +17,7 @@ import { addressUpdate } from '../service';
  * answers the entry it wrote.
  */
 export const { replace: replaceAddress, update: updateAddress } = createUpdateController({
+    versioned: false,
     entity: 'address',
     replaceSchema: ReplaceAddressBody,
     patchSchema: UpdateAddressBody,

@@ -57,6 +57,12 @@ export type UpdateControllerSpec<
 > = UpdateIdSource & {
     /** The entity, lower-case and singular — `'user'`. Names both handlers. */
     entity: string;
+    /**
+     * Whether the contract declares `If-Match` / `412` for this resource. `true` fences the write
+     * on the request's `If-Match`; `false` ignores that header entirely, so the route never
+     * answers a `412` its contract does not declare.
+     */
+    versioned: boolean;
     /** The PUT body's schema — every writable field, required ones genuinely required. */
     replaceSchema: TReplace;
     /** The PATCH body's schema — every writable field optional, nullable where clearing it is legal. */
@@ -150,6 +156,7 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
 } => {
     const {
         entity,
+        versioned,
         replaceSchema,
         patchSchema,
         input,
@@ -166,7 +173,7 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
 
     /**
      * The one pipeline both verbs run: id → decode → validate → (PUT only) fill and complete →
-     * `update()` (under the request's `If-Match`, if any) → respond with the new `ETag`.
+     * `update()` (under the request's `If-Match`, if any, on a versioned resource) → respond with the new `ETag`.
      * `schema`, `fills` and `complete` are the only things that differ between the verbs.
      */
     const run =
@@ -196,9 +203,12 @@ export const createUpdateController = <TReplace extends ZodObject, TPatch extend
 
             return (
                 (complete ? complete(id, changes) : Promise.resolve(changes))
-                    // An `If-Match` on the request fences the row's write; without one this is just `update()`.
+                    // On a versioned resource an `If-Match` fences the row's write; without one, or on
+                    // an unversioned resource, this is just `update()`.
                     .then((completed) =>
-                        withIfMatch(request, id, () => update(id, completed, request))
+                        versioned
+                            ? withIfMatch(request, id, () => update(id, completed, request))
+                            : update(id, completed, request)
                     )
                     .then((result) => {
                         // Sends the error envelope (404, 409, 422) and stops here if refused.

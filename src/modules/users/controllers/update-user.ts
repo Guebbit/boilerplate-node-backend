@@ -17,6 +17,7 @@ import { userService } from '../services';
  * merges the fields and audits the change itself (the ban/unban split included).
  */
 export const { replace: replaceUser, update: updateUser } = createUpdateController({
+    versioned: true,
     entity: 'user',
     notFoundKey: 'users.not-found',
     replaceSchema: ReplaceUserByIdBody,

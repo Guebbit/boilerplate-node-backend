@@ -230,6 +230,10 @@ write inside `withIfMatch(request, id, …)`, which opens a precondition for tha
 repository's `save`/`deleteOne` are where it is met, so no module writes precondition code — see
 [Write Methods](../api/write-methods.md#conditional-writes-etag-and-if-match).
 
+The update factory takes a required `versioned: boolean`. `true` is a resource whose contract
+declares `If-Match` and `412`; `false` ignores the header entirely, so a route never answers a
+`412` its contract does not declare (addresses, feedback, locales and webhooks).
+
 ```mermaid
 flowchart LR
     H["If-Match header"] --> W["withIfMatch(request, id)"] --> U["module's update(id, changes)"] --> R["repository.save"]

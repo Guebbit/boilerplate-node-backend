@@ -22,6 +22,7 @@ import { userService } from '@modules/users';
  * itself.
  */
 export const { replace: replaceAccount, update: updateAccount } = createUpdateController({
+    versioned: true,
     entity: 'account',
     replaceSchema: ReplaceAccountBody,
     patchSchema: UpdateAccountBody,

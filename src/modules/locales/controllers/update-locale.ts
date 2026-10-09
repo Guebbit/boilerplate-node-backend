@@ -17,6 +17,7 @@ import { presentLocale } from '../presenters';
  * change itself.
  */
 export const { replace: replaceLocale, update: updateLocale } = createUpdateController({
+    versioned: false,
     entity: 'locale',
     replaceSchema: ReplaceLocaleBody.extend({
         name: localeService.localeDisplayName,
