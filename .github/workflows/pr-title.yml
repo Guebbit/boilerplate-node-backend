@@ -1,0 +1,35 @@
+name: PR title
+
+# A pull request is squash-merged, so its TITLE becomes the commit subject on main. This lints the
+# title with the same commitlint config the commit-msg hook uses (`commitlint.config.cjs`).
+# A separate file, so editing a title does not rerun all of CI.
+#
+# The title goes through `env:`, never straight into the script: it is untrusted input.
+# https://docs.github.com/en/actions/security-for-github-actions/security-guides/security-hardening-for-github-actions#understanding-the-risk-of-script-injections
+
+on:
+    pull_request:
+        types: [opened, edited, synchronize, reopened]
+
+permissions:
+    contents: read
+
+jobs:
+    pr-title:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Setup
+              uses: ./.github/actions/setup
+
+            - name: Lint the PR title
+              env:
+                  PR_TITLE: ${{ github.event.pull_request.title }}
+              run: printf '%s\n' "$PR_TITLE" | npx commitlint --verbose

@@ -4,6 +4,11 @@ updates:
       directory: /
       schedule:
           interval: weekly
+      # Dependabot's PR title becomes the squash commit subject, so it must be conventional.
+      commit-message:
+          prefix: build
+          prefix-development: build
+          include: scope
       # A release must be a week old before Dependabot proposes it: a hijacked or yanked version is
       # usually caught inside that window.
       # https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference#cooldown-
@@ -26,6 +31,10 @@ updates:
           - /.github/actions/*
       schedule:
           interval: weekly
+      # Dependabot's PR title becomes the squash commit subject, so it must be conventional.
+      commit-message:
+          prefix: build
+          include: scope
       cooldown:
           default-days: 7
       groups:
@@ -40,6 +49,10 @@ updates:
       directory: /docker
       schedule:
           interval: weekly
+      # Dependabot's PR title becomes the squash commit subject, so it must be conventional.
+      commit-message:
+          prefix: build
+          include: scope
       cooldown:
           default-days: 7
       groups:
@@ -54,6 +67,10 @@ updates:
       directory: /
       schedule:
           interval: weekly
+      # Dependabot's PR title becomes the squash commit subject, so it must be conventional.
+      commit-message:
+          prefix: build
+          include: scope
       cooldown:
           default-days: 7
       groups:

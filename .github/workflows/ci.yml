@@ -51,9 +51,11 @@ env:
 
 jobs:
     commitlint:
-        # Lint commit messages against the conventional-commit rules in commitlint.config.cjs.
-        # Runs on PRs (gates the merge) and on push to main (backstop for commits made
-        # with --no-verify or on a machine where the Husky hook never installed).
+        # Push-only backstop: lint the pushed range against the conventional-commit rules in
+        # commitlint.config.cjs. It caught a commit made with --no-verify. A pull request is
+        # squash-merged, so its own commits never land; its TITLE becomes the commit subject and is
+        # linted by `pr-title.yml` instead.
+        if: github.event_name == 'push'
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:
@@ -71,12 +73,7 @@ jobs:
               with:
                   node-version: ${{ env.NODE_VERSION }}
 
-            - name: Lint commit messages (PR)
-              if: github.event_name == 'pull_request'
-              run: npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
-
-            - name: Lint commit messages (push)
-              if: github.event_name == 'push'
+            - name: Lint commit messages
               run: npx commitlint --from ${{ github.event.before }} --to ${{ github.event.after }} --verbose
 
     lint:
