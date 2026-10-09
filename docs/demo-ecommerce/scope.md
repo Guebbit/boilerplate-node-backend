@@ -65,3 +65,6 @@ Not "not yet" — these would change what kind of shop this is, and aren't plann
 
 Every one of these is a real, well-understood shop feature — they're absent because this is a
 _demonstration_ of the patterns underneath a shop, not a bid to be every kind of shop at once.
+
+Opening a real shop on it also means the legal and tax work no software does for you: see
+[Before you sell for real](./before-you-sell.md).

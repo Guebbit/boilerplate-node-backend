@@ -602,7 +602,7 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean
@@ -834,7 +834,7 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean
@@ -904,7 +904,7 @@ components:
                 requiresShipping:
                     type: boolean
                     default: true
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean
@@ -971,7 +971,7 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean
@@ -1026,7 +1026,7 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean
@@ -1088,7 +1088,7 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean
@@ -1148,7 +1148,7 @@ components:
                     type: boolean
                 requiresShipping:
                     type: boolean
-                # Art. 16 CRD: personalised, sealed-hygiene, perishable goods and the like carry no
+                # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
                 # right of withdrawal. Frozen onto each order line; `returns` refuses those lines.
                 noWithdrawal:
                     type: boolean

@@ -146,8 +146,9 @@ returned quantities would be a second copy of the truth.
 
 ## Goods with no right of withdrawal
 
-Art. 16 of the Consumer Rights Directive takes the right away from some goods — personalised,
-sealed-hygiene or perishable ones. A product carries `noWithdrawal: true` (an admin sets it in the
+Art. 16(c)–(d) of the Consumer Rights Directive takes the right away from some goods — those made
+to the customer's specifications or clearly personalised, and those liable to deteriorate or expire
+rapidly. A product carries `noWithdrawal: true` (an admin sets it in the
 product form); the flag is **frozen onto each order line at checkout**, like every other line field,
 so changing the product later cannot rewrite what a customer was sold.
 
@@ -158,6 +159,10 @@ so changing the product later cannot rewrite what a customer was sold.
 - `OrderActions.withdraw` is `false` on an order made only of excluded goods.
 - Excluded units never come back, so they never keep the order from reading `returned` — and a
   return that leaves them behind is never a "full" return, so delivery is not refunded with it.
+
+**Sealed hygiene goods** (Art. 16(e)) keep the right until the customer opens them after delivery.
+The flag cannot see that, so it is not the switch for them: staff handle an opened return outside
+the flow.
 
 **Digital content** (Art. 16(m): the right is lost once delivery starts, with the consumer's express
 consent) is not modelled: there is no consent step at checkout, and `noWithdrawal` is **not** the

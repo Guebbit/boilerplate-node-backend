@@ -35,7 +35,11 @@ export default withMermaid(
                             { text: 'The support desk', link: '/demo-ecommerce/support' },
                             { text: 'The editor', link: '/demo-ecommerce/editor' },
                             { text: 'The moderator', link: '/demo-ecommerce/moderator' },
-                            { text: 'What this demo models', link: '/demo-ecommerce/scope' }
+                            { text: 'What this demo models', link: '/demo-ecommerce/scope' },
+                            {
+                                text: 'Before you sell for real',
+                                link: '/demo-ecommerce/before-you-sell'
+                            }
                         ]
                     }
                 ],

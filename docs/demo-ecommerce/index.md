@@ -203,3 +203,6 @@ The application underneath is a reusable starting point â€” a **boilerplate** â€
 shop is just the example built on top of it. These pages describe the example. The pages under
 [Modules](../modules/) describe the parts it is assembled from, one per area of the business.
 :::
+
+Thinking of selling for real? Read [Before you sell for real](./before-you-sell.md) first: every
+legal text in this demo is an example.

@@ -66,8 +66,9 @@ export interface WithdrawableLine {
 }
 
 /**
- * Whether a line is one of the goods Art. 16 takes the right of withdrawal away from (personalised,
- * sealed hygiene, perishable...) — decided by the product, frozen on the line at checkout.
+ * Whether a line is one of the goods Art. 16(c)–(d) takes the right of withdrawal away from
+ * (made to order or clearly personalised, perishable) — decided by the product, frozen on the line
+ * at checkout.
  * @param line - an order line
  */
 export const isExcludedFromWithdrawal = (line: WithdrawableLine): boolean =>
