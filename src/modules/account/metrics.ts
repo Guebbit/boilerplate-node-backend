@@ -255,3 +255,13 @@ export const authRefreshReuseTotal = new Counter({
     help: 'Total refresh-token reuse detections.',
     registers: [metricsRegistry]
 });
+
+/**
+ * Data exports whose build failed. Each one is a person who asked for their Art. 15 copy and did
+ * not get it, so any increase deserves a look at the log line beside it.
+ */
+export const accountExportFailedTotal = new Counter({
+    name: 'account_export_failed_total',
+    help: 'Total data exports whose build failed.',
+    registers: [metricsRegistry]
+});

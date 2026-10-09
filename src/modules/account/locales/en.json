@@ -132,6 +132,13 @@
                 "greeting": "Hello, {{name}}!",
                 "body": "We haven't seen you sign in for a while. To keep your account, sign in within the next {{days}} days — after that it will be deactivated, and eventually permanently deleted."
             },
+            "export-failed": {
+                "subject": "We couldn't prepare your data export",
+                "meta-title": "Data export",
+                "greeting": "Hello, {{name}}!",
+                "body": "We couldn't prepare the copy of your data you asked for. Nothing is wrong with your account. Please ask again from your profile.",
+                "ignore": "If you didn't ask for this, change your password and sign out everywhere."
+            },
             "export-ready": {
                 "subject": "Your data export is ready",
                 "meta-title": "Data export",

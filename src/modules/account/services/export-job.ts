@@ -8,8 +8,8 @@
  * as it arrives, so peak memory is the largest single section, not the whole export. That is the
  * point of the job: the request used to hold all fifteen sections in one object, per call.
  *
- * Failure is a state, not an exception to hide: a build that throws marks its row `failed` and logs
- * the error, and asking again replaces it. No mail goes out for a failure.
+ * Failure is a state, not an exception to hide: a build that throws marks its row `failed`, logs the
+ * error, counts it, and mails the requester a short notice (no link); asking again replaces it.
  *
  * See: docs/modules/account.md#data-export
  */
@@ -24,7 +24,8 @@ import { userService } from '@modules/users';
 import type { AccountExportJobPayload } from '@types';
 import type { PersonalDataSection, PersonalDataSubject } from '@kernel/registry';
 import { exportRetentionMs } from '../config';
-import { exportReadyEmail, greetableName } from '../emails';
+import { exportFailedEmail, exportReadyEmail, greetableName } from '../emails';
+import { accountExportFailedTotal } from '../metrics';
 import { accountExportRepository, type AccountExportRow } from '../repository';
 import { personalDataSections } from './personal-data-registry';
 import { sendAccountMail } from './mail';
@@ -157,22 +158,50 @@ const afterBuild = (
 };
 
 /**
- * Mark the row `failed` and take the half-built file away. The error is logged here, so the
+ * Tell the requester a build failed. Skipped when the account is gone; a mail that cannot be queued
+ * is logged and the row stays `failed`.
+ *
+ * @param job - the job, for the address and the language
+ */
+const mailFailure = (job: AccountExportJobPayload): Promise<void> =>
+    userService
+        .getById(job.userId)
+        .then((user) => {
+            if (!user) return;
+
+            const name = job.emailVerified ? greetableName(user, job.email) : '';
+            return sendAccountMail(job.email, exportFailedEmail(job.locale, name), 'high');
+        })
+        .catch((error: unknown) => {
+            logger.error({ message: 'account export failure mail not queued', error });
+        });
+
+/**
+ * Mark the row `failed`, take the half-built file away and tell the requester. The error is logged here, so the
  * failure is never swallowed: the row says WHAT happened, the log says why.
  *
+ * @param job - the queue message, for the notice to the requester
  * @param row - the row the failed job was filling in
  * @param error - what the build threw
  */
-const fail = (row: AccountExportRow, error: unknown): Promise<void> => {
+const fail = (
+    job: AccountExportJobPayload,
+    row: AccountExportRow,
+    error: unknown
+): Promise<void> => {
     logger.error({ message: 'account export failed', exportId: String(row._id), error });
 
     return accountExportRepository
         .settleBuilding(String(row._id), 'failed', new Date(Date.now() + exportRetentionMs()))
-        .then((settled) =>
-            // This run's own failure: its half-built file goes. Otherwise a sibling settled the
-            // row (its file is good) or the row is gone (its file is nobody's).
-            settled ? removeExport(row.file).then(() => undefined) : removeFileIfRowGone(row)
-        );
+        .then((settled) => {
+            // Otherwise a sibling settled the row (its file is good) or the row is gone (its file
+            // is nobody's).
+            if (!settled) return removeFileIfRowGone(row);
+
+            // This run's own failure: its half-built file goes, and only this run tells the person.
+            accountExportFailedTotal.inc();
+            return removeExport(row.file).then(() => mailFailure(job));
+        });
 };
 
 /**
@@ -194,7 +223,7 @@ export const runExportJob = (job: AccountExportJobPayload): Promise<boolean> =>
         return buildAndSettle(job, row)
             .then(
                 (settled) => afterBuild(job, row, settled),
-                (error: unknown) => fail(row, error)
+                (error: unknown) => fail(job, row, error)
             )
             .then(() => true);
     });

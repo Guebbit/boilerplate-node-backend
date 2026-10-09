@@ -214,7 +214,7 @@ flowchart LR
     B --> F["file in the private store"]
     F --> M["mail: a link"]
     M --> D["GET /account/export/{id}<br/><i>owner · fresh session</i>"]
-    B -. "throws" .-> X["row: failed<br/><i>logged, no mail</i>"]
+    B -. "throws" .-> X["row: failed<br/><i>logged, counted, a notice mailed</i>"]
 
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef warn fill:#fee2e2,stroke:#dc2626,color:#111827;
@@ -241,8 +241,11 @@ Decisions rather than mechanics:
 - **The job carries the subject the request saw**, including whether the address had been proven. A
   section that matches by address (`feedback`) answers only for a proven one, so the file says what
   the caller was entitled to when they asked, not what became true later.
-- **A failed build is a state.** The worker logs the error and marks the row `failed`; no mail goes
-  out, and asking again replaces it. Two runs of one job (a broker redelivery) are safe: only a row
+- **A failed build is a state.** The worker logs the error, marks the row `failed`, counts it in
+  `account_export_failed_total` and mails the requester a short notice (`account.export-failed`: no
+  link, "ask again from your profile"), so nobody waits for a link that never comes. The notice is
+  skipped when the account is gone, and a mail that cannot be queued is logged: the row stays `failed`.
+  Asking again replaces it. Two runs of one job (a broker redelivery) are safe: only a row
   still `building` is built, and only the run that settles it mails the link.
 - **The download asks for a fresh session, like the request.** The mailed link opens a frontend page
   that calls `GET /account/export/{id}`; a forwarded mail hands nobody the file. A row that is not

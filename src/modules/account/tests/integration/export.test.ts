@@ -25,6 +25,7 @@ import type { PersonalDataSection } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { accountExportRepository } from '@modules/account/repository';
 import { accountExportModel } from '@modules/account/model';
+import { accountExportFailedTotal } from '@modules/account/metrics';
 import {
     personalDataSections,
     setPersonalDataSections
@@ -387,8 +388,12 @@ describe('the mailbox budget', () => {
         }));
 });
 
+/** How many failed builds the counter has seen so far. */
+const failedCount = (): Promise<number> =>
+    accountExportFailedTotal.get().then(({ values }) => values[0]?.value ?? 0);
+
 describe('a build that fails', () => {
-    it('marks the row failed, logs it, leaves no file and mails nothing', async () => {
+    it('marks the row failed, logs it, leaves no file and mails the failure notice', async () => {
         const error = jest.spyOn(logger, 'error').mockReturnValue(undefined);
         setPersonalDataSections([
             section('profile', {}),
@@ -401,9 +406,49 @@ describe('a build that fails', () => {
         const row = await accountExportRepository.findByUserId(user.id);
         expect(row?.status).toBe('failed');
         expect(await readdir(root)).toEqual([]);
-        expect(mockOutbox).toEqual([]);
+        expect(mockOutbox).toEqual([
+            expect.objectContaining({ to: user.email, template: 'account.export-failed' })
+        ]);
         expect(error).toHaveBeenCalledWith(
             expect.objectContaining({ exportId: result.data.id, message: 'account export failed' })
+        );
+    });
+
+    it('counts the failure, and mails nothing when the account is no longer there', async () => {
+        jest.spyOn(logger, 'error').mockReturnValue(undefined);
+        const before = await failedCount();
+        setPersonalDataSections([
+            section('profile', {}),
+            { section: 'orders', collect: () => Promise.reject(new Error('mongo went away')) }
+        ]);
+
+        await requestFor();
+        // The account vanishes between the failed build and the notice: nobody is left to tell.
+        // Set after the request, which reads the user itself.
+        jest.spyOn(userService, 'getById').mockResolvedValueOnce(undefined);
+        await settleInlineExports();
+
+        expect(await failedCount()).toBe(before + 1);
+        expect(mockOutbox).toEqual([]);
+    });
+
+    it('logs a failure notice that cannot be queued, and the row stays failed', async () => {
+        const error = jest.spyOn(logger, 'error').mockReturnValue(undefined);
+        setPersonalDataSections([
+            section('profile', {}),
+            { section: 'orders', collect: () => Promise.reject(new Error('mongo went away')) }
+        ]);
+
+        const { user } = await requestFor();
+        // Set after the request, which reads the user itself.
+        jest.spyOn(userService, 'getById').mockRejectedValueOnce(new Error('mongo still away'));
+        await settleInlineExports();
+
+        await expect(accountExportRepository.findByUserId(user.id)).resolves.toMatchObject({
+            status: 'failed'
+        });
+        expect(error).toHaveBeenCalledWith(
+            expect.objectContaining({ message: 'account export failure mail not queued' })
         );
     });
 

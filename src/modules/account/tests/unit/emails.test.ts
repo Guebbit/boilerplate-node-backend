@@ -15,6 +15,7 @@ import {
     deleteConfirmEmail,
     twoFactorChangedEmail,
     twoFactorLockedEmail,
+    exportFailedEmail,
     exportReadyEmail,
     greetableName
 } from '@modules/account/emails';
@@ -36,10 +37,11 @@ const LINK_EMAILS = [
     ['deleteRequestEmail', deleteRequestEmail, 'account.delete-request', 'delete']
 ] as const;
 
-/** The two that report a completed action and carry no link. */
+/** The ones that report something that happened and carry no link. */
 const CONFIRM_EMAILS = [
     ['resetConfirmEmail', resetConfirmEmail, 'account.reset-confirm'],
-    ['deleteConfirmEmail', deleteConfirmEmail, 'account.delete-confirm']
+    ['deleteConfirmEmail', deleteConfirmEmail, 'account.delete-confirm'],
+    ['exportFailedEmail', exportFailedEmail, 'account.export-failed']
 ] as const;
 
 /** Every string slot in a built email, with the locale and the empty meta-links excluded. */

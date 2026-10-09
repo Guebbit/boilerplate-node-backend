@@ -42,6 +42,7 @@ Liveness and readiness are separate: `/livez` and `/readyz`, see [Health Checks]
 | `auth_one_time_token_rejected_total`                      | refused reset/verify/email-change/delete links, by flow                |
 | `auth_refresh_token_reuse_detected_total`                 | refresh tokens replayed after rotation                                 |
 | `audit_sink_failures_total`                               | audit entries that could not be persisted                              |
+| `account_export_failed_total`                             | data exports whose build failed                                        |
 | `outbox_events_published_total` (+ `_retried_`, `_dead_`) | [outbox](./outbox.md) delivery outcomes                                |
 | `db_client_operation_duration_seconds`                    | histogram of every database command, by collection, operation, outcome |
 | `auth_login_total`, `cart_checkout_total`, …              | business counters                                                      |

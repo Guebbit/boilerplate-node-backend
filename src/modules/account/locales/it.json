@@ -132,6 +132,13 @@
                 "greeting": "Ciao, {{name}}!",
                 "body": "Non ti vediamo accedere da un po'. Per mantenere il tuo account, accedi entro i prossimi {{days}} giorni — trascorsi i quali verrà disattivato e, in seguito, eliminato definitivamente."
             },
+            "export-failed": {
+                "subject": "Non siamo riusciti a preparare l'esportazione dei tuoi dati",
+                "meta-title": "Esportazione dei dati",
+                "greeting": "Ciao, {{name}}!",
+                "body": "Non siamo riusciti a preparare la copia dei tuoi dati che hai richiesto. Il tuo account non ha problemi. Riprova dal tuo profilo.",
+                "ignore": "Se non l'hai richiesta tu, cambia la password ed esci da tutti i dispositivi."
+            },
             "export-ready": {
                 "subject": "L'esportazione dei tuoi dati è pronta",
                 "meta-title": "Esportazione dei dati",
