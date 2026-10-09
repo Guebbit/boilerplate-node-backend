@@ -109,8 +109,8 @@ scopes:
 # undeleted rows; `products.any.read` sees every row — which is why breadth and condition move
 # together on the four families where the narrow reading is filtered at all.
 #
-# `deletedAt: null` is on the `self` reads of the subjects that HAVE it — `Product`, `Locale` and
-# `Order`. A payment is a record of money moving and is never withdrawn from view, so it carries
+# `deletedAt: null` is on the `self` reads of `Product` and `Order`, the subjects whose soft delete
+# hides a row from the storefront. A payment is a record of money moving and is never withdrawn from view, so it carries
 # no such column and no such condition; a rule naming a column the table lacks is a query that
 # throws rather than one that narrows.
 #
