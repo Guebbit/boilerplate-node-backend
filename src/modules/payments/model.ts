@@ -12,6 +12,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { PaymentStatus, PaymentMethod, RefundReason, RefundStatus } from '@types';
+import { paymentWebhookEventRetentionDays } from './config';
 
 /**
  * One attempt to give money back — a record per attempt, the way Stripe keeps a `Refund` per
@@ -272,8 +273,11 @@ export const applyPaymentTransform = applySerialization(paymentSchema, {
  */
 export const paymentModel = model<PaymentDocument, PaymentModel>('Payment', paymentSchema);
 
-/** How long a processed webhook event id is remembered. Past any provider's retry window. */
-const WEBHOOK_EVENT_RETENTION_DAYS = 30;
+/**
+ * How long a processed webhook event id is remembered, in days. Past any provider's retry window.
+ * Read at import: changing `NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS` needs `npm run db:sync`.
+ */
+const webhookEventRetentionDays = paymentWebhookEventRetentionDays();
 
 /**
  * One webhook delivery this application has already acted on.
@@ -308,7 +312,7 @@ export const paymentWebhookEventSchema = new Schema<PaymentWebhookEventDocument>
         default: () => new Date(),
         // mongod drops the row once it is older than the window, so the collection does not grow
         // forever for a guarantee that stops mattering as soon as the retries stop.
-        expires: WEBHOOK_EVENT_RETENTION_DAYS * 24 * 60 * 60
+        expires: webhookEventRetentionDays * 24 * 60 * 60
     }
 });
 

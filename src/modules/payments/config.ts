@@ -108,7 +108,8 @@ export const paymentsConfig = defineConfig({
         }),
         NODE_STRIPE_SECRET_KEY: text({ sensitive: true }),
         NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
-        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 })
+        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 }),
+        NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS: int({ default: 30, min: 1 })
     },
     check: (config, environment) => [
         ...(config.NODE_PAYMENT_WEBHOOK_SECRET !== undefined &&
@@ -139,6 +140,14 @@ export const paymentEffectRetryMinutes = (): number =>
  */
 export const abandonedPaymentRetentionDays = (): number =>
     paymentsConfig().NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
+
+/**
+ * Days a processed webhook event id is remembered by the dedupe ledger's TTL index. Must outlast
+ * any provider's retry window; read once at import, since a TTL index is built once at startup.
+ * @returns the retention, in days
+ */
+export const paymentWebhookEventRetentionDays = (): number =>
+    paymentsConfig().NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS;
 
 /**
  * The provider's signing secrets, empty when unset: the first signs, any of them verifies.
