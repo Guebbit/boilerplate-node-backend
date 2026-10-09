@@ -38,8 +38,9 @@ declare module '@kernel/events' {
          * edit, including one that repeats `active: false` unchanged (see `products/services/crud.ts`'s
          * `updateById`, the same "flip, not every write" shape `users`' `ADMIN_USER_BANNED` uses).
          * No subscriber, and none is wanted: a deactivated product stays in carts and wishlists
-         * (their view reads `availability: unavailable`) and an order already placed treats it as
-         * present. Only `product.deleted` pulls lines.
+         * and an order already placed treats it as present. A signed-in cart keeps the line
+         * flagged and checkout refuses it with `CART_PRODUCT_UNAVAILABLE`; a guest cart drops it.
+         * Only `product.deleted` pulls lines.
          */
         'product.deactivated': { productId: string };
 

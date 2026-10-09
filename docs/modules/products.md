@@ -69,7 +69,7 @@ included, gets `inStock` (is anything available) and `lowStock` (available at or
 representation, so a client never has to guess from an absent number. A cached public list is
 keyed by the caller's reach, so one reader's counters are never served to another.
 
-Deletion is soft by default: `active` and `deletedAt`, with a restore route, because an order that
+Deletion is soft by default: it stamps `deletedAt` (and leaves `active` alone), with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete
 (`hardDelete: true`), which destroys the row outright — see
 [Removing or deactivating a product](#removing-or-deactivating-a-product) for what a hard delete
@@ -84,7 +84,7 @@ one may not import.
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
-    D["admin deletes<br/><i>soft: active · deletedAt</i>"] --> R["the row stays<br/><i>an order from March still renders</i>"]
+    D["admin deletes<br/><i>soft: deletedAt</i>"] --> R["the row stays<br/><i>an order from March still renders</i>"]
     D --> C["Redis cache invalidated"]
     D -. "product.deleted" .-> CA["cart<br/><i>drops the line</i>"]
     D -. "product.deleted" .-> WI["wishlist<br/><i>drops the line</i>"]
