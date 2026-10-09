@@ -42,6 +42,13 @@ export const localeCandidatesFor = (locale: string): string[] => {
     return [...new Set([locale, base, getFallbackLocale()])].filter((tag) => tag.length > 0);
 };
 
+/**
+ * Merged dictionaries by locale, filled on first read. The files are deployed with the build and
+ * cannot change inside a running process, so re-reading them every refresh only blocks the event
+ * loop. Cleared when the set of directories changes.
+ */
+const dictionaryCache = new Map<string, Record<string, unknown>>();
+
 /** Memoised result of {@link listSupportedLocales}; `undefined` until the first call. */
 let supportedLocalesCache: string[] | undefined;
 
@@ -77,6 +84,7 @@ export const listSupportedLocales = (): string[] => {
  */
 export const resetSupportedLocales = (): void => {
     supportedLocalesCache = undefined;
+    dictionaryCache.clear();
 };
 
 /**
@@ -97,6 +105,7 @@ let localeDirectories: string[] = [];
  */
 export const registerLocaleDirectories = (directories: string[]): void => {
     localeDirectories = [...directories];
+    dictionaryCache.clear();
 };
 
 /** Read one dictionary file, or `undefined` when that directory does not carry the language. */
@@ -137,8 +146,16 @@ const deepMerge = (
  * `tests/cross-cutting/locale-namespaces.test.ts` fails if one starts.
  *
  * Exported for `GET /locales/:locale`, so that endpoint sees the merged result too.
+ *
+ * Read from disk once per locale and cached; every caller gets its own copy, so mutating the
+ * result (the overrides layer does) never leaks into the next read.
  */
 export const readLocaleDictionary = (locale: string): Record<string, unknown> => {
+    const cached = dictionaryCache.get(locale);
+    // structuredClone: a copy per caller, so one caller's edits cannot reach the shared tree.
+    // https://developer.mozilla.org/docs/Web/API/Window/structuredClone
+    if (cached) return structuredClone(cached);
+
     // Shared file first, module contributions layered on top — hence a module CAN shadow a key.
     const merged = JSON.parse(
         readFileSync(path.join(LOCALES_DIRECTORY, `${locale}.json`), 'utf8')
@@ -150,7 +167,8 @@ export const readLocaleDictionary = (locale: string): Record<string, unknown> =>
         if (contribution) deepMerge(merged, contribution);
     }
 
-    return merged;
+    dictionaryCache.set(locale, merged);
+    return structuredClone(merged);
 };
 
 /**

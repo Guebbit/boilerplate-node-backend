@@ -17,6 +17,9 @@ import enTranslation from '../../../../src/locales/en.json';
 import enUsers from '@modules/users/locales/en.json';
 import itTranslation from '../../../../src/locales/it.json';
 import itUsers from '@modules/users/locales/it.json';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { setEnvironment } from '@tests/environment';
 
 describe('locale discovery', () => {
@@ -80,6 +83,44 @@ describe('locale discovery', () => {
     it('carries the shared keys a module did not contribute to', () => {
         expect(readLocaleDictionary('en').users).toMatchObject(enUsers.users);
     });
+});
+
+describe('the merged dictionary cache', () => {
+    it('answers equal but not identical objects, so no caller shares a tree', () => {
+        const first = readLocaleDictionary('en');
+        const second = readLocaleDictionary('en');
+
+        expect(second).toEqual(first);
+        expect(second).not.toBe(first);
+    });
+
+    it('does not leak a mutation of one result into the next read', () => {
+        const mutated = readLocaleDictionary('en');
+        mutated.injectedByATest = 'x';
+
+        expect(readLocaleDictionary('en')).not.toHaveProperty('injectedByATest');
+    });
+
+    it('picks up a new set of directories when they are registered again', () =>
+        // A fresh copy of the module: the shared one holds the directories the app registered.
+        jest.isolateModulesAsync(async () => {
+            const catalog = await import('@infrastructure/i18n/catalog');
+            const directory = mkdtempSync(path.join(os.tmpdir(), 'catalog-'));
+            mkdirSync(directory, { recursive: true });
+            writeFileSync(path.join(directory, 'en.json'), '{"addedLater":{"key":"value"}}');
+
+            try {
+                expect(catalog.readLocaleDictionary('en')).not.toHaveProperty('addedLater');
+
+                catalog.registerLocaleDirectories([directory]);
+
+                expect(catalog.readLocaleDictionary('en')).toMatchObject({
+                    addedLater: { key: 'value' }
+                });
+            } finally {
+                rmSync(directory, { recursive: true, force: true });
+            }
+        }));
 });
 
 describe('localeCandidatesFor', () => {
