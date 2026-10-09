@@ -1,0 +1,435 @@
+# Unit tests for prometheus.alert-rules.yaml, run by `promtool test rules` (see the
+# `alert-rules` job in .github/workflows/ci.yml). One firing case per alert, and a quiet case for
+# the rules whose expression is easy to get wrong: the error rate and p95 aggregate across series,
+# the webhook rule joins sides whose labels differ, and the stale-job rules read the `task` label.
+#
+# Run it: promtool test rules docker/observability/prometheus.alert-rules.test.yaml
+#
+rule_files:
+    - prometheus.alert-rules.yaml
+evaluation_interval: 1m
+tests:
+    - interval: 1m
+      input_series:
+          - series: up{job="api",instance="api:3000"}
+            values: '0x10'
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: ApiDown
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      job: api
+                      instance: api:3000
+                  exp_annotations:
+                      summary: API instance is down
+                      description: Prometheus cannot reach the /metrics endpoint of the API for > 1 min.
+    - interval: 1m
+      input_series:
+          - series: up{job="api",instance="api:3000"}
+            values: 1x10
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: ApiDown
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: http_request_errors_total{route="a"}
+            values: 0+15x20
+          - series: http_request_errors_total{route="b"}
+            values: 0+15x20
+          - series: http_requests_total{route="a"}
+            values: 0+100x20
+          - series: http_requests_total{route="b"}
+            values: 0+100x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: HighErrorRate
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: High HTTP error rate (> 5 %)
+                      description: More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.
+    - interval: 1m
+      input_series:
+          - series: http_request_errors_total{route="a"}
+            values: 0+1x20
+          - series: http_request_errors_total{route="b"}
+            values: 0+1x20
+          - series: http_requests_total{route="a"}
+            values: 0+100x20
+          - series: http_requests_total{route="b"}
+            values: 0+100x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: HighErrorRate
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: http_request_duration_milliseconds_bucket{route="a",le="100"}
+            values: '0x20'
+          - series: http_request_duration_milliseconds_bucket{route="a",le="5000"}
+            values: 0+100x20
+          - series: http_request_duration_milliseconds_bucket{route="a",le="+Inf"}
+            values: 0+100x20
+          - series: http_request_duration_milliseconds_bucket{route="b",le="100"}
+            values: '0x20'
+          - series: http_request_duration_milliseconds_bucket{route="b",le="5000"}
+            values: 0+100x20
+          - series: http_request_duration_milliseconds_bucket{route="b",le="+Inf"}
+            values: 0+100x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: HighP95Latency
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: p95 latency > 2 s
+                      description: The 95th-percentile request duration has exceeded 2 000 ms for 5 minutes.
+    - interval: 1m
+      input_series:
+          - series: http_request_duration_milliseconds_bucket{route="a",le="100"}
+            values: 0+100x20
+          - series: http_request_duration_milliseconds_bucket{route="a",le="5000"}
+            values: 0+100x20
+          - series: http_request_duration_milliseconds_bucket{route="a",le="+Inf"}
+            values: 0+100x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: HighP95Latency
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: http_requests_in_flight
+            values: 150x10
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: HighInFlightRequests
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Too many in-flight requests (> 100)
+                      description: More than 100 requests are being processed simultaneously for 2 minutes.
+    - interval: 1m
+      input_series:
+          - series: nodejs_heap_size_used_bytes
+            values: 95x20
+          - series: nodejs_heap_size_limit_bytes
+            values: 100x20
+      alert_rule_test:
+          - eval_time: 10m
+            alertname: HighHeapUsage
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Node.js heap usage above 90 % of the V8 limit
+                      description: The heap is within 10 % of --max-old-space-size; OOM risk if left unaddressed.
+    - interval: 1m
+      input_series:
+          - series: nodejs_heap_size_used_bytes
+            values: 50x20
+          - series: nodejs_heap_size_limit_bytes
+            values: 100x20
+      alert_rule_test:
+          - eval_time: 10m
+            alertname: HighHeapUsage
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: queue_jobs_dead_lettered_total{queue="email"}
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: QueueJobsParked
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      queue: email
+                  exp_annotations:
+                      summary: A queue is parking jobs in its dead-letter queue
+                      description: "queue_jobs_dead_lettered_total increased in the last 15 minutes for queue email \u2014 inspect and replay via the RabbitMQ management UI."
+    - interval: 1m
+      input_series:
+          - series: outbox_events_dead_total
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: OutboxEventsDead
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: The transactional outbox parked an event as dead
+                      description: "outbox_events_dead_total increased in the last 15 minutes \u2014 a consumer of a domain event kept failing. Inspect `outboxevents` rows with status \"dead\"."
+    - interval: 1m
+      input_series:
+          - series: webhook_delivery_attempts_total{outcome="failure"}
+            values: 0+5x40
+      alert_rule_test:
+          - eval_time: 35m
+            alertname: WebhookDeliveriesFailingEverywhere
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                  exp_annotations:
+                      summary: Every webhook delivery attempt is failing
+                      description: "No successful webhook delivery in 30 minutes while attempts keep arriving \u2014 a platform-side outage (egress, DNS, signing), not one endpoint."
+    - interval: 1m
+      input_series:
+          - series: webhook_delivery_attempts_total{outcome="failure"}
+            values: 0+5x40
+          - series: webhook_delivery_attempts_total{outcome="success"}
+            values: 0+5x40
+      alert_rule_test:
+          - eval_time: 35m
+            alertname: WebhookDeliveriesFailingEverywhere
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: webhook_deliveries_overdue
+            values: 3x30
+      alert_rule_test:
+          - eval_time: 20m
+            alertname: WebhookRetriesStalled
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Webhook retries are not being swept
+                      description: "webhook_deliveries_overdue has stayed above zero for 15 minutes \u2014 the retry sweep cron may not be running."
+    - interval: 1m
+      input_series:
+          - series: job_last_success_timestamp_seconds{task="reap:orders"}
+            values: '0x3000'
+          - series: job_last_success_timestamp_seconds{task="sweep:outbox"}
+            values: '0x3000'
+      alert_rule_test:
+          - eval_time: 49h
+            alertname: ScheduledJobStale
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      task: reap:orders
+                  exp_annotations:
+                      summary: A scheduled job has not succeeded in over 48 hours
+                      description: "reap:orders has not recorded a success in more than twice its expected daily interval \u2014 see docker/crontab and docs/reference/ops.md#scheduled-jobs."
+    - interval: 1m
+      input_series:
+          - series: job_last_success_timestamp_seconds{task="reap:orders"}
+            values: '0x3000'
+          - series: job_last_success_timestamp_seconds{task="sweep:outbox"}
+            values: '0x3000'
+      alert_rule_test:
+          - eval_time: 49h
+            alertname: FrequentSweepStale
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      task: sweep:outbox
+                  exp_annotations:
+                      summary: A 5-minute sweep has not succeeded in 30 minutes
+                      description: "sweep:outbox has not recorded a success in 30 minutes \u2014 see docker/crontab and docs/reference/ops.md#scheduled-jobs."
+    - interval: 1m
+      input_series:
+          - series: auth_login_total{status="failure"}
+            values: 0+120x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: LoginFailureRate
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Failed logins above 1 per second
+                      description: "auth_login_total{status=\"failure\"} has averaged more than 1/s for 5 minutes \u2014 credential stuffing or a broken client."
+    - interval: 1m
+      input_series:
+          - series: auth_login_total{status="failure"}
+            values: 0+60x40
+          - series: auth_login_total{status="success"}
+            values: 0+6x40
+      alert_rule_test:
+          - eval_time: 30m
+            alertname: LoginFailureShare
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: More than half of login attempts are failing
+                      description: Over 50 % of logins failed for 10 minutes while traffic stayed above 3 per minute.
+    - interval: 1m
+      input_series:
+          - series: auth_two_factor_challenge_total{status="failure"}
+            values: 0+12x40
+      alert_rule_test:
+          - eval_time: 25m
+            alertname: TwoFactorChallengeFailures
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Login-time 2FA challenges are failing
+                      description: auth_two_factor_challenge_total{status="failure"} averaged more than 0.1/s for 10 minutes.
+    - interval: 1m
+      input_series:
+          - series: auth_two_factor_disable_total{method="totp",status="failure"}
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: TwoFactorDisableFailures
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Someone failed to disable two-factor authentication
+                      description: auth_two_factor_disable_total{status="failure"} increased in the last 15 minutes.
+    - interval: 1m
+      input_series:
+          - series: audit_sink_failures_total
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: AuditSinkFailing
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                  exp_annotations:
+                      summary: Audit entries are not being persisted
+                      description: "audit_sink_failures_total increased in the last 5 minutes \u2014 GET /observability/audit is missing entries the log has."
+    - interval: 1m
+      input_series:
+          - series: http_requests_total{status_code="401"}
+            values: 0+200x40
+      alert_rule_test:
+          - eval_time: 25m
+            alertname: UnauthorizedForbiddenRate
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: 401 and 403 answers above 2 per second
+                      description: "The API has refused more than 2 requests per second for 10 minutes \u2014 a scanner, a broken client or an expired deployment secret."
+    - interval: 1m
+      input_series:
+          - series: rate_limit_store_fallback_total{namespace="auth"}
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: RateLimitStoreFallback
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      namespace: auth
+                  exp_annotations:
+                      summary: Rate limits are running without the limits Redis
+                      description: "rate_limit_store_fallback_total increased in the last 5 minutes for namespace auth \u2014 budgets are per process or open."
+    - interval: 1m
+      input_series:
+          - series: rate_limit_refusals_total{budget="auth"}
+            values: 0+120x40
+      alert_rule_test:
+          - eval_time: 25m
+            alertname: RateLimitRefusals
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      budget: auth
+                  exp_annotations:
+                      summary: A rate limit is refusing more than 1 request per second
+                      description: Budget auth has refused over 1 request per second for 10 minutes.
+    - interval: 1m
+      input_series:
+          - series: process_unhandled_rejections_total
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: UnhandledRejections
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A promise rejection went unhandled
+                      description: "process_unhandled_rejections_total increased in the last 15 minutes \u2014 a bug, find it in the logs."
+    - interval: 1m
+      input_series:
+          - series: security_events_total{event="security.token.invalid_signature"}
+            values: 0 0 20 20 20 20
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: ForgedBearerTokens
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: Bearer tokens with a bad signature or no JWT shape are arriving
+                      description: "security_events_total for security.token.* rose by more than 10 in 15 minutes \u2014 see the audit trail for the route and address."
+    - interval: 1m
+      input_series:
+          - series: security_events_total{event="security.api_key.revoked"}
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: RevokedApiKeyUsed
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A revoked API key was presented with its real secret
+                      description: "security.api_key.revoked fired in the last 15 minutes \u2014 whoever holds the key was not told it was revoked."
+    - interval: 1m
+      input_series:
+          - series: security_events_total{event="security.payment_webhook.invalid_signature"}
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: PaymentWebhookSignatureFailures
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                  exp_annotations:
+                      summary: A payment webhook failed its signature check
+                      description: Someone is posting to the payment webhook without the signing secret, or the secret was rotated on one side only.
+    - interval: 1m
+      input_series:
+          - series: security_events_total{event="security.metrics_token.invalid"}
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: MetricsTokenGuessed
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: The metrics endpoint received a wrong bearer token
+                      description: security.metrics_token.invalid fired in the last 15 minutes. If it is your own scraper, its token is stale.
+    - interval: 1m
+      input_series:
+          - series: auth_one_time_token_rejected_total{flow="password_reset"}
+            values: 0 0 30 30 30 30
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: OneTimeTokenGuessing
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      flow: password_reset
+                  exp_annotations:
+                      summary: Many one-time link tokens were refused on one flow
+                      description: auth_one_time_token_rejected_total for password_reset rose by more than 20 in 15 minutes.
+    - interval: 1m
+      input_series:
+          - series: auth_refresh_token_reuse_detected_total
+            values: 0 0 1 1 1 1
+      alert_rule_test:
+          - eval_time: 5m
+            alertname: RefreshTokenReuse
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A refresh token was replayed after rotation
+                      description: "auth_refresh_token_reuse_detected_total increased \u2014 a session token leaked; the account was signed out everywhere."
