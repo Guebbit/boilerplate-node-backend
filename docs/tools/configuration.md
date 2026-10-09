@@ -131,6 +131,10 @@ Presence is not a shape rule because an unset secret is a correct state on a dev
 Cross-field rules (`NODE_TOKEN_REUSE_WINDOW_MS` must exceed `NODE_TOKEN_ROTATION_GRACE_MS`; an SMTP
 host needs its credentials) are a slice's `check`, and run at boot with the parsed values.
 
+A check that needs ANOTHER slice's variable reads it through that slice's `readIn(environment)`
+(`mailConfig.readIn(environment)`), never through the raw variables: one variable, one parser. It
+answers `undefined` for a value its own slice refuses, and that slice reports the refusal.
+
 A **provider selector** (`NODE_PAYMENT_PROVIDER`, `NODE_ANTIBOT_PROVIDER`, …) is plain text in its
 slice, because the valid names live in a registry that imports the slice. A shape-less
 `…ProviderProbe` slice, next to the registry, runs the resolver once at boot instead.

@@ -9,7 +9,8 @@ import type { MfaChallenge } from '@types';
 import { defineConfig } from '@infrastructure/config/define';
 import { text } from '@infrastructure/config/fields';
 import { isRelaxedIn } from '@infrastructure/config/define';
-import { mailDeliversIn } from '@infrastructure/adapters/mail-transports';
+import { mailConfig } from '@infrastructure/adapters/config';
+import { mailDelivers } from '@infrastructure/adapters/mail-transports';
 import { siteConfig } from '@infrastructure/http/config';
 
 /**
@@ -43,7 +44,7 @@ export const oauthConfig = defineConfig({
     check: (config, environment) =>
         !isRelaxedIn(environment) &&
         PROVIDER_PAIRS.some(([id, secret]) => config[id] && config[secret]) &&
-        !mailDeliversIn(environment)
+        !mailDelivers(mailConfig.readIn(environment))
             ? [
                   'An OAuth provider is enabled but mail cannot be delivered (NODE_MAIL_TRANSPORT=smtp with NODE_SMTP_HOST): accounts with no password could not pass step-up.'
               ]

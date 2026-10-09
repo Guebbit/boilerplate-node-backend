@@ -47,7 +47,7 @@ in particular, they are simply absent.
 
 **`delivers` is what production code asks** instead of naming a transport: "does mail sent through
 you reach a person?" The email second factor and the boot check for OAuth accounts (which have no
-password, so step-up is a mailed code) both read it through `mailDeliversIn`.
+password, so step-up is a mailed code) both read it through `mailDelivers`.
 
 There is no `none`: it would differ from `log` only by skipping the render, and the render is
 where a broken template surfaces.

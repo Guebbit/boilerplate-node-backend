@@ -22,8 +22,7 @@ import {
     requireProvider
 } from '@infrastructure/runtime/provider-registry';
 import { defineConfig, probe } from '@infrastructure/config/define';
-import type { Environment } from '@infrastructure/config/store';
-import { mailConfig } from './config';
+import { mailConfig, type MailConfig } from './config';
 
 /** One message on its way out: what a transport is handed. */
 export interface OutgoingMail {
@@ -47,11 +46,12 @@ export interface MailTransportAdapter {
      * is set; a transport that renders and drops, or keeps mail in memory for a test to read,
      * says what it is.
      *
-     * Takes the raw environment because a boot check runs against it, not against the memo.
+     * Takes the parsed mail slice because a boot check judges an environment it was handed
+     * (`mailConfig.readIn`), not the store's.
      *
-     * @param environment - the environment to judge
+     * @param mail - the mail slice to judge
      */
-    delivers: (environment: Environment) => boolean;
+    delivers: (mail: MailConfig) => boolean;
     /**
      * Hand one message off.
      *
@@ -65,7 +65,7 @@ export interface MailTransportAdapter {
  * SMTP, the one transport production has. Its sender (and nodemailer) loads on the first send.
  */
 const smtpTransport: MailTransportAdapter = {
-    delivers: (environment) => Boolean((environment.NODE_SMTP_HOST ?? '').trim()),
+    delivers: (mail) => Boolean(mail.NODE_SMTP_HOST),
     send: (mail) => import('./smtp-transport').then(({ sendBySmtp }) => sendBySmtp(mail))
 };
 
@@ -97,16 +97,16 @@ export const resolveMailTransport = (): MailTransportAdapter =>
     requireProvider(mailTransportRegistry, 'NODE_MAIL_TRANSPORT', mailConfig().NODE_MAIL_TRANSPORT);
 
 /**
- * Whether this environment sends mail to a real inbox: the named transport's own answer. The
- * boot checks that depend on a person receiving mail (an account with no password passing step-up)
- * ask this, and an unknown name answers no — the boot probe refuses it separately.
+ * Whether this mail slice sends to a real inbox: the named transport's own answer. The boot checks
+ * that depend on a person receiving mail (an account with no password passing step-up) ask this,
+ * and an unknown name or a slice that did not parse answers no — the boot gate reports those
+ * separately.
  *
- * @param environment - the environment a slice check was handed
+ * @param mail - the parsed mail slice, `mailConfig.readIn(environment)` or `mailConfig()`
  */
-export const mailDeliversIn = (environment: Environment): boolean =>
-    mailTransportRegistry
-        .resolve((environment.NODE_MAIL_TRANSPORT ?? '').trim().toLowerCase() || 'smtp')
-        ?.delivers(environment) ?? false;
+export const mailDelivers = (mail: MailConfig | undefined): boolean =>
+    mail !== undefined &&
+    (mailTransportRegistry.resolve(mail.NODE_MAIL_TRANSPORT)?.delivers(mail) ?? false);
 
 /**
  * Boot probe for `NODE_MAIL_TRANSPORT`: a typo would otherwise throw on the first email, in the

@@ -29,7 +29,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 
 setupTestDb();
 
-// A mailed code is offered only where mail reaches a person (`mailDeliversIn`): the suite's default
+// A mailed code is offered only where mail reaches a person (`mailDelivers`): the suite's default
 // `log` drops it, the `outbox` keeps it. `enqueueEmail` is mocked below, so nothing is sent.
 beforeEach(() => {
     setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });

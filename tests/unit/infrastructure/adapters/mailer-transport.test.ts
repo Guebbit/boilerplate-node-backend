@@ -23,10 +23,10 @@ jest.mock('nodemailer', () => ({
 
 import { sendTemplatedEmail } from '@infrastructure/adapters/mailer';
 import { resetTransporter } from '@infrastructure/adapters/smtp-transport';
-import { mailDeliversIn, resolveMailTransport } from '@infrastructure/adapters/mail-transports';
+import { mailDelivers, resolveMailTransport } from '@infrastructure/adapters/mail-transports';
 import { logMailTransport } from '@scenarios/support/doubles/mail-log';
 import { outboxMailTransport } from '@scenarios/support/doubles/mail-outbox';
-import { currentEnvironment } from '@infrastructure/config/store';
+import { mailConfig } from '@infrastructure/adapters/config';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 /**
@@ -189,8 +189,8 @@ describe('resolveMailTransport', () => {
     withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_SMTP_HOST']);
 
     it('sends over SMTP when the deployment names nothing', () => {
-        expect(resolveMailTransport().delivers({ NODE_SMTP_HOST: 'smtp.example.com' })).toBe(true);
-        expect(resolveMailTransport().delivers({})).toBe(false);
+        expect(mailDelivers(mailConfig.readIn({ NODE_SMTP_HOST: 'smtp.example.com' }))).toBe(true);
+        expect(mailDelivers(mailConfig.readIn({}))).toBe(false);
     });
 
     it.each([
@@ -212,7 +212,7 @@ describe('resolveMailTransport', () => {
 });
 
 /** Whether a transport reaches a person — what a second factor and a boot check ask. */
-describe('mailDeliversIn', () => {
+describe('mailDelivers', () => {
     withoutEnvironmentInThisFile(['NODE_MAIL_TRANSPORT', 'NODE_SMTP_HOST']);
 
     it.each([
@@ -233,14 +233,29 @@ describe('mailDeliversIn', () => {
             { NODE_MAIL_TRANSPORT: 'outbox' },
             true
         ],
-        ['a name nobody registered', { NODE_MAIL_TRANSPORT: 'carrier-pigeon' }, false]
+        ['a name nobody registered', { NODE_MAIL_TRANSPORT: 'carrier-pigeon' }, false],
+        [
+            'a padded, upper-case transport name with a host',
+            { NODE_MAIL_TRANSPORT: '  SMTP  ', NODE_SMTP_HOST: 'mail.example.com' },
+            true
+        ],
+        ['a blank host', { NODE_MAIL_TRANSPORT: 'smtp', NODE_SMTP_HOST: '   ' }, false],
+        [
+            'a slice another variable of which does not parse',
+            { NODE_MAIL_TRANSPORT: 'outbox', NODE_SMTP_PORT: 'x' },
+            false
+        ]
     ])('%s', (_case, environment, expected) => {
-        expect(mailDeliversIn(environment)).toBe(expected);
+        expect(mailDelivers(mailConfig.readIn(environment))).toBe(expected);
     });
 
-    it('reads the live environment when asked of it', () => {
+    it('answers no for a slice that did not parse at all', () => {
+        expect(mailDelivers(undefined)).toBe(false);
+    });
+
+    it('reads the live slice when asked of it', () => {
         setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' });
 
-        expect(mailDeliversIn(currentEnvironment())).toBe(true);
+        expect(mailDelivers(mailConfig())).toBe(true);
     });
 });

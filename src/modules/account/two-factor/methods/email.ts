@@ -6,8 +6,8 @@
  * email.
  */
 
-import { mailDeliversIn } from '@infrastructure/adapters/mail-transports';
-import { currentEnvironment } from '@infrastructure/config/store';
+import { mailConfig } from '@infrastructure/adapters/config';
+import { mailDelivers } from '@infrastructure/adapters/mail-transports';
 import { t } from '@infrastructure/i18n';
 import type { CallerContext } from '@types';
 import type { TwoFactorMethodRecord, UserDocument } from '@modules/users';
@@ -82,7 +82,7 @@ export const emailMethod: TwoFactorMethodHandler = {
     // reaches a person's inbox (`smtp` with a host, or a transport that keeps mail where it can
     // be read). A deployment whose mail goes nowhere cannot deliver the code anywhere a caller can
     // read it, so it must not offer the method.
-    available: () => mailDeliversIn(currentEnvironment()),
+    available: () => mailDelivers(mailConfig()),
 
     eligibility: (user) =>
         user.verifiedAt

@@ -103,6 +103,23 @@ describe('the accessor', () => {
     });
 });
 
+describe('readIn', () => {
+    afterEach(() => {
+        resetEnvironment();
+    });
+
+    it('parses the environment it is handed, not the store', () => {
+        setEnvironment({ NODE_SAMPLE_LIMIT: '25' });
+
+        expect(slice.readIn({ NODE_SAMPLE_LIMIT: '7' })?.NODE_SAMPLE_LIMIT).toBe(7);
+        expect(slice().NODE_SAMPLE_LIMIT).toBe(25);
+    });
+
+    it('answers undefined for a misfit value, without throwing', () => {
+        expect(slice.readIn({ NODE_SAMPLE_LIMIT: '5mb' })).toBeUndefined();
+    });
+});
+
 describe('assertConfigIn', () => {
     it('passes a good deployment', () => {
         expect(() => assertConfigIn([slice.slice], GOOD)).not.toThrow();

@@ -57,9 +57,20 @@ export interface ConfigSlice {
     inspect(environment: Environment): SliceProblems;
 }
 
-/** A slice's reader: call it for the typed values; `.slice` is the type-erased view. */
+/**
+ * A slice's reader: call it for the typed values; `.slice` is the type-erased view;
+ * `.readIn` parses a given environment instead of the store's.
+ */
 export type ConfigAccessor<TShape extends Shape> = (() => Parsed<TShape>) & {
     readonly slice: ConfigSlice;
+    /**
+     * The typed values of THIS slice read from `environment`, for a boot check that judges an
+     * environment it was handed (another slice's `check`). Never throws and never memoises: a
+     * misfit value answers `undefined`, and its own slice reports it.
+     *
+     * @param environment - the environment to parse
+     */
+    readonly readIn: (environment: Environment) => Parsed<TShape> | undefined;
 };
 
 /** Thrown when a slice's values cannot be read, and by the boot gate. */
@@ -258,7 +269,14 @@ export const defineConfig = <TShape extends Shape>(
         return parsed.value;
     };
 
-    return Object.assign(read, { slice });
+    // A cross-slice check reads this slice through here, never through raw variables, so one
+    // variable has one parser.
+    const readIn = (environment: Environment): Parsed<TShape> | undefined => {
+        const parsed = parseShape(definition.shape, environment);
+        return parsed.ok ? parsed.value : undefined;
+    };
+
+    return Object.assign(read, { slice, readIn });
 };
 
 /**

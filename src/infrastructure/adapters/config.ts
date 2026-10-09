@@ -50,6 +50,9 @@ export const mailConfig = defineConfig({
     ]
 });
 
+/** The mail slice's parsed values: what a transport is asked about itself. */
+export type MailConfig = ReturnType<typeof mailConfig>;
+
 /** Where a spooled attachment waits. */
 export const mailFilesConfig = defineConfig({
     name: 'mail-files',
