@@ -3,6 +3,11 @@ info:
     title: webhooks — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Webhooks
+      description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
+
 x-error-codes:
     WEBHOOK_DELIVERY_IN_PROGRESS: { status: 409, description: 'A retry of this delivery is already in flight.' }
 

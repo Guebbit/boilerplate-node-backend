@@ -3,6 +3,11 @@ info:
     title: locales — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Locales
+      description: Supported languages, and the translations a deployment serves for its API messages, client screens and entities.
+
 # ── Two tiers, and they never merge ──────────────────────────────────────────────────────────
 #
 # TIER 1 — the API's OWN copy. Files under `src/locales/` and `src/modules/*/locales/`, loaded

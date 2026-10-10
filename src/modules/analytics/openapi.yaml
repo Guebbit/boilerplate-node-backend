@@ -3,6 +3,11 @@ info:
     title: analytics — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Analytics
+      description: Browsing events a browser reports, relayed only after the visitor agreed to be measured.
+
 paths:
     /analytics/events:
         post:

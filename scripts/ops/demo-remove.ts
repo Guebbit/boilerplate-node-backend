@@ -27,7 +27,6 @@ import {
     stripSubjects,
     stripDemoJobs
 } from './demo-remove-scenarios';
-import { stripAccountExportSchema } from './demo-remove-contract';
 
 /** Repo root, two levels up from `scripts/ops/`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
@@ -60,10 +59,6 @@ report([
     stripDemoJobs(REPO_ROOT),
     stripClientCollections(REPO_ROOT)
 ]);
-
-/** Step three: drop the removed modules' fields from the one shared contract schema. */
-console.info('\n[demo-remove] the shared contract fragment (shared/contracts/openapi.root.yaml):');
-report([stripAccountExportSchema(REPO_ROOT)]);
 
 /** What the person running this must do next, since the edits above are not yet verified. */
 console.info('\n[demo-remove] done. Next:');

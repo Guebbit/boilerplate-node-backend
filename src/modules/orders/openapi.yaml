@@ -3,11 +3,26 @@ info:
     title: orders — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Orders
+      description: Placing, reading and managing orders and their lifecycle.
+
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`inventory.any.read`).' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
+    ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    orders:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/Order'
 
 paths:
     /orders:
@@ -32,8 +47,8 @@ paths:
                   schema:
                       $ref: '#/components/schemas/OrderSort'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/UserIdParam'
-                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/ProductIdParam'
+                - $ref: '#/components/parameters/UserIdParam'
+                - $ref: '#/components/parameters/ProductIdParam'
                 - name: email
                   in: query
                   schema:
@@ -41,14 +56,14 @@ paths:
                 - name: status
                   in: query
                   schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                      $ref: '#/components/schemas/OrderStatus'
                 - name: paymentMethod
                   in: query
                   description: >-
                       Filter to orders placed with this method — the admin "awaiting transfer"
                       view combines this with `status=pending`.
                   schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                      $ref: '#/components/schemas/PaymentMethodId'
                 - name: deleted
                   in: query
                   description: >-
@@ -75,6 +90,11 @@ paths:
                 `userId`. The rank rule applies to that account: an operator raises orders for
                 customers, never for an equal or a superior (`OUTRANKED`). Raising one for oneself
                 is allowed, but the steps that move its money then refuse the caller.
+
+                A body is bounded twice. The schema caps it at 1000 lines of at most 999999 units
+                (what the contract promises); a deployment may set a lower limit in
+                `NODE_ADMIN_ORDER_MAX_LINES` and `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`, and a body over
+                it answers `422` with `ORDER_LINE_LIMIT_EXCEEDED`.
             operationId: createOrder
             security:
                 - bearerAuth: []
@@ -454,7 +474,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                    $ref: '#/components/schemas/Order'
 
         OrdersResponseEnvelope:
             type: object
@@ -492,7 +512,7 @@ components:
             properties:
                 to:
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                        - $ref: '#/components/schemas/OrderStatus'
                     description: Must be `processing`, `shipped` or `delivered`, and forward of the order's current status — every other value is a 409.
                 reason:
                     type: string
@@ -524,9 +544,9 @@ components:
                 # Narrows a listing already scoped to the caller: a customer filtering by
                 # status is filtering their own orders, and staff see the same shape.
                 status:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/OrderStatus'
+                    $ref: '#/components/schemas/OrderStatus'
                 paymentMethod:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                    $ref: '#/components/schemas/PaymentMethodId'
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
                 # Admin-effective, like `active`: a caller who cannot see deleted rows at all
                 # gets an empty page for `true`.
@@ -545,9 +565,26 @@ components:
                 items:
                     type: array
                     minItems: 1
+                    maxItems: 1000
                     items:
-                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/OrderLineInput'
             description: Create a new order.
+
+        # One line of an admin-created order. Not the cart's `CartItem`: the cart caps a quantity
+        # at what a shopper buys, an operator may book a bulk order. The stock guard is the real
+        # bound; this ceiling only keeps the schema finite (OWASP API4:2023, unrestricted resource
+        # consumption). A deployment lowers it with `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`.
+        OrderLineInput:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                    maximum: 999999
 
         # `status` is deliberately not a field here — see the route's own description. Writing it
         # through this body would let an admin skip `processing` by writing `paid → shipped`
@@ -590,6 +627,579 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                        $ref: '#/components/schemas/Order'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        # Shared by `Order.paymentMethod`, `CheckoutRequest.paymentMethod` and
+        # `PaymentMethod.id` (`payments`' own module contract) — one enum, so a third method
+        # added later cannot land in one of the three and not the others.
+        PaymentMethodId:
+            type: string
+            enum: [card, bank_transfer]
+            description: >-
+                How an order is being paid for. A preference recorded at checkout, not a lock — a
+                card payment still settles normally regardless of this value.
+
+        # An address an order freezes, as `shippingAddress` or `billingAddress` — a SNAPSHOT,
+        # exactly like the product snapshots the items embed: an order must keep where it was
+        # going and who it was billed to, not what the address book says today. No `id`, no
+        # `default` — those are facts about the book entry, not the order.
+        OrderAddress:
+            type: object
+            additionalProperties: false
+            required: [fullName, street, city, zip, country]
+            properties:
+                fullName:
+                    type: string
+                street:
+                    type: string
+                city:
+                    type: string
+                zip:
+                    type: string
+                country:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
+                phone:
+                    type: string
+
+        # What a pending `bank_transfer` order's owner (and staff) sees to complete it. Never
+        # frozen onto the order — the beneficiary/IBAN/BIC are deployment config, not
+        # order-specific data, so this is computed at read time from whatever the deployment
+        # currently has configured. `reference` IS order-specific: it is what the customer types
+        # into the transfer's own description field, so the money can be matched back.
+        OrderTransferInstructions:
+            type: object
+            additionalProperties: false
+            required: [beneficiary, iban, reference]
+            properties:
+                beneficiary:
+                    type: string
+                iban:
+                    type: string
+                bic:
+                    type: string
+                    description: Absent when the deployment has not configured one.
+                reference:
+                    type: string
+                    description: >-
+                        The ISO 11649 "RF" creditor reference minted for this order at checkout —
+                        what the customer writes into the transfer's description, so an admin can
+                        match the incoming payment back to it via `GET
+                        /payments/order-by-reference`. A malformed or unmatched reference answers
+                        404; a raw order id is not a reference.
+
+        # `Product`, without `onHand`/`reserved`/`available`, and without an image — see
+        # `OrderLineCurrent`. An order line is a purchase-time SNAPSHOT — the price and title a
+        # customer actually bought — and those two fields are the opposite of that: they describe
+        # the WAREHOUSE, right now, and publishing them on every past order republished live stock
+        # as if it were history. `id`/`title`/`price` stay `required`, same as `Product` itself.
+        OrderLineProduct:
+            type: object
+            additionalProperties: false
+            required: [id, title, price, taxRate]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        Gross — what the customer paid, VAT included, frozen at checkout. Same
+                        convention as `Product.price`.
+                description:
+                    type: string
+                requiresShipping:
+                    type: boolean
+                    default: true
+                # Art. 16 CRD, frozen at order-creation time — `returns` refuses a line marked so.
+                noWithdrawal:
+                    type: boolean
+                sku:
+                    $ref: '../products/openapi.yaml#/components/schemas/Sku'
+                # Grams, frozen at order-creation time — same convention as `Product.weight`,
+                # same "absent counts as 0" rule the shipping-method filter/refusal already apply.
+                weight:
+                    type: integer
+                    minimum: 0
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time
+                # The decimal rate this line was actually taxed at, resolved from the product's
+                # `taxClass` and frozen here at checkout — a rate change in config must not
+                # re-state what a past order was charged, and never re-resolved from the
+                # product's CURRENT tax class.
+                taxRate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    maximum: 1
+                    description: >-
+                        The VAT rate this line was actually charged, as a decimal (0.22 for 22%).
+                        Frozen at checkout, same reasoning as `price`.
+                # Unlike `taxClass` — resolved into `taxRate` and then discarded — `rateType` is
+                # copied here AS IS, same as `sku`/`weight`: there is no numeric rate for it to
+                # resolve into, and an invoice needs the category (Z vs E) the order was actually
+                # placed under, not whatever the product's config says today. See
+                # `orders/services/snapshot.ts#freezeOrderLines`.
+                rateType:
+                    $ref: '../products/openapi.yaml#/components/schemas/RateType'
+
+        # The picture, resolved LIVE from the catalogue product `OrderItem.product.id` still
+        # names — never frozen, so a hard-deleted or replaced image can never leak through order
+        # history. `null` means the product no longer exists; that is what lets "buy again" tell
+        # a deleted product apart from one that simply never had a picture (`imageUrl` absent).
+        OrderLineCurrent:
+            type: object
+            additionalProperties: false
+            properties:
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+
+        OrderItem:
+            type: object
+            additionalProperties: false
+            required: [product, quantity, locale, current, taxAmount, netAmount]
+            properties:
+                product:
+                    $ref: '#/components/schemas/OrderLineProduct'
+                quantity:
+                    type: integer
+                    minimum: 1
+                # The language `product.title`/`description` were resolved into when this line was
+                # frozen — the buyer's, not the request's. A historical record, not a preference:
+                # re-reading the order later must reproduce what was actually bought, in whatever
+                # language it was bought in, regardless of the reader's own locale.
+                locale:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                current:
+                    nullable: true
+                    allOf:
+                        - $ref: '#/components/schemas/OrderLineCurrent'
+                    description: >-
+                        The product's picture, resolved live — `null` when the catalogue product
+                        (`product.id`) has been hard-deleted. Never the terms of the sale, so it
+                        is never frozen; see `OrderLineCurrent`.
+                # Both derived at serialization from `product.price`/`quantity`/`product.taxRate`
+                # — never stored. See `src/modules/orders/domain/tax.ts`.
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: VAT included in this line's total, at its own frozen `taxRate`.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: This line's total excluding VAT — `price × quantity` minus `taxAmount`.
+
+        OrderStatus:
+            type: string
+            enum: [pending, paid, processing, shipped, delivered, cancelled]
+            description: >-
+                Where an order is in its lifecycle. The set is closed here; which value may FOLLOW
+                which is the server's own lifecycle rules, answered per caller by `OrderActions`.
+
+        OrderPaymentStatus:
+            type: string
+            enum: [unpaid, paid, partially_refunded, refunded]
+            description: >-
+                Where the order's MONEY stands, beside `status` — Shopify's `financial_status`.
+                `unpaid` until a payment lands; `paid`; then `partially_refunded` once some but not
+                all of it went back, and `refunded` once all of it did. Read-only: `payments`
+                stamps the refund states, `orders` derives the first two.
+
+        OrderFulfillmentStatus:
+            type: string
+            enum: [unfulfilled, in_progress, shipped, fulfilled]
+            description: >-
+                Where the goods stand, beside `status` — Shopify's `fulfillment_status`. Derived
+                from `status` alone: `unfulfilled` before work starts (and for a cancelled order),
+                `in_progress` while being prepared, `shipped` once handed to the carrier,
+                `fulfilled` on arrival. Read-only.
+
+        OrderReturnStatus:
+            type: string
+            enum: [none, requested, in_progress, partially_returned, returned]
+            description: >-
+                Where any return on the order stands — Shopify's `returnStatus`. `none` when no
+                return holds goods; `requested` while one awaits staff; `in_progress` once approved
+                and awaiting its goods; `partially_returned` / `returned` once received goods cover
+                some / every unit on the order. Read-only: `returns` stamps it, and `delivered`
+                stays terminal — a return is its own object, not an order status.
+
+        OrderActions:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    transitions,
+                    cancel,
+                    pay,
+                    recordPayment,
+                    start,
+                    ship,
+                    deliver,
+                    fulfill,
+                    override,
+                    invoice,
+                    withdraw
+                ]
+            description: >-
+                What the requesting caller may do to this order, decided by the server. A client
+                renders its controls from this rather than re-implementing the lifecycle: the rules
+                depend on the caller's role, and a second copy in a separately deployed client is
+                how the two come to disagree. Cancel and pay are the BUYER's (reading an order is
+                not owning it), and every move an operator makes is withheld when the buyer ranks
+                at or above them — a staff member's order is one only an admin handles. Nobody
+                handles their own money: recording a payment by hand is withheld on the caller's
+                own order too.
+            properties:
+                transitions:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderStatus'
+                    description: >-
+                        The statuses this caller may move the order to. Empty on a terminal order,
+                        and never contains the order's current status.
+                    example: [processing, cancelled]
+                cancel:
+                    type: boolean
+                    description: >-
+                        Whether `POST /orders/{id}/cancel` would be accepted for this caller. A
+                        customer may cancel while unpaid or paid; an operator one step further.
+                pay:
+                    type: boolean
+                    description: >-
+                        Whether this order is still awaiting payment — it can reach `paid`, which
+                        only a confirmed charge writes — and the caller may pay it: the buyer, who
+                        holds the shopper's checkout key (staff and administrators do not). Not in `transitions`, because no request may
+                        make that move: a client starts the flow with `POST /payments/intent` and
+                        the provider's yes does the rest.
+                recordPayment:
+                    type: boolean
+                    description: >-
+                        Whether `POST /payments/order/{orderId}/offline` would be accepted for this
+                        caller: an operator recording money that arrived another way. True while
+                        the order is still awaiting payment, the caller holds the key that records
+                        one and their rank reaches the buyer. Never true for the buyer, whose own
+                        step is `pay` — not even for a buyer who is staff or an administrator.
+                start:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/start` would be accepted for this
+                        caller. Not in `transitions`: `paid → processing` is `system`-only there,
+                        reached only by reporting the fact through `delivery`'s own door.
+                ship:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/ship` would be accepted for this
+                        caller. Not in `transitions`, for the same reason `start` is not. `false`
+                        for a digital-only order — nothing on it would ever ride in a parcel;
+                        `fulfill` is that order's door instead.
+                deliver:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/deliver` would be accepted for this
+                        caller. Not in `transitions`, for the same reason `start` is not.
+                fulfill:
+                    type: boolean
+                    description: >-
+                        Whether `POST /delivery/order/{id}/fulfill` would be accepted for this
+                        caller — the digital-only alternative to `ship`/`deliver`: `true` only for
+                        an order with no physical lines, once it is `processing`. Not in
+                        `transitions`, for the same reason `start` is not.
+                override:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderStatus'
+                    description: >-
+                        The statuses `POST /orders/{id}/status-override` would accept as a
+                        destination for this caller right now — empty for anyone without
+                        `orders.any.override`, or once the order has left every overridable status.
+                    example: [processing, shipped, delivered]
+                withdraw:
+                    type: boolean
+                    description: >-
+                        Whether the "withdraw from contract here" button is offered — EU Consumer
+                        Rights Directive Art. 11a. `true` for the order's own buyer while the order
+                        is withdrawable (paid or awaiting payment, in the shop's hands or on its way,
+                        or delivered) and the withdrawal window has not closed. Always `false` for
+                        anyone else, an operator included: the right is the consumer's. The client
+                        never counts the days — the server says when. Made with
+                        `POST /returns` and `reason: withdrawal`.
+                withdrawUntil:
+                    type: string
+                    format: date-time
+                    description: >-
+                        The last instant a withdrawal is valid, frozen when the period started —
+                        delivery for goods, payment for digital content. Absent before that: the
+                        right already exists, the window has no end yet.
+                invoice:
+                    type: boolean
+                    description: >-
+                        Whether `GET /orders/{id}/invoice` would answer a PDF rather than a 404 —
+                        `true` once the order has been invoiced (its `pending → paid` transition
+                        landed), regardless of anything that happened to it since. A gap between
+                        this and the actual download is possible but rare, the same "gaps are
+                        acceptable" policy `orderNumber` already lives under — see
+                        `docs/modules/invoicing.md`.
+
+        # One VAT rate's slice of the whole order — goods and shipping folded into the same row,
+        # since shipping is taxed at each line's own rate rather than carrying one of its own. See
+        # `src/modules/orders/domain/tax.ts`.
+        OrderTaxSummaryRow:
+            type: object
+            additionalProperties: false
+            required: [rate, netAmount, taxAmount, grossAmount]
+            properties:
+                rate:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: The decimal rate this row is for (`0.22` for 22%) — never repeated across rows.
+                netAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                taxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                grossAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: '`netAmount + taxAmount`, not re-derived from a price.'
+
+        Order:
+            type: object
+            additionalProperties: false
+            required:
+                [
+                    id,
+                    email,
+                    items,
+                    totalItems,
+                    totalQuantity,
+                    totalPrice,
+                    status,
+                    paymentStatus,
+                    fulfillmentStatus,
+                    returnStatus,
+                    currency,
+                    orderNumber,
+                    netTotal,
+                    taxTotal,
+                    shippingNetAmount,
+                    shippingTaxAmount,
+                    taxSummary
+                ]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                # Absent once the account that placed this order has been erased. The order
+                # survives (it is the invoice); the foreign key does not, because the account it
+                # named no longer exists.
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderItem'
+                totalItems:
+                    type: integer
+                    minimum: 0
+                    description: >-
+                        Number of distinct line items in this order. Not to be confused with
+                        `PaginationMeta.totalItems`, which counts orders matching a search.
+                    example: 2
+                totalQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Sum of `quantity` across every line item.
+                    example: 5
+                totalPrice:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: Sum of `product.price × quantity` across every line item, plus `shippingCost` when the checkout chose a method.
+                    example: 149.97
+                # Frozen from `NODE_DEFAULT_CURRENCY` the moment the order was placed — a later
+                # change to the shop's own setting must not rewrite what an old order actually
+                # charged.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: ISO-4217 currency code this order was priced in (e.g. EUR).
+                # Both derived at serialization from the lines' frozen `taxRate` — never stored.
+                # See `src/modules/orders/domain/tax.ts`.
+                netTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Sum of every line's `netAmount` — the goods total excluding VAT, GOODS
+                        ONLY. Shipping's own net amount is `shippingNetAmount`, not folded in here.
+                taxTotal:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Every VAT collected on this order: the lines' own `taxAmount`, plus the VAT
+                        on `shippingCost` — apportioned pro-rata across the lines by value and
+                        taxed at each line's own rate, since delivery is taxed as ancillary to what
+                        it delivers.
+                shippingNetAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own net amount, summed across every line it was apportioned
+                        onto — `netTotal` stays goods-only, this is the rest of the split. Zero on
+                        an order with no delivery method or free shipping.
+                shippingTaxAmount:
+                    type: number
+                    format: double
+                    minimum: 0
+                    readOnly: true
+                    description: >-
+                        Shipping's own tax amount, summed across every line it was apportioned
+                        onto — already folded into `taxTotal`, published separately so an invoice
+                        can print it as its own line. Zero on an order with no delivery method or
+                        free shipping.
+                taxSummary:
+                    type: array
+                    readOnly: true
+                    items:
+                        $ref: '#/components/schemas/OrderTaxSummaryRow'
+                    description: >-
+                        One row per distinct VAT rate charged on this order, sorted ascending.
+                        Reconciles exactly: summed `netAmount` is `netTotal` + `shippingNetAmount`,
+                        summed `taxAmount` is `taxTotal`, and summed `grossAmount` is `totalPrice`.
+                        Empty on an order with no lines.
+                notes:
+                    type: string
+                    description: Optional order notes
+                # Absent on an admin-created order (no checkout), or an all-digital basket — nothing
+                # ships, so no method applies.
+                # Present on every other order: a physical line makes a shipping method required.
+                shippingMethod:
+                    type: string
+                    description: The shipping method's id as the checkout froze it (e.g. standard, express, pickup).
+                shippingCost:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: What that method cost at checkout time — a later rate change cannot re-price history.
+                # Where the goods go — present only when a line ships to an address. Absent under
+                # the same conditions as `shippingMethod` above, when the chosen method itself
+                # needs no address (`requiresAddress: false`, e.g. pickup), on an all-digital
+                # order: nothing travels, so nothing is frozen here, and once the order is
+                # anonymised. `billingAddress` is the one every checkout order carries.
+                shippingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Who the order is invoiced to — the address the invoice prints as the buyer's
+                # (EU VAT Directive Art. 226). Present on every order a checkout places: the
+                # shipping address when the buyer chose "same as shipping", otherwise the book
+                # entry they named, otherwise their default. Absent on an admin-created order
+                # (`POST /orders` runs no checkout), and once the order is anonymised.
+                billingAddress:
+                    $ref: '#/components/schemas/OrderAddress'
+                # Absent on order creation that isn't a checkout (the admin `POST /orders` path
+                # names no method).
+                paymentMethod:
+                    $ref: '#/components/schemas/PaymentMethodId'
+                # When this order's stock hold ends — `NODE_RESERVATION_TTL_MINUTES` for `card`,
+                # `NODE_BANK_TRANSFER_HOLD_HOURS` for `bank_transfer`. Past this with no payment,
+                # the sweep releases the stock and cancels the order. Absent once paid or
+                # cancelled: the hold is over either way.
+                payBy:
+                    type: string
+                    format: date-time
+                # `{year}-{sequence}`, assigned once at order-creation time — never recomputed.
+                # Not a tax invoice number: this order is a receipt, not an invoice (no national
+                # e-invoicing system is involved) — see `docs/modules/orders.md`. Gaps are
+                # acceptable, the same way Shopify's `#1001` skips a number a failed write burned.
+                orderNumber:
+                    type: string
+                    readOnly: true
+                    example: '2026-000041'
+                # Present only while `paymentMethod` is `bank_transfer` and `status` is `pending`
+                # — the window in which the customer still needs to act. Scoped to the order's
+                # owner and to staff; never served to another customer.
+                transferInstructions:
+                    $ref: '#/components/schemas/OrderTransferInstructions'
+                status:
+                    $ref: '#/components/schemas/OrderStatus'
+                # Three read-only projections beside `status`, so a client never infers "was this
+                # refunded?" or "did a return come back?" from `status` — which `delivered` keeps
+                # terminal on purpose. Each says where one object stands: the money, the goods, and
+                # any return. See docs/modules/orders.md#the-status-projections.
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
+                # Computed per CALLER, not stored: what this requester may do to this order right
+                # now. Present on every response carrying ONE order — the read, the writes and the
+                # cancel — so a client that replaces its cached record from a write does not lose
+                # the block and collapse its own controls. Absent from the list, where it would be
+                # answered per row for a question only the detail view asks.
+                # See docs/theory/tactical-ddd.md.
+                actions:
+                    $ref: '#/components/schemas/OrderActions'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                # Unlike a product or a user, an order carries no `active` flag, so this is the
+                # only thing that distinguishes a hidden order from a live one. A non-admin never
+                # sees a record where it is set — `visibleScope` filters them out — so it appears
+                # only on admin reads.
+                deletedAt:
+                    type: string
+                    format: date-time
+    parameters:
+        UserIdParam:
+            name: userId
+            in: query
+            required: false
+            schema:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
+        ProductIdParam:
+            name: productId
+            in: query
+            required: false
+            schema:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'

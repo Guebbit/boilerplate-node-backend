@@ -3,6 +3,11 @@ info:
     title: cart — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Cart
+      description: The signed-in user's cart, and turning it into an order.
+
 x-error-codes:
     CART_ADDRESS_NOT_APPLICABLE: { status: 409, description: 'Nothing in this checkout ships to an address (all-digital, or a method that ships to none), so a shipping `addressId` cannot apply.' }
     CART_ADDRESS_NOT_FOUND: { status: 404, description: 'The named address does not exist, or does not belong to the caller.' }
@@ -23,6 +28,15 @@ x-error-codes:
     CART_SHIP_TO_COUNTRY_NOT_SUPPORTED: { status: 422, description: 'The address''s country is outside this deployment''s configured ship-to list.' }
     EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/verify-email`.' }
     REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    cart:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/CartItem'
 
 paths:
     /cart:
@@ -430,7 +444,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                    $ref: '../orders/openapi.yaml#/components/schemas/Order'
 
         CartQuantity:
             type: integer
@@ -641,7 +655,7 @@ components:
                     allOf:
                         [
                             {
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                                $ref: '../orders/openapi.yaml#/components/schemas/PaymentMethodId'
                             }
                         ]
                     default: card
@@ -793,3 +807,14 @@ components:
                         drawn from.
 
         # ---------- Observability ----------
+
+        CartItem:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1

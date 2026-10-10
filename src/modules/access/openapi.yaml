@@ -1,0 +1,136 @@
+openapi: 3.0.3
+info:
+    title: access — module contract
+    version: '0.1.0'
+
+# Components only: `access` has no HTTP routes of its own. `GET /account/abilities` (in `account`)
+# serves the rules below, and the role list is this module's section of the account data export.
+x-personal-data:
+    # A role lives in a membership row, not a field on the user document, so `profile`
+    # alone does not say what this account may do. Scope only, never the tenant id:
+    # this deployment ships one shop, so the id would name nothing a subject could
+    # recognise.
+    roles:
+        schema:
+            type: array
+            items:
+                type: object
+                additionalProperties: false
+                required: [role, scope]
+                properties:
+                    role:
+                        type: string
+                    scope:
+                        type: string
+                        enum: [tenant, platform]
+
+paths: {}
+
+components:
+    schemas:
+        Abilities:
+            type: object
+            additionalProperties: false
+            description: |
+                What the caller may do, as CASL's packed-rule format — the shape `unpackRules`
+                takes. A tuple per rule rather than an object, which is what makes shipping a few
+                dozen of them cheap.
+
+                BOTH SCOPES ARE ANSWERED, and that is the whole reason this is not a single rule
+                list. A request resolves to exactly one scope — the one the key it is asking about
+                declares — but a CLIENT renders screens from both at once: a shop's catalogue and
+                the installation's health dashboard sit in one navigation. Publishing only the
+                caller's tenant rules left every platform screen with no rule to grey out, so it
+                was gated on a tenant key that happened to correlate, which is exactly the
+                hand-maintained guess this endpoint exists to abolish.
+
+                The two lists never merge. A tenant rule can never satisfy a platform key and the
+                reverse is equally impossible (`shared/authorization-keys.yaml`'s one invariant),
+                so a client builds ONE ABILITY PER SCOPE and asks the one that owns the subject.
+
+                The client's copy has NO AUTHORITY: it decides what to render, never what is
+                allowed, and every request is re-evaluated server-side. Published so a client greys
+                out what it would be refused from the same rules the server enforces, rather than
+                from a hand-maintained duplicate that drifts — the drift is silent until somebody
+                is shown a button that answers 403.
+            required: [tenant, platform, version, subjects, grantableRoles]
+            properties:
+                subjects:
+                    type: array
+                    items: { type: string }
+                    description: |
+                        Every CASL subject a declared key names, deduplicated and sorted — the
+                        `Order`/`Product`/`ApiKey`/... a rule's second element may be. Published so
+                        a client's own `meta.can` rules are typed against the real set rather than
+                        an unchecked string a typo can silently fail closed on.
+                grantableRoles:
+                    type: array
+                    items: { type: string }
+                    description: |
+                        The tenant-scope roles this caller may assign through `POST`/`PUT`/`PATCH
+                        /users`, in the order `shared/authorization-roles.yaml` declares them.
+                        Computed by the same rule as the `409` those writes answer, so a role
+                        picker built from it offers exactly what the write accepts. Empty for a
+                        caller who may grant nothing, an anonymous one included. It has NO
+                        AUTHORITY: the write is re-checked server-side.
+                tenantId:
+                    type: string
+                    description: |
+                        The shop `tenant`'s rules are about. Absent when the caller has no tenant
+                        membership at all — a pure platform operator administers the installation
+                        rather than acting inside one shop.
+                tenant:
+                    allOf:
+                        - $ref: '#/components/schemas/PackedRules'
+                    description: |
+                        What the caller may do INSIDE their shop. Empty for a caller with no tenant
+                        membership; for an anonymous visitor it is the `guest` role's rules, which
+                        are a value in the model rather than an absence.
+                platform:
+                    allOf:
+                        - $ref: '#/components/schemas/PackedRules'
+                    description: |
+                        What the caller may do ACROSS the installation — health, metrics, the
+                        operational audit. Empty for everyone but a platform operator, which is
+                        most callers: an operator is not a super-member and holds no shop's keys.
+                version:
+                    type: integer
+                    description: |
+                        The permission model's own version, bumped when the KEYS change rather than
+                        when a role does. A client caches these; this is what tells it the cache is
+                        about a different model, not merely a different person. One number for both
+                        lists — the keys file they are declared in is one file.
+
+        PackedRules:
+            type: array
+            description: |
+                CASL packed rules — `[action, subject, conditions?, fields?, inverted?, reason?]`,
+                with trailing absent members omitted.
+            items:
+                type: array
+                description: |
+                    One packed rule. OpenAPI 3.0 has no tuple, so a position is declared as the
+                    union of what it may hold: the action and the subject are strings, `conditions`
+                    an object, `fields` a list of strings and `inverted` a boolean.
+                items:
+                    oneOf:
+                        - type: string
+                        - type: boolean
+                        - type: object
+                        - type: array
+                          items:
+                              type: string
+
+        AbilitiesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/Abilities'

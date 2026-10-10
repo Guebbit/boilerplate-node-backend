@@ -8,7 +8,7 @@
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import type { CartItem, UpdateOrderByIdRequest, CallerContext } from '@types';
+import type { OrderLineInput, UpdateOrderByIdRequest, CallerContext } from '@types';
 import type { OrderDocument } from '../model';
 import {
     generateReject,
@@ -24,10 +24,37 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { placeOrder } from './place';
+import { maxAdminOrderLineQuantity, maxAdminOrderLines } from '../config';
 import { outrankedRefusal } from '@modules/access';
 import { outrankedOrderRefusal } from './scope';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
 import { ERROR_CODES } from '@api/error-codes';
+
+/**
+ * The refusal for a body past this deployment's admin-order limits, or `undefined` within them.
+ * The contract's own ceilings are enforced earlier, by the schema; these are the operator's.
+ */
+const lineLimitRefusal = (items: readonly OrderLineInput[]): ResponseReject | undefined => {
+    const maxLines = maxAdminOrderLines();
+    if (items.length > maxLines)
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.ORDER_LINE_LIMIT_EXCEEDED,
+                message: t('orders.line-limit-lines', { limit: maxLines })
+            }
+        ]);
+
+    const maxQuantity = maxAdminOrderLineQuantity();
+    if (items.some(({ quantity }) => quantity > maxQuantity))
+        return generateReject(422, [
+            {
+                code: ERROR_CODES.ORDER_LINE_LIMIT_EXCEEDED,
+                message: t('orders.line-limit-quantity', { limit: maxQuantity })
+            }
+        ]);
+
+    return undefined;
+};
 
 /**
  * Report that an order was created — from the admin route or a customer's checkout
@@ -59,8 +86,10 @@ export const recordCreated = (order: OrderDocument, context: CallerContext): voi
  * @returns each item paired with its product, or `null` when the id no longer resolves
  */
 const resolveItemProducts = (
-    items: CartItem[]
-): Promise<{ item: CartItem; product: Awaited<ReturnType<typeof productService.findByIdRaw>> }[]> =>
+    items: OrderLineInput[]
+): Promise<
+    { item: OrderLineInput; product: Awaited<ReturnType<typeof productService.findByIdRaw>> }[]
+> =>
     Promise.all(
         items.map((item) =>
             productService.findByIdRaw(item.productId).then((product) => ({ item, product }))
@@ -80,9 +109,12 @@ const resolveItemProducts = (
 export const create = async (
     userId: string,
     email: string,
-    items: CartItem[],
+    items: OrderLineInput[],
     context: CallerContext
 ): Promise<ResponseSuccess<OrderDocument> | ResponseReject> => {
+    const overLimit = lineLimitRefusal(items);
+    if (overLimit) return overLimit;
+
     // The rank rule, asked of the buyer named in the body: an operator raises an order for a
     // customer, never for an equal or a superior. Raising one for themselves is allowed — the
     // steps that move its money then refuse them (`ownMoneyRefusalFor`).

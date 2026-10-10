@@ -3,6 +3,13 @@ info:
     title: account — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Auth
+      description: Sign up, log in, refresh and end a session, and recover or verify an account by email.
+    - name: Account
+      description: The signed-in user's own account - profile, credentials, two-factor, data export and deletion.
+
 x-error-codes:
     EMAIL_CHANGE_TOO_SOON: { status: 429, description: 'An email change was already requested for this account in the last minute — carries `details.retryAfter`.' }
     EMAIL_VERIFY_RESEND_TOO_SOON: { status: 429, description: 'A verification email was already sent recently — carries `details.retryAfter`.' }
@@ -51,7 +58,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AbilitiesEnvelope'
+                                $ref: '../access/openapi.yaml#/components/schemas/AbilitiesEnvelope'
 
     # --------- Authentication and profile ---------
     /account:
@@ -1028,7 +1035,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountExportResponse'
+                                $ref: '#/components/schemas/AccountExportResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -1036,6 +1043,21 @@ paths:
 components:
     schemas:
         # ---------- account — the schemas only this module's paths reference. ----------
+        # `POST /account/export`'s answer. Only the account's own half is written here: every other
+        # module declares its section as `x-personal-data` in its own contract, and the bundler
+        # adds it (`scripts/contracts/personal-data-assembly.ts`). A removed module takes its
+        # section with it.
+        AccountExportResponse:
+            type: object
+            additionalProperties: false
+            required: [exportedAt, profile]
+            properties:
+                exportedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+
         AccountExportRequest:
             type: object
             additionalProperties: false
@@ -1541,7 +1563,7 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 remember:
                     $ref: '#/components/schemas/RememberTier'
 
@@ -1566,9 +1588,9 @@ components:
                     minLength: 3
                     maxLength: 50
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                    $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 # Must be `true` — the checkbox gating the Terms of Service / Privacy Policy.
                 # Server-enforced (see `accountService.signup`), not just a client-side gate.
                 termsAccepted:
@@ -1599,9 +1621,9 @@ components:
                     minLength: 1
                     description: One-time password reset token (NOT a JWT).
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                    $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
 
         AccountDeleteConfirmRequest:
             type: object
@@ -1756,11 +1778,11 @@ components:
             required: [currentPassword, password, passwordConfirm]
             properties:
                 currentPassword:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                    $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
 
         ReauthMethod:
             type: string
@@ -1776,7 +1798,7 @@ components:
                     type: string
                     enum: [password]
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 otp:
                     type: string
                     maxLength: 64
@@ -1942,6 +1964,27 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/SessionsResponse'
+
+        Password:
+            type: string
+            maxLength: 128
+            minLength: 8
+            description: >-
+                An EXISTING password, being proved rather than set — login, the current-password
+                leg of a change, and re-auth. Length bounds only, like `PasswordNew`: a login
+                attempt is not the place to also announce the site's password policy to whoever is
+                guessing it.
+
+        PasswordNew:
+            type: string
+            maxLength: 128
+            minLength: 8
+            description: >-
+                A password being SET by its owner — signup, reset (or the setup link) and change.
+                Length only, 8 to 128 characters (NIST SP 800-63B-4: no composition rules, no
+                forced mix of classes); what keeps a weak one out is the breached-password check
+                on every set path, not a pattern. Hashed with argon2id, which has no 72-byte
+                limit, so every character counts.
 
     parameters:
         # ---------- account — the parameters only this module's paths reference. ----------

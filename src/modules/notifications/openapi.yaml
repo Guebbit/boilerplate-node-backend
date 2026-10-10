@@ -3,6 +3,21 @@ info:
     title: notifications — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Notifications
+      description: The signed-in user's in-app notifications and their delivery preferences.
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    # Every notification in this account's inbox, read and unread. Empty, never absent.
+    notifications:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/Notification'
+
 paths:
     /notifications:
         get:

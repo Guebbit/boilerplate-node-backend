@@ -124,7 +124,7 @@ describe('MODULE_SECTIONS', () => {
 describe('the OpenAPI bundle', () => {
     const openapi = bundleByName('openapi');
 
-    it('gives every module a standalone document with both paths and schemas', () => {
+    it('gives every module a standalone document with a `paths` map and schemas', () => {
         for (const section of MODULE_SECTIONS) {
             const document_ = parseYaml(readFileSync(moduleSpec(section), 'utf8')) as {
                 openapi?: string;
@@ -135,7 +135,9 @@ describe('the OpenAPI bundle', () => {
             // Standalone means standalone: a module document is valid OpenAPI on its own, which is
             // what lets it be linted and opened in an editor without the rest of the contract.
             expect(document_.openapi).toBeDefined();
-            expect(Object.keys(document_.paths ?? {}).length).toBeGreaterThan(0);
+            // A components-only module (`access`) declares `paths: {}`: the key must exist, the
+            // routes need not.
+            expect(document_.paths).toBeDefined();
             expect(Object.keys(document_.components?.schemas ?? {}).length).toBeGreaterThan(0);
         }
     });

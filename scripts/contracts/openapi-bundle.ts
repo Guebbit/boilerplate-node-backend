@@ -37,6 +37,8 @@ import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
+import { stageExportSchema } from './personal-data-assembly';
+import { pruneUnused } from './prune-unused';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
@@ -67,6 +69,9 @@ const MODULE_ORDER: readonly string[] = [
     'webhooks',
     'api-keys'
 ];
+
+/** The real `src/modules` directory. */
+const MODULES_ROOT = path.join(REPO_ROOT, 'src', 'modules');
 
 /** A module folder's name. */
 type ModuleSection = string;
@@ -499,6 +504,7 @@ const stageAssembledTree = (): string => {
         mkdirSync(path.dirname(target), { recursive: true });
         copyFileSync(moduleSpec(section), target);
     }
+    stageExportSchema(path.join(STAGING_DIR, 'src', 'modules'), MODULES_ROOT, MODULE_SECTIONS);
 
     return stagedRoot;
 };
@@ -537,6 +543,8 @@ const compile = (): string => {
                 path.join(REPO_ROOT, 'node_modules', '@redocly', 'cli', 'bin', 'cli.js'),
                 'bundle',
                 assembledRoot,
+                // A schema name two files both define stays an error, never a silent `Name-2`.
+                '--component-renaming-conflicts-severity=error',
                 '--output',
                 temporary
             ],
@@ -563,14 +571,16 @@ const compile = (): string => {
      */
     compiled =
         MARKER +
-        withErrorCodes(
-            withModuleStamps(
-                withVersionedResources(
-                    withAppLevelResponses(withBrowserEvents(readFileSync(temporary, 'utf8')))
+        pruneUnused(
+            withErrorCodes(
+                withModuleStamps(
+                    withVersionedResources(
+                        withAppLevelResponses(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                    ),
+                    moduleOfPath()
                 ),
-                moduleOfPath()
-            ),
-            collectErrorCodes()
+                collectErrorCodes()
+            )
         );
     return compiled;
 };

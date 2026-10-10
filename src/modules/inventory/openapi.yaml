@@ -3,6 +3,11 @@ info:
     title: inventory — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Inventory
+      description: Stock counters and the holds placed against them.
+
 x-error-codes:
     INVENTORY_BELOW_RESERVED: { status: 409, description: 'The requested on-hand count is below what is already reserved by open orders.' }
 

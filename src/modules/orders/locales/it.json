@@ -97,6 +97,8 @@
             "detail-partial": "È una parte di ciò che hai pagato; il resto del pagamento resta sull'ordine. Quanto tempo serve perché compaia dipende dalla tua banca o dal tuo emittente."
         },
         "insufficient-stock": "Alcuni articoli di questo ordine non sono più disponibili nella quantità richiesta — vedi `details.lines`.",
+        "line-limit-lines": "Questo ordine ha più di {{limit}} righe.",
+        "line-limit-quantity": "Una riga di questo ordine chiede più di {{limit}} unità.",
         "restored": "Ordine ripristinato.",
         "not-deleted": "Questo ordine non è eliminato."
     }

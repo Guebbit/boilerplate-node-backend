@@ -3,6 +3,11 @@ info:
     title: payments — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Payments
+      description: Paying for an order - payment intents, confirmation, offline payments and refunds.
+
 x-error-codes:
     PAYMENT_DECLINED: { status: 409, description: 'The card issuer or gateway declined the charge.' }
     PAYMENT_IN_FLIGHT: { status: 409, description: 'Another payment attempt for this order is already being recorded.' }
@@ -11,6 +16,15 @@ x-error-codes:
     PAYMENT_REFUND_EXCEEDS_REMAINING: { status: 422, description: 'The refund asks for more than the payment still has left to give back.' }
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
     PAYMENT_CARD_NOT_AVAILABLE: { status: 409, description: 'This deployment has no card payment provider, so a card payment cannot be started.' }
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    payments:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/ExportPayment'
 
 paths:
     /payments/methods:
@@ -695,7 +709,7 @@ components:
             required: [id]
             properties:
                 id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                    $ref: '../orders/openapi.yaml#/components/schemas/PaymentMethodId'
                 holdHours:
                     type: number
                     minimum: 0
@@ -744,7 +758,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                    $ref: '../orders/openapi.yaml#/components/schemas/Order'
 
         RecordOfflinePaymentRequest:
             type: object
