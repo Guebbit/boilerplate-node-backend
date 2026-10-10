@@ -31,6 +31,7 @@ import {
 } from './lookups';
 import {
     setPassword,
+    markSessionsEnded,
     markEmailVerified,
     applyEmailChange,
     restorePreviousEmail,
@@ -113,6 +114,7 @@ export const userService = {
     findByToken,
     findByTokenValue,
     setPassword,
+    markSessionsEnded,
     markEmailVerified,
     applyEmailChange,
     restorePreviousEmail,

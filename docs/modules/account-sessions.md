@@ -274,8 +274,17 @@ So every "I may be compromised" event also moves `tokensValidAfter` on the user,
 | password change or reset              | yes, and pending one-time tokens and MFA challenges are purged | survives: new session in the response                                                   |
 | 2FA factor armed, removed or disabled | yes                                                            | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
 | email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
+| email change undone ("not me")        | yes, FIRST, before the address is touched                      | n/a: the undo link is the credential                                                    |
 | refresh reuse detected                | yes                                                            | n/a                                                                                     |
 | plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
+
+**Where the epoch is written.** In the credential's own write, so a second write failing cannot
+leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two
+cases stand apart. Logout everywhere writes the epoch and its `account.sessions-revoked`
+[outbox](../tools/outbox.md) row in one transaction. The email undo does the same **before**
+restoring the address, because its link is already spent: if the old address was taken meanwhile
+the restore answers 409, and the owner has no retry, so the thief must already be out. Removing the
+refresh tokens afterwards is housekeeping; its failure is logged.
 
 `POST /account/reauth` retires the refresh token it was given when it re-mints, leaving one live
 session rather than two. A token stamped in the very second of a bump is kept, which is what lets

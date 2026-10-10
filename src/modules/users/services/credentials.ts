@@ -27,6 +27,18 @@ export const setPassword = (
 };
 
 /**
+ * Move the account's session epoch on the loaded document, for the caller's own `save` to carry:
+ * a credential change that ends sessions in the very write that changes the credential cannot be
+ * left half-done by a second write failing. Never moves the epoch backwards.
+ *
+ * @param user - the account the caller is about to save
+ * @param at - the new epoch
+ */
+export const markSessionsEnded = (user: UserDocument, at: Date = new Date()): void => {
+    if (!user.tokensValidAfter || user.tokensValidAfter < at) user.tokensValidAfter = at;
+};
+
+/**
  * Prove an account's email: stamp `verifiedAt` and save — document-only, per this file's own
  * module docblock. The `unverified` → `customer` promotion that follows a self-service
  * verification is `account`'s own flow's job (`completeEmailVerification`), not this operation's;
@@ -54,6 +66,8 @@ export const applyEmailChange = (user: UserDocument, newEmail: string): Promise<
     user.email = newEmail;
     user.pendingEmail = undefined;
     user.verifiedAt = new Date();
+    // The address is the recovery channel: whoever held the account under the old one is out now.
+    markSessionsEnded(user);
     return userRepository.save(user);
 };
 

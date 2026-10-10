@@ -88,7 +88,7 @@ flowchart LR
     F -->|yes| E{"expiresAt ≤ 1 year ahead?"}
     E -->|no| U["422"]
     E -->|yes| K["key minted · minter mailed"]
-    L["logout everywhere /<br/>password reset"] --> T["one transaction:<br/>epoch + credential + outbox row"]
+    L["logout everywhere /<br/>password reset /<br/>email change undone"] --> T["one transaction:<br/>epoch + credential + outbox row"]
     T --> V["account.sessions-revoked"]
     V -->|"relay delivers; a failing consumer is retried"| X["every live key the person minted revoked · list mailed"]
 ```
@@ -102,8 +102,8 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
 - **Minting needs a fresh session** (`stepUp: critical` on `apikeys.any.create`): a stolen access
   token must not turn ten minutes into a long-lived key. GitHub's sudo mode asks the same.
 - **Every key expires**, at most one year out. A key that never expires never gets rotated.
-- **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere
-  or a password reset revoked them. `account` only announces the event; this module owns what it
+- **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere,
+  a password reset or an email-change undo ("this wasn't me") revoked them. `account` only announces the event; this module owns what it
   means for keys. An ordinary password change, where the owner typed the current password, leaves
   keys alone.
 

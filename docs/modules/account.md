@@ -123,7 +123,9 @@ The old address gets a one-time **undo link** in its notice, valid for 7 days fr
 kept through a password change (a password change purges every other pending one-time token, not
 this one). Only the newest request's link lives. While the change is pending the undo cancels it;
 once the new address was confirmed it restores `previousEmail`, a field written at the swap. Either
-way every session ends, since the owner is saying the change was not theirs. The link is the
+way every session ends, first and as its own write (so a 409 on the restore still leaves the thief
+signed out), and `api-keys` revokes the keys the person minted: the owner is saying the change was
+not theirs. The link is the
 credential, so the route is public like the confirm one.
 
 A change never writes `user.email` directly. It parks the requested address in `pendingEmail`, so
