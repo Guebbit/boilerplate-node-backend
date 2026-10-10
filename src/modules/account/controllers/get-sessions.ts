@@ -28,5 +28,5 @@ export const getSessions = (request: Request, response: Response) => {
 
             successResponse<SessionsResponse>(response, result.data);
         })
-        .catch(catchAs(response, 'getSessions'));
+        .catch(catchAs(response, 'listSessions'));
 };

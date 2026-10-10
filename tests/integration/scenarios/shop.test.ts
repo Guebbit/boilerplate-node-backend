@@ -63,7 +63,7 @@ import {
     CreateOrder201Response,
     GetUserById200Response,
     ListAuditEntries200Response,
-    GetAddresses200Response
+    ListAddresses200Response
 } from '@api/schemas.zod';
 
 /*
@@ -521,7 +521,7 @@ describe('conformance: a produced row parses as the response the API would serve
         const books = await addressBookModel.find().exec();
         expect(books.length).toBeGreaterThan(0);
 
-        const addressSchema = GetAddresses200Response.shape.data.shape.addresses.element;
+        const addressSchema = ListAddresses200Response.shape.data.shape.addresses.element;
         for (const book of books) {
             // Decrypted first, same as every real reader (`addresses/repository.ts`'s
             // `decryptBook`) — `.toJSON()` alone would parse ciphertext, not what `GET

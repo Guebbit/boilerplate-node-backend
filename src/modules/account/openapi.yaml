@@ -296,7 +296,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/ReauthMethodPath'
+                - $ref: '#/components/parameters/ReauthMethodPathParam'
             responses:
                 '200':
                     description: A code is on its way
@@ -354,7 +354,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/TwoFactorMethodPath'
+                - $ref: '#/components/parameters/TwoFactorMethodPathParam'
             requestBody:
                 required: false
                 content:
@@ -385,7 +385,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/TwoFactorMethodPath'
+                - $ref: '#/components/parameters/TwoFactorMethodPathParam'
             responses:
                 '200':
                     description: A code is on its way
@@ -408,7 +408,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/TwoFactorMethodPath'
+                - $ref: '#/components/parameters/TwoFactorMethodPathParam'
             requestBody:
                 required: true
                 content:
@@ -436,7 +436,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '#/components/parameters/TwoFactorMethodPath'
+                - $ref: '#/components/parameters/TwoFactorMethodPathParam'
             requestBody:
                 required: true
                 content:
@@ -493,7 +493,7 @@ paths:
             tags: [Account]
             summary: List active sessions
             description: Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
-            operationId: getSessions
+            operationId: listSessions
             security:
                 - bearerAuth: []
             responses:
@@ -1945,7 +1945,7 @@ components:
 
     parameters:
         # ---------- account — the parameters only this module's paths reference. ----------
-        ReauthMethodPath:
+        ReauthMethodPathParam:
             name: method
             in: path
             required: true
@@ -1954,7 +1954,7 @@ components:
                 enum: [email]
             description: A re-authentication method that delivers a code — a `method` from `GET /account/reauth` other than `password`.
 
-        TwoFactorMethodPath:
+        TwoFactorMethodPathParam:
             name: method
             in: path
             required: true

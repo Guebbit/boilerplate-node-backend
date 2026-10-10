@@ -65,7 +65,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/CreditNoteListEnvelope'
+                                $ref: '#/components/schemas/CreditNotesResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -134,7 +134,7 @@ components:
                 refundId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
 
-        CreditNoteListEnvelope:
+        CreditNotesResponseEnvelope:
             type: object
             additionalProperties: false
             required: [success, status, message, data]

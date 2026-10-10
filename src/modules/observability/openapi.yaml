@@ -127,7 +127,7 @@ paths:
                 Entries are retained for a deployment-configured period (90 days by default) and expire after.
                 `meta.totalItems` counts every incident matching the filters, not just the returned page.
                 Requires the platform operator's observability key.
-            operationId: getObservabilityAuditLogs
+            operationId: listObservabilityAuditEntries
             security:
                 - bearerAuth: []
             parameters:
@@ -208,7 +208,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '#/components/schemas/AuditLogsPage'
+                    $ref: '#/components/schemas/AuditLogsResponse'
 
         ObservabilityHealthTelemetry:
             type: object
@@ -454,7 +454,7 @@ components:
                         memory: { $ref: '#/components/schemas/ProcessMemory' }
                 timestamp: { type: string, format: date-time }
 
-        AuditLogsPage:
+        AuditLogsResponse:
             type: object
             additionalProperties: false
             required: [items, meta]

@@ -12,7 +12,7 @@ paths:
             tags: [Account]
             summary: List saved addresses
             description: The authenticated user's address book. Whenever it is non-empty, exactly one entry carries `default` — the one checkout ships to when no `addressId` is named.
-            operationId: getAddresses
+            operationId: listAddresses
             security:
                 - bearerAuth: []
             responses:

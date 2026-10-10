@@ -125,7 +125,7 @@ paths:
                 `GET /locales/{locale}/messages?app=`.
 
                 Public and cacheable, like every other locale read.
-            operationId: getLocaleApps
+            operationId: listLocaleApps
             security: []
             responses:
                 '200':

@@ -8,7 +8,7 @@
  */
 
 import { pageSchema, pageSizeSchema } from '@infrastructure/http/schemas';
-import { GetObservabilityAuditLogsQueryParams } from '@api/schemas.zod';
+import { ListObservabilityAuditEntriesQueryParams } from '@api/schemas.zod';
 import { auditLogService } from '@modules/audit-logs';
 import { createListController } from '@infrastructure/surfaces/create-list-controller';
 
@@ -23,7 +23,7 @@ export const getObservabilityAuditLogs = createListController({
     // The generated `outcome` enum rejects anything outside `success`/`failure` with a 422
     // instead of the filter silently matching every row — `page`/`pageSize` swapped for the
     // infra pair so an absent one stays absent for `normalizePagination` to default.
-    schema: GetObservabilityAuditLogsQueryParams.extend({
+    schema: ListObservabilityAuditEntriesQueryParams.extend({
         page: pageSchema,
         pageSize: pageSizeSchema
     }).partial(),

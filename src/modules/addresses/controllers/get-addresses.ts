@@ -24,5 +24,5 @@ export const getAddresses = (request: Request, response: Response) => {
         .then((view) => {
             successResponse<AddressesResponse>(response, view);
         })
-        .catch(catchAs(response, 'getAddresses'));
+        .catch(catchAs(response, 'listAddresses'));
 };

@@ -51,7 +51,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/AuditEntryListResponseEnvelope'
+                                $ref: '#/components/schemas/AuditEntriesResponseEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -113,7 +113,7 @@ components:
                     type: string
                     enum: [info, warn]
 
-        AuditEntryList:
+        AuditEntriesResponse:
             type: object
             additionalProperties: false
             required: [items, meta]
@@ -124,7 +124,7 @@ components:
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
 
-        AuditEntryListResponseEnvelope:
+        AuditEntriesResponseEnvelope:
             type: object
             additionalProperties: false
             required: [success, status, message, data]
@@ -136,4 +136,4 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '#/components/schemas/AuditEntryList'
+                    $ref: '#/components/schemas/AuditEntriesResponse'

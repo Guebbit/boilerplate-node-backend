@@ -1,7 +1,7 @@
 /**
  * @module
  * Controller for `GET /audit`. The same filtered, paged read `observability`'s
- * `getObservabilityAuditLogs` serves, reached with a tenant key instead of a platform one — see
+ * `listObservabilityAuditEntries` serves, reached with a tenant key instead of a platform one — see
  * `../service.ts` for why one collection answers both.
  *
  * See: docs/modules/audit-logs.md
