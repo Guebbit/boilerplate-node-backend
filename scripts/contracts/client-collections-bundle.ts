@@ -64,9 +64,14 @@ const COLLECTION_NAME = 'Boilerplate API';
  * 1. Which module owns which path — read from the OpenAPI fragments, never restated
  * ──────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** The folders of a collection, in order: one per module, with the paths it owns. */
+/**
+ * The folders of a collection, in order: one per module, with the paths it owns. A components-only
+ * module (`access`) owns none, and an empty folder is noise in a request client.
+ */
 const sections = (): Section[] =>
-    SECTION_ORDER.map((name) => ({ name, paths: sectionPaths(name) }));
+    SECTION_ORDER.map((name) => ({ name, paths: sectionPaths(name) })).filter(
+        ({ paths }) => paths.length > 0
+    );
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * 2. Where the values come from — the shapes are the contract's, the data is the seed's

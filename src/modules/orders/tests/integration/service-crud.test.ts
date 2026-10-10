@@ -9,6 +9,7 @@
  * the order.
  */
 
+import { randomUUID } from 'node:crypto';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
@@ -92,6 +93,22 @@ const seedOrder = async () => {
     );
 
     return { user, keyboard, mouse, order: asSuccess(result).data };
+};
+
+/** Creates an order of `quantities.length` lines, one fresh well-stocked product each. */
+const createWithLines = async (quantities: number[]) => {
+    // A fresh address each call: a case may place two orders, and an email is unique.
+    const user = await createUser({ email: `buyer-${randomUUID()}@example.com` });
+    const items = await Promise.all(
+        quantities.map((quantity) =>
+            createProduct({ onHand: 100 }).then((product) => ({
+                productId: String(product._id),
+                quantity
+            }))
+        )
+    );
+
+    return create(String(user._id), user.email, items, callerContextAs('admin'));
 };
 
 describe('create', () => {
@@ -229,6 +246,42 @@ describe('create', () => {
 
         expect(result.success).toBe(false);
         expect(asReject(result).status).toBe(422);
+    });
+
+    describe('the admin order limits', () => {
+        it('accepts exactly as many lines as NODE_ADMIN_ORDER_MAX_LINES', () =>
+            withEnvironment('NODE_ADMIN_ORDER_MAX_LINES', '2', async () => {
+                const created = await createWithLines([1, 1]);
+                expect(created.success).toBe(true);
+            }));
+
+        it('refuses one line over NODE_ADMIN_ORDER_MAX_LINES with 422, naming the limit, and writes nothing', () =>
+            withEnvironment('NODE_ADMIN_ORDER_MAX_LINES', '2', async () => {
+                const refused = asReject(await createWithLines([1, 1, 1]));
+
+                expect(refused.status).toBe(422);
+                expect(refused.errors[0]?.code).toBe('ORDER_LINE_LIMIT_EXCEEDED');
+                expect(refused.errors[0]?.message).toContain('2');
+                await expect(orderRepository.count({})).resolves.toBe(0);
+            }));
+
+        it('accepts a quantity equal to NODE_ADMIN_ORDER_MAX_LINE_QUANTITY and refuses one more', () =>
+            withEnvironment('NODE_ADMIN_ORDER_MAX_LINE_QUANTITY', '3', async () => {
+                const created = await createWithLines([3]);
+                expect(created.success).toBe(true);
+
+                const refused = asReject(await createWithLines([4]));
+                expect(refused.status).toBe(422);
+                expect(refused.errors[0]?.code).toBe('ORDER_LINE_LIMIT_EXCEEDED');
+                expect(refused.errors[0]?.message).toContain('3');
+            }));
+
+        it('allows 100 lines by default', async () => {
+            // The default is a knob, not a wall: 100 passes, and the 101st is the first refused.
+            expect(
+                asReject(await createWithLines(Array.from({ length: 101 }, () => 1))).status
+            ).toBe(422);
+        });
     });
 
     it('rejects with 404 when any product does not exist', async () => {

@@ -86,11 +86,10 @@ Nothing else enumerates domains. Route mounting, the seeder, the i18n boot, the 
 the metrics registry all walk the registry instead — which is why none of them appears in either
 checklist.
 
-What still names modules by hand, and why it is not a table a new module edits:
+What still names modules by hand, and why it is not a table a new module edits (the data export's
+schema is not one: each module declares its own section as `x-personal-data` in its `openapi.yaml`,
+and the bundler assembles `AccountExportResponse` from them):
 
-- **`AccountExportResponse`** in `shared/contracts/openapi.root.yaml` has one field per module that
-  contributes a personal-data section — the export envelope is a contract, and a section a module
-  adds is a contract change made deliberately.
 - **Role grants** in `shared/authorization-roles.yaml` and the cases in
   `shared/authorization-conformance.yaml`. A module that introduces permission keys decides which
   roles hold them; the keys themselves live in the module's own `authorization.yaml`.

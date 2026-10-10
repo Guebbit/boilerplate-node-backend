@@ -20,6 +20,10 @@ import {
     bankTransferIban,
     bankTransferIbanFriendly,
     maxOpenUnpaidOrdersPerAccount,
+    maxAdminOrderLines,
+    maxAdminOrderLineQuantity,
+    ADMIN_ORDER_LINES_CEILING,
+    ADMIN_ORDER_LINE_QUANTITY_CEILING,
     orderFrontendLink,
     returnAddress,
     returnPostagePayer,
@@ -64,6 +68,8 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_BIC',
     'NODE_BANK_TRANSFER_HOLD_HOURS',
     'NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT',
+    'NODE_ADMIN_ORDER_MAX_LINES',
+    'NODE_ADMIN_ORDER_MAX_LINE_QUANTITY',
     'NODE_FRONTEND_LINK_ORDER',
     'NODE_FRONTEND_URL',
     'NODE_WITHDRAWAL_PERIOD_DAYS',
@@ -178,6 +184,37 @@ describe('bankTransferHoldHours', () => {
     it('reads NODE_BANK_TRANSFER_HOLD_HOURS when set', () => {
         setEnvironment({ NODE_BANK_TRANSFER_HOLD_HOURS: '48' });
         expect(bankTransferHoldHours()).toBe(48);
+    });
+});
+
+describe('the admin order limits', () => {
+    it('default to 100 lines and 99999 units a line', () => {
+        expect(maxAdminOrderLines()).toBe(100);
+        expect(maxAdminOrderLineQuantity()).toBe(99_999);
+    });
+
+    it('read NODE_ADMIN_ORDER_MAX_LINES and NODE_ADMIN_ORDER_MAX_LINE_QUANTITY when set', () => {
+        setEnvironment({
+            NODE_ADMIN_ORDER_MAX_LINES: '7',
+            NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: '12'
+        });
+        expect(maxAdminOrderLines()).toBe(7);
+        expect(maxAdminOrderLineQuantity()).toBe(12);
+    });
+
+    // The schema is the promise; an env value above it must not widen it.
+    it('never exceed the contract ceiling', () => {
+        setEnvironment({
+            NODE_ADMIN_ORDER_MAX_LINES: '5000',
+            NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: '99999999'
+        });
+        expect(maxAdminOrderLines()).toBe(ADMIN_ORDER_LINES_CEILING);
+        expect(maxAdminOrderLineQuantity()).toBe(ADMIN_ORDER_LINE_QUANTITY_CEILING);
+    });
+
+    it('refuse a limit below 1', () => {
+        setEnvironment({ NODE_ADMIN_ORDER_MAX_LINES: '0' });
+        expect(() => maxAdminOrderLines()).toThrow();
     });
 });
 

@@ -26,6 +26,14 @@ export interface ModuleFragment {
     paths: readonly string[];
     /** Every tag its operations use. */
     tags: readonly string[];
+    /** The tags the fragment declares itself, with their description: the module's own say on what each is. */
+    declaredTags?: readonly DeclaredTag[];
+}
+
+/** One entry of a fragment's top-level `tags:`. */
+export interface DeclaredTag {
+    name: string;
+    description?: string;
 }
 
 /** A `$ref` into a module fragment's path item — what the root's `paths` holds per module path. */
@@ -84,7 +92,11 @@ const appendMissingPaths = (
         }
 };
 
-/** Declares, as a bare `{ name }`, every tag a fragment uses that the root does not already list. */
+/**
+ * Declares every tag a fragment uses that the root does not already list: with the fragment's own
+ * description when it declares the tag, as a bare `{ name }` when it only uses it. The first
+ * fragment (in section order) to declare a name wins; a later one repeating it is ignored.
+ */
 const appendMissingTags = (document: Document, fragments: readonly ModuleFragment[]): void => {
     const tags = document.get('tags');
     const declared = new Set<string>();
@@ -95,10 +107,16 @@ const appendMissingTags = (document: Document, fragments: readonly ModuleFragmen
             if (typeof name === 'string') declared.add(name);
         }
 
-    const missing = [...new Set(fragments.flatMap(({ tags: used }) => used))].filter(
+    const described = new Map<string, DeclaredTag>();
+    for (const tag of fragments.flatMap(({ declaredTags }) => declaredTags ?? []))
+        if (!described.has(tag.name)) described.set(tag.name, tag);
+
+    const used = fragments.flatMap(({ tags: names }) => names);
+    const wanted = [...new Set([...described.keys(), ...used])].filter(
         (name) => !declared.has(name)
     );
-    for (const name of missing) document.addIn(['tags'], document.createNode({ name }));
+    for (const name of wanted)
+        document.addIn(['tags'], document.createNode(described.get(name) ?? { name }));
 };
 
 /**
@@ -132,8 +150,9 @@ interface FragmentOperation {
     tags?: string[];
 }
 
-/** A fragment's `paths`, as far as this reader looks. */
+/** A fragment's `paths` and `tags`, as far as this reader looks. */
 interface FragmentDocument {
+    tags?: DeclaredTag[];
     paths?: Record<string, Record<string, FragmentOperation | undefined>>;
 }
 
@@ -166,7 +185,8 @@ export const readModuleFragments = (
         return {
             section,
             paths: Object.keys(parsed.paths ?? {}),
-            tags: [...new Set(operations.flatMap((operation) => operation?.tags ?? []))]
+            tags: [...new Set(operations.flatMap((operation) => operation?.tags ?? []))],
+            declaredTags: parsed.tags ?? []
         };
     });
 };

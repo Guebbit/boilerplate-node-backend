@@ -3,6 +3,23 @@ info:
     title: api-keys — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: ApiKeys
+      description: Machine-to-machine credentials — list, mint, revoke.
+
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    # `api-keys` records `createdByUserId`, so the keys an account minted are its data.
+    # Metadata only, same as the admin's own list: no `hash`, no way to forge a
+    # credential from what a caller downloads about themselves.
+    apiKeys:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/ApiKey'
+
 paths:
     /api-keys:
         get:

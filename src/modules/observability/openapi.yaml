@@ -3,6 +3,11 @@ info:
     title: observability — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Observability
+      description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
+
 paths:
     # --------- Observability ---------
     /observability/events:
