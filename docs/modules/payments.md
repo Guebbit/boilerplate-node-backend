@@ -235,6 +235,15 @@ stateDiagram-v2
     refunded --> [*]
 ```
 
+**Each fact is reported once, by the call whose write made it true.** `settlePayment` says whether
+its own write moved the payment (`transitioned`); only then do the `payment.confirmed` / `payment.failed`
+audit row and the `payment_succeeded` / `payment_declined` analytics event fire. So a poll of a
+payment that already succeeded, or a webhook for a decline the confirm already recorded (Stripe sends
+two events for one decline), reports nothing. Only a confirm may decline an already-`declined`
+payment, because a confirm is itself a new attempt: card A refused, then card B refused, are two
+`payment.failed` rows. A confirm that loses the race to the webhook answers the payment as the
+winner left it, not the copy it read first.
+
 `POST /payments/order/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
 confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
 diagram's terminal states or their guards changes for it.
