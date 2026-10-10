@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: delivery — module contract
     version: '0.1.0'
@@ -52,11 +52,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: One of the caller's own orders
             responses:
                 '200':
@@ -78,11 +74,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: The order to ship
             requestBody:
                 required: false
@@ -119,11 +111,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: The order to start fulfilling
             responses:
                 '200':
@@ -147,11 +135,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: The order that arrived
             requestBody:
                 required: false
@@ -188,11 +172,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: The digital-only order to mark fulfilled
             responses:
                 '200':

@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: products — module contract
     version: '0.1.0'
@@ -519,19 +519,17 @@ components:
                     maxLength: 200
                     description: A title is never cleared — an empty locale is deleted with the locale's own `null`.
                 description:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 10000
                     minLength: 1
-                    nullable: true
                     description: A string sets the description, `null` clears it, absent keeps it. `""` is a 422.
 
         ProductTranslationsPatch:
             type: object
             additionalProperties:
-                type: object
-                nullable: true
-                allOf:
+                oneOf:
                     - $ref: '#/components/schemas/ProductTranslationFieldsPatch'
+                    - type: 'null'
             description: >-
                 One or more locales, keyed by BCP 47 tag. A key absent from this map leaves that
                 locale untouched; a key mapped to an object merges into it field by field (the
@@ -545,10 +543,9 @@ components:
         ProductTranslationsWrite:
             type: object
             additionalProperties:
-                type: object
-                nullable: true
-                allOf:
+                oneOf:
                     - $ref: '#/components/schemas/ProductTranslationFieldsWrite'
+                    - type: 'null'
             description: >-
                 One or more locales, keyed by BCP 47 tag, each stated WHOLE: a `PUT` replaces the
                 set, so a stored locale this map omits is deleted and a `description` a locale
@@ -989,22 +986,19 @@ components:
                 # `null` clears the class back to the shop's standard rate. Omitted on a PUT is
                 # the same as `null` — see the operation description.
                 taxClass:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/TaxClass'
+                        - type: 'null'
                 # `null` clears it back to `standard`, same as `taxClass`. Omitted on a PUT is
                 # the same as `null` — see the operation description.
                 rateType:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/RateType'
+                        - type: 'null'
                 sku:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/Sku'
+                        - type: 'null'
                 active:
                     type: boolean
                 purchasable:
@@ -1016,9 +1010,8 @@ components:
                 noWithdrawal:
                     type: boolean
                 weight:
-                    type: integer
+                    type: [integer, 'null']
                     minimum: 0
-                    nullable: true
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
@@ -1110,22 +1103,19 @@ components:
                 # `null` clears the class back to the shop's standard rate. Omitted leaves the
                 # stored value alone.
                 taxClass:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/TaxClass'
+                        - type: 'null'
                 # `null` clears it back to `standard`, same as `taxClass`. Omitted leaves the
                 # stored value alone.
                 rateType:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/RateType'
+                        - type: 'null'
                 sku:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/Sku'
+                        - type: 'null'
                 active:
                     type: boolean
                 purchasable:
@@ -1139,9 +1129,8 @@ components:
                 # `null` clears a recorded weight back to unset (read as 0 for shipping-method
                 # filtering, same as an absent one) — omitted leaves the stored value alone.
                 weight:
-                    type: integer
+                    type: [integer, 'null']
                     minimum: 0
-                    nullable: true
                     description: Grams. Absent counts as 0 for shipping-method filtering.
                 # `null` removes the image. Omitted leaves it unchanged; `''` is
                 # invalid (`ImageUrl`'s own `minLength: 1`), never a third spelling of "no image".

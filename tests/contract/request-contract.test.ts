@@ -45,7 +45,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { ZodType } from 'zod';
 import { validPayload, invalidPayloads } from '@tests/contract-data';
-import { listOperations, type Operation, type SchemaNode } from '@tests/spec-walk';
+import { isNullable, listOperations, type Operation, type SchemaNode } from '@tests/spec-walk';
 import { seedWorld, buildUrl, requiredHeadersOf, OBJECT_ID, type World } from '@tests/spec-world';
 import * as zodSchemas from '@api/schemas.zod';
 import {
@@ -578,10 +578,10 @@ const legalBody = (operation: Operation): Record<string, unknown> => {
     return validPayload(zod);
 };
 
-/** The names of the operation's `nullable` (or `enum: [null]`) body fields. */
+/** The names of the operation's body fields whose `type` admits `'null'` (3.1). */
 const nullableFieldsOf = (schema: SchemaNode | undefined): string[] =>
     Object.entries(schema?.properties ?? {})
-        .filter(([, property]) => property.nullable === true)
+        .filter(([, property]) => isNullable(property))
         .map(([name]) => name);
 
 /** The two request bodies a PATCH may carry: plain JSON, and merge-patch when declared. */

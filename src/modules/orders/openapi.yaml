@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: orders — module contract
     version: '0.1.0'
@@ -792,9 +792,9 @@ components:
                 locale:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
                 current:
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '#/components/schemas/OrderLineCurrent'
+                        - type: 'null'
                     description: >-
                         The product's picture, resolved live — `null` when the catalogue product
                         (`product.id`) has been hard-deleted. Never the terms of the sale, so it
@@ -1190,6 +1190,16 @@ components:
                     type: string
                     format: date-time
     parameters:
+        # Shared by every module that acts on one of an order's `{orderId}` routes (`dependsOn: orders`);
+        # each use restates its own `description` beside the `$ref` (OpenAPI 3.1 allows it).
+        OrderIdPathParam:
+            name: orderId
+            in: path
+            required: true
+            schema:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+            description: Order identifier
+
         UserIdParam:
             name: userId
             in: query

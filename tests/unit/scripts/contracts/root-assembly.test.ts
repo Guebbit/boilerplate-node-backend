@@ -6,7 +6,7 @@ import {
 } from '../../../../scripts/contracts/root-assembly';
 
 /** A root shaped like the real one: a system path, a comment, module refs in a chosen order, a tag list. */
-const ROOT = `openapi: 3.0.3
+const ROOT = `openapi: 3.1.0
 tags:
     - name: Alpha
       description: keeps its description
@@ -91,7 +91,7 @@ describe('assembleRoot', () => {
     });
 
     it('refuses a root with no paths map', () => {
-        expect(() => assembleRoot('openapi: 3.0.3\n', [alpha])).toThrow(/no `paths` map/);
+        expect(() => assembleRoot('openapi: 3.1.0\n', [alpha])).toThrow(/no `paths` map/);
     });
 
     it("declares a tag with the fragment's own description, and a used-only tag bare", () => {

@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: payments — module contract
     version: '0.1.0'
@@ -104,11 +104,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: One of the caller's own orders
             responses:
                 '200':
@@ -196,11 +192,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: The order whose payment is being returned
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/RequiredIdempotencyKeyHeader'
             requestBody:
@@ -249,11 +241,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: The order the money arrived for. Must still be `pending`
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -606,8 +594,7 @@ components:
                 amount:
                     type: number
                     format: double
-                    minimum: 0
-                    exclusiveMinimum: true
+                    exclusiveMinimum: 0
                     description: >-
                         How much to return, a decimal in the payment's own currency. Absent means
                         everything still refundable.

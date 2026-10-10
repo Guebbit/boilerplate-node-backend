@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: webhooks — module contract
     version: '0.1.0'
@@ -489,10 +489,9 @@ components:
                 # `null` clears it, same as PATCH — a PUT names every field, and an omitted one
                 # here clears too, since it has nothing to say by default.
                 description:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 500
                     minLength: 1
-                    nullable: true
                 eventTypes:
                     type: array
                     items: { type: string, minLength: 1, maxLength: 100 }
@@ -514,10 +513,9 @@ components:
                     description: Must be `https://` — same rule `CreateWebhookSubscriptionRequest` states.
                 # `null` clears it. Omitted leaves it unchanged; `''` is invalid.
                 description:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 500
                     minLength: 1
-                    nullable: true
                 eventTypes:
                     type: array
                     items: { type: string, minLength: 1, maxLength: 100 }

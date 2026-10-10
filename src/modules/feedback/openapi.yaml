@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: feedback — module contract
     version: '0.1.0'
@@ -346,10 +346,9 @@ components:
                 status:
                     $ref: '#/components/schemas/FeedbackRequestStatus'
                 adminNotes:
-                    type: string
+                    type: [string, 'null']
                     minLength: 1
                     maxLength: 5000
-                    nullable: true
 
         # PATCH /feedback/{id} — RFC 7396: every field optional, omitted means unchanged.
         UpdateFeedbackRequestStatusRequest:
@@ -360,10 +359,9 @@ components:
                     $ref: '#/components/schemas/FeedbackRequestStatus'
                 # `null` clears the notes. Omitted leaves them unchanged; `''` is invalid.
                 adminNotes:
-                    type: string
+                    type: [string, 'null']
                     minLength: 1
                     maxLength: 5000
-                    nullable: true
 
         FeedbackRequestsResponse:
             type: object

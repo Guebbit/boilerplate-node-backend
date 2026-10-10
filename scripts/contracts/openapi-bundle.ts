@@ -390,10 +390,9 @@ const collectErrorCodes = (): Record<string, ErrorCodeEntry> => {
  * Publishes the collected error-code catalogue as the bundled document's own `x-error-codes` —
  * `ErrorItem.code` itself stays `type: string` with its one illustrative `example`, deliberately
  * NEVER an `enum`, which could never gain a code later without being a breaking response change
- * (Zalando API guideline #112). OpenAPI 3.0 (this contract's version) has no schema-level
- * `examples` LIST the way 3.1 does — `oas3-schema` refuses one — so the full, documented set lives
- * in this vendor extension instead, which also carries each code's status and description,
- * strictly more than a bare list of names would.
+ * (Zalando API guideline #112). The full, documented set lives in this vendor extension rather
+ * than in a schema-level `examples` list, because it also carries each code's status and
+ * description — strictly more than a bare list of names would.
  *
  * Unlike {@link withAppLevelResponses}'s instruction key, `x-error-codes` is NOT deleted once
  * applied: it is real documentation a published contract benefits from keeping, and the generated
@@ -565,7 +564,7 @@ const compile = (): string => {
     /*
      * The marker has to be prepended rather than written into a source, because redocly PARSES: a
      * comment at the top of `openapi.root.yaml` would be dropped like every other one. Two lines of
-     * YAML comment ahead of `openapi: 3.0.3` are legal, and spectral, orval and the AsyncAPI-style
+     * YAML comment ahead of `openapi: 3.1.0` are legal, and spectral, orval and the AsyncAPI-style
      * viewers all read past them — the alternative is the one artefact in the repo that cannot say
      * what it is.
      */

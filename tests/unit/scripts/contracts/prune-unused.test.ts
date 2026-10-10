@@ -2,7 +2,7 @@ import { parse as parseYaml } from 'yaml';
 import { pruneUnused } from '../../../../scripts/contracts/prune-unused';
 
 /** A bundle with a used chain, orphans of every kind, and one tag nobody uses. */
-const BUNDLE = `openapi: 3.0.3
+const BUNDLE = `openapi: 3.1.0
 tags:
     - name: Used
     - name: Orphan

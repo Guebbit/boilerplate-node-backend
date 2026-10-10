@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: Boilerplate API
     license:
@@ -533,8 +533,7 @@ components:
                 `''` is never a synonym for "no image" — only `null` is, on a field that allows
                 it.
         ImageRemoval:
-            nullable: true
-            enum: [null]
+            type: 'null'
             description: >-
                 Write-side `imageUrl`: the ONLY accepted value is `null`, meaning "remove the
                 current image". A new image is sent as multipart `imageUpload` bytes. A client
@@ -732,9 +731,8 @@ components:
                 # above (`unverified` holds no `cart.checkout`, see `GET /account/abilities`) — so
                 # a client renders this as a banner, never as a wall of its own.
                 verifiedAt:
-                    type: string
+                    type: [string, 'null']
                     format: date-time
-                    nullable: true
                 # Set only by `PUT`/`PATCH /account` requesting a new address, cleared once
                 # `POST /account/email-change-confirm` proves it or `DELETE /account/pending-email`
                 # cancels it explicitly — resending the CURRENT address is a no-op, not a cancel.

@@ -20,6 +20,23 @@ rules:
             field: security
             function: truthy
 
+    # --- OpenAPI 3.1 has no `nullable` ---
+    #
+    # 3.1 adopted JSON Schema 2020-12, where `nullable: true` is an unknown keyword: every tool
+    # ignores it WITHOUT complaint, so a field written the 3.0 way silently stops accepting
+    # `null`. Spell it `type: [string, 'null']`, or `oneOf: [{ $ref }, { type: 'null' }]` around a
+    # reference. (A property literally named `nullable` sits under `properties` and is exempt.)
+    no-nullable-keyword:
+        description: "`nullable` is OpenAPI 3.0. In 3.1 write `type: [X, 'null']`, or `oneOf` with `{ type: 'null' }` around a `$ref`."
+        severity: error
+        given: "$..[?(@property === 'nullable' && @parentProperty !== 'properties')]"
+        then:
+            function: schema
+            functionOptions:
+                # `not: {}` rejects every value, so the keyword is refused whatever it was set to.
+                schema:
+                    not: {}
+
     # --- Catch the common typo: $refs instead of $ref ---
     no-refs-typo:
         description: "Do not use '$refs' (typo). Use '$ref'."
