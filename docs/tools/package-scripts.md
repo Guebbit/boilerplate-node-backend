@@ -8,7 +8,7 @@ This page groups the `package.json` scripts by job instead of by raw list order.
 | ------------------------- | ------------------------------------------------------------------------------------------------- |
 | `npm run compose:restart` | bring the stack up — [Getting Started](../getting-started.md)                                     |
 | `npm run regenerate`      | after changing anything a generator reads — [Regenerating After a Change](../api/regenerating.md) |
-| `npm run complete`        | before merging a lane — the full gate; pre-commit runs `complete:light` for now                   |
+| `npm run complete`        | before merging a lane — the full gate; pre-commit runs the light gate                             |
 | `npm run scaffold:module` | start a new domain — [Module scaffolder](./module-scaffolder.md)                                  |
 
 `regenerate` writes; `complete` only verifies. A gate failure saying **STALE** means the first one
@@ -56,7 +56,8 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | `complete:fix`                    | the same gate, with lint and formatting fixed rather than reported                                                                            | [Testing & Docs](./testing-and-docs.md)   |
 | `test:cluster`                    | boots `src/cluster.ts` with real forked workers and asserts one rate-limit budget across them; needs a Redis                                  | [Cluster Testing](./cluster-testing.md)   |
 | `test:broker`                     | runs the queue adapter against a real RabbitMQ: topology, retry, parking, priority, prefetch, reconnect; needs a broker or a container engine | [Broker Testing](./broker-testing.md)     |
-| `complete:light`                  | the fast subset pre-commit runs for now: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build` | [Testing & Docs](./testing-and-docs.md)   |
+| `complete:light:gates`            | `complete:light` minus lint and prettier, which the hook runs on staged files only via lint-staged                                            | [Testing & Docs](./testing-and-docs.md)   |
+| `complete:light`                  | the fast subset behind pre-commit: every static check + the unit and cross-cutting suites; nothing that needs `mongod`, no `docs:build`       | [Testing & Docs](./testing-and-docs.md)   |
 | `complete:manual`                 | what the gate cannot run for you: `test:prism`, `test:cluster` and `test:broker`, which bind real ports                                       | [Testing & Docs](./testing-and-docs.md)   |
 | `bench` / `bench:search`          | autocannon against a RUNNING server; reports latency numbers, has no pass/fail — which is why it is not `test:`                               | [Load Testing](./load-testing.md)         |
 | `bench:orders`                    | autocannon against `/orders` — the endpoint that embeds snapshots and derives totals                                                          | [Quick Start](./testing-quickstart.md)    |

@@ -306,9 +306,10 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
   other's edits, reconciled by hand afterward, is exactly how a merged file ends up with defects
   that pass review and only surface under execution — the failure mode is silent, not a merge
   conflict.
-- The pre-commit hook runs `regenerate` plus, **for now**, the light `complete:light` gate (static
-  checks + unit + cross-cutting; no integration, contract, fuzz or `docs:build`). A green commit is
-  therefore not a full gate: run `npm run complete` before merging a lane.
+- The pre-commit hook runs `regenerate --no-sync`, eslint + prettier on the staged files, then the
+  light `complete:light:gates` (static checks + unit + cross-cutting; no integration, contract, fuzz
+  or `docs:build`). That is the permanent commit gate. Run `npm run complete` before merging a lane
+  and once on main after; CI on push is authoritative.
 - Default: commit normally and let the hook run its light gate. Nothing more is required.
 - **NEVER** use `--no-verify` unless a `complete` (regular or `:fix`) has been run right before, on
   the current tree, and finished with success (all green). Running it is not required to commit;
