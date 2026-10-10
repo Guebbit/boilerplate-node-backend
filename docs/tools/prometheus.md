@@ -55,7 +55,7 @@ derived from the URL grows the registry for the life of the process.
 
 ## Alert rules
 
-Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
+Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`. The last three rows live in `docker/observability/prometheus.infra-rules.yaml` instead: they read Prometheus's and Alertmanager's own metrics (and, later, the host's and the proxy's), not the app's, which `tests/cross-cutting/alert-rules-metrics.test.ts` would reject. Both compose files mount it next to the first. The `security.rules` group (login, 2FA, audit, 401/403, rate-limit and rejection signals) is sized for a quiet shop: every threshold carries a "tune to your traffic" comment, and none should be trusted before it has seen yours.
 
 | Alert                                | Condition                                                                                                            | Severity |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | -------- |
@@ -85,6 +85,9 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                                                                     | warning  |
 | `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                      | warning  |
 | `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                          | warning  |
+| `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                  | none     |
+| `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (webhook only: email is what is broken)                         | warning  |
+| `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                      | warning  |
 
 ## Alertmanager
 

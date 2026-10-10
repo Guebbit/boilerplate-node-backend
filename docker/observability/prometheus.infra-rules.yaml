@@ -1,0 +1,44 @@
+# Rules about the alerting pipeline itself, and about the host and proxy around the app.
+# Why a second file: these read Prometheus's, Alertmanager's and other exporters' own metrics, not
+# the app's, and tests/cross-cutting/alert-rules-metrics.test.ts rejects any `*_total` the app does
+# not register. Mounted next to prometheus.alert-rules.yaml in both compose files.
+# Routing for these alerts: docs/tools/prometheus.md#alert-routing
+
+groups:
+    - name: alerting.rules
+      rules:
+          # The heartbeat. Always firing, on purpose: Alertmanager pushes it to ALERT_HEARTBEAT_URL
+          # every minute, and the service on the other end raises the alarm when the pings STOP.
+          # That is the only way to notice that the host, Prometheus, Alertmanager or the network is
+          # dead, since a dead pipeline cannot report itself.
+          - alert: Watchdog
+            expr: vector(1)
+            labels:
+                severity: none
+            annotations:
+                summary: 'Alerting pipeline heartbeat'
+                description: 'Always firing. If the heartbeat service stops receiving it, the alerting pipeline is down.'
+
+          # A failed send, by integration. The Watchdog cannot see this: its path is a different
+          # receiver. Routed to the webhook only, because email is what is likely broken
+          # (SMTP down, password rotated).
+          - alert: AlertmanagerNotificationsFailing
+            expr: sum by (integration) (increase(alertmanager_notifications_failed_total[15m])) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Alertmanager cannot send {{ $labels.integration }} notifications'
+                description: 'Alertmanager failed to deliver {{ $labels.integration }} notifications in the last 15 minutes. Alerts routed there are not arriving.'
+
+          # A rule that errors while running. `promtool check rules` in CI only reads the rule
+          # statically; a runtime failure (a bad join, a series that changed shape) stays invisible
+          # without this.
+          - alert: PrometheusRuleEvaluationFailures
+            expr: sum by (rule_group) (increase(prometheus_rule_evaluation_failures_total[15m])) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'Prometheus rule group {{ $labels.rule_group }} is failing to evaluate'
+                description: 'Rules in {{ $labels.rule_group }} errored while running in the last 15 minutes, so the alerts they define are blind.'

@@ -750,6 +750,7 @@ services:
         volumes:
             - ./docker/observability/prometheus.production.config.yaml:/etc/prometheus/prometheus.yml:ro
             - ./docker/observability/prometheus.alert-rules.yaml:/etc/prometheus/rules/alerts.yml:ro
+            - ./docker/observability/prometheus.infra-rules.yaml:/etc/prometheus/rules/infra.yml:ro
             - prometheus-data:/prometheus
         depends_on:
             - alertmanager
