@@ -31,6 +31,7 @@ export const createProduct = (
     const {
         price,
         active,
+        purchasable,
         requiresShipping,
         noWithdrawal,
         onHand,
@@ -40,7 +41,7 @@ export const createProduct = (
         translations
     } = readInput(request, {
         surface: 'create',
-        booleans: ['active', 'requiresShipping', 'noWithdrawal'],
+        booleans: ['active', 'purchasable', 'requiresShipping', 'noWithdrawal'],
         numbers: ['price', 'onHand', 'weight'],
         stringArrays: ['categories', 'tags'],
         jsonFields: ['translations']
@@ -56,6 +57,7 @@ export const createProduct = (
                 ...request.body,
                 price,
                 active,
+                purchasable,
                 requiresShipping,
                 noWithdrawal,
                 onHand,

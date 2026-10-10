@@ -47,5 +47,11 @@ export const probes: Probe[] = [
         why: `The other half of the pair: inactive is not deleted. \`active: false\` and a set \`deletedAt\` are different states with different visibility rules, and the dataset holds one of each so the difference is observable rather than argued about.`,
         method: 'GET',
         path: '/products/{{seedInactiveProductId}}'
+    },
+    {
+        name: 'Probe: the off-sale product, anonymously',
+        why: `The visible twin of the inactive one: \`purchasable: false\` lists the product for everyone, where \`active: false\` answers 404. Send it beside the inactive probe and compare — the pair is the whole difference between "not for sale" and "not there".`,
+        method: 'GET',
+        path: '/products/{{seedOffSaleProductId}}'
     }
 ];

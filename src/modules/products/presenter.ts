@@ -36,6 +36,7 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.reserved === undefined ? {} : { reserved: document.reserved }),
         ...(document.description === undefined ? {} : { description: document.description }),
         ...(document.active === undefined ? {} : { active: document.active }),
+        ...(document.purchasable === undefined ? {} : { purchasable: document.purchasable }),
         ...(document.requiresShipping === undefined
             ? {}
             : { requiresShipping: document.requiresShipping }),

@@ -128,6 +128,7 @@ describe('PUT /products/{id}', () => {
             .send({
                 price: 15,
                 active: true,
+                purchasable: true,
                 requiresShipping: true,
                 categories: [],
                 tags: [],
@@ -173,6 +174,7 @@ describe('PUT /products/{id}', () => {
             .send({
                 price: 10,
                 active: true,
+                purchasable: true,
                 requiresShipping: true,
                 categories: [],
                 tags: [],
@@ -195,6 +197,7 @@ describe('PUT /products/{id}', () => {
             .send({
                 price: 15,
                 active: true,
+                purchasable: true,
                 requiresShipping: true,
                 categories: [],
                 tags: [],
@@ -216,6 +219,7 @@ describe('PUT /products/{id}', () => {
             .send({
                 price: -5,
                 active: true,
+                purchasable: true,
                 requiresShipping: true,
                 categories: [],
                 tags: [],
@@ -368,6 +372,7 @@ describe('PATCH /products/{id} translations, field by field (RFC 7396)', () => {
             .send({
                 price: 10,
                 active: true,
+                purchasable: true,
                 requiresShipping: true,
                 categories: [],
                 tags: [],
@@ -587,5 +592,59 @@ describe('the stock counters on the product writes follow inventory.any.read', (
         expect(COUNTERS.filter((field) => field in byEditor.body.data)).toEqual([]);
         expect(byEditor.body.data.inStock).toBe(true);
         expect(byAdmin.body.data).toMatchObject({ onHand: 9, available: 9 });
+    });
+});
+
+describe('product states: `purchasable`', () => {
+    it('defaults to true on create, and accepts false', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const plain = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: 10, translations: { en: { title: 'Plain Dog Bed' } } });
+        const offSale = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({
+                price: 10,
+                purchasable: false,
+                translations: { en: { title: 'Off-sale Dog Bed' } }
+            });
+
+        expect(plain.body.data.purchasable).toBe(true);
+        expect(offSale.body.data.purchasable).toBe(false);
+    });
+
+    it('round-trips through PATCH without touching `active`', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed', active: true });
+
+        const response = await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ purchasable: false });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ purchasable: false, active: true });
+    });
+
+    it('is part of the replaced representation: a PUT without it is refused', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+        const product = await createProduct({ title: 'Bed' });
+
+        const response = await api()
+            .put(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({
+                price: 15,
+                active: true,
+                requiresShipping: true,
+                categories: [],
+                tags: [],
+                translations: { en: { title: 'Bed, replaced' } }
+            });
+
+        expect(response.status).toBe(422);
     });
 });

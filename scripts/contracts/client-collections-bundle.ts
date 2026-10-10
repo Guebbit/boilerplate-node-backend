@@ -149,6 +149,7 @@ const values: ValueSources = {
         seedProductId: SUBJECTS.product.id,
         seedSoftDeletedProductId: SEED_PRODUCT_IDS.heaterSoftDeleted,
         seedInactiveProductId: SEED_PRODUCT_IDS.bundleInactive,
+        seedOffSaleProductId: SEED_PRODUCT_IDS.bedOffSale,
         // Both resolve to a collection variable rather than an id — see ORDER_ID_VARIABLE.
         seedOrderId: ORDER_ID_VARIABLE,
         seedDeletedOrderId: '{{deletedOrderId}}'

@@ -125,6 +125,13 @@ describe('each subject names a row that really has the property', () => {
         expect(product?.deletedAt).toBeUndefined();
     });
 
+    it('product.offSale is listed and stocked, but not for sale', async () => {
+        const product = await productModel.findById(subjects['product.offSale']).exec();
+        expect(product?.purchasable).toBe(false);
+        expect(product?.active).toBe(true);
+        expect(product?.deletedAt).toBeUndefined();
+    });
+
     it('product.outOfStock is unbuyable where the storefront looks, and still listed', async () => {
         const product = await productModel.findById(subjects['product.outOfStock']).exec();
         expect(product).not.toBeNull();

@@ -45,6 +45,7 @@ const searchProductsQuerySchema = SearchProductsBody.extend({
     ),
     // A query string spells a boolean as text; the body carries a real one.
     active: optionalBooleanSchema,
+    purchasable: optionalBooleanSchema,
     deleted: optionalBooleanSchema
 });
 

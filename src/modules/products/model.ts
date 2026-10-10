@@ -308,12 +308,22 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: []
         },
         /*
-         * Independent of `deletedAt`: a product can be active/inactive regardless of deletion.
-         * `publicScope()` requires both active AND not deleted, so a soft-deleted product looks
-         * inactive from outside while staying a distinct state internally. Defaults `true`,
-         * matching `openapi.yaml`, so the frontend mock doesn't have to guess.
+         * Visibility only: can a shopper see it at all. `false` is hidden (404 for shoppers,
+         * visible to staff). Independent of `deletedAt` — `publicScope()` requires both active AND
+         * not deleted, so a soft-deleted product looks hidden from outside while staying a
+         * distinct state internally. Defaults `true`, matching `openapi.yaml`.
          */
         active: {
+            type: Boolean,
+            default: true
+        },
+        /*
+         * Buyability, stock aside: `false` is listed but "Not available right now". Cart accepts
+         * it like a sold-out product, checkout refuses it. Ignored while `active` is false (hidden
+         * wins). Defaults `true`, matching `openapi.yaml`.
+         * See: docs/modules/products.md#product-states
+         */
+        purchasable: {
             type: Boolean,
             default: true
         },

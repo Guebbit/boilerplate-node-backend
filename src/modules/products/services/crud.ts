@@ -199,6 +199,7 @@ export const applyUpdate = (
      */
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
+    if (data.purchasable !== undefined) product.purchasable = data.purchasable;
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.

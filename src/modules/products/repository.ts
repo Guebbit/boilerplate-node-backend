@@ -63,7 +63,7 @@ export const productRepository: Repository<ProductDocument, Product> & {
              * Admin-effective: a stranger's visibility scope pins `active: true`, so the two
              * clauses contradict and the page is empty rather than listing the unlisted catalogue.
              */
-            booleans: { active: 'active' },
+            booleans: { active: 'active', purchasable: 'purchasable' },
             presence: { deleted: 'deletedAt' },
             ranges: { price: { min: 'minPrice', max: 'maxPrice' } },
             // `title` is the fallback-locale column, the one the public catalogue exposes.

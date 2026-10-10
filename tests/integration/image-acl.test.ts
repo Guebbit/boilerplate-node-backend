@@ -175,6 +175,7 @@ describe('imageUrl is never a client-named path', () => {
                 price: 1,
                 translations: { en: { title: 'Attempt' } },
                 active: true,
+                purchasable: true,
                 requiresShipping: true,
                 categories: [],
                 tags: []

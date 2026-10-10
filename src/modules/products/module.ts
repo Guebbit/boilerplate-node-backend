@@ -50,7 +50,7 @@ export default {
     /**
      * The catalogue states the storefront and the repositories actually branch on.
      *
-     * Four are the hidden or empty ones; `inStock` and `rich` are the two ORDINARY rows a screen
+     * Five are the hidden, off-sale or empty ones; `inStock` and `rich` are the two ORDINARY rows a screen
      * needs a subject for — anything buyable, and one with every optional field populated, which
      * is what a detail page and a product form have to render to be worth auditing. `digital` is
      * the one row `requiresShipping: false` — the "digital = never shipped" rule needs a real product
@@ -68,6 +68,7 @@ export default {
         shop: [
             'product.softDeleted',
             'product.inactive',
+            'product.offSale',
             'product.outOfStock',
             'product.barebones',
             'product.inStock',

@@ -64,6 +64,13 @@ paths:
                   in: query
                   schema:
                       type: boolean
+                - name: purchasable
+                  in: query
+                  description: >-
+                      `true` lists only products that can be bought, `false` only the ones taken
+                      off sale. Open to every caller: an off-sale product is publicly listed.
+                  schema:
+                      type: boolean
                 - name: deleted
                   in: query
                   description: >-
@@ -599,6 +606,10 @@ components:
                     type: string
                 active:
                     type: boolean
+                # Visible but not for sale right now: listed, add-to-cart accepted like a sold-out
+                # product, checkout refused. Ignored while `active` is false (hidden wins).
+                purchasable:
+                    type: boolean
                 requiresShipping:
                     type: boolean
                     default: true
@@ -770,6 +781,9 @@ components:
                 # and the page is empty rather than revealing the unlisted catalogue.
                 active:
                     type: boolean
+                # Public, unlike `active`: an off-sale product is listed for everyone.
+                purchasable:
+                    type: boolean
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
                 # Admin-effective, like `active`: a caller who cannot see deleted rows at all
                 # gets an empty page for `true`.
@@ -827,6 +841,10 @@ components:
                 # "leave it as it is" — a default there would silently republish a deactivated
                 # record on any unrelated edit.
                 active:
+                    type: boolean
+                    default: true
+                # Same default and reasoning as `active` above: a declared default, create bodies only.
+                purchasable:
                     type: boolean
                     default: true
                 # Default true: most products are physical. false is a digital good — checkout
@@ -901,6 +919,10 @@ components:
                 active:
                     type: boolean
                     default: true
+                # Same default and reasoning as `active` above: a declared default, create bodies only.
+                purchasable:
+                    type: boolean
+                    default: true
                 requiresShipping:
                     type: boolean
                     default: true
@@ -939,7 +961,7 @@ components:
         ReplaceProductRequest:
             type: object
             additionalProperties: false
-            required: [price, translations, active, requiresShipping, categories, tags]
+            required: [price, translations, active, purchasable, requiresShipping, categories, tags]
             properties:
                 translations:
                     $ref: '#/components/schemas/ProductTranslationsWrite'
@@ -968,6 +990,8 @@ components:
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
+                    type: boolean
+                purchasable:
                     type: boolean
                 requiresShipping:
                     type: boolean
@@ -999,7 +1023,7 @@ components:
         ReplaceProductRequestMultipart:
             type: object
             additionalProperties: false
-            required: [price, translations, active, requiresShipping, categories, tags]
+            required: [price, translations, active, purchasable, requiresShipping, categories, tags]
             properties:
                 translations:
                     type: string
@@ -1023,6 +1047,8 @@ components:
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
+                    type: boolean
+                purchasable:
                     type: boolean
                 requiresShipping:
                     type: boolean
@@ -1086,6 +1112,8 @@ components:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
                     type: boolean
+                purchasable:
+                    type: boolean
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1145,6 +1173,8 @@ components:
                     allOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
                 active:
+                    type: boolean
+                purchasable:
                     type: boolean
                 requiresShipping:
                     type: boolean

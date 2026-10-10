@@ -1128,6 +1128,12 @@ components:
                     type: string
                 active:
                     type: boolean
+                # Visible but not for sale right now. Hidden (`active: false`) wins over it. Reads as
+                # "Not available right now": add-to-cart is accepted, as for a sold-out product, and
+                # checkout refuses it. Stock is unrelated — see `inStock`.
+                purchasable:
+                    type: boolean
+                    default: true
                 # Default true: most products are physical. false is a digital good — checkout
                 # never needs a shipping method for a cart made entirely of these.
                 requiresShipping:

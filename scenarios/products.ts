@@ -146,6 +146,20 @@ const NAMED_PRODUCT_COPY: Record<keyof typeof SEED_PRODUCT_IDS, ProductCopy> = {
                 'Consegna esclusivamente digitale — non viene spedito nulla.'
         }
     },
+    bedOffSale: {
+        en: {
+            title: 'Heated Orthopedic Pet Bed — Winter Edition',
+            description:
+                'A heated bed kept in the catalogue but not on sale right now: listed, ' +
+                'add-to-cart accepted, checkout refused.'
+        },
+        it: {
+            title: 'Cuccia Ortopedica Riscaldata — Edizione Invernale',
+            description:
+                'Una cuccia riscaldata che resta a catalogo ma non è in vendita al momento: ' +
+                'visibile, aggiungibile al carrello, ma il checkout la rifiuta.'
+        }
+    },
     bowlLowStock: {
         en: {
             title: 'Limited-Edition Brass Pet Bowl',
@@ -272,6 +286,20 @@ const namedProducts = [
         ...productImages.bundleInactive
     }),
     /*
+     * The off-sale one — listed and public, `purchasable: false`: the cart takes it like a sold-out
+     * product and checkout refuses it. Hidden's visible twin, and stocked, so the refusal cannot be
+     * mistaken for a stock-out.
+     */
+    makeUnstockedProduct({
+        id: SEED_PRODUCT_IDS.bedOffSale,
+        title: NAMED_PRODUCT_COPY.bedOffSale.en.title,
+        description: NAMED_PRODUCT_COPY.bedOffSale.en.description,
+        price: 120,
+        categories: ['dogs', 'seasonal'],
+        tags: ['dog-bed', 'heated'],
+        purchasable: false
+    }),
+    /*
      * The minimal one — only `title` and `price`, so every optional field but the stock counter
      * falls to the model's defaults, and has no image field. The others are richly populated and
      * can't catch a card or filter chip that wrongly assumes a description, category or image is
@@ -374,6 +402,7 @@ const OPENING_STOCK: ReadonlyMap<string, number> = new Map([
     [SEED_PRODUCT_IDS.heaterSoftDeleted, 12],
     [SEED_PRODUCT_IDS.dogBedPremium, 45],
     [SEED_PRODUCT_IDS.bundleInactive, 18],
+    [SEED_PRODUCT_IDS.bedOffSale, 15],
     [SEED_PRODUCT_IDS.barebones, 9],
     [SEED_PRODUCT_IDS.puppyCourseDigital, 50],
     [SEED_PRODUCT_IDS.bowlLowStock, 1],
