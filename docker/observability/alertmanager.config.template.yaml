@@ -85,5 +85,16 @@ receivers:
             # END heartbeat-auth
       # END heartbeat
 
-# None yet: no alert is only the consequence of another.
-inhibit_rules: []
+# Quiet what is only the consequence of a bigger fault, so one cause pages once.
+# A source alert mutes the target alerts it names; labels need no `equal`: there is one app.
+# `AuditSinkFailing` is never a target: a gap in the audit trail is real whatever the cause.
+inhibit_rules:
+    # A dead database makes every request slow or failing and every rejection unhandled.
+    - source_matchers: ['alertname="DependencyUnavailable"', 'dependency="database"']
+      target_matchers: ['alertname=~"HighErrorRate|HighP95Latency|UnhandledRejections"']
+    # A dead queue is why jobs park and webhook retries stall.
+    - source_matchers: ['alertname="DependencyUnavailable"', 'dependency="queue"']
+      target_matchers: ['alertname=~"QueueJobsParked|WebhookRetriesStalled"']
+    # A down API cannot also be a crash loop.
+    - source_matchers: ['alertname="ApiDown"']
+      target_matchers: ['alertname="ApiRestarting"']

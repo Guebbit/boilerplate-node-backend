@@ -39,8 +39,9 @@ hub and the scrape guard are its own files (`dependency-health.ts`, `job-health.
 the HTTP request counters stay in `infrastructure/observability`, since every module registers its
 own counters against that same registry (`metrics-registry.ts`, `metrics-http.ts`); this module's
 own `http-readback.ts` turns those counters into the overview endpoint's and the SSE stream's
-numbers — named apart from every other module's own `metrics.ts` (a wiring file, never barrel-
-published) because this one holds read-back services instead of metric declarations.
+numbers — named apart from this module's own `metrics.ts` (a wiring file, never barrel-
+published), which declares the one gauge it owns, `dependency_up`: each backing service's readiness,
+read at scrape time from `dependency-health.ts`.
 Beyond the audit read this module owns no collection at all, which is also why it has no `model.ts`
 and no `repository.ts`.
 

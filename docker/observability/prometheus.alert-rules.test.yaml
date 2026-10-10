@@ -34,6 +34,51 @@ tests:
             exp_alerts: []
     - interval: 1m
       input_series:
+          - series: dependency_up{job="api",dependency="database"}
+            values: 1 1 0x10
+          - series: dependency_up{job="api",dependency="cache"}
+            values: 1x12
+      alert_rule_test:
+          - eval_time: 8m
+            alertname: DependencyUnavailable
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      job: api
+                      dependency: database
+                  exp_annotations:
+                      summary: The database is unavailable
+                      description: The app has reported its database as not serving for over a minute.
+    - interval: 1m
+      input_series:
+          - series: dependency_up{job="api",dependency="queue"}
+            values: 1 1 0x20
+          - series: dependency_up{job="api",dependency="database"}
+            values: 1x22
+      alert_rule_test:
+          - eval_time: 12m
+            alertname: DependencyUnavailable
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      job: api
+                      dependency: queue
+                  exp_annotations:
+                      summary: The queue is unavailable
+                      description: The app has reported its queue as not serving for over 5 minutes; it keeps running without it.
+    # Quiet: every dependency serving, and a blip shorter than the `for`.
+    - interval: 1m
+      input_series:
+          - series: dependency_up{job="api",dependency="database"}
+            values: 1 1 0 1 1 1 1 1 1 1 1 1
+          - series: dependency_up{job="api",dependency="cache"}
+            values: 1x12
+      alert_rule_test:
+          - eval_time: 10m
+            alertname: DependencyUnavailable
+            exp_alerts: []
+    - interval: 1m
+      input_series:
           - series: http_requests_total{route="a",status_code="500"}
             values: 0+15x20
           - series: http_requests_total{route="b",status_code="502"}

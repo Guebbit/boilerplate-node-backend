@@ -21,6 +21,8 @@ import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 import { observabilityConfig } from './config';
+// Registers the `dependency_up` gauge with the metrics registry at module load.
+import './metrics';
 
 /** This module's manifest entry: routes and locales — no event subscriptions, no seeds. */
 export default {

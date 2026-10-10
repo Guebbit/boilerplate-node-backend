@@ -15,6 +15,31 @@ groups:
                 summary: 'API instance is down'
                 description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
 
+          # A backing service that is not serving. `dependency_up` is the app's own reading of each
+          # (`modules/observability/metrics.ts`). With Mongo down the job and outbox gauges stop
+          # reporting and the stale-job rules go blind, so this is the one that still speaks.
+          # One alert name, two rules, because severity differs: the database is critical, the
+          # cache and the queue only degrade. The rate-limit Redis is covered by
+          # `RateLimitStoreFallback`. While the database one fires, Alertmanager mutes the alerts
+          # that are its consequence (`alertmanager.config.template.yaml`, `inhibit_rules`).
+          - alert: DependencyUnavailable
+            expr: dependency_up{dependency="database"} == 0
+            for: 1m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'The {{ $labels.dependency }} is unavailable'
+                description: 'The app has reported its {{ $labels.dependency }} as not serving for over a minute.'
+
+          - alert: DependencyUnavailable
+            expr: dependency_up{dependency=~"cache|queue"} == 0
+            for: 5m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'The {{ $labels.dependency }} is unavailable'
+                description: 'The app has reported its {{ $labels.dependency }} as not serving for over 5 minutes; it keeps running without it.'
+
           # Error rate: the SERVER is failing. Counts 5xx only: 4xx are the client's mistakes
           # (scanner 404s, wrong logins, validation errors, rate-limit refusals) and have their own
           # rules, so counting them here fired three alerts for one cause. The golden-signals
