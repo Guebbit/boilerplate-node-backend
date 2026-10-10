@@ -41,3 +41,13 @@ rules:
     # contact and licence are the deployment's.
     asyncapi-info-contact: off
     asyncapi-info-license: off
+
+# The `webhooks` section declares the headers every event shares, and the events themselves live in
+# the owning modules' `asyncapi.webhooks.yaml` fragments, merged in by the bundler. On its own the
+# section therefore looks like it never uses `WebhookHeaders`; the merged section is linted, whole,
+# as part of `asyncapi.yaml` by `npm run lint:asyncapi`.
+overrides:
+    - files:
+          - '../../src/modules/webhooks/asyncapi.yaml'
+      rules:
+          asyncapi-unused-components-schema: off

@@ -1,0 +1,69 @@
+# The example module's webhook events: `example.published`.
+#
+# A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
+# `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
+# merges it into the `webhooks` section only while that module exists
+# (`scripts/contracts/asyncapi-webhook-events.ts`), and `GET /webhooks/events` lists it only while
+# this module is registered. Delete the module and its events leave the contract with it.
+# Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
+# `publicEvents` (`module.ts`) is what actually fires it.
+channels:
+    example.published:
+        address: example.published
+        description: An example was published. The `example` module's one webhook, there to be copied.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ExamplePublishedEvent:
+                $ref: '#/components/messages/ExamplePublishedEvent'
+operations:
+    webhookExamplePublished:
+        action: send
+        channel:
+            $ref: '#/channels/example.published'
+        summary: An example was published.
+        description: >-
+            One-to-one with the `example.published` domain event — see `example/services/crud.ts`. Fired
+            each time an example moves to `published`, including after being archived and brought back.
+        messages:
+            - $ref: '#/channels/example.published/messages/ExamplePublishedEvent'
+components:
+    messages:
+        ExamplePublishedEvent:
+            name: ExamplePublishedEvent
+            title: Example published
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ExamplePublishedEnvelope'
+    schemas:
+        ExamplePublishedPayload:
+            type: object
+            required:
+                - exampleId
+                - title
+            properties:
+                exampleId:
+                    type: string
+                title:
+                    type: string
+                    description: The fallback-language title.
+            additionalProperties: false
+        ExamplePublishedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ExamplePublishedEventType
+                    type: string
+                    enum:
+                        - example.published
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ExamplePublishedPayload'
+            additionalProperties: false

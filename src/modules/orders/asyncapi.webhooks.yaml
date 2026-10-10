@@ -1,0 +1,207 @@
+# The orders module's webhook events: `order.*`.
+#
+# A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
+# `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
+# merges it into the `webhooks` section only while that module exists
+# (`scripts/contracts/asyncapi-webhook-events.ts`), and `GET /webhooks/events` lists it only while
+# this module is registered. Delete the module and its events leave the contract with it.
+# Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
+# `publicEvents` (`module.ts`) is what actually fires it.
+channels:
+    order.created:
+        address: order.created
+        description: A new order was placed.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCreatedEvent:
+                $ref: '#/components/messages/OrderCreatedEvent'
+    order.paid:
+        address: order.paid
+        description: An order's payment settled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderPaidEvent:
+                $ref: '#/components/messages/OrderPaidEvent'
+    order.shipped:
+        address: order.shipped
+        description: An order was marked shipped.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderShippedEvent:
+                $ref: '#/components/messages/OrderShippedEvent'
+    order.cancelled:
+        address: order.cancelled
+        description: An order was cancelled.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            OrderCancelledEvent:
+                $ref: '#/components/messages/OrderCancelledEvent'
+operations:
+    webhookOrderCreated:
+        action: send
+        channel:
+            $ref: '#/channels/order.created'
+        summary: An order was written for the first time.
+        description: >-
+            Fired once per order, from both an admin create and a storefront checkout — see
+            `orders/services/crud.ts`'s `recordCreated`.
+        messages:
+            - $ref: '#/channels/order.created/messages/OrderCreatedEvent'
+    webhookOrderPaid:
+        action: send
+        channel:
+            $ref: '#/channels/order.paid'
+        summary: An order moved to the `paid` status.
+        description: >-
+            Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain
+            event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know
+            who cares."
+        messages:
+            - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
+    webhookOrderShipped:
+        action: send
+        channel:
+            $ref: '#/channels/order.shipped'
+        summary: An order moved to the `shipped` status.
+        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
+        messages:
+            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
+    webhookOrderCancelled:
+        action: send
+        channel:
+            $ref: '#/channels/order.cancelled'
+        summary: A cancel went through; stock is already back on the shelf.
+        description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
+        messages:
+            - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+components:
+    messages:
+        OrderCreatedEvent:
+            name: OrderCreatedEvent
+            title: Order created
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderCreatedEnvelope'
+        OrderPaidEvent:
+            name: OrderPaidEvent
+            title: Order paid
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderPaidEnvelope'
+        OrderShippedEvent:
+            name: OrderShippedEvent
+            title: Order shipped
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderShippedEnvelope'
+        OrderCancelledEvent:
+            name: OrderCancelledEvent
+            title: Order cancelled
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/OrderCancelledEnvelope'
+    schemas:
+        OrderIdPayload:
+            type: object
+            required:
+                - orderId
+            properties:
+                orderId:
+                    type: string
+            additionalProperties: false
+        OrderCancelledPayload:
+            type: object
+            required:
+                - orderId
+                - refund
+            properties:
+                orderId:
+                    type: string
+                refund:
+                    type: boolean
+                    description: >-
+                        Whether the cancel carries a refund — a customer cancelling is owed their
+                        money, an operator cancelling may not be. See `orders/events.ts`.
+            additionalProperties: false
+        OrderCreatedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    # `title` names the generated model — a bare inline enum-of-one otherwise
+                    # becomes Modelina's `AnonymousSchemaN`, renumbered on every unrelated addition.
+                    title: OrderCreatedEventType
+                    type: string
+                    enum:
+                        - order.created
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderPaidEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: OrderPaidEventType
+                    type: string
+                    enum:
+                        - order.paid
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderShippedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: OrderShippedEventType
+                    type: string
+                    enum:
+                        - order.shipped
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderIdPayload'
+            additionalProperties: false
+        OrderCancelledEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: OrderCancelledEventType
+                    type: string
+                    enum:
+                        - order.cancelled
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/OrderCancelledPayload'
+            additionalProperties: false

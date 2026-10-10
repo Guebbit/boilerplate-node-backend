@@ -31,6 +31,7 @@ import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/ada
 import { ERROR_CODES } from '@api/error-codes';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { webhooksAuditActions } from '../audit';
+import { unknownEventTypes } from './catalogue';
 
 /** A subscription alongside whichever plaintext secrets this call just minted — shown once. */
 export interface SubscriptionWithMintedSecrets {
@@ -73,6 +74,28 @@ const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
                 }
             ]);
         });
+
+/**
+ * Refuses an event filter naming something the catalogue does not list: such a subscription would
+ * never fire, and the caller would only learn it by waiting (Stripe's `enabled_events` and
+ * Shopify's topics refuse the same way).
+ *
+ * @param eventTypes - the requested filter; `undefined` on a partial update that leaves it alone
+ * @returns a 422 naming the `eventTypes` field, or `undefined` when every name is known
+ */
+const refuseUnknownEvents = (
+    eventTypes: readonly string[] | undefined
+): ResponseReject | undefined => {
+    const unknown = unknownEventTypes(eventTypes ?? []);
+    if (unknown.length === 0) return undefined;
+    return generateReject(422, [
+        {
+            code: ERROR_CODES.VALIDATION_ERROR,
+            message: t('webhooks.unknown-event-types', { names: unknown.join(', ') }),
+            details: { field: 'eventTypes' }
+        }
+    ]);
+};
 
 /** List this tenant's subscriptions, newest first, optionally filtered by `enabled`. */
 export const list = (
@@ -155,6 +178,8 @@ export const create = (
     context: TenantCallerContext
 ): Promise<ResponseSuccess<SubscriptionWithMintedSecrets> | ResponseReject> => {
     const tenant = context.caller.tenantId;
+    const unknownEvents = refuseUnknownEvents(body.eventTypes);
+    if (unknownEvents) return Promise.resolve(unknownEvents);
 
     return webhookSubscriptionRepository.count({ tenant }).then(async (count) => {
         if (count >= getWebhookSubscriptionCap())
@@ -196,6 +221,9 @@ export const update = (
         .findByIdInTenant(id, context.caller.tenantId)
         .then(async (subscription) => {
             if (!subscription) return generateReject(404, [t('generic.error-not-found')]);
+
+            const unknownEvents = refuseUnknownEvents(body.eventTypes);
+            if (unknownEvents) return unknownEvents;
 
             // Only a URL that CHANGES is worth a lookup: an edit to the description must not
             // start failing because the host's DNS is down today.

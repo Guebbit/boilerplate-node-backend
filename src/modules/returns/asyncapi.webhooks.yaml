@@ -1,0 +1,191 @@
+# The returns module's webhook events: `return.*`.
+#
+# A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
+# `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
+# merges it into the `webhooks` section only while that module exists
+# (`scripts/contracts/asyncapi-webhook-events.ts`), and `GET /webhooks/events` lists it only while
+# this module is registered. Delete the module and its events leave the contract with it.
+# Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
+# `publicEvents` (`module.ts`) is what actually fires it.
+channels:
+    return.requested:
+        address: return.requested
+        description: A return was opened — a withdrawal or a request.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnRequestedEvent:
+                $ref: '#/components/messages/ReturnRequestedEvent'
+    return.received:
+        address: return.received
+        description: Returned goods arrived and went back on sale.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnReceivedEvent:
+                $ref: '#/components/messages/ReturnReceivedEvent'
+    return.closed:
+        address: return.closed
+        description: A return finished — the money went back.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ReturnClosedEvent:
+                $ref: '#/components/messages/ReturnClosedEvent'
+operations:
+    webhookReturnRequested:
+        action: send
+        channel:
+            $ref: '#/channels/return.requested'
+        summary: A return was opened — a withdrawal or a request.
+        description: >-
+            One-to-one with the `return.requested` domain event — see `returns/services/create.ts`.
+            A withdrawal before dispatch fires it too, followed at once by `return.closed`: the
+            return is born closed, and `order.cancelled` says the order was cancelled.
+        messages:
+            - $ref: '#/channels/return.requested/messages/ReturnRequestedEvent'
+    webhookReturnReceived:
+        action: send
+        channel:
+            $ref: '#/channels/return.received'
+        summary: Returned goods arrived and went back on sale.
+        description: >-
+            One-to-one with the `return.received` domain event — see `returns/services/receive.ts`.
+            The stock movement and the status move committed together before this fired.
+        messages:
+            - $ref: '#/channels/return.received/messages/ReturnReceivedEvent'
+    webhookReturnClosed:
+        action: send
+        channel:
+            $ref: '#/channels/return.closed'
+        summary: A return finished — the money went back.
+        description: >-
+            One-to-one with the `return.closed` domain event — see `returns/services/close.ts`.
+            Fired when the refund settles: straight after the goods were received, or later when
+            the payment sweep completed a refund the provider first refused. A withdrawal before
+            dispatch fires it at birth, right after `return.requested`.
+        messages:
+            - $ref: '#/channels/return.closed/messages/ReturnClosedEvent'
+components:
+    messages:
+        ReturnReceivedEvent:
+            name: ReturnReceivedEvent
+            title: Return received
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnReceivedEnvelope'
+        ReturnClosedEvent:
+            name: ReturnClosedEvent
+            title: Return closed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnClosedEnvelope'
+        ReturnRequestedEvent:
+            name: ReturnRequestedEvent
+            title: Return requested
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ReturnRequestedEnvelope'
+    schemas:
+        ReturnRequestedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - reason
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                reason:
+                    type: string
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+            additionalProperties: false
+        ReturnReceivedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        ReturnClosedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - refundAmount
+                - currency
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                refundAmount:
+                    type: number
+                    description: What went back to the customer for this return, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
+        ReturnRequestedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnRequestedEventType
+                    type: string
+                    enum:
+                        - return.requested
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnRequestedPayload'
+            additionalProperties: false
+        ReturnReceivedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnReceivedEventType
+                    type: string
+                    enum:
+                        - return.received
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnReceivedPayload'
+            additionalProperties: false
+        ReturnClosedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ReturnClosedEventType
+                    type: string
+                    enum:
+                        - return.closed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ReturnClosedPayload'
+            additionalProperties: false

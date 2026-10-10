@@ -281,9 +281,10 @@ paths:
             tags: [Webhooks]
             summary: The public event catalogue
             description: |
-                Read straight from this module's own `asyncapi.yaml` fragment — the same source
-                `asyncapi.public.yaml` is generated from — so this list and what the module can
-                actually fire can never drift apart. See `docs/api/asyncapi-workflow.md`.
+                The events of the modules this deployment runs, read from each one's own
+                `asyncapi.webhooks.yaml` — the same files `asyncapi.public.yaml` is generated from —
+                so this list and what can actually fire can never drift apart. A module that is
+                not deployed lists nothing. See `docs/api/asyncapi-workflow.md`.
             operationId: listWebhookEvents
             security:
                 - bearerAuth: []
@@ -324,7 +325,7 @@ components:
                     type: array
                     items: { type: string }
                     minItems: 1
-                    description: Names from `GET /webhooks/events` this subscription receives.
+                    description: Names from `GET /webhooks/events` this subscription receives, or `*` for every event.
                 enabled:
                     type: boolean
                 consecutiveFailures:
@@ -457,6 +458,7 @@ components:
                     type: array
                     items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
+                    description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
 
         ReplaceWebhookSubscriptionRequest:
             type: object
@@ -480,6 +482,7 @@ components:
                     type: array
                     items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
+                    description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
                 enabled:
                     type: boolean
                     description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.
@@ -504,6 +507,7 @@ components:
                     type: array
                     items: { type: string, minLength: 1, maxLength: 100 }
                     minItems: 1
+                    description: A name from `GET /webhooks/events`, or `*` for every event. Any other name is a 422 naming `eventTypes`.
                 enabled:
                     type: boolean
                     description: Setting this true re-arms a subscription the auto-disable guard turned off, and clears `disabledAt`.

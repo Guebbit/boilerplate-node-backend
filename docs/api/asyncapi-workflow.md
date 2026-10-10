@@ -58,6 +58,8 @@ src/modules/<module>/asyncapi.yaml             a module's public events (observa
                                                notifications) — a module's own document,
                                                exactly as it carries one openapi.yaml
 src/modules/<module>/asyncapi.internal.yaml    a module's own queue (webhooks, account)
+src/modules/<module>/asyncapi.webhooks.yaml    a module's own webhook events, merged into the
+                                               `webhooks` section (orders, payments, returns, example)
 shared/contracts/asyncapi.workers.yaml         the RabbitMQ queues, which belong to no domain
 shared/contracts/asyncapi.root.yaml            version, id, info, tags — no channels, no servers
 ```

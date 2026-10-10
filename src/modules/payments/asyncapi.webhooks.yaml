@@ -1,0 +1,179 @@
+# The payments module's webhook events: `payment.*`.
+#
+# A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
+# `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
+# merges it into the `webhooks` section only while that module exists
+# (`scripts/contracts/asyncapi-webhook-events.ts`), and `GET /webhooks/events` lists it only while
+# this module is registered. Delete the module and its events leave the contract with it.
+# Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
+# `publicEvents` (`module.ts`) is what actually fires it.
+channels:
+    payment.succeeded:
+        address: payment.succeeded
+        description: A payment settled successfully.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentSucceededEvent:
+                $ref: '#/components/messages/PaymentSucceededEvent'
+    payment.failed:
+        address: payment.failed
+        description: A payment attempt was declined.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentFailedEvent:
+                $ref: '#/components/messages/PaymentFailedEvent'
+    payment.refunded:
+        address: payment.refunded
+        description: A refund on a payment settled — the whole payment, or a part of it.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            PaymentRefundedEvent:
+                $ref: '#/components/messages/PaymentRefundedEvent'
+operations:
+    webhookPaymentSucceeded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.succeeded'
+        summary: A payment reached `succeeded`.
+        description: One-to-one with the `payment.succeeded` domain event — see `payments/events.ts`.
+        messages:
+            - $ref: '#/channels/payment.succeeded/messages/PaymentSucceededEvent'
+    webhookPaymentFailed:
+        action: send
+        channel:
+            $ref: '#/channels/payment.failed'
+        summary: A payment reached `declined`.
+        description: >-
+            One-to-one with the `payment.failed` domain event. Retryable with another method,
+            so this can fire more than once for the same order.
+        messages:
+            - $ref: '#/channels/payment.failed/messages/PaymentFailedEvent'
+    webhookPaymentRefunded:
+        action: send
+        channel:
+            $ref: '#/channels/payment.refunded'
+        summary: A refund on a payment settled.
+        description: >-
+            One-to-one with the `payment.refunded` domain event — see `payments/services/refunds.ts`'s
+            `settleRefund`. Fired once per refund, whether an operator asked for it directly or the
+            `ORDER_REFUND_OWED` retry sweep completed it; never fired for a hand-paid refund left
+            for an operator to confirm by hand.
+        messages:
+            - $ref: '#/channels/payment.refunded/messages/PaymentRefundedEvent'
+components:
+    messages:
+        PaymentSucceededEvent:
+            name: PaymentSucceededEvent
+            title: Payment succeeded
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentSucceededEnvelope'
+        PaymentFailedEvent:
+            name: PaymentFailedEvent
+            title: Payment failed
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentFailedEnvelope'
+        PaymentRefundedEvent:
+            name: PaymentRefundedEvent
+            title: Payment refunded
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/PaymentRefundedEnvelope'
+    schemas:
+        PaymentEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        PaymentRefundedPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                    description: >-
+                        The refund record this delivery is about. A payment can be refunded in
+                        parts, so one payment can raise this event more than once.
+                amount:
+                    type: number
+                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
+        PaymentSucceededEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentSucceededEventType
+                    type: string
+                    enum:
+                        - payment.succeeded
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentEventPayload'
+            additionalProperties: false
+        PaymentFailedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentFailedEventType
+                    type: string
+                    enum:
+                        - payment.failed
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentEventPayload'
+            additionalProperties: false
+        PaymentRefundedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: PaymentRefundedEventType
+                    type: string
+                    enum:
+                        - payment.refunded
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/PaymentRefundedPayload'
+            additionalProperties: false
