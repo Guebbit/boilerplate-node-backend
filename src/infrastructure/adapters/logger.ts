@@ -15,6 +15,7 @@ import winston from 'winston';
 // fails at jest's globalSetup runtime.
 import { isRelaxedEnvironment, loggingConfig, PERSONAL_FIELD_MODES } from '../runtime/config';
 import { pseudonymise } from '../security/pseudonymise';
+import { toSemanticNames } from './semantic-names';
 
 /** A structured log call's own object form: a `message` plus whatever context goes with it. */
 export type LogFields = Record<string, unknown>;
@@ -309,6 +310,20 @@ export const redactFormat = winston.format((info) => {
 });
 
 /**
+ * Rename the record's fields to OpenTelemetry semantic-convention names, see `semantic-names.ts`.
+ * Runs AFTER {@link redactFormat}: the redaction lists know the names code writes (`ip`,
+ * `userAgent`), and a renamed `client.address` would no longer be recognised as personal data.
+ *
+ * `level`, `message` and `timestamp` are winston's own and keep their names. The record is
+ * rebuilt in place because winston requires the same `info` object back.
+ */
+export const semanticNamesFormat = winston.format((info) => {
+    const renamed = toSemanticNames({ ...info });
+    for (const key of Object.keys(info)) Reflect.deleteProperty(info, key);
+    return Object.assign(info, renamed);
+});
+
+/**
  * Resolve runtime log level with sensible defaults per environment.
  *
  * Winston levels are hierarchical (error < warn < info < http < verbose < debug < silly);
@@ -331,6 +346,7 @@ const baseFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
     // Note the call: the factory above must be invoked to yield a format instance.
     redactFormat(),
+    semanticNamesFormat(),
     winston.format.json()
 );
 
@@ -343,6 +359,7 @@ const baseFormat = winston.format.combine(
 const prettyFormat = winston.format.combine(
     winston.format.timestamp({ format: 'YYYY-MM-DDTHH:mm:ss.SSSZ' }),
     redactFormat(),
+    semanticNamesFormat(),
     // `all: true` colours the whole line by level, not just the level token.
     winston.format.colorize({ all: true }),
     // `printf` is the terminal format: whatever string it returns is what gets written.

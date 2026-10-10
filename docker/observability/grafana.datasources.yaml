@@ -54,7 +54,8 @@ datasources:
       uid: loki
       jsonData:
           derivedFields:
-              # Turn trace_id in log lines into a clickable Tempo link.
+              # Turn trace_id in log lines into a clickable Tempo link. `trace_id` is the OpenTelemetry
+              # Logs Data Model name and stays as written; the logger renames the other fields only.
               - datasourceUid: tempo
                 matcherRegex: '"trace_id":"(\w+)"'
                 name: TraceID

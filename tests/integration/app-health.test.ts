@@ -36,7 +36,7 @@ describe('System routes', () => {
     });
 
     // The id this service answers with is always one it chose: a client-supplied value is kept
-    // beside it as `client_request_id`, never adopted — see request-context.ts.
+    // beside it as `clientRequestId`, never adopted — see request-context.ts.
     it('answers with its own request id and logs the client one beside it', async () => {
         const clientId = '4f9c9a10-2b3e-4d5c-8f1a-0e6b7c8d9e10';
         const log = jest.spyOn(logger, 'log').mockImplementation(() => logger);
@@ -47,8 +47,8 @@ describe('System routes', () => {
 
         expect(response.headers['x-request-id']).not.toBe(clientId);
         expect(accessLog?.[2]).toMatchObject({
-            request_id: response.headers['x-request-id'],
-            client_request_id: clientId
+            requestId: response.headers['x-request-id'],
+            clientRequestId: clientId
         });
     });
 

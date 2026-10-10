@@ -15,7 +15,8 @@ Docker JSON log files → Promtail → Loki → Grafana
 ```
 
 - Promtail reads `/var/lib/docker/containers/*/*-json.log` on the host.
-- It parses Docker's JSON envelope, then Winston's structured JSON fields (`level`, `service`, `trace_id`) as Loki labels.
+- It parses Docker's JSON envelope, then Winston's structured JSON fields (`level`, `service.name`, `trace_id`) as Loki labels; the `service` label is read from `service.name`, the
+  OpenTelemetry name the logger writes. See [Winston](./winston.md#field-names-in-the-log-line).
 
 **Podman (rootless, k8s-file log driver)**
 

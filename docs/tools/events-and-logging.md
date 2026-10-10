@@ -152,13 +152,13 @@ subscription lives (`AppModule.subscribe`), because those are the same question.
 
 Whatever the signal, two fields let you line them up afterwards:
 
-| Field        | Set by                                   | Joins                                           |
-| ------------ | ---------------------------------------- | ----------------------------------------------- |
-| `request_id` | the request-id middleware                | every log line and audit entry from one request |
-| `trace_id`   | ambient OTel context, read by the tracer | logs and audit entries ↔ the Tempo trace        |
+| Field                                          | Set by                                   | Joins                                           |
+| ---------------------------------------------- | ---------------------------------------- | ----------------------------------------------- |
+| `requestId` (`app.request.id` on the log line) | the request-id middleware                | every log line and audit entry from one request |
+| `traceId` (`trace_id` on the log line)         | ambient OTel context, read by the tracer | logs and audit entries ↔ the Tempo trace        |
 
 This is what makes the split above workable: an audit entry that looks wrong and the application
-log lines explaining it are one `request_id` query apart.
+log lines explaining it are one `app.request.id` query apart.
 
 ## Related pages
 

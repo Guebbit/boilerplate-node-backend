@@ -25,7 +25,7 @@ const REQUEST_ID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
  * Request ID middleware — always a fresh UUID, with the caller's own id kept beside it.
  *
  * A well-formed `x-request-id` becomes `request.clientRequestId` (logged and audited as
- * `client_request_id`, the shape an AWS ALB gives its own id), never `request.requestId`: the id
+ * `clientRequestId`, the shape an AWS ALB gives its own id), never `request.requestId`: the id
  * this service answers with is one it chose. Behind a trusted ingress (`NODE_TRUSTED_INGRESS`)
  * the ingress vouches for the header, so the client value IS the request id.
  *

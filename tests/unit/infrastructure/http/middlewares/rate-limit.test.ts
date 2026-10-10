@@ -271,7 +271,7 @@ describe('refuseRateLimited — the answer a caller and the audit trail see', ()
 
         expect(warn).toHaveBeenCalledWith(
             expect.anything(),
-            expect.objectContaining({ status_code: 429 })
+            expect.objectContaining({ statusCode: 429 })
         );
     });
 });

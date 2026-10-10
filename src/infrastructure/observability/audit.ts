@@ -286,7 +286,7 @@ export const buildAuditEvent = (
     // The caller's own request id rides in `metadata`, not a column of its own: it is a hint for
     // correlation, and the audit schema stays as it is.
     ...(context.clientRequestId && {
-        metadata: { ...fields.metadata, client_request_id: context.clientRequestId }
+        metadata: { ...fields.metadata, clientRequestId: context.clientRequestId }
     }),
     // Spread last, deliberately: context-derived fields (ip, traceId, ...) are not
     // caller-overridable, so an audit entry cannot misreport where it came from.

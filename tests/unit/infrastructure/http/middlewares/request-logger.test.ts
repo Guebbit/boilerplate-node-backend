@@ -89,17 +89,17 @@ describe('requestLogger', () => {
         const callArgs = mockLog.mock.calls[0] as unknown[];
         const meta = callArgs[2] as Record<string, unknown>;
         expect(meta).toEqual({
-            request_id: 'req-1',
-            trace_id: 'trace-xyz',
+            requestId: 'req-1',
+            traceId: 'trace-xyz',
             method: 'GET',
             route: '/products',
-            status_code: 200,
-            duration_ms: expect.any(Number)
+            statusCode: 200,
+            durationMs: expect.any(Number)
         });
         expect(meta.headers).toBeUndefined();
         expect(meta.user_id).toBeUndefined();
         expect(meta.ip).toBeUndefined();
-        expect(meta.user_agent).toBeUndefined();
+        expect(meta.userAgent).toBeUndefined();
     });
 
     it('does not log twice when finish fires more than once', () => {

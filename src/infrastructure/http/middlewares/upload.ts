@@ -252,7 +252,7 @@ export const validateUploadedImages: RequestHandler = (request, response, next) 
                 files: rejected,
                 declared,
                 identified,
-                request_id: request.requestId
+                requestId: request.requestId
             });
             // Stryker restore all
 

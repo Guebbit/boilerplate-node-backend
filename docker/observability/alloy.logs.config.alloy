@@ -68,12 +68,14 @@ loki.process "podman_envelope" {
 
 // Winston writes one JSON object per line. Three fields become labels, because they are what a
 // LogQL selector filters on first; everything else stays in the line, where `| json` reads it.
+// Field names there are OpenTelemetry semantic-convention names (`service.name`, `user.id`, ...),
+// so a dotted one is quoted in the JMESPath expression and read back in LogQL as `user_id`.
 // `log_type` is a label too, so the audit stream can be selected without parsing every line.
 loki.process "app" {
     stage.json {
         expressions = {
             level    = "level",
-            service  = "service",
+            service  = "\"service.name\"",
             log_type = "log_type",
         }
     }

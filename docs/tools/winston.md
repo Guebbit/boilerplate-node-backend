@@ -17,12 +17,13 @@ One slim line per request, only the fields that actually help:
 {
     "level": "info",
     "message": "GET /products 200 12.4ms",
-    "request_id": "1b2c3d…",
+    "service.name": "api",
+    "app.request.id": "1b2c3d…",
     "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-    "method": "GET",
-    "route": "/products",
-    "status_code": 200,
-    "duration_ms": 12.4
+    "http.request.method": "GET",
+    "http.route": "/products",
+    "http.response.status_code": 200,
+    "app.request.duration_ms": 12.4
 }
 ```
 
@@ -36,11 +37,47 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 {
     "level": "error",
     "message": "ValidationError: name is required",
-    "request_id": "1b2c3d…",
+    "service.name": "api",
+    "app.request.id": "1b2c3d…",
     "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
-    "status": 422
+    "http.response.status_code": 422,
+    "exception.type": "ValidationError",
+    "exception.message": "name is required"
 }
 ```
+
+## Field names in the log line
+
+Code logs camelCase fields (`actorUserId`, `statusCode`). `semanticNamesFormat`, the last step of
+the transport format, renames them to [OpenTelemetry semantic-convention](https://opentelemetry.io/docs/specs/semconv/)
+names, so a dashboard or alert written against the standard works here unchanged. Mongo and the API
+keep the camelCase; only the log line changes.
+
+```mermaid
+flowchart LR
+    Call["logger.info({ actorUserId, ip })"] --> Redact["redactFormat: personal fields hashed by their code name"]
+    Redact --> Rename["semanticNamesFormat: actorUserId becomes user.id, ip becomes client.address"]
+    Rename --> Json["json(): one line on stdout"]
+```
+
+Redaction runs first on purpose: its lists know the names code writes.
+
+| In code                                                                                 | On the line                                                          | Convention                      |
+| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------- |
+| `service`                                                                               | `service.name`                                                       | resource attribute              |
+| `traceId`, `spanId`                                                                     | `trace_id`, `span_id`                                                | Logs Data Model (trace context) |
+| `method`, `route`, `statusCode`                                                         | `http.request.method`, `http.route`, `http.response.status_code`     | HTTP semconv                    |
+| `ip`, `userAgent`                                                                       | `client.address`, `user_agent.original`                              | client / user-agent semconv     |
+| `actorUserId`, `actorRole`                                                              | `user.id`, `user.roles` (a one-entry list)                           | user semconv                    |
+| `action`                                                                                | `event.name`                                                         | event semconv                   |
+| `error` (an `Error` or a string)                                                        | `exception.type`, `.message`, `.stacktrace`, `.cause`                | exception semconv               |
+| `requestId`, `clientRequestId`, `durationMs`                                            | `app.request.id`, `app.request.client_id`, `app.request.duration_ms` | custom, `app.` namespace        |
+| `outcome`, `actorRoleName`, `actorCredentialId`, `actorScope`, `targetType`, `targetId` | `app.audit.outcome`, `app.actor.*`, `app.target.*`                   | custom, `app.` namespace        |
+
+The map lives in `src/infrastructure/adapters/semantic-names.ts`. Only top-level fields are renamed:
+`metadata` and a nested `error.cause` keep the call site's own shape. In LogQL, `| json` turns a dot
+into an underscore: read `user.id` as `user_id`. Promtail and Alloy extract the `service` label from
+`service.name`.
 
 ## Audit events
 
@@ -50,13 +87,13 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
 {
     "level": "info",
     "log_type": "audit",
-    "action": "auth.login",
-    "actorUserId": "user-123",
-    "actorRole": "user",
-    "actorScope": "tenant",
-    "outcome": "success",
-    "ip": "1.2.3.4",
-    "request_id": "…",
+    "event.name": "auth.login",
+    "user.id": "user-123",
+    "user.roles": ["user"],
+    "app.actor.scope": "tenant",
+    "app.audit.outcome": "success",
+    "client.address": "hmac:3f9a1c0b7d2e",
+    "app.request.id": "…",
     "trace_id": "…"
 }
 ```

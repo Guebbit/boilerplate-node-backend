@@ -150,9 +150,9 @@ export const handleUncaughtError = (
     // logged at `error` it would page someone for every bad request.
     // Stryker disable all
     logger[status >= 500 ? 'error' : 'warn'](headline, {
-        request_id: request.requestId,
-        trace_id: getActiveSpanContext().traceId,
-        status,
+        requestId: request.requestId,
+        traceId: getActiveSpanContext().traceId,
+        statusCode: status,
         error: logged
     });
     // Stryker restore all

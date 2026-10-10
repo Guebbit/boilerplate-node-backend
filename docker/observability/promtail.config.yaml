@@ -45,7 +45,8 @@ scrape_configs:
           - json:
                 expressions:
                     level: level
-                    service: service
+                    # `service.name` is the OpenTelemetry name; the dot needs JMESPath quoting.
+                    service: '"service.name"'
                     trace_id: trace_id
 
           # Stage 4: promote fields to labels for filtering in LogQL.

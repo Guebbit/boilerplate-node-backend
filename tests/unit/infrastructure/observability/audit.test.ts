@@ -206,7 +206,7 @@ describe("buildAuditEvent — the caller's own request id", () => {
             { action: 'auth.login', outcome: 'success', metadata: { route: '/x' } }
         );
 
-        expect(event.metadata).toEqual({ route: '/x', client_request_id: 'client-id-1' });
+        expect(event.metadata).toEqual({ route: '/x', clientRequestId: 'client-id-1' });
     });
 
     it('adds no metadata when the caller sent none', () => {

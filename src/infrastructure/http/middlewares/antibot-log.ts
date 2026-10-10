@@ -30,7 +30,7 @@ export const logAntibotRefusal = (
         rung,
         method,
         route: path,
-        status_code: status
+        statusCode: status
     });
     // Stryker restore all
 };

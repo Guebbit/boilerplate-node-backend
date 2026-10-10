@@ -29,13 +29,13 @@ export const requestLogger = (request: Request, response: Response, next: NextFu
         // `route` is the matched template, never the concrete path — read here rather than
         // before `next()` because that is when Express has populated it.
         logger.log(level, `${method} ${route} ${statusCode} ${durationMs.toFixed(1)}ms`, {
-            request_id: requestId,
-            client_request_id: clientRequestId,
-            trace_id: getActiveSpanContext().traceId,
+            requestId,
+            clientRequestId,
+            traceId: getActiveSpanContext().traceId,
             method,
             route,
-            status_code: statusCode,
-            duration_ms: Math.round(durationMs * 100) / 100
+            statusCode,
+            durationMs: Math.round(durationMs * 100) / 100
         });
     });
 

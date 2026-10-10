@@ -88,7 +88,7 @@ describe('submissionLimiter', () => {
 
         expect(warn).toHaveBeenCalledWith(
             expect.stringContaining('POST /contact'),
-            expect.objectContaining({ method: 'POST', route: '/contact', status_code: 429 })
+            expect.objectContaining({ method: 'POST', route: '/contact', statusCode: 429 })
         );
 
         warn.mockRestore();

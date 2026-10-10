@@ -77,7 +77,7 @@ The API is reachable by anyone, so it never adopts a caller's `traceparent` as i
 
 - **No remote parent, no baggage.** A custom propagator (`publicEndpointPropagator`, `runtime/otel-sdk.ts`) still writes `traceparent` on outgoing calls but extracts nothing inbound. A caller cannot graft requests onto another trace, force sampling with a `-01` flag, or fill our baggage; a `-00` flag does not switch tracing off either.
 - **A link instead.** A valid inbound `traceparent` becomes a span link on the HTTP server span, so a browser span and the request it caused are findable from each other. This is the pattern Go's `WithPublicEndpoint` implements.
-- **Request ids follow.** `x-request-id` is never the request id: a well-formed client value is logged and audited as `client_request_id`.
+- **Request ids follow.** `x-request-id` is never the request id: a well-formed client value is logged and audited as `clientRequestId`.
 
 `NODE_TRUSTED_INGRESS` turns this off for a deployment whose proxy **strips or overwrites** `traceparent` and `x-request-id` itself, so what arrives was set by that proxy: the caller's trace then continues here as the parent and its request id is kept. It is off by default and is never keyed on the peer's address: behind Traefik every peer is the proxy.
 

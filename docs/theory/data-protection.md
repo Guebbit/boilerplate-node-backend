@@ -125,7 +125,8 @@ exactly this:
 - `GET /observability/audit?action=<action>` — every occurrence of one action across accounts, for
   the audit vocabulary each module owns (`account/audit.ts`, `users/audit.ts`, …). `auth.login`,
   `admin.user.erased` and `auth.data_export.downloaded` are usually the first three worth checking.
-- The Winston log lines in Loki, same actor or time window, once the queryable collection's
+- The Winston log lines in Loki (the actor is `user.id`, the address `client.address`; see
+  [Winston](../tools/winston.md#field-names-in-the-log-line)), same actor or time window, once the queryable collection's
   90-day window (`NODE_AUDIT_RETENTION_DAYS`) is not enough — Loki's own retention is longer or
   shorter depending on how the stack is configured, see [ops: Data retention](../reference/ops.md#data-retention).
 
