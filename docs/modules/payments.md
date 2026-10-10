@@ -300,6 +300,7 @@ sequenceDiagram
     alt provider answers
         P->>D: record succeeded (conditional on it still being open)
         P->>D: payment refunded, only if the records add up to amount
+        P->>D: order.paymentStatus stamped (same transaction)
         P-->>C: payment.refunded (once per refund)
     else provider refuses
         P->>D: record failed + lastError, still counted
@@ -314,6 +315,9 @@ sequenceDiagram
   `orders`), never by adding decimals.
 - **One key per record.** `refund:{paymentId}:{refundId}` — a retry of a refund is safe at the
   provider, and two different partial refunds are never mistaken for one.
+- **The order's status commits with the settlement.** `order.paymentStatus` (`partially_refunded`
+  or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
+  missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
 - **A refusal stays open.** The record is `failed` (its `lastError` is stored, never published) and
   keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run sweep:payment-effects`) and the next cancel or operator call both finish it.

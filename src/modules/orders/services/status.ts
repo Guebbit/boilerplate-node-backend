@@ -10,6 +10,7 @@
 
 import { announceInTransaction } from '@kernel/outbox';
 import { OrderStatus } from '@types';
+import type { ClientSession } from 'mongoose';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { statusChangedEvent } from './announce';
@@ -196,11 +197,14 @@ export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
  * @param orderId - the order whose payment was refunded
  * @param paymentStatus - `partially_refunded` while some of the money is still with the shop,
  *   `refunded` once all of it went back
+ * @param session - the refund settlement's transaction, so the stamp and the settlement commit or
+ *   roll back together
  */
 export const markPaymentStatus = (
     orderId: string,
-    paymentStatus: StampedPaymentStatus
-): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus });
+    paymentStatus: StampedPaymentStatus,
+    session?: ClientSession
+): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus }, session);
 
 /**
  * Report where the order's returns stand. `returns`' own door for this. `undefined` clears it: no

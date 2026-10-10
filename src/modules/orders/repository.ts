@@ -269,6 +269,7 @@ const markDelivered = (
  * same value, and `undefined` clears it — "no return holds goods" is the absence of the field.
  * @param id - the order
  * @param fields - the projection(s) to set; a key set to `undefined` is unset
+ * @param session - the caller's transaction, when the stamp must commit or roll back with it
  * @returns whether an order was found
  */
 const setProjection = (
@@ -276,7 +277,8 @@ const setProjection = (
     fields: {
         paymentStatus?: StampedPaymentStatus | undefined;
         returnStatus?: StampedReturnStatus | undefined;
-    }
+    },
+    session?: ClientSession
 ): Promise<boolean> => {
     // `in`, not a truthiness check: a key present as `undefined` means clear, absent means leave.
     const changes = Object.fromEntries(
@@ -286,7 +288,7 @@ const setProjection = (
     );
 
     return orderModel
-        .updateOne({ _id: toObjectId(id) }, setAndUnset(changes))
+        .updateOne({ _id: toObjectId(id) }, setAndUnset(changes), { session })
         .exec()
         .then(({ matchedCount }) => matchedCount > 0);
 };
@@ -589,7 +591,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         fields: {
             paymentStatus?: StampedPaymentStatus | undefined;
             returnStatus?: StampedReturnStatus | undefined;
-        }
+        },
+        session?: ClientSession
     ) => Promise<boolean>;
     markDelivered: (
         id: string,
