@@ -22,12 +22,14 @@ import {
     type ResponseReject,
     type ResponseSuccess
 } from '@infrastructure/http/response';
+import type { ClientSession } from 'mongoose';
 import { announceInTransaction } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { holdsKey } from '@kernel/ability';
 import type { OrderDocument, OrderStatusOverride } from '../model';
 import { orderRepository } from '../repository';
 import { statusChangedEvent } from './announce';
+import { announceMoveShippingStock } from './ship-stock';
 import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
 import { canOverrideTo, statusesOverridableInto, withdrawUntilFrom } from '../domain';
@@ -93,18 +95,24 @@ const applyOverride = (
             ? withdrawUntilFrom(entry.at, withdrawalPeriodDays())
             : undefined;
 
-    return announceInTransaction(
-        (session) =>
-            orderRepository.applyStatusOverride(
-                orderId,
-                allowedFrom,
-                to,
-                entry,
-                withdrawUntil,
-                session
-            ),
-        () => statusChangedEvent(orderId, observedFrom, to)
-    ).then((updated) => {
+    const write = (session: ClientSession): Promise<OrderDocument | null> =>
+        orderRepository.applyStatusOverride(
+            orderId,
+            allowedFrom,
+            to,
+            entry,
+            withdrawUntil,
+            session
+        );
+
+    // Overriding past dispatch is still a dispatch: the units leave the shelf with the status.
+    // `processing` is not one; a hold already `shipped` makes the stock half a no-op.
+    const move =
+        to === OrderStatus.processing
+            ? announceInTransaction(write, () => statusChangedEvent(orderId, observedFrom, to))
+            : announceMoveShippingStock(orderId, observedFrom, to, write);
+
+    return move.then((updated) => {
         if (!updated) return null;
 
         recordAudit(context, {

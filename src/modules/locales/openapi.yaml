@@ -45,7 +45,7 @@ paths:
     # --------- Locales ---------
     /locales:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: Supported languages
             description: |
                 Every language this deployment offers, from both tiers, each stating what it can
@@ -78,7 +78,7 @@ paths:
                                 $ref: '#/components/schemas/LocaleCapabilitiesEnvelope'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
-            tags: [System]
+            tags: [Locales]
             summary: Add a language
             description: |
                 Registers a language in the dynamic tier so entries can be translated into it.
@@ -112,7 +112,7 @@ paths:
 
     /locales/apps:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: Translation apps
             description: |
                 Every app this deployment holds words for — the keyspaces an entry can belong
@@ -138,7 +138,7 @@ paths:
 
     /locales/{locale}:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: API message dictionary
             description: |
                 This API's own dictionary for one language — tier 1, the deployed files.
@@ -168,7 +168,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
-            tags: [System]
+            tags: [Locales]
             summary: Replace a language
             description: |
                 Replaces a language's display names, writing direction and visibility (RFC 9110
@@ -204,7 +204,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
-            tags: [System]
+            tags: [Locales]
             summary: Edit a language
             description: |
                 Merges a language's display names, writing direction or visibility (RFC 7396, an
@@ -242,7 +242,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
-            tags: [System]
+            tags: [Locales]
             summary: Remove a language
             description: |
                 Removes the language AND every entry translated into it.
@@ -265,7 +265,7 @@ paths:
 
     /locales/{locale}/messages:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: Client message dictionary
             description: |
                 The dynamic dictionary for one language, built from its stored entries into the
@@ -308,7 +308,7 @@ paths:
 
     /locales/{locale}/entries:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: List translation entries
             description: |
                 The rows behind one language's dictionary, paginated and searchable — what a
@@ -345,7 +345,7 @@ paths:
     # URI lists.
     /locales/{locale}/apps/{app}/entries:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: List one app's translation entries
             description: |
                 The rows behind one language's dictionary, paginated and searchable — what a
@@ -377,7 +377,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         post:
-            tags: [System]
+            tags: [Locales]
             summary: Add one translation entry
             description: |
                 Adds a key to this app's dictionary. 409 if the key already exists in this language, and equally if it COLLIDES with one
@@ -411,7 +411,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
-            tags: [System]
+            tags: [Locales]
             summary: Replace every entry
             description: |
                 Bulk import, REPLACING semantics: what is not sent is DELETED. The whole set of
@@ -452,7 +452,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
-            tags: [System]
+            tags: [Locales]
             summary: Merge entries
             description: |
                 Bulk import, MERGING semantics: what is sent is upserted, everything else is left
@@ -497,7 +497,7 @@ paths:
     # belongs to another language or app is a 404 here.
     /locales/{locale}/apps/{app}/entries/{entryId}:
         put:
-            tags: [System]
+            tags: [Locales]
             summary: Edit one translation entry
             description: |
                 Updates the value of one entry. The key is not editable — a key is the identity a
@@ -529,7 +529,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         delete:
-            tags: [System]
+            tags: [Locales]
             summary: Remove one translation entry
             description: Removes a single key from one language. The other languages keep theirs.
             operationId: deleteLocaleEntry
@@ -552,7 +552,7 @@ paths:
     # in V1); the entity's OWN contract is untouched by this feature and never sees this shape.
     /locales/translations/{entityType}/{id}:
         get:
-            tags: [System]
+            tags: [Locales]
             summary: Read every translation an entity has
             description: |
                 Every locale this entity has a row for, in one response — the admin shape a
@@ -576,7 +576,7 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         put:
-            tags: [System]
+            tags: [Locales]
             summary: Replace every translation an entity has
             description: |
                 REPLACING semantics: a locale currently stored but absent from the body is deleted
@@ -621,7 +621,7 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
         patch:
-            tags: [System]
+            tags: [Locales]
             summary: Merge one or more of an entity's translations
             description: |
                 MERGING semantics: a locale key absent from the body is left exactly as it is. Three

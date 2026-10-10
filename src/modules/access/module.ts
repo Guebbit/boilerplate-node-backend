@@ -6,8 +6,8 @@
  * why that still makes this a module rather than kernel code.
  *
  * Owns:   the tenant and membership collections, outright.
- * Shares: nothing over HTTP. `account`, `api-keys` and `users` are its only consumers, all
- *         through this barrel.
+ * Shares: nothing over HTTP. `account`, `api-keys`, `example`, `orders`, `payments`, `returns`
+ *         and `users` consume it, all through this barrel.
  *
  * See: docs/theory/authorization.md
  */

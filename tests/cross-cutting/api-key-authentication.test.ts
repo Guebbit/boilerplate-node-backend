@@ -95,12 +95,13 @@ describe('an api key over the real chain', () => {
      * mint credentials never has to be rotated.
      */
     it('cannot mint another credential with a credential', async () => {
-        const secret = await credentialHolding(['apikeys.any.create']);
+        // `apikeys.any.create` itself cannot be minted (step-up), so the key holds the read.
+        const secret = await credentialHolding(['apikeys.any.read']);
 
         const response = await api()
             .post('/api-keys')
             .set('Authorization', `Bearer ${secret}`)
-            .send({ name: 'second key', permissions: ['apikeys.any.create'] });
+            .send({ name: 'second key', permissions: ['apikeys.any.read'] });
 
         expect(response.status).toBe(401);
     });

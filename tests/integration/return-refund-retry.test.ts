@@ -55,6 +55,8 @@ const withdrawnOrder = async () => {
     if (!intent.success) throw new Error('intent refused');
     await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
     await forceOrderStatus(orderId, OrderStatus.delivered);
+    // The forced status skips the parcel's own move, so the units leave the shelf here.
+    await inventoryService.shipForOrder(orderId);
     const outcome = await createReturn(
         { orderId, reason: 'withdrawal' },
         asCustomer(user.id),

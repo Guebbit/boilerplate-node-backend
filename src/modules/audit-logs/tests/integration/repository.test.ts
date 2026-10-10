@@ -62,6 +62,14 @@ describe('auditLogRepository', () => {
             expect(stored.metadata?.hardDelete).toBe(true);
         });
 
+        it('keeps the api-key behind an entry, through the stored row and the search', async () => {
+            await auditLogRepository.create(makeEntry({ actor_credential_id: 'sk_a1b2c3d4' }));
+
+            const found = await search();
+
+            expect(found.items[0]?.actor_credential_id).toBe('sk_a1b2c3d4');
+        });
+
         it('rejects an entry missing a required field', async () => {
             const incomplete = {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED

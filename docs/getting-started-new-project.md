@@ -136,7 +136,7 @@ rewrite them around your own domain if you want that coverage back.
 module, and `demo:remove` edits only its account-export schema. The root contract's path index
 follows the modules that are left, but three things stay until you change them:
 
-- `info.title` is still `Ecommerce Demo API`.
+- `info.title` is still `Boilerplate API`.
 - The tag list (`Orders`, `Cart`, `Wishlist`, ...) keeps the shop's tags, because an existing entry is
   never dropped (`scripts/contracts/root-assembly.ts`).
 - The shared schemas the shop used (`Product`, `Order`, `OrderItem`, `CartItem`, `TaxClass`, ...) are

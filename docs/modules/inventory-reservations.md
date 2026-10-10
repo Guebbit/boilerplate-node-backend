@@ -9,20 +9,21 @@ fixed window.
 **Breaks if you change** — the conditional status claim. It is the entire correctness of this module.
 :::
 
-## Two counters, five transitions
+## Two counters, six transitions
 
 Every product row carries `onHand` and `reserved`. [`products`](./products.md) never writes either,
-and neither does anything else — the five transitions below are the only writers in the
+and neither does anything else — the six transitions below are the only writers in the
 application.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 34, 'rankSpacing': 60}}}%%
 flowchart LR
     N["no hold"] -->|"reserveForOrder<br/><i>checkout · admin create</i>"| H["held<br/><i>reserved +n</i>"]
-    H -->|"commitForOrder<br/><i>payment confirmed</i>"| C["committed<br/><i>onHand −n · reserved −n</i>"]
+    H -->|"commitForOrder<br/><i>payment confirmed</i>"| C["committed<br/><i>no counter moves</i>"]
     H -->|"releaseForOrder<br/><i>order cancelled</i>"| R["released<br/><i>reserved −n</i>"]
     H -->|"releaseForOrder<br/><i>the sweep</i>"| R
-    C -->|"restockForOrder<br/><i>a PAID order cancelled</i>"| S["restocked<br/><i>onHand +n</i>"]
+    C -->|"releaseCommittedForOrder<br/><i>a PAID order cancelled before dispatch</i>"| R
+    C -->|"shipForOrder<br/><i>the parcel leaves</i>"| S["shipped<br/><i>onHand −n · reserved −n</i>"]
 
     classDef open fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
@@ -32,26 +33,38 @@ flowchart LR
     class N none;
 ```
 
-`held` is the only non-terminal state, and `expiresAt` is what makes it non-permanent — `committed`
-is otherwise terminal too, except for the one door `restockForOrder` opens onto `restocked`.
+`held` is the only state with a deadline: `expiresAt` is what makes it non-permanent. `committed` is
+a paid order waiting for its parcel; it ends at `shipped` (the units leave) or, if the order is
+cancelled first, `released`. Shelf count (`onHand`) drops at dispatch, not at payment — the model
+Shopify, Magento MSI, Saleor and Medusa share — so a stocktake counts the same number `onHand`
+says, and `available` is identical in both models at every moment.
 
-| Transition        | Called by                                                                | Counters                   | Ledger `reason` |
-| ----------------- | ------------------------------------------------------------------------ | -------------------------- | --------------- |
-| `reserveForOrder` | [checkout](./cart-checkout.md), admin order create                       | `reserved` +n              | `reserve`       |
-| `commitForOrder`  | [`payments`](./payments.md) on confirm                                   | `onHand` −n, `reserved` −n | `commit`        |
-| `releaseForOrder` | [`orders`](./orders.md) on cancel                                        | `reserved` −n              | `release`       |
-| `releaseForOrder` | the sweep                                                                | `reserved` −n              | `expire`        |
-| `restockForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing | `onHand` +n                | `restock`       |
+| Transition                 | Called by                                                                                          | Counters                   | Ledger `reason` |
+| -------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------- | --------------- |
+| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                 | `reserved` +n              | `reserve`       |
+| `commitForOrder`           | [`payments`](./payments.md) on confirm                                                             | none (a zero-delta row)    | `commit`        |
+| `shipForOrder`             | [`orders`](./orders.md), in the transaction of the move to `shipped` or a digital `delivered`      | `onHand` −n, `reserved` −n | `ship`          |
+| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                  | `reserved` −n              | `release`       |
+| `releaseForOrder`          | the sweep                                                                                          | `reserved` −n              | `expire`        |
+| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order) | `reserved` −n              | `release`       |
 
-**`restockForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only ever
-releases a stale HOLD, and folding restock into that same function would let it put a just-paid
-order's units back on sale the moment its unrelated reservation record aged past the sweep's
-cutoff — a sale undone by a timer, not by anyone cancelling anything. A cancel calls it explicitly,
-only after `releaseForOrder`'s own claim on `held → released` has already missed — exactly what a
-PAID order's `committed` hold does, every time.
+**`releaseCommittedForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only
+ever releases a stale HOLD, and folding the paid case into that same function would let it put a
+just-paid order's units back on sale the moment its unrelated reservation record aged past the
+sweep's cutoff — a sale undone by a timer, not by anyone cancelling anything. A cancel calls it
+explicitly, only after `releaseForOrder`'s own claim on `held → released` has already missed —
+exactly what a PAID order's `committed` hold does, every time.
+
+`shipForOrder` runs in the same transaction as the status write, so an order never reads `shipped`
+while its units still count as on hand. Callers: `markShipped`, `markFulfilled` (digital-only) and
+the admin override into `shipped`/`delivered` (including `delivery`'s forced doors). It claims
+`committed → shipped`, and also `held → shipped` for a payment whose own commit crashed and has not
+been retried yet: the goods left either way, and the retry then finds a shipped hold and stays
+silent. Goods a customer sends back are a separate door: `restockReturnedLines` writes `restock`
+rows and claims nothing, because the hold is `shipped` for good.
 
 Both take an optional Mongo `session`. `orders`' cancel passes one so the status move, the release
-and the restock commit together or not at all; given a session, the catalogue's stock cache is
+commits together or not at all; given a session, the catalogue's stock cache is
 not synced inside the transaction (that write cannot roll back), and the caller runs
 `refreshStockCacheForOrder` after the commit.
 
@@ -69,22 +82,24 @@ twice, resolves to exactly one winner and the loser is a no-op rather than a sec
 There is no distributed lock holding this up. A single conditional update decides the winner, which
 is why it survives a restart and a second worker. The claim and every line's counter move then land
 in **one transaction** (the caller's, or one `commitForOrder` / `releaseForOrder` /
-`restockForOrder` opens itself): a write that throws partway undoes the claim too, so the retry
+`releaseCommittedForOrder` opens itself): a write that throws partway undoes the claim too, so the retry
 finds the hold still open and finishes the job instead of reporting "already done".
 
 Taking a multi-line hold's lines is ordered by product id, so two checkouts listing the same
 products oppositely meet on the same product first, and one goes on rather than both refusing.
 :::
 
-## A commit with no hold is an incident, not a no-op
+## A paid order with no hold is an incident, not a no-op
 
-A paid order always commits its hold. When `commitForOrder`'s claim misses, that is one of two
-very different facts, and it tells them apart before deciding what to do:
+A paid order always commits its hold, and a shipped one always ships it. When `commitForOrder`'s or
+`shipForOrder`'s claim misses, that is one of two very different facts, and it tells them apart
+before deciding what to do:
 
-- the hold is already `committed` — a redelivered settlement, the sale already stands. Silent,
-  correctly: replaying it is not new information.
+- the hold is already `committed` or `shipped` — a redelivered settlement, or a repeated dispatch
+  report; the sale already stands. Silent, correctly: replaying it is not new information.
 - the hold is `released`/`expired`, or never existed — the order is paid and nothing was set aside
-  for it. Alarmed: an `admin.commit.orphaned` audit row, `outcome: 'failure'`, naming the order.
+  for it. Alarmed: an `admin.commit.orphaned` audit row, `outcome: 'failure'`, naming the order and the `stage`
+  (`commit` or `ship`).
 
 The alarm only **records** the fact; nothing auto-compensates. A missing hold does not mean
 missing goods — the units are still on the shelf, just unreserved — so refunding on that signal

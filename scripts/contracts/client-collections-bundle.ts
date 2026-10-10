@@ -58,7 +58,7 @@ const ORDER_ID_VARIABLE = '{{orderId}}';
 const COLLECTION_TOOLS = ['bruno', 'insomnia', 'mockoon', 'postman'] as const;
 
 /** The name every collection carries, in the tools that show one. */
-const COLLECTION_NAME = 'Ecommerce Demo API';
+const COLLECTION_NAME = 'Boilerplate API';
 
 /* ────────────────────────────────────────────────────────────────────────────────────────────
  * 1. Which module owns which path — read from the OpenAPI fragments, never restated

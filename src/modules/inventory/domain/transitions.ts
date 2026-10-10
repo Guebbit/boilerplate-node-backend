@@ -2,8 +2,8 @@
  * @module
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
- * claimed). Seven transitions move those counters, and this file is the one place that says what
- * each does — an eighth is one entry here plus one enum value in `openapi.yaml`. What a customer
+ * claimed). Eight transitions move those counters, and this file is the one place that says what
+ * each does — a ninth is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
@@ -25,10 +25,11 @@ export interface CounterDelta {
 }
 
 /**
- * The seven transitions, as a total map from reason to what it does. `receive`, `adjust`, `commit`
- * and `restock` change how many units exist; `commit` moves both columns together so a sale
- * doesn't change availability; `release` and `expire` are the same arithmetic under two names,
- * kept separate because the ledger records which story it was.
+ * The eight transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
+ * and `restock` change how many units are on the shelf; `ship` moves both columns together so a
+ * dispatch doesn't change availability; `commit` moves neither (payment settles the claim, the
+ * units stay on the shelf until dispatch); `release` and `expire` are the same arithmetic under
+ * two names, kept separate because the ledger records which story it was.
  * @param reason - which transition
  * @param quantity - how many units; signed only for `adjust`, positive for everything else
  * @returns the pair of counter deltas the transition implies
@@ -40,8 +41,13 @@ export const counterDeltaFor = (reason: StockMovementReason, quantity: number): 
             return { onHandDelta: 0, reservedDelta: quantity };
         }
 
-        // The sale completes: the units leave the building and stop being spoken for.
+        // The order was paid: the claim is settled, the units stay on the shelf and stay spoken for.
         case StockMovementReason.commit: {
+            return { onHandDelta: 0, reservedDelta: 0 };
+        }
+
+        // The parcel leaves: the units are off the shelf and no longer spoken for.
+        case StockMovementReason.ship: {
             return { onHandDelta: -quantity, reservedDelta: -quantity };
         }
 
@@ -56,8 +62,7 @@ export const counterDeltaFor = (reason: StockMovementReason, quantity: number): 
             return { onHandDelta: quantity, reservedDelta: 0 };
         }
 
-        // A paid order's committed units come back — cancelled after `commit` already took them
-        // out of `onHand`, not merely out of a hold. `reserved` is untouched: `commit` already
+        // Returned goods are received back on the shelf. `reserved` is untouched: `ship` already
         // took it down, and nothing reserved these units again in the meantime.
         case StockMovementReason.restock: {
             return { onHandDelta: quantity, reservedDelta: 0 };

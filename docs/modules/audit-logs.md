@@ -69,6 +69,10 @@ trail — everything one actor did, and everyone who did one thing.
 Field names are `snake_case` here and `camelCase` everywhere else, because an audit row is a log
 record rather than a domain document.
 
+One row shape, `AuditEntryItem`, answers every read: `GET /audit`, `GET /observability/audit` and the
+account export. `actor_credential_id` names the API key when a credential did the action, and is absent
+when a person did.
+
 ## Offline writes
 
 `bufferCommands: false` on this schema fails a write immediately when Mongo is unreachable,

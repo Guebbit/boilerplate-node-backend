@@ -54,6 +54,13 @@ const PUBLISHABLE: { model: string; key: string; because: string }[] = [
             'lets an admin name a specific entry for `DELETE .../secrets/:secretId` after ' +
             '`POST .../rotate-secret` without the response ever carrying anything that could ' +
             'sign a delivery.'
+    },
+    {
+        model: 'AuditLog',
+        key: 'actor_credential_id',
+        because:
+            "The key's public prefix (`sk_a1b2c3d4`), never the secret or its hash. An audit " +
+            'row names the credential so a reader can tell a key from the person who minted it.'
     }
 ];
 

@@ -1,8 +1,8 @@
 /**
  * @module
  * Cancelling an order, and making its consequences stick. The status move, the hold's release and
- * a paid order's restock are ONE transaction: a restock that throws rolls the status back too, so
- * units are never lost from sale behind an order that already reads `cancelled`. The refund is
+ * a paid order's claim on stock are ONE transaction: a release that throws rolls the status back
+ * too, so units are never lost from sale behind an order that already reads `cancelled`. The refund is
  * not in it — that is money at a provider, which cannot roll back — so only its intent is written
  * down, in the status write itself; `retryPendingEffects` discharges it when the announcement was
  * not enough.
@@ -47,17 +47,18 @@ const PENDING_REFUND = Object.freeze(['refund'] as const);
 const SWEEP_BATCH_SIZE = 200;
 
 /**
- * Give an order's stock back, inside the cancel's own transaction. A `held` reservation is
- * released; a PAID order's hold is `committed`, so `releaseForOrder` never matches it — the units
- * already left `onHand` at payment — and `restockForOrder` gives those back instead. Each claims
- * its status conditionally, so calling the second speculatively is safe: a hold in any other state
- * claims nothing. A hold already expired is an ordinary sequence, the units are already back.
+ * Give an order's stock claim back, inside the cancel's own transaction. A `held` reservation is
+ * released; a PAID order's hold is `committed`, so `releaseForOrder` never matches it, and
+ * `releaseCommittedForOrder` gives it up instead — the units never left the shelf (they leave at
+ * shipment), so nothing is restocked. Each claims its status conditionally, so calling the second
+ * speculatively is safe: a hold in any other state claims nothing. A hold already expired is an
+ * ordinary sequence, the units are already back.
  * @param orderId - the order being cancelled
  * @param session - the cancel's transaction
  */
 const giveBackStock = async (orderId: string, session: ClientSession): Promise<void> => {
     const released = await inventoryService.releaseForOrder(orderId, 'release', session);
-    if (!released) await inventoryService.restockForOrder(orderId, session);
+    if (!released) await inventoryService.releaseCommittedForOrder(orderId, session);
 };
 
 /**

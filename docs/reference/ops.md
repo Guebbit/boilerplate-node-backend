@@ -213,7 +213,7 @@ refund owed for up to 24 hours. It is safe to repeat, since a second pass over a
 refunds nothing.
 
 The stock half of a cancel is not covered here, because it cannot half-happen: the status move,
-the hold's release and a paid order's restock are one `withTransaction`. A restock that throws
+the hold's release (a paid, unshipped order's claim included) is one `withTransaction`. A release that throws
 rolls the status back with it — the order stays `paid`, the counters stay put, and the cancel can
 simply be retried. Only the catalogue's stock cache is refreshed after the commit, and the next
 stock transition on a product corrects it if that one write is lost.

@@ -98,6 +98,21 @@ describe('mint — the subset boundary', () => {
         expect(result.status).toBe(422);
     });
 
+    it('refuses a permission with a step-up tier, even when the caller holds it', async () => {
+        const user = await createRealUser('mint-step-up');
+        // `users.any.delete` is `stepUp: critical`: a key can never re-authenticate to use it.
+        const context = contextFor(String(user._id), permissionsOfRole('admin'));
+
+        const result = await mint(
+            { name: 'dead key', permissions: ['users.any.delete'], expiresAt: IN_A_WEEK },
+            context
+        );
+
+        expect(result.success).toBe(false);
+        if (result.success) throw new Error('unreachable — asserted above');
+        expect(result.status).toBe(422);
+    });
+
     it('mints when every requested key is held, and returns the plaintext once', async () => {
         const user = await createRealUser('mint-ok');
         const context = contextFor(String(user._id), ['apikeys.any.read', 'apikeys.any.create']);

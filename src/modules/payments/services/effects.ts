@@ -9,7 +9,7 @@
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { orderService, stockCommitted } from '@modules/orders';
+import { orderService, paymentSettled } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
@@ -37,7 +37,7 @@ const retryOne = (payment: PaymentDocument): Promise<boolean> => {
         .then((order): Promise<unknown> => {
             // The settlement died after charging: commit the stock, then announce — the announce
             // clears the marker and writes `payment.succeeded` to the outbox in one transaction.
-            if (order !== undefined && stockCommitted(order.status))
+            if (order !== undefined && paymentSettled(order.status))
                 return inventoryService
                     .commitForOrder(orderId)
                     .then(() => announcePaymentSucceeded(String(payment._id), orderId));

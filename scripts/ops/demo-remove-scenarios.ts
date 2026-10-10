@@ -424,7 +424,7 @@ const ORDER_ID_VARIABLE = '{{orderId}}';
     );
     content = replaceOnce(
         content,
-        `const COLLECTION_NAME = 'Ecommerce Demo API';`,
+        `const COLLECTION_NAME = 'Boilerplate API';`,
         `const COLLECTION_NAME = 'API';`,
         label
     );

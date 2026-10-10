@@ -85,14 +85,13 @@ export const isPayable = (status: OrderStatus): boolean =>
     canTransition(status, OrderStatus.paid, 'system') && status !== OrderStatus.paid;
 
 /**
- * Whether an order in `status` has already had its stock committed — `paid`, or further along.
- * `pending`'s stock is only ever held, and `cancelled` gave it back. The one place this fact is
- * declared, so a caller deciding whether a stock commit is still owed never hand-lists the same
- * statuses.
+ * Whether an order in `status` has already been paid — `paid`, or further along. `pending` has
+ * only a stock hold, and `cancelled` gave it up. The one place this fact is declared, so a caller
+ * deciding whether a hold's commit is still owed never hand-lists the same statuses.
  * @param status - current status
- * @returns whether stock already left the shelf for this order
+ * @returns whether the order's hold should be (or already is) `committed` or later
  */
-export const stockCommitted = (status: OrderStatus): boolean =>
+export const paymentSettled = (status: OrderStatus): boolean =>
     status !== OrderStatus.pending && status !== OrderStatus.cancelled;
 
 /**

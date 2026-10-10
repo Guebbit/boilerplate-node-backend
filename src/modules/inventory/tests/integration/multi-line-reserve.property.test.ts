@@ -1,11 +1,11 @@
 /**
  * @module
- * Property-based: whatever mix of multi-line holds, commits, releases and expiries a shop sees,
+ * Property-based: whatever mix of multi-line holds, shipments, releases and expiries a shop sees,
  * the stock level agrees with the open holds. The two invariants every guard in the repository
  * exists for, stated once over generated sequences instead of a table of examples:
  *
  *   - `reserved` of a product == the sum, over every `held` reservation, of that product's lines.
- *   - `available == onHand - reserved`, and `onHand` has dropped by exactly what was committed.
+ *   - `available == onHand - reserved`, and `onHand` has dropped by exactly what was shipped.
  *
  * A refused multi-line hold must leave NOTHING behind, which is what keeps the first invariant
  * true after a rollback. Real Mongo, seeded, same pattern as `ledger.property.test.ts`.
@@ -39,7 +39,7 @@ interface Line {
 /** One step a generated shop takes. */
 type Step =
     | { kind: 'place'; lines: Line[] }
-    | { kind: 'resolve'; which: number; how: 'commit' | 'release' | 'expire' };
+    | { kind: 'resolve'; which: number; how: 'ship' | 'release' | 'expire' };
 
 /** A multi-line order: distinct products in an arbitrary order, like a cart's lines. */
 const placeStep = (): fc.Arbitrary<Step> =>
@@ -60,15 +60,15 @@ const resolveStep = (): fc.Arbitrary<Step> =>
     fc.record({
         kind: fc.constant('resolve' as const),
         which: fc.nat({ max: 50 }),
-        how: fc.constantFrom('commit' as const, 'release' as const, 'expire' as const)
+        how: fc.constantFrom('ship' as const, 'release' as const, 'expire' as const)
     });
 
 /** What every hold ended as, for the summation the invariants are checked against. */
 interface Outcome {
-    /** Units still held, per product id. */
+    /** Units still claimed (held, or paid and not yet shipped), per product id. */
     held: Map<string, number>;
-    /** Units committed (sold), per product id. */
-    committed: Map<string, number>;
+    /** Units shipped (off the shelf), per product id. */
+    shipped: Map<string, number>;
 }
 
 /** Add `quantity` to `key`'s running total. */
@@ -77,7 +77,7 @@ const addTo = (totals: Map<string, number>, key: string, quantity: number): void
 };
 
 /**
- * Play a generated shop and report what ended up held and committed, from the HOLDS themselves
+ * Play a generated shop and report what ended up claimed and shipped, from the HOLDS themselves
  * (`reservations`), never from the counters under test.
  */
 const play = async (productIds: readonly string[], steps: readonly Step[]): Promise<Outcome> => {
@@ -100,8 +100,11 @@ const play = async (productIds: readonly string[], steps: readonly Step[]): Prom
         } else if (open.length > 0) {
             const [orderId] = open.splice(current.which % open.length, 1);
             if (orderId === undefined) continue;
-            if (current.how === 'commit') await inventoryService.commitForOrder(orderId);
-            else
+            if (current.how === 'ship') {
+                // Paid first, as in life: the payment settles the claim, the dispatch moves units.
+                await inventoryService.commitForOrder(orderId);
+                await inventoryService.shipForOrder(orderId);
+            } else
                 await inventoryService.releaseForOrder(
                     orderId,
                     current.how === 'expire'
@@ -110,12 +113,13 @@ const play = async (productIds: readonly string[], steps: readonly Step[]): Prom
                 );
         }
 
-    const outcome: Outcome = { held: new Map(), committed: new Map() };
+    const outcome: Outcome = { held: new Map(), shipped: new Map() };
     for (const reservation of await reservationModel.find({}).lean())
         for (const { productId, quantity } of reservation.items) {
-            if (reservation.status === 'held') addTo(outcome.held, String(productId), quantity);
-            if (reservation.status === 'committed')
-                addTo(outcome.committed, String(productId), quantity);
+            if (reservation.status === 'held' || reservation.status === 'committed')
+                addTo(outcome.held, String(productId), quantity);
+            if (reservation.status === 'shipped')
+                addTo(outcome.shipped, String(productId), quantity);
         }
     return outcome;
 };
@@ -134,18 +138,18 @@ describe('multi-line holds against the stock level', () => {
                     const productIds = products.map((product) => String(product._id));
                     await reservationModel.deleteMany({});
 
-                    const { held, committed } = await play(productIds, steps);
+                    const { held, shipped } = await play(productIds, steps);
 
                     for (const productId of productIds) {
                         const level = await stockLevelModel.findOne({ productId }).lean();
                         const heldUnits = held.get(productId) ?? 0;
-                        const soldUnits = committed.get(productId) ?? 0;
+                        const shippedUnits = shipped.get(productId) ?? 0;
 
                         expect(level?.reserved).toBe(heldUnits);
-                        expect(level?.onHand).toBe(OPENING_ON_HAND - soldUnits);
-                        expect(level?.available).toBe(OPENING_ON_HAND - soldUnits - heldUnits);
+                        expect(level?.onHand).toBe(OPENING_ON_HAND - shippedUnits);
+                        expect(level?.available).toBe(OPENING_ON_HAND - shippedUnits - heldUnits);
                         // Never promised more than exists.
-                        expect(heldUnits).toBeLessThanOrEqual(OPENING_ON_HAND - soldUnits);
+                        expect(heldUnits).toBeLessThanOrEqual(OPENING_ON_HAND - shippedUnits);
                     }
                 }
             ),

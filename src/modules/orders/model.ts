@@ -94,7 +94,7 @@ const ORDER_PENDING_EFFECTS = ['refund'] as const;
  *
  * One member, not because the stock half always heals — it does not. The reservation sweep
  * (`inventory/repository.ts`) only matches `held` reservations; a paid order's `committed` hold,
- * restocked by the cancel rather than released, is never retried if that restock throws, and those
+ * released by the cancel rather than swept, is never retried if that release throws, and those
  * units are lost from sale for good. The money half is tracked here because the domain event bus
  * has no retry of its own: a refund that throws is lost unless the intent to make it survives the
  * failure.
