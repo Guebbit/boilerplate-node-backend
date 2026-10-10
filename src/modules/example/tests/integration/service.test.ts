@@ -125,7 +125,7 @@ describe('create', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: exampleAuditActions.EXAMPLE_CREATED,
-                target_id: created.data.id
+                targetId: created.data.id
             })
         );
     });
@@ -448,7 +448,7 @@ describe('remove', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: exampleAuditActions.EXAMPLE_DELETED,
-                target_id: String(theirs._id)
+                targetId: String(theirs._id)
             })
         );
     });

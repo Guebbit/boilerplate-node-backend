@@ -20,7 +20,7 @@ setupTestDb();
 /** One audit entry as the logger receives it. */
 interface Entry {
     action: string;
-    target_id?: string;
+    targetId?: string;
     metadata?: Record<string, unknown>;
 }
 
@@ -101,7 +101,7 @@ describe('a failed login', () => {
         await api().post('/account/login').send({ email: '  Victim@Example.COM ', password: 'x' });
 
         const failure = entries().find((entry) => entry.action === accountAuditActions.AUTH_LOGIN);
-        expect(failure?.target_id).toBe(pseudonymise('log', 'victim@example.com'));
+        expect(failure?.targetId).toBe(pseudonymise('log', 'victim@example.com'));
         expect(JSON.stringify(entries())).not.toMatch(/victim@example/i);
     });
 
@@ -112,6 +112,6 @@ describe('a failed login', () => {
 
         const failure = entries().find((entry) => entry.action === accountAuditActions.AUTH_LOGIN);
         expect(failure).toBeDefined();
-        expect(failure?.target_id).toBeUndefined();
+        expect(failure?.targetId).toBeUndefined();
     });
 });

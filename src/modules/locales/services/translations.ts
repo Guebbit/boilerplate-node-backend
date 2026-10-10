@@ -348,8 +348,8 @@ const applyTranslationBatch = async (
     recordAudit(context, {
         action: localeAuditActions.ADMIN_TRANSLATION_UPDATED,
         outcome: 'success',
-        target_type: entityType,
-        target_id: entityId,
+        targetType: entityType,
+        targetId: entityId,
         metadata: {
             upserted: planned.filter((slot) => slot.kind === 'upsert').map((s) => s.locale),
             deleted: planned.filter((slot) => slot.kind === 'delete').map((s) => s.locale)

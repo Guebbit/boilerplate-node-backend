@@ -349,7 +349,7 @@ describe('completeEmailChange', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
-                actor_user_id: user.id,
+                actorUserId: user.id,
                 outcome: 'success'
             })
         );
@@ -833,7 +833,7 @@ describe('completeEmailVerification', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_EMAIL_VERIFY_COMPLETED,
-                actor_user_id: user.id,
+                actorUserId: user.id,
                 outcome: 'success'
             })
         );
@@ -867,7 +867,7 @@ describe('removeOwnAccount', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
-                actor_user_id: user.id,
+                actorUserId: user.id,
                 outcome: 'success'
             })
         );
@@ -897,8 +897,8 @@ describe('requestPasswordReset', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
                 outcome: 'success'
             })
         );
@@ -914,8 +914,8 @@ describe('requestPasswordReset', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
                 outcome: 'success'
             })
         );
@@ -1207,7 +1207,7 @@ describe('requestAccountDeletion', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
-                actor_user_id: user.id,
+                actorUserId: user.id,
                 outcome: 'success'
             })
         );

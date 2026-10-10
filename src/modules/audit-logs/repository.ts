@@ -39,10 +39,10 @@ const base = createRepository<AuditLogDocument, AuditEntryItem>(auditLogModel, {
         // `outcome` in particular must not be a partial match: 'fail' silently matching 'failure'
         // would make a filtered view quietly disagree with the numbers next to it.
         exact: {
-            actor: 'actor_user_id',
+            actor: 'actorUserId',
             action: 'action',
             outcome: 'outcome',
-            target: 'target_id'
+            target: 'targetId'
         }
     }
 });
@@ -106,7 +106,7 @@ const cursorAfter = (
  *
  * No `countDocuments` and no `skip`: the shared `search` counts and skips on every page, so reading
  * an actor's whole trail that way costs work quadratic in its length. This walks the
- * `{ actor_user_id, timestamp }` index from where the last page ended, so each page costs a page.
+ * `{ actorUserId, timestamp }` index from where the last page ended, so each page costs a page.
  *
  * @param actor - the account whose entries are read; never anyone else's
  * @param after - the cursor the previous page returned, or `undefined` for the first page
@@ -119,7 +119,7 @@ const ownEntriesPage = (
 ): Promise<OwnEntriesPage> =>
     auditLogModel
         .find({
-            actor_user_id: actor,
+            actorUserId: actor,
             ...(after ? { timestamp: { $lte: after.timestamp }, _id: { $nin: after.seen } } : {})
         })
         .sort({ timestamp: -1 })

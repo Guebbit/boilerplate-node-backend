@@ -155,8 +155,8 @@ export const recordOneTimeTokenRejected = (
     authOneTimeTokenRejectedTotal.inc({ flow });
     recordAudit(context, {
         action: accountAuditActions.AUTH_ONE_TIME_TOKEN_REJECTED,
-        actor_user_id: 'anonymous',
-        actor_role: 'anonymous',
+        actorUserId: 'anonymous',
+        actorRole: 'anonymous',
         outcome: 'failure',
         metadata: { flow }
     });

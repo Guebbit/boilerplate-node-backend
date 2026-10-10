@@ -64,8 +64,8 @@ export const remove = (
                         recordAudit(context, {
                             action: ordersAuditActions.ORDER_DELETED,
                             outcome: 'success',
-                            target_type: 'order',
-                            target_id: id,
+                            targetType: 'order',
+                            targetId: id,
                             metadata: { hardDelete: true }
                         });
                 })
@@ -83,8 +83,8 @@ export const remove = (
             recordAudit(context, {
                 action: ordersAuditActions.ORDER_DELETED,
                 outcome: 'success',
-                target_type: 'order',
-                target_id: id,
+                targetType: 'order',
+                targetId: id,
                 metadata: { hardDelete: false }
             });
         return generateSuccess(saved, 200, t('orders.soft-deleted'));
@@ -116,8 +116,8 @@ export const restoreById = (
                     recordAudit(context, {
                         action: ordersAuditActions.ORDER_RESTORED,
                         outcome: 'success',
-                        target_type: 'order',
-                        target_id: id
+                        targetType: 'order',
+                        targetId: id
                     });
                 return generateSuccess(saved, 200, t('orders.restored'));
             });

@@ -172,8 +172,8 @@ describe('the rank rule on a user', () => {
             expect.objectContaining({
                 action: 'security.forbidden',
                 outcome: 'failure',
-                target_type: 'user',
-                target_id: owner.id,
+                targetType: 'user',
+                targetId: owner.id,
                 metadata: expect.objectContaining({ reason: 'outranked' })
             })
         );

@@ -198,8 +198,8 @@ export const requestExport = (
             recordAudit(context, {
                 action: accountAuditActions.AUTH_DATA_EXPORT_REQUESTED,
                 outcome: 'success',
-                target_type: 'account_export',
-                target_id: String(row._id),
+                targetType: 'account_export',
+                targetId: String(row._id),
                 ...(created ? {} : { metadata: { reused: true } })
             });
 
@@ -245,8 +245,8 @@ export const openOwnExport = (
             recordAudit(context, {
                 action: accountAuditActions.AUTH_DATA_EXPORT_DOWNLOADED,
                 outcome: 'success',
-                target_type: 'account_export',
-                target_id: exportId
+                targetType: 'account_export',
+                targetId: exportId
             });
             return stream;
         });

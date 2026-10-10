@@ -54,8 +54,8 @@ describe('removeById', () => {
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_DELETED,
                 outcome: 'success',
-                target_type: 'order',
-                target_id: String(order._id),
+                targetType: 'order',
+                targetId: String(order._id),
                 metadata: { hardDelete: false }
             })
         );
@@ -71,8 +71,8 @@ describe('removeById', () => {
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_DELETED,
                 outcome: 'success',
-                target_type: 'order',
-                target_id: String(order._id),
+                targetType: 'order',
+                targetId: String(order._id),
                 metadata: { hardDelete: true }
             })
         );
@@ -100,8 +100,8 @@ describe('restoreById', () => {
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_RESTORED,
                 outcome: 'success',
-                target_type: 'order',
-                target_id: String(order._id)
+                targetType: 'order',
+                targetId: String(order._id)
             })
         );
     });

@@ -301,7 +301,7 @@ describe('getAuth', () => {
             expect.objectContaining({
                 action,
                 outcome: 'failure',
-                actor_user_id: 'anonymous',
+                actorUserId: 'anonymous',
                 metadata: expect.objectContaining({ kind: 'jwt', route: '/protected' })
             })
         );
@@ -456,8 +456,8 @@ describe('isAuth', () => {
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
                 outcome: 'failure'
             })
         );
@@ -587,8 +587,8 @@ describe('requirePermission', () => {
                 // An absent session is an authentication failure, so it is audited as one — the
                 // same action `isAuth` emits, rather than a permission denial.
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
                 metadata: expect.objectContaining({ reason: 'not_authenticated' })
             })
         );
@@ -606,7 +606,7 @@ describe('requirePermission', () => {
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_FORBIDDEN,
-                actor_user_id: 'user-9',
+                actorUserId: 'user-9',
                 metadata: expect.objectContaining({ reason: 'missing_permission' })
             })
         );
@@ -770,7 +770,7 @@ describe('requirePermissionViaCookie', () => {
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_FORBIDDEN,
-                actor_user_id: 'user-1',
+                actorUserId: 'user-1',
                 outcome: 'failure'
             })
         );
@@ -788,7 +788,7 @@ describe('requirePermissionViaCookie', () => {
         await new Promise((resolve) => setImmediate(resolve));
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
-            expect.objectContaining({ actor_user_id: 'anonymous' })
+            expect.objectContaining({ actorUserId: 'anonymous' })
         );
     });
 
@@ -894,7 +894,7 @@ describe('stillHoldsKeyViaCookie', () => {
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_FORBIDDEN,
-                actor_user_id: 'user-1',
+                actorUserId: 'user-1',
                 outcome: 'failure'
             })
         );
@@ -1019,7 +1019,7 @@ describe('requireFreshAuth', () => {
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
-                actor_user_id: 'user-1',
+                actorUserId: 'user-1',
                 outcome: 'failure'
             })
         );

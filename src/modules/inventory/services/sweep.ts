@@ -131,7 +131,7 @@ export const runReservationSweep = async (context?: CallerContext): Promise<numb
     recordAudit(context, {
         action: inventoryAuditActions.ADMIN_RESERVATIONS_SWEPT,
         outcome: 'success',
-        target_type: 'reservation',
+        targetType: 'reservation',
         metadata: { expired }
     });
 

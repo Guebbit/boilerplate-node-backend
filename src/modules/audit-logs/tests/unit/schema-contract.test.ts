@@ -29,9 +29,9 @@ describe('auditLogSchema — what an entry must carry', () => {
         // is absent on events that genuinely have none (a scheduled job has no IP).
         expect(requiredPaths(auditLogSchema)).toEqual([
             'action',
-            'actor_role',
-            'actor_scope',
-            'actor_user_id',
+            'actorRole',
+            'actorScope',
+            'actorUserId',
             'level',
             'outcome',
             'timestamp'
@@ -42,7 +42,7 @@ describe('auditLogSchema — what an entry must carry', () => {
         // These three are queried and aggregated on. A free-form value would not error; it would
         // quietly fall outside every filter an operator writes, which is indistinguishable from
         // the event never happening.
-        expect(enumOf(auditLogSchema, 'actor_role')).toEqual([
+        expect(enumOf(auditLogSchema, 'actorRole')).toEqual([
             'admin',
             'user',
             'anonymous',
@@ -55,15 +55,15 @@ describe('auditLogSchema — what an entry must carry', () => {
     it('includes anonymous as a role, so an unauthenticated event is still attributable', () => {
         // A failed login has no user. Without this value the entry that matters most — the one
         // before an account is taken — has nowhere to record who it was not.
-        expect(enumOf(auditLogSchema, 'actor_role')).toContain('anonymous');
+        expect(enumOf(auditLogSchema, 'actorRole')).toContain('anonymous');
     });
 
     it('carries the real role name beside the closed bucket, open and optional', () => {
-        // Open where `actor_role` is closed: a preset role renamed in `authorization-roles.yaml`
-        // must not fail a write, so no enum and no `required` — see `AuditEvent.actor_role_name`.
-        expect(pathNames(auditLogSchema)).toContain('actor_role_name');
-        expect(requiredPaths(auditLogSchema)).not.toContain('actor_role_name');
-        expect(enumOf(auditLogSchema, 'actor_role_name')).toEqual([]);
+        // Open where `actorRole` is closed: a preset role renamed in `authorization-roles.yaml`
+        // must not fail a write, so no enum and no `required` — see `AuditEvent.actorRoleName`.
+        expect(pathNames(auditLogSchema)).toContain('actorRoleName');
+        expect(requiredPaths(auditLogSchema)).not.toContain('actorRoleName');
+        expect(enumOf(auditLogSchema, 'actorRoleName')).toEqual([]);
     });
 });
 
@@ -71,8 +71,8 @@ describe('auditLogSchema — the credential behind an entry', () => {
     it('stores the api-key id, open and optional', () => {
         // Strict mode drops a field the schema lacks, so without this path a stored row could
         // never say "done with an API key" although the event carries it.
-        expect(pathNames(auditLogSchema)).toContain('actor_credential_id');
-        expect(requiredPaths(auditLogSchema)).not.toContain('actor_credential_id');
+        expect(pathNames(auditLogSchema)).toContain('actorCredentialId');
+        expect(requiredPaths(auditLogSchema)).not.toContain('actorCredentialId');
     });
 });
 
@@ -99,8 +99,8 @@ describe('auditLogSchema — indexes and retention', () => {
         // retention sweep below.
         expect(indexSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: action+1, timestamp-1',
-            'actor_user_id_1_timestamp_-1: actor_user_id+1, timestamp-1',
-            'target_id_1_timestamp_-1: target_id+1, timestamp-1',
+            'actorUserId_1_timestamp_-1: actorUserId+1, timestamp-1',
+            'targetId_1_timestamp_-1: targetId+1, timestamp-1',
             'timestamp_1: timestamp+1'
         ]);
     });
@@ -111,8 +111,8 @@ describe('auditLogSchema — indexes and retention', () => {
         // and the test together — and so a TTL appearing on a different index fails here.
         expect(indexOptionSpecs(auditLogSchema)).toEqual([
             'action_1_timestamp_-1: (none)',
-            'actor_user_id_1_timestamp_-1: (none)',
-            'target_id_1_timestamp_-1: (none)',
+            'actorUserId_1_timestamp_-1: (none)',
+            'targetId_1_timestamp_-1: (none)',
             `timestamp_1: expireAfterSeconds=${RETENTION_SECONDS}`
         ]);
     });

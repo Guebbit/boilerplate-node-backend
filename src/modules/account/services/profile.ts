@@ -240,8 +240,8 @@ const afterReset = (
         .then((unrestricted) => {
             recordAudit(context, {
                 action: accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED,
-                actor_user_id: String(user._id),
-                actor_role: unrestricted ? 'admin' : 'user',
+                actorUserId: String(user._id),
+                actorRole: unrestricted ? 'admin' : 'user',
                 outcome: 'success'
             });
         })
@@ -358,7 +358,7 @@ export const completePasswordReset = (
  * last step for the admin `DELETE /users/:id`, which already reports its own
  * `ADMIN_USER_ERASED`/`ADMIN_USER_SOFT_DELETED`. Emitting inside `remove` would double up there,
  * and — worse — misattribute
- * it: this event's `actor_user_id`/`actor_role` are the deleted account's own, correct for a
+ * it: this event's `actorUserId`/`actorRole` are the deleted account's own, correct for a
  * self-delete but backwards for an admin's.
  */
 export const removeOwnAccount = (
@@ -381,8 +381,8 @@ export const removeOwnAccount = (
             if (result.success) {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_ACCOUNT_DELETE_COMPLETED,
-                    actor_user_id: String(_id),
-                    actor_role: unrestricted ? 'admin' : 'user',
+                    actorUserId: String(_id),
+                    actorRole: unrestricted ? 'admin' : 'user',
                     outcome: 'success'
                 });
                 emitAnalyticsEvent({

@@ -243,8 +243,8 @@ const refuseUnauthenticated = (
 ): void => {
     auditRefusal(request, {
         action: coreAuditActions.SECURITY_UNAUTHORIZED,
-        actor_user_id: 'anonymous',
-        actor_role: 'anonymous'
+        actorUserId: 'anonymous',
+        actorRole: 'anonymous'
     });
     rejectResponse(response, 401, errors);
 };
@@ -411,9 +411,9 @@ export const requirePermission = (key: string) => {
         if (!request.authContext && !request.caller) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_UNAUTHORIZED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
-                actor_scope: scope,
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
+                actorScope: scope,
                 metadata: { reason: 'not_authenticated' }
             });
             rejectResponse(response, 401);
@@ -429,7 +429,7 @@ export const requirePermission = (key: string) => {
         if (!request.authContext && scope === 'platform') {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
-                actor_scope: scope,
+                actorScope: scope,
                 metadata: { reason: 'credential_wrong_scope', permission: key }
             });
             rejectResponse(response, 403);
@@ -463,7 +463,7 @@ export const requirePermission = (key: string) => {
         if (allowed && declared?.stepUp && !provedRecentlyEnough(request, declared.stepUp)) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
-                actor_scope: scope,
+                actorScope: scope,
                 metadata: { reason: 'step_up_required', permission: key, tier: declared.stepUp }
             });
             challengeForFreshAuth(response, reauthWindowSeconds(declared.stepUp));
@@ -474,7 +474,7 @@ export const requirePermission = (key: string) => {
         if (!allowed) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
-                actor_scope: scope,
+                actorScope: scope,
                 metadata: { reason: 'missing_permission', permission: key }
             });
             rejectResponse(response, 403, [{ code: deniedCode, message: t(deniedMessageKey) }]);
@@ -518,7 +518,7 @@ const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: 
         if (!allowed) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
-                actor_user_id: user?.id ?? 'anonymous',
+                actorUserId: user?.id ?? 'anonymous',
                 metadata: { reason: 'missing_permission', permission: key }
             });
         }

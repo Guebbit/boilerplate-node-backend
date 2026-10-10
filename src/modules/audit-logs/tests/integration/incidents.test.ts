@@ -20,9 +20,9 @@ const row = (
     outcome: 'success' | 'failure',
     extra: Partial<AuditLogDocument> = {}
 ): Partial<AuditLogDocument> => ({
-    actor_user_id: 'user-1',
-    actor_role: 'user',
-    actor_scope: 'tenant',
+    actorUserId: 'user-1',
+    actorRole: 'user',
+    actorScope: 'tenant',
     action,
     outcome,
     timestamp: new Date(),
@@ -101,7 +101,7 @@ describe('the operator’s audit read — what it withholds', () => {
             ['outranked', 'own', 'own_role', undefined].map((reason, index) =>
                 auditLogRepository.create(
                     row('security.forbidden', 'failure', {
-                        request_id: `forbidden-${index}`,
+                        requestId: `forbidden-${index}`,
                         metadata: reason === undefined ? undefined : { reason, ownerId: 'owner-1' }
                     })
                 )
@@ -110,7 +110,7 @@ describe('the operator’s audit read — what it withholds', () => {
 
         const { items } = await auditLogService.searchIncidents({});
 
-        expect(items.map((item) => item.request_id).toSorted()).toEqual([
+        expect(items.map((item) => item.requestId).toSorted()).toEqual([
             'forbidden-2',
             'forbidden-3'
         ]);
@@ -144,13 +144,13 @@ describe('the operator’s audit read — addresses', () => {
     it('gives a keyed digest in place of the address, the same for the same address', async () => {
         await Promise.all([
             auditLogRepository.create(
-                row('security.forbidden', 'failure', { ip: '203.0.113.4', request_id: 'a' })
+                row('security.forbidden', 'failure', { ip: '203.0.113.4', requestId: 'a' })
             ),
             auditLogRepository.create(
-                row('security.forbidden', 'failure', { ip: '203.0.113.4', request_id: 'b' })
+                row('security.forbidden', 'failure', { ip: '203.0.113.4', requestId: 'b' })
             ),
             auditLogRepository.create(
-                row('security.forbidden', 'failure', { ip: '198.51.100.9', request_id: 'c' })
+                row('security.forbidden', 'failure', { ip: '198.51.100.9', requestId: 'c' })
             )
         ]);
 

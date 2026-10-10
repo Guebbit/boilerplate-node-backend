@@ -213,8 +213,8 @@ const receiveFor = (
                 recordAudit(context, {
                     action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
                     outcome: 'success',
-                    target_type: 'return',
-                    target_id: id,
+                    targetType: 'return',
+                    targetId: id,
                     metadata: {
                         orderId: String(received.orderId),
                         refundAmount: verdict.breakdown.total

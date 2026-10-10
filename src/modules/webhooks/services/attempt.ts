@@ -46,18 +46,18 @@ import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../mo
 const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | null): void => {
     if (!subscription) return;
 
-    // No `CallerContext` behind this — see `../audit.ts`'s own note on why `actor_user_id` is the
+    // No `CallerContext` behind this — see `../audit.ts`'s own note on why `actorUserId` is the
     // literal string `'system'` rather than attributing it to whichever worker process ran this.
-    // `actor_role: 'system'` for the same reason: this is a background job, not an admin's
+    // `actorRole: 'system'` for the same reason: this is a background job, not an admin's
     // own action, and there is no `Caller` here for `resolveActorRole` to read that off of.
     emitAuditEvent({
-        actor_user_id: 'system',
-        actor_role: 'system',
-        actor_scope: 'tenant',
+        actorUserId: 'system',
+        actorRole: 'system',
+        actorScope: 'tenant',
         action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
         outcome: 'success',
-        target_type: 'webhook_subscription',
-        target_id: String(subscription._id)
+        targetType: 'webhook_subscription',
+        targetId: String(subscription._id)
     } satisfies AuditEvent);
 
     void userService

@@ -198,8 +198,8 @@ export const mint = (
             recordAudit(context, {
                 action: apiKeysAuditActions.ADMIN_API_KEY_MINTED,
                 outcome: 'success',
-                target_type: 'api_key',
-                target_id: String(apiKey._id),
+                targetType: 'api_key',
+                targetId: String(apiKey._id),
                 metadata: { permissions: body.permissions }
             });
             return generateSuccess(
@@ -233,8 +233,8 @@ export const revoke = (
             recordAudit(context, {
                 action: apiKeysAuditActions.ADMIN_API_KEY_REVOKED,
                 outcome: 'success',
-                target_type: 'api_key',
-                target_id: id,
+                targetType: 'api_key',
+                targetId: id,
                 metadata: { credential: displayIdOf(apiKey.publicPrefix) }
             });
             return generateSuccess(undefined);
@@ -299,8 +299,8 @@ export const revokeAllMintedBy = (userId: string, reason: RevocationReason): Pro
                 recordAudit(systemCallerContext('ApiKey'), {
                     action: apiKeysAuditActions.SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE,
                     outcome: 'success',
-                    target_type: 'user',
-                    target_id: userId,
+                    targetType: 'user',
+                    targetId: userId,
                     metadata: { count: live.length, reason }
                 });
                 return notifyRevoked(userId, reason, live);

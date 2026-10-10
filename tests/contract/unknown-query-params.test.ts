@@ -1,7 +1,7 @@
 /**
  * An unknown query parameter is a 422, not a silent no-op. A typo or a stale filter name that is
  * dropped quietly returns everything the caller may read, as though the filter had been honoured —
- * `?actor_user_id=` was documented for the audit read and ignored for as long as nobody tried it.
+ * `?actorUserId=` was documented for the audit read and ignored for as long as nobody tried it.
  *
  * Each route gets a control (the same request without the stray parameter answers 200), so the
  * 422 is earned by the parameter and not by a route that refuses everything.
@@ -35,10 +35,10 @@ describe('a stray query parameter on a list read', () => {
     });
 
     // Documented in the data-protection page for the audit read, and ignored until now.
-    it('refuses the documented-but-undeclared actor_user_id filter on the audit read', async () => {
+    it('refuses the documented-but-undeclared actorUserId filter on the audit read', async () => {
         const { bearer } = await authenticateAsRole('admin');
 
-        const response = await api().get('/audit?actor_user_id=abc').set('Authorization', bearer);
+        const response = await api().get('/audit?actorUserId=abc').set('Authorization', bearer);
 
         expect(response.status).toBe(422);
     });

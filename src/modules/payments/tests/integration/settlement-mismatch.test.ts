@@ -153,9 +153,9 @@ describe('a mismatch recorded', () => {
             expect.objectContaining({
                 action: 'payment.amount_mismatch',
                 outcome: 'failure',
-                target_type: 'payment',
-                target_id: paymentId,
-                actor_user_id: SYSTEM_ACTOR.id,
+                targetType: 'payment',
+                targetId: paymentId,
+                actorUserId: SYSTEM_ACTOR.id,
                 metadata: expect.objectContaining({
                     fields: ['currency'],
                     received: expect.objectContaining({ currency: 'USD' })

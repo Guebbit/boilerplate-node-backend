@@ -118,8 +118,8 @@ const applyOverride = (
         recordAudit(context, {
             action: ordersAuditActions.ORDER_STATUS_OVERRIDDEN,
             outcome: 'success',
-            target_type: 'order',
-            target_id: orderId,
+            targetType: 'order',
+            targetId: orderId,
             metadata: { mode, from: observedFrom, to, reason }
         });
 

@@ -220,8 +220,8 @@ const missingKeyRefusal = (key: string, id: string, context: CallerContext): Res
     recordAudit(context, {
         action: coreAuditActions.SECURITY_FORBIDDEN,
         outcome: 'failure',
-        target_type: 'user',
-        target_id: id,
+        targetType: 'user',
+        targetId: id,
         metadata: { reason: 'missing_permission', permission: key }
     });
 
@@ -241,8 +241,8 @@ const ownRoleRefusal = (id: string, context: CallerContext): ResponseReject => {
     recordAudit(context, {
         action: coreAuditActions.SECURITY_FORBIDDEN,
         outcome: 'failure',
-        target_type: 'user',
-        target_id: id,
+        targetType: 'user',
+        targetId: id,
         metadata: { reason: 'own_role' }
     });
 
@@ -325,8 +325,8 @@ const applyUpdate = (
             recordAudit(context, {
                 action: auditActionForUpdate(wasActive, data.active),
                 outcome: 'success',
-                target_type: 'user',
-                target_id: String(user._id)
+                targetType: 'user',
+                targetId: String(user._id)
             });
             // Deactivation is a product event as well as an administrative one: it is what a
             // churn dashboard counts, and it is invisible in a plain "updated" signal. Only on

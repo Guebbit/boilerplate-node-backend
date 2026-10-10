@@ -268,7 +268,7 @@ export const markVerified = (user: UserDocument): Promise<void> => {
 /**
  * Records that `user`'s address has been proven — signup verification or an email change, whoever
  * calls this. Reads roles fresh rather than trusting a value computed before this request's own
- * promotion, so `actor_role` reflects what just happened, not the stale role it replaced.
+ * promotion, so `actorRole` reflects what just happened, not the stale role it replaced.
  * @param user - the account whose address was just proven
  * @param context - the caller context, for the audit record
  * @param action - which flow this proof completes
@@ -282,8 +282,8 @@ const auditProvenAddress = (
     isUnrestrictedCaller(user.id).then((unrestricted) => {
         recordAudit(context, {
             action,
-            actor_user_id: user.id,
-            actor_role: unrestricted ? 'admin' : 'user',
+            actorUserId: user.id,
+            actorRole: unrestricted ? 'admin' : 'user',
             outcome: 'success'
         });
         return user;

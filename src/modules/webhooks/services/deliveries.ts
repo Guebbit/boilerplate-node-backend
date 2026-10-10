@@ -105,8 +105,8 @@ export const replay = async (
     recordAudit(context, {
         action: webhooksAuditActions.ADMIN_WEBHOOK_DELIVERY_REPLAYED,
         outcome: 'success',
-        target_type: 'webhook_delivery',
-        target_id: id
+        targetType: 'webhook_delivery',
+        targetId: id
     });
     return generateSuccess(updated);
 };

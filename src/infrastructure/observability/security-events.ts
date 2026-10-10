@@ -65,8 +65,8 @@ export const recordSecurityEvent = (
     securityEventsTotal.inc({ event: action });
     recordAudit(context, {
         action,
-        actor_user_id: 'anonymous',
-        actor_role: 'anonymous',
+        actorUserId: 'anonymous',
+        actorRole: 'anonymous',
         outcome: 'failure',
         ...(metadata && { metadata })
     });

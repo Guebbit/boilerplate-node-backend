@@ -102,8 +102,8 @@ export const remove = (
                             ? usersAuditActions.SYSTEM_USER_ERASED
                             : usersAuditActions.ADMIN_USER_ERASED,
                         outcome: 'success',
-                        target_type: 'user',
-                        target_id: user.id,
+                        targetType: 'user',
+                        targetId: user.id,
                         metadata: { hardDelete: true }
                     });
             })
@@ -128,8 +128,8 @@ export const remove = (
                             ? usersAuditActions.SYSTEM_USER_SOFT_DELETED
                             : usersAuditActions.ADMIN_USER_SOFT_DELETED,
                         outcome: 'success',
-                        target_type: 'user',
-                        target_id: user.id,
+                        targetType: 'user',
+                        targetId: user.id,
                         metadata: { hardDelete: false }
                     });
                 return generateSuccess(saved, 200, t('users.soft-deleted'));
@@ -163,8 +163,8 @@ export const restoreById = (
                     recordAudit(context, {
                         action: usersAuditActions.ADMIN_USER_RESTORED,
                         outcome: 'success',
-                        target_type: 'user',
-                        target_id: id
+                        targetType: 'user',
+                        targetId: id
                     });
                 return generateSuccess(saved, 200, t('users.restored'));
             });

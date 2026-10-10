@@ -32,12 +32,12 @@ describe('emitAuditEvent', () => {
     it('calls auditLogger.log with "info" level for success outcome', () => {
         const event: AuditEvent = {
             action: 'auth.login',
-            actor_user_id: 'user-123',
-            actor_role: 'user',
-            actor_scope: 'tenant',
+            actorUserId: 'user-123',
+            actorRole: 'user',
+            actorScope: 'tenant',
             outcome: 'success',
             ip: '1.2.3.4',
-            request_id: 'req-abc'
+            requestId: 'req-abc'
         };
 
         emitAuditEvent(event);
@@ -46,16 +46,16 @@ describe('emitAuditEvent', () => {
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
         expect(call[0]).toBe('info');
         expect(call[1]).toBe('auth.login');
-        expect(call[2].actor_user_id).toBe('user-123');
+        expect(call[2].actorUserId).toBe('user-123');
         expect(call[2].outcome).toBe('success');
     });
 
     it('calls auditLogger.log with "warn" level for failure outcome', () => {
         const event: AuditEvent = {
             action: 'auth.login',
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            actor_scope: 'tenant',
+            actorUserId: 'anonymous',
+            actorRole: 'anonymous',
+            actorScope: 'tenant',
             outcome: 'failure',
             ip: '1.2.3.4'
         };
@@ -69,14 +69,14 @@ describe('emitAuditEvent', () => {
     it('passes all event fields through to the logger', () => {
         const event: AuditEvent = {
             action: 'admin.user.erased',
-            actor_user_id: 'admin-456',
-            actor_role: 'admin',
-            actor_scope: 'tenant',
+            actorUserId: 'admin-456',
+            actorRole: 'admin',
+            actorScope: 'tenant',
             outcome: 'success',
-            target_type: 'user',
-            target_id: 'user-789',
-            request_id: 'req-xyz',
-            trace_id: 'trace-001',
+            targetType: 'user',
+            targetId: 'user-789',
+            requestId: 'req-xyz',
+            traceId: 'trace-001',
             metadata: { hardDelete: true }
         };
 
@@ -84,18 +84,18 @@ describe('emitAuditEvent', () => {
 
         const call = (auditLogger.log as jest.Mock).mock.calls[0] as [string, string, AuditEvent];
         expect(call[2].action).toBe('admin.user.erased');
-        expect(call[2].target_type).toBe('user');
-        expect(call[2].target_id).toBe('user-789');
-        expect(call[2].trace_id).toBe('trace-001');
+        expect(call[2].targetType).toBe('user');
+        expect(call[2].targetId).toBe('user-789');
+        expect(call[2].traceId).toBe('trace-001');
         expect(call[2].metadata?.hardDelete).toBe(true);
     });
 
     it('uses "warn" level for security.unauthorized events', () => {
         emitAuditEvent({
             action: coreAuditActions.SECURITY_UNAUTHORIZED,
-            actor_user_id: 'anonymous',
-            actor_role: 'anonymous',
-            actor_scope: 'tenant',
+            actorUserId: 'anonymous',
+            actorRole: 'anonymous',
+            actorScope: 'tenant',
             outcome: 'failure'
         });
 
@@ -112,9 +112,9 @@ describe('registerAuditSink', () => {
 
     const event: AuditEvent = {
         action: 'auth.login',
-        actor_user_id: 'user-123',
-        actor_role: 'user',
-        actor_scope: 'tenant',
+        actorUserId: 'user-123',
+        actorRole: 'user',
+        actorScope: 'tenant',
         outcome: 'success'
     };
 
@@ -127,7 +127,7 @@ describe('registerAuditSink', () => {
         expect(sink).toHaveBeenCalledTimes(1);
         const entry = sink.mock.calls[0][0] as AuditEntry;
         expect(entry.action).toBe('auth.login');
-        expect(entry.actor_user_id).toBe('user-123');
+        expect(entry.actorUserId).toBe('user-123');
     });
 
     it('stamps the entry with a Date timestamp and the outcome-derived level', () => {
@@ -173,7 +173,7 @@ describe('registerAuditSink', () => {
 });
 
 describe('extractRequestContext', () => {
-    it('extracts ip, user_agent, and request_id', () => {
+    it('extracts ip, userAgent, and requestId', () => {
         const ctx = extractRequestContext({
             caller: strangerCaller(),
             ip: '10.0.0.1',
@@ -183,19 +183,19 @@ describe('extractRequestContext', () => {
         });
 
         expect(ctx.ip).toBe('10.0.0.1');
-        expect(ctx.user_agent).toBe('Mozilla/5.0');
-        expect(ctx.request_id).toBe('req-111');
-        // trace_id comes from the active OTel span; undefined when no SDK is active in tests
-        expect(ctx.trace_id).toBeUndefined();
+        expect(ctx.userAgent).toBe('Mozilla/5.0');
+        expect(ctx.requestId).toBe('req-111');
+        // traceId comes from the active OTel span; undefined when no SDK is active in tests
+        expect(ctx.traceId).toBeUndefined();
     });
 
     it('returns undefined for missing fields', () => {
         const ctx = extractRequestContext({ caller: strangerCaller(), analyticsConsent: false });
 
         expect(ctx.ip).toBeUndefined();
-        expect(ctx.user_agent).toBeUndefined();
-        expect(ctx.request_id).toBeUndefined();
-        expect(ctx.trace_id).toBeUndefined();
+        expect(ctx.userAgent).toBeUndefined();
+        expect(ctx.requestId).toBeUndefined();
+        expect(ctx.traceId).toBeUndefined();
     });
 });
 
@@ -219,14 +219,14 @@ describe("buildAuditEvent — the caller's own request id", () => {
     });
 });
 
-describe('buildAuditEvent — default actor_role', () => {
+describe('buildAuditEvent — default actorRole', () => {
     it('reports anonymous for a caller with no id', () => {
         const event = buildAuditEvent(testCallerContext, {
             action: 'auth.login',
             outcome: 'failure'
         });
 
-        expect(event.actor_role).toBe('anonymous');
+        expect(event.actorRole).toBe('anonymous');
     });
 
     it('reports user for an authenticated caller that holds only some keys', () => {
@@ -235,19 +235,19 @@ describe('buildAuditEvent — default actor_role', () => {
             outcome: 'success'
         });
 
-        expect(event.actor_role).toBe('user');
+        expect(event.actorRole).toBe('user');
     });
 
     // The fix this guards: before `unrestricted` was carried on `Caller`, `resolveActorRole`
     // could only tell an authenticated caller from an anonymous one — an admin action whose call
-    // site passed no explicit `actor_role` was logged as `user` alongside everybody else's.
+    // site passed no explicit `actorRole` was logged as `user` alongside everybody else's.
     it('reports admin for a caller holding every key its scope declares', () => {
         const event = buildAuditEvent(callerContextAs('admin', 'admin-1'), {
             action: 'admin.user.erased',
             outcome: 'success'
         });
 
-        expect(event.actor_role).toBe('admin');
+        expect(event.actorRole).toBe('admin');
     });
 
     // `SYSTEM_ACTOR` is unrestricted too, exactly like `admin` — this must be checked FIRST,
@@ -259,6 +259,6 @@ describe('buildAuditEvent — default actor_role', () => {
             outcome: 'success'
         });
 
-        expect(event.actor_role).toBe('system');
+        expect(event.actorRole).toBe('system');
     });
 });

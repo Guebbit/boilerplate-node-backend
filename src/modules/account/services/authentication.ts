@@ -79,7 +79,7 @@ export const requestAccountDeletion = (user: UserDocument, context: CallerContex
     tokenAdd(user, ACCOUNT_DELETE_TOKEN_TYPE, 3_600_000).then((token) => {
         recordAudit(context, {
             action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
-            actor_user_id: user.id,
+            actorUserId: user.id,
             outcome: 'success'
         });
 
@@ -205,8 +205,8 @@ export const requestPasswordReset = (
             authPasswordResetTotal.inc({ status: sent ? 'success' : 'failure' });
             recordAudit(context, {
                 action: accountAuditActions.AUTH_PASSWORD_RESET_REQUESTED,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
                 outcome: 'success'
             });
             return sent;
@@ -325,11 +325,11 @@ export const refreshAccessToken = (
                     ? accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED
                     : accountAuditActions.AUTH_TOKEN_REFRESHED,
                 // The reuse case DOES know whose account this was — carry the id, unlike the
-                // ordinary failures below, which never got far enough to find out. `actor_role`
+                // ordinary failures below, which never got far enough to find out. `actorRole`
                 // is left to its default (`anonymous`): this request never carried a verified
                 // access token, so admin status isn't cheaply known, and getting it wrong would
                 // misreport a fact the id alone already establishes precisely.
-                actor_user_id: reuseDetected ? error.userId : 'anonymous',
+                actorUserId: reuseDetected ? error.userId : 'anonymous',
                 outcome: 'failure',
                 ...(reuseDetected
                     ? {}
@@ -518,8 +518,8 @@ export const signup = (
         if (!result.success || result.data.isNew) {
             recordAudit(callerContext, {
                 action: accountAuditActions.AUTH_SIGNED_UP,
-                actor_user_id: 'anonymous',
-                actor_role: 'anonymous',
+                actorUserId: 'anonymous',
+                actorRole: 'anonymous',
                 outcome: 'failure'
             });
             return result;
@@ -528,8 +528,8 @@ export const signup = (
         const newUserId = result.data.id;
         recordAudit(callerContext, {
             action: accountAuditActions.AUTH_SIGNED_UP,
-            actor_user_id: newUserId,
-            actor_role: 'user',
+            actorUserId: newUserId,
+            actorRole: 'user',
             outcome: 'success'
         });
         emitAnalyticsEvent({

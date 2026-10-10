@@ -671,8 +671,8 @@ describe('userService.updateById', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: usersAuditActions.ADMIN_USER_BANNED,
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });
@@ -687,8 +687,8 @@ describe('userService.updateById', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: usersAuditActions.ADMIN_USER_UNBANNED,
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });
@@ -802,8 +802,8 @@ describe('userService.removeById', () => {
             expect.objectContaining({
                 action: usersAuditActions.ADMIN_USER_SOFT_DELETED,
                 outcome: 'success',
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });
@@ -819,8 +819,8 @@ describe('userService.removeById', () => {
             expect.objectContaining({
                 action: usersAuditActions.ADMIN_USER_ERASED,
                 outcome: 'success',
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });
@@ -836,8 +836,8 @@ describe('userService.removeById', () => {
             expect.objectContaining({
                 action: usersAuditActions.ADMIN_USER_RESTORED,
                 outcome: 'success',
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });
@@ -944,8 +944,8 @@ describe('userService.remove', () => {
             expect.objectContaining({
                 action: usersAuditActions.SYSTEM_USER_ERASED,
                 outcome: 'success',
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });
@@ -961,8 +961,8 @@ describe('userService.remove', () => {
             expect.objectContaining({
                 action: usersAuditActions.SYSTEM_USER_SOFT_DELETED,
                 outcome: 'success',
-                target_type: 'user',
-                target_id: id
+                targetType: 'user',
+                targetId: id
             })
         );
     });

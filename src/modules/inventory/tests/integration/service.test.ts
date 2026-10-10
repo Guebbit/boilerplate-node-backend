@@ -374,10 +374,10 @@ describe('commitForOrder', () => {
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
                 outcome: 'failure',
                 // SYSTEM_ACTOR's own role now, not admin's.
-                actor_role: 'system',
-                actor_user_id: 'system',
-                target_type: 'order',
-                target_id: orderId,
+                actorRole: 'system',
+                actorUserId: 'system',
+                targetType: 'order',
+                targetId: orderId,
                 metadata: { reservationStatus: 'released', stage: 'commit' }
             })
         );
@@ -400,7 +400,7 @@ describe('commitForOrder', () => {
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
                 outcome: 'failure',
-                target_id: orderId,
+                targetId: orderId,
                 metadata: { reservationStatus: 'none', stage: 'commit' }
             })
         );
@@ -467,7 +467,7 @@ describe('shipForOrder', () => {
             expect.objectContaining({
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
                 outcome: 'failure',
-                target_id: orderId,
+                targetId: orderId,
                 metadata: { reservationStatus: 'none', stage: 'ship' }
             })
         );

@@ -247,9 +247,9 @@ describe('auditing a role change', () => {
             expect.objectContaining({
                 action: accessAuditActions.ROLE_ASSIGNED,
                 outcome: 'success',
-                actor_user_id: 'admin-1',
-                target_type: 'user',
-                target_id: 'target-user',
+                actorUserId: 'admin-1',
+                targetType: 'user',
+                targetId: 'target-user',
                 metadata: expect.objectContaining({ role: 'manager' })
             })
         );
@@ -274,7 +274,7 @@ describe('auditing a role change', () => {
             expect.objectContaining({
                 action: accessAuditActions.ROLE_ASSIGNED,
                 outcome: 'failure',
-                target_id: 'target-user'
+                targetId: 'target-user'
             })
         );
     });
@@ -291,7 +291,7 @@ describe('auditing a role change', () => {
             expect.objectContaining({
                 action: accessAuditActions.ROLE_REVOKED,
                 outcome: 'success',
-                target_id: 'owner-a',
+                targetId: 'owner-a',
                 metadata: expect.objectContaining({ role: 'admin' })
             })
         );

@@ -90,7 +90,7 @@ apiKeySchema.index({ tenant: 1, createdAt: -1 });
 /**
  * Wire shape: `_id` → `id`, drops `tenant` (implicit in who is asking), `hash` (never leaves this
  * module — a serialized credential must never be the thing an attacker reads to forge one) and
- * `createdByUserId` (an internal detail the audit trail carries via `actor_user_id`, not a field
+ * `createdByUserId` (an internal detail the audit trail carries via `actorUserId`, not a field
  * this contract exposes).
  */
 export const applyApiKeyTransform = applySerialization(apiKeySchema, {

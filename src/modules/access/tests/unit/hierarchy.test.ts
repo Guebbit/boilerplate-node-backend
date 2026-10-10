@@ -172,8 +172,8 @@ describe('outrankedRefusal', () => {
             {
                 action: 'security.forbidden',
                 outcome: 'failure',
-                target_type: 'order',
-                target_id: 'order-1',
+                targetType: 'order',
+                targetId: 'order-1',
                 metadata: { reason: 'outranked', ownerId: 'owner' }
             }
         ]);
@@ -200,8 +200,8 @@ describe('ownMoneyRefusal', () => {
             {
                 action: 'security.forbidden',
                 outcome: 'failure',
-                target_type: 'order',
-                target_id: 'order-1',
+                targetType: 'order',
+                targetId: 'order-1',
                 metadata: { reason: 'own' }
             }
         ]);

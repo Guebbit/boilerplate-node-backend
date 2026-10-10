@@ -236,7 +236,7 @@ Decisions rather than mechanics:
   so a ready file stays downloadable; asking while one is `building` is not charged.
 - **Peak memory is one section.** The worker collects the sections one at a time and appends each to
   the file as it arrives, so the largest section is the ceiling, not the sum. The audit section reads
-  by cursor on the `{ actor_user_id, timestamp }` index: no count and no skip per page, which would make
+  by cursor on the `{ actorUserId, timestamp }` index: no count and no skip per page, which would make
   reading a long trail cost work quadratic in its length.
 - **The job carries the subject the request saw**, including whether the address had been proven. A
   section that matches by address (`feedback`) answers only for a proven one, so the file says what

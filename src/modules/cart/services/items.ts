@@ -198,10 +198,10 @@ export const cartItemRemoveById = (
         if (!cart) return generateReject(404, [t('cart.item-not-found')]);
         recordAudit(context, {
             action: cartAuditActions.USER_CART_ITEM_REMOVED,
-            actor_role: 'user',
+            actorRole: 'user',
             outcome: 'success',
-            target_type: 'product',
-            target_id: id
+            targetType: 'product',
+            targetId: id
         });
         emitAnalyticsEvent({
             ...buildAnalyticsBase(context),

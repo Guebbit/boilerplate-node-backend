@@ -187,8 +187,8 @@ const settleMismatch = (
             recordAudit(systemContext('Payment'), {
                 action: paymentsAuditActions.PAYMENT_AMOUNT_MISMATCH,
                 outcome: 'failure',
-                target_type: 'payment',
-                target_id: String(payment._id),
+                targetType: 'payment',
+                targetId: String(payment._id),
                 metadata: {
                     order_id: orderId,
                     fields,

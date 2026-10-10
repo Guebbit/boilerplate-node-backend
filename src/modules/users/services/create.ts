@@ -86,8 +86,8 @@ export const create = (
             recordAudit(context, {
                 action: usersAuditActions.ADMIN_USER_CREATED,
                 outcome: 'success',
-                target_type: 'user',
-                target_id: String(user._id)
+                targetType: 'user',
+                targetId: String(user._id)
             });
             emitAnalyticsEvent({
                 ...buildAnalyticsBase(context),

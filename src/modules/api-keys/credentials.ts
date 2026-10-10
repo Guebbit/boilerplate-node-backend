@@ -81,7 +81,7 @@ export const verifyApiKey = (plaintext: string, storedHash: string): boolean =>
     constantTimeEqual(hashToken(plaintext), storedHash);
 
 /**
- * The display-safe identifier for a credential — the audit trail's `actor_credential_id` and
+ * The display-safe identifier for a credential — the audit trail's `actorCredentialId` and
  * anywhere else a key needs naming without risking the secret. Never the database `_id`: an
  * operator recognises a key by its prefix, the same string a request presents and a list shows.
  */

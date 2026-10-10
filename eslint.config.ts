@@ -483,8 +483,8 @@ export default tseslint.config(
                 },
                 /*
                  * `snake_case` is in the list because wire formats decide these names, not this
-                 * codebase: audit entries (`actor_user_id`, `target_type`), analytics properties
-                 * (`order_id`) and header-shaped keys are all read by something outside the repo.
+                 * codebase: analytics properties (`order_id`) and header-shaped keys are both read by
+                 * something outside the repo.
                  */
                 {
                     selector: ['memberLike', 'enumMember'],

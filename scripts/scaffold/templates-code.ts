@@ -318,8 +318,8 @@ export const create = (
             'created',
             'CREATED',
             `,
-                target_type: '${names.entitySnake}',
-                target_id: String(created._id)`
+                targetType: '${names.entitySnake}',
+                targetId: String(created._id)`
         )};
 
 /**
@@ -374,8 +374,8 @@ export const updateById = (
             'result',
             'UPDATED',
             `,
-                target_type: '${names.entitySnake}',
-                target_id: id`
+                targetType: '${names.entitySnake}',
+                targetId: id`
         )};
     });
 
@@ -395,8 +395,8 @@ export const remove = (
                 options,
                 'DELETED',
                 `,
-                target_type: '${names.entitySnake}',
-                target_id: id`
+                targetType: '${names.entitySnake}',
+                targetId: id`
             )}
             return generateSuccess(undefined);
         });

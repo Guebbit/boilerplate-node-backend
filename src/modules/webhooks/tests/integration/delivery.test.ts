@@ -408,10 +408,10 @@ describe('sustained failure', () => {
 
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
-                actor_user_id: 'system',
+                actorUserId: 'system',
                 action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
-                target_type: 'webhook_subscription',
-                target_id: String(subscription._id)
+                targetType: 'webhook_subscription',
+                targetId: String(subscription._id)
             })
         );
     });
@@ -436,7 +436,7 @@ describe('sustained failure', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
-                target_id: String(subscription._id)
+                targetId: String(subscription._id)
             })
         );
     });
@@ -478,7 +478,7 @@ describe('sustained failure', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
-                target_id: String(subscription._id)
+                targetId: String(subscription._id)
             })
         );
     });

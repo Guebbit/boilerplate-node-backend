@@ -121,8 +121,8 @@ export const createEntry = async (
     recordAudit(context, {
         action: localeAuditActions.ADMIN_LOCALE_ENTRY_CREATED,
         outcome: 'success',
-        target_type: 'locale_entry',
-        target_id: String(entry._id),
+        targetType: 'locale_entry',
+        targetId: String(entry._id),
         metadata: { locale: language.tag, app, key: payload.key }
     });
 
@@ -154,8 +154,8 @@ export const updateEntry = (
                 recordAudit(context, {
                     action: localeAuditActions.ADMIN_LOCALE_ENTRY_UPDATED,
                     outcome: 'success',
-                    target_type: 'locale_entry',
-                    target_id: entryId,
+                    targetType: 'locale_entry',
+                    targetId: entryId,
                     // The key, not the new text. An audit trail records that the Spanish product
                     // title changed and who changed it; storing the copy itself would make the trail
                     // a second, unmanaged copy of the dictionary.
@@ -192,8 +192,8 @@ export const deleteEntry = (
             recordAudit(context, {
                 action: localeAuditActions.ADMIN_LOCALE_ENTRY_DELETED,
                 outcome: 'success',
-                target_type: 'locale_entry',
-                target_id: entryId,
+                targetType: 'locale_entry',
+                targetId: entryId,
                 metadata: { locale: tag, app, key }
             });
 
@@ -265,8 +265,8 @@ export const importEntries = async (
     recordAudit(context, {
         action: localeAuditActions.ADMIN_LOCALE_ENTRY_IMPORTED,
         outcome: 'success',
-        target_type: 'locale',
-        target_id: language.tag,
+        targetType: 'locale',
+        targetId: language.tag,
         // `mode` is the field that makes this record worth keeping: a replace that
         // removed three hundred keys and a merge that added two are the same action name
         // and very different events. `app` says whose dictionary it happened to, which

@@ -130,8 +130,8 @@ const recordOpened = (
     recordAudit(context, {
         action: returnsAuditActions.RETURN_REQUESTED,
         outcome: 'success',
-        target_type: 'return',
-        target_id: String(created._id),
+        targetType: 'return',
+        targetId: String(created._id),
         metadata: { orderId: String(order._id), reason: created.reason }
     });
     void emitDomainEvent(RETURN_REQUESTED, {

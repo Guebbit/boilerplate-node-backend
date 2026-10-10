@@ -81,8 +81,8 @@ const linkToExistingAccount = (
             isUnrestrictedCaller(user.id).then((unrestricted) => {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_OAUTH_LINKED,
-                    actor_user_id: user.id,
-                    actor_role: unrestricted ? 'admin' : 'user',
+                    actorUserId: user.id,
+                    actorRole: unrestricted ? 'admin' : 'user',
                     outcome: 'success',
                     metadata: { via: provider }
                 });
@@ -166,8 +166,8 @@ const signupFromOAuth = (
             .then((created) => {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_SIGNED_UP,
-                    actor_user_id: created.id,
-                    actor_role: 'user',
+                    actorUserId: created.id,
+                    actorRole: 'user',
                     outcome: 'success',
                     metadata: { via: provider }
                 });
@@ -307,7 +307,7 @@ export const unlinkOAuthProvider = (
         if (removed)
             recordAudit(context, {
                 action: accountAuditActions.AUTH_OAUTH_UNLINKED,
-                actor_user_id: userId,
+                actorUserId: userId,
                 outcome: 'success',
                 metadata: { via: provider }
             });

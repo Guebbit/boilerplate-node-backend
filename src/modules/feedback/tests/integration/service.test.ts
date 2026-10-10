@@ -357,8 +357,8 @@ describe('remove', () => {
             expect.objectContaining({
                 action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
                 outcome: 'success',
-                target_type: 'feedback',
-                target_id: String(feedback._id)
+                targetType: 'feedback',
+                targetId: String(feedback._id)
             })
         );
     });

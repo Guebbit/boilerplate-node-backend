@@ -138,8 +138,8 @@ export const finishCreate = (
                 recordAudit(context, {
                     action: productsAuditActions.ADMIN_PRODUCT_CREATED,
                     outcome: 'success',
-                    target_type: 'product',
-                    target_id: id
+                    targetType: 'product',
+                    targetId: id
                 })
             )
                 .then(() => enqueueIfPending(created))
@@ -298,8 +298,8 @@ export const finishUpdateById = (
         recordAudit(context, {
             action: productsAuditActions.ADMIN_PRODUCT_UPDATED,
             outcome: 'success',
-            target_type: 'product',
-            target_id: id
+            targetType: 'product',
+            targetId: id
         })
     )
         .then(() => finishUpdate(outcome))

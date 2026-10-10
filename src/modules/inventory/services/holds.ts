@@ -78,8 +78,8 @@ const raiseOrphanAlarm = (
         {
             action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
             outcome: 'failure',
-            target_type: 'order',
-            target_id: orderId,
+            targetType: 'order',
+            targetId: orderId,
             metadata: { reservationStatus, stage }
         }
     );

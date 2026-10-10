@@ -392,7 +392,7 @@ describe('accountService.refreshAccessToken', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_REFRESH_TOKEN_REUSE_DETECTED,
-                actor_user_id: user.id,
+                actorUserId: user.id,
                 outcome: 'failure'
             })
         );
@@ -450,7 +450,7 @@ describe('accountService.refreshAccessToken', () => {
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_TOKEN_REFRESHED,
-                actor_user_id: 'anonymous',
+                actorUserId: 'anonymous',
                 outcome: 'failure',
                 metadata: { reason: 'missing_token' }
             })

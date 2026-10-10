@@ -16,9 +16,9 @@ setupTestDb();
 /** One audit entry as the logger receives it. */
 interface Entry {
     action: string;
-    actor_user_id?: string;
-    target_type?: string;
-    target_id?: string;
+    actorUserId?: string;
+    targetType?: string;
+    targetId?: string;
 }
 
 let auditSpy: jest.SpyInstance;
@@ -62,9 +62,9 @@ describe('GET /users/{id}', () => {
         expect(viewed()).toEqual([
             expect.objectContaining({
                 action: 'admin.user.viewed',
-                actor_user_id: String(admin.user._id),
-                target_type: 'user',
-                target_id: String(customer.user._id)
+                actorUserId: String(admin.user._id),
+                targetType: 'user',
+                targetId: String(customer.user._id)
             })
         ]);
     });
@@ -101,8 +101,8 @@ describe('GET /orders/{id}', () => {
         expect(viewed()).toEqual([
             expect.objectContaining({
                 action: 'admin.order.viewed',
-                target_type: 'order',
-                target_id: orderId
+                targetType: 'order',
+                targetId: orderId
             })
         ]);
     });
@@ -144,7 +144,7 @@ describe('GET /returns/{id}', () => {
 
         await api().get(`/returns/${returnId}`).set('Authorization', admin.bearer);
         expect(viewed()).toEqual([
-            expect.objectContaining({ action: 'admin.return.viewed', target_id: returnId })
+            expect.objectContaining({ action: 'admin.return.viewed', targetId: returnId })
         ]);
     });
 });

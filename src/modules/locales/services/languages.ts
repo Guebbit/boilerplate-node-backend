@@ -69,8 +69,8 @@ export const createLanguage = (
                 recordAudit(context, {
                     action: localeAuditActions.ADMIN_LOCALE_CREATED,
                     outcome: 'success',
-                    target_type: 'locale',
-                    target_id: tag,
+                    targetType: 'locale',
+                    targetId: tag,
                     metadata: { active: language.active }
                 });
 
@@ -107,8 +107,8 @@ export const updateLanguage = (
             recordAudit(context, {
                 action: localeAuditActions.ADMIN_LOCALE_UPDATED,
                 outcome: 'success',
-                target_type: 'locale',
-                target_id: tag,
+                targetType: 'locale',
+                targetId: tag,
                 // The visibility flag is the field worth having in the trail on its own: it is
                 // what makes a half-finished translation public, and the only edit here that
                 // changes what an anonymous caller can see.
@@ -145,8 +145,8 @@ export const deleteLanguage = (
                 recordAudit(context, {
                     action: localeAuditActions.ADMIN_LOCALE_DELETED,
                     outcome: 'success',
-                    target_type: 'locale',
-                    target_id: tag,
+                    targetType: 'locale',
+                    targetId: tag,
                     metadata: { removedEntries, removedTranslations }
                 });
 

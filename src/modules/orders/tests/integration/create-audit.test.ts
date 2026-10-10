@@ -1,6 +1,6 @@
 /**
  * @module
- * `recordCreated`'s audit trail — no path may force `actor_role`/`actor_role_name` to a fixed
+ * `recordCreated`'s audit trail — no path may force `actorRole`/`actorRoleName` to a fixed
  * value, not even to make checkout's own purchases read as "a customer action": an
  * `order_created` audit row always reflects the real caller's real role, whoever placed the
  * order.
@@ -75,7 +75,7 @@ describe('create — the audit row records the real caller, never a forced label
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_CREATED,
                 outcome: 'success',
-                actor_role_name: 'moderator'
+                actorRoleName: 'moderator'
             })
         );
     });
@@ -95,7 +95,7 @@ describe('create — the audit row records the real caller, never a forced label
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_CREATED,
-                actor_role_name: 'admin'
+                actorRoleName: 'admin'
             })
         );
     });

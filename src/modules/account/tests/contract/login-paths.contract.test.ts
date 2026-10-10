@@ -110,7 +110,7 @@ interface LoginPath {
 
     /**
      * Logs a healthy account in with the given membership role, returning the response and the
-     * account's id (for the audit's `actor_user_id`). Omitted on the refresh path — see the
+     * account's id (for the audit's `actorUserId`). Omitted on the refresh path — see the
      * module doc on why it isn't in the success table.
      */
     attemptSuccess?: (
@@ -250,8 +250,8 @@ describe.each([passwordPath, oauthPath])(
                 );
                 expect(loginCalls).toHaveLength(1);
                 expect(loginCalls[0][0]).toMatchObject({
-                    actor_user_id: userId,
-                    actor_role: auditRole,
+                    actorUserId: userId,
+                    actorRole: auditRole,
                     outcome: 'success'
                 });
                 expect(incSpy).toHaveBeenCalledWith({ status: 'success' });

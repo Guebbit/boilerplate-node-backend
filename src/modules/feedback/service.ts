@@ -202,8 +202,8 @@ export const updateStatusById = (
             recordAudit(context, {
                 action: feedbackAuditActions.ADMIN_FEEDBACK_STATUS_UPDATED,
                 outcome: 'success',
-                target_type: 'feedback',
-                target_id: id,
+                targetType: 'feedback',
+                targetId: id,
                 metadata: { status: payload.status }
             });
             return result;
@@ -229,8 +229,8 @@ export const remove = (
             recordAudit(context, {
                 action: feedbackAuditActions.ADMIN_FEEDBACK_DELETED,
                 outcome: 'success',
-                target_type: 'feedback',
-                target_id: id
+                targetType: 'feedback',
+                targetId: id
             });
             return generateSuccess(undefined);
         });

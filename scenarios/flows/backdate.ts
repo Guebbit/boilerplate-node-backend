@@ -29,7 +29,7 @@ import type { Model, QueryFilter } from 'mongoose';
  * @param model - the collection holding the rows
  * @param find - how that collection names the order, given its id. Not one shared filter: three of
  *               the six store a real `ObjectId` reference, while `stockmovements` and `auditlogs`
- *               hold the id as a STRING in a free-text column (`reference`, `target_id`)
+ *               hold the id as a STRING in a free-text column (`reference`, `targetId`)
  * @param dates - the row's date columns, every one of which moves with the order
  * @returns a mover: give it an order and a distance, it rewrites that collection's rows
  */
@@ -73,7 +73,7 @@ const TRAILS = [
     mover(shipmentModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'deliveredAt']),
     mover(reservationModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'expiresAt']),
     mover(stockMovementModel, (orderId) => ({ reference: orderId }), ['createdAt', 'updatedAt']),
-    mover(auditLogModel, (orderId) => ({ target_id: orderId }), ['timestamp'])
+    mover(auditLogModel, (orderId) => ({ targetId: orderId }), ['timestamp'])
 ];
 
 /**

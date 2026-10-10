@@ -102,8 +102,8 @@ const applyAdminStockTransition = async ({
     recordAudit(context, {
         action: auditAction,
         outcome: 'success',
-        target_type: 'product',
-        target_id: productId,
+        targetType: 'product',
+        targetId: productId,
         metadata: buildAuditMetadata(level)
     });
 

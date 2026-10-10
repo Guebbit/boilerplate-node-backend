@@ -66,7 +66,7 @@ export interface AuditActionMap {}
  */
 export type AuditAction = CoreAuditAction | AuditActionMap[keyof AuditActionMap];
 
-/** Every privilege level an entry can record — the schema's `enum` for `actor_role`. */
+/** Every privilege level an entry can record — the schema's `enum` for `actorRole`. */
 export const AUDIT_ACTOR_ROLES = ['admin', 'user', 'anonymous', 'system'] as const;
 
 /** Whether an audited action worked — the schema's `enum` for `outcome`. */
@@ -77,31 +77,31 @@ export const AUDIT_LEVELS = ['info', 'warn'] as const;
 
 /**
  * See docs/tools/winston.md for field descriptions and examples.
- * snake_case field names (unlike the camelCase used elsewhere in the codebase) because these
- * are log *data*, consumed by SIEM/log tooling rather than by TypeScript callers.
+ * camelCase here, in Mongo and in the API. The logger's `semanticNamesFormat` renames them to
+ * OpenTelemetry semantic-convention names in the log line only.
  */
 export interface AuditEvent {
     /** Who acted. 'unknown' when unresolvable — never omitted, so queries can rely on it. */
-    actor_user_id: string;
+    actorUserId: string;
     /**
      * Privilege level at the time of the action, so a later role change cannot rewrite history.
      * `system` is `SYSTEM_ACTOR` — a background job, never a real account — kept apart from
      * `admin` so the trail can tell "an operator did this" from "a sweep did".
      */
-    actor_role: (typeof AUDIT_ACTOR_ROLES)[number];
+    actorRole: (typeof AUDIT_ACTOR_ROLES)[number];
     /**
-     * The tenant role name behind `actor_role`, e.g. `moderator` — open where `actor_role` is
+     * The tenant role name behind `actorRole`, e.g. `moderator` — open where `actorRole` is
      * closed, so a reader can ask "which moderator did this" without a renamed role invalidating
      * a query against the field above it. Absent for a request that never resolved a role at all.
      */
-    actor_role_name?: string;
+    actorRoleName?: string;
     /**
-     * The api-key behind `actor_user_id`, e.g. `sk_a1b2c3d4` (the public prefix only, never the
-     * secret) — sibling to `actor_role_name`, absent for a request that resolved a human session
+     * The api-key behind `actorUserId`, e.g. `sk_a1b2c3d4` (the public prefix only, never the
+     * secret) — sibling to `actorRoleName`, absent for a request that resolved a human session
      * instead. Lets a reader tell "the shop owner did this" from "a credential minted BY the shop
      * owner did this", which otherwise both record identically.
      */
-    actor_credential_id?: string;
+    actorCredentialId?: string;
     /**
      * Which world this action happened in. Derived from `context.caller.scope` by default, which
      * is correct for every ordinary tenant action — but `context.caller` is ALWAYS resolved in
@@ -109,7 +109,7 @@ export interface AuditEvent {
      * explicitly with the scope the guard actually resolved, or every platform refusal records as
      * a tenant one. `requirePermissionGuard` is the one caller that does.
      */
-    actor_scope: AuthorizationScope;
+    actorScope: AuthorizationScope;
     /** What was attempted (see the enum above). */
     action: AuditAction;
     /** Whether it worked. Failures are the security-relevant half: repeated ones signal attack. */
@@ -117,14 +117,14 @@ export interface AuditEvent {
     /** Source IP — the primary pivot when investigating an incident. */
     ip?: string;
     /** Client user-agent string; useful for spotting scripted traffic. */
-    user_agent?: string;
+    userAgent?: string;
     /** Per-request correlation id, links this entry to the application log lines. */
-    request_id?: string;
+    requestId?: string;
     /** OTel trace id, links it to the distributed trace. */
-    trace_id?: string;
-    /** What was acted upon, e.g. 'product' — with `target_id`, the object of the action. */
-    target_type?: string;
-    target_id?: string;
+    traceId?: string;
+    /** What was acted upon, e.g. 'product' — with `targetId`, the object of the action. */
+    targetType?: string;
+    targetId?: string;
     /** Action-specific extras. Anything here passes through the logger's redaction pipeline. */
     metadata?: Record<string, unknown>;
 }
@@ -207,16 +207,16 @@ export const emitAuditEvent = (event: AuditEvent): void => {
  */
 export const extractRequestContext = (
     context: CallerContext
-): Pick<AuditEvent, 'ip' | 'user_agent' | 'request_id' | 'trace_id'> => ({
+): Pick<AuditEvent, 'ip' | 'userAgent' | 'requestId' | 'traceId'> => ({
     // Note: `ip` reflects the proxy's address unless Express `trust proxy` is configured —
     // behind a load balancer that setting is what makes this field meaningful.
     ip: context.ip,
-    user_agent: context.userAgent,
+    userAgent: context.userAgent,
     // Assigned by the request-id middleware.
-    request_id: context.requestId,
+    requestId: context.requestId,
     // Pulled from ambient OTel context, so audit entries join up with traces. Safe unlike a
     // "current request" accessor would be — see `CallerContext`'s docblock.
-    trace_id: getActiveSpanContext().traceId
+    traceId: getActiveSpanContext().traceId
 });
 
 /**
@@ -227,13 +227,13 @@ export const extractRequestContext = (
  * rather than re-deriving "holds every key this scope declares" or "is this `SYSTEM_ACTOR`"
  * itself, either of which would need to reach past the kernel boundary (`infrastructure` may not
  * import `@kernel/*` — see `eslint.config.ts`). A call site that wants a role NAME rather than
- * this four-way split still passes `actor_role_name` alongside, and one auditing an action for a
- * caller it already knows is unrestricted may still pass `actor_role` explicitly to skip this
+ * this four-way split still passes `actorRoleName` alongside, and one auditing an action for a
+ * caller it already knows is unrestricted may still pass `actorRole` explicitly to skip this
  * default.
  * @param context - the caller context built once in the controller
  * @returns the actor's role
  */
-const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
+const resolveActorRole = (context: CallerContext): AuditEvent['actorRole'] => {
     // No caller id at all: an unauthenticated request. Still audited — failed logins and
     // blocked access attempts are exactly the events worth keeping.
     if (!context.caller.id) return 'anonymous';
@@ -245,7 +245,7 @@ const resolveActorRole = (context: CallerContext): AuditEvent['actor_role'] => {
 
 /**
  * Build a complete audit event from caller context + action-specific fields.
- * Caller-provided actor_user_id / actor_role override the derived defaults.
+ * Caller-provided actorUserId / actorRole override the derived defaults.
  * @param context - the caller context built once in the controller, see `callerContextOf`
  * @param fields - action, outcome, and optional overrides
  * @returns fully populated AuditEvent
@@ -259,13 +259,13 @@ export const buildAuditEvent = (
         Partial<
             Pick<
                 AuditEvent,
-                | 'actor_user_id'
-                | 'actor_role'
-                | 'actor_role_name'
-                | 'actor_credential_id'
-                | 'actor_scope'
-                | 'target_type'
-                | 'target_id'
+                | 'actorUserId'
+                | 'actorRole'
+                | 'actorRoleName'
+                | 'actorCredentialId'
+                | 'actorScope'
+                | 'targetType'
+                | 'targetId'
                 | 'metadata'
             >
         >
@@ -273,14 +273,14 @@ export const buildAuditEvent = (
     // Explicit override wins, then the authenticated caller, then 'unknown'. The override matters
     // where there is no caller id at all — a failed login records `'anonymous'` rather than
     // `'unknown'`, so the two cases stay distinguishable.
-    actor_user_id: fields.actor_user_id ?? context.caller.id ?? 'unknown',
-    actor_role: fields.actor_role ?? resolveActorRole(context),
-    actor_role_name: fields.actor_role_name ?? context.actorRoleName,
-    actor_credential_id: fields.actor_credential_id ?? context.actorCredentialId,
-    // `context.caller.scope` is always `'tenant'` (see `AuditEvent.actor_scope`'s own docblock),
+    actorUserId: fields.actorUserId ?? context.caller.id ?? 'unknown',
+    actorRole: fields.actorRole ?? resolveActorRole(context),
+    actorRoleName: fields.actorRoleName ?? context.actorRoleName,
+    actorCredentialId: fields.actorCredentialId ?? context.actorCredentialId,
+    // `context.caller.scope` is always `'tenant'` (see `AuditEvent.actorScope`'s own docblock),
     // so this default is correct for every ordinary tenant action and wrong for a platform one —
     // which is exactly why a platform-key check overrides it explicitly instead of relying here.
-    actor_scope: fields.actor_scope ?? context.caller.scope,
+    actorScope: fields.actorScope ?? context.caller.scope,
     // Spread after the defaults so caller values replace them.
     ...fields,
     // The caller's own request id rides in `metadata`, not a column of its own: it is a hint for
@@ -288,7 +288,7 @@ export const buildAuditEvent = (
     ...(context.clientRequestId && {
         metadata: { ...fields.metadata, client_request_id: context.clientRequestId }
     }),
-    // Spread last, deliberately: context-derived fields (ip, trace_id, ...) are not
+    // Spread last, deliberately: context-derived fields (ip, traceId, ...) are not
     // caller-overridable, so an audit entry cannot misreport where it came from.
     ...extractRequestContext(context)
 });

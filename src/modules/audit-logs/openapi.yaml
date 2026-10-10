@@ -65,23 +65,23 @@ components:
         AuditEntryItem:
             type: object
             additionalProperties: false
-            required: [actor_user_id, actor_role, actor_scope, action, outcome, timestamp, level]
+            required: [actorUserId, actorRole, actorScope, action, outcome, timestamp, level]
             properties:
-                actor_user_id: { type: string }
-                actor_credential_id:
+                actorUserId: { type: string }
+                actorCredentialId:
                     {
                         type: string,
                         description: 'The API key the action was done with. Absent when a person did it themselves.'
                     }
-                actor_role:
+                actorRole:
                     type: string
                     enum: [admin, user, anonymous, system]
-                actor_role_name:
+                actorRoleName:
                     {
                         type: string,
-                        description: 'The tenant role behind actor_role, e.g. moderator. Absent when the request never resolved one.'
+                        description: 'The tenant role behind actorRole, e.g. moderator. Absent when the request never resolved one.'
                     }
-                actor_scope:
+                actorScope:
                     {
                         type: string,
                         enum: [tenant, platform],
@@ -100,11 +100,11 @@ components:
                         type: string,
                         description: 'The caller address as recorded. The platform trail (`GET /observability/audit`) answers a keyed digest instead: `hmac:` and 12 hex characters.'
                     }
-                user_agent: { type: string }
-                request_id: { type: string }
-                trace_id: { type: string }
-                target_type: { type: string }
-                target_id: { type: string }
+                userAgent: { type: string }
+                requestId: { type: string }
+                traceId: { type: string }
+                targetType: { type: string }
+                targetId: { type: string }
                 metadata:
                     type: object
                     additionalProperties: true

@@ -33,10 +33,10 @@ export const recordLoginFailure = (request: Request): void => {
     authLoginTotal.inc({ status: 'failure' });
     recordAudit(callerContextOf(request), {
         action: accountAuditActions.AUTH_LOGIN,
-        actor_user_id: 'anonymous',
-        actor_role: 'anonymous',
+        actorUserId: 'anonymous',
+        actorRole: 'anonymous',
         outcome: 'failure',
-        ...(target && { target_type: 'login_identifier', target_id: target })
+        ...(target && { targetType: 'login_identifier', targetId: target })
     });
 };
 
@@ -57,8 +57,8 @@ export const recordLoginSuccess = (
     authLoginTotal.inc({ status: 'success' });
     recordAudit(context, {
         action: accountAuditActions.AUTH_LOGIN,
-        actor_user_id: userId,
-        actor_role: role,
+        actorUserId: userId,
+        actorRole: role,
         outcome: 'success',
         ...(metadata ? { metadata } : {})
     });

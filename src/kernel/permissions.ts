@@ -657,7 +657,7 @@ export const isSystemActor = (caller: AuthContext | undefined): boolean =>
 /**
  * The {@link CallerContext} a cron job hands `recordAudit` for a write nobody at the keyboard
  * asked for — a reaper's own hard delete, not an admin's. `caller` is {@link SYSTEM_ACTOR}'s, so
- * the resulting row's `actor_role` reads the same "unrestricted" way an admin's would; nothing
+ * the resulting row's `actorRole` reads the same "unrestricted" way an admin's would; nothing
  * else on `CallerContext` is filled in, since a cron job has no IP, user agent or request id.
  *
  * @param subject - the entity being audited, e.g. `'User'` — picks tenant or platform scope the

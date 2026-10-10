@@ -137,8 +137,8 @@ const settleDecision = (
                 ? returnsAuditActions.ADMIN_RETURN_APPROVED
                 : returnsAuditActions.ADMIN_RETURN_DECLINED,
         outcome: 'success',
-        target_type: 'return',
-        target_id: id,
+        targetType: 'return',
+        targetId: id,
         metadata: { orderId: String(decided.orderId) }
     });
 

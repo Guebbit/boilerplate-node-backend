@@ -66,11 +66,13 @@ existing TTL index's window in place: a new value fails the boot until `npm run 
 the index. The two compound indexes are the two questions anyone asks of a
 trail — everything one actor did, and everyone who did one thing.
 
-Field names are `snake_case` here and `camelCase` everywhere else, because an audit row is a log
-record rather than a domain document.
+Field names are `camelCase` in the event, in Mongo and in the API, like every other collection. The
+log line is the one place they change: the Winston formatter renames them to OpenTelemetry
+semantic-convention names (`actorUserId` becomes `user.id`) on the way out. See
+[Winston](../tools/winston.md#field-names-in-the-log-line).
 
 One row shape, `AuditEntryItem`, answers every read: `GET /audit`, `GET /observability/audit` and the
-account export. `actor_credential_id` names the API key when a credential did the action, and is absent
+account export. `actorCredentialId` names the API key when a credential did the action, and is absent
 when a person did.
 
 ## Offline writes

@@ -16,9 +16,9 @@ setupTestDb();
 
 /** A complete entry, shaped exactly as `emitAuditEvent` hands one to the sink. */
 const makeEntry = (overrides: Partial<AuditEntry> = {}): Partial<AuditLogDocument> => ({
-    actor_user_id: 'user-1',
-    actor_role: 'user',
-    actor_scope: 'tenant',
+    actorUserId: 'user-1',
+    actorRole: 'user',
+    actorScope: 'tenant',
     action: coreAuditActions.SECURITY_UNAUTHORIZED,
     outcome: 'success',
     timestamp: new Date('2026-08-01T10:00:00.000Z'),
@@ -48,26 +48,26 @@ describe('auditLogRepository', () => {
             const stored = await auditLogRepository.create(
                 makeEntry({
                     ip: '203.0.113.4',
-                    user_agent: 'Mozilla/5.0',
-                    request_id: 'req-1',
-                    trace_id: 'trace-1',
-                    target_type: 'session',
-                    target_id: 'sess-9',
+                    userAgent: 'Mozilla/5.0',
+                    requestId: 'req-1',
+                    traceId: 'trace-1',
+                    targetType: 'session',
+                    targetId: 'sess-9',
                     metadata: { hardDelete: true }
                 })
             );
 
             expect(stored.ip).toBe('203.0.113.4');
-            expect(stored.target_id).toBe('sess-9');
+            expect(stored.targetId).toBe('sess-9');
             expect(stored.metadata?.hardDelete).toBe(true);
         });
 
         it('keeps the api-key behind an entry, through the stored row and the search', async () => {
-            await auditLogRepository.create(makeEntry({ actor_credential_id: 'sk_a1b2c3d4' }));
+            await auditLogRepository.create(makeEntry({ actorCredentialId: 'sk_a1b2c3d4' }));
 
             const found = await search();
 
-            expect(found.items[0]?.actor_credential_id).toBe('sk_a1b2c3d4');
+            expect(found.items[0]?.actorCredentialId).toBe('sk_a1b2c3d4');
         });
 
         it('rejects an entry missing a required field', async () => {
@@ -86,7 +86,7 @@ describe('auditLogRepository', () => {
             );
             await auditLogRepository.create(
                 makeEntry({
-                    actor_user_id: 'user-2',
+                    actorUserId: 'user-2',
                     action: coreAuditActions.SECURITY_RATE_LIMIT_HIT,
                     outcome: 'failure',
                     level: 'warn',
@@ -95,10 +95,10 @@ describe('auditLogRepository', () => {
             );
             await auditLogRepository.create(
                 makeEntry({
-                    actor_user_id: 'user-2',
+                    actorUserId: 'user-2',
                     action: coreAuditActions.SECURITY_FORBIDDEN,
-                    target_type: 'user',
-                    target_id: 'target-9',
+                    targetType: 'user',
+                    targetId: 'target-9',
                     timestamp: new Date('2026-08-03T10:00:00.000Z')
                 })
             );
@@ -119,7 +119,7 @@ describe('auditLogRepository', () => {
             const { items, meta } = await search({ actor: 'user-2' });
 
             expect(meta.totalItems).toBe(2);
-            expect(items.every((item) => item.actor_user_id === 'user-2')).toBe(true);
+            expect(items.every((item) => item.actorUserId === 'user-2')).toBe(true);
         });
 
         it('filters by action and by outcome', async () => {
@@ -210,7 +210,7 @@ describe('auditLogRepository', () => {
                 Array.from({ length: TOTAL }, (_, index) =>
                     auditLogRepository.create(
                         makeEntry({
-                            request_id: `entry-${index}`,
+                            requestId: `entry-${index}`,
                             timestamp: new Date(EPOCH + index * 60_000)
                         })
                     )
@@ -228,7 +228,7 @@ describe('auditLogRepository', () => {
             expect(meta).toEqual({ page: 21, pageSize: 10, totalItems: TOTAL, totalPages: 21 });
             // Newest first, so rows 201-205 are the five oldest entries — the ones the capped
             // read counted and refused to send.
-            expect(items.map((item) => item.request_id)).toEqual([
+            expect(items.map((item) => item.requestId)).toEqual([
                 'entry-4',
                 'entry-3',
                 'entry-2',
@@ -245,7 +245,7 @@ describe('auditLogRepository', () => {
                     auditLogRepository.search({ page, pageSize: 100 }, {}, AUDIT_SORT)
                 )
             );
-            const seen = pages.flatMap(({ items }) => items.map((item) => item.request_id));
+            const seen = pages.flatMap(({ items }) => items.map((item) => item.requestId));
 
             expect(seen).toHaveLength(TOTAL);
             expect(new Set(seen).size).toBe(TOTAL);
@@ -260,7 +260,7 @@ const walk = async (actor: string, limit: number) => {
     let pages = 0;
     do {
         const page = await auditLogRepository.ownEntriesPage(actor, after, limit);
-        collected.push(...page.items.map((item) => item.request_id ?? ''));
+        collected.push(...page.items.map((item) => item.requestId ?? ''));
         after = page.next;
         pages += 1;
     } while (after);
@@ -274,8 +274,8 @@ describe('reading an actor’s own trail by cursor', () => {
     const tied = (actor: string, count: number, prefix: string) =>
         Array.from({ length: count }, (_, index) =>
             makeEntry({
-                actor_user_id: actor,
-                request_id: `${prefix}-${String(index)}`,
+                actorUserId: actor,
+                requestId: `${prefix}-${String(index)}`,
                 timestamp: AT
             })
         );
@@ -295,8 +295,8 @@ describe('reading an actor’s own trail by cursor', () => {
         for (const [index, minutes] of [0, 5, 10, 15].entries())
             await auditLogRepository.create(
                 makeEntry({
-                    actor_user_id: 'ada',
-                    request_id: `at-${String(index)}`,
+                    actorUserId: 'ada',
+                    requestId: `at-${String(index)}`,
                     timestamp: new Date(AT.getTime() + minutes * 60_000)
                 })
             );
@@ -307,10 +307,8 @@ describe('reading an actor’s own trail by cursor', () => {
     });
 
     it('never reads another actor’s entries', async () => {
-        await auditLogRepository.create(makeEntry({ actor_user_id: 'ada', request_id: 'mine' }));
-        await auditLogRepository.create(
-            makeEntry({ actor_user_id: 'grace', request_id: 'theirs' })
-        );
+        await auditLogRepository.create(makeEntry({ actorUserId: 'ada', requestId: 'mine' }));
+        await auditLogRepository.create(makeEntry({ actorUserId: 'grace', requestId: 'theirs' }));
 
         const { collected } = await walk('ada', 10);
 
@@ -318,7 +316,7 @@ describe('reading an actor’s own trail by cursor', () => {
     });
 
     it('reports no next page when the trail ends inside one, and when it is empty', async () => {
-        await auditLogRepository.create(makeEntry({ actor_user_id: 'ada' }));
+        await auditLogRepository.create(makeEntry({ actorUserId: 'ada' }));
 
         const short = await auditLogRepository.ownEntriesPage('ada', undefined, 5);
         const none = await auditLogRepository.ownEntriesPage('nobody', undefined, 5);
@@ -330,11 +328,11 @@ describe('reading an actor’s own trail by cursor', () => {
     it('findOwnAuditEntries returns the whole trail, past one page', async () => {
         const total = OWN_ENTRIES_PAGE + 1;
         await Promise.all(tied('ada', total, 'e').map((entry) => auditLogRepository.create(entry)));
-        await auditLogRepository.create(makeEntry({ actor_user_id: 'grace' }));
+        await auditLogRepository.create(makeEntry({ actorUserId: 'grace' }));
 
         const entries = await findOwnAuditEntries('ada');
 
         expect(entries).toHaveLength(total);
-        expect(entries.every((entry) => entry.actor_user_id === 'ada')).toBe(true);
+        expect(entries.every((entry) => entry.actorUserId === 'ada')).toBe(true);
     });
 });

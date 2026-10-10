@@ -120,8 +120,8 @@ export const create = (
             recordAudit(context, {
                 action: exampleAuditActions.EXAMPLE_CREATED,
                 outcome: 'success',
-                target_type: 'example',
-                target_id: String(created._id)
+                targetType: 'example',
+                targetId: String(created._id)
             });
             return presentWithOwner(created);
         })
@@ -207,8 +207,8 @@ const applyUpdate = (
         recordAudit(context, {
             action: exampleAuditActions.EXAMPLE_UPDATED,
             outcome: 'success',
-            target_type: 'example',
-            target_id: String(saved._id),
+            targetType: 'example',
+            targetId: String(saved._id),
             metadata: { status: next }
         });
         if (!isPublished(before) && isPublished(next)) announcePublished(saved, context);
@@ -264,8 +264,8 @@ const deleteLoaded = (
             recordAudit(context, {
                 action: exampleAuditActions.EXAMPLE_DELETED,
                 outcome: 'success',
-                target_type: 'example',
-                target_id: String(example._id)
+                targetType: 'example',
+                targetId: String(example._id)
             });
             return generateSuccess(undefined, 200, t('example.deleted'));
         });

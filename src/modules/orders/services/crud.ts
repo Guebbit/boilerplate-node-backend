@@ -43,8 +43,8 @@ export const recordCreated = (order: OrderDocument, context: CallerContext): voi
     recordAudit(context, {
         action: ordersAuditActions.ORDER_CREATED,
         outcome: 'success',
-        target_type: 'order',
-        target_id: String(order._id)
+        targetType: 'order',
+        targetId: String(order._id)
     });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
@@ -196,8 +196,8 @@ export const updateById = (
                         recordAudit(context, {
                             action: ordersAuditActions.ORDER_UPDATED,
                             outcome: 'success',
-                            target_type: 'order',
-                            target_id: id
+                            targetType: 'order',
+                            targetId: id
                         });
                     return result;
                 })

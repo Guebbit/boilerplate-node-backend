@@ -1,7 +1,7 @@
 /**
  * @module
  * Whether a caller's own membership carries an unrestricted (admin) role — the fact every login
- * emit and audit record here needs for `actor_role`. Read fresh from the membership store rather
+ * emit and audit record here needs for `actorRole`. Read fresh from the membership store rather
  * than trusted off a stale value: the account document itself carries no role of its own.
  */
 

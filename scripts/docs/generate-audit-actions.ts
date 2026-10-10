@@ -12,7 +12,7 @@
  *
  * Every action's owner and wire value come from the same source that cross-cutting test trusts:
  * each module's own `audit.ts`, imported for real, plus infrastructure's three `security.*`
- * actions. `target_type` is not declared anywhere near an action — it is a free string passed at
+ * actions. `targetType` is not declared anywhere near an action — it is a free string passed at
  * each `recordAudit`/`emitAuditEvent`/`buildAuditEvent` call site — so it is read off the call
  * site's own text instead, the same trade-off `generate-module-graph.ts`'s `readEventEdges` makes
  * for event subscriptions: `—` where no call site names a literal one (the three `security.*`
@@ -114,9 +114,9 @@ const collectDeclaredActions = async (): Promise<DeclaredAction[]> => {
 
 /**
  * How far either side of an `owner.KEY` reference to look for the same object literal's target
- * field. Two shapes both fit inside it: an ordinary `recordAudit` call, where `target_type:`
+ * field. Two shapes both fit inside it: an ordinary `recordAudit` call, where `targetType:`
  * follows the action a few lines later; and the shared `createDeleteController` spec, where
- * `entity:` — its own docblock: "used for the audit target_type" — sits a few lines BEFORE the
+ * `entity:` — its own docblock: "used for the audit targetType" — sits a few lines BEFORE the
  * `auditAction:` that names this identifier. A third shape, an action chosen by a same-file helper
  * (`auditActionForUpdate` in `users/services/update.ts`) and read back at a call site further away than
  * this window, is left as "not discoverable" rather than risking a wrong attribution from a wider
@@ -129,7 +129,7 @@ const TARGET_WINDOW = 300;
  * group covering both quote styles, rather than one per style: a call site's target is always a
  * plain lower-case word, so the looser `[^'"]*` never has to worry about a quote inside the value.
  */
-const TARGET_FIELD = /(?:target_type|entity):\s*["']([^"']*)["']/;
+const TARGET_FIELD = /(?:targetType|entity):\s*["']([^"']*)["']/;
 
 /** Every literal target a given `owner.KEY` identifier is fired against, across `src/`. */
 const targetTypesOf = (identifier: string, sources: readonly string[]): Set<string> => {

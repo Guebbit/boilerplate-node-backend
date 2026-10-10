@@ -51,9 +51,9 @@ One line per error, no stack trace bloat — the stack lives on the OTel span:
     "level": "info",
     "log_type": "audit",
     "action": "auth.login",
-    "actor_user_id": "user-123",
-    "actor_role": "user",
-    "actor_scope": "tenant",
+    "actorUserId": "user-123",
+    "actorRole": "user",
+    "actorScope": "tenant",
     "outcome": "success",
     "ip": "1.2.3.4",
     "request_id": "…",
@@ -75,7 +75,7 @@ convention log backends filter on.
 ### Every action
 
 `npm run docs:audit-actions`, checked by `npm run check:docs-audit-actions`. Every action this
-build can emit, its owning module, and — where a call site names one — the `target_type` it
+build can emit, its owning module, and — where a call site names one — the `targetType` it
 audits. `—` means no call site attaches a target; `(varies)` means the action is fired against more
 than one, from a generic helper that takes the target as a runtime parameter.
 
@@ -147,7 +147,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                   | `admin.reservations.swept`                   | `reservation`          |
 | `inventory`      | `ADMIN_STOCK_ADJUSTED`                       | `admin.stock.adjusted`                       | —                      |
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |
-| `invoicing`      | `ADMIN_INVOICE_VIEWED`                       | `admin.invoice.viewed`                       | —                      |
+| `invoicing`      | `ADMIN_INVOICE_VIEWED`                       | `admin.invoice.viewed`                       | `invoice`              |
 | `locales`        | `ADMIN_LOCALE_CREATED`                       | `admin.locale.created`                       | `locale`               |
 | `locales`        | `ADMIN_LOCALE_DELETED`                       | `admin.locale.deleted`                       | `locale`               |
 | `locales`        | `ADMIN_LOCALE_ENTRY_CREATED`                 | `admin.locale_entry.created`                 | `locale_entry`         |
@@ -156,7 +156,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `locales`        | `ADMIN_LOCALE_ENTRY_UPDATED`                 | `admin.locale_entry.updated`                 | `locale_entry`         |
 | `locales`        | `ADMIN_LOCALE_UPDATED`                       | `admin.locale.updated`                       | `locale`               |
 | `locales`        | `ADMIN_TRANSLATION_UPDATED`                  | `admin.translation.updated`                  | —                      |
-| `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | —                      |
+| `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | `order`                |
 | `orders`         | `ORDER_CANCELLED`                            | `order.cancelled`                            | `order`                |
 | `orders`         | `ORDER_CREATED`                              | `order.created`                              | `order`                |
 | `orders`         | `ORDER_DELETED`                              | `order.deleted`                              | `order`                |
@@ -176,7 +176,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `returns`        | `ADMIN_RETURN_APPROVED`                      | `admin.return.approved`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_DECLINED`                      | `admin.return.declined`                      | `return`               |
 | `returns`        | `ADMIN_RETURN_RECEIVED`                      | `admin.return.received`                      | `return`               |
-| `returns`        | `ADMIN_RETURN_VIEWED`                        | `admin.return.viewed`                        | —                      |
+| `returns`        | `ADMIN_RETURN_VIEWED`                        | `admin.return.viewed`                        | `return`               |
 | `returns`        | `RETURN_REQUESTED`                           | `return.requested`                           | `return`               |
 | `users`          | `ADMIN_USER_BANNED`                          | `admin.user.banned`                          | —                      |
 | `users`          | `ADMIN_USER_CREATED`                         | `admin.user.created`                         | `user`                 |

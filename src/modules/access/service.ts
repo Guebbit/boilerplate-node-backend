@@ -216,8 +216,8 @@ const auditRoleChange = (
     recordAudit(context, {
         action,
         outcome,
-        target_type: 'user',
-        target_id: userId,
+        targetType: 'user',
+        targetId: userId,
         metadata: role === undefined ? { tenantId, scope } : { role, tenantId, scope }
     });
 };
@@ -509,8 +509,8 @@ export const outrankedRefusal = (
         recordAudit(context, {
             action: coreAuditActions.SECURITY_FORBIDDEN,
             outcome: 'failure',
-            target_type: targetType,
-            target_id: targetId,
+            targetType: targetType,
+            targetId: targetId,
             metadata: { reason: 'outranked', ownerId }
         });
 
@@ -562,8 +562,8 @@ export const ownMoneyRefusal = (
     recordAudit(context, {
         action: coreAuditActions.SECURITY_FORBIDDEN,
         outcome: 'failure',
-        target_type: targetType,
-        target_id: targetId,
+        targetType: targetType,
+        targetId: targetId,
         metadata: { reason: 'own' }
     });
 

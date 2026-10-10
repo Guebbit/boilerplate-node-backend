@@ -124,13 +124,13 @@ export interface TenantCaller {
      * Holds every key this scope declares — `kernel/permissions.ts`'s `isUnrestricted`, computed
      * once where the caller is built rather than re-derived (and re-imported past the kernel
      * boundary) at every call site that needs "is this an admin" for something other than a
-     * permission check, e.g. the audit trail's `actor_role`.
+     * permission check, e.g. the audit trail's `actorRole`.
      */
     unrestricted: boolean;
     /**
      * Is this `SYSTEM_ACTOR` — the application acting on nobody's behalf — rather than a real
      * account, computed once alongside {@link unrestricted} and for the identical reason: the
-     * audit trail's `actor_role` needs to tell "a background job did this" from "an admin did
+     * audit trail's `actorRole` needs to tell "a background job did this" from "an admin did
      * this" without importing `kernel/permissions`' `SYSTEM_ACTOR` past the infrastructure
      * boundary (`infrastructure` may not reach `kernel` — see `eslint.config.ts`).
      */
@@ -182,7 +182,7 @@ export interface CallerContext {
      * request never resolved one at all (see `STRANGER` in `http/request.ts`).
      *
      * `caller.permissions` is the expanded key list a rule reads; this is the NAME a person would
-     * recognise, kept only for the audit trail's `actor_role_name` — a renamed role invalidates a
+     * recognise, kept only for the audit trail's `actorRoleName` — a renamed role invalidates a
      * value read from here, never a decision made from `caller`, which is why the two travel
      * separately instead of one standing in for the other.
      */
@@ -190,7 +190,7 @@ export interface CallerContext {
     /**
      * The api-key behind {@link caller} — `request.credentialId` — absent for every request that
      * resolved a human session instead. Sibling to {@link actorRoleName} rather than a replacement
-     * for it, and kept only for the audit trail's `actor_credential_id`: a row can say "acted via
+     * for it, and kept only for the audit trail's `actorCredentialId`: a row can say "acted via
      * key `sk_a1b2c3d4`" instead of attributing machine traffic to the human who created the key.
      */
     actorCredentialId?: string;

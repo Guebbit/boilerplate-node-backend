@@ -44,14 +44,14 @@ describe('GET /audit', () => {
     it('matches the contract for a moderator, filtered by actor and target', async () => {
         const { user, bearer } = await authenticateInRole('moderator');
         await auditLogRepository.create({
-            actor_user_id: String(user._id),
-            actor_role: 'user',
-            actor_scope: 'tenant',
-            actor_role_name: 'moderator',
+            actorUserId: String(user._id),
+            actorRole: 'user',
+            actorScope: 'tenant',
+            actorRoleName: 'moderator',
             action: 'admin.user.banned',
             outcome: 'success',
-            target_type: 'user',
-            target_id: 'target-9',
+            targetType: 'user',
+            targetId: 'target-9',
             timestamp: new Date(),
             level: 'info'
         });
@@ -62,7 +62,7 @@ describe('GET /audit', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toHaveLength(1);
-        expect(response.body.data.items[0].actor_role_name).toBe('moderator');
+        expect(response.body.data.items[0].actorRoleName).toBe('moderator');
     });
 
     it('422s a repeated scalar filter instead of silently picking one entry', async () => {
@@ -94,10 +94,10 @@ describe('GET /audit', () => {
     it('422s an outcome outside success/failure instead of matching every row', async () => {
         const { user, bearer } = await authenticateInRole('moderator');
         await auditLogRepository.create({
-            actor_user_id: String(user._id),
-            actor_role: 'user',
-            actor_scope: 'tenant',
-            actor_role_name: 'moderator',
+            actorUserId: String(user._id),
+            actorRole: 'user',
+            actorScope: 'tenant',
+            actorRoleName: 'moderator',
             action: 'admin.user.banned',
             outcome: 'success',
             timestamp: new Date(),

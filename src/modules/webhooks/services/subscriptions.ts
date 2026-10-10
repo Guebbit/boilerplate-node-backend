@@ -130,8 +130,8 @@ const finalizeCreate = async (
     recordAudit(context, {
         action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_CREATED,
         outcome: 'success',
-        target_type: 'webhook_subscription',
-        target_id: String(subscription._id)
+        targetType: 'webhook_subscription',
+        targetId: String(subscription._id)
     });
     return generateSuccess({ subscription, secret: plaintext }, 201);
 };
@@ -225,8 +225,8 @@ export const update = (
                 recordAudit(context, {
                     action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED,
                     outcome: 'success',
-                    target_type: 'webhook_subscription',
-                    target_id: id
+                    targetType: 'webhook_subscription',
+                    targetId: id
                 });
                 return generateSuccess(saved);
             });
@@ -260,8 +260,8 @@ export const rotateSecret = (
                 recordAudit(context, {
                     action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_ROTATED,
                     outcome: 'success',
-                    target_type: 'webhook_subscription',
-                    target_id: id
+                    targetType: 'webhook_subscription',
+                    targetId: id
                 });
                 return generateSuccess({ subscription: saved, newSecret: minted.plaintext });
             });
@@ -300,8 +300,8 @@ export const removeSecret = (
                 recordAudit(context, {
                     action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_SECRET_REMOVED,
                     outcome: 'success',
-                    target_type: 'webhook_subscription',
-                    target_id: id
+                    targetType: 'webhook_subscription',
+                    targetId: id
                 });
                 return generateSuccess(saved);
             });
@@ -321,8 +321,8 @@ export const remove = (
                 recordAudit(context, {
                     action: webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_DELETED,
                     outcome: 'success',
-                    target_type: 'webhook_subscription',
-                    target_id: id
+                    targetType: 'webhook_subscription',
+                    targetId: id
                 });
                 return generateSuccess(undefined);
             });

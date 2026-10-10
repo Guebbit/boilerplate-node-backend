@@ -300,7 +300,7 @@ describe('cancelById — audit and analytics', () => {
             expect.objectContaining({
                 action: ordersAuditActions.ORDER_CANCELLED,
                 outcome: 'success',
-                actor_role: 'anonymous'
+                actorRole: 'anonymous'
             })
         );
         expect(analyticsSpy).toHaveBeenCalledWith(
@@ -323,8 +323,8 @@ describe('cancelById — audit and analytics', () => {
                 outcome: 'success',
                 // The system actor, not admin — `SYSTEM_ACTOR` is its own role now, not an
                 // alias for a human admin's, and the audit trail says so.
-                actor_role: 'system',
-                actor_user_id: 'system'
+                actorRole: 'system',
+                actorUserId: 'system'
             })
         );
     });

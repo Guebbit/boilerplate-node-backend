@@ -47,8 +47,8 @@ export const remove = (
             recordAudit(context, {
                 action: productsAuditActions.ADMIN_PRODUCT_DELETED,
                 outcome: 'success',
-                target_type: 'product',
-                target_id: id,
+                targetType: 'product',
+                targetId: id,
                 metadata: { hardDelete }
             });
     };
@@ -140,8 +140,8 @@ export const restoreById = (
                 recordAudit(context, {
                     action: productsAuditActions.ADMIN_PRODUCT_RESTORED,
                     outcome: 'success',
-                    target_type: 'product',
-                    target_id: id
+                    targetType: 'product',
+                    targetId: id
                 });
             return generateSuccess(saved, 200, t('products.restored'));
         });

@@ -60,8 +60,8 @@ const applyCover = (
             recordAudit(context, {
                 action: exampleAuditActions.EXAMPLE_COVER_CHANGED,
                 outcome: 'success',
-                target_type: 'example',
-                target_id: String(saved._id)
+                targetType: 'example',
+                targetId: String(saved._id)
             });
             return presentWithOwner(saved);
         })

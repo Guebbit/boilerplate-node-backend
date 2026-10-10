@@ -2,9 +2,8 @@
  * @module
  * Persisted audit trail — the durable half of `@infrastructure/observability/audit`. The audit
  * *logger* remains the compliance record; this collection exists so `GET /observability/audit`
- * can answer "what has actor X done" from the API. snake_case fields, unlike every other model
- * here: returned verbatim as `AuditEntryItem` in `openapi.yaml`, matching the log lines a SIEM
- * ingests — renaming would mean mapping on every read.
+ * can answer "what has actor X done" from the API. camelCase fields like every other model,
+ * returned verbatim as `AuditEntryItem` in `openapi.yaml`; only the log line renames them.
  *
  * See: docs/modules/audit-logs.md
  */
@@ -53,27 +52,27 @@ const retentionDays = auditLogsConfig().NODE_AUDIT_RETENTION_DAYS;
 /** Audit collection schema. */
 export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
     {
-        actor_user_id: {
+        actorUserId: {
             type: String,
             required: true
         },
         // The api-key's public prefix when a credential acted, so a stored row can say "done with a
         // key" as well as the log line. Optional: a person acting directly has none.
-        actor_credential_id: {
+        actorCredentialId: {
             type: String
         },
-        actor_role: {
+        actorRole: {
             type: String,
             enum: [...AUDIT_ACTOR_ROLES],
             required: true
         },
-        // Open where `actor_role` is closed — no enum, so a renamed or newly added preset role
-        // never needs a migration here. See `actor_role_name` on `AuditEvent`.
-        actor_role_name: {
+        // Open where `actorRole` is closed — no enum, so a renamed or newly added preset role
+        // never needs a migration here. See `actorRoleName` on `AuditEvent`.
+        actorRoleName: {
             type: String
         },
         // Every audit row names its world: `buildAuditEvent` always fills it in.
-        actor_scope: {
+        actorScope: {
             type: String,
             enum: [...AUTHORIZATION_SCOPES],
             required: true
@@ -90,19 +89,19 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         ip: {
             type: String
         },
-        user_agent: {
+        userAgent: {
             type: String
         },
-        request_id: {
+        requestId: {
             type: String
         },
-        trace_id: {
+        traceId: {
             type: String
         },
-        target_type: {
+        targetType: {
             type: String
         },
-        target_id: {
+        targetId: {
             type: String
         },
         // Free-form by design: `metadata` carries action-specific extras, and the audit vocabulary
@@ -135,7 +134,7 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
 
 /*
  * Indexes matching the three filtered ways the endpoints are queried. All three are compound with
- * `timestamp: -1` because every query sorts newest-first — a plain `{ actor_user_id: 1 }` index
+ * `timestamp: -1` because every query sorts newest-first — a plain `{ actorUserId: 1 }` index
  * would find the matching entries and then sort them in memory, which is the shape that falls
  * over first as the collection grows.
  *
@@ -146,13 +145,13 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
 // Mongoose `index(fields, options)`: 1 ascending, -1 descending.
 // https://mongoosejs.com/docs/guide.html#indexes
 // "What this actor did" — `GET /audit`'s `actor` filter.
-auditLogSchema.index({ actor_user_id: 1, timestamp: -1 });
+auditLogSchema.index({ actorUserId: 1, timestamp: -1 });
 
 // "Every time this action ran" — `GET /audit`'s `action` filter.
 auditLogSchema.index({ action: 1, timestamp: -1 });
 
 // "What happened to this row" — the question `GET /audit`'s `target` filter answers.
-auditLogSchema.index({ target_id: 1, timestamp: -1 });
+auditLogSchema.index({ targetId: 1, timestamp: -1 });
 
 /*
  * TTL index — Mongo deletes entries older than the retention window on its own.

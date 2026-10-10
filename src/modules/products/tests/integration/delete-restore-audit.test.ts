@@ -54,8 +54,8 @@ describe('removeById', () => {
             expect.objectContaining({
                 action: productsAuditActions.ADMIN_PRODUCT_DELETED,
                 outcome: 'success',
-                target_type: 'product',
-                target_id: id,
+                targetType: 'product',
+                targetId: id,
                 metadata: { hardDelete: false }
             })
         );
@@ -72,8 +72,8 @@ describe('removeById', () => {
             expect.objectContaining({
                 action: productsAuditActions.ADMIN_PRODUCT_DELETED,
                 outcome: 'success',
-                target_type: 'product',
-                target_id: id,
+                targetType: 'product',
+                targetId: id,
                 metadata: { hardDelete: true }
             })
         );
@@ -102,8 +102,8 @@ describe('restoreById', () => {
             expect.objectContaining({
                 action: productsAuditActions.ADMIN_PRODUCT_RESTORED,
                 outcome: 'success',
-                target_type: 'product',
-                target_id: id
+                targetType: 'product',
+                targetId: id
             })
         );
     });

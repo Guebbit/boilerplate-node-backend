@@ -112,8 +112,8 @@ export const recordOfflinePayment = async (
     recordAudit(context, {
         action: paymentsAuditActions.PAYMENT_RECORDED_OFFLINE,
         outcome: 'success',
-        target_type: 'order',
-        target_id: orderId,
+        targetType: 'order',
+        targetId: orderId,
         metadata: { method: input.method, reference: input.reference }
     });
     emitAnalyticsEvent({

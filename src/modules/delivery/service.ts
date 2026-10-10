@@ -182,8 +182,8 @@ const auditOrderEvent = (
     recordAudit(context, {
         action,
         outcome: 'success',
-        target_type: 'order',
-        target_id: orderId
+        targetType: 'order',
+        targetId: orderId
     });
 
 /** The refusal shared by both {@link recordShipment} gates: forced or not, this order isn't `processing`. */

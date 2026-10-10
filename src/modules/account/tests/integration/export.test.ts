@@ -58,7 +58,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 
 /** Every audit event recorded, newest last. */
-const mockAudit: { action: string; target_id?: string; metadata?: Record<string, unknown> }[] = [];
+const mockAudit: { action: string; targetId?: string; metadata?: Record<string, unknown> }[] = [];
 
 jest.mock('@infrastructure/observability/audit', () => {
     const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
@@ -274,7 +274,7 @@ describe('requestExport', () => {
         expect(mockAudit).toContainEqual(
             expect.objectContaining({
                 action: 'auth.data_export.requested',
-                target_id: result.data.id
+                targetId: result.data.id
             })
         );
     });
@@ -552,7 +552,7 @@ describe('openOwnExport', () => {
         expect(mockAudit).toContainEqual(
             expect.objectContaining({
                 action: 'auth.data_export.downloaded',
-                target_id: result.data.id
+                targetId: result.data.id
             })
         );
     });

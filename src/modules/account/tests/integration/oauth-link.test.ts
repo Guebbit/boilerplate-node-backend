@@ -78,7 +78,7 @@ describe('loginOrCreateFromOAuth — case 1: an already-linked identity', () => 
     /*
      * Recording a login is only a fact once a session actually exists, which is a CONTROLLER
      * decision (`get-oauth-callback.ts` calls `recordLoginSuccess`, reading the account's real
-     * role). An audit or metric emitted here would hardcode `actor_role: 'user'` — wrong for an
+     * role). An audit or metric emitted here would hardcode `actorRole: 'user'` — wrong for an
      * admin — and skip `authLoginTotal`. So this branch resolves the account, tags the outcome,
      * and emits nothing at all.
      */
@@ -120,8 +120,8 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_OAUTH_LINKED,
-                actor_user_id: user.id,
-                actor_role: 'admin'
+                actorUserId: user.id,
+                actorRole: 'admin'
             })
         );
     });

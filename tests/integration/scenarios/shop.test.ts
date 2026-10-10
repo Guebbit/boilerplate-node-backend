@@ -414,7 +414,7 @@ describe('the history reads as a history', () => {
     it('moves an order and its audit trail together', async () => {
         const order = await orderModel.findById(subjects['order.delivered']).exec();
         const entry = await auditLogModel
-            .findOne({ target_id: subjects['order.delivered'], action: 'order.created' })
+            .findOne({ targetId: subjects['order.delivered'], action: 'order.created' })
             .exec();
 
         expect(entry).not.toBeNull();

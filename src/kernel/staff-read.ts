@@ -42,7 +42,7 @@ export const recordStaffRead = (request: Request, target: StaffReadTarget): void
     recordAudit(callerContextOf(request), {
         action: target.action,
         outcome: 'success',
-        target_type: target.targetType,
-        target_id: target.targetId
+        targetType: target.targetType,
+        targetId: target.targetId
     });
 };
