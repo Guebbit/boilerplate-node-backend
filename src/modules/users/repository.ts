@@ -39,14 +39,15 @@ const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
 
 /**
  * A user's last proof of life, as an aggregation `$expr`: `lastActiveAt` (stamped on every session
- * mint and refresh, see `touchLastActive`), or `createdAt` for an account that never signed in.
+ * mint and refresh, see `touchLastActive`), `lastApiKeyUseAt` (a key the account minted was used,
+ * see `touchApiKeyUse`), or `createdAt` for an account that never signed in.
  * `$max` ignores a missing field. Shared by every `findInactive*` query below so "how recently was
  * this account used" is answered once rather than reimplemented per query and drifting.
  *
  * Reads no `tokens`: a token is pruned when it expires or is revoked, so activity derived from
  * them fell back to `createdAt` for any account that logged out.
  */
-const LAST_ACTIVE_EXPR = { $max: ['$lastActiveAt', '$createdAt'] };
+const LAST_ACTIVE_EXPR = { $max: ['$lastActiveAt', '$lastApiKeyUseAt', '$createdAt'] };
 
 /** One day in milliseconds: the throttle of the activity stamp. */
 const ACTIVITY_THROTTLE_MS = 24 * 60 * 60 * 1000;
@@ -96,6 +97,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
+    touchApiKeyUse: (id: string, now: Date) => Promise<void>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
@@ -575,6 +577,29 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                     ]
                 },
                 { $max: { lastActiveAt: now } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Stamp `lastApiKeyUseAt`, at most once a day — same throttle and same reasons as
+     * `touchLastActive`, so a busy key costs one user write a day, not one per request.
+     *
+     * @param id - the account that minted the key
+     * @param now - the moment to stamp
+     */
+    touchApiKeyUse: (id: string, now: Date) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    $or: [
+                        { lastApiKeyUseAt: { $exists: false } },
+                        { lastApiKeyUseAt: { $lt: new Date(now.getTime() - ACTIVITY_THROTTLE_MS) } }
+                    ]
+                },
+                { $max: { lastApiKeyUseAt: now } },
                 { timestamps: false }
             )
             .exec()

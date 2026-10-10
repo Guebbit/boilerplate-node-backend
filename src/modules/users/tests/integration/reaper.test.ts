@@ -189,3 +189,40 @@ describe('who soft-deleted the account', () => {
         expect(await markerOf(user.id)).toBeUndefined();
     });
 });
+
+describe('API-key use counts as activity', () => {
+    it('keeps an account whose only recent activity is a key use out of the warning stage', async () => {
+        const used = await inactiveAccount('key-used', 'customer');
+        const idle = await inactiveAccount('key-idle', 'customer');
+        await makeInactive(used.id, { lastApiKeyUseAt: daysAgo(1) });
+        await makeInactive(idle.id, { lastApiKeyUseAt: daysAgo(400) });
+
+        const candidates = await userService.findInactiveUnwarned(daysAgo(30));
+
+        expect(emailsOf(candidates)).toEqual(['key-idle@reaper.test']);
+    });
+
+    it('keeps a warned account that used a key since the warning out of the soft-delete stage', async () => {
+        const user = await inactiveAccount('key-returned', 'customer');
+        await makeInactive(user.id, {
+            inactivityWarnedAt: daysAgo(40),
+            lastApiKeyUseAt: daysAgo(5)
+        });
+
+        expect(await userService.findWarnedStillInactive(daysAgo(30))).toEqual([]);
+    });
+
+    it('stamps the use once a day: a second use inside the day keeps the first stamp', async () => {
+        const user = await createUser({ email: 'throttle@reaper.test', username: 'throttle' });
+        const first = new Date('2026-01-01T10:00:00Z');
+
+        await userService.touchApiKeyUse(user.id, first);
+        await userService.touchApiKeyUse(user.id, new Date('2026-01-01T20:00:00Z'));
+        const afterTwo = await userModel.findById(user.id).lean().exec();
+        await userService.touchApiKeyUse(user.id, new Date('2026-01-02T11:00:00Z'));
+        const afterDay = await userModel.findById(user.id).lean().exec();
+
+        expect(afterTwo?.lastApiKeyUseAt).toEqual(first);
+        expect(afterDay?.lastApiKeyUseAt).toEqual(new Date('2026-01-02T11:00:00Z'));
+    });
+});

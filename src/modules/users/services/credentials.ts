@@ -149,3 +149,12 @@ export const bumpSessionEpoch = (id: string, at: Date = new Date()): Promise<voi
  */
 export const touchLastActive = (id: string, now: Date = new Date()): Promise<void> =>
     userRepository.touchLastActive(id, now);
+
+/**
+ * Stamp the account as active because a key it minted was just used. Throttled to one write a day
+ * in the repository, so the resolve path may call it on every request.
+ * @param id - the account that minted the key
+ * @param now - the moment to stamp
+ */
+export const touchApiKeyUse = (id: string, now: Date = new Date()): Promise<void> =>
+    userRepository.touchApiKeyUse(id, now);

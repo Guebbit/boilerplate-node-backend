@@ -143,6 +143,13 @@ export interface UserRecord extends Omit<
     lastActiveAt?: Date;
 
     /**
+     * The last time an API key this account minted was used (stamped at most once a day). Counts as
+     * activity in `LAST_ACTIVE_EXPR`, so a key-only account is not mistaken for an idle one. Never
+     * on the wire.
+     */
+    lastApiKeyUseAt?: Date;
+
+    /**
      * Who soft-deleted the account, when it was not a person: `reaper` marks
      * `scripts/ops/reap-inactive-accounts.ts`'s own soft delete, the only thing its hard-delete
      * stage may later erase. Cleared by a restore. Never on the wire.
@@ -559,6 +566,9 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         lastActiveAt: {
             type: Date
         },
+        lastApiKeyUseAt: {
+            type: Date
+        },
         deletedBy: {
             type: String,
             enum: ['reaper']
@@ -842,6 +852,7 @@ export type UserWire = Omit<
     | 'pendingImageKey'
     | 'inactivityWarnedAt'
     | 'lastActiveAt'
+    | 'lastApiKeyUseAt'
     | 'deletedBy'
     | 'twoFactorMethods'
     | 'twoFactorBackupCodes'
@@ -868,7 +879,7 @@ export type UserWire = Omit<
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    // `inactivityWarnedAt`, `lastActiveAt` and `deletedBy` are the reaper's own bookkeeping, same treatment.
+    // `inactivityWarnedAt`, `lastActiveAt`, `lastApiKeyUseAt` and `deletedBy` are the reaper's own bookkeeping, same treatment.
     // `twoFactorMethods`/`twoFactorBackupCodes`/`twoFactorBackupCodeSalt` are 2FA credential material —
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
@@ -879,6 +890,7 @@ export const applyUserTransform = applySerialization(userSchema, {
         'pendingImageKey',
         'inactivityWarnedAt',
         'lastActiveAt',
+        'lastApiKeyUseAt',
         'deletedBy',
         'twoFactorMethods',
         'twoFactorBackupCodes',

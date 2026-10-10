@@ -42,7 +42,8 @@ import {
     resetMfaAttempts,
     claimTotpStep,
     bumpSessionEpoch,
-    touchLastActive
+    touchLastActive,
+    touchApiKeyUse
 } from './credentials';
 import {
     consumeToken,
@@ -121,6 +122,7 @@ export const userService = {
     claimTotpStep,
     bumpSessionEpoch,
     touchLastActive,
+    touchApiKeyUse,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,

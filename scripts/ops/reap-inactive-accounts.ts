@@ -10,7 +10,8 @@
  * boilerplate that ships it enabled will eventually delete someone's live account.
  *
  * "Last active" is `lastActiveAt` — stamped, at most once a day, on every sign-in (password, OAuth,
- * 2FA) and every refresh — or `createdAt` for an account that never signed in; see
+ * 2FA) and every refresh, `lastApiKeyUseAt` (a key the account minted was used, also at most
+ * once a day) — or `createdAt` for an account that never signed in; see
  * `LAST_ACTIVE_EXPR` in `users/repository.ts`. Sessions are not read: they are pruned on expiry and
  * logout, so an account that logged out would look as idle as one never used. Three stages, one
  * `NODE_INACTIVE_ACCOUNT_DAYS` threshold and one fixed grace between them:
