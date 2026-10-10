@@ -31,7 +31,7 @@ x-personal-data:
         schema:
             type: array
             items:
-                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+                $ref: '#/components/schemas/CartItem'
 
 paths:
     /cart:
@@ -439,7 +439,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                    $ref: '../orders/openapi.yaml#/components/schemas/Order'
 
         CartQuantity:
             type: integer
@@ -650,7 +650,7 @@ components:
                     allOf:
                         [
                             {
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                                $ref: '../orders/openapi.yaml#/components/schemas/PaymentMethodId'
                             }
                         ]
                     default: card
@@ -802,3 +802,14 @@ components:
                         drawn from.
 
         # ---------- Observability ----------
+
+        CartItem:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1

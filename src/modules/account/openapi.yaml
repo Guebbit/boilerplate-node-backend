@@ -51,7 +51,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AbilitiesEnvelope'
+                                $ref: '../access/openapi.yaml#/components/schemas/AbilitiesEnvelope'
 
     # --------- Authentication and profile ---------
     /account:
@@ -1043,29 +1043,13 @@ components:
         AccountExportResponse:
             type: object
             additionalProperties: false
-            required: [exportedAt, profile, roles]
+            required: [exportedAt, profile]
             properties:
                 exportedAt:
                     type: string
                     format: date-time
                 profile:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
-                # A role lives in a membership row, not a field on the user document, so `profile`
-                # alone does not say what this account may do. Scope only, never the tenant id:
-                # this deployment ships one shop, so the id would name nothing a subject could
-                # recognise.
-                roles:
-                    type: array
-                    items:
-                        type: object
-                        additionalProperties: false
-                        required: [role, scope]
-                        properties:
-                            role:
-                                type: string
-                            scope:
-                                type: string
-                                enum: [tenant, platform]
 
         AccountExportRequest:
             type: object
@@ -1572,7 +1556,7 @@ components:
                 email:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 remember:
                     $ref: '#/components/schemas/RememberTier'
 
@@ -1597,9 +1581,9 @@ components:
                     minLength: 3
                     maxLength: 50
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                    $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 # Must be `true` — the checkbox gating the Terms of Service / Privacy Policy.
                 # Server-enforced (see `accountService.signup`), not just a client-side gate.
                 termsAccepted:
@@ -1630,9 +1614,9 @@ components:
                     minLength: 1
                     description: One-time password reset token (NOT a JWT).
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                    $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
 
         AccountDeleteConfirmRequest:
             type: object
@@ -1787,11 +1771,11 @@ components:
             required: [currentPassword, password, passwordConfirm]
             properties:
                 currentPassword:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PasswordNew'
+                    $ref: '#/components/schemas/PasswordNew'
                 passwordConfirm:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
 
         ReauthMethod:
             type: string
@@ -1807,7 +1791,7 @@ components:
                     type: string
                     enum: [password]
                 password:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Password'
+                    $ref: '#/components/schemas/Password'
                 otp:
                     type: string
                     maxLength: 64
@@ -1973,6 +1957,27 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/SessionsResponse'
+
+        Password:
+            type: string
+            maxLength: 128
+            minLength: 8
+            description: >-
+                An EXISTING password, being proved rather than set — login, the current-password
+                leg of a change, and re-auth. Length bounds only, like `PasswordNew`: a login
+                attempt is not the place to also announce the site's password policy to whoever is
+                guessing it.
+
+        PasswordNew:
+            type: string
+            maxLength: 128
+            minLength: 8
+            description: >-
+                A password being SET by its owner — signup, reset (or the setup link) and change.
+                Length only, 8 to 128 characters (NIST SP 800-63B-4: no composition rules, no
+                forced mix of classes); what keeps a weak one out is the breached-password check
+                on every set path, not a pattern. Hashed with argon2id, which has no 72-byte
+                limit, so every character counts.
 
     parameters:
         # ---------- account — the parameters only this module's paths reference. ----------

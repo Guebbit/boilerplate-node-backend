@@ -464,7 +464,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Product'
+                    $ref: '#/components/schemas/Product'
 
         # One locale's words for a product. `title` mirrors `zodProductSchema`'s length rules,
         # enforced per locale — see the write operations' descriptions.
@@ -575,11 +575,11 @@ components:
                     readOnly: true
                     description: ISO-4217 currency code (e.g. EUR) — see `Product.currency`.
                 taxClass:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                    $ref: '#/components/schemas/TaxClass'
                 rateType:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                    $ref: '#/components/schemas/RateType'
                 sku:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                    $ref: '#/components/schemas/Sku'
                 inStock:
                     type: boolean
                     readOnly: true
@@ -803,11 +803,11 @@ components:
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                    $ref: '#/components/schemas/TaxClass'
                 rateType:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                    $ref: '#/components/schemas/RateType'
                 sku:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                    $ref: '#/components/schemas/Sku'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -895,11 +895,11 @@ components:
                     minimum: 0
                     description: Gross — VAT included. Same convention as `Product.price`.
                 taxClass:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                    $ref: '#/components/schemas/TaxClass'
                 rateType:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                    $ref: '#/components/schemas/RateType'
                 sku:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                    $ref: '#/components/schemas/Sku'
                 # The opening count — the one place an ABSOLUTE stock number is honest, because
                 # a product being created has no prior value to race with and no history to
                 # contradict. Every later change is a signed `/inventory` transition.
@@ -976,19 +976,19 @@ components:
                     type: string
                     nullable: true
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                        - $ref: '#/components/schemas/TaxClass'
                 # `null` clears it back to `standard`, same as `taxClass`. Omitted on a PUT is
                 # the same as `null` — see the operation description.
                 rateType:
                     type: string
                     nullable: true
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                        - $ref: '#/components/schemas/RateType'
                 sku:
                     type: string
                     nullable: true
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                        - $ref: '#/components/schemas/Sku'
                 active:
                     type: boolean
                 purchasable:
@@ -1037,15 +1037,15 @@ components:
                 taxClass:
                     type: string
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                        - $ref: '#/components/schemas/TaxClass'
                 rateType:
                     type: string
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                        - $ref: '#/components/schemas/RateType'
                 sku:
                     type: string
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                        - $ref: '#/components/schemas/Sku'
                 active:
                     type: boolean
                 purchasable:
@@ -1097,19 +1097,19 @@ components:
                     type: string
                     nullable: true
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                        - $ref: '#/components/schemas/TaxClass'
                 # `null` clears it back to `standard`, same as `taxClass`. Omitted leaves the
                 # stored value alone.
                 rateType:
                     type: string
                     nullable: true
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                        - $ref: '#/components/schemas/RateType'
                 sku:
                     type: string
                     nullable: true
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                        - $ref: '#/components/schemas/Sku'
                 active:
                     type: boolean
                 purchasable:
@@ -1163,15 +1163,15 @@ components:
                 taxClass:
                     type: string
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/TaxClass'
+                        - $ref: '#/components/schemas/TaxClass'
                 rateType:
                     type: string
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/RateType'
+                        - $ref: '#/components/schemas/RateType'
                 sku:
                     type: string
                     allOf:
-                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Sku'
+                        - $ref: '#/components/schemas/Sku'
                 active:
                     type: boolean
                 purchasable:
@@ -1223,6 +1223,173 @@ components:
                 items:
                     type: array
                     items:
-                        $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Product'
+                        $ref: '#/components/schemas/Product'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        # Overrides the shop's default VAT rate for this product. Absent — most products — means
+        # the standard rate (`NODE_VAT_RATE_DEFAULT`) applies; every product resolves to SOME
+        # rate, this field only ever narrows it. `reduced` uses `NODE_VAT_RATE_REDUCED`; `zero`
+        # is always 0%, no configuration needed. The RESOLVED decimal rate, not this class, is
+        # what gets frozen onto an order line — see `OrderLineProduct.taxRate`.
+        TaxClass:
+            type: string
+            enum: [reduced, zero]
+            description: >-
+                A category of goods taxed below the shop's standard VAT rate — books, food,
+                medicine and similar, depending on the deployment's own jurisdiction. Absent means
+                the standard rate.
+
+        # EN 16931's VAT category codes distinguish a 0%-rated line (`Z`) from an exempt one
+        # (`E`) — reasons that both resolve `TaxClass: zero` to the same 0% rate but print a
+        # different code on an invoice. `standard` covers every non-zero rate (`reduced` and the
+        # shop's default alike); absent means `standard`, same convention as `TaxClass` itself.
+        # `products/service.ts` does not enforce `taxClass: zero` alongside a non-`standard`
+        # value here — an invoice's category-code render (`invoicing/emails.ts`) only consults
+        # this field once the frozen rate is actually 0, so a mismatched pair is inert rather
+        # than rejected.
+        RateType:
+            type: string
+            enum: [standard, zero-rated, exempt]
+            description: >-
+                WHY a product's resolved VAT rate is 0%, when it is — `TaxClass: zero` alone
+                cannot say. Meaningless when the resolved rate isn't 0%.
+
+        # SH4: a stock-keeping unit, deliberately just a string — this deployment's own numbering
+        # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are
+        # a separate, larger feature, on the roadmap and not built here; today's SKU is one per
+        # product, same cardinality as `Product` itself.
+        Sku:
+            type: string
+            maxLength: 64
+            minLength: 1
+            description: >-
+                An optional, deployment-chosen stock-keeping unit — unique across the catalogue
+                when set. `''` is invalid, same reasoning as `ImageUrl`'s own `minLength: 1`:
+                never a second spelling of "absent". Frozen onto an order line at checkout
+                (`OrderLineProduct.sku`), same as every other field a purchase must remember
+                regardless of what the catalogue does with the product afterwards.
+
+        Product:
+            type: object
+            additionalProperties: false
+            required: [id, title, price, currency, inStock, lowStock]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                price:
+                    type: number
+                    format: double
+                    minimum: 0
+                    description: >-
+                        Gross — what the customer pays, VAT included. Never net-of-tax: the invoice
+                        derives the net amount and the VAT amount FROM this, at whatever rate
+                        applies, rather than the other way around.
+                currency:
+                    type: string
+                    readOnly: true
+                    description: >-
+                        ISO-4217 currency code (e.g. EUR) — this deployment's own
+                        `NODE_DEFAULT_CURRENCY`, read live, never stored on the product itself. An
+                        order freezes it onto its own `currency` at checkout; this field always
+                        reports the shop's CURRENT setting.
+                taxClass:
+                    $ref: '#/components/schemas/TaxClass'
+                rateType:
+                    $ref: '#/components/schemas/RateType'
+                sku:
+                    $ref: '#/components/schemas/Sku'
+                # ── What a shopper may know about stock, and what only a stock reader sees ──
+                #
+                # `inStock` and `lowStock` are on every response, for every caller. The exact
+                # numbers behind them are not: `onHand`, `reserved` and `available` are present
+                # ONLY for a caller holding `inventory.any.read` (the manager, the warehouse and
+                # the admin), because exact counters leak sales velocity to a competitor and help
+                # plan a denial of inventory. A storefront reads the two flags; an admin screen
+                # reads the counters so it can explain a low availability ("forty here,
+                # thirty-eight spoken for") rather than merely assert it.
+                #
+                # Every field here is read-only. No request body anywhere in this contract accepts
+                # a counter except `CreateProductRequest.onHand`, which is a new product's opening
+                # count. Everything after that moves through the `/inventory` transitions, which
+                # are signed, conditional, and leave a ledger row.
+                inStock:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        Something is for sale. `false` renders as out of stock — the catalogue
+                        still lists the product, and checkout is what refuses it
+                        (`CART_INSUFFICIENT_STOCK`).
+                lowStock:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        What is left is at or under the shop's low-stock threshold
+                        (`NODE_LOW_STOCK_THRESHOLD`) while something is still for sale. Never
+                        true together with `inStock` false.
+                onHand:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: Units physically present, whether or not they are spoken for. Only for a caller holding `inventory.any.read`.
+                reserved:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: Units held by an open order — present, but not for sale. Only for a caller holding `inventory.any.read`.
+                # Derived (`onHand - reserved`), never stored, so it cannot disagree with the
+                # pair it comes from.
+                available:
+                    type: integer
+                    minimum: 0
+                    readOnly: true
+                    description: Units a customer may actually buy, derived from the two counters above. Only for a caller holding `inventory.any.read`.
+                description:
+                    type: string
+                active:
+                    type: boolean
+                # Visible but not for sale right now. Hidden (`active: false`) wins over it. Reads as
+                # "Not available right now": add-to-cart is accepted, as for a sold-out product, and
+                # checkout refuses it. Stock is unrelated — see `inStock`.
+                purchasable:
+                    type: boolean
+                    default: true
+                # Default true: most products are physical. false is a digital good — checkout
+                # never needs a shipping method for a cart made entirely of these.
+                requiresShipping:
+                    type: boolean
+                    default: true
+                # Art. 16 CRD: personalised, sealed-hygiene or perishable goods carry no right of
+                # withdrawal. Frozen onto each order line; `returns` refuses those lines.
+                noWithdrawal:
+                    type: boolean
+                    default: false
+                # Grams. Absent counts as 0 for shipping-method filtering (`GET /delivery/methods`,
+                # checkout's weight-range refusal) — a product missing this is silently routed as
+                # weightless, not refused, so the admin form warns rather than requiring it outright.
+                weight:
+                    type: integer
+                    minimum: 0
+                imageUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageUrl'
+                thumbnailUrl:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ThumbnailUrl'
+                categories:
+                    type: array
+                    items:
+                        type: string
+                tags:
+                    type: array
+                    items:
+                        type: string
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+                deletedAt:
+                    type: string
+                    format: date-time

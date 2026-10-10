@@ -704,7 +704,7 @@ components:
             required: [id]
             properties:
                 id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaymentMethodId'
+                    $ref: '../orders/openapi.yaml#/components/schemas/PaymentMethodId'
                 holdHours:
                     type: number
                     minimum: 0
@@ -753,7 +753,7 @@ components:
                 message:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+                    $ref: '../orders/openapi.yaml#/components/schemas/Order'
 
         RecordOfflinePaymentRequest:
             type: object

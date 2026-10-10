@@ -260,7 +260,7 @@ the paths and tags of a fragment the root has not heard of, and stages the compl
 bundle does not move; a new module is in the contract from its own `openapi.yaml` alone.
 
 **The data export's schema is assembled the same way.** `AccountExportResponse` lives in
-`account/openapi.yaml` as a stub (`exportedAt`, `profile`, `roles`). Each module that contributes a
+`account/openapi.yaml` as a stub (`exportedAt`, `profile`). Each module that contributes a
 section declares it beside its paths:
 
 ```yaml
