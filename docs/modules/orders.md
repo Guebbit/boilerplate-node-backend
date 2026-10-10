@@ -107,7 +107,10 @@ their personal fields, since order history is part of the contract
 ([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
 this reap is what protects the far more common case, the order nobody ever deletes. A paid order
 refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
-legal document from that same transition, and it must survive the order it was issued for. `npm run
+legal document from that same transition, and it must survive the order it was issued for. The
+refusal does not trust the document the caller read: the hard delete runs in one transaction with
+the stock release, and its `deleteOne` filters on `paidAt: null`, so a settlement that commits in
+between turns the delete into the same 409 and leaves the hold as it was. `npm run
 sweep:order-effects`, every 5 minutes, re-announces `order.refund_owed` for a refund the event bus's one delivery
 attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
 full mechanism.
