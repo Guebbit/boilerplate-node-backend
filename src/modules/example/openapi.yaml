@@ -3,6 +3,16 @@ info:
     title: example — module contract
     version: '0.1.0'
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    # Every example this account owns, drafts and archived included. Empty, never absent.
+    examples:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/Example'
+
 paths:
     # The one PUBLIC route: it sits above the auth gate in `routes.ts`, so `security: []` here
     # is what keeps the contract and the router telling the same story.

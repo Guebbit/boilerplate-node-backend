@@ -1028,7 +1028,7 @@ paths:
                     content:
                         application/json:
                             schema:
-                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/AccountExportResponse'
+                                $ref: '#/components/schemas/AccountExportResponse'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -1036,6 +1036,37 @@ paths:
 components:
     schemas:
         # ---------- account — the schemas only this module's paths reference. ----------
+        # `POST /account/export`'s answer. Only the account's own half is written here: every other
+        # module declares its section as `x-personal-data` in its own contract, and the bundler
+        # adds it (`scripts/contracts/personal-data-assembly.ts`). A removed module takes its
+        # section with it.
+        AccountExportResponse:
+            type: object
+            additionalProperties: false
+            required: [exportedAt, profile, roles]
+            properties:
+                exportedAt:
+                    type: string
+                    format: date-time
+                profile:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
+                # A role lives in a membership row, not a field on the user document, so `profile`
+                # alone does not say what this account may do. Scope only, never the tenant id:
+                # this deployment ships one shop, so the id would name nothing a subject could
+                # recognise.
+                roles:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [role, scope]
+                        properties:
+                            role:
+                                type: string
+                            scope:
+                                type: string
+                                enum: [tenant, platform]
+
         AccountExportRequest:
             type: object
             additionalProperties: false

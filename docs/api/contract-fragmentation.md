@@ -259,6 +259,21 @@ the paths and tags of a fragment the root has not heard of, and stages the compl
 `tmp/` for redocly. The root's hand order is kept for what it already lists, so the committed
 bundle does not move; a new module is in the contract from its own `openapi.yaml` alone.
 
+**The data export's schema is assembled the same way.** `AccountExportResponse` lives in
+`account/openapi.yaml` as a stub (`exportedAt`, `profile`, `roles`). Each module that contributes a
+section declares it beside its paths:
+
+```yaml
+x-personal-data:
+    orders: # the property name in the export
+        required: false # optional, defaults to true
+        schema: { type: array, items: { $ref: '#/components/schemas/Order' } }
+```
+
+`scripts/contracts/personal-data-assembly.ts` reads those off disk and adds one property per section
+to the staged stub, rewriting each in-file `$ref` to point at the declaring module. A module that is
+deleted takes its section with it, so `demo:remove` has no export list to edit.
+
 To rebuild one document while iterating, name it: `npm run contracts:bundle -- openapi`. The
 ordering lives inside `scripts/contracts/build-bundles.ts` rather than as an `&&` chain in `package.json`,
 which is what makes that flag narrow the run instead of silently doing everything else. See

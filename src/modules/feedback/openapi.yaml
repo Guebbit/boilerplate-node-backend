@@ -3,6 +3,17 @@ info:
     title: feedback — module contract
     version: '0.1.0'
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    feedback:
+        required: false
+        schema:
+            type: array
+            description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
+            items:
+                $ref: '#/components/schemas/ExportFeedbackTicket'
+
 paths:
     /feedback/contact:
         post:

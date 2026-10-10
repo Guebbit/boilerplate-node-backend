@@ -11,6 +11,18 @@ x-error-codes:
     RETURN_ORDER_NOT_RETURNABLE: { status: 409, description: 'The order is not in a state a return can be opened on — cancelled, or (for a reason other than withdrawal) still in the shop''s hands.' }
     RETURN_WINDOW_CLOSED: { status: 409, description: 'The withdrawal period for this order has ended.' }
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    # Every return on one of this account's OWN orders — a withdrawal included — found by
+    # `orderId`, since a return is keyed by the order and never by the user. Empty, never
+    # absent, for an account that has returned nothing.
+    returns:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/ExportReturn'
+
 paths:
     /returns:
         get:

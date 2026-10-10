@@ -9,6 +9,15 @@ x-error-codes:
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    orders:
+        schema:
+            type: array
+            items:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Order'
+
 paths:
     /orders:
         get:

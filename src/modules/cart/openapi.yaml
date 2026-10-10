@@ -24,6 +24,15 @@ x-error-codes:
     EMAIL_NOT_VERIFIED: { status: 403, description: 'Checkout requires a verified email address — see `POST /account/verify-email`.' }
     REORDER_UNAVAILABLE: { status: 409, description: 'The past order named for reorder no longer has any purchasable lines.' }
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    cart:
+        schema:
+            type: array
+            items:
+                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CartItem'
+
 paths:
     /cart:
         get:

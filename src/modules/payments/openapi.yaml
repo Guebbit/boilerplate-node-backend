@@ -12,6 +12,15 @@ x-error-codes:
     PAYMENT_ORDER_NOT_PAYABLE: { status: 409, description: 'The order is not in a state that can still accept a payment.' }
     PAYMENT_CARD_NOT_AVAILABLE: { status: 409, description: 'This deployment has no card payment provider, so a card payment cannot be started.' }
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    payments:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/ExportPayment'
+
 paths:
     /payments/methods:
         get:

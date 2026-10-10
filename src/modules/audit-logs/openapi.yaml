@@ -3,6 +3,15 @@ info:
     title: audit-logs — module contract
     version: '0.1.0'
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    auditLog:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/AuditEntryItem'
+
 paths:
     /audit:
         get:

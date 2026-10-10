@@ -12,6 +12,15 @@ x-error-codes:
     ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }
     ORDER_NOT_SHIPPED: { status: 409, description: 'The order must be shipped before this delivery action.' }
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    shipments:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/Shipment'
+
 paths:
     /delivery/methods:
         get:

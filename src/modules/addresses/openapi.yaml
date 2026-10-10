@@ -6,6 +6,15 @@ info:
 x-error-codes:
     ADDRESS_BOOK_FULL: { status: 409, description: 'The address book already holds `NODE_ADDRESS_BOOK_MAX` entries (20 by default) — remove one before adding another.' }
 
+# This module's section of the account data export (`POST /account/export`): the bundler
+# adds it to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    addresses:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/Address'
+
 paths:
     /account/addresses:
         get:
