@@ -46,7 +46,7 @@ flowchart TD
 | OTel Collector | Telemetry fan-out hub              | —                                | `otel/opentelemetry-collector-contrib:0.114.0` |
 | Tempo          | Trace store                        | internal only                    | `grafana/tempo:2.6.1`                          |
 | Prometheus     | Metrics store / alert evaluation   | `http://localhost:9090`          | `prom/prometheus:v2.55.1`                      |
-| Alertmanager   | Alert routing                      | `http://localhost:9093`          | `prom/alertmanager:v0.27.0`                    |
+| Alertmanager   | Alert routing                      | `http://localhost:9093`          | `prom/alertmanager:v0.34.1`                    |
 | Loki           | Log store                          | `http://localhost:3100`          | `grafana/loki:3.3.2`                           |
 | Promtail       | Log shipper (Docker/Podman → Loki) | —                                | `grafana/promtail:3.3.2`                       |
 | Alloy          | Browser-facing Faro collector      | `http://localhost:12347/collect` | `grafana/alloy:v1.5.1`                         |

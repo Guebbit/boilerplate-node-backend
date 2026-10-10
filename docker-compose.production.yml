@@ -757,7 +757,7 @@ services:
     # Alertmanager: groups and routes what Prometheus fires. Ships the `null` receiver.
     alertmanager:
         logging: *logging
-        image: docker.io/prom/alertmanager:v0.27.0
+        image: docker.io/prom/alertmanager:v0.34.1
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
