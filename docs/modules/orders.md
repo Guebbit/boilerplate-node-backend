@@ -252,6 +252,10 @@ name. Two modes, both requiring a `reason`, both writing an embedded override-hi
 `PUT /orders/:id` carries no `status` field at all — the override's own two doors are the only way
 to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.
 
+A digital-only order has no parcel, so an override into `shipped` is refused with the same 409 as
+any other illegal target; `delivered` stays reachable. Likewise `markFulfilled` refuses an order
+with a physical line: a physical order must pass through `shipped`.
+
 An override into `shipped` or `delivered` also takes the order's units off the shelf
 (`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a normal
 shipment triggers. An override into `processing` moves no stock. A hold already `shipped` makes the
@@ -315,7 +319,8 @@ flowchart LR
   operator reading it) while the status is withdrawable and the window is open; `withdrawUntil`
   rides along once the clock has started. A client never counts days.
 - An admin override into `delivered` starts the clock at the override, since no delivery timestamp
-  exists for it.
+  exists for it. A digital-only order is the exception: its clock starts at `paidAt`, as it does
+  through fulfilment (`withdrawalStartFor` owns that rule).
 
 ## Cancel and refund mails
 

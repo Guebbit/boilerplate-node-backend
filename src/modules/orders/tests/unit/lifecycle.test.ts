@@ -354,6 +354,16 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
             }
     });
 
+    it('refuses shipped for a digital-only order, and nothing else', () => {
+        expect(canOverrideTo(OrderStatus.processing, OrderStatus.shipped, true)).toBe(false);
+        expect(canOverrideTo(OrderStatus.paid, OrderStatus.shipped, true)).toBe(false);
+        expect(canOverrideTo(OrderStatus.processing, OrderStatus.delivered, true)).toBe(true);
+        expect(canOverrideTo(OrderStatus.paid, OrderStatus.processing, true)).toBe(true);
+        expect(overridableTargetsFrom(OrderStatus.processing, true)).toEqual([
+            OrderStatus.delivered
+        ]);
+    });
+
     it('refuses a no-op — an override always moves the order somewhere new', () => {
         for (const status of OVERRIDABLE_DESTINATIONS)
             expect(canOverrideTo(status, status)).toBe(false);

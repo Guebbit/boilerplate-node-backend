@@ -32,7 +32,13 @@ import { statusChangedEvent } from './announce';
 import { announceMoveShippingStock } from './ship-stock';
 import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
-import { canOverrideTo, statusesOverridableInto, withdrawUntilFrom } from '../domain';
+import {
+    canOverrideTo,
+    isDigitalOnlyOrder,
+    statusesOverridableInto,
+    withdrawalStartFor,
+    withdrawUntilFrom
+} from '../domain';
 import { withdrawalPeriodDays } from '../config';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -40,14 +46,13 @@ import { ERROR_CODES } from '@api/error-codes';
  * Write one override, whichever door asked for it — the conditional write, the history entry, the
  * event and the audit trail all happen once, here, so neither caller below can produce a status
  * move with no matching history row or vice versa.
- * @param orderId - the order to move
- * @param observedFrom - the status a fresh read found the order at, immediately before this call —
- *   recorded on the history entry as-is; the conditional write below still guards against every
+ * @param order - the order to move, as a fresh read found it immediately before this call; its
+ *   status is the history entry's `from`, recorded as-is; the conditional write below still guards against every
  *   legal `from`, not only this one, so a benign race (the order moved between that read and this
  *   write, but stayed within the allowed set) still lands, just possibly against a `from` one step
  *   more recent than what the history entry claims — no admin action here is hot-path enough to pay
  *   for a strict read-your-write transaction over that edge case
- * @param to - the status being written; caller has already confirmed `canOverrideTo(observedFrom, to)`
+ * @param to - the status being written; caller has already confirmed `canOverrideTo(order.status, to)`
  * @param mode - `'status'` for the status-only door, `'forced'` for a delivery door
  * @param reason - required on every override, never empty
  * @param context - the admin making the call
@@ -56,8 +61,7 @@ import { ERROR_CODES } from '@api/error-codes';
  * @returns the order as it now stands, or `null` if it had already moved past every legal `from`
  */
 const applyOverride = (
-    orderId: string,
-    observedFrom: OrderStatus,
+    order: OrderDocument,
     to: OrderStatus,
     mode: OrderStatusOverride['mode'],
     reason: string,
@@ -77,6 +81,8 @@ const applyOverride = (
             )
         );
 
+    const orderId = String(order._id);
+    const observedFrom = order.status;
     const allowedFrom = statusesOverridableInto(to);
     const entry: OrderStatusOverride = {
         from: observedFrom,
@@ -89,10 +95,10 @@ const applyOverride = (
 
     // An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
     // exists: the deadline is counted from the override itself, which is when the shop says the
-    // order arrived.
+    // order arrived — or from payment, for digital content.
     const withdrawUntil =
         to === OrderStatus.delivered
-            ? withdrawUntilFrom(entry.at, withdrawalPeriodDays())
+            ? withdrawUntilFrom(withdrawalStartFor(order, entry.at), withdrawalPeriodDays())
             : undefined;
 
     const write = (session: ClientSession): Promise<OrderDocument | null> =>
@@ -179,13 +185,13 @@ export const overrideStatus = (
 
         return outrankedOrderRefusal(orderId, context).then((refusal) => {
             if (refusal) return refusal;
-            if (!canOverrideTo(order.status, to)) return notAllowed(order.status, to);
+            if (!canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
+                return notAllowed(order.status, to);
 
-            return applyOverride(orderId, order.status, to, 'status', reason, context).then(
-                (updated) =>
-                    // Lost a race against another write since the read above — same shape as the
-                    // ordinary `update`'s 409, not a 404: the order still exists.
-                    updated ? generateSuccess(updated) : notAllowed(order.status, to)
+            return applyOverride(order, to, 'status', reason, context).then((updated) =>
+                // Lost a race against another write since the read above — same shape as the
+                // ordinary `update`'s 409, not a 404: the order still exists.
+                updated ? generateSuccess(updated) : notAllowed(order.status, to)
             );
         });
     });
@@ -218,7 +224,8 @@ export const forceMove = (
     if (!holdsKey(context.caller, 'orders.any.override')) return Promise.resolve(notEarned());
 
     return orderRepository.findByIdScoped(orderId).then((order) => {
-        if (!order || !canOverrideTo(order.status, to)) return null;
-        return applyOverride(orderId, order.status, to, 'forced', reason, context, at);
+        if (!order || !canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
+            return null;
+        return applyOverride(order, to, 'forced', reason, context, at);
     });
 };
