@@ -177,6 +177,7 @@ COPY --from=build /app/scripts/ops/reap-account-exports.ts \
     /app/scripts/ops/reap-orphaned-images.ts \
     /app/scripts/ops/reap-payments.ts \
     /app/scripts/ops/reap-quarantine.ts \
+    /app/scripts/ops/reap-returns.ts \
     /app/scripts/ops/sweep-order-effects.ts \
     /app/scripts/ops/sweep-outbox.ts \
     /app/scripts/ops/sweep-payment-effects.ts \

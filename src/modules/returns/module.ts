@@ -18,6 +18,7 @@ import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { PAYMENT_REFUNDED } from '@modules/payments';
 import { router } from './routes';
 import { returnsRateLimits } from './rate-limits';
+import { returnsConfig } from './config';
 import { collectPersonalData } from './services/personal-data';
 // Also installs this module's event declarations. Reached directly, never through this module's
 // own barrel — see CLAUDE.md's module-barrel rule.
@@ -60,6 +61,7 @@ export default {
     name: 'returns',
     basePath: '/returns',
     routes: router,
+    config: [returnsConfig.slice],
     rateLimits: returnsRateLimits,
     publicEvents,
     /*

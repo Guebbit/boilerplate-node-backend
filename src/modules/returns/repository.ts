@@ -41,6 +41,7 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
     findByOrderId: (orderId: string, session?: ClientSession) => Promise<ReturnDocument[]>;
     lockOrder: (orderId: string, session: ClientSession) => Promise<void>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<ReturnDocument[]>;
+    scrubFreeTextBefore: (cutoff: Date) => Promise<number>;
 } = {
     ...createRepository<ReturnDocument, Return>(returnModel, {
         transform: applyReturnTransform,
@@ -109,5 +110,29 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
         returnModel
             .find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } })
             .sort({ createdAt: 1, _id: 1 })
+            .exec(),
+
+    /**
+     * Unset the free text (`note`, `declineReason`) on every return not changed since `cutoff` that
+     * still holds some. The filter only matches returns that still hold text, so a rerun matches
+     * nothing. `timestamps: false` keeps the wipe from moving `updatedAt`, the very clock this
+     * query reads.
+     *
+     * Mongoose `updateMany` options: https://mongoosejs.com/docs/api/query.html#Query.prototype.updateMany()
+     *
+     * @param cutoff - returns with `updatedAt` at or before this are wiped
+     * @returns how many returns lost text
+     */
+    scrubFreeTextBefore: (cutoff) =>
+        returnModel
+            .updateMany(
+                {
+                    updatedAt: { $lte: cutoff },
+                    $or: [{ note: { $exists: true } }, { declineReason: { $exists: true } }]
+                },
+                { $unset: { note: 1, declineReason: 1 } },
+                { timestamps: false }
+            )
             .exec()
+            .then((result) => result.modifiedCount)
 };
