@@ -179,52 +179,8 @@ x-app-level-responses:
         appliesTo: all
 
 tags:
-    - name: Auth
-      description: Sign up, log in, refresh and end a session, and recover or verify an account by email.
-    - name: Antibot
-      description: The human-check challenge a protected form asks for before it submits.
-    - name: Analytics
-      description: Browsing events a browser reports, relayed only after the visitor agreed to be measured.
-    - name: Account
-      description: The signed-in user's own account - profile, credentials, two-factor, data export and deletion.
-    - name: Users
-      description: Administration of user accounts and their roles.
-    - name: Products
-      description: The catalogue - browsing, searching and managing products and their images.
-    - name: Cart
-      description: The signed-in user's cart, and turning it into an order.
-    - name: Wishlist
-      description: Products a user saved for later.
-    - name: Notifications
-      description: The signed-in user's in-app notifications and their delivery preferences.
-    - name: Orders
-      description: Placing, reading and managing orders and their lifecycle.
-    - name: Payments
-      description: Paying for an order - payment intents, confirmation, offline payments and refunds.
-    - name: Invoicing
-      description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
-    - name: Delivery
-      description: Shipping an order and marking it delivered.
-    - name: Returns
-      description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
-    - name: Inventory
-      description: Stock counters and the holds placed against them.
-    - name: Feedback
-      description: What visitors tell the shop, and the admin queue that reads it.
-    - name: Examples
-      description: The example module - the small, complete domain to copy when starting a new one. Safe to delete.
-    - name: Locales
-      description: Supported languages, and the translations a deployment serves for its API messages, client screens and entities.
     - name: System
       description: Public system endpoints (ping, liveness).
-    - name: Observability
-      description: Operational observability endpoints (metrics, health, audit, events). Protected endpoints require admin role.
-    - name: Audit
-      description: The tenant's own action history — who did what, when, to which row. Read-only, and separate from Observability's operational audit, which is the platform operator's view across every shop.
-    - name: Webhooks
-      description: Outbound webhook subscriptions, the delivery log, replay, and the public event catalogue.
-    - name: ApiKeys
-      description: Machine-to-machine credentials — list, mint, revoke.
 
 # If set, by default all operation requires an authentication
 # security:

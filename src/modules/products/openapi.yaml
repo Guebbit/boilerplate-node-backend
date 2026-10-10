@@ -3,6 +3,11 @@ info:
     title: products — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Products
+      description: The catalogue - browsing, searching and managing products and their images.
+
 paths:
     /products:
         get:

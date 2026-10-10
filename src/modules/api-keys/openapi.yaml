@@ -3,6 +3,11 @@ info:
     title: api-keys — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: ApiKeys
+      description: Machine-to-machine credentials — list, mint, revoke.
+
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
 x-personal-data:

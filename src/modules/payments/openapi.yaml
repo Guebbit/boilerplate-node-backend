@@ -3,6 +3,11 @@ info:
     title: payments — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Payments
+      description: Paying for an order - payment intents, confirmation, offline payments and refunds.
+
 x-error-codes:
     PAYMENT_DECLINED: { status: 409, description: 'The card issuer or gateway declined the charge.' }
     PAYMENT_IN_FLIGHT: { status: 409, description: 'Another payment attempt for this order is already being recorded.' }

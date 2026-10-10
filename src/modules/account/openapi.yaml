@@ -3,6 +3,13 @@ info:
     title: account — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Auth
+      description: Sign up, log in, refresh and end a session, and recover or verify an account by email.
+    - name: Account
+      description: The signed-in user's own account - profile, credentials, two-factor, data export and deletion.
+
 x-error-codes:
     EMAIL_CHANGE_TOO_SOON: { status: 429, description: 'An email change was already requested for this account in the last minute — carries `details.retryAfter`.' }
     EMAIL_VERIFY_RESEND_TOO_SOON: { status: 429, description: 'A verification email was already sent recently — carries `details.retryAfter`.' }

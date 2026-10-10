@@ -129,17 +129,11 @@ throughout (the mailer-template sweep, the analytics port's suite, the write-met
 request-contract suites) — they go entirely;
 rewrite them around your own domain if you want that coverage back.
 
-**The published contract still speaks shop.** `shared/contracts/openapi.root.yaml` belongs to no
-module, and `demo:remove` does not edit it. The root contract's path index
-follows the modules that are left, but three things stay until you change them:
-
-- `info.title` is still `Boilerplate API`.
-- The tag list (`Orders`, `Cart`, `Wishlist`, ...) keeps the shop's tags, because an existing entry is
-  never dropped (`scripts/contracts/root-assembly.ts`).
-- The shared schemas the shop used (`Product`, `Order`, `OrderItem`, `CartItem`, `TaxClass`, ...) are
-  still declared and published, since they are not owned by any one module.
-
-Edit them in that file, then `npm run regenerate`.
+**The published contract follows the modules that are left.** The path index, the tags, the shop's
+schemas and the data export's sections all live in the module that owns them, so removing a module
+removes them from the bundle, and the bundler's last step drops what nothing references any more.
+`shared/contracts/openapi.root.yaml` is left with what no module owns, and `info.title` there is
+still `Boilerplate API`: change it, then `npm run regenerate`.
 
 `docs/theory/module-lifecycle.md`'s "residue" is what is left over: a test that names a removed
 module in a string or a table rather than an import. `ts-check` and the suites name each one.

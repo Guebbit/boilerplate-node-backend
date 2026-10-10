@@ -3,6 +3,11 @@ info:
     title: returns — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Returns
+      description: Sending goods back — including the EU withdrawal button, which is a return with `reason` `withdrawal`.
+
 x-error-codes:
     RETURN_DEDUCTION_INVALID: { status: 422, description: 'The handling deduction is more than the refund is worth.' }
     RETURN_LINES_INVALID: { status: 422, description: 'A line names a product that is not on the order, asks for more than is left of it, is excluded from the right of withdrawal (Art. 16), or nothing on the order is left to return.' }

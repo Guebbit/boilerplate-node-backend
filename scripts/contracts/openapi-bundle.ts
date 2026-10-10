@@ -37,6 +37,7 @@ import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { stageExportSchema } from './personal-data-assembly';
+import { pruneUnused } from './prune-unused';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
@@ -541,6 +542,8 @@ const compile = (): string => {
                 path.join(REPO_ROOT, 'node_modules', '@redocly', 'cli', 'bin', 'cli.js'),
                 'bundle',
                 assembledRoot,
+                // A schema name two files both define stays an error, never a silent `Name-2`.
+                '--component-renaming-conflicts-severity=error',
                 '--output',
                 temporary
             ],
@@ -567,12 +570,14 @@ const compile = (): string => {
      */
     compiled =
         MARKER +
-        withErrorCodes(
-            withModuleStamps(
-                withVersionedResources(withAppLevelResponses(readFileSync(temporary, 'utf8'))),
-                moduleOfPath()
-            ),
-            collectErrorCodes()
+        pruneUnused(
+            withErrorCodes(
+                withModuleStamps(
+                    withVersionedResources(withAppLevelResponses(readFileSync(temporary, 'utf8'))),
+                    moduleOfPath()
+                ),
+                collectErrorCodes()
+            )
         );
     return compiled;
 };

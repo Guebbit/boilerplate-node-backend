@@ -80,7 +80,7 @@ full contract is compared against nothing and is marked `shared: false` to say s
 %%{init: {'flowchart': {'nodeSpacing': 45, 'rankSpacing': 55}}}%%
 flowchart TD
     subgraph BE["boilerplate-node-api-mongodb-mongoose  (owns the contract)"]
-        H["shared/contracts/openapi.root.yaml<br/><i>preamble · tags · shared components · GET /</i>"] --> AR["assembleRoot<br/><i>paths + tags from the fragments</i>"] --> B["redocly bundle"]
+        H["shared/contracts/openapi.root.yaml<br/><i>preamble · shared components · GET /</i>"] --> AR["assembleRoot<br/><i>paths + tags from the fragments</i>"] --> B["redocly bundle"]
         F1["modules/products/openapi.yaml"] --> B
         F2["modules/orders/openapi.yaml"] --> B
         F3["modules/…/openapi.yaml"] --> B
@@ -181,9 +181,9 @@ hit them first:
   `Invoicing` rather than `Orders`, since download-a-frozen-document is a different concern from
   the order resource itself — fragmenting by `basePath` still splits the two files correctly.
 - **`access` has no HTTP surface of its own** — headless by design, the one module whose manifest
-  declares neither `basePath` nor `routes`. A module with no paths simply contributes no fragment;
-  it is not an error, and it is a good sign: that module is consumed through the permission model
-  every other module's routes already go through, not through an API of its own.
+  declares neither `basePath` nor `routes`. Its `openapi.yaml` is components only (`paths: {}`):
+  the abilities schemas `GET /account/abilities` returns, and the `roles` section of the data
+  export. A components-only fragment owns no folder in the client collections.
 
 Also note that `Auth` and `Account` are two tags over one `basePath`. **Fragment by `basePath`, not
 by tag** — tags are a documentation grouping and one module may legitimately use several.
@@ -241,11 +241,11 @@ contract:
 Every operation and every single-domain type lives with the module that owns it.
 
 ```
-shared/contracts/openapi.root.yaml    preamble · tags · securitySchemes · parameters · responses ·
+shared/contracts/openapi.root.yaml    preamble · securitySchemes · parameters · responses ·
                                       the shared types · GET / · the per-module path index
                                       (a preference: completed from the fragments, see below)
 src/modules/<name>/openapi.yaml       one standalone OpenAPI document per module:
-                                      its paths, and the schemas only its paths reference
+                                      its paths, its tags, and every schema it owns
 ```
 
 ```bash
@@ -255,9 +255,16 @@ npm run check:contracts-bundle        # fail if any committed bundle is stale
 
 **The root's path index is completed, not trusted.** `scripts/contracts/root-assembly.ts` reads
 every fragment on disk, drops the root's `$ref` for a path no fragment declares any more, appends
-the paths and tags of a fragment the root has not heard of, and stages the completed tree under
-`tmp/` for redocly. The root's hand order is kept for what it already lists, so the committed
+the paths and tags of a fragment the root has not heard of (a tag the fragment declares in its own
+`tags:` arrives with that description), and stages the completed tree under `tmp/` for redocly. The root's hand order is kept for what it already lists, so the committed
 bundle does not move; a new module is in the contract from its own `openapi.yaml` alone.
+
+**Two guards close the bundle.** `redocly bundle` runs with
+`--component-renaming-conflicts-severity=error`, so two files defining one schema name fail the
+build instead of coming out as `Name-2`. And `scripts/contracts/prune-unused.ts` runs last, after
+every step that adds references, dropping the components nothing reaches and the tags no operation
+uses: a deleted module leaves nothing orphaned behind. A security scheme no operation names goes
+with them.
 
 **The data export's schema is assembled the same way.** `AccountExportResponse` lives in
 `account/openapi.yaml` as a stub (`exportedAt`, `profile`). Each module that contributes a
@@ -313,24 +320,28 @@ documents, and the client collections are generated whole.
 
 ### Which schemas stayed shared, and why
 
-The split is a transitive closure over `$ref`, not a guess from names. A schema referenced by one
-module lives in that module's `openapi.yaml`; one referenced by several lives in
+A schema lives with the module that owns the thing it describes, and other modules `$ref` it by
+file (`../orders/openapi.yaml#/components/schemas/Order`). Only what has no single owner stays in
 `shared/contracts/openapi.root.yaml`:
 
 | Kind | Examples | Why shared |
 | ---- | -------- | ---------- |
-| Scalars | `Id`, `Email`, `Password`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
+| Scalars | `Id`, `Email`, `Locale`, `Page`, `PageSize`, `Text`, `ImageUrl` | referenced everywhere |
 | Envelope machinery | `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`, `PaginationMeta`, `MessageResponse`, `ErrorItem`, `ErrorResponse`, `ValidationErrorResponse` | every operation's success and failure shape |
-| Cross-domain entities | `Product`, `Order`, `OrderItem`, `OrderAddress`, `CartItem`, `User`, `UserEnvelope` | a cart line embeds a product, a checkout returns an order, `account` authenticates the record `users` administers |
-| Cross-domain requests | `HardDeleteRequest` | products, users and orders all take it |
-| The shell's own | `HealthPing`, `HealthPingEnvelope` | `GET /` belongs to no module, so neither does its answer |
+| The user record | `User`, `UserEnvelope`, `UserActions` | `account` authenticates the record `users` administers: the repo's one shared kernel |
+| Cross-domain requests | `HardDeleteRequest`, `RequiredIdempotencyKeyHeader` | products, users and orders all take the first; the second belongs to a middleware in `infrastructure` |
+| The shell's own | `HealthPing`, `HealthPingEnvelope`, the `System` tag | `GET /` belongs to no module, so neither does its answer |
 
-The root file is the authority for the exact set.
+The root file is the authority for the exact set. Everything else is owned: `Product` and its tax
+fields by `products`, the order schemas by `orders`, `CartItem` by `cart`, the password fields by
+`account`, the abilities schemas by `access`.
 
-**Duplicating one of these into two module fragments is the failure to watch for** — the bundle
-would carry two definitions that drift apart silently. Deleting `src/modules/products` removes its
-paths and its own schemas and leaves `Product` standing, because order items still embed it;
-spectral confirms no `$ref` is left dangling.
+**A `$ref` between two modules follows `module.yaml` `dependsOn`.**
+`tests/cross-cutting/contract-refs-follow-depends-on.test.ts` fails on a contract that reaches
+into a sibling it does not declare, so the dependency map and the contract say the same thing.
+
+**Duplicating a schema into two fragments is the failure to watch for** — the bundle would carry
+two definitions that drift apart silently, and the conflict flag above refuses the same name twice.
 
 ### What the split changed in the bundle
 

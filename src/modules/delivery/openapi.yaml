@@ -3,6 +3,11 @@ info:
     title: delivery — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Delivery
+      description: Shipping an order and marking it delivered.
+
 x-error-codes:
     DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'An admin status override requires a reason and none was supplied.' }
     DELIVERY_TRACKING_CODE_REQUIRED: { status: 422, description: 'Marking a shipment shipped requires a tracking code and none was supplied.' }

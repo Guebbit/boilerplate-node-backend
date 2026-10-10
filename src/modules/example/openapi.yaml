@@ -3,6 +3,11 @@ info:
     title: example — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Examples
+      description: The example module - the small, complete domain to copy when starting a new one. Safe to delete.
+
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
 x-personal-data:

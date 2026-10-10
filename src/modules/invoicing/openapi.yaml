@@ -3,6 +3,11 @@ info:
     title: invoicing — module contract
     version: '0.1.0'
 
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Invoicing
+      description: The frozen invoice and credit-note PDFs — issued at payment and at refund, never before.
+
 x-error-codes:
     ORDER_CREDIT_NOTE_NOT_ISSUED: { status: 404, description: 'The order exists but has no such credit note.' }
     ORDER_INVOICE_NOT_ISSUED: { status: 404, description: 'The order exists but no invoice has been issued for it yet.' }

@@ -93,4 +93,30 @@ describe('assembleRoot', () => {
     it('refuses a root with no paths map', () => {
         expect(() => assembleRoot('openapi: 3.0.3\n', [alpha])).toThrow(/no `paths` map/);
     });
+
+    it("declares a tag with the fragment's own description, and a used-only tag bare", () => {
+        const described: ModuleFragment = {
+            section: 'widgets',
+            paths: ['/widgets'],
+            tags: ['Widgets', 'Extras'],
+            declaredTags: [{ name: 'Widgets', description: 'Small parts.' }]
+        };
+
+        expect(assembled([alpha, described]).tags).toEqual([
+            { name: 'Alpha', description: 'keeps its description' },
+            { name: 'Widgets', description: 'Small parts.' },
+            { name: 'Extras' }
+        ]);
+    });
+
+    it('lists a tag the fragment declares even when no operation uses it yet', () => {
+        const declaresOnly: ModuleFragment = {
+            section: 'widgets',
+            paths: [],
+            tags: [],
+            declaredTags: [{ name: 'Widgets', description: 'Small parts.' }]
+        };
+
+        expect(assembled([declaresOnly]).tags.map(({ name }) => name)).toContain('Widgets');
+    });
 });
