@@ -49,7 +49,7 @@ const PATH_ONLY_ERRORS = [
  * @param names - the module's spellings
  * @returns the YAML text
  */
-export const openapiFragment = (names: ModuleNames): string => `openapi: 3.0.3
+export const openapiFragment = (names: ModuleNames): string => `openapi: 3.1.0
 info:
     title: ${names.kebab} — module contract
     version: '1.0.0'
@@ -245,10 +245,9 @@ components:
                     minLength: 1
                     maxLength: 120
                 notes:
-                    type: string
+                    type: [string, 'null']
                     minLength: 1
                     maxLength: 5000
-                    nullable: true
 
         # PATCH: every field optional, omitted means unchanged. null clears notes.
         Update${names.entity}Request:
@@ -260,8 +259,7 @@ components:
                     minLength: 1
                     maxLength: 120
                 notes:
-                    type: string
+                    type: [string, 'null']
                     minLength: 1
                     maxLength: 5000
-                    nullable: true
 `;

@@ -27,12 +27,13 @@ const METHODS: HttpMethod[] = ['get', 'post', 'put', 'patch', 'delete'];
 
 /** A JSON Schema node, in the subset this repo's spec actually uses. */
 export interface SchemaNode {
-    type?: string;
+    /** A single type, or the OpenAPI 3.1 array form — `['string', 'null']` is a nullable string. */
+    type?: string | string[];
     format?: string;
     enum?: unknown[];
     minimum?: number;
-    /** OpenAPI 3.0 boolean form: `minimum` itself is not a valid value. */
-    exclusiveMinimum?: boolean;
+    /** OpenAPI 3.1 numeric form: the bound itself, which is not a valid value. */
+    exclusiveMinimum?: number;
     maximum?: number;
     minLength?: number;
     maxLength?: number;
@@ -40,7 +41,6 @@ export interface SchemaNode {
     maxItems?: number;
     uniqueItems?: boolean;
     pattern?: string;
-    nullable?: boolean;
     required?: string[];
     properties?: Record<string, SchemaNode>;
     items?: SchemaNode;
@@ -119,8 +119,8 @@ export const readSpec = (): SpecDocument => {
 /**
  * Fold an `allOf` into one node: every part's keywords, then the node's own siblings on top.
  *
- * Own siblings win because the spec writes `type: string` or `nullable: true` beside the
- * `allOf: [$ref]` wrapper on purpose (orval needs the wrapper, the sibling says what the field is).
+ * Own siblings win because the spec writes `type: string` beside the `allOf: [$ref]` wrapper on
+ * purpose (orval needs the wrapper, the sibling says what the field is).
  * Among parts the last one wins for a scalar keyword — no part in the spec constrains the same
  * bound twice, so "tightest wins" would be code for a case that does not exist.
  * `properties` are merged and `required` unioned, which is what `allOf` means for objects.
@@ -143,6 +143,34 @@ const mergeAllOf = (own: SchemaNode, parts: (SchemaNode | undefined)[]): SchemaN
     return merged;
 };
 
+/** Whether a node is the 3.1 null type, `{ type: 'null' }`. */
+const isNullSchema = (node: SchemaNode): boolean => node.type === 'null';
+
+/**
+ * Whether a resolved node accepts `null`: `type` is `'null'` or an array listing it.
+ *
+ * A `oneOf: [X, { type: 'null' }]` is already folded into the array form by {@link resolveSchema}.
+ *
+ * @param node - a node as {@link resolveSchema} returns it
+ */
+export const isNullable = (node: SchemaNode | undefined): boolean =>
+    node !== undefined && [node.type].flat().includes('null');
+
+/**
+ * Fold `oneOf: [X, { type: 'null' }]` — the 3.1 spelling of "X or null" around a `$ref` — into
+ * `X` with `'null'` added to its `type`, so the readers below see one nullable node.
+ *
+ * @param schema - a node whose `oneOf` has a null member
+ * @param inner - the one other member, already resolved
+ */
+const foldNullUnion = (schema: SchemaNode, inner: SchemaNode | undefined): SchemaNode => {
+    const { oneOf: _members, ...siblings } = schema;
+    const merged: SchemaNode = { ...inner, ...siblings };
+    return merged.type === undefined
+        ? merged
+        : { ...merged, type: [...[merged.type].flat(), 'null'] };
+};
+
 /**
  * Resolve `$ref` and fold `allOf`, leaving a node the arbitrary builder can read directly.
  *
@@ -163,6 +191,10 @@ export const resolveSchema = (
         seen.add(name);
         return resolveSchema(spec.components?.schemas?.[name], spec, seen);
     }
+
+    const others = schema.oneOf?.filter((member) => !isNullSchema(member));
+    if (others?.length === 1 && schema.oneOf?.some((member) => isNullSchema(member)))
+        return foldNullUnion(schema, resolveSchema(others[0], spec, seen));
 
     if (schema.allOf)
         return mergeAllOf(
@@ -299,7 +331,7 @@ const isEmptyRequirement = (alternative: unknown): boolean =>
  * Whether an operation's `security` demands a credential.
  *
  * Absent or `[]` is public. An alternative that is the empty object `{}` makes the whole list
- * optional (OpenAPI 3.0.3, "Security Requirement Object"): a request with no credential is one of
+ * optional (OpenAPI 3.1, "Security Requirement Object"): a request with no credential is one of
  * the accepted shapes, so a session may be present but is not required.
  *
  * @param security - the operation's `security` value, as parsed
@@ -378,7 +410,6 @@ export const SUPPORTED_KEYWORDS = new Set([
     'maxItems',
     'uniqueItems',
     'pattern',
-    'nullable',
     'required',
     'properties',
     'items',
@@ -389,7 +420,7 @@ export const SUPPORTED_KEYWORDS = new Set([
     '$ref',
     // A lookup hint over `oneOf`, not a constraint: each branch already pins its tag with a
     // one-value `enum`, so a value built from any branch satisfies the mapping.
-    // https://spec.openapis.org/oas/v3.0.3#discriminator-object
+    // https://spec.openapis.org/oas/v3.1.0#discriminator-object
     'discriminator',
     // Documentation-only; they do not change what a valid value is.
     'description',

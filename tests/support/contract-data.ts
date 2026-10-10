@@ -272,6 +272,10 @@ const buildValue = (schema: ZodType): unknown => {
         case 'literal': {
             return (def.values ?? [])[0];
         }
+        // `type: 'null'` (OpenAPI 3.1) — the write-side `imageUrl`, whose one legal value is `null`.
+        case 'null': {
+            return null;
+        }
         case 'enum': {
             const values = Object.values(def.entries ?? {});
             return values[randomInt(0, values.length - 1)];

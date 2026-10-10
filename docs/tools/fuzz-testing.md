@@ -53,14 +53,14 @@ Generating outright garbage would mostly re-test the validator: every write endp
 
 So the generator honours `minLength`, `maximum`, `pattern`, `enum`, `format` and `minItems`, and then heads for the edges of what those allow:
 
-| Kind     | What it reaches for                                                                                                                             |
-| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| strings  | empty, whitespace, `'null'`, `'undefined'`, emoji, right-to-left marks, 1000 characters, regex metacharacters, traversal and injection shapes   |
-| numbers  | exactly `minimum`, exactly `maximum`, `0`, `1` — each only where the bounds allow it                                                            |
-| objects  | optional properties genuinely omitted — "absent" is a different case from "empty"                                                               |
-| arrays   | `minItems` respected, so the request is not rejected before it reaches the handler                                                              |
-| nullable | `null` drawn on purpose for every `nullable: true` field, and for an `enum: [null]` — "cleared" is a different case from "absent" and from `''` |
-| maps     | an `additionalProperties` schema (translations keyed by locale) draws up to three entries of its value schema                                   |
+| Kind     | What it reaches for                                                                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| strings  | empty, whitespace, `'null'`, `'undefined'`, emoji, right-to-left marks, 1000 characters, regex metacharacters, traversal and injection shapes          |
+| numbers  | exactly `minimum`, exactly `maximum`, `0`, `1` — each only where the bounds allow it                                                                   |
+| objects  | optional properties genuinely omitted — "absent" is a different case from "empty"                                                                      |
+| arrays   | `minItems` respected, so the request is not rejected before it reaches the handler                                                                     |
+| nullable | `null` drawn on purpose for every field whose `type` lists `'null'` (or is `'null'` alone) — "cleared" is a different case from "absent" and from `''` |
+| maps     | an `additionalProperties` schema (translations keyed by locale) draws up to three entries of its value schema                                          |
 
 These are weighted rather than uniform. Uniform random strings essentially never produce an empty one.
 
@@ -73,10 +73,11 @@ A path whose resource is not seeded still gets a well-formed id nothing holds.
 ### `allOf` is folded, not flattened
 
 The contract wraps a shared schema in `allOf: [$ref]` wherever a field needs a sibling keyword
-(`nullable`, `default`), because the generator needs the wrapper. `resolveSchema()` folds the
-parts and the siblings into one node: keywords merge, `properties` union, `required` unions, the
-node's own siblings win. An earlier version rebuilt every `allOf` as an empty object, so a
-nullable string like `locale` was drawn as `{}` and the operation was refused at the edge on every
+(`default`), because the generator needs the wrapper. `resolveSchema()` folds the parts and the
+siblings into one node: keywords merge, `properties` union, `required` unions, the node's own
+siblings win. A nullable `$ref` is `oneOf: [{ $ref }, { type: 'null' }]` (OpenAPI 3.1), which
+`resolveSchema()` folds into the referenced node with `'null'` added to its `type`. An earlier
+version rebuilt every `allOf` as an empty object, so a nullable string like `locale` was drawn as `{}` and the operation was refused at the edge on every
 run, 11 of them (the `PUT`/`PATCH` of `/account`, `/users/{id}`, `/products/{id}`, translations,
 `POST /products`, `POST /cart/checkout`, `POST /orders/{id}/status-override`). Green, and testing
 the validator. `tests/unit/spec-walk.test.ts` pins the fold.

@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: cart — module contract
     version: '0.1.0'
@@ -379,11 +379,7 @@ paths:
             security:
                 - bearerAuth: []
             parameters:
-                - name: orderId
-                  in: path
-                  required: true
-                  schema:
-                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
                   description: One of the caller's own orders
             responses:
                 '200':
@@ -585,10 +581,9 @@ components:
             required: [shippingMethodId]
             properties:
                 shippingMethodId:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 64
                     minLength: 1
-                    nullable: true
                     description: >-
                         Which shipping method (see `GET /delivery/methods`) the cart plans to ship
                         by. `null` clears the choice. An id that matches no method refuses with
@@ -789,8 +784,7 @@ components:
                         all-digital cart, which `PUT /cart/shipping-method` and checkout both
                         refuse a method against (`CART_SHIPPING_NOT_APPLICABLE`).
                 selected:
-                    type: string
-                    nullable: true
+                    type: [string, 'null']
                     description: >-
                         The cart's chosen shipping method (`PUT /cart/shipping-method`). `null`
                         when none is chosen, when `required` is `false`, or once the stored choice

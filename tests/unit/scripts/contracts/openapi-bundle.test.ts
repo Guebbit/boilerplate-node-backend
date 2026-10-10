@@ -19,7 +19,7 @@ import {
 /** A bundled document small enough to read in one glance, shaped exactly like `compile()` feeds in. */
 const bundle = (extra: Record<string, unknown>) =>
     stringifyYaml({
-        openapi: '3.0.3',
+        openapi: '3.1.0',
         'x-app-level-responses': {
             '429': { response: 'TooManyRequests', appliesTo: 'all' },
             '400': { response: 'BadRequest', appliesTo: 'requestBody' }
@@ -100,14 +100,14 @@ describe('withAppLevelResponses', () => {
     });
 
     it('throws when the root declares no x-app-level-responses at all', () => {
-        expect(() => withAppLevelResponses(stringifyYaml({ openapi: '3.0.3', paths: {} }))).toThrow(
+        expect(() => withAppLevelResponses(stringifyYaml({ openapi: '3.1.0', paths: {} }))).toThrow(
             /x-app-level-responses/
         );
     });
 });
 
 /** A bundled document small enough to read in one glance, for `withModuleStamps`' own tests. */
-const stampBundle = (paths: Record<string, unknown>) => stringifyYaml({ openapi: '3.0.3', paths });
+const stampBundle = (paths: Record<string, unknown>) => stringifyYaml({ openapi: '3.1.0', paths });
 
 /** Parsed-back result of stamping `stampBundle`'s output against a small map. */
 const stampedResult = (yaml: string, moduleByPath: Record<string, string>) =>
@@ -167,7 +167,7 @@ describe('withModuleStamps', () => {
 /** A bundled document small enough to read in one glance, for `withErrorCodes`' own tests. */
 const errorCodesBundle = () =>
     stringifyYaml({
-        openapi: '3.0.3',
+        openapi: '3.1.0',
         components: { schemas: { ErrorItem: { type: 'object' } } }
     });
 
@@ -201,7 +201,7 @@ describe('withErrorCodes', () => {
 
     it('throws when the bundle has no ErrorItem schema to publish alongside', () => {
         expect(() =>
-            withErrorCodes(stringifyYaml({ openapi: '3.0.3', components: { schemas: {} } }), {})
+            withErrorCodes(stringifyYaml({ openapi: '3.1.0', components: { schemas: {} } }), {})
         ).toThrow(/ErrorItem/);
     });
 
@@ -235,7 +235,7 @@ interface Operation {
 /** Bundles `paths`, and reads back the one path every case is about. */
 const run = (paths: Record<string, unknown>) =>
     (
-        parseYaml(withVersionedResources(stringifyYaml({ openapi: '3.0.3', paths }))) as {
+        parseYaml(withVersionedResources(stringifyYaml({ openapi: '3.1.0', paths }))) as {
             paths: Record<string, Record<string, Operation>>;
         }
     ).paths['/widgets/{id}'];

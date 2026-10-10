@@ -113,6 +113,18 @@ npm run test:prism        # smoke-test Prism mock server against the spec
 
 The full "I changed X, run Y" table is [Regenerating After a Change](./regenerating.md).
 
+## Nullable fields (OpenAPI 3.1)
+
+The contract is OpenAPI **3.1.0**, where `nullable: true` does not exist: JSON Schema 2020-12 has no such keyword, so every tool ignores it without complaint and the field silently stops accepting `null`. The `no-nullable-keyword` Spectral rule fails the lint on it.
+
+| Field is… | Write it as |
+| --- | --- |
+| a scalar that may be `null` | `type: [string, 'null']` |
+| a `$ref` that may be `null` | `oneOf: [{ $ref: … }, { type: 'null' }]` |
+| only ever `null` (`ImageRemoval`) | `type: 'null'` |
+
+A 3.1 `$ref` may carry its own `description` beside it, so a shared parameter such as `OrderIdPathParam` is referenced with a per-operation description. The generated clients keep the component's description, not the sibling one.
+
 ## Who may call an operation
 
 Every operation declares `security`, and the `operation-security-declared` Spectral rule fails the lint when one does not: silence is ambiguous (public on purpose, or forgotten?).

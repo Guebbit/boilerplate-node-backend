@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: locales — module contract
     version: '0.1.0'
@@ -1490,10 +1490,9 @@ components:
                 fields:
                     type: object
                     additionalProperties:
-                        type: string
+                        type: [string, 'null']
                         maxLength: 10000
                         minLength: 1
-                        nullable: true
                     description: >-
                         Each key MUST be one the `translatables` registry declares for this
                         `entityType`. A string sets that field, `null` clears it, a field left out
@@ -1508,10 +1507,9 @@ components:
         UpsertTranslationsRequest:
             type: object
             additionalProperties:
-                type: object
-                nullable: true
-                allOf:
+                oneOf:
                     - $ref: '#/components/schemas/UpsertTranslationRequest'
+                    - type: 'null'
                 description: >-
                     Upserts this locale's row when an object, deletes it when `null`. See the
                     operation description for what a key this map does not name means for the verb
@@ -1529,10 +1527,9 @@ components:
         MergeTranslationsRequest:
             type: object
             additionalProperties:
-                type: object
-                nullable: true
-                allOf:
+                oneOf:
                     - $ref: '#/components/schemas/MergeTranslationRequest'
+                    - type: 'null'
                 description: >-
                     Merges into this locale's row when an object, deletes the row when `null`. A
                     locale key this map does not name is left alone.

@@ -77,7 +77,7 @@ The body **is** the new resource (RFC 9110 §9.3.4).
 
 | A field in the representation is… | Omitted from a PUT |
 | --- | --- |
-| clearable (`nullable`) | cleared — as if it were sent as `null` |
+| clearable (`type` lists `'null'`) | cleared — as if it were sent as `null` |
 | not clearable (no legal empty state) | **required**: omitting it is a 422 |
 | outside the representation (below) | unchanged, always |
 
@@ -153,13 +153,13 @@ bytes is not judged: a missing required body is the schema's own 422.
 | On the wire | Means | Legal on |
 | --- | --- | --- |
 | omitted | nothing to say about this field | every write |
-| `null` | clear it | PUT and PATCH, where the field is `nullable` |
+| `null` | clear it | PUT and PATCH, where the field's `type` lists `'null'` |
 | `''` | an empty value — **never** "clear" | only a field with no `minLength` (a blank translation) |
 
 Every optional free-text field in a write body carries `minLength: 1`, so a blank string is a
 422 rather than a stored `''`. Search bodies are reads: an empty filter there is ignored.
 
-A create body declares nothing `nullable` — there is nothing to clear yet, so `null` is a 422 and
+A create body declares no `'null'` type — there is nothing to clear yet, so `null` is a 422 and
 "no value" is spelt by leaving the field out.
 
 ## Multipart
@@ -170,8 +170,8 @@ A create body declares nothing `nullable` — there is nothing to clear yet, so 
   booleans, numbers, arrays and JSON parts.
 - So a clear cannot travel with an upload. Clear with a JSON PATCH; send the file alone, or with
   the fields that have values.
-- The `*Multipart` schemas are documentation and client codegen only. They declare nothing
-  `nullable`.
+- The `*Multipart` schemas are documentation and client codegen only. They declare no
+  `'null'` type.
 
 ## Status codes a write answers
 

@@ -10,7 +10,7 @@ import {
 } from '../../../../scripts/contracts/personal-data-assembly';
 
 /** The owner's stub, as `account/openapi.yaml` keeps it. */
-const OWNER = `openapi: 3.0.3
+const OWNER = `openapi: 3.1.0
 components:
     schemas:
         AccountExportResponse:
@@ -74,7 +74,7 @@ describe('assemblePersonalData', () => {
     });
 
     it('refuses an owner with no stub', () => {
-        expect(() => assemblePersonalData('openapi: 3.0.3\n', [])).toThrow(/declares no/);
+        expect(() => assemblePersonalData('openapi: 3.1.0\n', [])).toThrow(/declares no/);
     });
 });
 

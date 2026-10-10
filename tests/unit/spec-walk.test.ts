@@ -1,12 +1,18 @@
 /**
  * The spec walk and the arbitrary builder, on schemas written for the purpose.
  *
- * They are the fuzz suite's own foundation: if `allOf` collapsed or `nullable` were ignored the
+ * They are the fuzz suite's own foundation: if `allOf` collapsed or `null` in a `type` array were ignored the
  * fuzz would stay green while sending nothing useful, so each is pinned here where a failure
  * names the cause instead of an endpoint.
  */
 import fc from 'fast-check';
-import { resolveSchema, securityRequiresAuth, type SchemaNode } from '@tests/spec-walk';
+import {
+    isNullable,
+    resolveSchema,
+    securityRequiresAuth,
+    unsupportedKeywords,
+    type SchemaNode
+} from '@tests/spec-walk';
 import { arbitraryFor } from '@tests/spec-arbitraries';
 
 /** A spec document with just the schemas a case needs. */
@@ -19,13 +25,16 @@ describe('resolveSchema: allOf', () => {
         Extra: { type: 'object', required: ['b'], properties: { b: { type: 'integer' } } }
     });
 
-    it('keeps the scalar type and the pattern of a wrapped string, plus the sibling nullable', () => {
+    it('keeps the scalar type and the pattern of a wrapped string, plus the sibling null type', () => {
         const resolved = resolveSchema(
-            { type: 'string', nullable: true, allOf: [{ $ref: '#/components/schemas/Locale' }] },
+            {
+                type: ['string', 'null'],
+                allOf: [{ $ref: '#/components/schemas/Locale' }]
+            },
             spec
         );
 
-        expect(resolved).toEqual({ type: 'string', pattern: '^[a-z]{2}$', nullable: true });
+        expect(resolved).toEqual({ type: ['string', 'null'], pattern: '^[a-z]{2}$' });
     });
 
     it('unions the properties and the required lists of several parts', () => {
@@ -68,12 +77,47 @@ describe('resolveSchema: allOf', () => {
     });
 });
 
+describe('resolveSchema: null', () => {
+    const spec = specOf({ Locale: { type: 'string', pattern: '^[a-z]{2}$' } });
+
+    it('folds oneOf [$ref, null] into the referenced node with null added to its type', () => {
+        const resolved = resolveSchema(
+            { oneOf: [{ $ref: '#/components/schemas/Locale' }, { type: 'null' }] },
+            spec
+        );
+
+        expect(resolved).toEqual({ type: ['string', 'null'], pattern: '^[a-z]{2}$' });
+        expect(isNullable(resolved)).toBe(true);
+    });
+
+    it('leaves a oneOf of two real variants alone', () => {
+        const union: SchemaNode = { oneOf: [{ type: 'string' }, { type: 'integer' }] };
+
+        expect(resolveSchema(union, spec)).toEqual(union);
+    });
+
+    it.each<[string, SchemaNode | undefined, boolean]>([
+        ['the bare null type', { type: 'null' }, true],
+        ['a type array with null', { type: ['string', 'null'] }, true],
+        ['a plain string', { type: 'string' }, false],
+        ['no schema', undefined, false]
+    ])('isNullable: %s', (_name, node, expected) => {
+        expect(isNullable(node)).toBe(expected);
+    });
+});
+
+describe('unsupportedKeywords', () => {
+    it('refuses a 3.0 `nullable`, which 3.1 ignores without a word', () => {
+        // The cast is the point: `SchemaNode` no longer has `nullable`, and this is a 3.0 spec.
+        const spec = specOf({ A: { type: 'string', nullable: true } as SchemaNode });
+
+        expect(unsupportedKeywords(spec)).toEqual(['nullable']);
+    });
+});
+
 describe('arbitraryFor', () => {
     it('sends null for a nullable field, and the field otherwise', () => {
-        const draws = fc.sample(
-            arbitraryFor({ type: 'string', nullable: true, minLength: 1 }),
-            400
-        );
+        const draws = fc.sample(arbitraryFor({ type: ['string', 'null'], minLength: 1 }), 400);
 
         expect(draws).toContain(null);
         expect(draws.some((value) => typeof value === 'string' && value.length > 0)).toBe(true);
@@ -83,16 +127,23 @@ describe('arbitraryFor', () => {
         expect(fc.sample(arbitraryFor({ type: 'string' }), 400)).not.toContain(null);
     });
 
-    it('sends null for an enum that lists it', () => {
-        expect(fc.sample(arbitraryFor({ nullable: true, enum: [null] }), 20)).toEqual(
+    it('sends only null for the bare null type', () => {
+        expect(fc.sample(arbitraryFor({ type: 'null' }), 20)).toEqual(
             Array.from({ length: 20 }, () => null)
         );
+    });
+
+    it('draws null as well as a member of a nullable enum', () => {
+        const draws = fc.sample(arbitraryFor({ type: ['string', 'null'], enum: ['a', 'b'] }), 400);
+
+        expect(draws).toContain(null);
+        expect(draws).toContain('a');
     });
 
     it('draws a wrapped nullable string as a string or null, never as an object', () => {
         const spec = specOf({ Locale: { type: 'string', pattern: '^[a-z]{2}$' } });
         const resolved = resolveSchema(
-            { type: 'string', nullable: true, allOf: [{ $ref: '#/components/schemas/Locale' }] },
+            { oneOf: [{ $ref: '#/components/schemas/Locale' }, { type: 'null' }] },
             spec
         );
 
@@ -105,8 +156,7 @@ describe('arbitraryFor', () => {
             arbitraryFor({
                 type: 'object',
                 additionalProperties: {
-                    type: 'object',
-                    nullable: true,
+                    type: ['object', 'null'],
                     properties: { x: { type: 'integer' } },
                     required: ['x']
                 }

@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: addresses — module contract
     version: '0.1.0'
@@ -263,10 +263,9 @@ components:
                 # NON-nullable — omitting one leaves it unchanged, but a `null` is a 422: those are
                 # required on the resource itself, an address is not valid without them.
                 label:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 50
                     minLength: 1
-                    nullable: true
                 fullName:
                     type: string
                     maxLength: 100
@@ -286,10 +285,9 @@ components:
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 32
                     minLength: 1
-                    nullable: true
 
         # PUT /account/addresses/{addressId} — RFC 9110 §9.3.4: the body IS the new resource, so
         # every writable field this resource has must be nameable and the identity fields are
@@ -300,10 +298,9 @@ components:
             required: [fullName, street, city, zip, country]
             properties:
                 label:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 50
                     minLength: 1
-                    nullable: true
                 fullName:
                     type: string
                     maxLength: 100
@@ -323,10 +320,9 @@ components:
                 country:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/CountryCode'
                 phone:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 32
                     minLength: 1
-                    nullable: true
 
         AddressesResponse:
             type: object

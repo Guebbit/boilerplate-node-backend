@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.1.0
 info:
     title: users — module contract
     version: '0.1.0'
@@ -472,20 +472,17 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 # `null` clears the override, falling back to the deployment default/negotiated locale.
                 locale:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                        - type: 'null'
                 phone:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 32
                     minLength: 1
-                    nullable: true
                 website:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 2048
                     minLength: 1
-                    nullable: true
 
         # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         UpdateUserByIdRequestMultipart:
@@ -541,20 +538,17 @@ components:
                 imageUrl:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/ImageRemoval'
                 locale:
-                    type: string
-                    nullable: true
-                    allOf:
+                    oneOf:
                         - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Locale'
+                        - type: 'null'
                 phone:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 32
                     minLength: 1
-                    nullable: true
                 website:
-                    type: string
+                    type: [string, 'null']
                     maxLength: 2048
                     minLength: 1
-                    nullable: true
 
         # A multipart part is a string or a file, never `null`: a clear cannot travel here. Send it as a JSON PATCH.
         ReplaceUserByIdRequestMultipart:
