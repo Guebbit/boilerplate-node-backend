@@ -105,9 +105,9 @@ const moveToCancelled = (
  * @param context - the caller's context; absent for a system-initiated cancel (the reservation
  *   sweep), still audited as a system actor and
  *   reported under its own analytics name
- * @param viaReservationExpiry - true only for the `RESERVATION_EXPIRED` listener. Only the
- *   reservation sweep cancels with no context, but the flag keeps that explicit: the expiry
- *   notice is for a hold that timed out, never for another system cancel
+ * @param viaReservationExpiry - true only for the `RESERVATION_EXPIRED` listener. The expiry
+ *   notice and the expiry analytics event are for a hold that timed out, never for another system
+ *   cancel (an account erasure also has no context)
  * @param byPerson - true when the customer or staff cancelled, and nothing else mails about it:
  *   a withdrawal has its acknowledgement, and every system cancel its own explanation or none
  */
@@ -126,10 +126,10 @@ const afterCancel = async (
         if (refunded) await orderRepository.clearPendingEffect(String(order._id), 'refund');
     }
 
-    // No context: the reservation-sweep expiry, not a request. Audited as a system
-    // actor rather than skipped — see the docblock above — and reported under its own
-    // analytics name so a timeout is never counted as a customer's choice to cancel.
-    const isSystemExpiry = !context;
+    // A system cancel has no context and is audited as the system actor rather than skipped —
+    // see the docblock above. Only the reservation sweep's own timeout is reported under the
+    // expiry analytics name, so a timeout is never counted as a customer's choice to cancel and
+    // an erasure's cancel is never counted as a timeout.
     const emitContext = context ?? {
         caller: callerForSubject(SYSTEM_ACTOR, 'Order'),
         analyticsConsent: false
@@ -174,7 +174,7 @@ const afterCancel = async (
     });
     emitAnalyticsEvent({
         ...buildAnalyticsBase(emitContext),
-        event: isSystemExpiry
+        event: viaReservationExpiry
             ? ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED
             : ordersAnalyticsEvents.ORDER_CANCELLED,
         properties: { order_id: String(order._id) }

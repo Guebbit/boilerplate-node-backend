@@ -335,6 +335,10 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 | Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |
 | Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
 
+The analytics event follows the same split: only a hold that timed out reports
+`order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports
+`order_cancelled` like any other.
+
 An anonymised order is never mailed: its email is a `.invalid` placeholder (`mailBuyer` skips it), so
 any mail to it would only bounce.
 

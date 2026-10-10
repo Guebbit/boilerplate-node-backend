@@ -334,7 +334,8 @@ describe('cancelById — audit and analytics', () => {
         const user = await createUser();
         const order = await seedOrder(user);
 
-        await orderService.cancelById(String(order._id), asAdmin());
+        // Mirrors module.ts's RESERVATION_EXPIRED handler: the flag, not the missing context, says expiry.
+        await orderService.cancelById(String(order._id), asAdmin(), {}, undefined, true);
 
         expect(analyticsSpy).toHaveBeenCalledWith(
             expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
