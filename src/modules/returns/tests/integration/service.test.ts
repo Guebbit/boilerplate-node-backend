@@ -703,4 +703,16 @@ describe('the account export', () => {
         expect(exported[0]).toMatchObject({ orderId: mine.orderId, reason: 'defective' });
         expect(exported[0].lines.map(({ title }) => title).toSorted()).toEqual(['Mug', 'Shirt']);
     });
+
+    it('carries the text staff wrote when declining, and omits it while there is none', async () => {
+        const declined = await requestedReturn();
+        const open = await requestedReturn();
+        await declineReturn(declined.returnId, 'Worn beyond a trial', callerContextAs('admin'));
+
+        const [declinedSection] = await collectPersonalData(declined.user.id);
+        const [openSection] = await collectPersonalData(open.user.id);
+
+        expect(declinedSection).toMatchObject({ declineReason: 'Worn beyond a trial' });
+        expect(openSection).not.toHaveProperty('declineReason');
+    });
 });
