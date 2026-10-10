@@ -134,13 +134,15 @@ success, `lastError` on a throw — onto the same `leases` document `withLease` 
 job also takes one; `GET /observability/health`'s `jobs` array reports the whole set, so any
 crontab job silently failing or silently not running at all is visible on the probe an operator
 already looks at. `job_last_success_timestamp_seconds{task="…"}` (`infrastructure/observability/metrics-registry.ts`)
-exposes the same value to Prometheus; `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
+exposes the same value to Prometheus, next to `job_last_run_timestamp_seconds{task="…"}` (when the row was last touched,
+success or not); `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
 fires when a nightly job's last success is more than 48 hours old. The 5-minute-or-faster
 jobs are excluded from that alert, each covered by its own faster-firing one instead:
 `sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:outbox` /
 `sweep:payment-effects` / `sweep:reservations` / `sweep:order-effects` by `FrequentSweepStale`
 (30 min) — 48 hours at that cadence would page two days after a stuck payment, a reservation
-nobody is expiring or a refund nobody is retrying. No Pushgateway needed: the value
+nobody is expiring or a refund nobody is retrying. `ScheduledJobNeverSucceeded` covers every job that
+has a run series but no success series: one that has only ever failed. No Pushgateway needed: the value
 lives in Mongo, and the long-running app exports it at scrape time.
 See `docs/tools/observability-layer.md`.
 

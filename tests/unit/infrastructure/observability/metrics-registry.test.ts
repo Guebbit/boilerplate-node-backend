@@ -68,6 +68,51 @@ describe('job_last_success_timestamp_seconds — D9', () => {
     });
 });
 
+describe('job_last_run_timestamp_seconds', () => {
+    afterEach(() => {
+        mockedListLeaseSummaries.mockReset();
+    });
+
+    it('skips the query and reports nothing while Mongo is not connected', async () => {
+        withReadyState(0);
+
+        const metrics = await getPrometheusMetrics();
+
+        expect(mockedListLeaseSummaries).not.toHaveBeenCalled();
+        expect(metrics).not.toMatch(/^job_last_run_timestamp_seconds{/m);
+    });
+
+    it('reports a job that has run but never succeeded, which the success gauge omits', async () => {
+        withReadyState(1);
+        mockedListLeaseSummaries.mockResolvedValue([
+            {
+                name: 'reap:orders',
+                lastSuccessAt: new Date('2026-01-01T00:00:00.000Z'),
+                lastRunAt: new Date('2026-01-02T00:00:00.000Z')
+            },
+            { name: 'reap:quarantine', lastRunAt: new Date('2026-01-03T00:00:00.000Z') }
+        ]);
+
+        const metrics = await getPrometheusMetrics();
+
+        expect(metrics).toContain('job_last_run_timestamp_seconds{task="reap:orders"} 1767312000');
+        expect(metrics).toContain(
+            'job_last_run_timestamp_seconds{task="reap:quarantine"} 1767398400'
+        );
+        expect(metrics).not.toContain('job_last_success_timestamp_seconds{task="reap:quarantine"}');
+    });
+
+    it('resolves the whole scrape, rather than rejecting, when the query itself fails', async () => {
+        withReadyState(1);
+        mockedListLeaseSummaries.mockRejectedValue(new Error('connection reset'));
+
+        const metrics = await getPrometheusMetrics();
+
+        expect(metrics).toContain('# HELP process_uptime_seconds');
+        expect(metrics).not.toMatch(/^job_last_run_timestamp_seconds{/m);
+    });
+});
+
 describe('labelled alert counters', () => {
     it('start at 0, so an increase() alert sees the first event after a restart', async () => {
         await import('@infrastructure/observability/security-events');

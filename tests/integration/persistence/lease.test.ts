@@ -1,5 +1,10 @@
 import { setupTestDb } from '@tests/setup-test-db';
-import { leaseModel, withLease, recordJobOutcome } from '@infrastructure/persistence/lease';
+import {
+    leaseModel,
+    withLease,
+    recordJobOutcome,
+    listLeaseSummaries
+} from '@infrastructure/persistence/lease';
 
 /**
  * `withLease` against a real database — see docs/reference/ops.md#scheduled-jobs for why this is a
@@ -234,5 +239,28 @@ describe('recordJobOutcome', () => {
             .exec();
         expect(stored?.owner).toBe('a-real-holder');
         expect(stored?.lastSuccessAt).toBeInstanceOf(Date);
+    });
+});
+
+/**
+ * `lastRunAt` is what lets Prometheus tell a job that has only ever failed from one that never
+ * ran: the failing job has a row (and so a run time) but no `lastSuccessAt`.
+ */
+describe('listLeaseSummaries', () => {
+    it('reports when a job last ran, including one that has never succeeded', async () => {
+        const before = Date.now();
+        await recordJobOutcome('scheduled-jobs-test.summary-failing', {
+            failed: true,
+            error: new Error('disk full')
+        });
+
+        const summaries = await listLeaseSummaries();
+        const summary = summaries.find(
+            ({ name }) => name === 'scheduled-jobs-test.summary-failing'
+        );
+
+        expect(summary?.lastSuccessAt).toBeUndefined();
+        expect(summary?.lastError).toBe('disk full');
+        expect(summary?.lastRunAt?.getTime()).toBeGreaterThanOrEqual(before);
     });
 });

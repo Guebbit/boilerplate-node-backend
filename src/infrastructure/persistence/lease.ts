@@ -100,10 +100,15 @@ leaseSchema.index(
 /** Lease model entrypoint. Collection name `leases`, Mongoose's default pluralization of `Lease`. */
 export const leaseModel = model<LeaseDocument, LeaseModel>('Lease', leaseSchema);
 
-/** One job's last observed outcome, as `GET /observability/health` reports it. */
+/**
+ * One job's last observed outcome, as `GET /observability/health` reports it.
+ * `lastRunAt` is when the row was last touched (an outcome recorded, a lease taken or released):
+ * the job ran, whether or not it succeeded. `job_last_run_timestamp_seconds` exports it.
+ */
 export interface LeaseSummary {
     name: string;
     lastSuccessAt?: Date;
+    lastRunAt?: Date;
     lastError?: string;
 }
 
@@ -116,7 +121,7 @@ export interface LeaseSummary {
  */
 export const listLeaseSummaries = (): Promise<LeaseSummary[]> =>
     leaseModel
-        .find({}, { owner: 0, expiresAt: 0, createdAt: 0, updatedAt: 0, __v: 0 })
+        .find({}, { owner: 0, expiresAt: 0, createdAt: 0, __v: 0 })
         .sort({ _id: 1 })
         .lean()
         .exec()
@@ -124,6 +129,7 @@ export const listLeaseSummaries = (): Promise<LeaseSummary[]> =>
             rows.map((row) => ({
                 name: row._id,
                 lastSuccessAt: row.lastSuccessAt,
+                lastRunAt: row.updatedAt,
                 lastError: row.lastError
             }))
         );

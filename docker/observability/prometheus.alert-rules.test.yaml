@@ -68,6 +68,59 @@ tests:
           - eval_time: 15m
             alertname: HighErrorRate
             exp_alerts: []
+    # A job that has only ever failed: a run series, no success series.
+    - interval: 1m
+      input_series:
+          - series: job_last_run_timestamp_seconds{job="api",task="reap:orders"}
+            values: 1000x120
+      alert_rule_test:
+          - eval_time: 90m
+            alertname: ScheduledJobNeverSucceeded
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      job: api
+                      task: reap:orders
+                  exp_annotations:
+                      summary: A scheduled job has run but never succeeded
+                      description: reap:orders has been recorded as run for over an hour and has never recorded a success. Its lastError is on GET /observability/health, see docs/reference/ops.md#scheduled-jobs.
+    # Quiet: the grace hour, so a first run's row can land before its success.
+    - interval: 1m
+      input_series:
+          - series: job_last_run_timestamp_seconds{job="api",task="reap:orders"}
+            values: 1000x120
+      alert_rule_test:
+          - eval_time: 30m
+            alertname: ScheduledJobNeverSucceeded
+            exp_alerts: []
+    # Quiet: a job that has run and succeeded has both series.
+    - interval: 1m
+      input_series:
+          - series: job_last_run_timestamp_seconds{job="api",task="reap:orders"}
+            values: 1000x120
+          - series: job_last_success_timestamp_seconds{job="api",task="reap:orders"}
+            values: 1000x120
+      alert_rule_test:
+          - eval_time: 90m
+            alertname: ScheduledJobNeverSucceeded
+            exp_alerts: []
+    # A job last successful 31 days ago, while its row still exists, is stale: past the 30-day
+    # lease retention the row (and this series) is reclaimed by the TTL index.
+    - interval: 1d
+      input_series:
+          - series: job_last_success_timestamp_seconds{job="api",task="reap:orders"}
+            values: 0x40
+      alert_rule_test:
+          - eval_time: 31d
+            alertname: ScheduledJobStale
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      job: api
+                      task: reap:orders
+                  exp_annotations:
+                      summary: A scheduled job has not succeeded in over 48 hours
+                      description: reap:orders has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.
     - interval: 1m
       input_series:
           - series: http_request_duration_milliseconds_bucket{route="a",le="100"}

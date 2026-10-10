@@ -70,6 +70,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `WebhookRetriesStalled`              | webhook deliveries stay overdue for 15 min straight                                                                  | warning  |
 | `ScheduledJobStale`                  | a nightly `docker/crontab` job has not recorded a success in > 48 h                                                  | warning  |
 | `FrequentSweepStale`                 | `sweep:outbox`, `sweep:payment-effects`, `sweep:reservations` or `sweep:order-effects` has not succeeded in > 30 min | warning  |
+| `ScheduledJobNeverSucceeded`         | a job has been recorded as run for over an hour and has never recorded a success                                     | warning  |
 | `LoginFailureRate`                   | failed logins above 1 per second for 5 min                                                                           | warning  |
 | `LoginFailureShare`                  | over half of logins failing for 10 min, with real traffic                                                            | warning  |
 | `TwoFactorChallengeFailures`         | login-time 2FA failures above 0.1 per second for 10 min                                                              | warning  |

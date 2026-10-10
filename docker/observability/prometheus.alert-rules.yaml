@@ -155,6 +155,21 @@ groups:
                 summary: 'A scheduled job has not succeeded in over 48 hours'
                 description: '{{ $labels.task }} has not recorded a success in more than twice its expected daily interval — see docker/crontab and docs/reference/ops.md#scheduled-jobs.'
 
+          # A job that has run but never once succeeded has no `job_last_success_timestamp_seconds`
+          # series at all, so the two staleness rules cannot see it. `job_last_run_timestamp_seconds`
+          # exists as soon as the job's outcome is recorded, success or not; `unless on (task)`
+          # keeps the jobs with no success series. `for: 1h` lets a lease-guarded job's very first
+          # run record its row before its success lands. Covers every job, the frequent sweeps
+          # included.
+          - alert: ScheduledJobNeverSucceeded
+            expr: job_last_run_timestamp_seconds unless on (task) job_last_success_timestamp_seconds
+            for: 1h
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A scheduled job has run but never succeeded'
+                description: '{{ $labels.task }} has been recorded as run for over an hour and has never recorded a success. Its lastError is on GET /observability/health, see docs/reference/ops.md#scheduled-jobs.'
+
           # `sweep:outbox` (every minute), `sweep:payment-effects`, `sweep:reservations` and
           # `sweep:order-effects` (every 5 minutes; `docker/crontab`) are excluded from the rule above for the same reason `sweep:webhook-retries` is: at
           # that cadence, the 48-hour threshold would page 48 hours after a stuck payment or a
