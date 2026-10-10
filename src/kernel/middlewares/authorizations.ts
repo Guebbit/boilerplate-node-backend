@@ -134,13 +134,19 @@ const continueOrFailInfra = (next: NextFunction, error: unknown): void => {
 };
 
 /**
+ * `Authorization: Bearer <token>`, scheme word first. RFC 9110 §11.1 makes the scheme
+ * case-insensitive; RFC 6750 §2.1 names it `Bearer`.
+ */
+const BEARER_HEADER = /^bearer +(\S+)$/i;
+
+/**
  * Pull the bearer token out of the `Authorization` header, if any.
  *
  * @param request - the incoming request
- * @returns the token, or `undefined` when the header is absent or has no second segment
+ * @returns the token, or `undefined` when the header is absent or does not use the `Bearer` scheme
  */
 export const getTokenBearer = (request: Request) =>
-    request.header('Authorization')?.split(' ', 2)[1];
+    BEARER_HEADER.exec(request.header('Authorization') ?? '')?.[1];
 
 /**
  * Resolve `request.authContext` from a bearer token when one is present, then continue. This sits

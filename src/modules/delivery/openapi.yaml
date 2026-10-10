@@ -359,33 +359,3 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/Shipment'
-
-        # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — mirrors
-        # `Shipment` exactly, kept as its own schema since an export's shape is free to diverge
-        # from the admin response even though it doesn't today; every field here is already the
-        # caller's own, so nothing needs stripping.
-        ExportShipment:
-            type: object
-            additionalProperties: false
-            required: [id, orderId, status]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                orderId:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                trackingCode:
-                    type: string
-                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false).
-                status:
-                    type: string
-                    enum: [shipped, delivered]
-                deliveredAt:
-                    type: string
-                    format: date-time
-                createdAt:
-                    type: string
-                    format: date-time
-                updatedAt:
-                    type: string
-                    format: date-time
-

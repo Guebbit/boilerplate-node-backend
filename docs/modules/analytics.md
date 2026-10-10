@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — `POST /analytics/events`: the relay a browser uses to report the browsing events the
 server cannot see (a product page opened, a search made).
-**Depends on** — nothing, and nothing depends on it. The events go through the analytics port in
+**Depends on** — no module, and no module depends on it; only the paired frontend calls it. The events go through the analytics port in
 `infrastructure/observability/analytics`, like every other module's.
 **Breaks if you change** — the closed event list in the contract (`AnalyticsEventRequest`), which
 the paired frontend's `trackBrowsing` sends from.

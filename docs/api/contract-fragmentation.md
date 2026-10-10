@@ -158,7 +158,7 @@ paths it owns:
 | `inventory`     | `/inventory`      | `Inventory`                   |
 | `observability` | `/observability`  | `Observability`                |
 | `feedback`      | `/feedback`       | `Feedback`                       |
-| `locales`       | `/locales`        | `System` (all but `GET /`)        |
+| `locales`       | `/locales`        | `Locales`                          |
 | `webhooks`      | `/webhooks`       | `Webhooks`                          |
 | `returns`       | `/returns`        | `Returns`                           |
 | `notifications` | `/notifications`  | `Notifications`                     |

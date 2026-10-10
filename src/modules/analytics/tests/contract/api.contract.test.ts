@@ -14,7 +14,7 @@ describe('POST /analytics/events', () => {
     it('accepts a product view with 204', async () => {
         const response = await api()
             .post('/analytics/events')
-            .send({ event: 'product_viewed', productId: 'abc123' });
+            .send({ event: 'product_viewed', productId: '65a1b2c3d4e5f60718293a4b' });
 
         expect(response.status).toBe(204);
     });

@@ -181,9 +181,19 @@ describe('getTokenBearer', () => {
     });
 
     it('returns undefined when the header has a scheme but no token', () => {
-        // 'Bearer'.split(' ')[1] is undefined — the caller's falsy check must still catch it.
         expect(getTokenBearer(makeRequest({ authorization: 'Bearer' }))).toBeUndefined();
     });
+
+    it('accepts the scheme word in any case', () => {
+        expect(getTokenBearer(makeRequest({ authorization: 'bEaReR abc' }))).toBe('abc');
+    });
+
+    it.each(['Basic abc', 'Foo abc', 'abc', 'Bearer a b'])(
+        'refuses %j: another scheme, or no scheme word',
+        (authorization) => {
+            expect(getTokenBearer(makeRequest({ authorization }))).toBeUndefined();
+        }
+    );
 });
 
 describe('getAuth', () => {

@@ -3,7 +3,7 @@
  * Persisted audit trail — the durable half of `@infrastructure/observability/audit`. The audit
  * *logger* remains the compliance record; this collection exists so `GET /observability/audit`
  * can answer "what has actor X done" from the API. snake_case fields, unlike every other model
- * here: returned verbatim as `AuditEventItem` in `openapi.yaml`, matching the log lines a SIEM
+ * here: returned verbatim as `AuditEntryItem` in `openapi.yaml`, matching the log lines a SIEM
  * ingests — renaming would mean mapping on every read.
  *
  * See: docs/modules/audit-logs.md
@@ -56,6 +56,11 @@ export const auditLogSchema = new Schema<AuditLogDocument, AuditLogModel>(
         actor_user_id: {
             type: String,
             required: true
+        },
+        // The api-key's public prefix when a credential acted, so a stored row can say "done with a
+        // key" as well as the log line. Optional: a person acting directly has none.
+        actor_credential_id: {
+            type: String
         },
         actor_role: {
             type: String,
