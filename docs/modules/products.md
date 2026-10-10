@@ -72,9 +72,68 @@ keyed by the caller's reach, so one reader's counters are never served to anothe
 Deletion is soft by default: it stamps `deletedAt` (and leaves `active` alone), with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete
 (`hardDelete: true`), which destroys the row outright — see
-[Removing or deactivating a product](#removing-or-deactivating-a-product) for what a hard delete
+[Hiding, taking off sale, removing](#hiding-taking-off-sale-removing) for what a hard delete
 means for the rest of the shop. The `active: 1, deletedAt: 1` index is what makes the public list
 cheap while the admin list can still see everything.
+
+## Product states
+
+Three independent questions, three fields. Stock is the third axis and is unchanged.
+
+| Field                 | Question                       | `false` / set means                        |
+| --------------------- | ------------------------------ | ------------------------------------------ |
+| `active`              | Can a shopper see it?          | hidden: 404 for shoppers, visible to staff |
+| `purchasable`         | Can it be bought, stock aside? | listed, "Not available right now"          |
+| `available` (derived) | Is there stock?                | `0`: sold out                              |
+| `deletedAt`           | Was it removed?                | gone; carts and wishlists drop it          |
+
+`purchasable` is ignored while `active` is `false`: hidden wins. `active` means visibility and
+nothing else, the same meaning it has on users and languages.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> OnSale: create
+    OnSale --> OffSale: purchasable = false
+    OffSale --> OnSale: purchasable = true
+    OnSale --> Hidden: active = false
+    OffSale --> Hidden: active = false
+    Hidden --> OnSale: active = true
+    Hidden --> OffSale: active = true<br/>(purchasable still false)
+    OnSale --> Removed: soft delete
+    OffSale --> Removed: soft delete
+    Hidden --> Removed: soft delete
+    Removed --> OnSale: restore
+    Removed --> [*]: hard delete
+    note right of OnSale
+        stock decides in_stock / out_of_stock,
+        independent of these states
+    end note
+```
+
+What each state does to the rest of the shop:
+
+| State    | Catalogue (shopper) | Cart / wishlist line       | New add | Checkout      | Placed orders |
+| -------- | ------------------- | -------------------------- | ------- | ------------- | ------------- |
+| On sale  | listed              | `in_stock` / stock values  | ok      | stock decides | untouched     |
+| Off sale | listed, flagged     | `unavailable`              | ok      | refused       | untouched     |
+| Hidden   | 404                 | `removed`, kept            | 404     | refused       | untouched     |
+| Removed  | 404                 | pulled (`product.deleted`) | 404     | n/a           | untouched     |
+
+Who sees a hidden product is settled by `products.any.read` (`manager`, `warehouse`, `editor`,
+`admin`); an off-sale product is public, so `GET /products?purchasable=` is open to everyone. The
+line values and their precedence live in [cart](./cart.md#line-availability).
+
+### Industry mapping
+
+Not stored; how these states translate if a feed or JSON-LD is ever emitted.
+
+| Ours               | schema.org `availability` | Google feed           |
+| ------------------ | ------------------------- | --------------------- |
+| on sale, stock > 0 | `InStock`                 | `in_stock`            |
+| on sale, stock 0   | `OutOfStock`              | `out_of_stock`        |
+| off sale           | `OutOfStock`              | `out_of_stock`        |
+| hidden / removed   | (not emitted)             | removed from the feed |
 
 ## The pipeline
 
@@ -98,25 +157,33 @@ flowchart LR
     class ST note;
 ```
 
-## Removing or deactivating a product
+## Hiding, taking off sale, removing
 
-A delete (soft or hard) and a deactivation (an update that flips `active` to `false`) both mean the
-product can no longer be **newly** sold, and neither reaches back into an order already placed:
+Hiding (`active: false`), taking off sale (`purchasable: false`) and removing (soft or hard delete)
+all mean the product can no longer be **newly** sold. None of them reaches back into an order
+already placed, and none of them cancels one: an order is a contract snapshot, and the only
+automatic cancel is an unpaid order timing out (the reservation expiry, in
+[`inventory`](./inventory.md#reservations) and [`orders`](./orders.md)).
 
-- [`inventory`](./inventory.md) deletes the product's `stocklevels` row on a hard delete; a
-  deactivation leaves the counters alone, since the product still exists and might come back.
+- [`inventory`](./inventory.md) deletes the product's `stocklevels` row on a hard delete; hiding
+  and taking off sale leave the counters alone, since the product still exists and might come back.
 - `orders` and `payments` do nothing: an order placed while the product was sellable treats it as
   present afterwards. It stays `pending`, nobody is emailed, and the buyer can still pay it, by card
-  or offline. A real problem with such an order is an admin's to cancel by hand.
-- `cart` and `wishlist` drop the line and announce whose lists held it, so
-  [`notifications`](./notifications.md) can tell those users. `product.deleted` carries `titles`
+  or offline. A real problem with such an order is an admin's to cancel by hand. No event is emitted
+  for hiding or taking off sale: nothing would listen.
+- Only a delete pulls lines. `cart` and `wishlist` drop the line and announce whose lists held it,
+  so [`notifications`](./notifications.md) can tell those users. `product.deleted` carries `titles`
   (the name in every language, locale → title) for exactly that: it is read before a hard delete
   drops the translation rows, because once the event fires the product is gone and nothing else
   could name it. A soft delete carries them too.
-- `cart`'s checkout still refuses a basket holding an inactive or deleted product, and
-  `CART_PRODUCT_UNAVAILABLE` carries `details.lines` naming exactly which lines are affected,
-  instead of leaving the client to work it out. That guard is about a NEW purchase; once an order
-  exists the product counts as present.
+- A **hidden** product's line stays in the cart and the wishlist, reads `removed` with no title,
+  and comes back to a stock value if the product is shown again. An **off-sale** product's line
+  stays too, reads `unavailable`, and is added to a cart like a sold-out product.
+- `cart`'s checkout refuses both. A hidden or deleted product answers `CART_PRODUCT_UNAVAILABLE`;
+  an off-sale one joins the stock refusal `CART_INSUFFICIENT_STOCK`. Each carries `details.lines`
+  naming exactly which lines are affected (with an `availability` on the stock refusal), instead of
+  leaving the client to work it out. That guard is about a NEW purchase; once an order exists the
+  product counts as present.
 
 ## Configuration
 

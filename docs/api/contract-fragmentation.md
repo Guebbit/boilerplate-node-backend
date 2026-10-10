@@ -456,7 +456,7 @@ Each probe is a question a contract cannot ask. A few examples:
 | Module | Probes |
 | --- | --- |
 | `account` | log in as the non-admin · 401 from a bogus token · 409 from a duplicate signup · the rate limiter (send repeatedly) |
-| `products` | 422 from a body that breaks two constraints · the same product under `Accept-Language: it` · every optional filter at once · the soft-deleted product · the inactive one |
+| `products` | 422 from a body that breaks two constraints · the same product under `Accept-Language: it` · every optional filter at once · the soft-deleted product · the inactive one · the off-sale one |
 | `cart` | checkout with an empty cart · adding a product that does not exist · a quantity the schema forbids |
 | `orders` | the owner asking for their own soft-deleted order |
 | `wishlist` | saving a product the storefront will not show · moving or unsaving one that was never saved · an id no ObjectId can be built from |

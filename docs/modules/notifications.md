@@ -93,8 +93,8 @@ flowchart LR
 - **Who reaches the inbox.** Only domain events. `cart` knows whose carts held a product, so `cart`
   emits `cart.lines_removed`; `notifications` never listens to `product.deleted` itself.
 - **The merge message.** Only for guest-cart lines that could not be added at all (the product
-  is not publicly visible: deleted or hidden). A sold-out or short product is added and flagged
-  instead, and a line that landed with another quantity is the cart page's alert to show, not the
+  is not publicly visible: deleted or hidden, `reason: removed`). A sold-out, short or off-sale
+  product is added and flagged through its `availability` instead, and a line that landed with another quantity is the cart page's alert to show, not the
   inbox's: it can be seen again later, a vanished product cannot.
 - **The product's name.** `product.deleted` carries `titles`, every translated name, read before a
   hard delete drops the translation rows. The notification copies them in: the product is gone, so

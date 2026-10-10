@@ -133,7 +133,12 @@ A module states what it needs the `shop` scenario to demonstrate as data, right 
 
 ```ts
 scenario: {
-    shop: ['product.softDeleted', 'product.inactive', 'product.outOfStock' /* … */];
+    shop: [
+        'product.softDeleted',
+        'product.inactive',
+        'product.offSale',
+        'product.outOfStock' /* … */
+    ];
 }
 ```
 

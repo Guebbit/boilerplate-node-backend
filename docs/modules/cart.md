@@ -91,27 +91,59 @@ durability — and would turn one indexed query into a hand-maintained secondary
 
 ## Stock checked in three places
 
-One rule answers "does this line fit what is for sale", in the cart's domain layer
-(`domain/stock.ts`), and three callers share it. All three read the **stock ledger**
+One rule answers "what can this line do right now", in the cart's domain layer
+(`src/modules/cart/domain/availability.ts`), and three callers share it. All three read the **stock ledger**
 (`inventoryService.availableFor`, one batched read per request), never the catalogue's cached copy,
 so a line cannot read as fitting and then be refused at checkout.
 
-| Where        | When                               | What happens on a short line                                                   |
-| ------------ | ---------------------------------- | ------------------------------------------------------------------------------ |
-| **Checkout** | `POST /cart/checkout`              | Refused, `CART_INSUFFICIENT_STOCK`, naming the line and the quantity asked for |
-| **Merge**    | `POST /cart/merge`                 | The line keeps its quantity and comes back `insufficientStock`                 |
-| **View**     | every answer that carries the cart | The line is flagged; a client polling `GET /cart` learns it                    |
+| Where        | When                               | What happens on a line that cannot be bought as it stands                   |
+| ------------ | ---------------------------------- | --------------------------------------------------------------------------- |
+| **Checkout** | `POST /cart/checkout`              | Refused, naming the line, the quantity asked for and its `availability`     |
+| **Merge**    | `POST /cart/merge`                 | The line keeps its quantity and comes back with its `availability`          |
+| **View**     | every answer that carries the cart | The line carries its `availability`; a client polling `GET /cart` learns it |
 
-A line carries one boolean, `insufficientStock`: true when its quantity is more than is for sale.
-A product the catalogue no longer shows (deleted or deactivated) fits nothing, so its line reads
-short too, and checkout refuses it as `CART_PRODUCT_UNAVAILABLE`.
-
-**No number is ever disclosed.** The flag says short, not how many are left: exact stock is for
+**No number is ever disclosed.** The value says short, not how many are left: exact stock is for
 callers holding `inventory.any.read` ([Reading the shelf](../theory/defences/authorization.md)).
 That is also why the merge never lowers a short line: lowering it to what is for sale would let
 anyone read the stock by merging 999.
 
-`POST /cart` and `PUT` still do not refuse a line for stock, so the gate that refuses is checkout.
+`POST /cart` and `PUT` do not refuse a line for stock or for being off sale, so the gate that
+refuses is checkout.
+
+## Line availability
+
+One derived value on every cart line, wishlist line and merge result. The names are Google's feed
+vocabulary.
+
+| `availability`       | Means                                                   | Shopper copy (frontend)               | Checkout |
+| -------------------- | ------------------------------------------------------- | ------------------------------------- | -------- |
+| `in_stock`           | buyable, enough stock                                   | none                                  | ok       |
+| `insufficient_stock` | some left, fewer than the line wants (cart lines only)  | "Only fewer left, lower the quantity" | refused  |
+| `out_of_stock`       | none left                                               | "Sold out"                            | refused  |
+| `unavailable`        | taken off sale (`purchasable: false`)                   | "Not available right now"             | refused  |
+| `removed`            | hidden (`active: false`), or deleted and not yet pulled | "No longer available", no title       | refused  |
+
+First match wins. The wishlist asks the same function without a quantity, so it never yields
+`insufficient_stock`.
+
+```mermaid
+flowchart TD
+    A[line] --> B{product row found<br/>and not deleted?}
+    B -- no --> R[removed]
+    B -- yes --> C{active?}
+    C -- no --> R
+    C -- yes --> D{purchasable?}
+    D -- no --> U[unavailable]
+    D -- yes --> E{available = 0?}
+    E -- yes --> O[out_of_stock]
+    E -- no --> F{quantity > available?<br/>cart only}
+    F -- yes --> I[insufficient_stock]
+    F -- no --> S[in_stock]
+```
+
+Adding a hidden product stays a 404 (`POST /cart`, a wishlist add, `PUT /cart/{id}`): a new add
+must not reveal that a hidden product exists. An off-sale product is accepted, as a sold-out one
+is. The states themselves are in [products](./products.md#product-states).
 
 ## Merging a guest cart
 
@@ -119,7 +151,7 @@ A cart built while signed out lives in the browser. At sign-in the client sends 
 `POST /cart/merge`, and the cart folds it in by `POST /cart`'s own rule: a product held in both
 carts ends at the sum, capped at `NODE_CART_LINE_MAX`. The answer is the cart as it now stands plus
 **one result per submitted line, in request order**: what the guest asked for (`requested`), what the
-cart holds now (`resulting`), a `reason` when the two differ, and `insufficientStock`.
+cart holds now (`resulting`), a `reason` when the two differ, and the line's `availability`.
 
 ```mermaid
 sequenceDiagram
@@ -132,20 +164,21 @@ sequenceDiagram
     API->>P: one read of every product and its stock
     loop each line, in order
         API->>C: add what POST /cart would (sum, cap)
-        API->>API: insufficientStock for what the cart now holds
+        API->>API: availability for what the cart now holds
     end
-    API-->>N: cart.merge_refused, only for products the catalogue does not show
+    API-->>N: cart.merge_refused, only for hidden or deleted products
     API-->>FE: cart + one result per line
     FE->>FE: alert for every line that is not as asked
 ```
 
-| Line                                           | Result                                                 |
-| ---------------------------------------------- | ------------------------------------------------------ |
-| a new product                                  | added; no `reason`                                     |
-| already in the cart                            | added to the line, `reason: summed`                    |
-| the sum passes the ceiling                     | the line stops at the ceiling, `reason: capped`        |
-| sold out, or short                             | added anyway, `insufficientStock`                      |
-| not shown by the catalogue (deleted or hidden) | nothing added, `reason: unavailable`, one notification |
+| Line                                           | Result                                                             |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
+| a new product                                  | added; no `reason`                                                 |
+| already in the cart                            | added to the line, `reason: summed`                                |
+| the sum passes the ceiling                     | the line stops at the ceiling, `reason: capped`                    |
+| sold out, or short                             | added anyway, `availability: out_of_stock` or `insufficient_stock` |
+| taken off sale                                 | added anyway, `availability: unavailable`                          |
+| not shown by the catalogue (deleted or hidden) | nothing added, `reason: removed`, one notification                 |
 
 One bad line is a result, never a failure: the call answers 200 and the rest still land. The
 request carries an `Idempotency-Key`, so a lost answer replays instead of adding twice (the server

@@ -63,6 +63,26 @@ A deleted product leaves a message behind: after the lines are pulled the module
 [`notifications`](./notifications.md) writes one row per owner. The wishlist itself never imports
 the inbox.
 
+## Line availability
+
+Each line comes back as `{ productId, availability }`: the cart's own rule decides, so a wishlist
+line and a cart line never disagree about a product (see
+[line availability](./cart.md#line-availability)). A wishlist line holds no quantity, so it never
+reads `insufficient_stock`.
+
+| `availability` | The line shows            | Move to cart                                      |
+| -------------- | ------------------------- | ------------------------------------------------- |
+| `in_stock`     | normal                    | ok                                                |
+| `out_of_stock` | "Sold out"                | ok, as `POST /cart` accepts a sold-out product    |
+| `unavailable`  | "Not available right now" | ok, an off-sale product moves like a sold-out one |
+| `removed`      | "No longer available"     | refused: a hidden product is a 404                |
+
+A hidden product's line is kept and returns to a stock value when the product is shown again;
+only a delete pulls it. Saving a hidden product stays a 404, so a new add never reveals one.
+
+The personal-data export carries the stored lines only (`{ productId }`): availability is the
+shop's live opinion of a product, not something the account holder saved.
+
 ## The pipeline
 
 The whole module. Three arrows out, two events in, one event out.

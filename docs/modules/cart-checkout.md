@@ -106,6 +106,25 @@ ids, and `placeOrder` takes the hold with ids and quantities. Mapping the lines 
 the whole basket is what keeps `inventory` from ever learning what a cart is.
 :::
 
+## Which lines are refused, and as what
+
+Checkout judges every line with the cart's [availability rule](./cart.md#line-availability) and
+refuses everything that is not `in_stock`. The code depends on the line's value, so a client can
+word each case differently:
+
+| `availability`       | Error code                 | Status | `details.lines[]` carries                                |
+| -------------------- | -------------------------- | ------ | -------------------------------------------------------- |
+| `removed`            | `CART_PRODUCT_UNAVAILABLE` | 404    | `productId`, `title` (absent for a hard-deleted product) |
+| `unavailable`        | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
+| `out_of_stock`       | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
+| `insufficient_stock` | `CART_INSUFFICIENT_STOCK`  | 409    | `productId`, `title`, `requested`, `availability`        |
+
+An off-sale product is "stock 0" with its own message, so it joins the stock refusal. A removed
+line outranks the rest: one hidden line answers the 404 even when another line is also short.
+`CART_INSUFFICIENT_STOCK` lists every refused line at once, never the number left. The same
+refusal comes back from the reserve when a race takes the last unit between the pre-flight and the
+hold, so a sold-out line then reads `out_of_stock` and a short one `insufficient_stock`.
+
 ## The price check
 
 The request names `expectedTotal`, the total the buyer was shown right before the press (EU Directive

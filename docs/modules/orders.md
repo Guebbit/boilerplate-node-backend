@@ -76,13 +76,13 @@ that, never re-resolve against whoever is reading it now — see
 
 The status enum is the module's public vocabulary:
 
-| Status                  | What it means                                | Who moves it                                                                                                          |
-| ----------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                  |
-| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                |
-| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction) |
-| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival                                                    |
-| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product removed or deactivated afterwards does not cancel it                             |
+| Status                  | What it means                                | Who moves it                                                                                                                                                |
+| ----------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                                                        |
+| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                                                      |
+| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction)                                       |
+| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival                                                                                          |
+| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing)) |
 
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
