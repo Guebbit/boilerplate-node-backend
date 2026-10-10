@@ -303,6 +303,13 @@ session may live past what it was granted at login. The "remember me" choice is 
 ([above](#remember-me-unticked)): a rotation that dropped it would turn a session cookie persistent
 on the first refresh.
 
+**A session keeps one id across rotation.** Every rotation stores a new token row with a new `_id`,
+so the id `GET /account/sessions` publishes is the row's `familyId` instead: minted at login and
+copied to every successor. "Log out that device" pulls the whole family, the live token and any
+rotated-away predecessor still kept for reuse detection. An id taken from `_id` would name the dead
+predecessor after the first refresh, and the revoke would answer success while the device stayed
+signed in (RFC 9700 §4.14.2: refresh-token families).
+
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 46}}}%%
 flowchart TD

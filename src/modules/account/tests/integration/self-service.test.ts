@@ -26,7 +26,7 @@ import {
     VERIFY_RESEND_SECONDS,
     completeEmailChange
 } from '@modules/account/services';
-import { TokenType, hashToken } from '@modules/users';
+import { TokenType, hashToken, sessionIdOf, type Token } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
 import { asReject, asSuccess } from '@tests/response';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -95,6 +95,9 @@ const readTokens = async (userId: string) => {
     const stored = await userRepository.findByIdWithCredentials(userId);
     return stored?.tokens ?? [];
 };
+
+/** The id a stored entry is revoked by, from a lookup that may have found nothing. */
+const sessionIdOfEntry = (token: Token | undefined): string => (token ? sessionIdOf(token) : '');
 
 describe('updateProfile', () => {
     it('updates the fields a user owns', async () => {
@@ -455,7 +458,7 @@ describe('sessionRemove', () => {
         // `token.token` is a digest at rest — `tokenAdd` hashed 'refresh-a' before storing.
         const target = tokens.find((token) => token.token === hashToken('refresh-a'));
 
-        const result = await userRepository.sessionRemove(user.id, String(target?._id));
+        const result = await userRepository.sessionRemove(user.id, sessionIdOfEntry(target));
 
         expect(result.modifiedCount).toBe(1);
         const remaining = await readTokens(user.id);
@@ -467,7 +470,7 @@ describe('sessionRemove', () => {
         await user.tokenAdd('password', 60_000, 'pending-reset');
 
         const tokens = await readTokens(user.id);
-        const result = await userRepository.sessionRemove(user.id, String(tokens[0]?._id));
+        const result = await userRepository.sessionRemove(user.id, sessionIdOfEntry(tokens[0]));
 
         expect(result.modifiedCount).toBe(0);
         expect(await readTokens(user.id)).toHaveLength(1);
@@ -479,7 +482,10 @@ describe('sessionRemove', () => {
         await owner.tokenAdd(TokenType.REFRESH, 60_000, 'owner-session');
 
         const [ownerToken] = await readTokens(owner.id);
-        const result = await userRepository.sessionRemove(attacker.id, String(ownerToken?._id));
+        const result = await userRepository.sessionRemove(
+            attacker.id,
+            sessionIdOfEntry(ownerToken)
+        );
 
         expect(result.modifiedCount).toBe(0);
         expect(await readTokens(owner.id)).toHaveLength(1);
@@ -495,7 +501,7 @@ describe('sessionRevoke', () => {
 
         const result = await accountService.sessionRevoke(
             user.id,
-            String(target?._id),
+            sessionIdOfEntry(target),
             testCallerContext
         );
 

@@ -350,7 +350,9 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
-     * Revoke one refresh token by its SUBDOCUMENT id — "log out that device". The id filter
+     * Revoke a whole session by its FAMILY id — "log out that device": the live token and any
+     * rotated-away predecessor still in its retention window go together, so a revoked session
+     * cannot be replayed into a reuse alarm either. The id filter
      * carries the owner as well as the session, so a leaked session id from someone else's
      * listing matches nothing and reports `modifiedCount: 0` (404). `type` is pinned to `refresh`
      * so this handle can't be turned against the other token kinds — a pending reset or delete
@@ -360,7 +362,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         userModel
             .updateOne(
                 { _id: toObjectId(id) },
-                { $pull: { tokens: { _id: toObjectId(sessionId), type: TokenType.REFRESH } } },
+                { $pull: { tokens: { familyId: toObjectId(sessionId), type: TokenType.REFRESH } } },
                 { timestamps: false }
             )
             .exec(),

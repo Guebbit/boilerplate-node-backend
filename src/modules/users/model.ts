@@ -6,8 +6,8 @@
  * See: docs/modules/users.md
  */
 
-import { model, Schema } from 'mongoose';
-import type { Document, Model, Types } from 'mongoose';
+import { model, Schema, Types } from 'mongoose';
+import type { Document, Model } from 'mongoose';
 import { hashPassword } from '@infrastructure/security/password-hash';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
@@ -86,6 +86,14 @@ export interface Token {
      */
     supersededAt?: Date;
     /**
+     * The session this refresh token belongs to, stable across rotation: login mints it, every
+     * rotation copies it to the successor. It is what `GET /account/sessions` publishes as the
+     * session `id` and what "log out that device" pulls, because `_id` changes with every refresh
+     * and an id taken from it names a dead predecessor after the first rotation. Set on refresh
+     * entries only.
+     */
+    familyId?: Types.ObjectId;
+    /**
      * Which factor(s) were already proven when this entry was minted. Only set on an
      * `MFA_CHALLENGE`: `account/services/two-factor.ts#verifyLoginChallenge` reads it back once
      * the second factor checks out, so the finished session's own `amr` names how the FIRST one
@@ -95,6 +103,14 @@ export interface Token {
      */
     amr?: string[];
 }
+
+/**
+ * The id a session is known by outside the server: its family, which survives rotation. Falls back
+ * to the row's own id for an entry that has no family (it is not a refresh token).
+ *
+ * @param token - a stored token entry
+ */
+export const sessionIdOf = (token: Token): string => String(token.familyId ?? token._id);
 
 /**
  * A refresh token that still represents a session someone is holding.
@@ -331,7 +347,8 @@ export interface UserMethods {
         type: Token['type'],
         expirationMs: number,
         token: string,
-        amr?: string[]
+        amr?: string[],
+        familyId?: Types.ObjectId
     ) => Promise<string>;
     tokenRemoveAll: (type: Token['type']) => Promise<void>;
 }
@@ -557,6 +574,10 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
                     },
                     amr: {
                         type: [String],
+                        required: false
+                    },
+                    familyId: {
+                        type: Schema.Types.ObjectId,
                         required: false
                     }
                 }
@@ -812,14 +833,19 @@ userSchema.methods.tokenAdd = function (
     type: Token['type'],
     expirationMs: number,
     token: string,
-    amr?: string[]
+    amr?: string[],
+    familyId?: Types.ObjectId
 ): Promise<string> {
     const entry: Token = {
         type,
         token: hashToken(token),
         expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined,
         sentAt: new Date(),
-        ...(amr && { amr })
+        ...(amr && { amr }),
+        // A refresh token starts a session family unless it continues one (a rotation passes it).
+        ...(type === (TokenType.REFRESH as string) && {
+            familyId: familyId ?? new Types.ObjectId()
+        })
     };
 
     return (this.constructor as UserModel)
