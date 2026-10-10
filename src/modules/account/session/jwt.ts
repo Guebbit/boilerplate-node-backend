@@ -10,6 +10,7 @@
 import { randomUUID } from 'node:crypto';
 import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
 import type { ResolveMissReason } from '@kernel/authentication';
+import { logger } from '@infrastructure/adapters/logger';
 import { userService, TokenType, hashToken } from '@modules/users';
 import type { UserDocument } from '@modules/users';
 import {
@@ -232,6 +233,18 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): string =
 };
 
 /**
+ * Stamp the account's `lastActiveAt` — the clock the inactivity reaper measures. Never rejects: a
+ * lost stamp costs a stale reading, nothing more, and a valid session must not fail on it. The
+ * once-a-day throttle lives in the users repository.
+ * @param userId - the account a session was just minted or refreshed for
+ */
+const recordActivity = (userId: string): Promise<void> =>
+    userService.touchLastActive(userId).catch((error: unknown) => {
+        // Stryker disable next-line all
+        logger.warn({ message: 'Could not stamp the account as active.', userId, error });
+    });
+
+/**
  * Create a refresh token, sign it, and persist it on the user document.
  *
  * @param id - user ID
@@ -271,12 +284,9 @@ export const createRefreshToken = (
                 },
                 getExpiryTime(remember)
             );
-            return userService.tokenAdd(
-                user,
-                TokenType.REFRESH,
-                getExpiryTimeMilliseconds(remember),
-                token
-            );
+            return userService
+                .tokenAdd(user, TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token)
+                .then((refreshToken) => recordActivity(id).then(() => refreshToken));
         });
 
 /**
@@ -361,6 +371,7 @@ const reissueRotated = (claims: TokenData, remainingMs: number): Promise<Rotated
                 .then((refreshToken) =>
                     recordRefreshTokenUse(refreshToken).then(() => refreshToken)
                 )
+                .then((refreshToken) => recordActivity(user.id).then(() => refreshToken))
                 // After the lookup and the new token, never before: the rotation reads the presented
                 // token's entry to tell a benign race from reuse, and a prune ahead of that read could
                 // take the entry with it. Contained: housekeeping cannot fail a valid refresh.

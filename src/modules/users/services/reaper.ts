@@ -27,11 +27,11 @@ export const findInactiveUnwarned = (cutoff: Date) =>
     userRepository.findInactiveUnwarned(cutoff).then(customersOnly);
 
 /**
- * Every account warned, and still inactive past the grace window — the reaper's soft-delete
+ * Every account warned before `warnedBefore` and not active since — the reaper's soft-delete
  * stage. Staff and administrators are never in it.
  */
-export const findWarnedStillInactive = (cutoff: Date) =>
-    userRepository.findWarnedStillInactive(cutoff).then(customersOnly);
+export const findWarnedStillInactive = (warnedBefore: Date) =>
+    userRepository.findWarnedStillInactive(warnedBefore).then(customersOnly);
 
 /**
  * Every account soft-deleted by the reaper past ITS OWN grace window — the hard-delete stage.

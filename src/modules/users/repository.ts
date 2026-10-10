@@ -38,17 +38,29 @@ const CREDENTIAL_FIELDS =
 const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
 
 /**
- * A user's last proof of life, as an aggregation `$expr`: the latest refresh-token exchange
- * (`tokens[].lastUsedAt`, already stamped on every refresh — see `model.ts`'s `Token`), or
- * `createdAt` for an account that has never come back to redeem one. Shared by every
- * `findInactive*` query below so "how recently was this account used" is
- * answered once rather than reimplemented per query and drifting.
+ * A user's last proof of life, as an aggregation `$expr`: `lastActiveAt` (stamped on every session
+ * mint and refresh, see `touchLastActive`), or `createdAt` for an account that never signed in.
+ * `$max` ignores a missing field. Shared by every `findInactive*` query below so "how recently was
+ * this account used" is answered once rather than reimplemented per query and drifting.
  *
- * `tokens` is `select: false` on the schema — irrelevant here, since that only trims what a
- * QUERY RETURNS, not what a `$expr` filter may read from the stored document.
+ * Reads no `tokens`: a token is pruned when it expires or is revoked, so activity derived from
+ * them fell back to `createdAt` for any account that logged out.
  */
-const LAST_ACTIVE_EXPR = {
-    $max: { $concatArrays: [{ $ifNull: ['$tokens.lastUsedAt', []] }, ['$createdAt']] }
+const LAST_ACTIVE_EXPR = { $max: ['$lastActiveAt', '$createdAt'] };
+
+/** One day in milliseconds: the throttle of the activity stamp. */
+const ACTIVITY_THROTTLE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Whether the reaper has not yet warned an account for its CURRENT stretch of inactivity: never
+ * warned, or active again since the warning. The second half is what lets a returning user be
+ * warned again later without a write on login.
+ */
+const NOT_WARNED_THIS_STRETCH = {
+    $or: [
+        { $eq: [{ $type: '$inactivityWarnedAt' }, 'missing'] },
+        { $gt: [LAST_ACTIVE_EXPR, '$inactivityWarnedAt'] }
+    ]
 };
 
 /**
@@ -83,8 +95,9 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     bumpSessionEpoch: (id: string, at: Date) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
     writebackImage: ImageWriteback;
+    touchLastActive: (id: string, now: Date) => Promise<void>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
-    findWarnedStillInactive: (cutoff: Date) => Promise<UserDocument[]>;
+    findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
 } = {
     reencrypt: reencryptOf(userModel),
@@ -543,41 +556,67 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             ),
 
     /**
-     * Every account inactive past the warning threshold, never yet warned —
-     * `scripts/ops/reap-inactive-accounts.ts`'s first stage.
+     * Stamp the account's `lastActiveAt`, at most once a day: the filter matches only an account
+     * with no stamp yet or one older than a day, so a busy account costs one write a day.
+     * `$max` keeps the stamp from ever moving backwards. `timestamps: false`, since signing in
+     * is not an edit of the profile.
+     *
+     * @param id - the account
+     * @param now - the moment to stamp
+     */
+    touchLastActive: (id: string, now: Date) =>
+        userModel
+            .updateOne(
+                {
+                    _id: toObjectId(id),
+                    $or: [
+                        { lastActiveAt: { $exists: false } },
+                        { lastActiveAt: { $lt: new Date(now.getTime() - ACTIVITY_THROTTLE_MS) } }
+                    ]
+                },
+                { $max: { lastActiveAt: now } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Every enabled, live account inactive past the warning threshold and not yet warned for this
+     * stretch of inactivity — `scripts/ops/reap-inactive-accounts.ts`'s first stage.
      */
     findInactiveUnwarned: (cutoff: Date) =>
         userModel
             .find({
                 active: { $ne: false },
                 deletedAt: { $exists: false },
-                inactivityWarnedAt: { $exists: false },
-                $expr: { $lt: [LAST_ACTIVE_EXPR, cutoff] }
+                $expr: { $and: [{ $lt: [LAST_ACTIVE_EXPR, cutoff] }, NOT_WARNED_THIS_STRETCH] }
             })
             .exec(),
 
     /**
-     * Every account warned, and still inactive past the grace window — the reaper's soft-delete
-     * stage.
+     * Every enabled, live account warned before `warnedBefore` and not active since the warning —
+     * the reaper's soft-delete stage. The grace runs from the WARNING, so one run can never warn
+     * and soft-delete the same account.
      */
-    findWarnedStillInactive: (cutoff: Date) =>
+    findWarnedStillInactive: (warnedBefore: Date) =>
         userModel
             .find({
+                active: { $ne: false },
                 deletedAt: { $exists: false },
-                inactivityWarnedAt: { $exists: true },
-                $expr: { $lt: [LAST_ACTIVE_EXPR, cutoff] }
+                inactivityWarnedAt: { $lt: warnedBefore },
+                $expr: { $lt: [LAST_ACTIVE_EXPR, '$inactivityWarnedAt'] }
             })
             .exec(),
 
-    /** Every account soft-deleted by the reaper past ITS OWN grace window — the hard-delete stage. */
+    /** Every enabled account soft-deleted by the reaper before `cutoff` — the hard-delete stage. */
     findReaperSoftDeletedPastGrace: (cutoff: Date) =>
         userModel
             .find({
-                deletedAt: { $exists: true, $lt: cutoff },
-                // `inactivityWarnedAt` is the marker that THIS reaper made the soft delete —
-                // an admin's own soft delete never sets it, so it is never a hard-delete
-                // candidate here. See the field's own doc comment on `UserRecord`.
-                inactivityWarnedAt: { $exists: true }
+                active: { $ne: false },
+                // `deletedBy` is the explicit marker that THIS reaper made the soft delete: a
+                // person's soft delete never carries it, whatever the account's warning history.
+                deletedBy: 'reaper',
+                deletedAt: { $lt: cutoff }
             })
             .exec()
 };

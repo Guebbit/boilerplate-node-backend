@@ -41,7 +41,8 @@ import {
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
-    bumpSessionEpoch
+    bumpSessionEpoch,
+    touchLastActive
 } from './credentials';
 import {
     consumeToken,
@@ -119,6 +120,7 @@ export const userService = {
     resetMfaAttempts,
     claimTotpStep,
     bumpSessionEpoch,
+    touchLastActive,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,

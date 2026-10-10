@@ -9,23 +9,22 @@
  * person's account is a decision only the controller running this deployment can make — a
  * boilerplate that ships it enabled will eventually delete someone's live account.
  *
- * "Last active" is the latest refresh-token exchange (`tokens[].lastUsedAt`, already stamped on
- * every refresh) or `createdAt` for an account that has never redeemed one — see
- * `LAST_ACTIVE_EXPR` in `users/repository.ts`. Three stages, one `NODE_INACTIVE_ACCOUNT_DAYS`
- * threshold and one fixed grace between them:
+ * "Last active" is `lastActiveAt` — stamped, at most once a day, on every sign-in (password, OAuth,
+ * 2FA) and every refresh — or `createdAt` for an account that never signed in; see
+ * `LAST_ACTIVE_EXPR` in `users/repository.ts`. Sessions are not read: they are pruned on expiry and
+ * logout, so an account that logged out would look as idle as one never used. Three stages, one
+ * `NODE_INACTIVE_ACCOUNT_DAYS` threshold and one fixed grace between them:
  *
  *   inactive N days  → email warning, `inactivityWarnedAt` stamped
- *   + GRACE_DAYS more, still no login → soft delete (`userService.remove(user, false, systemContext)`)
- *   + GRACE_DAYS more since the soft delete → hard delete (`userService.remove(user, true)`),
- *     which runs every module's `personalData.erase` hook, exactly like an admin's own hard delete
+ *   GRACE_DAYS after the WARNING, still no sign-in → soft delete, marked `deletedBy: 'reaper'`
+ *   GRACE_DAYS after that soft delete → hard delete (`userService.remove(user, true)`), which runs
+ *     every module's `personalData.erase` hook, exactly like an admin's own hard delete
  *
- * `inactivityWarnedAt` is what tells stage three's candidates apart from an account an admin
- * soft-deleted for an unrelated reason — see the field's own doc comment on `UserRecord`. A
- * returning user is naturally excluded from every later stage: `LAST_ACTIVE_EXPR` is recomputed
- * fresh on each run, not read off the stale warning, so signing back in undoes the clock. The one
- * gap this leaves: someone who returns and later goes inactive AGAIN keeps their old
- * `inactivityWarnedAt` and so gets no fresh warning email before stage two — acceptable for a
- * disabled-by-default safety net, not a substitute for a fuller design if this ever needs one.
+ * The grace runs from the warning, never from the last activity, so one run cannot warn and
+ * soft-delete the same account. An account that comes back after a warning is not deleted, and is
+ * warned again if it goes idle again — nothing is written on its sign-in. The `deletedBy` marker is
+ * what lets stage three tell its own soft deletes from a staff member's: it never erases the latter.
+ * Disabled (`active: false`) accounts are in no stage.
  *
  * Meant to run periodically (the same cron container that runs `reap:quarantine` and
  * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
@@ -117,9 +116,7 @@ const main = async (): Promise<void> => {
         const toWarn = await userService.findInactiveUnwarned(daysAgo(inactiveDays));
         for (const user of toWarn) await warn(user);
 
-        const toSoftDelete = await userService.findWarnedStillInactive(
-            daysAgo(inactiveDays + GRACE_DAYS)
-        );
+        const toSoftDelete = await userService.findWarnedStillInactive(daysAgo(GRACE_DAYS));
         // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
         for (const user of toSoftDelete)
             await userService.remove(user, false, systemCallerContext('User'));

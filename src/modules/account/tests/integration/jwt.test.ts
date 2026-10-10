@@ -716,3 +716,54 @@ describe('rotateRefreshToken housekeeping', () => {
         );
     });
 });
+
+/** When the account was last stamped as active. */
+const activeAt = (userId: string) =>
+    userRepository.findByIdWithCredentials(userId).then((doc) => doc!.lastActiveAt);
+
+describe('the activity stamp the inactivity reaper reads', () => {
+    const DAY_MS = 24 * 60 * 60 * 1000;
+
+    beforeEach(() => freezeDate());
+
+    afterEach(() => jest.useRealTimers());
+
+    it('stamps a sign-in', async () => {
+        const user = await createUser();
+        expect(await activeAt(String(user._id))).toBeUndefined();
+
+        await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
+
+        expect(await activeAt(String(user._id))).toEqual(new Date());
+    });
+
+    it('stamps a refresh', async () => {
+        const user = await createUser();
+        const id = String(user._id);
+        const first = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        // Backdated by hand: the token itself lives an hour, so the clock cannot move a day.
+        await userRepository.updateMany(
+            { _id: id },
+            { $set: { lastActiveAt: new Date(Date.now() - 2 * DAY_MS) } }
+        );
+
+        await rotateRefreshToken(first);
+
+        expect(await activeAt(id)).toEqual(new Date());
+    });
+
+    it('writes at most once a day, and again after a day', async () => {
+        const user = await createUser();
+        const id = String(user._id);
+        const stamped = new Date();
+        await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+
+        advanceDate(DAY_MS - 1000);
+        await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        expect(await activeAt(id)).toEqual(stamped);
+
+        advanceDate(2000);
+        await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        expect(await activeAt(id)).toEqual(new Date());
+    });
+});
