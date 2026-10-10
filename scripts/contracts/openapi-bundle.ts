@@ -36,6 +36,7 @@ import path from 'node:path';
 import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
+import { withBrowserEvents } from './analytics-browser-events';
 
 /**
  * The narrative order the contract has always had — what a caller meets first, then the path a
@@ -564,7 +565,9 @@ const compile = (): string => {
         MARKER +
         withErrorCodes(
             withModuleStamps(
-                withVersionedResources(withAppLevelResponses(readFileSync(temporary, 'utf8'))),
+                withVersionedResources(
+                    withAppLevelResponses(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                ),
                 moduleOfPath()
             ),
             collectErrorCodes()

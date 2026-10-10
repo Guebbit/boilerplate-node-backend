@@ -16,6 +16,7 @@ import { assertModuleConfig } from '@kernel/module-config';
 import type { ConfigSlice } from '@infrastructure/config/define';
 import { markDomainEventsWired } from '@kernel/events';
 import type { RateLimitBudget } from '@types';
+import type { AnalyticsEventInput } from '@infrastructure/observability/analytics';
 
 /**
  * A module's writeback for the image digest pipeline — how the worker (or the no-broker inline
@@ -204,6 +205,30 @@ export interface PublicEventTarget {
 }
 
 /**
+ * What `analytics` forwards to the provider for one browser-reported event: the event's name and
+ * properties, built by the module that owns the event.
+ */
+export type BrowserEventReport = Pick<AnalyticsEventInput, 'event' | 'properties'>;
+
+/**
+ * A module's declaration that the browser may report one event the server cannot see (the response
+ * cache hides most reads). Keyed on the manifest by the event name the request body carries, and
+ * assembled into the `POST /analytics/events` contract from the module's own
+ * `openapi.browser-events.yaml`.
+ *
+ * `analytics` cannot import the owning module (the same wall as {@link PublicEventTarget}), so it
+ * resolves these through {@link resolveBrowserEvents}. `toReport` takes `never` for the same reason
+ * `PublicEventTarget.toPublicEvent` does: one entry per event, called back with that event's body.
+ */
+export interface BrowserEventTarget {
+    /**
+     * @param body - the validated request body of this event
+     * @returns the report to hand the analytics port
+     */
+    toReport: (body: never) => BrowserEventReport;
+}
+
+/**
  * Who a data-subject export is about. `email` because one module (`feedback`, tickets are not
  * tied to an account) matches its rows by address, not by id.
  */
@@ -376,6 +401,13 @@ export interface AppModule {
     publicEvents?: Readonly<Record<string, PublicEventTarget>>;
 
     /**
+     * This module's {@link BrowserEventTarget}s, keyed by event name — see
+     * {@link resolveBrowserEvents}. Most modules have none; a module whose pages report an event
+     * through `POST /analytics/events` registers one entry per such event.
+     */
+    browserEvents?: Readonly<Record<string, BrowserEventTarget>>;
+
+    /**
      * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
      * Relative to `basePath`, the same way `routes` is.
      *
@@ -529,6 +561,22 @@ export const resolvePublicEvents = (
     uniqueEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.publicEvents ?? {})),
         'public event domain name'
+    );
+
+/**
+ * Every registered module's {@link BrowserEventTarget}s, flattened into one lookup keyed by event
+ * name. Built from the passed-in list for the same reason {@link resolvePublicEvents} is.
+ *
+ * @param appModules - the enabled module list
+ * @throws {Error} when two modules declare the same browser event
+ */
+export const resolveBrowserEvents = (
+    appModules: readonly AppModule[]
+    // `| undefined` stated explicitly: `noUncheckedIndexedAccess` is off project-wide.
+): Readonly<Record<string, BrowserEventTarget | undefined>> =>
+    uniqueEntries(
+        appModules.flatMap((appModule) => Object.entries(appModule.browserEvents ?? {})),
+        'browser event name'
     );
 
 /**

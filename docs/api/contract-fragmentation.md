@@ -395,6 +395,16 @@ Why: removing `orders` removes its events from the contract with no hand edit, a
 leaves the fragments unmerged. The fragments are not documents (they ref the shared server), so
 `lint:asyncapi:modules` skips them and `lint:asyncapi` lints the merged result.
 
+### Module-owned browser events {#module-owned-browser-events}
+
+`POST /analytics/events` accepts a closed set of events, and each belongs to the module whose page
+reports it. A module ships `src/modules/<m>/openapi.browser-events.yaml` (components only, one schema
+per event, each with a one-value `event` enum). After the bundle is built,
+`scripts/contracts/analytics-browser-events.ts` adds those schemas and replaces `analytics`'
+placeholder `AnalyticsEventRequest` with a `oneOf` discriminated on `event`: one call in
+`openapi-bundle.ts`. With `analytics` absent nothing is added; with no fragment the placeholder stays.
+The runtime half is `AppModule.browserEvents`, the same shape as `publicEvents` for webhooks.
+
 ### The analytics names — owned by the module, published to no one
 
 `PRODUCTS_SEARCHED` is a fact about products and `CART_ITEM_ADDED` one about the cart, so each

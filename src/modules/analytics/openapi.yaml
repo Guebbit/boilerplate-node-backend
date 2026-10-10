@@ -10,8 +10,8 @@ paths:
             summary: Report one browsing event
             description: >
                 The relay for events a browser sees and the server cannot: the response cache
-                answers most reads without reaching the application. The set is closed
-                (`product_viewed`, `products_searched`); a business fact (cart, checkout, order,
+                answers most reads without reaching the application. The set is closed: the events the deployed
+                modules declare (today `product_viewed`, `products_searched`); a business fact (cart, checkout, order,
                 payment, signup, login) is never accepted here, it is emitted by the service that
                 makes it true. A visitor who has not agreed to analytics is not measured: the
                 answer is the same `204`, and nothing is recorded or forwarded. A page should not
@@ -34,43 +34,15 @@ paths:
 components:
     schemas:
         # ---------- analytics — the schemas only this module's paths reference. ----------
+        # The closed set of events a browser may report. Declared by the modules that own them, in
+        # `src/modules/<m>/openapi.browser-events.yaml`; the bundler replaces this object with a
+        # `oneOf` over those schemas (`scripts/contracts/analytics-browser-events.ts`). With no module
+        # declaring one, this stays: an `event` name and nothing the relay recognises.
         AnalyticsEventRequest:
-            oneOf:
-                - $ref: '#/components/schemas/ProductViewedEvent'
-                - $ref: '#/components/schemas/ProductsSearchedEvent'
-            discriminator:
-                propertyName: event
-                mapping:
-                    product_viewed: '#/components/schemas/ProductViewedEvent'
-                    products_searched: '#/components/schemas/ProductsSearchedEvent'
-
-        ProductViewedEvent:
             type: object
-            additionalProperties: false
-            required: [event, productId]
+            additionalProperties: true
+            required: [event]
             properties:
                 event:
                     type: string
-                    enum: [product_viewed]
-                productId:
-                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
-                    description: The product whose page was opened.
-
-        ProductsSearchedEvent:
-            type: object
-            additionalProperties: false
-            required: [event, resultCount, page]
-            properties:
-                event:
-                    type: string
-                    enum: [products_searched]
-                text:
-                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text' }]
-                    description: The free-text term searched for, when there was one.
-                resultCount:
-                    type: integer
-                    minimum: 0
-                    maximum: 100000
-                    description: How many products the search found.
-                page:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                    maxLength: 100

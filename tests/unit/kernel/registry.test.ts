@@ -13,6 +13,7 @@ import {
     resolvePersonalDataSections,
     resolvePersonalDataMinimisers,
     resolvePublicEvents,
+    resolveBrowserEvents,
     type AppModule
 } from '@kernel/registry';
 
@@ -242,5 +243,34 @@ describe('resolvePublicEvents', () => {
         ];
 
         expect(() => resolvePublicEvents(modules)).toThrow(/"order\.created"/);
+    });
+});
+
+describe('resolveBrowserEvents', () => {
+    it('flattens every module into one lookup keyed by event name', () => {
+        const viewed = { toReport: jest.fn() };
+        const searched = { toReport: jest.fn() };
+        const modules: AppModule[] = [
+            { name: 'products', browserEvents: { product_viewed: viewed }, personalData: 'none' },
+            { name: 'other', browserEvents: { page_opened: searched }, personalData: 'none' },
+            { name: 'quiet', personalData: 'none' }
+        ];
+
+        const lookup = resolveBrowserEvents(modules);
+
+        expect(lookup.product_viewed).toBe(viewed);
+        expect(lookup.page_opened).toBe(searched);
+        expect(Object.keys(lookup)).toHaveLength(2);
+    });
+
+    it('refuses an event two modules both claim', () => {
+        const target = { toReport: jest.fn() };
+
+        expect(() =>
+            resolveBrowserEvents([
+                { name: 'a', browserEvents: { product_viewed: target }, personalData: 'none' },
+                { name: 'b', browserEvents: { product_viewed: target }, personalData: 'none' }
+            ])
+        ).toThrow(/browser event name.*product_viewed/);
     });
 });
