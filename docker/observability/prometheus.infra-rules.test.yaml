@@ -1,0 +1,65 @@
+# Unit tests for prometheus.infra-rules.yaml, run by `promtool test rules` (see the `alert-rules`
+# job in .github/workflows/ci.yml). One firing case per alert and a quiet case for the two that
+# read a counter.
+#
+# Run it: promtool test rules docker/observability/prometheus.infra-rules.test.yaml
+#
+rule_files:
+    - prometheus.infra-rules.yaml
+evaluation_interval: 1m
+tests:
+    - interval: 1m
+      input_series: []
+      alert_rule_test:
+          - eval_time: 1m
+            alertname: Watchdog
+            exp_alerts:
+                - exp_labels:
+                      severity: none
+                  exp_annotations:
+                      summary: Alerting pipeline heartbeat
+                      description: Always firing. If the heartbeat service stops receiving it, the alerting pipeline is down.
+    - interval: 1m
+      input_series:
+          - series: alertmanager_notifications_failed_total{integration="email"}
+            values: 0 0 0 1 2 3 4 5 5 5
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: AlertmanagerNotificationsFailing
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      integration: email
+                  exp_annotations:
+                      summary: Alertmanager cannot send email notifications
+                      description: Alertmanager failed to deliver email notifications in the last 15 minutes. Alerts routed there are not arriving.
+    - interval: 1m
+      input_series:
+          - series: alertmanager_notifications_failed_total{integration="email"}
+            values: 0x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: AlertmanagerNotificationsFailing
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: prometheus_rule_evaluation_failures_total{rule_group="/etc/prometheus/rules/alerts.yml;api.rules"}
+            values: 0 0 0 1 2 3 4 5 5 5
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PrometheusRuleEvaluationFailures
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      rule_group: /etc/prometheus/rules/alerts.yml;api.rules
+                  exp_annotations:
+                      summary: Prometheus rule group /etc/prometheus/rules/alerts.yml;api.rules is failing to evaluate
+                      description: Rules in /etc/prometheus/rules/alerts.yml;api.rules errored while running in the last 15 minutes, so the alerts they define are blind.
+    - interval: 1m
+      input_series:
+          - series: prometheus_rule_evaluation_failures_total{rule_group="/etc/prometheus/rules/alerts.yml;api.rules"}
+            values: 0x20
+      alert_rule_test:
+          - eval_time: 15m
+            alertname: PrometheusRuleEvaluationFailures
+            exp_alerts: []
