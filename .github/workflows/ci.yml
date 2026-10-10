@@ -233,7 +233,7 @@ jobs:
     alert-rules:
         # The Prometheus alert rules: valid syntax (`check rules`) and the right answers
         # (`test rules`, cases in prometheus.alert-rules.test.yaml). The image is the one
-        # docker-compose runs, pinned by digest.
+        # docker-compose runs, pinned by digest. Then the Alertmanager routing, by `amtool`.
         runs-on: ubuntu-latest
         timeout-minutes: 10
         permissions:
@@ -255,6 +255,16 @@ jobs:
                     -v "$PWD/docker/observability:/obs:ro" \
                     prom/prometheus:v2.55.1@sha256:2659f4c2ebb718e7695cb9b25ffa7d6be64db013daba13e05c875451cf51b0d3 \
                     test rules /obs/prometheus.alert-rules.test.yaml
+
+            - name: Check and test the alert routing
+              # Renders alertmanager.config.template.yaml for each knob combination, then
+              # `amtool check-config` and `amtool config routes test` prove where each alert
+              # lands. amtool ships in the Alertmanager image, pinned by digest like the one above.
+              run: |
+                  docker run --rm --entrypoint sh \
+                    -v "$PWD/docker/observability:/obs:ro" \
+                    prom/alertmanager:v0.34.1@sha256:84967b9b7ba45e38a9278d3e594305f43d4993c310df3905b51138b816c365f3 \
+                    /obs/alertmanager-routes-test.sh
 
     lint-openapi-modules:
         # The per-module REST fragments, against the narrower ruleset they are bundled from.
