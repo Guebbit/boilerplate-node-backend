@@ -18,6 +18,7 @@ paths:
             operationId: listAuditEntries
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - name: actor
                   in: query

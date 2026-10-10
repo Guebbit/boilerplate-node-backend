@@ -17,6 +17,7 @@ paths:
             operationId: listWebhookSubscriptions
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -51,6 +52,7 @@ paths:
             operationId: createWebhookSubscription
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:
@@ -82,6 +84,7 @@ paths:
             operationId: replaceWebhookSubscription
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -111,6 +114,7 @@ paths:
             operationId: updateWebhookSubscription
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -141,6 +145,7 @@ paths:
             operationId: deleteWebhookSubscription
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -167,6 +172,7 @@ paths:
             operationId: rotateWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -192,6 +198,7 @@ paths:
             operationId: removeWebhookSubscriptionSecret
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - name: secretId
@@ -220,6 +227,7 @@ paths:
             operationId: listWebhookDeliveries
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -259,6 +267,7 @@ paths:
             operationId: replayWebhookDelivery
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -288,6 +297,7 @@ paths:
             operationId: listWebhookEvents
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             responses:
                 '200':
                     description: Every event a subscription may filter on

@@ -47,6 +47,7 @@ paths:
             operationId: listFeedbackRequests
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             # Query only, and the DTO form of the same filters is `POST /feedback/search`. A body
             # on a GET has no defined semantics (RFC 9110 9.3.1) and the Fetch spec rejects it
             # outright, so the paired frontend could never have sent one; worse, `setCache` keys
@@ -95,6 +96,7 @@ paths:
             x-alias-of: listFeedbackRequests
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:
@@ -121,6 +123,7 @@ paths:
             operationId: replaceFeedbackRequestStatus
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -148,6 +151,7 @@ paths:
             operationId: updateFeedbackRequestStatus
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -178,6 +182,7 @@ paths:
             operationId: deleteFeedbackRequest
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
