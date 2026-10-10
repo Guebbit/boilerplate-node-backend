@@ -41,26 +41,24 @@ describe('planMergeLine', () => {
         expect(plan({ requested: LINE_MAX, held: 0 })).toEqual({ add: LINE_MAX });
     });
 
-    it('says "unavailable" and adds nothing for a product the catalogue does not show', () => {
+    it('says "removed" and adds nothing for a product the catalogue does not show', () => {
         expect(plan({ requested: 2, held: 0, listed: false })).toEqual({
             add: 0,
-            reason: 'unavailable'
+            reason: 'removed'
         });
     });
 
-    describe('when several reasons apply, the first of unavailable, capped, summed wins', () => {
+    describe('when several reasons apply, the first of removed, capped, summed wins', () => {
         it('capped beats summed', () => {
             expect(plan({ requested: 10, held: 995 }).reason).toBe('capped');
         });
 
-        it('unavailable beats summed', () => {
-            expect(plan({ requested: 1, held: 4, listed: false }).reason).toBe('unavailable');
+        it('removed beats summed', () => {
+            expect(plan({ requested: 1, held: 4, listed: false }).reason).toBe('removed');
         });
 
-        it('unavailable beats capped', () => {
-            expect(plan({ requested: 5, held: LINE_MAX, listed: false }).reason).toBe(
-                'unavailable'
-            );
+        it('removed beats capped', () => {
+            expect(plan({ requested: 5, held: LINE_MAX, listed: false }).reason).toBe('removed');
         });
     });
 

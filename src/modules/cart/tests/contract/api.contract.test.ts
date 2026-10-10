@@ -72,7 +72,7 @@ describe('GET /cart', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.items).toEqual([
-            { productId: String(scarce._id), quantity: 3, insufficientStock: true }
+            { productId: String(scarce._id), quantity: 3, availability: 'insufficient_stock' }
         ]);
     });
 });
@@ -230,7 +230,7 @@ describe('POST /cart/merge', () => {
                 productId: String(product._id),
                 requested: 2,
                 resulting: 2,
-                insufficientStock: false
+                availability: 'in_stock'
             }
         ]);
         expect(response.body.data.cart.items).toHaveLength(1);
@@ -263,21 +263,26 @@ describe('POST /cart/merge', () => {
                 requested: 2,
                 resulting: 3,
                 reason: 'summed',
-                insufficientStock: false
+                availability: 'in_stock'
             },
-            // Short, and kept at what was asked: the flag is all a shopper is told.
-            { productId: String(scarce._id), requested: 5, resulting: 5, insufficientStock: true },
+            // Short, and kept at what was asked: the name is all a shopper is told.
+            {
+                productId: String(scarce._id),
+                requested: 5,
+                resulting: 5,
+                availability: 'insufficient_stock'
+            },
             {
                 productId: MISSING_ID,
                 requested: 1,
                 resulting: 0,
-                reason: 'unavailable',
-                insufficientStock: false
+                reason: 'removed',
+                availability: 'removed'
             }
         ]);
     });
 
-    it('matches the contract when a line is unavailable: 200, with the line, and the rest landed', async () => {
+    it('matches the contract when a line is removed: 200, with the line, and the rest landed', async () => {
         const { bearer } = await authenticateAs('user');
         const kept = await createProduct();
 
@@ -293,7 +298,7 @@ describe('POST /cart/merge', () => {
 
         expect(response.status).toBe(200);
         expect(response.body.data.lines.map(({ reason }: { reason?: string }) => reason)).toEqual([
-            'unavailable',
+            'removed',
             undefined
         ]);
         expect(response.body.data.cart.items).toHaveLength(1);
@@ -868,8 +873,8 @@ describe('POST /cart/checkout', () => {
         expect(response.status).toBe(409);
         expect(response.body.errors[0].code).toBe('CART_INSUFFICIENT_STOCK');
         /*
-         * The refusal has to be actionable over the wire, not just in the service: which line and
-         * how much was asked for — never the exact number left, which is for stock readers only.
+         * The refusal has to be actionable over the wire, not just in the service: which line, how
+         * much was asked for and why it was refused — never the exact number left, which is for stock readers only.
          * `ErrorItem.details` is `additionalProperties: true`, so this rides the existing contract
          * rather than widening it.
          */
@@ -877,7 +882,8 @@ describe('POST /cart/checkout', () => {
             {
                 productId: String(scarce._id),
                 title: expect.any(String),
-                requested: 2
+                requested: 2,
+                availability: 'insufficient_stock'
             }
         ]);
     });

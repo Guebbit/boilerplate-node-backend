@@ -15,6 +15,10 @@ export { planMergeLine } from './merge';
 
 export { fitsStock } from './stock';
 
+export { lineAvailability } from './availability';
+
+export type { LineAvailability, AvailabilityFacts, AvailabilityProduct } from './availability';
+
 export type { MergeLineFacts, MergePlan, MergeReason } from './merge';
 
 export type { CheckoutShortfall, UnavailableCartLine, ShippingRequirementVerdict } from './rules';

@@ -10,10 +10,10 @@ x-error-codes:
     CART_BILLING_ADDRESS_REQUIRED: { status: 422, description: 'No billing address could be resolved — none was named, nothing ships, and the address book has no default.' }
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
-    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines exceed the product''s available stock — see `errors[].details.lines`, one entry per short line with its `productId`, `title` and the `requested` quantity. The number left is not part of the answer: exact stock is for callers who read it (`inventory.any.read`).' }
+    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`inventory.any.read`).' }
     CART_OPEN_ORDER_LIMIT: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments/intent`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
-    CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or deactivated since it was added.' }
+    CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added: its `availability` is `removed`. A product merely taken off sale is `unavailable` and refused as `CART_INSUFFICIENT_STOCK`.' }
     CART_QUANTITY_LIMIT: { status: 422, description: 'The requested quantity exceeds the per-line limit.' }
     CART_SHIPPING_METHOD_NOT_FOUND: { status: 404, description: 'The named shipping method does not exist or is not offered.' }
     CART_SHIPPING_METHOD_REQUIRED: { status: 422, description: 'A shipping method is required and none is set on the cart.' }
@@ -281,14 +281,16 @@ paths:
                 # refuses rather than shipping nowhere. `errors[].code` is `CART_ADDRESS_NOT_FOUND`.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 # Checking out an empty cart (`CART_EMPTY`), insufficient stock
-                # (`CART_INSUFFICIENT_STOCK`, naming each short line but not the number left), a race with another checkout (`CART_CHANGED`), an
+                # (`CART_INSUFFICIENT_STOCK`, naming each short line but not the number
+                # left), a race with another checkout (`CART_CHANGED`), an
                 # `addressId` sent for a chosen method whose `requiresAddress` is false
                 # (`CART_ADDRESS_NOT_APPLICABLE`: that method ships to no address at all — and
                 # neither does an all-digital basket — so naming one is a client error, not a
                 # lookup that might resolve), a `paymentMethod` this
                 # deployment does not offer (`CART_PAYMENT_METHOD_NOT_AVAILABLE`), or the caller
                 # already has `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, of any
-                # payment method (`CART_OPEN_ORDER_LIMIT`, naming them in `details.orderIds`). A stored shipping choice the basket no
+                # payment method (`CART_OPEN_ORDER_LIMIT`, naming them in
+                # `details.orderIds`). A stored shipping choice the basket no
                 # longer fits (gone digital-only, lost its last physical line, outgrown the method)
                 # is not a refusal here: it reads as no choice, as in `GET /cart`'s `shipping.selected`.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
@@ -320,10 +322,11 @@ paths:
                 not land cleanly, why (`reason`). A line the cart cannot take is not a failure: the
                 call still answers 200, because one bad line must not strand the rest. Stock is CHECKED,
                 not enforced: a line that is short is still added (a stock-out is temporary) and
-                flagged `insufficientStock`, with the quantity left as the sum, so the answer never
+                flagged through its `availability` (`insufficient_stock`, `out_of_stock`, or `unavailable` for a
+                product taken off sale), with the quantity left as the sum, so the answer never
                 says how many are for sale. The same rule runs at checkout, which refuses, and in
                 `GET /cart`, which flags, all three reading the stock ledger. Lines that could not be
-                added at all (`unavailable`: the product is deleted or hidden) are also written as ONE notification
+                added at all (`removed`: the product is deleted or hidden) are also written as ONE notification
                 (`notifications.cart-merge-refused`); nothing is written when there are none. Safe to
                 retry with an `Idempotency-Key`: a lost answer replays instead of adding the same
                 quantities twice. The caller empties its local guest cart once this answers.
@@ -467,6 +470,23 @@ components:
                     items:
                         $ref: '#/components/schemas/AddCartItemRequest'
 
+        # One value for a cart line, a wishlist line and a merge result. Google's feed vocabulary.
+        # First match wins: removed, unavailable, out_of_stock, insufficient_stock, in_stock.
+        LineAvailability:
+            type: string
+            description: >-
+                Whether a saved line can be bought right now.
+
+                - `in_stock`: buyable, enough stock.
+                - `insufficient_stock`: some left, fewer than the line wants (cart lines only).
+                - `out_of_stock`: none left.
+                - `unavailable`: the product is taken off sale (`purchasable: false`).
+                - `removed`: the product is hidden (`active: false`) or deleted. The line is kept,
+                  and returns to a stock value if the product is shown again.
+
+                Never a number: exact stock stays behind `inventory.any.read`.
+            enum: [in_stock, insufficient_stock, out_of_stock, unavailable, removed]
+
         MergeLineReason:
             type: string
             description: >-
@@ -474,16 +494,16 @@ components:
 
                 - `summed`: the cart already held some of the product, so `resulting` is the sum.
                 - `capped`: the sum would pass the per-line cap (`NODE_CART_LINE_MAX`); `resulting` is the cap.
-                - `unavailable`: the product is not publicly visible any more (deleted or hidden);
+                - `removed`: the product is not publicly visible any more (deleted or hidden);
                   nothing was added, `resulting` is what the cart already held (often 0). A product
-                  that is merely sold out is NOT unavailable: it is added and flagged
-                  `insufficientStock`.
-            enum: [summed, capped, unavailable]
+                  that is merely sold out, or taken off sale, is NOT removed: it is added and
+                  flagged through `availability`.
+            enum: [summed, capped, removed]
 
         MergeLineResult:
             type: object
             additionalProperties: false
-            required: [productId, requested, resulting, insufficientStock]
+            required: [productId, requested, resulting, availability]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -497,11 +517,10 @@ components:
                     description: What the cart holds for this product after the merge.
                 reason:
                     $ref: '#/components/schemas/MergeLineReason'
-                insufficientStock:
-                    type: boolean
-                    description: >-
-                        True when `resulting` is more than is for sale. A flag, never the number left.
-                        Independent of `reason`: a line can be `summed` and short.
+                # What `resulting` can do right now. Never the number left. Independent of
+                # `reason`: a line can be `summed` and short.
+                availability:
+                    $ref: '#/components/schemas/LineAvailability'
 
         MergeCartResponse:
             type: object
@@ -692,10 +711,10 @@ components:
         CartResponseItem:
             type: object
             additionalProperties: false
-            required: [productId, quantity, insufficientStock]
+            required: [productId, quantity, availability]
             description: >-
-                One line of the basket as the cart answers it: the stored line plus whether it fits
-                what is for sale. Not `CartItem`, which stays the bare stored line the export and the
+                One line of the basket as the cart answers it: the stored line plus whether it can
+                be bought as it stands. Not `CartItem`, which stays the bare stored line the export and the
                 order request use.
             properties:
                 productId:
@@ -703,15 +722,15 @@ components:
                 quantity:
                     type: integer
                     minimum: 1
-                insufficientStock:
-                    type: boolean
-                    description: >-
-                        True when `quantity` is more than is for sale right now. A flag and never the
-                        number left: exact stock is for callers holding `inventory.any.read`, the same
-                        level of disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
-                        ledger by the cart view, the merge and checkout through one rule; `POST /cart`
-                        and `PUT` still do not refuse a line for stock, so a client polling `GET /cart`
-                        is how it learns a line has gone short.
+                # Whether `quantity` can be bought right now, never the number left: exact
+                # stock is for callers holding `inventory.any.read`, the same level of
+                # disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
+                # ledger and the catalogue by the cart view, the merge and checkout
+                # through one rule; `POST /cart` and `PUT` do not refuse a line for stock
+                # or for being off sale, so a client polling `GET /cart` is how it learns
+                # a line has gone short or unavailable.
+                availability:
+                    $ref: '#/components/schemas/LineAvailability'
 
         CartShippingOption:
             type: object

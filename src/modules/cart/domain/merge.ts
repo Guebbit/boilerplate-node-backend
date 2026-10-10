@@ -6,7 +6,7 @@
  */
 
 /** Why a merged line did not land exactly as asked — the contract's `MergeLineReason`. */
-export type MergeReason = 'summed' | 'capped' | 'unavailable';
+export type MergeReason = 'summed' | 'capped' | 'removed';
 
 /** What one guest line asks the rule to decide on. */
 export interface MergeLineFacts {
@@ -14,7 +14,10 @@ export interface MergeLineFacts {
     requested: number;
     /** What the cart already holds of the product. */
     held: number;
-    /** Whether the product is publicly visible; a deleted or hidden one takes no line. */
+    /**
+     * Whether the product is publicly visible. A deleted or hidden one takes no line; one merely
+     * off sale is listed and takes one.
+     */
     listed: boolean;
     /** The per-line ceiling. */
     lineMax: number;
@@ -34,14 +37,14 @@ export interface MergePlan {
  * Stock plays no part. A sold-out or short product is added like any other and flagged by the
  * caller through `fitsStock`; lowering the line to what is for sale would let a caller read exact
  * stock by merging 999 (`docs/theory/defences/authorization.md`, "Reading the shelf"). When several
- * reasons apply the one reported is the first that does: `unavailable` (nothing is added at all),
+ * reasons apply the one reported is the first that does: `removed` (nothing is added at all),
  * `capped`, `summed`. `capped` says the shopper got less than they asked for; `summed` is context.
  *
  * @param facts - the line, what the cart holds, and whether the product is listed
  * @returns how many units to add, and the one reason to report
  */
 export const planMergeLine = ({ requested, held, listed, lineMax }: MergeLineFacts): MergePlan => {
-    if (!listed) return { add: 0, reason: 'unavailable' };
+    if (!listed) return { add: 0, reason: 'removed' };
 
     const wanted = held + requested;
     const target = Math.min(wanted, lineMax);

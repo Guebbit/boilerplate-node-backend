@@ -25,8 +25,7 @@ export default {
     personalData: [
         {
             section: 'wishlist',
-            collect: (subject) =>
-                wishlistService.wishlistGet(subject.userId).then((view) => view.items),
+            collect: (subject) => wishlistService.wishlistExportLines(subject.userId),
             // Joins the caller's own hard-delete transaction — see `wishlistDeleteByUserId`.
             erase: wishlistDeleteByUserId
         }

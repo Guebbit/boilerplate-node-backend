@@ -110,7 +110,7 @@ describe('a merge that loses a race at the cap', () => {
                 requested: 2,
                 resulting: 5,
                 reason: 'capped',
-                insufficientStock: false
+                availability: 'in_stock'
             }
         ]);
         expect(emit).not.toHaveBeenCalled();

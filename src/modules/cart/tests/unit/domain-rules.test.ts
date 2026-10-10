@@ -51,7 +51,7 @@ describe('evaluateCheckout', () => {
      * still NAME the product: the row is right there to read a title off.
      */
     it.each([
-        ['deactivated', { title: 'Old Favourite', active: false }],
+        ['hidden', { title: 'Old Favourite', active: false }],
         ['soft-deleted', { title: 'Discontinued', deletedAt: new Date() }]
     ])('refuses a cart holding a %s product, with its title', (_label, product) => {
         expect(evaluateCheckout([line(1, 10), { quantity: 1, product, productId: 'p-1' }])).toEqual(
@@ -82,7 +82,45 @@ describe('evaluateCheckout', () => {
 
         expect(
             !verdict.ok && verdict.reason === 'insufficient-stock' && verdict.shortfalls
-        ).toEqual([{ productId: '', title: '', requested: 6 }]);
+        ).toEqual([{ productId: '', title: '', requested: 6, availability: 'insufficient_stock' }]);
+    });
+
+    // Off sale is "stock 0" for checkout, with its own name so the client words it differently.
+    it('refuses an off-sale product under the stock refusal, named unavailable', () => {
+        const offSale = {
+            quantity: 1,
+            productId: 'p-1',
+            product: { title: 'Bed', available: 9, purchasable: false }
+        };
+
+        expect(evaluateCheckout([line(1, 10), offSale])).toEqual({
+            ok: false,
+            reason: 'insufficient-stock',
+            shortfalls: [
+                { productId: 'p-1', title: 'Bed', requested: 1, availability: 'unavailable' }
+            ]
+        });
+    });
+
+    it('names a sold-out line out_of_stock, apart from a short one', () => {
+        const verdict = evaluateCheckout([line(2, 0), line(6, 5)]);
+
+        expect(
+            !verdict.ok &&
+                verdict.reason === 'insufficient-stock' &&
+                verdict.shortfalls.map(({ availability }) => availability)
+        ).toEqual(['out_of_stock', 'insufficient_stock']);
+    });
+
+    // Hidden wins over off sale: the line is `removed`, which is the 404-shaped refusal.
+    it('treats a hidden off-sale product as removed, not unavailable', () => {
+        const product = { title: 'Bed', available: 9, active: false, purchasable: false };
+
+        expect(evaluateCheckout([{ quantity: 1, productId: 'p-1', product }])).toEqual({
+            ok: false,
+            reason: 'product-unavailable',
+            lines: [{ productId: 'p-1', title: 'Bed' }]
+        });
     });
 
     it('accepts a line taking exactly the last units', () => {

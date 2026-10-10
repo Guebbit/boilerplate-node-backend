@@ -22,8 +22,7 @@ import {
     type StaticShippingMethod
 } from '@modules/delivery';
 import type { CartDocument } from '../model';
-import { basketWeight, fitsStock, needsShipping } from '../domain';
-import { sellableUnits } from './shelf';
+import { basketWeight, lineAvailability, needsShipping } from '../domain';
 
 /**
  * A cart line joined with the product it references.
@@ -67,7 +66,7 @@ export const isJoined = (line: CartLine): line is JoinedCartLine => line.product
  * Join a cart's lines to their products, in one query.
  *
  * `productService.findManyByIds` is unscoped, the same as the `populate()` it replaces: a
- * soft-deleted or deactivated product still joins, `active`/`deletedAt` included, which is what
+ * soft-deleted or hidden product still joins, `active`/`deletedAt` included, which is what
  * lets checkout tell "gone" (hard-deleted, absent from the lookup) from "here, but not sellable"
  * apart. One `$in` query for however many lines the cart holds, same shape as
  * `orders/services/current.ts`'s own catalogue join.
@@ -165,10 +164,11 @@ const buildView = (
         items: lines.map(({ productId, quantity: lineQuantity, product }) => ({
             productId,
             quantity: lineQuantity,
-            insufficientStock: !fitsStock(
-                lineQuantity,
-                sellableUnits({ product, available: available.get(productId) })
-            )
+            availability: lineAvailability({
+                product,
+                available: available.get(productId),
+                quantity: lineQuantity
+            })
         })),
         summary: {
             itemsCount: count,
@@ -187,10 +187,10 @@ const buildView = (
 /**
  * Turn a cart document into the response the contract declares.
  * The joined `product` prices the cart and, with the ledger's units, sets each line's
- * `insufficientStock` flag, then is dropped: `CartResponseItem` in `openapi.yaml` is
- * `additionalProperties: false` over `{ productId, quantity, insufficientStock }`. The ledger is
+ * `availability`, then is dropped: `CartResponseItem` in `openapi.yaml` is
+ * `additionalProperties: false` over `{ productId, quantity, availability }`. The ledger is
  * read once for the whole cart (`inventoryService.availableFor`, the same source checkout and the
- * merge use), and the flag is never the number left. Use `cartGet` where the joined product is
+ * merge use), and the value is never the number left. Use `cartGet` where the joined product is
  * actually needed.
  */
 export const toCartView = (cart: CartDocument | null): Promise<CartView> =>

@@ -1819,7 +1819,7 @@ components:
                 wishlist:
                     type: array
                     items:
-                        $ref: '../../src/modules/wishlist/openapi.yaml#/components/schemas/WishlistItem'
+                        $ref: '../../src/modules/wishlist/openapi.yaml#/components/schemas/WishlistExportItem'
                 sessions:
                     type: array
                     items:

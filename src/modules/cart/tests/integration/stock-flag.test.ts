@@ -1,13 +1,13 @@
 /**
  * @module
- * The cart view's stock flag: every answer that carries the cart marks a line `insufficientStock`
- * when its quantity is more than is for sale, from the same rule checkout and the merge use and
- * the same source, the stock ledger.
+ * The cart view's line availability: every answer that carries the cart gives each line an
+ * `availability`, from the same rule checkout and the merge use and the same sources, the stock
+ * ledger and the catalogue.
  *
- * The second invariant matters as much as the first: the flag is a boolean and NEVER the number
+ * The second invariant matters as much as the first: the value is a name and NEVER the number
  * left. "Reading the shelf" (`docs/theory/defences/authorization.md`) gives exact stock to
  * `inventory.any.read` only, so no field of any cart answer may vary with what is on the shelf
- * beyond that one boolean.
+ * beyond that one name.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -36,9 +36,9 @@ afterEach(() => {
     resetEnvironmentOverrides();
 });
 
-/** The flag of the one line in the user's cart. */
+/** The availability of the one line in the user's cart. */
 const flagOf = (userId: string) =>
-    cartGetForView(userId, testCallerContext).then(({ items }) => items[0]?.insufficientStock);
+    cartGetForView(userId, testCallerContext).then(({ items }) => items[0]?.availability);
 
 /** Every key that appears anywhere in a JSON value, nested objects and arrays included. */
 const keysOf = (value: unknown): string[] => {
@@ -47,16 +47,16 @@ const keysOf = (value: unknown): string[] => {
     return Object.entries(value).flatMap(([key, entry]) => [key, ...keysOf(entry)]);
 };
 
-describe('GET /cart’s stock flag', () => {
-    it('is false while the line fits, and true once it no longer does', async () => {
+describe('GET /cart’s line availability', () => {
+    it('is in_stock while the line fits, and insufficient_stock once it no longer does', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 5 });
         await cartItemAddById(user.id, String(product._id), 4);
-        await expect(flagOf(user.id)).resolves.toBe(false);
+        await expect(flagOf(user.id)).resolves.toBe('in_stock');
 
         await inventoryService.adjust(String(product._id), -2, 'stocktake');
 
-        await expect(flagOf(user.id)).resolves.toBe(true);
+        await expect(flagOf(user.id)).resolves.toBe('insufficient_stock');
     });
 
     it('reads the ledger, not the catalogue cache that sits low', async () => {
@@ -66,7 +66,7 @@ describe('GET /cart’s stock flag', () => {
 
         await productService.syncStockCache(String(product._id), { onHand: 0, reserved: 0 });
 
-        await expect(flagOf(user.id)).resolves.toBe(false);
+        await expect(flagOf(user.id)).resolves.toBe('in_stock');
     });
 
     it('treats a line equal to what is for sale as fitting', async () => {
@@ -74,15 +74,15 @@ describe('GET /cart’s stock flag', () => {
         const product = await createProduct({ onHand: 4 });
         await cartItemAddById(user.id, String(product._id), 4);
 
-        await expect(flagOf(user.id)).resolves.toBe(false);
+        await expect(flagOf(user.id)).resolves.toBe('in_stock');
     });
 
-    it('flags a sold-out line', async () => {
+    it('names a sold-out line out_of_stock', async () => {
         const user = await createUser();
         const product = await createProduct({ onHand: 0 });
         await cartItemAddById(user.id, String(product._id), 1);
 
-        await expect(flagOf(user.id)).resolves.toBe(true);
+        await expect(flagOf(user.id)).resolves.toBe('out_of_stock');
     });
 
     it('counts units another order holds as not for sale', async () => {
@@ -99,14 +99,14 @@ describe('GET /cart’s stock flag', () => {
 
         const shopper = await createUser({ email: 'shopper@example.com' });
         await cartItemAddById(shopper.id, String(product._id), 4);
-        await expect(flagOf(shopper.id)).resolves.toBe(false);
+        await expect(flagOf(shopper.id)).resolves.toBe('in_stock');
         await cartItemAddById(shopper.id, String(product._id), 1);
 
         // 10 on the shelf, 6 held by the open order: 4 fit, 5 do not.
-        await expect(flagOf(shopper.id)).resolves.toBe(true);
+        await expect(flagOf(shopper.id)).resolves.toBe('insufficient_stock');
     });
 
-    it('flags a line whose product is no longer sold, in the window before the pull', async () => {
+    it('names a line whose product is no longer shown removed, in the window before the pull', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemAddById(user.id, String(product._id), 1);
@@ -116,10 +116,10 @@ describe('GET /cart’s stock flag', () => {
 
         await productService.removeById(String(product._id), false);
 
-        await expect(flagOf(user.id)).resolves.toBe(true);
+        await expect(flagOf(user.id)).resolves.toBe('removed');
     });
 
-    it('flags a hard-deleted product’s line too', async () => {
+    it('names a hard-deleted product’s line removed too', async () => {
         const user = await createUser();
         const product = await createProduct();
         await cartItemAddById(user.id, String(product._id), 1);
@@ -127,10 +127,10 @@ describe('GET /cart’s stock flag', () => {
 
         await productService.removeById(String(product._id), true);
 
-        await expect(flagOf(user.id)).resolves.toBe(true);
+        await expect(flagOf(user.id)).resolves.toBe('removed');
     });
 
-    it('flags each line on its own, in one answer', async () => {
+    it('names each line on its own, in one answer', async () => {
         const user = await createUser();
         const plenty = await createProduct({ onHand: 50 });
         const scarce = await createProduct({ onHand: 1 });
@@ -139,7 +139,10 @@ describe('GET /cart’s stock flag', () => {
 
         const { items } = await cartGetForView(user.id, testCallerContext);
 
-        expect(items.map(({ insufficientStock }) => insufficientStock)).toEqual([false, true]);
+        expect(items.map(({ availability }) => availability)).toEqual([
+            'in_stock',
+            'insufficient_stock'
+        ]);
     });
 });
 
@@ -163,7 +166,7 @@ const shortCartBody = async (onHand: number, bearer: string) => {
 const anonymised = (body: unknown, id: string): unknown =>
     JSON.parse(JSON.stringify(body).replaceAll(id, 'PRODUCT'));
 
-describe('the flag never carries a number', () => {
+describe('the availability never carries a number', () => {
     it('answers GET /cart and POST /cart/merge identically for 1 on the shelf and 500', async () => {
         const first = await authenticateAs('user');
         const second = await authenticateAsRole('customer');
@@ -176,8 +179,8 @@ describe('the flag never carries a number', () => {
         expect(anonymised(nearlyGone.merge, nearlyGone.id)).toEqual(
             anonymised(plenty.merge, plenty.id)
         );
-        expect(nearlyGone.view.data.items[0].insufficientStock).toBe(true);
-        expect(nearlyGone.merge.data.lines[0].insufficientStock).toBe(true);
+        expect(nearlyGone.view.data.items[0].availability).toBe('insufficient_stock');
+        expect(nearlyGone.merge.data.lines[0].availability).toBe('insufficient_stock');
     });
 
     it('has no stock-like field anywhere in either answer', async () => {
@@ -185,9 +188,7 @@ describe('the flag never carries a number', () => {
         const { view, merge } = await shortCartBody(7, bearer);
 
         const stockLike = /available|onhand|reserved|remaining|left|stock/i;
-        const offending = [...keysOf(view), ...keysOf(merge)].filter(
-            (key) => stockLike.test(key) && key !== 'insufficientStock'
-        );
+        const offending = [...keysOf(view), ...keysOf(merge)].filter((key) => stockLike.test(key));
 
         expect(offending).toEqual([]);
     });

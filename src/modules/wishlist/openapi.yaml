@@ -34,7 +34,8 @@ paths:
                 not an error. Pairs with the `DELETE` on the same URI (GitHub's
                 `PUT`/`DELETE /user/starred/{owner}/{repo}` is the same pattern). The product must
                 be publicly visible; a hidden or soft-deleted product answers 404 exactly as it
-                would from the catalogue.
+                would from the catalogue. A product taken off sale (`purchasable: false`) is saved
+                like any other.
             operationId: addWishlistItem
             security:
                 - bearerAuth: []
@@ -114,6 +115,20 @@ components:
         # answers "do I want this", not "how many". The moment an amount matters the line belongs
         # in the cart, which is what the move-to-cart operation is for.
         WishlistItem:
+            type: object
+            additionalProperties: false
+            required: [productId, availability]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                # Never `insufficient_stock`: a wishlist line holds no quantity to fall short of.
+                # `removed` keeps the line, and it returns to a stock value on reactivation.
+                availability:
+                    $ref: '../cart/openapi.yaml#/components/schemas/LineAvailability'
+
+        # The stored line alone, as the personal-data export carries it: availability is the shop's
+        # live opinion of a product, not something the account holder saved.
+        WishlistExportItem:
             type: object
             additionalProperties: false
             required: [productId]

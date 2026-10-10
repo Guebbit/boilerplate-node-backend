@@ -54,7 +54,9 @@ describe('GET /wishlist', () => {
         const response = await api().get('/wishlist').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([{ productId: String(product._id) }]);
+        expect(response.body.data.items).toEqual([
+            { productId: String(product._id), availability: 'in_stock' }
+        ]);
     });
 });
 
@@ -68,7 +70,9 @@ describe('PUT /wishlist/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([{ productId: String(product._id) }]);
+        expect(response.body.data.items).toEqual([
+            { productId: String(product._id), availability: 'in_stock' }
+        ]);
     });
 
     // RFC 9110 §9.3.4: the URI is the whole statement, so sending it twice leaves the same state.
@@ -80,7 +84,9 @@ describe('PUT /wishlist/{productId}', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        expect(response.body.data.items).toEqual([{ productId: String(product._id) }]);
+        expect(response.body.data.items).toEqual([
+            { productId: String(product._id), availability: 'in_stock' }
+        ]);
     });
 
     it('matches the error contract for a malformed product id', async () => {
@@ -164,7 +170,7 @@ describe('POST /wishlist/{productId}/move-to-cart', () => {
 
         const cart = await api().get('/cart').set('Authorization', bearer);
         expect(cart.body.data.items).toEqual([
-            { productId: String(product._id), quantity: 1, insufficientStock: false }
+            { productId: String(product._id), quantity: 1, availability: 'in_stock' }
         ]);
     });
 

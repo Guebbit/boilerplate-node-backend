@@ -295,13 +295,17 @@ const buildStockRefusal = (refusal: StockRefusal): ResponseReject => {
                 message: t('cart.insufficient-stock'),
                 // Every short line, so the customer fixes the basket in one pass instead of one
                 // refusal per line. Copied field by field: the reserve's own shortfall also carries
-                // the exact count left, which a shopper is not told.
+                // the exact count left, which a shopper is not told. `availability` is what lets the
+                // client word a sold-out line differently from an off-sale one.
                 details: {
-                    lines: refusal.shortfalls.map(({ productId, title, requested }) => ({
-                        productId,
-                        title,
-                        requested
-                    }))
+                    lines: refusal.shortfalls.map(
+                        ({ productId, title, requested, availability }) => ({
+                            productId,
+                            title,
+                            requested,
+                            availability
+                        })
+                    )
                 }
             }
         ]);
@@ -447,6 +451,7 @@ const runCheckout = async (
             product: line.product && {
                 title: line.product.title,
                 active: line.product.active,
+                purchasable: line.product.purchasable,
                 deletedAt: line.product.deletedAt,
                 available: availableByProduct.get(line.productId) ?? 0
             }
@@ -568,7 +573,16 @@ const runCheckout = async (
         // proved the basket good — but map them defensively rather than assume the invariant.
         if (outcome.reason !== 'insufficient-stock')
             return buildStockRefusal({ type: 'unavailable', status: 409 });
-        return buildStockRefusal({ type: 'insufficient-stock', shortfalls: outcome.shortfalls });
+        // The reserve lost a race, so only stock can be the reason: sold out, or fewer left.
+        return buildStockRefusal({
+            type: 'insufficient-stock',
+            shortfalls: outcome.shortfalls.map(({ productId, title, requested, available }) => ({
+                productId,
+                title,
+                requested,
+                availability: available === 0 ? 'out_of_stock' : 'insufficient_stock'
+            }))
+        });
     }
     const { order } = outcome;
 

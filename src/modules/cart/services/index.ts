@@ -11,6 +11,7 @@ import * as checkout from './checkout';
 import * as reorder from './reorder';
 import * as merge from './merge';
 import * as cleanup from './cleanup';
+import * as shelf from './shelf';
 
 /*
  * Published by name as well as through the namespace: `module.ts` wires the two cleanup calls into
@@ -33,6 +34,7 @@ export {
 export { orderConfirm, type CheckoutChoices } from './checkout';
 export { cartDeleteByUserId, productRemoveFromCartsById } from './cleanup';
 export { cartMerge, type MergeResult } from './merge';
+export { productAvailabilityFor } from './shelf';
 
 /** The module's barrel export — controllers and siblings call through this, never the bare functions. */
 export const cartService = {
@@ -50,5 +52,6 @@ export const cartService = {
     orderConfirm: checkout.orderConfirm,
     reorderIntoCart: reorder.reorderIntoCart,
     cartMerge: merge.cartMerge,
+    productAvailabilityFor: shelf.productAvailabilityFor,
     productRemoveFromCartsById: cleanup.productRemoveFromCartsById
 };

@@ -1,8 +1,8 @@
 /**
  * @module
- * The view every endpoint answers with is `{ items: [{ productId }] }` — ids only, like the
- * cart's: the client renders from its own product store, and shipping a product per line is
- * over-serialization the contract suite fails on.
+ * The view every endpoint answers with is `{ items: [{ productId, availability }] }` — ids and
+ * what each product can do right now, like the cart's: the client renders from its own product
+ * store, and shipping a product per line is over-serialization the contract suite fails on.
  *
  * See: docs/modules/wishlist.md
  */
@@ -22,14 +22,33 @@ import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { wishlistAnalyticsEvents } from './analytics';
 import { WISHLIST_ITEMS_REMOVED } from './events';
+import type { WishlistDocument } from './model';
 import { wishlistRepository } from './repository';
-import { presentWishlist, type WishlistView } from './presenter';
+import { presentWishlist, savedProductIds, type WishlistView } from './presenter';
+
+/**
+ * The wishlist as the contract declares it: each saved line with what its product can do right
+ * now. The cart's rule decides, so a cart line and a wishlist line never disagree about a product.
+ */
+const present = (wishlist: WishlistDocument | null): Promise<WishlistView> =>
+    cartService
+        .productAvailabilityFor(savedProductIds(wishlist))
+        .then((availability) => presentWishlist(wishlist, availability));
 
 /**
  * Get the user's wishlist. Absence and emptiness are the same state — an empty view, never 404.
  */
 const wishlistGet = (userId: string): Promise<WishlistView> =>
-    wishlistRepository.findByUserId(userId).then((wishlist) => presentWishlist(wishlist));
+    wishlistRepository.findByUserId(userId).then(present);
+
+/**
+ * The saved lines exactly as stored — product ids, no availability — for the personal-data export:
+ * availability is the shop's live opinion of a product, not something the account holder saved.
+ */
+const wishlistExportLines = (userId: string): Promise<{ productId: string }[]> =>
+    wishlistRepository
+        .findByUserId(userId)
+        .then((wishlist) => savedProductIds(wishlist).map((productId) => ({ productId })));
 
 /**
  * Save a product.
@@ -54,7 +73,9 @@ const wishlistAdd = (
                     event: wishlistAnalyticsEvents.WISHLIST_ITEM_ADDED,
                     properties: { product_id: productId }
                 });
-            return generateSuccess(presentWishlist(wishlist), 200, t('wishlist.added'));
+            return present(wishlist).then((view) =>
+                generateSuccess(view, 200, t('wishlist.added'))
+            );
         });
     });
 
@@ -76,7 +97,7 @@ const wishlistRemove = (
             event: wishlistAnalyticsEvents.WISHLIST_ITEM_REMOVED,
             properties: { product_id: productId }
         });
-        return generateSuccess(presentWishlist(wishlist), 200, t('wishlist.removed'));
+        return present(wishlist).then((view) => generateSuccess(view, 200, t('wishlist.removed')));
     });
 
 /**
@@ -87,7 +108,7 @@ const wishlistRemove = (
  * Whether the product may go in a cart is the cart's rule and is asked by asking the cart: a
  * refusal comes back as a reject envelope and becomes this operation's 404. A wishlist outlives
  * the catalogue by design — `PRODUCT_DELETED` pulls the line on a soft delete as well as a hard one, so a
- * line pointing at a merely deactivated product is the state that survives — and re-deriving "is it still on sale"
+ * line pointing at a hidden or off-sale product is the state that survives — and re-deriving "is it still on sale"
  * here would be a second copy of a rule the cart already enforces for every other caller.
  *
  * Cart first, wishlist second, deliberately in that order: if the cart write fails the line is
@@ -119,7 +140,9 @@ const wishlistMoveToCart = (
                     event: wishlistAnalyticsEvents.WISHLIST_MOVED_TO_CART,
                     properties: { product_id: productId }
                 });
-                return generateSuccess(presentWishlist(updated), 200, t('wishlist.moved-to-cart'));
+                return present(updated).then((view) =>
+                    generateSuccess(view, 200, t('wishlist.moved-to-cart'))
+                );
             });
         });
     });
@@ -151,6 +174,7 @@ export const productRemoveFromWishlistsById = (
 /** The module's barrel export — the controllers call through this, never the bare functions. */
 export const wishlistService = {
     wishlistGet,
+    wishlistExportLines,
     wishlistAdd,
     wishlistRemove,
     wishlistMoveToCart,

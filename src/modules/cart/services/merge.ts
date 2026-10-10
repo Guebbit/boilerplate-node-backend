@@ -16,13 +16,13 @@ import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observab
 import { productService } from '@modules/products';
 import type { CallerContext, AddCartItemRequest, MergeLineResult } from '@types';
 import { cartAnalyticsEvents } from '../analytics';
-import { fitsStock, planMergeLine } from '../domain';
+import { planMergeLine } from '../domain';
 import { CART_MERGE_REFUSED } from '../events';
 import type { CartDocument } from '../model';
 import { cartLineMax } from '../config';
 import { cartRepository, QUANTITY_LIMIT } from '../repository';
 import { cartGetForBadge } from './items';
-import { readShelf, sellableUnits, type Shelf } from './shelf';
+import { readShelf, shelfAvailability, type Shelf } from './shelf';
 import type { CartView } from './view';
 
 /** What a merge answers with: the cart as it now stands, and what became of each guest line. */
@@ -42,7 +42,7 @@ const heldIn = (cart: CartDocument | null, productId: string): number =>
     cart?.items.find((item) => String(item.productId) === productId)?.quantity ?? 0;
 
 /** Whether the catalogue shows the product publicly — the same test `findPublicById` applies. */
-const isListed = (shelf: Shelf): boolean => sellableUnits(shelf) !== null;
+const isListed = (shelf: Shelf): boolean => shelfAvailability(shelf) !== 'removed';
 
 /**
  * A line the cart took: the analytics event `POST /cart` would have fired for it. `created` is
@@ -83,7 +83,7 @@ const writeAdd = (
 /**
  * One guest line: ask the rule, write what it allows, read `resulting` off the cart that came
  * back. `requested` is always the guest's number, and `resulting` always the cart's — so the two
- * stay truthful whatever the reason says. Stock only sets `insufficientStock`; it never changes
+ * stay truthful whatever the reason says. Stock only sets `availability`; it never changes
  * what is added.
  */
 const mergeLine = (
@@ -117,8 +117,8 @@ const mergeLine = (
                 requested: quantity,
                 resulting,
                 ...(reason ? { reason } : {}),
-                // The shared stock rule, on what the cart now holds: the flag, never the number.
-                insufficientStock: !fitsStock(resulting, sellableUnits(shelf))
+                // The shared availability rule, on what the cart now holds: never the number.
+                availability: shelfAvailability(shelf, resulting)
             }
         };
     });
@@ -160,12 +160,12 @@ const mergeLines = async (
  * product that is no longer available". Says nothing when there is no such line: a changed
  * quantity is the answer's to show, not the inbox's.
  */
-const announceUnavailable = (userId: string, results: MergeLineResult[]): Promise<unknown> => {
-    const unavailable = results.filter(({ reason }) => reason === 'unavailable');
-    if (unavailable.length === 0) return Promise.resolve();
+const announceRemoved = (userId: string, results: MergeLineResult[]): Promise<unknown> => {
+    const removed = results.filter(({ reason }) => reason === 'removed');
+    if (removed.length === 0) return Promise.resolve();
 
     return Promise.all(
-        unavailable.map(({ productId, requested }) =>
+        removed.map(({ productId, requested }) =>
             productService
                 .titlesById(productId)
                 .then((titles) => ({ productId, requested, titles }))
@@ -176,8 +176,8 @@ const announceUnavailable = (userId: string, results: MergeLineResult[]): Promis
 /**
  * `POST /cart/merge`. Quantities add up exactly as `POST /cart` would — a product in both carts
  * ends at the sum, capped at the line maximum — and only a product the catalogue does not show is
- * refused. Stock lowers nothing: a short line keeps its quantity and comes back flagged
- * `insufficientStock`, read from the stock ledger. Lowering a short line would let a caller read
+ * refused. Stock lowers nothing: a short line keeps its quantity and comes back with its
+ * `availability`, read from the stock ledger and the catalogue. Lowering a short line would let a caller read
  * exact stock by merging 999 (docs/theory/defences/authorization.md, "Reading the shelf"). Checkout stays the one real stock gate.
  *
  * @param userId - the signed-in caller
@@ -191,7 +191,7 @@ export const cartMerge = (
     context: CallerContext
 ): Promise<MergeResult> =>
     mergeLines(userId, lines, context).then((results) =>
-        announceUnavailable(userId, results).then(() =>
+        announceRemoved(userId, results).then(() =>
             cartGetForBadge(userId).then((cart) => ({ cart, lines: results }))
         )
     );

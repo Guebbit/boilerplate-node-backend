@@ -4,7 +4,7 @@
  * See `docs/theory/domain-layer.md`.
  */
 
-import { fitsStock } from './stock';
+import { lineAvailability, type LineAvailability } from './availability';
 
 /**
  * A cart line as the rules see it. `product: null` is what the service-level join
@@ -27,6 +27,7 @@ export interface CartLineCandidate {
         title?: string;
         available?: number;
         active?: boolean;
+        purchasable?: boolean;
         deletedAt?: Date;
     } | null;
 }
@@ -46,6 +47,8 @@ export interface CheckoutShortfall {
     productId: string;
     title: string;
     requested: number;
+    /** Why the line is refused, so the client picks the message. Never `in_stock` or `removed`. */
+    availability: Exclude<LineAvailability, 'in_stock' | 'removed'>;
 }
 
 /** A cart line as {@link basketWeight} sees it — only the fields it actually sums or filters on. */
@@ -148,29 +151,39 @@ export const evaluateCheckout = (lines: readonly CartLineCandidate[]): CheckoutV
     if (lines.length === 0) return { ok: false, reason: 'empty' };
 
     /*
-     * "Unavailable" covers two different facts a joined line can carry: gone entirely
-     * (`product` null — a hard delete the catalogue join can no longer find), or here but not
-     * sellable (`active: false`, or soft-deleted). Every unavailable line, not just the first,
-     * same reasoning `shortfalls` below already follows.
+     * One availability per line, from the rule the cart view and the merge share. `removed` is
+     * "gone entirely or hidden" (`product` null — a hard delete the catalogue join can no longer
+     * find — or `active: false`, or soft-deleted). Every refused line, not just the first: a
+     * customer who trimmed one only to be refused on the next is binary-searching their own basket.
      */
-    const unavailable = lines
-        .filter(
-            ({ product }) => !product || product.active === false || product.deletedAt !== undefined
-        )
-        .map(({ productId, product }) => ({ productId: productId ?? '', title: product?.title }));
+    const judged = lines.map((line) => ({
+        line,
+        availability: lineAvailability({
+            product: line.product,
+            available: line.product?.available,
+            quantity: line.quantity ?? 0
+        })
+    }));
+
+    const unavailable = judged
+        .filter(({ availability }) => availability === 'removed')
+        .map(({ line }) => ({ productId: line.productId ?? '', title: line.product?.title }));
     if (unavailable.length > 0)
         return { ok: false, reason: 'product-unavailable', lines: unavailable };
-    /*
-     * Every short line, not just the first. A customer who trimmed one line only to be refused
-     * again on the next is being made to binary-search their own basket.
-     */
-    const shortfalls = lines
-        .filter(({ product, quantity }) => !fitsStock(quantity ?? 0, product?.available))
-        .map(({ productId, product, quantity }) => ({
-            productId: productId ?? '',
-            title: product?.title ?? '',
-            requested: quantity ?? 0
-        }));
+
+    // Off sale and sold out join the stock refusal, each naming its own availability.
+    const shortfalls = judged.flatMap(({ line, availability }) =>
+        availability === 'in_stock' || availability === 'removed'
+            ? []
+            : [
+                  {
+                      productId: line.productId ?? '',
+                      title: line.product?.title ?? '',
+                      requested: line.quantity ?? 0,
+                      availability
+                  }
+              ]
+    );
     if (shortfalls.length > 0) return { ok: false, reason: 'insufficient-stock', shortfalls };
 
     return { ok: true };

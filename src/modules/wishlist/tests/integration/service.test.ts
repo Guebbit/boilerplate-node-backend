@@ -41,6 +41,89 @@ describe('wishlistRepository.addLine', () => {
     });
 });
 
+describe('wishlistGet: availability per line', () => {
+    it('names each saved product by what it can do right now', async () => {
+        const user = await createUser();
+        const onSale = await createProduct({ onHand: 5 });
+        const soldOut = await createProduct({ onHand: 0 });
+        const offSale = await createProduct({ onHand: 5, purchasable: false });
+        const hidden = await createProduct({ onHand: 5 });
+        for (const product of [onSale, soldOut, offSale, hidden])
+            await wishlistRepository.addLine(user.id, String(product._id));
+        await productService.updateById(String(hidden._id), { active: false }, testCallerContext);
+
+        const view = await wishlistService.wishlistGet(user.id);
+
+        expect(view.items).toEqual([
+            { productId: String(onSale._id), availability: 'in_stock' },
+            { productId: String(soldOut._id), availability: 'out_of_stock' },
+            { productId: String(offSale._id), availability: 'unavailable' },
+            { productId: String(hidden._id), availability: 'removed' }
+        ]);
+    });
+
+    it('never says insufficient_stock: a wishlist line holds no quantity', async () => {
+        const user = await createUser();
+        const scarce = await createProduct({ onHand: 1 });
+        await wishlistRepository.addLine(user.id, String(scarce._id));
+
+        const view = await wishlistService.wishlistGet(user.id);
+
+        expect(view.items[0].availability).toBe('in_stock');
+    });
+
+    it('returns a hidden line to a stock value once the product is shown again', async () => {
+        const user = await createUser();
+        const product = await createProduct({ onHand: 5 });
+        await wishlistRepository.addLine(user.id, String(product._id));
+
+        await productService.updateById(String(product._id), { active: false }, testCallerContext);
+        const hidden = await wishlistService.wishlistGet(user.id);
+        await productService.updateById(String(product._id), { active: true }, testCallerContext);
+        const shown = await wishlistService.wishlistGet(user.id);
+
+        expect([hidden.items[0].availability, shown.items[0].availability]).toEqual([
+            'removed',
+            'in_stock'
+        ]);
+    });
+
+    it('lets an off-sale product be saved, and moves it to the cart like a sold-out one', async () => {
+        const user = await createUser();
+        const offSale = await createProduct({ onHand: 5, purchasable: false });
+
+        const saved = await wishlistService.wishlistAdd(
+            user.id,
+            String(offSale._id),
+            testCallerContext
+        );
+        const moved = await wishlistService.wishlistMoveToCart(
+            user.id,
+            String(offSale._id),
+            testCallerContext
+        );
+
+        expect(saved.success).toBe(true);
+        expect(moved.success).toBe(true);
+        const cart = await cartService.cartGetForBadge(user.id);
+        expect(cart.items).toEqual([
+            { productId: String(offSale._id), quantity: 1, availability: 'unavailable' }
+        ]);
+    });
+});
+
+describe('wishlistExportLines', () => {
+    it('carries the saved product ids only, no availability', async () => {
+        const user = await createUser();
+        const product = await createProduct({ purchasable: false });
+        await wishlistRepository.addLine(user.id, String(product._id));
+
+        await expect(wishlistService.wishlistExportLines(user.id)).resolves.toEqual([
+            { productId: String(product._id) }
+        ]);
+    });
+});
+
 describe('wishlistAdd', () => {
     it('saves a product and answers the view', async () => {
         const user = await createUser();
@@ -136,7 +219,7 @@ describe('wishlistMoveToCart', () => {
         expect(await savedIds(user.id)).toEqual([]);
         const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(product._id), quantity: 1, insufficientStock: false }
+            { productId: String(product._id), quantity: 1, availability: 'in_stock' }
         ]);
     });
 
@@ -150,7 +233,7 @@ describe('wishlistMoveToCart', () => {
 
         const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(product._id), quantity: 3, insufficientStock: false }
+            { productId: String(product._id), quantity: 3, availability: 'in_stock' }
         ]);
     });
 

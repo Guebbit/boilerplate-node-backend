@@ -81,7 +81,14 @@ describe('the cache says there is stock, the level collection says there is not'
         const result = await cartService.orderConfirm(user.id, testCallerContext, undefined);
 
         expect(!result.success && result.errors[0]?.details).toEqual({
-            lines: [{ productId: String(product._id), title: product.title, requested: 3 }]
+            lines: [
+                {
+                    productId: String(product._id),
+                    title: product.title,
+                    requested: 3,
+                    availability: 'insufficient_stock'
+                }
+            ]
         });
     });
 

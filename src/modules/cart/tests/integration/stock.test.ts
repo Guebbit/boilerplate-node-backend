@@ -82,7 +82,14 @@ describe('checkout holds units without selling them', () => {
             // Which line, and how much was asked for — the number left is not told to a shopper.
             // Without the line the customer is editing the cart by trial and error.
             details: {
-                lines: [{ productId: String(product._id), title: product.title, requested: 3 }]
+                lines: [
+                    {
+                        productId: String(product._id),
+                        title: product.title,
+                        requested: 3,
+                        availability: 'insufficient_stock'
+                    }
+                ]
             }
         });
         expect(await countersOf(product._id)).toEqual({
@@ -93,7 +100,7 @@ describe('checkout holds units without selling them', () => {
         // And the cart survives — a refused checkout is not a lost basket.
         const cart = await cartService.cartGetForBadge(user.id);
         expect(cart.items).toEqual([
-            { productId: String(product._id), quantity: 3, insufficientStock: true }
+            { productId: String(product._id), quantity: 3, availability: 'insufficient_stock' }
         ]);
     });
 
@@ -145,8 +152,18 @@ describe('checkout holds units without selling them', () => {
         // Both short lines, with titles, and the healthy one absent — a customer trimming one
         // line only to be refused on the next is being made to binary-search their own basket.
         expect(details?.lines).toEqual([
-            { productId: String(shortA._id), title: 'Short A', requested: 5 },
-            { productId: String(shortB._id), title: 'Short B', requested: 5 }
+            {
+                productId: String(shortA._id),
+                title: 'Short A',
+                requested: 5,
+                availability: 'insufficient_stock'
+            },
+            {
+                productId: String(shortB._id),
+                title: 'Short B',
+                requested: 5,
+                availability: 'insufficient_stock'
+            }
         ]);
     });
 
@@ -202,7 +219,14 @@ describe('checkout holds units without selling them', () => {
         expect(refusal && refusal.code).toBe('CART_INSUFFICIENT_STOCK');
         // `toEqual`, not `toMatchObject`: an extra `available` on the line must fail.
         expect(refusal && refusal.details).toEqual({
-            lines: [{ productId: String(lastOne._id), title: lastOne.title, requested: 1 }]
+            lines: [
+                {
+                    productId: String(lastOne._id),
+                    title: lastOne.title,
+                    requested: 1,
+                    availability: 'out_of_stock'
+                }
+            ]
         });
     });
 });

@@ -226,9 +226,9 @@ describe('cartGetForBadge', () => {
 
         // `CartResponseItem` is additionalProperties:false — an extra key here is a contract violation.
         expect(items).toEqual([
-            { productId: String(product._id), quantity: 2, insufficientStock: false }
+            { productId: String(product._id), quantity: 2, availability: 'in_stock' }
         ]);
-        expect(Object.keys(items[0])).toEqual(['productId', 'quantity', 'insufficientStock']);
+        expect(Object.keys(items[0])).toEqual(['productId', 'quantity', 'availability']);
     });
 
     it('computes the summary across several lines', async () => {
@@ -366,7 +366,7 @@ describe('cartItemSetById', () => {
 
         expect(result.success).toBe(true);
         expect(result.data).toEqual({
-            items: [{ productId: String(product._id), quantity: 2, insufficientStock: false }],
+            items: [{ productId: String(product._id), quantity: 2, availability: 'in_stock' }],
             summary: {
                 itemsCount: 1,
                 totalQuantity: 2,
