@@ -17,7 +17,8 @@ import {
     loginOrCreateFromOAuth,
     presentClaim,
     OAuthEmailUnverifiedError,
-    OAuthAccountUnverifiedError
+    OAuthAccountUnverifiedError,
+    OAuthAccountUnavailableError
 } from '../../services/oauth';
 import { accountAuditActions } from '../../audit';
 import { accountAnalyticsEvents } from '../../analytics';
@@ -175,6 +176,73 @@ describe('loginOrCreateFromOAuth — case 2: a verified email matching an existi
         // as unproven as it was.
         const refreshed = await userRepository.findById(user.id);
         expect(refreshed?.verifiedAt ?? null).toBeNull();
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('loginOrCreateFromOAuth — an account that may not authenticate', () => {
+    const states = [
+        ['banned', { active: false }],
+        ['soft-deleted', { deletedAt: new Date() }]
+    ] as const;
+
+    it.each(states)(
+        'a %s account with a matching verified email gets no link, no audit row and no signup',
+        async (_state, overrides) => {
+            const user = await createUser({
+                email: identity().email,
+                verifiedAt: new Date(),
+                ...overrides
+            });
+            const auditSpy = observePort(auditPort.emitAuditEvent);
+
+            await expect(
+                loginOrCreateFromOAuth('google', identity(), testCallerContext)
+            ).rejects.toBeInstanceOf(OAuthAccountUnavailableError);
+
+            expect(await oauthAccountsOf(user.id)).toEqual([]);
+            expect(await userRepository.count({})).toBe(1);
+            expect(auditSpy).not.toHaveBeenCalled();
+        }
+    );
+
+    it.each(states)(
+        'a %s account that linked the provider earlier is refused without a second entry',
+        async (_state, overrides) => {
+            const user = await createUser({
+                email: identity().email,
+                verifiedAt: new Date(),
+                ...overrides
+            });
+            await userRepository.linkOAuthAccount(user.id, {
+                provider: 'google',
+                providerId: 'subject-1',
+                connectedAt: new Date()
+            });
+
+            await expect(
+                loginOrCreateFromOAuth('google', identity(), testCallerContext)
+            ).rejects.toBeInstanceOf(OAuthAccountUnavailableError);
+
+            expect(await oauthAccountsOf(user.id)).toHaveLength(1);
+        }
+    );
+});
+
+describe('loginOrCreateFromOAuth — a repeated link', () => {
+    it('does not grow the array or audit again when the provider is already linked', async () => {
+        const user = await createUser({ email: identity().email, verifiedAt: new Date() });
+        await userRepository.linkOAuthAccount(user.id, {
+            provider: 'google',
+            providerId: 'older-subject',
+            connectedAt: new Date()
+        });
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        const resolved = await loginOrCreateFromOAuth('google', identity(), testCallerContext);
+
+        expect(resolved.user.id).toBe(user.id);
+        expect(await oauthAccountsOf(user.id)).toHaveLength(1);
         expect(auditSpy).not.toHaveBeenCalled();
     });
 });

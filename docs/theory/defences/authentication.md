@@ -162,6 +162,15 @@ carried as an ARRAY rather than a boolean: a future `amr: ['hwk']` is a new valu
 | SSO misconfiguration                     | issuer or audience not pinned, so any tenant's users are accepted                                                    | Each provider's token and profile endpoints are hard-coded — `account/oauth/providers/`. See [SSRF](ssrf.md#making-the-server-fetch).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | Pre-account-takeover                     | the attacker registers the victim's address before they do                                                           | Two halves, both closed. Signup is bounded — an unproven address holds `unverified` and no `cart.checkout`. And the LINK now demands verification of BOTH sides: `loginOrCreateFromOAuth` refuses to attach a provider identity to an account that never proved the address itself, so the victim's own Google sign-in cannot drop them into a squatter's account. An owner can also see every connected provider and remove one (`GET`/`DELETE /account/oauth/links`), and the reset mail lists what is still connected. Their way in is the password reset, which proves the same mailbox — `account/services/oauth.ts#OAuthAccountUnverifiedError` |
 
+**A banned or soft-deleted account is refused before the link, not after.** An address that matches
+such an account would otherwise get a provider link and an `AUTH_OAUTH_LINKED` audit row, with the
+session refused only afterwards, and the link would outlive an unban or a restore. The callback
+answers `provider_error` (the frontend has no new case, and the caller learns nothing about the
+account's state) and writes nothing. The "may this account authenticate" rule is one specification,
+the filter and the predicate in `users/authenticatable.ts`, shared by the lookups, the token mint and
+the inactivity reaper. A provider the account already holds is not linked twice: the write is
+guarded on `oauthAccounts.provider`, and only a link that landed is audited.
+
 ## Related
 
 - [Authorization](authorization.md) — what a proven identity is then allowed to do

@@ -11,8 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
 import type { ResolveMissReason } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, TokenType, hashToken } from '@modules/users';
-import type { UserDocument } from '@modules/users';
+import { userService, TokenType, hashToken, isAuthenticatable } from '@modules/users';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
@@ -74,17 +73,6 @@ const carriedClaims = ({ id, auth_time: authTime, amr, remember }: TokenData): T
     amr,
     ...(remember && { remember })
 });
-
-/**
- * Refuse to mint for a user already loaded (unfiltered, by id) rather than found through a
- * pre-filtered query — `createRefreshToken` and `reissueRotated` both load `userService`'s own
- * `findByIdWithCredentials`, which GDPR export/erase deliberately still need unfiltered. Mirrors
- * the `active`/`deletedAt` clause `users/repository.ts`'s `AUTHENTICATABLE_FILTER` applies at the
- * query, the backstop for every path that reaches a mint without going through `findForLogin` —
- * an OAuth login that resolved through a linked identity or an email fallback, chiefly.
- */
-const isAuthenticatable = (user: Pick<UserDocument, 'active' | 'deletedAt'>): boolean =>
-    user.active !== false && !user.deletedAt;
 
 /**
  * The `typ` header each token kind is signed with (RFC 9068 for the access token, the same shape

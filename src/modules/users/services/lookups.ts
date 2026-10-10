@@ -4,6 +4,7 @@
  */
 
 import { userRepository } from '../repository';
+import { AUTHENTICATABLE_FILTER } from '../authenticatable';
 
 /*
  * `account` end of the one shared-kernel relationship in this repo (`docs/theory/strategic-ddd.md`
@@ -32,16 +33,15 @@ export const findForLogin = (email: string) => userRepository.findAuthenticatabl
 /**
  * The credentialed account already linked to this federated identity, if any — `select: false`
  * fields included because a caller may need to build a 2FA login challenge off
- * `user.twoFactorMethods` right after. `active: { $ne: false }`/`deletedAt: undefined`, same
- * clause `findForLogin` filters on: a deactivated or soft-deleted account must not walk straight
+ * `user.twoFactorMethods` right after. Filtered by {@link AUTHENTICATABLE_FILTER}, the same
+ * clause `findForLogin` uses: a deactivated or soft-deleted account must not walk straight
  * into a session through a provider it linked before either happened.
  */
 export const findByOAuthIdentity = (provider: string, providerId: string) =>
     userRepository.findOneWithCredentials({
         'oauthAccounts.provider': provider,
         'oauthAccounts.providerId': providerId,
-        active: { $ne: false },
-        deletedAt: undefined
+        ...AUTHENTICATABLE_FILTER
     });
 
 /** The hydrated document with the pending-email-change field loaded. */

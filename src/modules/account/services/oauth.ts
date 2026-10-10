@@ -8,7 +8,7 @@
  */
 
 import { getCurrentLocale } from '@infrastructure/i18n';
-import { userService, type UserDocument } from '@modules/users';
+import { userService, isAuthenticatable, type UserDocument } from '@modules/users';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
 import type { CallerContext } from '@types';
@@ -55,6 +55,20 @@ export class OAuthAccountUnverifiedError extends Error {
 }
 
 /**
+ * The address matches an account that may not authenticate (banned, or soft-deleted). Refused
+ * before anything is written: a link left on it would outlive an unban or a restore, and a signup
+ * would collide with its address. The callback controller answers it as `provider_error`, so the
+ * frontend needs no new case and the caller learns nothing about the account's state.
+ */
+export class OAuthAccountUnavailableError extends Error {
+    /** @param userId - the account that was refused, for the log line. */
+    constructor(userId: string) {
+        super(`OAuth sign-in matched an account that may not authenticate: ${userId}`);
+        this.name = 'OAuthAccountUnavailableError';
+    }
+}
+
+/**
  * Link a NEW provider identity onto an existing, verified-match account — the case-2 tail.
  *
  * The link itself always audits — it genuinely happened, with the account's REAL role (an
@@ -75,17 +89,20 @@ const linkToExistingAccount = (
             providerId: identity.providerId,
             connectedAt: new Date()
         })
-        .then(() =>
+        .then((linked) =>
             // Read fresh from the membership — the document carries no role of its own, same
             // reasoning `postLogin` gives for its own AUTH_LOGIN.
             isUnrestrictedCaller(user.id).then((unrestricted) => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_OAUTH_LINKED,
-                    actorUserId: user.id,
-                    actorRole: unrestricted ? 'admin' : 'user',
-                    outcome: 'success',
-                    metadata: { via: provider }
-                });
+                // Only a link that landed is a fact: an account that already holds this provider
+                // is simply signed in, with nothing new to record.
+                if (linked)
+                    recordAudit(context, {
+                        action: accountAuditActions.AUTH_OAUTH_LINKED,
+                        actorUserId: user.id,
+                        actorRole: unrestricted ? 'admin' : 'user',
+                        outcome: 'success',
+                        metadata: { via: provider }
+                    });
                 if (!user.twoFactorEnabledAt) {
                     emitAnalyticsEvent({
                         ...buildAnalyticsBase(context),
@@ -230,6 +247,11 @@ export const loginOrCreateFromOAuth = (
                 // Unverified is refused on BOTH branches: a signup would stamp `verifiedAt` on an
                 // address nobody proved, which pre-hijacks it (Sudhodanan & Paverd 2022).
                 if (!identity.emailVerified) throw new OAuthEmailUnverifiedError(identity.email);
+
+                // BEFORE any write, and before the signup branch: this address belongs to an
+                // account that may not authenticate, so neither a link nor a new account fits.
+                if (byEmail && !isAuthenticatable(byEmail))
+                    throw new OAuthAccountUnavailableError(byEmail.id);
 
                 if (!byEmail)
                     return signupFromOAuth(provider, identity, context).then((user) => ({

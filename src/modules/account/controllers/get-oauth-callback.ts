@@ -38,7 +38,8 @@ import {
     recordOAuthFailure,
     twoFactorService,
     OAuthEmailUnverifiedError,
-    OAuthAccountUnverifiedError
+    OAuthAccountUnverifiedError,
+    OAuthAccountUnavailableError
 } from '../services';
 import { issueSession } from '../session/session';
 import { recordLoginSuccess } from '../session/login-observability';
@@ -187,6 +188,12 @@ export const getOAuthCallback = (request: Request, response: Response) => {
             // already holding this address.
             if (error instanceof OAuthAccountUnverifiedError) {
                 failToFrontend('account_unverified');
+                return;
+            }
+            // A banned or soft-deleted account answers like any other provider failure: the
+            // caller must not learn what state the account is in. Expected, so not logged as one.
+            if (error instanceof OAuthAccountUnavailableError) {
+                failToFrontend('provider_error');
                 return;
             }
             // The provider/exchange detail is developer-facing only — same rule

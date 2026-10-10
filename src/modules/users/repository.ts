@@ -11,6 +11,7 @@ import {
     type ReencryptSpec,
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
+import { AUTHENTICATABLE_FILTER } from './authenticatable';
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
@@ -29,13 +30,6 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
  */
 const CREDENTIAL_FIELDS =
     '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +reauthCode +oauthAccounts +pendingEmail +previousEmail';
-
-/**
- * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a
- * document carrying no `active` field is enabled, and must not be locked out by its absence.
- * Shared by `findAuthenticatableById` and `findByTokenValue` so the two can't drift.
- */
-const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
 
 /**
  * A user's last proof of life, as an aggregation `$expr`: `lastActiveAt` (stamped on every session
@@ -89,7 +83,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
-    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<void>;
+    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<boolean>;
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
@@ -380,12 +374,14 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     linkOAuthAccount: (userId: string, account: OAuthAccount) =>
         userModel
             .updateOne(
-                { _id: toObjectId(userId) },
+                // One entry per provider: a link for a provider the account already holds matches
+                // nothing, so a repeated callback cannot grow the array.
+                { _id: toObjectId(userId), 'oauthAccounts.provider': { $ne: account.provider } },
                 { $push: { oauthAccounts: account } },
                 { timestamps: false }
             )
             .exec()
-            .then(() => undefined),
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Remove the link to one provider — atomic `$pull`, the mirror of {@link linkOAuthAccount} and
@@ -659,8 +655,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findInactiveUnwarned: (cutoff: Date) =>
         userModel
             .find({
-                active: { $ne: false },
-                deletedAt: { $exists: false },
+                ...AUTHENTICATABLE_FILTER,
                 $expr: { $and: [{ $lt: [LAST_ACTIVE_EXPR, cutoff] }, NOT_WARNED_THIS_STRETCH] }
             })
             .exec(),
@@ -673,8 +668,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findWarnedStillInactive: (warnedBefore: Date) =>
         userModel
             .find({
-                active: { $ne: false },
-                deletedAt: { $exists: false },
+                ...AUTHENTICATABLE_FILTER,
                 inactivityWarnedAt: { $lt: warnedBefore },
                 $expr: { $lt: [LAST_ACTIVE_EXPR, '$inactivityWarnedAt'] }
             })
