@@ -13,7 +13,7 @@ import {
 } from '@infrastructure/security/reencrypt';
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
-import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
+import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
 import {
     createRepository,
     toObjectId,
@@ -93,7 +93,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
-    bumpSessionEpoch: (id: string, at: Date) => Promise<void>;
+    bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
@@ -491,7 +491,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * working. A plain `$set` — and never backwards, so a slow earlier bump cannot undo a later
      * one. `timestamps: false`, since revoking is not an edit of the profile.
      */
-    bumpSessionEpoch: (id: string, at: Date) =>
+    bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) =>
         userModel
             .updateOne(
                 {
@@ -499,7 +499,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                     $or: [{ tokensValidAfter: null }, { tokensValidAfter: { $lt: at } }]
                 },
                 { $set: { tokensValidAfter: at } },
-                { timestamps: false }
+                // `session`: the caller's transaction, so the epoch commits with its other writes.
+                { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),

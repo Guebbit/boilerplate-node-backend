@@ -3,6 +3,7 @@
  * The `account` end of the shared kernel, write side: one narrow mutation per operation.
  */
 
+import type { ClientSession } from 'mongoose';
 import type { MfaReservation, UserDocument } from '../model';
 import { userRepository } from '../repository';
 
@@ -11,10 +12,18 @@ import { userRepository } from '../repository';
  * caller, itself the funnel both a password reset and an authenticated password change go
  * through. Takes the already-loaded, already-validated account: `passwordChange` refuses a weak
  * or breached password well before this point, so nothing here re-checks either.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param password - the new password, already accepted
+ * @param session - the transaction this write belongs to, when the caller owns one
  */
-export const setPassword = (user: UserDocument, password: string): Promise<UserDocument> => {
+export const setPassword = (
+    user: UserDocument,
+    password: string,
+    session?: ClientSession
+): Promise<UserDocument> => {
     user.password = password;
-    return userRepository.save(user);
+    return userRepository.save(user, session);
 };
 
 /**
@@ -137,9 +146,16 @@ export const claimTotpStep = (id: string, method: string, step: number): Promise
  * Move the account's session epoch to `at` (now by default): every access or refresh token minted
  * before it stops working. The funnel for every "I may be compromised" event — logout-all, a
  * password change or reset, a 2FA factor change, an email change, detected refresh reuse.
+ *
+ * @param id - the account
+ * @param at - the new epoch
+ * @param session - the transaction this write belongs to, when the caller owns one
  */
-export const bumpSessionEpoch = (id: string, at: Date = new Date()): Promise<void> =>
-    userRepository.bumpSessionEpoch(id, at);
+export const bumpSessionEpoch = (
+    id: string,
+    at: Date = new Date(),
+    session?: ClientSession
+): Promise<void> => userRepository.bumpSessionEpoch(id, at, session);
 
 /**
  * Stamp the account's last proof of life — a session was minted or refreshed. Throttled to one

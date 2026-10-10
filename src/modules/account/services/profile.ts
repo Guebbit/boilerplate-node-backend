@@ -8,6 +8,7 @@
  */
 
 import { z } from 'zod';
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
@@ -18,9 +19,10 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
-import { emitDomainEvent } from '@kernel/events';
-import { ACCOUNT_SESSIONS_REVOKED } from '../events';
-import { revokeAfterPasswordChange } from './revocation';
+import { announceInTransaction } from '@kernel/outbox';
+import { withTransaction } from '@infrastructure/runtime/database';
+import type { SessionsRevokedReason } from '../events';
+import { purgeAfterPasswordChange, sessionsRevokedAnnouncement } from './revocation';
 import { mailRecipientRefusal } from '../mail-budget';
 import {
     sendVerificationEmail,
@@ -119,12 +121,15 @@ export const validatePasswordChange = (
  *   refused password must not leave a half-applied change on the document, and the only place
  *   that can be guaranteed is here, next to the `save`. May return a `Promise` — `markVerified`'s
  *   role promotion is a membership write, not a field mutation, so it cannot be purely synchronous.
+ * @param announceAs - when set, the change also announces `account.sessions-revoked` with this
+ *   reason, through the outbox, in the write's own transaction
  */
 export const passwordChange = (
     user: UserDocument,
     password = '',
     passwordConfirm = '',
-    beforeSave?: (user: UserDocument) => void | Promise<void>
+    beforeSave?: (user: UserDocument) => void | Promise<void>,
+    announceAs?: SessionsRevokedReason
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
@@ -135,31 +140,60 @@ export const passwordChange = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return writePassword(user, password, beforeSave);
+        return writePassword(user, password, beforeSave, announceAs);
     });
 };
 
 /**
+ * The state change of {@link writePassword}: password and session epoch, on one session.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param password - the new password, already accepted
+ * @returns a write to hand to a transaction
+ */
+const passwordAndEpochWrite =
+    (user: UserDocument, password: string) =>
+    (session: ClientSession): Promise<UserDocument> =>
+        userService
+            .setPassword(user, password, session)
+            .then((saved) =>
+                userService.bumpSessionEpoch(saved.id, undefined, session).then(() => saved)
+            );
+
+/**
  * The write half of {@link passwordChange}, for a caller that has already run every check on the
  * password itself — shape, match, breach — and must not run the breach lookup a second time.
- * Saves first and revokes every refresh token second, for the reason {@link passwordChange} gives.
+ *
+ * One transaction holds the new password, the session epoch and, when `announceAs` is given, the
+ * `account.sessions-revoked` outbox row: the credential cannot change while old sessions stay live,
+ * and the event exists exactly when the change does. The token purge that follows is housekeeping
+ * (the epoch already refuses every old token), so its failure is logged, not turned into a 500.
  *
  * @param user - the account, carrying its credential fields
  * @param password - the new password, already accepted
  * @param beforeSave - a caller's own mutation to ride along in the same write
+ * @param announceAs - the reason to announce to subscribers, or nothing for a silent change
  */
 const writePassword = (
     user: UserDocument,
     password: string,
-    beforeSave?: (user: UserDocument) => void | Promise<void>
+    beforeSave?: (user: UserDocument) => void | Promise<void>,
+    announceAs?: SessionsRevokedReason
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     Promise.resolve(beforeSave?.(user))
-        .then(() => userService.setPassword(user, password))
+        .then(() => {
+            const write = passwordAndEpochWrite(user, password);
+            return announceAs
+                ? announceInTransaction(write, (saved) =>
+                      sessionsRevokedAnnouncement(saved.id, announceAs)
+                  )
+                : withTransaction(write);
+        })
         .then((savedUser) =>
-            revokeAfterPasswordChange(savedUser)
+            purgeAfterPasswordChange(savedUser)
                 .catch((error: unknown) => {
                     logger.warn({
-                        message: 'Password written, but its session revoke failed.',
+                        message: 'Password written, but its token purge failed.',
                         userId: savedUser.id,
                         error
                     });
@@ -211,13 +245,14 @@ export const passwordResetChange = (
     passwordConfirm: string,
     context: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    passwordChange(user, password, passwordConfirm, markResetCompleted).then((result) =>
-        afterReset(result, user, context)
+    passwordChange(user, password, passwordConfirm, markResetCompleted, 'password-reset').then(
+        (result) => afterReset(result, user, context)
     );
 
 /**
  * What follows a finished reset: on success, the audit row, the confirmation mail and the
- * `account.sessions-revoked` event. Shared by
+ * audit row and the confirmation mail (the `account.sessions-revoked` event already left with the
+ * password write). Shared by
  * {@link passwordResetChange} and {@link completePasswordReset}, which differ only in how the
  * password was checked.
  *
@@ -275,12 +310,7 @@ const afterReset = (
     // Normal priority: a confirmation, not a link or code anyone is blocked on.
     void sendAccountMail(user.email, mail, 'normal');
 
-    // Awaited, unlike the mail: a subscriber (`api-keys`) revokes what outlives a session, and a
-    // reset that answered before that was done would leave a window the owner believes is shut.
-    return emitDomainEvent(ACCOUNT_SESSIONS_REVOKED, {
-        userId: user.id,
-        reason: 'password-reset'
-    }).then(() => result);
+    return Promise.resolve(result);
 };
 
 /**
@@ -314,8 +344,8 @@ const resetWith = (
 
         return spendLiveToken(user, token).then((spentByThisRequest) =>
             spentByThisRequest
-                ? writePassword(user, password, markResetCompleted).then((result) =>
-                      afterReset(result, user, context)
+                ? writePassword(user, password, markResetCompleted, 'password-reset').then(
+                      (result) => afterReset(result, user, context)
                   )
                 : resetLinkRefused(context)
         );

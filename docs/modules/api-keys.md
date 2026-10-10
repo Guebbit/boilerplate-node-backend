@@ -88,9 +88,16 @@ flowchart LR
     F -->|yes| E{"expiresAt ≤ 1 year ahead?"}
     E -->|no| U["422"]
     E -->|yes| K["key minted · minter mailed"]
-    L["logout everywhere /<br/>password reset"] --> V["account.sessions-revoked"]
-    V --> X["every live key the person minted revoked · list mailed"]
+    L["logout everywhere /<br/>password reset"] --> T["one transaction:<br/>epoch + credential + outbox row"]
+    T --> V["account.sessions-revoked"]
+    V -->|"relay delivers; a failing consumer is retried"| X["every live key the person minted revoked · list mailed"]
 ```
+
+The event is not fired on the bus and forgotten: it is a row in the [transactional
+outbox](../tools/outbox.md), committed with the credential write and the session epoch. If
+revoking the keys fails, the row stays pending and the relay retries it, so a reset can no longer
+report success while the keys stay live. Revoking is idempotent (only active keys are touched, and
+a person with none live gets neither audit row nor mail), so a redelivery does nothing twice.
 
 - **Minting needs a fresh session** (`stepUp: critical` on `apikeys.any.create`): a stolen access
   token must not turn ten minutes into a long-lived key. GitHub's sudo mode asks the same.
