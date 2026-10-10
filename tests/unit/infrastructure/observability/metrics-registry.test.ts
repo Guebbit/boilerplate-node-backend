@@ -117,11 +117,14 @@ describe('labelled alert counters', () => {
     it('start at 0, so an increase() alert sees the first event after a restart', async () => {
         await import('@infrastructure/observability/security-events');
         await import('@modules/account/metrics');
+        await import('@modules/payments/metrics');
         withReadyState(0);
 
         const metrics = await getPrometheusMetrics();
 
         expect(metrics).toMatch(/^security_events_total\{event="security\.api_key\.revoked"\} 0$/m);
         expect(metrics).toMatch(/^auth_one_time_token_rejected_total\{flow="email_change"\} 0$/m);
+        expect(metrics).toMatch(/^payment_amount_mismatch_total\{field="amount"\} 0$/m);
+        expect(metrics).toMatch(/^account_export_failed_total 0$/m);
     });
 });

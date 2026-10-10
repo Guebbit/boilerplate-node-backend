@@ -15,6 +15,19 @@ groups:
                 summary: 'API instance is down'
                 description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
 
+          # A crash loop: the app restarts faster than `ApiDown`'s one-minute wait can complete, so
+          # that alert never fires. More than two process starts in 15 minutes is not a deploy.
+          # Unreliable with `NODE_ENABLE_CLUSTERING` on: each scrape then hits a different worker
+          # and `process_start_time_seconds` jumps between them. `ApiDown` mutes this one.
+          - alert: ApiRestarting
+            expr: changes(process_start_time_seconds{job="api"}[15m]) > 2
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'The API is restarting repeatedly'
+                description: 'The API process started more than twice in 15 minutes: a crash loop. Not reliable with NODE_ENABLE_CLUSTERING on, where each scrape hits a different worker.'
+
           # A backing service that is not serving. `dependency_up` is the app's own reading of each
           # (`modules/observability/metrics.ts`). With Mongo down the job and outbox gauges stop
           # reporting and the stale-job rules go blind, so this is the one that still speaks.
@@ -388,3 +401,29 @@ groups:
             annotations:
                 summary: 'A refresh token was replayed after rotation'
                 description: 'auth_refresh_token_reuse_detected_total increased — a session token leaked; the account was signed out everywhere.'
+
+    # Signals the business cannot ignore, each a counter that has no other watcher.
+    - name: business.rules
+      rules:
+          # The provider reported a success for an amount, currency or payment that is not the one
+          # frozen for the order (`payments/services/settlement.ts`). The order was cancelled and
+          # the money is to be returned: any increase is a reconciliation to do by hand.
+          - alert: PaymentAmountMismatch
+            expr: sum by (field) (increase(payment_amount_mismatch_total[15m])) > 0
+            for: 0m
+            labels:
+                severity: critical
+            annotations:
+                summary: 'A payment succeeded for the wrong {{ $labels.field }}'
+                description: 'payment_amount_mismatch_total rose for {{ $labels.field }} in the last 15 minutes: money that does not add up. See the payments log line for the order.'
+
+          # A person asked for their Art. 15 copy and did not get it, and the one-month deadline of
+          # Art. 12(3) is running.
+          - alert: AccountExportFailing
+            expr: increase(account_export_failed_total[15m]) > 0
+            for: 0m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'A personal-data export failed'
+                description: 'account_export_failed_total rose in the last 15 minutes: a data-subject request is unanswered, and the GDPR deadline is running.'

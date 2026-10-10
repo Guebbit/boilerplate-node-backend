@@ -29,3 +29,9 @@ export const paymentAmountMismatchTotal = new Counter({
     labelNames: ['field'],
     registers: [metricsRegistry]
 });
+
+// Zero from startup, so an `increase()` alert sees the first mismatch after a restart. The fields
+// are the ones `services/settlement.ts` compares.
+// https://prometheus.io/docs/practices/instrumentation/#avoid-missing-metrics
+for (const field of ['amount', 'currency', 'paymentId'])
+    paymentAmountMismatchTotal.inc({ field }, 0);

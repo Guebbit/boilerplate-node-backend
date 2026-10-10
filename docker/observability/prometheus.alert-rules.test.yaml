@@ -34,6 +34,73 @@ tests:
             exp_alerts: []
     - interval: 1m
       input_series:
+          - series: process_start_time_seconds{job="api",instance="api"}
+            values: 100 100 200 200 300 300 400 400
+      alert_rule_test:
+          - eval_time: 7m
+            alertname: ApiRestarting
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      job: api
+                      instance: api
+                  exp_annotations:
+                      summary: The API is restarting repeatedly
+                      description: 'The API process started more than twice in 15 minutes: a crash loop. Not reliable with NODE_ENABLE_CLUSTERING on, where each scrape hits a different worker.'
+    # Quiet: one restart is a deploy.
+    - interval: 1m
+      input_series:
+          - series: process_start_time_seconds{job="api",instance="api"}
+            values: 100 100 100 200 200 200 200 200
+      alert_rule_test:
+          - eval_time: 7m
+            alertname: ApiRestarting
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: payment_amount_mismatch_total{field="amount"}
+            values: 0 0 0 1 1 1 1 1
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaymentAmountMismatch
+            exp_alerts:
+                - exp_labels:
+                      severity: critical
+                      field: amount
+                  exp_annotations:
+                      summary: A payment succeeded for the wrong amount
+                      description: 'payment_amount_mismatch_total rose for amount in the last 15 minutes: money that does not add up. See the payments log line for the order.'
+    - interval: 1m
+      input_series:
+          - series: payment_amount_mismatch_total{field="amount"}
+            values: 0x8
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: PaymentAmountMismatch
+            exp_alerts: []
+    - interval: 1m
+      input_series:
+          - series: account_export_failed_total
+            values: 0 0 0 1 1 1 1 1
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: AccountExportFailing
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                  exp_annotations:
+                      summary: A personal-data export failed
+                      description: 'account_export_failed_total rose in the last 15 minutes: a data-subject request is unanswered, and the GDPR deadline is running.'
+    - interval: 1m
+      input_series:
+          - series: account_export_failed_total
+            values: 0x8
+      alert_rule_test:
+          - eval_time: 6m
+            alertname: AccountExportFailing
+            exp_alerts: []
+    - interval: 1m
+      input_series:
           - series: dependency_up{job="api",dependency="database"}
             values: 1 1 0x10
           - series: dependency_up{job="api",dependency="cache"}

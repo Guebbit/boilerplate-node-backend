@@ -62,6 +62,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | ------------------ |
 | `ApiDown`                            | scrape target unreachable > 1 min                                                                                    | critical           |
 | `DependencyUnavailable`              | the app reports Mongo (critical, 1 min), Redis or RabbitMQ (warning, 5 min) as not serving (`dependency_up`)         | critical / warning |
+| `ApiRestarting`                      | more than 2 process starts in 15 min: a crash loop (unreliable with clustering on; `ApiDown` mutes it)               | critical           |
 | `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                               | warning            |
 | `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                         | warning            |
 | `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                  | warning            |
@@ -88,6 +89,8 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `MetricsTokenGuessed`                | a wrong bearer token on `/observability/metrics`                                                                     | warning            |
 | `OneTimeTokenGuessing`               | more than 20 refused one-time link tokens on one flow in 15 min                                                      | warning            |
 | `RefreshTokenReuse`                  | a refresh token was replayed after rotation                                                                          | warning            |
+| `PaymentAmountMismatch`              | the provider reported a success for an amount, currency or payment that is not the frozen one                        | critical           |
+| `AccountExportFailing`               | any personal-data export failed in 15 min (the GDPR deadline is running)                                             | warning            |
 | `Watchdog`                           | always firing; the heartbeat pushed to `ALERT_HEARTBEAT_URL` (silence there = the pipeline is dead)                  | none               |
 | `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (webhook only: email is what is broken)                         | warning            |
 | `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                      | warning            |
