@@ -149,8 +149,8 @@ x-data-hardening: &data-hardening
 # ── MONITORING, OFF BY DEFAULT ──────────────────────────────────────────────────────────────────
 # `profiles: [monitoring]` services start only when `COMPOSE_PROFILES` includes `monitoring`:
 #   COMPOSE_PROFILES=bundled,monitoring
-# Prometheus (scrape + the alert rules), Alertmanager (routing), Loki (log store) and Alloy (the
-# container-log shipper). The rule files are the SAME ones the local stack loads. No Grafana: it
+# Prometheus (scrape + the alert rules), Alertmanager (routing), node_exporter (the host's disk
+# only), Loki (log store) and Alloy (the container-log shipper). The rule files are the SAME ones the local stack loads. No Grafana: it
 # costs about a gigabyte of memory and the alerts do not need a screen — point your own at Loki and
 # Prometheus if you want one.
 #
@@ -805,6 +805,25 @@ services:
         volumes:
             - ./docker/observability/loki.config.yaml:/etc/loki/loki-config.yaml:ro
             - loki-data:/var/loki
+
+    # node_exporter: the host's disk, and nothing else. Only the filesystem collector runs, so the
+    # one thing it can tell Prometheus is how full each real mount is (`DiskAlmostFull`).
+    # The host root is mounted READ-ONLY at /host: that is how it sees the host's filesystems and
+    # not the container's. Virtual and container-storage mounts are excluded: they are not disks.
+    # https://github.com/prometheus/node_exporter#docker
+    node-exporter:
+        logging: *logging
+        image: docker.io/prom/node-exporter:v1.12.1
+        restart: unless-stopped
+        profiles: [monitoring]
+        <<: *monitoring-hardening
+        command:
+            - '--path.rootfs=/host'
+            - '--collector.disable-defaults'
+            - '--collector.filesystem'
+            - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|run|var/lib/docker/.+|var/lib/containers/storage/.+)($$|/)'
+        volumes:
+            - /:/host:ro,rslave
 
     # Alloy: tails the container log files and ships them to Loki. Replaces Promtail, which is
     # deprecated. Runs as root because the engine's log files are root-owned; the capability set is

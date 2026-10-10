@@ -242,9 +242,9 @@ nothing selects a backend yet, on purpose.
 
 ## Monitoring and alerts
 
-The `monitoring` profile adds four services, **off by default**: Prometheus (scrapes `app` and
-evaluates the alert rules), Alertmanager (routes what fires), Loki (stores container logs) and Alloy
-(ships them). Turn it on with `COMPOSE_PROFILES=bundled,monitoring`. There is no Grafana: it costs
+The `monitoring` profile adds five services, **off by default**: Prometheus (scrapes `app` and
+evaluates the alert rules), Alertmanager (routes what fires), node_exporter (the host's disk, for
+`DiskAlmostFull`), Loki (stores container logs) and Alloy (ships them). Turn it on with `COMPOSE_PROFILES=bundled,monitoring`. There is no Grafana: it costs
 about a gigabyte of memory and the alerts do not need a screen.
 
 ```mermaid
@@ -257,7 +257,7 @@ flowchart LR
     alloy -. "audit lines only,<br/>if you configure it" .-> offhost[("off-host store")]
 ```
 
-- **No host ports.** Prometheus and Alertmanager have web UIs with no login, so none of the four
+- **No host ports.** Prometheus and Alertmanager have web UIs with no login, so none of the five
   publishes a port; they reach each other and `app` over the compose network. Reach a UI with
   `docker compose exec` or an SSH tunnel, not a published port.
 - **One credential.** Prometheus scrapes with the `metrics_token` secret file the app reads its own

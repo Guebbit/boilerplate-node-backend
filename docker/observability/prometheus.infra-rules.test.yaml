@@ -63,3 +63,59 @@ tests:
           - eval_time: 15m
             alertname: PrometheusRuleEvaluationFailures
             exp_alerts: []
+    # Little free space left: 5 % of a 100 GB disk. (Input every minute: a sample older than five
+    # minutes is stale, and `for` needs the series present throughout.)
+    - interval: 1m
+      input_series:
+          - series: node_filesystem_avail_bytes{job="node",instance="node-exporter:9100",mountpoint="/",fstype="ext4"}
+            values: '5000000000x120'
+          - series: node_filesystem_size_bytes{job="node",instance="node-exporter:9100",mountpoint="/",fstype="ext4"}
+            values: '100000000000x120'
+      alert_rule_test:
+          - eval_time: 2h
+            alertname: DiskAlmostFull
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      job: node
+                      instance: node-exporter:9100
+                      mountpoint: /
+                      fstype: ext4
+                  exp_annotations:
+                      summary: The disk at / is almost full
+                      description: '/ has under 10 % free, or will be full within 24 hours at the rate of the last 6 hours.'
+    # The trend: 70 % free now, but shrinking fast enough to be gone within 24 hours.
+    - interval: 1m
+      input_series:
+          - series: node_filesystem_avail_bytes{job="node",instance="node-exporter:9100",mountpoint="/data",fstype="ext4"}
+            values: '70000000000-100000000x120'
+          - series: node_filesystem_size_bytes{job="node",instance="node-exporter:9100",mountpoint="/data",fstype="ext4"}
+            values: '100000000000x120'
+      alert_rule_test:
+          - eval_time: 2h
+            alertname: DiskAlmostFull
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      job: node
+                      instance: node-exporter:9100
+                      mountpoint: /data
+                      fstype: ext4
+                  exp_annotations:
+                      summary: The disk at /data is almost full
+                      description: '/data has under 10 % free, or will be full within 24 hours at the rate of the last 6 hours.'
+    # Quiet: half full and steady, and a tmpfs that is full by design.
+    - interval: 1m
+      input_series:
+          - series: node_filesystem_avail_bytes{job="node",instance="node-exporter:9100",mountpoint="/",fstype="ext4"}
+            values: '50000000000x120'
+          - series: node_filesystem_size_bytes{job="node",instance="node-exporter:9100",mountpoint="/",fstype="ext4"}
+            values: '100000000000x120'
+          - series: node_filesystem_avail_bytes{job="node",instance="node-exporter:9100",mountpoint="/run",fstype="tmpfs"}
+            values: '0x120'
+          - series: node_filesystem_size_bytes{job="node",instance="node-exporter:9100",mountpoint="/run",fstype="tmpfs"}
+            values: '100000000x120'
+      alert_rule_test:
+          - eval_time: 2h
+            alertname: DiskAlmostFull
+            exp_alerts: []

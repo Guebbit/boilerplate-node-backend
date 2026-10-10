@@ -42,3 +42,28 @@ groups:
             annotations:
                 summary: 'Prometheus rule group {{ $labels.rule_group }} is failing to evaluate'
                 description: 'Rules in {{ $labels.rule_group }} errored while running in the last 15 minutes, so the alerts they define are blind.'
+
+    - name: host.rules
+      rules:
+          # Disk filling up, on any real mount node_exporter reports. One rule for both conditions,
+          # so the two never double-alarm: little space left, OR the last six hours say it is gone
+          # within 24. The trend catches a runaway log or a growing upload folder days before the
+          # percentage does. `for: 30m` rides out a compaction or a backup that borrows space.
+          - alert: DiskAlmostFull
+            expr: |
+                (
+                    node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|squashfs|overlay"}
+                    /
+                    node_filesystem_size_bytes{fstype!~"tmpfs|ramfs|squashfs|overlay"}
+                    < 0.10
+                )
+                or
+                (
+                    predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|squashfs|overlay"}[6h], 24 * 3600) < 0
+                )
+            for: 30m
+            labels:
+                severity: warning
+            annotations:
+                summary: 'The disk at {{ $labels.mountpoint }} is almost full'
+                description: '{{ $labels.mountpoint }} has under 10 % free, or will be full within 24 hours at the rate of the last 6 hours.'
