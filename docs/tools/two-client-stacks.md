@@ -179,6 +179,11 @@ Docker host hits neither):
   Both forms are legal Compose Specification; the second is only needed to work around this one
   tool.
 
+**Certificate expiry.** Traefik renews certificates on its own, and Let's Encrypt no longer emails
+before one lapses (since 2025-06-04). The overlay turns on Traefik's Prometheus metrics, and each
+client's Prometheus (the `monitoring` profile) joins the `proxy` network to scrape them, so
+`TlsCertExpiringSoon` fires when a renewal silently failed. See [Prometheus](./prometheus.md).
+
 ## When Compose stops being the answer
 
 **Not yet.** At twenty clients on one box, Kubernetes adds a control plane, an ingress controller,

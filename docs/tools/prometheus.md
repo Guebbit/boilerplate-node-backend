@@ -95,6 +95,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | `AlertmanagerNotificationsFailing`   | Alertmanager failed to send a notification in 15 min (webhook only: email is what is broken)                                 | warning            |
 | `PrometheusRuleEvaluationFailures`   | a rule errored while running in the last 15 min                                                                              | warning            |
 | `DiskAlmostFull`                     | a real mount under 10 % free, or predicted full within 24 h by the last 6 h (needs the `monitoring` profile's node_exporter) | warning            |
+| `TlsCertExpiringSoon`                | a certificate Traefik serves expires in under 14 days (needs `docker-compose.proxy.yml`)                                     | warning            |
 
 ## Alertmanager
 

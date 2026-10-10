@@ -67,3 +67,19 @@ groups:
             annotations:
                 summary: 'The disk at {{ $labels.mountpoint }} is almost full'
                 description: '{{ $labels.mountpoint }} has under 10 % free, or will be full within 24 hours at the rate of the last 6 hours.'
+
+    - name: proxy.rules
+      rules:
+          # Traefik renews certificates by itself; this catches a renewal that failed silently.
+          # Let's Encrypt stopped sending expiry emails on 2025-06-04, so nothing else says so.
+          # 14 days is two renewal attempts' worth of margin (Traefik renews at 30 days left).
+          # One alert per certificate (`cn`): one proxy serves several client stacks. The default
+          # self-signed certificate is not one anyone presents, so it is left out.
+          - alert: TlsCertExpiringSoon
+            expr: (traefik_tls_certs_not_after{cn!="TRAEFIK DEFAULT CERT"} - time()) < 14 * 86400
+            for: 1h
+            labels:
+                severity: warning
+            annotations:
+                summary: 'The TLS certificate for {{ $labels.cn }} expires in under 14 days'
+                description: 'Traefik should have renewed {{ $labels.cn }} by now. Check its ACME log and that port 80 is reachable.'

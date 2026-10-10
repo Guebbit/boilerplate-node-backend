@@ -119,3 +119,33 @@ tests:
           - eval_time: 2h
             alertname: DiskAlmostFull
             exp_alerts: []
+    # A certificate with 10 days left, and one with 60: only the first is near expiry.
+    - interval: 1m
+      input_series:
+          - series: traefik_tls_certs_not_after{job="traefik",cn="app.acme.example",serial="1"}
+            values: '864000x120'
+          - series: traefik_tls_certs_not_after{job="traefik",cn="app.other.example",serial="2"}
+            values: '5184000x120'
+          - series: traefik_tls_certs_not_after{job="traefik",cn="TRAEFIK DEFAULT CERT",serial="3"}
+            values: '864000x120'
+      alert_rule_test:
+          - eval_time: 2h
+            alertname: TlsCertExpiringSoon
+            exp_alerts:
+                - exp_labels:
+                      severity: warning
+                      job: traefik
+                      cn: app.acme.example
+                      serial: '1'
+                  exp_annotations:
+                      summary: The TLS certificate for app.acme.example expires in under 14 days
+                      description: Traefik should have renewed app.acme.example by now. Check its ACME log and that port 80 is reachable.
+    # Quiet: every certificate has plenty of time left.
+    - interval: 1m
+      input_series:
+          - series: traefik_tls_certs_not_after{job="traefik",cn="app.acme.example",serial="1"}
+            values: '5184000x120'
+      alert_rule_test:
+          - eval_time: 2h
+            alertname: TlsCertExpiringSoon
+            exp_alerts: []

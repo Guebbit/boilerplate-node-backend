@@ -57,6 +57,11 @@ services:
             - '--certificatesresolvers.le.acme.email=${NODE_PROXY_ACME_EMAIL:?set NODE_PROXY_ACME_EMAIL in the client env file}'
             - '--certificatesresolvers.le.acme.storage=/letsencrypt/acme.json'
             - '--certificatesresolvers.le.acme.httpchallenge.entrypoint=web'
+            # Prometheus metrics on Traefik's internal entrypoint (:8080, never published on the
+            # host). They carry `traefik_tls_certs_not_after`, which `TlsCertExpiringSoon` reads to
+            # catch a renewal that failed silently.
+            # https://doc.traefik.io/traefik/observability/metrics/prometheus/
+            - '--metrics.prometheus=true'
         ports:
             - '80:80'
             - '443:443'
@@ -92,6 +97,17 @@ services:
             # the proxy. A client env file that sets its own value still wins.
             # https://doc.traefik.io/traefik/routing/entrypoints/#forwarded-headers
             NODE_TRUST_PROXY_HOPS: '${NODE_TRUST_PROXY_HOPS:-1}'
+
+    # The client's Prometheus (the `monitoring` profile) joins the shared network to scrape
+    # Traefik, and loads the scrape job from this file. The base file loads nothing from that
+    # folder, so a stack without this overlay has no Traefik target to show as down. Both networks
+    # named, for the same reason as `app` above.
+    prometheus:
+        networks:
+            default: {}
+            proxy: {}
+        volumes:
+            - ./docker/observability/prometheus.traefik-scrape.yaml:/etc/prometheus/scrape.d/traefik.yml:ro
 
 networks:
     # Declared explicitly so `app` can name it alongside `proxy` — the base file never declares a
