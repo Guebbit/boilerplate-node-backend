@@ -82,7 +82,7 @@ describe('productService.writeCreate is one transaction', () => {
 });
 
 describe('productService.writeUpdate is one transaction', () => {
-    it('keeps the old row, and writes no event, when the translation write fails', async () => {
+    it('keeps the old row when the translation write fails', async () => {
         const product = await createProduct({ title: 'Standing Desk', price: 10, active: true });
         write.mockRejectedValueOnce(new Error('translation store down'));
 
@@ -100,15 +100,5 @@ describe('productService.writeUpdate is one transaction', () => {
 
         const stored = await readProduct(String(product._id));
         expect(stored).toMatchObject({ price: 10, active: true });
-        expect(await rowsNamed('product.deactivated')).toHaveLength(0);
-    });
-
-    it('writes the deactivation event with the row that flipped', async () => {
-        const product = await createProduct({ title: 'Standing Desk', active: true });
-
-        await productService.writeUpdate(String(product._id), { active: false }, testCallerContext);
-        await settleOutboxNudges();
-
-        expect(await rowsNamed('product.deactivated')).toHaveLength(1);
     });
 });

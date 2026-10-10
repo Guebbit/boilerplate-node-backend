@@ -1254,8 +1254,6 @@ components:
                         convention as `Product.price`.
                 description:
                     type: string
-                active:
-                    type: boolean
                 requiresShipping:
                     type: boolean
                     default: true

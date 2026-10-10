@@ -20,7 +20,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
-import { PRODUCT_CREATED, PRODUCT_DEACTIVATED } from '../events';
+import { PRODUCT_CREATED } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { sanitizeStringArray } from './validation';
@@ -257,7 +257,6 @@ export const update = (
 
 /**
  * Fetches a product by id and updates it — inside the caller's transaction; a miss is a 404.
- * A flip to inactive writes `PRODUCT_DEACTIVATED` to the outbox in the same transaction.
  *
  * @param id - the product
  * @param data - the changes
@@ -273,22 +272,12 @@ export const updateByIdInTransaction = (
     // against the row it loads, instead of the first attempt's having used it up.
     rearmPrecondition();
 
-    return productRepository.findById(id).then((product) => {
+    return productRepository.findById(id).then<ProductUpdateOutcome | ResponseReject>((product) => {
         // Returned, not thrown: a thrown miss is indistinguishable from a genuine database error
         // at the `.catch()` that has to tell them apart.
         if (!product) return generateReject(404, [t('products.not-found')]);
 
-        // Read before `applyUpdate` mutates `product.active` in place — the flip is the whole
-        // signal `PRODUCT_DEACTIVATED` exists to report, same shape `users`' ban/unban audit uses.
-        const wasActive = product.active;
-
-        return applyUpdate(product, data, session).then((outcome) =>
-            wasActive !== false && outcome.updated.active === false
-                ? enqueueOutboxEvent(PRODUCT_DEACTIVATED, { productId: id }, id, session).then(
-                      () => outcome
-                  )
-                : outcome
-        );
+        return applyUpdate(product, data, session);
     });
 };
 

@@ -105,7 +105,7 @@ describe('makeOrder — the embedded product snapshot', () => {
         const snapshot = makeOrder({ items: [{ product: DOG_FOOD, quantity: 1 }] }).items![0]
             .product;
 
-        for (const field of ['categories', 'tags', 'active'])
+        for (const field of ['categories', 'tags'])
             expect(Object.hasOwn(snapshot, field)).toBe(false);
     });
 
@@ -123,11 +123,16 @@ describe('makeOrder — the embedded product snapshot', () => {
         // The whole reason a snapshot exists: an order keeps what was bought. A field stated on
         // the override has to survive into the stored copy.
         const snapshot = makeOrder({
-            items: [{ product: { ...DOG_FOOD, categories: ['food'], active: false }, quantity: 1 }]
+            items: [
+                {
+                    product: { ...DOG_FOOD, categories: ['food'], requiresShipping: false },
+                    quantity: 1
+                }
+            ]
         }).items![0].product;
 
         expect(snapshot.categories).toEqual(['food']);
-        expect(snapshot.active).toBe(false);
+        expect(snapshot.requiresShipping).toBe(false);
     });
 
     it('converts the snapshot"s own timestamps from ISO strings', () => {

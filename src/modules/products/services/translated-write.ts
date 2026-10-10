@@ -149,7 +149,7 @@ export const writeCreate = async (
  * multilingual product write surface. A PUT arrives here with every omitted locale already `null`
  * ({@link clearOmittedLocales}), so this one path serves both verbs.
  *
- * Inside:  the 404 check, the row, `PRODUCT_DEACTIVATED` on a flip to inactive, the translation
+ * Inside:  the 404 check, the row, the translation
  *          rows and the derived column. After: the audit entry, the old-image delete, the image
  *          enqueue — see {@link updateByIdInTransaction} and {@link finishUpdateById}.
  *

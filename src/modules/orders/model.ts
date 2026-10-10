@@ -297,7 +297,6 @@ const orderLineProductSchema = new Schema(
         description: { type: String },
         categories: { type: [String] },
         tags: { type: [String] },
-        active: { type: Boolean },
         requiresShipping: { type: Boolean },
         /** Art. 16 exclusion, frozen the same as every other line field — see `Product.noWithdrawal`. */
         noWithdrawal: { type: Boolean },

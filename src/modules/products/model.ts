@@ -52,11 +52,13 @@ export interface ProductRecord extends Omit<
 /**
  * A product as an ORDER LINE remembers it: `ProductRecord` without `onHand`/`reserved` — the two
  * fields that describe the WAREHOUSE, right now, rather than what a customer saw and bought.
+ * `active` and `purchasable` are omitted too: checkout refuses anything hidden or off sale, so a
+ * frozen value would always be `true` and say nothing.
  * `orders/model.ts` embeds a Mongoose schema that mirrors this shape (not `productSchema` itself,
  * so the two counters are never even reachable to store), and its `OrderDocumentItem.product` is
  * typed by this, not by `ProductRecord`.
  */
-export type ProductSnapshot = Omit<ProductRecord, 'onHand' | 'reserved'>;
+export type ProductSnapshot = Omit<ProductRecord, 'onHand' | 'reserved' | 'active' | 'purchasable'>;
 
 /**
  * Product Document interface — the stored fields, plus everything Mongoose adds.

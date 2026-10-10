@@ -9,8 +9,10 @@
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * A product just stopped being reachable — soft-deleted or hard-deleted. Never fires on a
-         * restore: what the delete already set in motion (carts and wishlists emptied) stays
+         * A product just stopped being reachable — soft-deleted or hard-deleted. The ONLY catalogue
+         * event that pulls cart and wishlist lines: hiding a product (`active: false`) or taking it
+         * off sale (`purchasable: false`) emits nothing, and no placed order is ever cancelled by a
+         * catalogue change. Never fires on a restore: what the delete already set in motion (carts and wishlists emptied) stays
          * done, since a restore puts the product back on sale, not undoes
          * the past — see `restoreById`'s own docblock.
          *
@@ -32,17 +34,6 @@ declare module '@kernel/events' {
             hardDelete: boolean;
             titles: Record<string, string>;
         };
-
-        /**
-         * A product's `active` flag flipped from `true` to `false` — never fired for any other
-         * edit, including one that repeats `active: false` unchanged (see `products/services/crud.ts`'s
-         * `updateById`, the same "flip, not every write" shape `users`' `ADMIN_USER_BANNED` uses).
-         * No subscriber, and none is wanted: a deactivated product stays in carts and wishlists
-         * and an order already placed treats it as present. A signed-in cart keeps the line
-         * flagged and checkout refuses it with `CART_PRODUCT_UNAVAILABLE`; a guest cart drops it.
-         * Only `product.deleted` pulls lines.
-         */
-        'product.deactivated': { productId: string };
 
         /**
          * A product was created, with the opening stock count the request asked for. The document
@@ -68,6 +59,3 @@ export const PRODUCT_DELETED = 'product.deleted';
 
 /** See {@link DomainEventMap}'s `'product.created'` for why this exists and what it may trigger. */
 export const PRODUCT_CREATED = 'product.created';
-
-/** See {@link DomainEventMap}'s `'product.deactivated'` for why this exists and what it may trigger. */
-export const PRODUCT_DEACTIVATED = 'product.deactivated';
