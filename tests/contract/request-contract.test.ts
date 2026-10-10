@@ -97,6 +97,8 @@ const withRealOrderReferences = async (
     // A shelf no generated quantity can exhaust, for the same reason the ids are patched in:
     // `quantity ≤ available` is a business rule the schema cannot express, and this file only
     // asks whether the API honours its own CONTRACT — the refusal has its own scenario tests.
+    // The same goes for the admin line limits: `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY` is a
+    // deployment knob under the contract's wider ceiling, so a generated quantity is clamped to 1.
     const [product, { user }] = await Promise.all([
         createProduct({ onHand: 1_000_000_000 }),
         authenticateAs('user')
@@ -106,6 +108,7 @@ const withRealOrderReferences = async (
     if (Array.isArray(payload.items))
         result.items = (payload.items as { quantity: number }[]).map((item) => ({
             ...item,
+            quantity: 1,
             productId: String(product._id)
         }));
     return result;
