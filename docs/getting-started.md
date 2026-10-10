@@ -182,9 +182,10 @@ never as anything that says why.
 npm run complete     # build + all tests + lint + format check — several minutes
 ```
 
-For now the pre-commit hook runs a faster subset, `npm run complete:light`: every static check plus
-the unit and cross-cutting suites, nothing that needs `mongod`. Run the full `complete` yourself
-before merging. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
+The pre-commit hook runs a faster subset permanently: eslint and prettier on the staged files, then
+`npm run complete:light:gates` (every other static check plus the unit and cross-cutting suites,
+nothing that needs `mongod`). Run the full `complete` yourself before merging a lane and once on main
+after; CI on push is authoritative. Its mutating twin, `npm run complete:fix`, fixes lint and formatting instead of reporting
 them.
 
 Deliberately outside that gate, run by hand when you want them: `npm run mutation` (Stryker,

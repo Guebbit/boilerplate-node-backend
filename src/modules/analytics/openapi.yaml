@@ -53,9 +53,7 @@ components:
                     type: string
                     enum: [product_viewed]
                 productId:
-                    type: string
-                    minLength: 1
-                    maxLength: 64
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id' }]
                     description: The product whose page was opened.
 
         ProductsSearchedEvent:
@@ -67,8 +65,7 @@ components:
                     type: string
                     enum: [products_searched]
                 text:
-                    type: string
-                    maxLength: 200
+                    allOf: [{ $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text' }]
                     description: The free-text term searched for, when there was one.
                 resultCount:
                     type: integer

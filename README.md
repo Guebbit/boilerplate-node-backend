@@ -148,6 +148,11 @@ Per-suite numbers, so a doubling reads as a regression rather than as a mood:
 
 AGPL-3.0-or-later. See [LICENSE](./LICENSE).
 
+Copyright (C) 2023-2026 Andrea Guerzoni. This program is free software: you can redistribute it
+and/or modify it under the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option) any later version. It is
+distributed WITHOUT ANY WARRANTY; see the GNU Affero General Public License for details.
+
 Every site built on this backend is a network service, so AGPL §13 applies: if you modify it, you
 must offer everyone who interacts with it remotely a way to get the Corresponding Source of your
 modified version — not just to someone you hand a copy to. The paired frontend is shipped straight

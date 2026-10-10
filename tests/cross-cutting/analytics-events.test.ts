@@ -1,8 +1,8 @@
 /**
  * The analytics vocabulary, swept across every module — the twin of `audit-actions.test.ts`.
  * Names land in ONE Umami website which counts per name, so a name claimed twice produces rows
- * nothing can tell apart. The paired frontend emits no custom events, so this sweep is the whole
- * of the guard.
+ * nothing can tell apart. The paired frontend sends only the closed browsing list of
+ * `POST /analytics/events`, so this sweep guards the server-side names.
  *
  * See: docs/api/contract-fragmentation.md#the-analytics-names--the-bundle-that-stopped-being-one
  */
