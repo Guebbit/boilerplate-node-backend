@@ -1,0 +1,4 @@
+{
+    "*.{ts,mts,tsx,cjs}": "eslint --max-warnings 0 --no-warn-ignored",
+    "*": "prettier --check --ignore-unknown"
+}

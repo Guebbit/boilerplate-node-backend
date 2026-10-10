@@ -26,7 +26,7 @@ npm run regenerate    # every generator, in dependency order, then the sync to t
 Then the gate that would have caught you anyway:
 
 ```bash
-npm run complete      # build + test + lint + format — the full gate (pre-commit runs complete:light for now)
+npm run complete      # build + test + lint + format — the full gate (pre-commit runs the light gate)
 ```
 
 `regenerate` **writes**; `complete` only **verifies**. A gate failure saying `STALE` means the

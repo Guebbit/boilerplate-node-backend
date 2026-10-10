@@ -1,4 +1,5 @@
-# The LIGHT gate, `complete:light`.
+# The LIGHT gate: eslint + prettier on the STAGED files only (lint-staged), then `complete:light:gates`.
+# Staged-only so a peer session's dirty file cannot fail an unrelated commit; CI lints the whole tree.
 # It keeps every static check (type-check, lint, both spec lints, format, the contract-bundle, docs and
 # cross-repo checks) plus the unit and cross-cutting suites — nothing that starts `mongod`.
 #
@@ -38,4 +39,5 @@
 npm run regenerate -- --no-sync
 git add asyncapi.yaml asyncapi.public.yaml
 
-npm run complete:light
+npx lint-staged
+npm run complete:light:gates
