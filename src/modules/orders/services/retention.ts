@@ -36,6 +36,24 @@ export const detachUserId = (userId: string, session: ClientSession): Promise<vo
 };
 
 /**
+ * The `personalData.minimise` hook. Starts the same per-order PII clock erasure does, but keeps
+ * `userId`: an inactive customer still sees their order history, minus the addresses and notes
+ * once each order's own window ends. Idempotent — an order that already has a clock is skipped.
+ *
+ * @param userId - the inactive account's id
+ */
+export const startOrderPiiClock = (userId: string): Promise<void> =>
+    orderRepository.startPiiClock(userId, orderPiiRetentionDays()).then((stamped) => {
+        if (stamped > 0)
+            // Stryker disable next-line all
+            logger.info({
+                message: 'Started the PII clock on an inactive account.',
+                userId,
+                stamped
+            });
+    });
+
+/**
  * `scripts/ops/reap-orders.ts`'s sweep. Scrubs the remaining PII on every order
  * whose retention window (stamped by {@link detachUserId}) has elapsed.
  *

@@ -65,6 +65,9 @@ import {
 } from './signup';
 import {
     findInactiveUnwarned,
+    findInactiveUnminimised,
+    minimiseInactive,
+    minimiseInactiveBefore,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace
 } from './reaper';
@@ -133,6 +136,9 @@ export const userService = {
     linkOAuthAccount,
     unlinkOAuthAccount,
     findInactiveUnwarned,
+    findInactiveUnminimised,
+    minimiseInactive,
+    minimiseInactiveBefore,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,
     consumeToken,

@@ -411,16 +411,43 @@ const findOpenUnpaidIdsOf = (userId: string, session?: ClientSession): Promise<s
         .then((orders) => orders.map((order) => String(order._id)));
 
 /**
+ * The per-order PII clock, as an aggregation expression: `max(now, createdAt + retentionDays)`, and
+ * `now` itself for a never-paid order. Shared by erasure ({@link detachUserId}) and inactivity
+ * minimisation ({@link startPiiClock}), so both stamp the same date for the same order.
+ *
+ * The `$max` is what stops an order already past its own window from getting a fresh ten years just
+ * because the account was erased today. A never-paid order (`paidAt` unset — `pending`, or cancelled
+ * before ever reaching `paid`) is due AT ONCE instead: it is no tax record at all, so Art. 17(3)(b)/(e)'s
+ * retention reason never applied to it in the first place.
+ *
+ * @param now - the moment the clock is started
+ * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
+ */
+const piiClockExpression = (now: Date, retentionDays: number) => ({
+    // `$paidAt` missing evaluates falsy in `$cond`'s own boolean rules —
+    // no `$ifNull` needed. https://www.mongodb.com/docs/manual/reference/operator/aggregation/cond/
+    $cond: {
+        if: '$paidAt',
+        // MongoDB's own `$cond` operator syntax requires this exact key;
+        // it is data for the aggregation pipeline, never awaited as a value.
+        // eslint-disable-next-line unicorn/no-thenable -- see comment above
+        then: {
+            $max: [
+                now,
+                { $dateAdd: { startDate: '$createdAt', unit: 'day', amount: retentionDays } }
+            ]
+        },
+        else: now
+    }
+});
+
+/**
  * Unset `userId` on every order this account placed, and mark each for
  * `scripts/ops/reap-orders.ts` to scrub later — `users`' `personalData.erase` hook. The order row
  * is never touched otherwise: it is the invoice, kept whole until its own `anonymizeAfter`.
  *
  * An aggregation-pipeline update, not a flat `$set`, because the clock runs PER ORDER: a decade-old
- * order is due almost immediately, not ten years from today. `anonymizeAfter = max(now, createdAt +
- * retentionDays)` — the `$max` is what stops an order already past its own window from getting a
- * fresh ten years just because the account was erased today. A never-paid order (`paidAt` unset —
- * `pending`, or cancelled before ever reaching `paid`) is due AT ONCE instead: it is no tax record
- * at all, so Art. 17(3)(b)/(e)'s retention reason never applied to it in the first place.
+ * order is due almost immediately, not ten years from today (see {@link piiClockExpression}).
  *
  * @param userId - the erased account's id
  * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
@@ -430,39 +457,15 @@ const detachUserId = (
     userId: string,
     retentionDays: number,
     session?: ClientSession
-): Promise<number> => {
-    const now = new Date();
-
-    return orderModel
+): Promise<number> =>
+    orderModel
         .updateMany(
             { userId: toObjectId(userId) },
             [
                 {
                     $set: {
                         userId: '$$REMOVE',
-                        anonymizeAfter: {
-                            // `$paidAt` missing evaluates falsy in `$cond`'s own boolean rules —
-                            // no `$ifNull` needed. https://www.mongodb.com/docs/manual/reference/operator/aggregation/cond/
-                            $cond: {
-                                if: '$paidAt',
-                                // MongoDB's own `$cond` operator syntax requires this exact key;
-                                // it is data for the aggregation pipeline, never awaited as a value.
-                                // eslint-disable-next-line unicorn/no-thenable -- see comment above
-                                then: {
-                                    $max: [
-                                        now,
-                                        {
-                                            $dateAdd: {
-                                                startDate: '$createdAt',
-                                                unit: 'day',
-                                                amount: retentionDays
-                                            }
-                                        }
-                                    ]
-                                },
-                                else: now
-                            }
-                        }
+                        anonymizeAfter: piiClockExpression(new Date(), retentionDays)
                     }
                 }
             ],
@@ -474,7 +477,26 @@ const detachUserId = (
         )
         .exec()
         .then(({ modifiedCount }) => modifiedCount);
-};
+
+/**
+ * Start the PII clock on every order an account placed, keeping its `userId` — `personalData.minimise`
+ * for an inactive account. Orders already carrying a clock are left alone, so a rerun is a no-op and
+ * an order's date never moves later.
+ *
+ * @param userId - the inactive account's id
+ * @param retentionDays - how many days of PII a PAID order gets from ITS OWN `createdAt`
+ * @returns how many orders were stamped
+ */
+const startPiiClock = (userId: string, retentionDays: number): Promise<number> =>
+    orderModel
+        .updateMany(
+            { userId: toObjectId(userId), anonymizeAfter: { $exists: false } },
+            [{ $set: { anonymizeAfter: piiClockExpression(new Date(), retentionDays) } }],
+            // Pipeline update, no `updatedAt` bump: see `detachUserId`.
+            { timestamps: false, updatePipeline: true }
+        )
+        .exec()
+        .then(({ modifiedCount }) => modifiedCount);
 
 /**
  * `scripts/ops/reap-orders.ts`'s sweep: every order whose `anonymizeAfter` has elapsed loses its
@@ -592,6 +614,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         retentionDays: number,
         session?: ClientSession
     ) => Promise<number>;
+    startPiiClock: (userId: string, retentionDays: number) => Promise<number>;
     scrubDueForAnonymization: (cutoff: Date) => Promise<number>;
     incrementOrderNumberCounter: (year: number) => Promise<number>;
 } = {
@@ -612,6 +635,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     addPendingEffect,
     findOpenUnpaidIdsOf,
     detachUserId,
+    startPiiClock,
     scrubDueForAnonymization,
     incrementOrderNumberCounter
 };

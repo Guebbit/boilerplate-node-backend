@@ -34,6 +34,7 @@ export const accountConfig = defineConfig({
         NODE_FRONTEND_LINK_EXPORT: text({ default: 'account-export/{id}' }),
         NODE_PASSWORD_RESET_TTL_MS: int({ default: 3_600_000, min: 1 }),
         NODE_INACTIVE_ACCOUNT_DAYS: int({ default: 0, min: 0 }),
+        NODE_INACTIVE_MINIMISE_DAYS: int({ default: 1095, min: 0 }),
         NODE_EMAIL_VERIFY_TTL_MS: int({ default: 86_400_000, min: 1 }),
         NODE_ACCOUNT_EXPORT_TTL_DAYS: int({ default: 7, min: 1 })
     }

@@ -98,6 +98,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
+    markInactivityMinimised: (id: string, at: Date) => Promise<void>;
+    findInactiveUnminimised: (cutoff: Date) => Promise<UserDocument[]>;
     findInactiveUnwarned: (cutoff: Date) => Promise<UserDocument[]>;
     findWarnedStillInactive: (warnedBefore: Date) => Promise<UserDocument[]>;
     findReaperSoftDeletedPastGrace: (cutoff: Date) => Promise<UserDocument[]>;
@@ -604,6 +606,48 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Stamp that every minimise hook has run for this account. `timestamps: false`: minimising is
+     * not an edit of the profile.
+     *
+     * @param id - the account
+     * @param at - the moment to stamp
+     */
+    markInactivityMinimised: (id: string, at: Date) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id) },
+                { $set: { inactivityMinimisedAt: at } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() => undefined),
+
+    /**
+     * Every live account quiet since before `cutoff` that has not been minimised for this stretch of
+     * inactivity: never minimised, or active again since the last time. Disabled accounts are
+     * included — minimising drops data and deletes nothing, so a ban is no reason to keep it.
+     *
+     * @param cutoff - last activity must be older than this
+     */
+    findInactiveUnminimised: (cutoff: Date) =>
+        userModel
+            .find({
+                deletedAt: { $exists: false },
+                $expr: {
+                    $and: [
+                        { $lt: [LAST_ACTIVE_EXPR, cutoff] },
+                        {
+                            $or: [
+                                { $eq: [{ $type: '$inactivityMinimisedAt' }, 'missing'] },
+                                { $gt: [LAST_ACTIVE_EXPR, '$inactivityMinimisedAt'] }
+                            ]
+                        }
+                    ]
+                }
+            })
+            .exec(),
 
     /**
      * Every enabled, live account inactive past the warning threshold and not yet warned for this

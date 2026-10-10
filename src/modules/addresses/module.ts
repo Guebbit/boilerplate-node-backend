@@ -16,7 +16,7 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { addressesDeleteByUserId, addressesGet } from './service';
+import { addressesDeleteByUserId, addressesGet, addressesMinimise } from './service';
 import { router } from './routes';
 import { addressesConfig } from './config';
 
@@ -32,7 +32,9 @@ export default {
             collect: (subject) => addressesGet(subject.userId).then((view) => view.addresses),
             // A destroyed account takes its address book with it, inside the same
             // transaction — see `addressesDeleteByUserId`.
-            erase: addressesDeleteByUserId
+            erase: addressesDeleteByUserId,
+            // The book is re-enterable convenience data, the first thing an idle account drops.
+            minimise: addressesMinimise
         }
     ],
     locales: path.join(__dirname, 'locales')

@@ -110,3 +110,13 @@ export const addressForCheckout = (
  */
 export const addressesDeleteByUserId = (userId: string, session: ClientSession): Promise<void> =>
     addressBookRepository.deleteByUserId(userId, session);
+
+/**
+ * What an inactive account owes the book — the `personalData.minimise` hook. The same delete as
+ * {@link addressesDeleteByUserId}, with no transaction to join; deleting nothing twice is a no-op,
+ * so a retried run is safe.
+ *
+ * @param userId - the inactive account's id
+ */
+export const addressesMinimise = (userId: string): Promise<void> =>
+    addressBookRepository.deleteByUserId(userId);

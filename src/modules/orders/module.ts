@@ -22,7 +22,7 @@ import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
-import { cancelById, eraseUserOrders, findOwnOrders } from './services';
+import { cancelById, eraseUserOrders, findOwnOrders, startOrderPiiClock } from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
@@ -77,7 +77,9 @@ export default {
             // Detach, never delete — the order survives the account, inside the same
             // hard-delete transaction. A never-paid order is also cancelled, after the commit.
             // See `eraseUserOrders`.
-            erase: eraseUserOrders
+            erase: eraseUserOrders,
+            // An inactive account keeps its orders and its link to them; only the PII clock starts.
+            minimise: startOrderPiiClock
         }
     ],
     /*
