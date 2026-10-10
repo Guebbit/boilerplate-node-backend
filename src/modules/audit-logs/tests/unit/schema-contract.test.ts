@@ -67,6 +67,15 @@ describe('auditLogSchema — what an entry must carry', () => {
     });
 });
 
+describe('auditLogSchema — the credential behind an entry', () => {
+    it('stores the api-key id, open and optional', () => {
+        // Strict mode drops a field the schema lacks, so without this path a stored row could
+        // never say "done with an API key" although the event carries it.
+        expect(pathNames(auditLogSchema)).toContain('actor_credential_id');
+        expect(requiredPaths(auditLogSchema)).not.toContain('actor_credential_id');
+    });
+});
+
 describe('auditLogSchema — options', () => {
     it('stamps entries from the event, not from the write', () => {
         // `timestamps: false` and a required `timestamp`. The row is written by whatever drained

@@ -1794,7 +1794,7 @@ components:
                 shipments:
                     type: array
                     items:
-                        $ref: '../../src/modules/delivery/openapi.yaml#/components/schemas/ExportShipment'
+                        $ref: '../../src/modules/delivery/openapi.yaml#/components/schemas/Shipment'
                 cart:
                     type: array
                     items:
@@ -1802,12 +1802,7 @@ components:
                 wishlist:
                     type: array
                     items:
-                        type: object
-                        additionalProperties: false
-                        required: [productId]
-                        properties:
-                            productId:
-                                $ref: '#/components/schemas/Id'
+                        $ref: '../../src/modules/wishlist/openapi.yaml#/components/schemas/WishlistItem'
                 sessions:
                     type: array
                     items:
@@ -1815,7 +1810,7 @@ components:
                 auditLog:
                     type: array
                     items:
-                        $ref: '../../src/modules/audit-logs/openapi.yaml#/components/schemas/ExportAuditEntry'
+                        $ref: '../../src/modules/audit-logs/openapi.yaml#/components/schemas/AuditEntryItem'
                 feedback:
                     type: array
                     description: Present only when `NODE_EXPORT_INCLUDE_FEEDBACK=true`.
