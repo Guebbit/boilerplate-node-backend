@@ -13,7 +13,7 @@ import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
 import { sendOrderPlacedEmail, mailBuyer } from './notify';
-import { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
+import { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 import {
     callerScope,
     ownerScope,
@@ -70,7 +70,7 @@ export {
     markReturnStatus
 } from './status';
 export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
-export { detachUserId, eraseUserOrders, anonymizeDueOrders } from './retention';
+export { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 export {
     callerScope,
     cancelScope,
@@ -149,6 +149,7 @@ export const orderService = {
     forceMove,
     detachUserId,
     eraseUserOrders,
+    startOrderPiiClock,
     anonymizeDueOrders,
     cancelById,
     retryPendingEffects,

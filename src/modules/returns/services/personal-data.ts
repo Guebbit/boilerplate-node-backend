@@ -13,7 +13,9 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 
 /**
- * A return in export shape — what the customer wrote and where it stands, never staff's internals.
+ * A return in export shape — what the customer wrote, what staff wrote back to them
+ * (`declineReason`: it is mailed to the customer and is on their own `GET /returns`) and where it
+ * stands. Never the deciding staff member's id.
  * @param returned - the return
  */
 const toExportReturn = (returned: ReturnDocument): ExportReturn => ({
@@ -22,6 +24,7 @@ const toExportReturn = (returned: ReturnDocument): ExportReturn => ({
     status: returned.status,
     reason: returned.reason,
     ...(returned.note ? { note: returned.note } : {}),
+    ...(returned.declineReason ? { declineReason: returned.declineReason } : {}),
     lines: returned.lines.map(({ productId, quantity, title }) => ({
         productId: String(productId),
         quantity,

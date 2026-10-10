@@ -37,6 +37,8 @@
 9  2 * * * cd /app && npm run reap:account-exports
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 10 2 * * * cd /app && npm run reap:orders
+# WARNING: owned by the returns module — delete it when removing the module (docs/modules/returns.md)
+12 2 * * * cd /app && npm run reap:returns
 # WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)
 15 2 * * * cd /app && npm run reap:payments
 # WARNING: owned by the webhooks module — delete it when removing the module (docs/modules/webhooks.md)

@@ -89,6 +89,16 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
                 });
             });
 
+            // The minter counts as active while their key is in use (the inactivity reaper reads
+            // it). Same fire-and-forget: a lost stamp costs a stale reading, nothing more.
+            void userService.touchApiKeyUse(apiKey.createdByUserId).catch((error: unknown) => {
+                logger.warn({
+                    message: 'Could not stamp the minter of an api key as active.',
+                    apiKeyId: String(apiKey._id),
+                    error
+                });
+            });
+
             // The literal keys, not CASL's collapsed answer: `orders.self.read` and
             // `orders.any.read` are both `read` on `Order`, so a minter who is now a customer
             // would otherwise still pass for the wide read a key was minted with.

@@ -7,7 +7,7 @@
  * `resolvePersonalDataErasers(modules)`, once every enabled module is known, and hands it in here.
  */
 
-import type { PersonalDataEraser } from '@kernel/registry';
+import type { PersonalDataEraser, PersonalDataMinimiser } from '@kernel/registry';
 
 /** The registered erasers, empty until the app tier supplies them. */
 let erasers: readonly PersonalDataEraser[] = [];
@@ -22,3 +22,17 @@ export const setPersonalDataErasers = (registered: readonly PersonalDataEraser[]
 
 /** Every registered eraser, in declaration order. */
 export const personalDataErasers = (): readonly PersonalDataEraser[] => erasers;
+
+/** The registered minimisers, empty until the app tier supplies them. */
+let minimisers: readonly PersonalDataMinimiser[] = [];
+
+/**
+ * Declare the personal-data minimisers, replacing any previous list. Called once at boot; tests
+ * call it again to install a fixture and to restore an empty one afterwards.
+ */
+export const setPersonalDataMinimisers = (registered: readonly PersonalDataMinimiser[]): void => {
+    minimisers = registered;
+};
+
+/** Every registered minimiser, in declaration order. */
+export const personalDataMinimisers = (): readonly PersonalDataMinimiser[] => minimisers;

@@ -229,6 +229,9 @@ Subscriptions, the secret ring and the delivery log all have an admin screen in 
 endpoints. "Usable via any HTTP client" is true too (nothing here requires the UI). See that repo's `docs/modules/webhooks.md` for the client side, including why
 `rotateSecret`'s response never gets cached client-side.
 
+Delivery payloads carry ids, amounts and the return `reason` code, never a return's free text
+(`note`, `declineReason`). Delivery rows are kept `NODE_WEBHOOK_DELIVERY_RETENTION_DAYS` (30) days.
+
 ## Not wanted? Remove the module
 
 There is no switch. Webhooks are on when this module is in the build, and a deployment that never

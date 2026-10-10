@@ -11,6 +11,7 @@ import {
     registerModules,
     resolveTranslatables,
     resolvePersonalDataSections,
+    resolvePersonalDataMinimisers,
     resolvePublicEvents,
     type AppModule
 } from '@kernel/registry';
@@ -184,6 +185,28 @@ describe('resolvePersonalDataSections', () => {
  * matches a real, currently-firing domain event is
  * `tests/cross-cutting/webhook-event-producers.test.ts`'s job, not this one's.
  */
+/** `resolvePersonalDataMinimisers` — only the sections that declare a `minimise` hook contribute. */
+describe('resolvePersonalDataMinimisers', () => {
+    it('collects the declared hooks in order and skips sections and modules with none', () => {
+        const addresses = jest.fn();
+        const orders = jest.fn();
+        const modules: AppModule[] = [
+            {
+                name: 'addresses',
+                personalData: [{ section: 'addresses', collect: jest.fn(), minimise: addresses }]
+            },
+            { name: 'cart', personalData: [{ section: 'cart', collect: jest.fn() }] },
+            { name: 'antibot', personalData: 'none' },
+            {
+                name: 'orders',
+                personalData: [{ section: 'orders', collect: jest.fn(), minimise: orders }]
+            }
+        ];
+
+        expect(resolvePersonalDataMinimisers(modules)).toEqual([addresses, orders]);
+    });
+});
+
 describe('resolvePublicEvents', () => {
     it('flattens every module into one lookup keyed by domain event name', () => {
         const toOrderCreated = jest.fn();

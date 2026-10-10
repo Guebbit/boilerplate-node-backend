@@ -1,31 +1,43 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Three-stage inactivity reaper — `npm run reap:inactive-accounts`. Art. 5(1)(e)
- * allows keeping personal data only as long as the purpose needs it, and an account nobody has
- * touched in years has no live purpose.
+ * Inactivity reaper — `npm run reap:inactive-accounts`. Art. 5(1)(e) allows keeping personal data
+ * only as long as the purpose needs it, and an account nobody has touched in years has no live
+ * purpose. Two dials, four stages:
  *
- * **Disabled by default** (`NODE_INACTIVE_ACCOUNT_DAYS=0`). Automatically deleting a real
- * person's account is a decision only the controller running this deployment can make — a
- * boilerplate that ships it enabled will eventually delete someone's live account.
+ *   NODE_INACTIVE_MINIMISE_DAYS (1095, ON; 0 disables)
+ *     0. minimise  → every module's `personalData.minimise` hook, then `inactivityMinimisedAt`.
+ *                    Drops the address book, starts the orders' PII clock; the login stays.
+ *   NODE_INACTIVE_ACCOUNT_DAYS (0, OFF)
+ *     1. warn      → email, `inactivityWarnedAt` stamped
+ *     2. soft delete, GRACE_DAYS after the warning
+ *     3. hard delete, GRACE_DAYS after the soft delete
  *
- * "Last active" is the latest refresh-token exchange (`tokens[].lastUsedAt`, already stamped on
- * every refresh) or `createdAt` for an account that has never redeemed one — see
- * `LAST_ACTIVE_EXPR` in `users/repository.ts`. Three stages, one `NODE_INACTIVE_ACCOUNT_DAYS`
- * threshold and one fixed grace between them:
+ * Stage 0 runs even when the deletion stages are off. See
+ * docs/theory/data-retention.md#inactive-accounts-minimise-don-t-delete.
+ *
+ * **Deletion is disabled by default** (`NODE_INACTIVE_ACCOUNT_DAYS=0`). Automatically deleting a
+ * real person's account is a decision only the controller running this deployment can make — a
+ * boilerplate that ships it enabled will eventually delete someone's live account. Minimising is
+ * different: it removes only what the customer can re-enter, so it ships on.
+ *
+ * "Last active" is `lastActiveAt` — stamped, at most once a day, on every sign-in (password, OAuth,
+ * 2FA) and every refresh, `lastApiKeyUseAt` (a key the account minted was used, also at most
+ * once a day) — or `createdAt` for an account that never signed in; see
+ * `LAST_ACTIVE_EXPR` in `users/repository.ts`. Sessions are not read: they are pruned on expiry and
+ * logout, so an account that logged out would look as idle as one never used. The
+ * deletion stages share one fixed grace between them:
  *
  *   inactive N days  → email warning, `inactivityWarnedAt` stamped
- *   + GRACE_DAYS more, still no login → soft delete (`userService.remove(user, false, systemContext)`)
- *   + GRACE_DAYS more since the soft delete → hard delete (`userService.remove(user, true)`),
- *     which runs every module's `personalData.erase` hook, exactly like an admin's own hard delete
+ *   GRACE_DAYS after the WARNING, still no sign-in → soft delete, marked `deletedBy: 'reaper'`
+ *   GRACE_DAYS after that soft delete → hard delete (`userService.remove(user, true)`), which runs
+ *     every module's `personalData.erase` hook, exactly like an admin's own hard delete
  *
- * `inactivityWarnedAt` is what tells stage three's candidates apart from an account an admin
- * soft-deleted for an unrelated reason — see the field's own doc comment on `UserRecord`. A
- * returning user is naturally excluded from every later stage: `LAST_ACTIVE_EXPR` is recomputed
- * fresh on each run, not read off the stale warning, so signing back in undoes the clock. The one
- * gap this leaves: someone who returns and later goes inactive AGAIN keeps their old
- * `inactivityWarnedAt` and so gets no fresh warning email before stage two — acceptable for a
- * disabled-by-default safety net, not a substitute for a fuller design if this ever needs one.
+ * The grace runs from the warning, never from the last activity, so one run cannot warn and
+ * soft-delete the same account. An account that comes back after a warning is not deleted, and is
+ * warned again if it goes idle again — nothing is written on its sign-in. The `deletedBy` marker is
+ * what lets stage three tell its own soft deletes from a staff member's: it never erases the latter.
+ * Disabled (`active: false`) accounts are in no stage.
  *
  * Meant to run periodically (the same cron container that runs `reap:quarantine` and
  * `reap:orders`), never on every boot. Guarded by `withLease` — the one job wired to the
@@ -97,12 +109,49 @@ const warn = (user: UserDocument): Promise<void> => {
     );
 };
 
-/** The three stages in order (warn, soft delete, hard delete), under the job's lease. */
+/**
+ * Stage 0: minimise every account quiet past `minimiseDays`. A failure is logged per account and
+ * retried next night, never stopping the rest.
+ */
+const minimiseStage = (minimiseDays: number): Promise<void> =>
+    userService.minimiseInactiveBefore(daysAgo(minimiseDays)).then((result) => {
+        logger.info({ message: 'Inactive-account minimise stage complete.', ...result });
+    });
+
+/** Stages 1-3, the opt-in deletion path: warn, soft delete, hard delete. */
+const deletionStages = async (inactiveDays: number): Promise<void> => {
+    await initI18n();
+
+    const toWarn = await userService.findInactiveUnwarned(daysAgo(inactiveDays));
+    for (const user of toWarn) await warn(user);
+
+    const toSoftDelete = await userService.findWarnedStillInactive(daysAgo(GRACE_DAYS));
+    // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
+    for (const user of toSoftDelete)
+        await userService.remove(user, false, systemCallerContext('User'));
+
+    const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
+    // Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
+    // request behind it, so it hands its own audit context.
+    for (const user of toHardDelete)
+        await userService.remove(user, true, systemCallerContext('User'));
+
+    logger.info({
+        message: 'Inactive-account reaper run complete.',
+        warned: toWarn.length,
+        softDeleted: toSoftDelete.length,
+        hardDeleted: toHardDelete.length
+    });
+};
+
+/** The stages in order (minimise, then the opt-in deletion path), under the job's lease. */
 const main = async (): Promise<void> => {
-    const inactiveDays = accountConfig().NODE_INACTIVE_ACCOUNT_DAYS;
-    if (inactiveDays <= 0) {
+    const { NODE_INACTIVE_ACCOUNT_DAYS: inactiveDays, NODE_INACTIVE_MINIMISE_DAYS: minimiseDays } =
+        accountConfig();
+    if (inactiveDays <= 0 && minimiseDays <= 0) {
         logger.info({
-            message: 'Inactive-account reaper disabled (NODE_INACTIVE_ACCOUNT_DAYS <= 0).'
+            message:
+                'Inactive-account reaper disabled (NODE_INACTIVE_ACCOUNT_DAYS and NODE_INACTIVE_MINIMISE_DAYS are 0).'
         });
         return;
     }
@@ -111,31 +160,10 @@ const main = async (): Promise<void> => {
     await startJob();
 
     const ran = await withLease('reap:inactive-accounts', LEASE_TTL_MS, async () => {
+        // Registers every module's hooks: minimise and erase are resolved from the manifests.
         registerModules(enabledModules);
-        await initI18n();
-
-        const toWarn = await userService.findInactiveUnwarned(daysAgo(inactiveDays));
-        for (const user of toWarn) await warn(user);
-
-        const toSoftDelete = await userService.findWarnedStillInactive(
-            daysAgo(inactiveDays + GRACE_DAYS)
-        );
-        // Both deletes hand a system context: nobody is at the keyboard, so the trail is the only record.
-        for (const user of toSoftDelete)
-            await userService.remove(user, false, systemCallerContext('User'));
-
-        const toHardDelete = await userService.findReaperSoftDeletedPastGrace(daysAgo(GRACE_DAYS));
-        // Every HTTP-driven delete records through `createDeleteController`'s spec; this one has no
-        // request behind it, so it hands its own audit context.
-        for (const user of toHardDelete)
-            await userService.remove(user, true, systemCallerContext('User'));
-
-        logger.info({
-            message: 'Inactive-account reaper run complete.',
-            warned: toWarn.length,
-            softDeleted: toSoftDelete.length,
-            hardDeleted: toHardDelete.length
-        });
+        if (minimiseDays > 0) await minimiseStage(minimiseDays);
+        if (inactiveDays > 0) await deletionStages(inactiveDays);
     });
 
     if (ran === undefined) {

@@ -113,6 +113,8 @@ export const remove = (
     if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200, t('users.soft-deleted')));
 
     user.deletedAt = new Date();
+    // Only the reaper's own soft delete may later be hard-deleted by it.
+    if (context?.caller.system) user.deletedBy = 'reaper';
     return userRepository.save(user).then((saved) =>
         // Soft delete revokes every refresh token too — same defense-in-depth reasoning as
         // `update`'s deactivation branch above.
@@ -155,6 +157,7 @@ export const restoreById = (
             if (refusal) return refusal;
             if (!user.deletedAt) return generateReject(409, [t('users.not-deleted')]);
             user.deletedAt = undefined;
+            user.deletedBy = undefined;
             return userRepository.save(user).then((saved) => {
                 if (context)
                     recordAudit(context, {

@@ -12,18 +12,22 @@
  */
 
 import path from 'node:path';
-import { resolvePersonalDataErasers, type AppModule } from '@kernel/registry';
+import {
+    resolvePersonalDataErasers,
+    resolvePersonalDataMinimisers,
+    type AppModule
+} from '@kernel/registry';
 import type { ExportSession } from '@types';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './services';
 import { isLiveRefreshSession, type Token } from './model';
-import { setPersonalDataErasers } from './erasure-registry';
+import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
 import './events';
 import { usersConfig } from './config';
 
 /**
- * Resolves every module's `personalData.erase` hook once every module is known, and
+ * Resolves every module's `personalData.erase` and `minimise` hooks once every module is known, and
  * hands the list to `./services/remove.ts`'s hard-delete path through `./erasure-registry.ts` — the same
  * pattern `account/module.ts`'s `onRegistered` follows for `personalData` export sections.
  *
@@ -31,6 +35,7 @@ import { usersConfig } from './config';
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
     setPersonalDataErasers(resolvePersonalDataErasers(modules));
+    setPersonalDataMinimisers(resolvePersonalDataMinimisers(modules));
 };
 
 /**

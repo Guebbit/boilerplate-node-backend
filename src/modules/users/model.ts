@@ -129,12 +129,39 @@ export interface UserRecord extends Omit<
     deletedAt?: Date;
 
     /**
-     * Stamped by `scripts/ops/reap-inactive-accounts.ts` the first time it warns
-     * this account about impending removal — never set anywhere else. Absent means "never
-     * warned"; it is also how the script tells its OWN soft-deletes apart from an admin's when
-     * deciding what is safe to hard-delete next, since `deletedAt` alone doesn't say who set it.
+     * Stamped by `scripts/ops/reap-inactive-accounts.ts` when it warns this account about
+     * impending removal — never set anywhere else. Absent means "never warned". The soft-delete
+     * stage counts its grace from this date; an account active again since is warned afresh.
      */
     inactivityWarnedAt?: Date;
+
+    /**
+     * The account's last proof of life: stamped (at most once a day) on every session mint and every
+     * refresh. Never on the wire. `LAST_ACTIVE_EXPR` in `./repository` reads it, with `createdAt`
+     * as the fallback for an account that never signed in.
+     */
+    lastActiveAt?: Date;
+
+    /**
+     * The last time an API key this account minted was used (stamped at most once a day). Counts as
+     * activity in `LAST_ACTIVE_EXPR`, so a key-only account is not mistaken for an idle one. Never
+     * on the wire.
+     */
+    lastApiKeyUseAt?: Date;
+
+    /**
+     * Stamped by `scripts/ops/reap-inactive-accounts.ts` once every module's `personalData.minimise`
+     * hook has run for this account. An account active again since is minimised afresh when it goes
+     * quiet again. Never on the wire.
+     */
+    inactivityMinimisedAt?: Date;
+
+    /**
+     * Who soft-deleted the account, when it was not a person: `reaper` marks
+     * `scripts/ops/reap-inactive-accounts.ts`'s own soft delete, the only thing its hard-delete
+     * stage may later erase. Cleared by a restore. Never on the wire.
+     */
+    deletedBy?: 'reaper';
 
     /** Every second factor this account has enrolled or half-enrolled — see {@link TwoFactorMethodRecord}. */
     twoFactorMethods: TwoFactorMethodRecord[];
@@ -543,6 +570,19 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
         inactivityWarnedAt: {
             type: Date
         },
+        lastActiveAt: {
+            type: Date
+        },
+        lastApiKeyUseAt: {
+            type: Date
+        },
+        inactivityMinimisedAt: {
+            type: Date
+        },
+        deletedBy: {
+            type: String,
+            enum: ['reaper']
+        },
         /*
          * Two-factor authentication. Asymmetric storage on purpose: a device method's `secret`
          * must be recoverable to recompute a code against, so it is ENCRYPTED
@@ -821,6 +861,10 @@ export type UserWire = Omit<
     | 'tokens'
     | 'pendingImageKey'
     | 'inactivityWarnedAt'
+    | 'lastActiveAt'
+    | 'lastApiKeyUseAt'
+    | 'inactivityMinimisedAt'
+    | 'deletedBy'
     | 'twoFactorMethods'
     | 'twoFactorBackupCodes'
     | 'twoFactorBackupCodeSalt'
@@ -846,7 +890,7 @@ export type UserWire = Omit<
 export const applyUserTransform = applySerialization(userSchema, {
     // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
-    // `inactivityWarnedAt` is the reaper's own bookkeeping, same treatment.
+    // `inactivityWarnedAt`, `lastActiveAt`, `lastApiKeyUseAt`, `inactivityMinimisedAt` and `deletedBy` are the reaper's own bookkeeping, same treatment.
     // `twoFactorMethods`/`twoFactorBackupCodes`/`twoFactorBackupCodeSalt` are 2FA credential material —
     // `twoFactorEnabledAt` alone is the `User` contract's business, same asymmetry as
     // the schema's own `select: false` split above. `oauthAccounts` gets the same treatment: not
@@ -856,6 +900,10 @@ export const applyUserTransform = applySerialization(userSchema, {
         'tokens',
         'pendingImageKey',
         'inactivityWarnedAt',
+        'lastActiveAt',
+        'lastApiKeyUseAt',
+        'inactivityMinimisedAt',
+        'deletedBy',
         'twoFactorMethods',
         'twoFactorBackupCodes',
         'twoFactorBackupCodeSalt',

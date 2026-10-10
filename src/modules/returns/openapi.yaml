@@ -459,8 +459,9 @@ components:
                     $ref: '#/components/schemas/ReturnsResponse'
 
         # Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`) — what the customer
-        # wrote and where it stands. Staff's decision reason and the frozen unit prices are left
-        # out: an export answers "what did I ask for", not a copy of the shop's working records.
+        # wrote, what staff wrote back (`declineReason`, the customer's own data under Art. 15) and
+        # where it stands. The deciding staff member and the frozen unit prices are left out: an
+        # export answers "what did I ask for and what was I told", not the shop's working records.
         ExportReturn:
             type: object
             additionalProperties: false
@@ -475,6 +476,8 @@ components:
                 reason:
                     $ref: '#/components/schemas/ReturnReason'
                 note:
+                    type: string
+                declineReason:
                     type: string
                 lines:
                     type: array

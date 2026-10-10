@@ -249,7 +249,20 @@ export interface PersonalDataSection {
      * not a database write that can roll back (a hold released, a payment intent cancelled).
      */
     erase?: PersonalDataEraser;
+
+    /**
+     * Drop what an inactive account no longer needs, keeping the account itself: the twin of
+     * {@link erase} without the transaction. Must be idempotent — the account is stamped minimised
+     * only once every hook succeeded, so a failure is retried on the next run.
+     *
+     * Optional: most sections hold nothing a quiet account should lose. See
+     * docs/theory/data-retention.md#inactive-accounts-minimise-don-t-delete.
+     */
+    minimise?: PersonalDataMinimiser;
 }
+
+/** One module's minimise hook, resolved and ready to call for an inactive account. */
+export type PersonalDataMinimiser = (userId: string) => Promise<void>;
 
 /**
  * Work a module's {@link PersonalDataSection.erase} defers until the erasure transaction has
@@ -553,6 +566,24 @@ export const resolvePersonalDataErasers = (
         appModule.personalData === 'none'
             ? []
             : appModule.personalData.flatMap((section) => (section.erase ? [section.erase] : []))
+    );
+
+/**
+ * Every registered module's {@link PersonalDataSection.minimise}, flattened — a section with none
+ * contributes nothing. Built the same way, and for the same reason, as
+ * {@link resolvePersonalDataErasers}.
+ *
+ * @param appModules - the enabled module list
+ */
+export const resolvePersonalDataMinimisers = (
+    appModules: readonly AppModule[]
+): readonly PersonalDataMinimiser[] =>
+    appModules.flatMap((appModule) =>
+        appModule.personalData === 'none'
+            ? []
+            : appModule.personalData.flatMap((section) =>
+                  section.minimise ? [section.minimise] : []
+              )
     );
 
 /**

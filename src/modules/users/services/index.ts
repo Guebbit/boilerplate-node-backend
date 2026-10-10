@@ -41,7 +41,9 @@ import {
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
-    bumpSessionEpoch
+    bumpSessionEpoch,
+    touchLastActive,
+    touchApiKeyUse
 } from './credentials';
 import {
     consumeToken,
@@ -63,6 +65,9 @@ import {
 } from './signup';
 import {
     findInactiveUnwarned,
+    findInactiveUnminimised,
+    minimiseInactive,
+    minimiseInactiveBefore,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace
 } from './reaper';
@@ -119,6 +124,8 @@ export const userService = {
     resetMfaAttempts,
     claimTotpStep,
     bumpSessionEpoch,
+    touchLastActive,
+    touchApiKeyUse,
     tokenAdd,
     tokenRemoveAll,
     sessionRemove,
@@ -129,6 +136,9 @@ export const userService = {
     linkOAuthAccount,
     unlinkOAuthAccount,
     findInactiveUnwarned,
+    findInactiveUnminimised,
+    minimiseInactive,
+    minimiseInactiveBefore,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,
     consumeToken,
