@@ -67,12 +67,12 @@ flowchart LR
 
 Repo files: [`/docker/observability/prometheus.config.yaml`](../../docker/observability/prometheus.config.yaml), [`/docker/observability/prometheus.alert-rules.yaml`](../../docker/observability/prometheus.alert-rules.yaml)
 
-| Config section                                  | What it does                                                           | Why local value                                | Common tweak                   | Dev vs prod                             |
-| ----------------------------------------------- | ---------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------ | --------------------------------------- |
-| `global.scrape_interval`, `evaluation_interval` | scrape/evaluate cadence                                                | `15s` keeps feedback quick                     | increase to reduce laptop load | prod often 15-60s by target criticality |
-| `scrape_configs`                                | scrape targets (`api`, `otel-collector`, `otel-collector-spanmetrics`) | static docker service names are simple locally | add more jobs/targets          | prod usually uses service discovery     |
-| `rule_files`                                    | loads alert rules                                                      | keeps rules versioned in repo                  | split rules by domain          | prod often adds recording rules         |
-| `alerting.alertmanagers`                        | sends firing alerts                                                    | points to local Alertmanager                   | switch target/HA endpoints     | prod commonly has multiple replicas     |
+| Config section                                  | What it does                                                                                         | Why local value                                | Common tweak                   | Dev vs prod                             |
+| ----------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------------------------ | --------------------------------------- |
+| `global.scrape_interval`, `evaluation_interval` | scrape/evaluate cadence                                                                              | `15s` keeps feedback quick                     | increase to reduce laptop load | prod often 15-60s by target criticality |
+| `scrape_configs`                                | scrape targets (`api`, `otel-collector`, `otel-collector-spanmetrics`, `prometheus`, `alertmanager`) | static docker service names are simple locally | add more jobs/targets          | prod usually uses service discovery     |
+| `rule_files`                                    | loads alert rules                                                                                    | keeps rules versioned in repo                  | split rules by domain          | prod often adds recording rules         |
+| `alerting.alertmanagers`                        | sends firing alerts                                                                                  | points to local Alertmanager                   | switch target/HA endpoints     | prod commonly has multiple replicas     |
 
 ### Alertmanager
 
