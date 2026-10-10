@@ -4,7 +4,8 @@
  */
 
 import { productService } from '@modules/products';
-import type { InventoryLevel, StockMovement } from '@types';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { StockMovementReason, type InventoryLevel, type StockMovement } from '@types';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -13,18 +14,36 @@ import {
 import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 import type { LevelFilters, MovementFilters } from './types';
+import { applyTransition, syncStockCache } from './transition';
 
 /**
- * Guarantee a product has a level row, even at zero — `module.ts`'s `PRODUCT_CREATED` listener's
- * own job, called REGARDLESS of the opening quantity. `receive` is never called for an opening
- * count of zero, so relying on it alone as this module's reaction to a new product would leave a
- * zero-quantity product with no row at all: invisible to the stock board and the low-stock gauge,
- * both of which start from this collection.
+ * A new product's opening stock — `module.ts`'s `PRODUCT_CREATED` listener's own job, and safe
+ * under the outbox's at-least-once delivery (Idempotent Consumer).
+ *
+ * The row is created at zero REGARDLESS of the opening quantity: a zero-stock product must still
+ * be visible to the stock board and the low-stock gauge, both of which start from this
+ * collection. The opening units are booked only when THIS call inserted the row, in the same
+ * transaction as their ledger movement — a redelivery finds the row and books nothing.
  *
  * @param productId - the product just created
+ * @param onHand - the opening quantity; zero books no movement
  */
-export const ensureLevel = (productId: string): Promise<void> =>
-    stockLevelRepository.ensure(productId).then(() => undefined);
+export const openLevel = (productId: string, onHand: number): Promise<void> =>
+    withTransaction((session) =>
+        stockLevelRepository
+            .insertIfAbsent(productId, session)
+            .then((inserted) =>
+                inserted && onHand > 0
+                    ? applyTransition(
+                          StockMovementReason.receive,
+                          productId,
+                          onHand,
+                          { note: 'Opening stock' },
+                          session
+                      )
+                    : false
+            )
+    ).then((booked) => (booked ? syncStockCache(productId) : undefined));
 
 /**
  * Erase a product's level row — `module.ts`'s `PRODUCT_DELETED` listener's own job, and ONLY for

@@ -53,6 +53,10 @@ synced copy of `onHand`/`reserved` on its own document purely so a catalogue rea
 join; that copy is never the source of truth and this module never reads it back. **Every change
 to a stock count is a transition here.**
 
+A new product's opening stock arrives as `product.created` through the outbox, which delivers at
+least once. `openLevel` inserts the row and books the opening units in one transaction, and books
+them only when that call inserted the row, so a redelivery finds it and books nothing.
+
 | Transition                 | Fired by                                                                     | What it does                                                                                                                               |
 | -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `reserveForOrder`          | checkout, admin order create                                                 | units held, not sold                                                                                                                       |

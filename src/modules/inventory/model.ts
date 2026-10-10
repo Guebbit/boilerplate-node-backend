@@ -129,10 +129,8 @@ export type StockLevelModel = Model<StockLevelDocument>;
 
 /**
  * Mongoose Schema for a product's stock level. One document per product — `productId`'s unique
- * index is what makes `ensureLevel`'s zero-row upsert (half of `PRODUCT_CREATED`'s listener) safe
- * to run twice: a retried event's upsert finds the row already there and touches nothing further.
- * The listener's OTHER half, `receive()` for a nonzero opening quantity, is not itself idempotent
- * — a genuinely redelivered event would double it, same as any other `receive` call.
+ * index is what makes `openLevel`'s upsert (`PRODUCT_CREATED`'s listener) safe to run twice: a
+ * retried event's upsert finds the row already there, inserts nothing and books no opening stock.
  */
 export const stockLevelSchema = new Schema<StockLevelDocument>(
     {
