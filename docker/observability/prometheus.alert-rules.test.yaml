@@ -34,13 +34,13 @@ tests:
             exp_alerts: []
     - interval: 1m
       input_series:
-          - series: http_request_errors_total{route="a"}
+          - series: http_requests_total{route="a",status_code="500"}
             values: 0+15x20
-          - series: http_request_errors_total{route="b"}
+          - series: http_requests_total{route="b",status_code="502"}
             values: 0+15x20
-          - series: http_requests_total{route="a"}
+          - series: http_requests_total{route="a",status_code="200"}
             values: 0+100x20
-          - series: http_requests_total{route="b"}
+          - series: http_requests_total{route="b",status_code="200"}
             values: 0+100x20
       alert_rule_test:
           - eval_time: 15m
@@ -49,17 +49,20 @@ tests:
                 - exp_labels:
                       severity: warning
                   exp_annotations:
-                      summary: High HTTP error rate (> 5 %)
-                      description: More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.
+                      summary: High HTTP 5xx rate (> 5 %)
+                      description: More than 5 % of requests are failing with a 5xx over the last 5 minutes.
+    # Quiet: a flood of client errors (scanner 404s, wrong logins, 429s) is not a server fault.
     - interval: 1m
       input_series:
-          - series: http_request_errors_total{route="a"}
+          - series: http_requests_total{route="a",status_code="404"}
+            values: 0+60x20
+          - series: http_requests_total{route="b",status_code="401"}
+            values: 0+30x20
+          - series: http_requests_total{route="b",status_code="429"}
+            values: 0+30x20
+          - series: http_requests_total{route="a",status_code="500"}
             values: 0+1x20
-          - series: http_request_errors_total{route="b"}
-            values: 0+1x20
-          - series: http_requests_total{route="a"}
-            values: 0+100x20
-          - series: http_requests_total{route="b"}
+          - series: http_requests_total{route="a",status_code="200"}
             values: 0+100x20
       alert_rule_test:
           - eval_time: 15m

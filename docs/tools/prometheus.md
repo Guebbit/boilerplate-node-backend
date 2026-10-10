@@ -60,7 +60,7 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 | Alert                                | Condition                                                                                                            | Severity |
 | ------------------------------------ | -------------------------------------------------------------------------------------------------------------------- | -------- |
 | `ApiDown`                            | scrape target unreachable > 1 min                                                                                    | critical |
-| `HighErrorRate`                      | error rate > 5 % over 5 min                                                                                          | warning  |
+| `HighErrorRate`                      | 5xx rate > 5 % of requests over 5 min (4xx are the client's, and have their own rules)                               | warning  |
 | `HighP95Latency`                     | p95 latency > 2 s over 5 min                                                                                         | warning  |
 | `HighInFlightRequests`               | > 100 concurrent requests for 2 min                                                                                  | warning  |
 | `HighHeapUsage`                      | heap > 90 % for 5 min                                                                                                | warning  |

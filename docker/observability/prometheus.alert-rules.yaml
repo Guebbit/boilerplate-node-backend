@@ -15,11 +15,14 @@ groups:
                 summary: 'API instance is down'
                 description: 'Prometheus cannot reach the /metrics endpoint of the API for > 1 min.'
 
-          # Error rate: failures are above normal baseline.
+          # Error rate: the SERVER is failing. Counts 5xx only: 4xx are the client's mistakes
+          # (scanner 404s, wrong logins, validation errors, rate-limit refusals) and have their own
+          # rules, so counting them here fired three alerts for one cause. The golden-signals
+          # error rate is the server's own failures.
           - alert: HighErrorRate
             expr: |
                 (
-                    sum(rate(http_request_errors_total[5m]))
+                    sum(rate(http_requests_total{status_code=~"5.."}[5m]))
                     /
                     sum(rate(http_requests_total[5m]))
                 ) > 0.05
@@ -27,8 +30,8 @@ groups:
             labels:
                 severity: warning
             annotations:
-                summary: 'High HTTP error rate (> 5 %)'
-                description: 'More than 5 % of requests are returning 4xx/5xx over the last 5 minutes.'
+                summary: 'High HTTP 5xx rate (> 5 %)'
+                description: 'More than 5 % of requests are failing with a 5xx over the last 5 minutes.'
 
           # Latency: user-perceived slowness at p95 percentile.
           - alert: HighP95Latency

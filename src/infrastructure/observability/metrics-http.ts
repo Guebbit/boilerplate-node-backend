@@ -44,8 +44,8 @@ export const httpRequestDuration = new Histogram({
 
 /**
  * 4xx/5xx responses by method, route, and status code.
- * Redundant with `httpRequestsTotal` filtered by status, but a dedicated counter keeps
- * alerting rules simple and cheap.
+ * Redundant with `httpRequestsTotal` filtered by status: a ready-made 4xx+5xx total for dashboards.
+ * `HighErrorRate` does not read it, since a client mistake is not a server failure.
  */
 export const httpRequestErrorsTotal = new Counter({
     name: 'http_request_errors_total',
