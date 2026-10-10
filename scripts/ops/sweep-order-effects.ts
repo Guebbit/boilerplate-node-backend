@@ -9,8 +9,8 @@
  * has no retry of its own, so a provider unreachable for the length of one call leaves the order
  * cancelled and the refund never made. The stock half is NOT covered here, and `sweep:reservations`
  * does not cover all of it either: its query only matches `held` holds, so a paid order's
- * `committed` hold — restocked by the cancel rather than released — is never retried if that
- * restock throws, and those units stay lost from sale. `cancelById` writes the refund intent into
+ * `committed` hold — released by the cancel rather than swept — is never retried if that
+ * release throws, and those units stay lost from sale. `cancelById` writes the refund intent into
  * the order in the same write that cancels it; this script is the other half, re-announcing for
  * whatever is still standing.
  *

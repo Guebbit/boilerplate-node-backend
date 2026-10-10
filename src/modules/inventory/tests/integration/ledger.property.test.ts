@@ -40,6 +40,7 @@ type Step =
     | { kind: 'adjust'; delta: number }
     | { kind: 'reserve'; quantity: number }
     | { kind: 'commit' }
+    | { kind: 'ship' }
     | { kind: 'release' }
     | { kind: 'expire' };
 
@@ -59,19 +60,21 @@ const step = (): fc.Arbitrary<Step> =>
             quantity: fc.integer({ min: 1, max: 30 })
         }),
         fc.constant({ kind: 'commit' as const }),
+        fc.constant({ kind: 'ship' as const }),
         fc.constant({ kind: 'release' as const }),
         fc.constant({ kind: 'expire' as const })
     );
 
 /**
  * Drive one generated sequence against a real product. Each hold is keyed by an order id,
- * tracked via a counter: `reserve` opens the next one, `commit`/`release`/`expire` resolve
- * whichever is open — mirroring one live hold per order, so generated refusals are real rather
+ * tracked via a counter: `reserve` opens the next one, `commit` pays it (the units stay on the
+ * shelf), `ship`/`release`/`expire` resolve whichever is open — mirroring one live hold per order, so generated refusals are real rather
  * than invented.
  */
 const play = async (productId: string, steps: readonly Step[]): Promise<void> => {
     let holdCounter = 0;
     let openOrderId: string | null = null;
+    let openIsPaid = false;
 
     // A syntactically valid, unique ObjectId per hold, derived rather than random so a failing
     // run replays identically.
@@ -93,23 +96,35 @@ const play = async (productId: string, steps: readonly Step[]): Promise<void> =>
                 const { held } = await inventoryService.reserveForOrder(orderId, [
                     { productId, quantity: current.quantity }
                 ]);
-                if (held) openOrderId = orderId;
+                if (held) {
+                    openOrderId = orderId;
+                    openIsPaid = false;
+                }
                 break;
             }
             case 'commit': {
-                if (!openOrderId) break;
+                if (!openOrderId || openIsPaid) break;
                 await inventoryService.commitForOrder(openOrderId);
+                openIsPaid = true;
+                break;
+            }
+            case 'ship': {
+                if (!openOrderId) break;
+                await inventoryService.shipForOrder(openOrderId);
                 openOrderId = null;
                 break;
             }
             case 'release': {
                 if (!openOrderId) break;
-                await inventoryService.releaseForOrder(openOrderId);
+                await (openIsPaid
+                    ? inventoryService.releaseCommittedForOrder(openOrderId)
+                    : inventoryService.releaseForOrder(openOrderId));
                 openOrderId = null;
                 break;
             }
             case 'expire': {
-                if (!openOrderId) break;
+                // The sweep only expires unpaid holds.
+                if (!openOrderId || openIsPaid) break;
                 await inventoryService.releaseForOrder(openOrderId, StockMovementReason.expire);
                 openOrderId = null;
                 break;

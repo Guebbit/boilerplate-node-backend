@@ -252,10 +252,10 @@ name. Two modes, both requiring a `reason`, both writing an embedded override-hi
 `PUT /orders/:id` carries no `status` field at all — the override's own two doors are the only way
 to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.
 
-Either mode also commits the order's stock hold (`inventory.commitForOrder`) whenever it moves the
-order out of `pending` — the same commit a normal payment confirmation triggers. Without it, the
-reservation sweep would eventually release units an override already shipped, since the sweep only
-knows the order is still `pending` from its own point of view.
+An override into `shipped` or `delivered` also takes the order's units off the shelf
+(`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a normal
+shipment triggers. An override into `processing` moves no stock. A hold already `shipped` makes the
+second call silent.
 
 ## The invoice
 

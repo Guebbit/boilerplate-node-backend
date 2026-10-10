@@ -62,7 +62,7 @@ a payment already `succeeded` is `order.refund_owed`'s to give back, never this 
 
 **`settlePayment` is the one place where the money and the goods agree.** It commits the order's
 held units itself rather than announcing and hoping, because that instant is the only moment a hold
-becomes a sale. Without this module nothing would ever commit a hold, and every order would sit
+becomes a paid claim (the units leave the shelf later, at shipment). Without this module nothing would ever commit a hold, and every order would sit
 reserved until its window expired.
 
 It is reached three ways — the confirm, the sync, and the provider's webhook — and there is exactly
@@ -155,7 +155,7 @@ payment is written `succeeded` with what ARRIVED, and then:
 ```mermaid
 flowchart TD
     S["provider reports succeeded"] --> C{"amount, currency and<br/>paymentId match?"}
-    C -->|yes| P["markPaid, commit stock,<br/>payment.succeeded"]
+    C -->|yes| P["markPaid, commit the hold,<br/>payment.succeeded"]
     C -->|no| W["record what arrived<br/>(no pendingEffects)"]
     W --> A["audit payment.amount_mismatch,<br/>count it, log an error"]
     A --> X["cancel the order (system actor)"]
@@ -459,7 +459,7 @@ flowchart LR
     D -->|"succeeded / declined"| ST
     ST -.->|declined| E["order stays pending<br/><i>units still held</i>"]
     ST -->|succeeded| F["order → paid<br/><i>orders</i>"]
-    F --> G["commit the hold<br/><i>inventory</i>"]
+    F --> G["commit the hold<br/><i>inventory · no counter moves<br/>until the parcel ships</i>"]
     OC["orders"] -. "order.refund_owed" .-> R["refund<br/><i>if one was due</i>"]
 
     classDef step fill:#dbeafe,stroke:#2563eb,color:#111827;

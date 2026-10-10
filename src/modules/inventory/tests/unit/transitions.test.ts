@@ -28,7 +28,8 @@ describe('counterDeltaFor', () => {
     // pair of numbers, so this pins the actual value each reason produces.
     it.each([
         [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3 }],
-        [StockMovementReason.commit, { onHandDelta: -3, reservedDelta: -3 }],
+        [StockMovementReason.commit, { onHandDelta: 0, reservedDelta: 0 }],
+        [StockMovementReason.ship, { onHandDelta: -3, reservedDelta: -3 }],
         [StockMovementReason.release, { onHandDelta: 0, reservedDelta: -3 }],
         [StockMovementReason.expire, { onHandDelta: 0, reservedDelta: -3 }],
         [StockMovementReason.receive, { onHandDelta: 3, reservedDelta: 0 }],
@@ -38,17 +39,16 @@ describe('counterDeltaFor', () => {
         expect(counterDeltaFor(reason, 3)).toEqual(expected);
     });
 
-    it('lets only a sale, a receipt, an adjustment or a restock change how many units exist', () => {
+    it('lets only a shipment, a receipt, an adjustment or a restock change how many units exist', () => {
         const changesOnHand = EVERY_REASON.filter(
             (reason) => counterDeltaFor(reason, 5).onHandDelta !== 0
         );
 
-        // `commit` is here too, and that is correct — a sale removes units. The point of the
-        // assertion is that nothing a CUSTOMER does before paying, or before cancelling a hold
-        // that never became a sale, appears in this list.
+        // `ship` is here, and `commit` is not: paying moves nothing, the units leave at dispatch.
+        // Nothing a CUSTOMER does before the parcel leaves appears in this list.
         expect(changesOnHand.toSorted()).toEqual(
             [
-                StockMovementReason.commit,
+                StockMovementReason.ship,
                 StockMovementReason.receive,
                 StockMovementReason.adjust,
                 StockMovementReason.restock
@@ -56,12 +56,20 @@ describe('counterDeltaFor', () => {
         );
     });
 
-    it('commits without changing availability', () => {
-        const { onHandDelta, reservedDelta } = counterDeltaFor(StockMovementReason.commit, 7);
+    it('commits without moving a counter', () => {
+        expect(counterDeltaFor(StockMovementReason.commit, 7)).toEqual({
+            onHandDelta: 0,
+            reservedDelta: 0
+        });
+    });
+
+    it('ships without changing availability', () => {
+        const { onHandDelta, reservedDelta } = counterDeltaFor(StockMovementReason.ship, 7);
 
         // Both columns fall together, so `onHand - reserved` is untouched: the units stopped
         // being sellable when they were reserved, and this is only the moment they leave.
         expect(onHandDelta).toBe(reservedDelta);
+        expect(onHandDelta).toBe(-7);
         expect(onHandDelta - reservedDelta).toBe(0);
     });
 

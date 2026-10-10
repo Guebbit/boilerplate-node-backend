@@ -33,7 +33,7 @@ export type { ShippableLineCandidate } from './rules';
 export {
     canTransition,
     isPayable,
-    stockCommitted,
+    paymentSettled,
     statusesReachableFrom,
     statusesLeadingTo,
     orderActionsFor,

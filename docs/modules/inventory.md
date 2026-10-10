@@ -53,13 +53,14 @@ synced copy of `onHand`/`reserved` on its own document purely so a catalogue rea
 join; that copy is never the source of truth and this module never reads it back. **Every change
 to a stock count is a transition here.**
 
-| Transition             | Fired by                                                            | What it does                                                                                                                               |
-| ---------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `reserveForOrder`      | checkout, admin order create                                        | units held, not sold                                                                                                                       |
-| `commitForOrder`       | payment confirmed                                                   | units leave                                                                                                                                |
-| `releaseForOrder`      | order cancelled, or the sweep (a stale hold timed out)              | units come back                                                                                                                            |
-| `restockForOrder`      | a PAID order cancelled                                              | the units `commitForOrder` already sold come back too                                                                                      |
-| `restockReturnedLines` | goods a customer sent back are received ([`returns`](./returns.md)) | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
+| Transition                 | Fired by                                                                     | What it does                                                                                                                               |
+| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reserveForOrder`          | checkout, admin order create                                                 | units held, not sold                                                                                                                       |
+| `commitForOrder`           | payment confirmed                                                            | the claim is settled; nothing moves, the units stay on the shelf                                                                           |
+| `shipForOrder`             | the parcel leaves, or a digital order is fulfilled ([`orders`](./orders.md)) | units leave the shelf: `onHand` and `reserved` fall together, `available` stays                                                            |
+| `releaseForOrder`          | order cancelled, or the sweep (a stale hold timed out)                       | units come back                                                                                                                            |
+| `releaseCommittedForOrder` | a PAID order cancelled before dispatch                                       | the claim is given up; the units never left the shelf                                                                                      |
+| `restockReturnedLines`     | goods a customer sent back are received ([`returns`](./returns.md))          | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
 
 ::: warning Exactly-once, by construction
 Each transition claims the reservation's status **conditionally**, so a cancel racing the sweep — or
@@ -67,8 +68,8 @@ a provider webhook delivered twice — resolves to exactly one winner. That cond
 correctness of this module; there is no lock anywhere else holding it up.
 :::
 
-A paid order always commits its hold. `commitForOrder` finding no hold to claim is either a benign
-replay (already `committed`) or an incident — see
+A paid order always commits its hold. `commitForOrder` or `shipForOrder` finding no hold to claim is
+either a benign replay (already `committed` or `shipped`) or an incident — see
 [Reservations](./inventory-reservations.md#a-commit-with-no-hold-is-an-incident-not-a-no-op) for
 which is which, and what gets recorded.
 
@@ -124,20 +125,23 @@ the ledger in the same call that moves the counter.
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     CO["checkout · admin order create"] -->|reserveForOrder| H["held<br/><i>reserved+</i>"]
-    H -->|"commitForOrder<br/><i>payment confirmed</i>"| S["sold<br/><i>onHand− reserved−</i>"]
+    H -->|"commitForOrder<br/><i>payment confirmed</i>"| P["paid<br/><i>no counter moves</i>"]
+    P -->|"shipForOrder<br/><i>the parcel leaves</i>"| S["shipped<br/><i>onHand− reserved−</i>"]
+    P -->|"releaseCommittedForOrder<br/><i>cancelled before dispatch</i>"| B
     H -->|"releaseForOrder<br/><i>order cancelled</i>"| B["back on the shelf<br/><i>reserved−</i>"]
     H -. "the sweep · hold timed out" .-> B
     B -. "inventory.reservation_expired" .-> OR["orders<br/><i>cancels the order</i>"]
     RC["admin receipt<br/><i>supplier delivery</i>"] -->|onHand+| L
     AD["admin adjustment<br/><i>stocktake</i>"] -->|"onHand ±"| L["stockmovements<br/><i>the ledger, written by the same call</i>"]
     S --> L
+    P --> L
     B --> L
 
     classDef hold fill:#fef3c7,stroke:#d97706,color:#111827;
     classDef done fill:#ccfbf1,stroke:#0f766e,color:#111827;
     classDef entry fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef ledger fill:#ede9fe,stroke:#7c3aed,color:#111827;
-    class H hold;
+    class H,P hold;
     class S,B done;
     class CO,RC,AD,OR entry;
     class L ledger;

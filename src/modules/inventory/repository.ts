@@ -40,9 +40,9 @@ import { StockMovementReason, type StockMovement } from '@types';
  *
  * Stays in step with `counterDeltaFor`'s reason→deltas table (`./domain`) by hand: a manual
  * invariant with no test of its own; `tests/unit/transitions.test.ts` covers `counterDeltaFor`
- * itself, not this. `commit` and `adjust` read `onHand`/`reserved` directly rather than
- * `available`, matching the invariant each protects: a sale must find both real, a correction must
- * not cut below what's promised.
+ * itself, not this. `ship` and `adjust` read `onHand`/`reserved` directly rather than
+ * `available`, matching the invariant each protects: a dispatch must find both real, a correction
+ * must not cut below what's promised.
  *
  * @param reason - the transition
  * @param quantity - how many units; signed only for `adjust`
@@ -56,13 +56,15 @@ const conditionFor = (
         case StockMovementReason.reserve: {
             return { available: { $gte: quantity } };
         }
-        case StockMovementReason.commit: {
+        case StockMovementReason.ship: {
             return { onHand: { $gte: quantity }, reserved: { $gte: quantity } };
         }
         case StockMovementReason.release:
         case StockMovementReason.expire: {
             return { reserved: { $gte: quantity } };
         }
+        // `commit` moves nothing, so it guards nothing: it only has to leave its ledger row.
+        case StockMovementReason.commit:
         case StockMovementReason.receive:
         case StockMovementReason.restock: {
             return {};
@@ -221,7 +223,9 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 { timestamps: false, session }
             )
             .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
+            // `matchedCount`, not `modifiedCount`: a `commit` increments by zero, which Mongo
+            // reports as nothing modified although the condition matched and the move is valid.
+            .then(({ matchedCount }) => matchedCount > 0),
 
     /**
      * A page of the stock board, scarcest first — THIS module's rows alone, no join. Sorted on

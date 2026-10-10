@@ -8,10 +8,9 @@ import { StockMovementReason } from '@types';
 import { applyToEveryLine, syncStockCache } from './transition';
 
 /**
- * Put returned goods back on the shelf — units a customer sent back and staff received. Unlike
- * {@link restockForOrder} this claims no reservation: the order's hold was `committed` when it was
- * paid and stays that way, and it is the RETURN's own once-only move (`approved → received`) that
- * makes this at-most-once, so the caller runs both in one transaction. Each line becomes one
+ * Put returned goods back on the shelf — units a customer sent back and staff received. This
+ * claims no reservation: the order's hold went `shipped` at dispatch and stays that way, and it
+ * is the RETURN's own once-only move (`approved → received`) that makes this at-most-once, so the caller runs both in one transaction. Each line becomes one
  * `restock` movement in the ledger, referencing the order and naming the return.
  *
  * A line the counters refuse throws: the caller's transaction is the atomicity, and a return

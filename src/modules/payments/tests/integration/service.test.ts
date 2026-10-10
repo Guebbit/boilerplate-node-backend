@@ -621,15 +621,17 @@ const payFor = async (orderId: string, user: { id: string }) => {
  * than fixtures, so there is a real hold for the commit to claim.
  */
 describe('the confirm commits the order’s held units', () => {
-    it('drops both counters together when the money lands', async () => {
+    it('moves no counter when the money lands, and dates the payment in the ledger', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
 
         const paid = await payFor(String(order._id), user);
 
         expect(paid.success).toBe(true);
-        // Availability is unchanged by the sale — those units stopped being sellable at checkout.
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        // The units stay on the shelf, still spoken for, until the parcel leaves.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+        const movements = await inventoryService.listMovements({ productId: String(product._id) });
+        expect(movements.items.filter((row) => row.reason === 'commit')).toHaveLength(1);
     });
 
     it('leaves the hold alone when the card is declined', async () => {
@@ -657,9 +659,11 @@ describe('the confirm commits the order’s held units', () => {
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        // Seven, not four. Two guards refuse the replay independently — the order's conditional
-        // `pending → paid` and the reservation's own `held → committed` claim.
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        // One commit row, not two. Two guards refuse the replay independently — the order's
+        // conditional `pending → paid` and the reservation's own `held → committed` claim.
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+        const movements = await inventoryService.listMovements({ productId: String(product._id) });
+        expect(movements.items.filter((row) => row.reason === 'commit')).toHaveLength(1);
     });
 
     it('commits once when the webhook and the browser settle the same payment', async () => {
@@ -682,7 +686,7 @@ describe('the confirm commits the order’s held units', () => {
         await applyWebhookSettlement(providerRef);
         await syncPayment(paymentId, auth(user), testCallerContext);
 
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
     });
@@ -708,45 +712,45 @@ describe('the confirm commits the order’s held units', () => {
         await syncPayment(paymentId, auth(user), testCallerContext);
         await applyWebhookSettlement(providerRef);
 
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
     });
 });
 
 /**
- * Cancelling a PAID order only ever released a hold that payment had already turned into a
- * sale — `releaseForOrder` claims `held → released`, but a paid hold is `committed`, so it matched
- * nothing and the units were lost from the shelf for good. `restockForOrder` is what gives them
- * back once the release itself finds nothing to do.
+ * Paying settles the claim and nothing more: the units stay on the shelf, still spoken for, until
+ * the parcel leaves. So cancelling a PAID, unshipped order is a plain release — `reserved` drops,
+ * `onHand` was never touched. `releaseCommittedForOrder` is what matches the paid hold.
  */
-describe('cancelling a paid order restocks its units', () => {
-    it('gives on-hand back, records a restock movement, and refuses a second cancel', async () => {
+describe('cancelling a paid order releases its claim', () => {
+    it('makes the units sellable again, records a release, and refuses a second cancel', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         await payFor(String(order._id), user);
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
 
         const cancelled = await orderService.cancelById(String(order._id), auth(user));
 
         expect(cancelled.success).toBe(true);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
         const movements = await inventoryService.listMovements({ productId: String(product._id) });
-        expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(1);
+        expect(movements.items.filter((row) => row.reason === 'release')).toHaveLength(1);
+        expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(0);
 
         const second = await orderService.cancelById(String(order._id), auth(user));
         expect(second.success).toBe(false);
         expect(asReject(second).status).toBe(409);
     });
 
-    it('rolls the status, the hold and the counters back together when the restock throws (D3)', async () => {
+    it('rolls the status, the hold and the counters back together when the release throws (D3)', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         await payFor(String(order._id), user);
-        const restock = inventoryService.restockForOrder;
-        // The real restock runs to completion, THEN throws — the worst case: counters already
+        const release = inventoryService.releaseCommittedForOrder;
+        // The real release runs to completion, THEN throws — the worst case: counters already
         // moved inside the transaction, so only a rollback puts them back.
-        jest.spyOn(inventoryService, 'restockForOrder').mockImplementationOnce(
+        jest.spyOn(inventoryService, 'releaseCommittedForOrder').mockImplementationOnce(
             async (orderId, session) => {
-                await restock(orderId, session);
+                await release(orderId, session);
                 throw new Error('connection reset');
             }
         );
@@ -757,9 +761,9 @@ describe('cancelling a paid order restocks its units', () => {
 
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe('paid');
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const movements = await inventoryService.listMovements({ productId: String(product._id) });
-        expect(movements.items.filter((row) => row.reason === 'restock')).toHaveLength(0);
+        expect(movements.items.filter((row) => row.reason === 'release')).toHaveLength(0);
 
         // Nothing was half-done, so the same cancel simply works when retried.
         const retried = await orderService.cancelById(String(order._id), auth(user));
@@ -803,7 +807,11 @@ describe('B14 — a lost stock commit is retried, not lost', () => {
 
             expect(await retryPendingEffects()).toBe(1);
 
-            expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+            expect(await countersOf(product._id)).toEqual({
+                onHand: 10,
+                reserved: 3,
+                available: 7
+            });
             const payment = await paymentRepository.findByOrderId(String(order._id));
             // `[]`, not `undefined`: Mongoose defaults an array path back to empty once `$unset`
             // has removed it from storage — this is the cleared state, not a leftover value.
@@ -1330,7 +1338,7 @@ describe('recordOfflinePayment', () => {
         });
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
     // Nobody handles their own money: an administrator who raised an order for themselves cannot
@@ -1471,7 +1479,7 @@ describe('recordOfflinePayment', () => {
         expect(result.success).toBe(true);
         expect(cancelSpy).not.toHaveBeenCalled();
         cancelSpy.mockRestore();
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
 
     it('refuses a `receivedAt` in the future', async () => {

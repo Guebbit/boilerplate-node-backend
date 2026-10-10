@@ -12,8 +12,8 @@
  *   P5 — a customer cancelling while the payment settles: the order and the money always agree.
  *
  * What "once" means is counted in the ledger and the event bus, not inferred from status codes:
- * a second commit would leave `onHand` right by accident only if nothing else moved it, while the
- * `commit` movement rows and `PAYMENT_SUCCEEDED` emissions count every time it happened.
+ * a second commit moves no counter, so only the `commit` movement rows and `PAYMENT_SUCCEEDED`
+ * emissions count every time it happened.
  *
  * Hit rate: P1-P4 contend on every run. P5's window (between `markPaid` and the payment write) was
  *   never hit in 3 runs at TEST_RACE_SIZE=20 with the fix reverted; its bug is pinned
@@ -163,7 +163,7 @@ const settleEvents = () =>
         .then(() => undefined);
 
 describe('P1 — the same intent confirmed many times at once', () => {
-    it('settles once: one success, one commit, one event, the units sold once', async () => {
+    it('settles once: one success, one commit, one event, the claim settled once', async () => {
         const product = await createProduct({ onHand: 10 });
         const { bearer, orderId, paymentId } = await orderAwaitingPayment(String(product._id), 2);
         const succeededFor = countSucceededEvents();
@@ -183,7 +183,7 @@ describe('P1 — the same intent confirmed many times at once', () => {
 
         expect(await commitsFor(orderId)).toBe(1);
         expect(succeededFor(orderId)).toBe(1);
-        expect(await countersOf(product._id)).toEqual({ onHand: 8, reserved: 0, available: 8 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 2, available: 8 });
         await expect(orderModel.findById(orderId).then((order) => order?.status)).resolves.toBe(
             'paid'
         );
@@ -210,7 +210,7 @@ describe('P2 — one webhook event redelivered in parallel', () => {
 
         expect(await commitsFor(orderId)).toBe(1);
         expect(succeededFor(orderId)).toBe(1);
-        expect(await countersOf(product._id)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         await expect(
             paymentModel.findById(paymentId).then((payment) => payment?.status)
         ).resolves.toBe('succeeded');
@@ -240,7 +240,7 @@ describe('P3 — the webhook racing the browser confirm', () => {
         expectNoServerErrors(results);
         expect(await commitsFor(orderId)).toBe(1);
         expect(succeededFor(orderId)).toBe(1);
-        expect(await countersOf(product._id)).toEqual({ onHand: 9, reserved: 0, available: 9 });
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 1, available: 9 });
     });
 });
 

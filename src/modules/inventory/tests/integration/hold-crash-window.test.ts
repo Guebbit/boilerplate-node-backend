@@ -2,7 +2,7 @@
  * @module
  * A crash between claiming a hold and moving its counters leaves neither half done.
  *
- * `commitForOrder`, `releaseForOrder` and `restockForOrder` claim the hold's status and move every
+ * `commitForOrder`, `shipForOrder`, `releaseForOrder` and `releaseCommittedForOrder` claim the hold's status and move every
  * line's counters in one transaction. A write that throws partway undoes the claim too, so the
  * retry claims again and finishes the job, rather than finding the hold closed and reporting
  * "already done" while the counters never moved.
@@ -13,7 +13,13 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { StockMovementReason } from '@types';
-import { commitForOrder, releaseForOrder, reserveForOrder, restockForOrder } from '../../services';
+import {
+    commitForOrder,
+    releaseCommittedForOrder,
+    releaseForOrder,
+    reserveForOrder,
+    shipForOrder
+} from '../../services';
 import { reservationRepository, stockLevelRepository } from '../../repository';
 import { stockLevelModel } from '../../model';
 
@@ -48,14 +54,17 @@ const levelOf = (productId: string) =>
         .then((level) => ({ onHand: level?.onHand, reserved: level?.reserved }));
 
 describe('a crash between the claim and the counter move', () => {
-    it('commit: a retry finishes the sale', async () => {
+    it('ship: a retry takes the units off the shelf', async () => {
         const product = await createProduct({ onHand: 10 });
         const productId = String(product._id);
         await reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
-        failOnce(StockMovementReason.commit);
-
-        await expect(commitForOrder(ORDER)).rejects.toThrow('connection reset');
         await commitForOrder(ORDER);
+        failOnce(StockMovementReason.ship);
+
+        await expect(shipForOrder(ORDER)).rejects.toThrow('connection reset');
+        const hold = await reservationRepository.findByOrderId(ORDER);
+        expect(hold?.status).toBe('committed');
+        await shipForOrder(ORDER);
 
         expect(await levelOf(productId)).toEqual({ onHand: 6, reserved: 0 });
     });
@@ -72,15 +81,15 @@ describe('a crash between the claim and the counter move', () => {
         expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 0 });
     });
 
-    it('restock: a retry puts the sold units back on the shelf', async () => {
+    it('release of a paid claim: a retry makes the units sellable again', async () => {
         const product = await createProduct({ onHand: 10 });
         const productId = String(product._id);
         await reserveForOrder(ORDER, [{ productId, quantity: 4 }]);
         await commitForOrder(ORDER);
-        failOnce(StockMovementReason.restock);
+        failOnce(StockMovementReason.release);
 
-        await expect(restockForOrder(ORDER)).rejects.toThrow('connection reset');
-        await restockForOrder(ORDER);
+        await expect(releaseCommittedForOrder(ORDER)).rejects.toThrow('connection reset');
+        await releaseCommittedForOrder(ORDER);
 
         expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 0 });
     });
@@ -95,10 +104,10 @@ describe('a line whose counters refuse', () => {
             { productId: firstId, quantity: 4 },
             { productId: secondId, quantity: 4 }
         ]);
-        // Records that disagree with the hold: the later line has nothing reserved to commit.
+        // Records that disagree with the hold: the later line has nothing reserved to ship.
         await stockLevelModel.updateOne({ productId: secondId }, { $set: { reserved: 0 } });
 
-        await expect(commitForOrder(ORDER)).rejects.toThrow('the counters refused');
+        await expect(shipForOrder(ORDER)).rejects.toThrow('the counters refused');
 
         const hold = await reservationRepository.findByOrderId(ORDER);
         expect(hold?.status).toBe('held');

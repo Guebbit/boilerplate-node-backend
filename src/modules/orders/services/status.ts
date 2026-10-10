@@ -20,6 +20,7 @@ import {
     type StampedReturnStatus
 } from '../domain';
 import { withdrawalPeriodDays } from '../config';
+import { announceMoveShippingStock } from './ship-stock';
 
 /**
  * Move an order to `to`, from whichever status `ORDER_LIFECYCLE` says a `system` report may
@@ -91,8 +92,20 @@ export const markProcessing = (orderId: string): Promise<OrderDocument | null> =
  * @param orderId - the order the parcel belongs to
  * @returns the order as it now stands, or `null` if it was not awaiting shipment
  */
-export const markShipped = (orderId: string): Promise<OrderDocument | null> =>
-    markSystemMove(orderId, OrderStatus.shipped);
+export const markShipped = (orderId: string): Promise<OrderDocument | null> => {
+    const [from] = statusesLeadingTo(OrderStatus.shipped, 'system');
+    // The units leave the shelf in the same transaction as the status.
+    return announceMoveShippingStock(orderId, from, OrderStatus.shipped, (session) =>
+        orderRepository.updateStatusIfIn(
+            orderId,
+            [from],
+            OrderStatus.shipped,
+            undefined,
+            undefined,
+            session
+        )
+    );
+};
 
 /**
  * Move an order to `delivered` and freeze its withdrawal deadline, in one write, then announce it.
@@ -100,17 +113,24 @@ export const markShipped = (orderId: string): Promise<OrderDocument | null> =>
  * @param orderId - the order that arrived
  * @param from - the status it must currently be in
  * @param withdrawUntil - the last instant a withdrawal is valid
+ * @param shipsStock - whether this arrival is also the dispatch: a digital order has no parcel
+ *   step before it, so its units leave here; a parcel's already left at `shipped`
  * @returns the order as it now stands, or `null` if it was not in `from`
  */
 const markArrived = (
     orderId: string,
     from: OrderStatus,
-    withdrawUntil: Date
+    withdrawUntil: Date,
+    shipsStock: boolean
 ): Promise<OrderDocument | null> =>
-    announceInTransaction(
-        (session) => orderRepository.markDelivered(orderId, from, withdrawUntil, session),
-        () => statusChangedEvent(orderId, from, OrderStatus.delivered)
-    );
+    shipsStock
+        ? announceMoveShippingStock(orderId, from, OrderStatus.delivered, (session) =>
+              orderRepository.markDelivered(orderId, from, withdrawUntil, session)
+          )
+        : announceInTransaction(
+              (session) => orderRepository.markDelivered(orderId, from, withdrawUntil, session),
+              () => statusChangedEvent(orderId, from, OrderStatus.delivered)
+          );
 
 /**
  * Report that a parcel arrived. `delivery`'s delivery door calls this only after it has recorded
@@ -129,7 +149,12 @@ export const markDelivered = (
     deliveredAt: Date
 ): Promise<OrderDocument | null> => {
     const [from] = statusesLeadingTo(OrderStatus.delivered, 'system');
-    return markArrived(orderId, from, withdrawUntilFrom(deliveredAt, withdrawalPeriodDays()));
+    return markArrived(
+        orderId,
+        from,
+        withdrawUntilFrom(deliveredAt, withdrawalPeriodDays()),
+        false
+    );
 };
 
 /**
@@ -155,7 +180,8 @@ export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
         return markArrived(
             orderId,
             OrderStatus.processing,
-            withdrawUntilFrom(start, withdrawalPeriodDays())
+            withdrawUntilFrom(start, withdrawalPeriodDays()),
+            true
         );
     });
 

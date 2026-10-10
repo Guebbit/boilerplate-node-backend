@@ -11,8 +11,9 @@
 import { reserveForOrder } from './reserve';
 import {
     commitForOrder,
+    shipForOrder,
     releaseForOrder,
-    restockForOrder,
+    releaseCommittedForOrder,
     refreshStockCacheForOrder,
     extendHoldForOrder,
     isStockBoundToOrder,
@@ -45,8 +46,9 @@ export type {
 export { reserveForOrder } from './reserve';
 export {
     commitForOrder,
+    shipForOrder,
     releaseForOrder,
-    restockForOrder,
+    releaseCommittedForOrder,
     refreshStockCacheForOrder,
     extendHoldForOrder
 } from './holds';
@@ -66,8 +68,9 @@ export { receive, adjust } from './admin';
 export const inventoryService = {
     reserveForOrder,
     commitForOrder,
+    shipForOrder,
     releaseForOrder,
-    restockForOrder,
+    releaseCommittedForOrder,
     refreshStockCacheForOrder,
     restockReturnedLines,
     refreshStockCacheForProducts,

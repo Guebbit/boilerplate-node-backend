@@ -185,11 +185,12 @@ export interface ReservationItem {
 }
 
 /** Every state a hold can be in — the schema's `enum`, and the source of {@link ReservationStatus}. */
-const RESERVATION_STATUSES = ['held', 'committed', 'released', 'restocked'] as const;
+const RESERVATION_STATUSES = ['held', 'committed', 'shipped', 'released'] as const;
 
 /**
- * The four states a hold can be in. `released` and `restocked` are terminal; `committed` can
- * still move to `restocked` if the paid order behind it is later cancelled.
+ * The four states a hold can be in. `held` is claimed at checkout, `committed` once the order is
+ * paid. `shipped` (the units left the shelf) and `released` (the claim was given up) are terminal;
+ * a paid order cancelled before dispatch moves `committed → released`.
  */
 export type ReservationStatus = (typeof RESERVATION_STATUSES)[number];
 

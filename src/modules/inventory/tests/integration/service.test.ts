@@ -20,7 +20,9 @@ import { StockMovementReason } from '@types';
 import {
     reserveForOrder,
     commitForOrder,
+    shipForOrder,
     releaseForOrder,
+    releaseCommittedForOrder,
     runReservationSweep,
     receive,
     adjust,
@@ -312,11 +314,26 @@ describe('commitForOrder', () => {
         await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
 
         expect(await commitForOrder(orderId)).toBe(true);
+        // Paying moves nothing: the units are still on the shelf, still spoken for.
         expect(await countersOf(String(product._id))).toEqual({
-            onHand: 7,
-            reserved: 0,
+            onHand: 10,
+            reserved: 3,
             available: 7
         });
+    });
+
+    it('dates the payment in the ledger with a row that moves nothing', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await commitForOrder(orderId);
+
+        const ledger = await listMovements({
+            productId: String(product._id),
+            reason: StockMovementReason.commit
+        });
+        expect(ledger.items).toHaveLength(1);
+        expect(ledger.items[0]).toMatchObject({ onHandDelta: 0, reservedDelta: 0 });
     });
 
     it('is at most once — a second confirm commits nothing, and raises no alarm', async () => {
@@ -329,10 +346,10 @@ describe('commitForOrder', () => {
         auditSpy.mockClear();
         expect(await commitForOrder(orderId)).toBe(false);
 
-        // Seven, not four: the reservation's status claim is what refuses the replay.
+        // Still one claim, not two: the reservation's status claim is what refuses the replay.
         expect(await countersOf(String(product._id))).toEqual({
-            onHand: 7,
-            reserved: 0,
+            onHand: 10,
+            reserved: 3,
             available: 7
         });
         // A redelivered settlement finding its own sale already on record is not an incident.
@@ -361,7 +378,7 @@ describe('commitForOrder', () => {
                 actor_user_id: 'system',
                 target_type: 'order',
                 target_id: orderId,
-                metadata: { reservationStatus: 'released' }
+                metadata: { reservationStatus: 'released', stage: 'commit' }
             })
         );
     });
@@ -384,9 +401,127 @@ describe('commitForOrder', () => {
                 action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
                 outcome: 'failure',
                 target_id: orderId,
-                metadata: { reservationStatus: 'none' }
+                metadata: { reservationStatus: 'none', stage: 'commit' }
             })
         );
+    });
+});
+
+describe('shipForOrder', () => {
+    it('takes the units off the shelf and leaves availability alone', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await commitForOrder(orderId);
+
+        expect(await shipForOrder(orderId)).toBe(true);
+
+        expect(await countersOf(String(product._id))).toEqual({
+            onHand: 7,
+            reserved: 0,
+            available: 7
+        });
+        const ledger = await listMovements({
+            productId: String(product._id),
+            reason: StockMovementReason.ship
+        });
+        expect(ledger.items[0]).toMatchObject({ onHandDelta: -3, reservedDelta: -3 });
+    });
+
+    it('is at most once, and a replay raises no alarm', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await commitForOrder(orderId);
+        await shipForOrder(orderId);
+        auditSpy.mockClear();
+
+        expect(await shipForOrder(orderId)).toBe(false);
+
+        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 7, reserved: 0 });
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    it('still ships a hold whose payment commit never landed', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+
+        expect(await shipForOrder(orderId)).toBe(true);
+
+        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 7, reserved: 0 });
+        // The payment's own retry then finds a shipped hold: a replay, not an incident.
+        expect(await commitForOrder(orderId)).toBe(false);
+    });
+
+    it('alarms a shipment with no hold, and moves nothing', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+
+        expect(await shipForOrder(orderId)).toBe(false);
+
+        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: inventoryAuditActions.ADMIN_COMMIT_ORPHANED,
+                outcome: 'failure',
+                target_id: orderId,
+                metadata: { reservationStatus: 'none', stage: 'ship' }
+            })
+        );
+    });
+
+    it('alarms a shipment whose hold was already released', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await releaseForOrder(orderId);
+
+        expect(await shipForOrder(orderId)).toBe(false);
+
+        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 0 });
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ metadata: { reservationStatus: 'released', stage: 'ship' } })
+        );
+    });
+});
+
+describe('releaseCommittedForOrder', () => {
+    it('gives a paid, unshipped claim back without touching the shelf', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 4 }]);
+        await commitForOrder(orderId);
+
+        expect(await releaseCommittedForOrder(orderId)).toBe(true);
+        expect(await releaseCommittedForOrder(orderId)).toBe(false);
+
+        expect(await countersOf(String(product._id))).toEqual({
+            onHand: 10,
+            reserved: 0,
+            available: 10
+        });
+        const ledger = await listMovements({
+            productId: String(product._id),
+            reason: StockMovementReason.release
+        });
+        expect(ledger.items).toHaveLength(1);
+    });
+
+    it('leaves an unpaid hold to releaseForOrder, and a shipped one alone', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const unpaid = anOrderId();
+        const shipped = anOrderId();
+        await reserveForOrder(unpaid, [{ productId: String(product._id), quantity: 1 }]);
+        await reserveForOrder(shipped, [{ productId: String(product._id), quantity: 1 }]);
+        await commitForOrder(shipped);
+        await shipForOrder(shipped);
+
+        expect(await releaseCommittedForOrder(unpaid)).toBe(false);
+        expect(await releaseCommittedForOrder(shipped)).toBe(false);
     });
 });
 
@@ -483,6 +618,20 @@ describe('adjust', () => {
             reserved: 8,
             available: 2
         });
+    });
+
+    it('refuses a correction below units paid for and not yet shipped', async () => {
+        const product = await createProduct({ onHand: 10 });
+        const orderId = anOrderId();
+        await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
+        await commitForOrder(orderId);
+
+        // `onHand` is the shelf count until dispatch, so the paid units are still inside it and
+        // still promised: a correction cutting below them is refused.
+        const result = await adjust(String(product._id), -8, 'stocktake');
+
+        expect(result.status).toBe(409);
+        expect(await countersOf(String(product._id))).toMatchObject({ onHand: 10, reserved: 3 });
     });
 
     it('allows a correction down to exactly what is promised', async () => {

@@ -17,7 +17,7 @@ import {
     orderActionsFor,
     statusesLeadingTo,
     statusesReachableFrom,
-    stockCommitted,
+    paymentSettled,
     overridableTargetsFrom,
     type OrderActor
 } from '../../domain/lifecycle';
@@ -373,29 +373,29 @@ describe("statusesOverridableInto — the conditional write's own `from` set", (
     });
 });
 
-describe('stockCommitted — stock has left the shelf from `paid` onwards', () => {
+describe('paymentSettled — true from `paid` onwards', () => {
     it('is true exactly for the statuses from `paid` on in the fulfilment sequence', () => {
         const fromPaid = FULFILMENT_SEQUENCE.slice(FULFILMENT_SEQUENCE.indexOf(OrderStatus.paid));
 
         for (const status of EVERY_STATUS)
-            expect(stockCommitted(status)).toBe(fromPaid.includes(status));
+            expect(paymentSettled(status)).toBe(fromPaid.includes(status));
     });
 
     it('holds at every override destination', () => {
         for (const from of EVERY_STATUS)
-            for (const to of overridableTargetsFrom(from)) expect(stockCommitted(to)).toBe(true);
+            for (const to of overridableTargetsFrom(from)) expect(paymentSettled(to)).toBe(true);
     });
 
     it('is never undone by a move, except a cancel', () => {
-        for (const from of EVERY_STATUS.filter(stockCommitted))
+        for (const from of EVERY_STATUS.filter(paymentSettled))
             for (const actor of EVERY_ACTOR)
                 for (const to of statusesReachableFrom(from, actor))
-                    expect(stockCommitted(to) || to === OrderStatus.cancelled).toBe(true);
+                    expect(paymentSettled(to) || to === OrderStatus.cancelled).toBe(true);
     });
 
     it('never holds for a status that can still be paid', () => {
         for (const status of EVERY_STATUS)
-            expect(isPayable(status) && stockCommitted(status)).toBe(false);
+            expect(isPayable(status) && paymentSettled(status)).toBe(false);
     });
 });
 
