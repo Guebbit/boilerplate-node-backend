@@ -265,11 +265,10 @@ flowchart LR
 - **The rules** are the files the local stack loads: `docker/observability/prometheus.alert-rules.yaml`.
   The `security` group carries a "tune to your traffic" comment on every threshold.
 - **You need an alert receiver.** Alerts that fire into nothing are a dashboard nobody opens.
-  Alertmanager ships the `null` receiver, which notifies no one. Wire a real one in
-  `docker/observability/alertmanager.config.yaml` before relying on any alert: an email (SMTP)
-  receiver, a chat webhook (Slack, Mattermost, Teams) or a pager (PagerDuty, Opsgenie). This
-  boilerplate picks none, because the right one is whatever your team already watches.
-  [Receiver settings](https://prometheus.io/docs/alerting/latest/configuration/#receiver-integration-settings)
+  With no `ALERT_*` knob set, Alertmanager sends every alert to `null`, which notifies no one.
+  Set `ALERT_EMAIL_TO` / `ALERT_EMAIL_FROM` (sent through the app's own `NODE_SMTP_*`),
+  `ALERT_WEBHOOK_URL` (ntfy, Slack, Telegram, Matrix: your choice) and `ALERT_HEARTBEAT_URL` in the
+  client's `.env`. [Alert routing](tools/prometheus.md#alert-routing) has the table.
 - **Logs.** Alloy tails the engine's container log files (Docker: `/var/lib/docker/containers`; set
   `CONTAINER_LOGS_PATH` for Podman, together with `CONTAINER_LOG_DRIVER=k8s-file`, because Podman's
   default driver writes no file). It reads the Docker and the Podman format at once.

@@ -159,9 +159,9 @@ x-data-hardening: &data-hardening
 #                   have web UIs with no login, which is the reason.
 #   the secret      Prometheus scrapes with the `metrics_token` secret file the app reads its own
 #                   `NODE_METRICS_TOKEN` from, so there is one credential and one rotation.
-#   a receiver      Alertmanager ships with the `null` receiver, which notifies no one. Wire a
-#                   real one in `docker/observability/alertmanager.config.yaml` before relying on
-#                   any alert — see docs/getting-started-production.md#monitoring-and-alerts.
+#   a receiver      Alertmanager renders its routing from the `ALERT_*` knobs in the client's
+#                   `.env`. With none set every alert goes to `null`, which notifies no one — see
+#                   docs/getting-started-production.md#monitoring-and-alerts.
 #   the logs        Alloy tails the container log files under `CONTAINER_LOGS_PATH` (Docker's
 #                   `/var/lib/docker/containers` by default; Podman needs its own path and
 #                   `CONTAINER_LOG_DRIVER=k8s-file`). It reads both engines' formats.
@@ -754,16 +754,41 @@ services:
         depends_on:
             - alertmanager
 
-    # Alertmanager: groups and routes what Prometheus fires. Ships the `null` receiver.
+    # Alertmanager: groups and routes what Prometheus fires, by the `ALERT_*` knobs (empty = `null`).
     alertmanager:
         logging: *logging
         image: docker.io/prom/alertmanager:v0.34.1
         restart: unless-stopped
         profiles: [monitoring]
         <<: *monitoring-hardening
-        command: ['--config.file=/etc/alertmanager/alertmanager.yml']
+        # Renders the routing template from the environment below, then starts Alertmanager on it.
+        # Why: Alertmanager reads no env vars itself. docs/tools/prometheus.md#alert-routing
+        entrypoint:
+            - '/bin/sh'
+            - '/etc/alertmanager/render.sh'
+            - '/etc/alertmanager/template.yml'
+            - '/tmp/alertmanager.yml'
+            - '/tmp/alertmanager-secrets'
+        command:
+            - '/bin/alertmanager'
+            - '--config.file=/tmp/alertmanager.yml'
+            - '--storage.path=/alertmanager'
+        # From the client's `.env` through `--env-file`, never `env_file:`: the app's other
+        # secrets stay out of this container. Every knob empty = every route goes to `null`.
+        environment:
+            ALERT_EMAIL_TO: '${ALERT_EMAIL_TO:-}'
+            ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM:-}'
+            ALERT_WEBHOOK_URL: '${ALERT_WEBHOOK_URL:-}'
+            ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL:-}'
+            ALERT_HEARTBEAT_TOKEN: '${ALERT_HEARTBEAT_TOKEN:-}'
+            # The app's own SMTP account, so alerts need no second provider.
+            NODE_SMTP_HOST: '${NODE_SMTP_HOST:-}'
+            NODE_SMTP_PORT: '${NODE_SMTP_PORT:-587}'
+            NODE_SMTP_USER: '${NODE_SMTP_USER:-}'
+            NODE_SMTP_PASS: '${NODE_SMTP_PASS:-}'
         volumes:
-            - ./docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:ro
+            - ./docker/observability/alertmanager-render.sh:/etc/alertmanager/render.sh:ro
+            - ./docker/observability/alertmanager.config.template.yaml:/etc/alertmanager/template.yml:ro
 
     # Loki: stores the container logs Alloy ships. Its config is the local stack's.
     loki:

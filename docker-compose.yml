@@ -427,9 +427,33 @@ services:
         profiles: ['observability']
         image: prom/alertmanager:v0.34.1
         restart: unless-stopped
-        command: ['--config.file=/etc/alertmanager/alertmanager.yml']
+        # Renders the routing template from the environment below, then starts Alertmanager on it.
+        # Why: Alertmanager reads no env vars itself. docs/tools/prometheus.md#alert-routing
+        entrypoint:
+            - '/bin/sh'
+            - '/etc/alertmanager/render.sh'
+            - '/etc/alertmanager/template.yml'
+            - '/tmp/alertmanager.yml'
+            - '/tmp/alertmanager-secrets'
+        command:
+            - '/bin/alertmanager'
+            - '--config.file=/tmp/alertmanager.yml'
+            - '--storage.path=/alertmanager'
+        environment:
+            # Local defaults deliver to mailpit (`integrations` profile). Set a knob to the empty
+            # string in `.env` to switch its route off; unset keeps the default.
+            ALERT_EMAIL_TO: '${ALERT_EMAIL_TO-ops@example.test}'
+            ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM-alertmanager@example.test}'
+            ALERT_WEBHOOK_URL: '${ALERT_WEBHOOK_URL:-}'
+            ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL:-}'
+            ALERT_HEARTBEAT_TOKEN: '${ALERT_HEARTBEAT_TOKEN:-}'
+            # The sink is mailpit, never the app's real SMTP server: a drill must not send real mail.
+            NODE_SMTP_HOST: 'mailpit'
+            NODE_SMTP_PORT: '1025'
+            ALERT_SMTP_REQUIRE_TLS: 'false'
         volumes:
-            - ./docker/observability/alertmanager.config.yaml:/etc/alertmanager/alertmanager.yml:Z
+            - ./docker/observability/alertmanager-render.sh:/etc/alertmanager/render.sh:ro,Z
+            - ./docker/observability/alertmanager.config.template.yaml:/etc/alertmanager/template.yml:ro,Z
         ports:
             - '127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093'
 

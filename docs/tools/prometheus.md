@@ -88,8 +88,39 @@ Baseline alert rules live in `docker/observability/prometheus.alert-rules.yaml`.
 
 ## Alertmanager
 
-Alertmanager config lives at `docker/observability/alertmanager.config.yaml`.
-In local dev it uses a `null` receiver (logs only). Replace it with Slack, PagerDuty, or email for production.
+The routing lives in `docker/observability/alertmanager.config.template.yaml`, rendered from the `ALERT_*` knobs by
+`docker/observability/alertmanager-render.sh` when the container starts. The routing table and the knobs are written up with the rest of
+the alerting set-up (see [Alert routing](#alert-routing)).
+
+## Alert routing
+
+Prometheus evaluates the rules; Alertmanager decides who is told. The routing is one template
+(`alertmanager.config.template.yaml`), rendered when the container starts from the client's `.env`: Alertmanager
+reads no environment variables, and its email `to` / `from` / `smarthost` have no `_file` form.
+Same routing for every client and for dev; only the values differ.
+
+| Alert                              | Goes to                | Why                                                |
+| ---------------------------------- | ---------------------- | -------------------------------------------------- |
+| `Watchdog`                         | the heartbeat URL only | silence on the other end = the pipeline is dead    |
+| `AlertmanagerNotificationsFailing` | the webhook only       | email is the thing that is broken                  |
+| `severity: critical`               | email **and** webhook  | a phone push for what cannot wait                  |
+| everything else                    | email                  | through the app's own SMTP account (`NODE_SMTP_*`) |
+
+| Knob                                 | Meaning                                                                               |
+| ------------------------------------ | ------------------------------------------------------------------------------------- |
+| `ALERT_EMAIL_TO`, `ALERT_EMAIL_FROM` | who receives the email, and from what address (`from` falls back to `NODE_SMTP_USER`) |
+| `ALERT_WEBHOOK_URL`                  | ntfy, Slack, Telegram, Matrix... the operator's choice                                |
+| `ALERT_HEARTBEAT_URL`, `_TOKEN`      | the off-host service that raises the alarm when the `Watchdog` pings stop             |
+
+- **Empty knob, route off.** Its alerts go to `null` and nothing warns about it at boot. Email needs
+  `ALERT_EMAIL_TO`, a sender and `NODE_SMTP_HOST`; with `NODE_SMTP_PASS` empty no SMTP login is sent.
+- **Secrets stay out of the config.** The webhook and heartbeat URLs, the token and the SMTP password are
+  written to `0600` files at start and read through Alertmanager's `url_file` / `*_file` forms, so they do not
+  show in `/api/v2/status`.
+- **Values are escaped** (`/`, `&`, `\` and `'`) before they reach the template, so an address or a password can
+  contain them.
+- **Local stack.** Email defaults to mailpit (`integrations` profile, `http://localhost:8025`) and needs no
+  `.env` change.
 
 ## Observability endpoints
 
@@ -115,7 +146,7 @@ Use this for live widgets in a custom UI. For historical charts, query your back
 ## Works with
 
 - **[Grafana](./grafana.md)** — Grafana is the primary consumer of Prometheus data. Every metric chart and KPI panel in the dashboard reads from Prometheus. You rarely need to query Prometheus directly; Grafana's Explore view is the normal entry point. → [Works with Prometheus](./grafana.md#works-with)
-- **Alertmanager** — Prometheus evaluates the rules in `docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. In local dev the receiver is `null` (no actual notifications). Swap it for Slack, PagerDuty, or email in production. Both share the same [Observability Reference](./observability-reference.md) config tables.
+- **Alertmanager** — Prometheus evaluates the rules in `docker/observability/prometheus.alert-rules.yaml` and pushes firing alerts to Alertmanager, which groups and routes them to notification receivers. The receivers are chosen by the `ALERT_*` knobs; with none set, everything goes to `null` (no notifications). Both share the same [Observability Reference](./observability-reference.md) config tables.
 
 ## External references
 

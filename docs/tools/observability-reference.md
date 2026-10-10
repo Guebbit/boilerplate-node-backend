@@ -78,7 +78,7 @@ Repo files: [`/docker/observability/prometheus.config.yaml`](../../docker/observ
 
 **What it does:** groups/routes alerts to notification receivers.
 
-Repo file: [`/docker/observability/alertmanager.config.yaml`](../../docker/observability/alertmanager.config.yaml)
+Repo file: [`/docker/observability/alertmanager.config.template.yaml`](../../docker/observability/alertmanager.config.yaml)
 
 | Config section                                             | What it does                       | Why local value                                  | Common tweak                     | Dev vs prod                             |
 | ---------------------------------------------------------- | ---------------------------------- | ------------------------------------------------ | -------------------------------- | --------------------------------------- |
