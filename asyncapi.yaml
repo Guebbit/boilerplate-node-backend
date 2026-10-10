@@ -6,6 +6,10 @@
 #          src/modules/account/asyncapi.internal.yaml
 #          src/modules/webhooks/asyncapi.internal.yaml
 #          shared/contracts/asyncapi.workers.yaml
+#          src/modules/orders/asyncapi.webhooks.yaml
+#          src/modules/payments/asyncapi.webhooks.yaml
+#          src/modules/returns/asyncapi.webhooks.yaml
+#          src/modules/example/asyncapi.webhooks.yaml
 asyncapi: 3.0.0
 id: 'urn:boilerplate-node-backend:asyncapi:contracts'
 info:
@@ -36,8 +40,8 @@ servers:
     subscriberEndpoint:
         # A VARIABLE server, not a fixed host: every subscription names its own HTTPS URL, so there
         # is no one address this document can print. `asyncapi-servers`/`asyncapi-channel-servers`
-        # (`spectral.asyncapi.modules.yaml`) still pass, because the channels below DO bind to a
-        # declared server — it just resolves per subscription instead of per deployment.
+        # (`spectral.asyncapi.modules.yaml`) still pass, because the channels merged in from the
+        # modules' fragments DO bind to this server — it just resolves per subscription instead of per deployment.
         #
         # Not a server this application runs — the reverse of every other section's server: a
         # subscriber genuinely subscribes to receive these, over a connection this application
@@ -533,13 +537,6 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnClosedEnvelope'
-        ExamplePublishedEvent:
-            name: ExamplePublishedEvent
-            title: Example published
-            headers:
-                $ref: '#/components/schemas/WebhookHeaders'
-            payload:
-                $ref: '#/components/schemas/ExamplePublishedEnvelope'
         ReturnRequestedEvent:
             name: ReturnRequestedEvent
             title: Return requested
@@ -547,6 +544,13 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/ReturnRequestedEnvelope'
+        ExamplePublishedEvent:
+            name: ExamplePublishedEvent
+            title: Example published
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ExamplePublishedEnvelope'
         NotificationCreatedEvent:
             name: NotificationCreatedEvent
             title: A notification was written
@@ -687,98 +691,6 @@ components:
                     description: >-
                         Whether the cancel carries a refund — a customer cancelling is owed their money, an operator cancelling may not be. See `orders/events.ts`.
             additionalProperties: false
-        PaymentEventPayload:
-            type: object
-            required:
-                - paymentId
-                - orderId
-            properties:
-                paymentId:
-                    type: string
-                orderId:
-                    type: string
-            additionalProperties: false
-        PaymentRefundedPayload:
-            type: object
-            required:
-                - paymentId
-                - orderId
-                - refundId
-                - amount
-                - currency
-            properties:
-                paymentId:
-                    type: string
-                orderId:
-                    type: string
-                refundId:
-                    type: string
-                    description: >-
-                        The refund record this delivery is about. A payment can be refunded in parts, so one payment can raise this event more than once.
-                amount:
-                    type: number
-                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
-                currency:
-                    type: string
-                    description: ISO-4217, e.g. `EUR`.
-            additionalProperties: false
-        ReturnRequestedPayload:
-            type: object
-            required:
-                - returnId
-                - orderId
-                - reason
-            properties:
-                returnId:
-                    type: string
-                orderId:
-                    type: string
-                reason:
-                    type: string
-                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
-            additionalProperties: false
-        ReturnReceivedPayload:
-            type: object
-            required:
-                - returnId
-                - orderId
-            properties:
-                returnId:
-                    type: string
-                orderId:
-                    type: string
-            additionalProperties: false
-        ReturnClosedPayload:
-            type: object
-            required:
-                - returnId
-                - orderId
-                - refundAmount
-                - currency
-            properties:
-                returnId:
-                    type: string
-                orderId:
-                    type: string
-                refundAmount:
-                    type: number
-                    description: What went back to the customer for this return, two decimal places.
-                currency:
-                    type: string
-                    description: ISO-4217, e.g. `EUR`.
-            additionalProperties: false
-        ExamplePublishedPayload:
-            type: object
-            required:
-                - exampleId
-                - title
-            properties:
-                exampleId:
-                    type: string
-                title:
-                    type: string
-                    description: The fallback-language title.
-            additionalProperties: false
         OrderCreatedEnvelope:
             type: object
             required:
@@ -853,6 +765,41 @@ components:
                 data:
                     $ref: '#/components/schemas/OrderCancelledPayload'
             additionalProperties: false
+        PaymentEventPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        PaymentRefundedPayload:
+            type: object
+            required:
+                - paymentId
+                - orderId
+                - refundId
+                - amount
+                - currency
+            properties:
+                paymentId:
+                    type: string
+                orderId:
+                    type: string
+                refundId:
+                    type: string
+                    description: >-
+                        The refund record this delivery is about. A payment can be refunded in parts, so one payment can raise this event more than once.
+                amount:
+                    type: number
+                    description: This refund's amount, two decimal places — the payment's own `amount` for a full refund.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
         PaymentSucceededEnvelope:
             type: object
             required:
@@ -907,6 +854,51 @@ components:
                 data:
                     $ref: '#/components/schemas/PaymentRefundedPayload'
             additionalProperties: false
+        ReturnRequestedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - reason
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                reason:
+                    type: string
+                    description: Why the goods come back — `withdrawal`, `defective`, `wrong_item` or `other`.
+            additionalProperties: false
+        ReturnReceivedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+            additionalProperties: false
+        ReturnClosedPayload:
+            type: object
+            required:
+                - returnId
+                - orderId
+                - refundAmount
+                - currency
+            properties:
+                returnId:
+                    type: string
+                orderId:
+                    type: string
+                refundAmount:
+                    type: number
+                    description: What went back to the customer for this return, two decimal places.
+                currency:
+                    type: string
+                    description: ISO-4217, e.g. `EUR`.
+            additionalProperties: false
         ReturnRequestedEnvelope:
             type: object
             required:
@@ -960,6 +952,18 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/ReturnClosedPayload'
+            additionalProperties: false
+        ExamplePublishedPayload:
+            type: object
+            required:
+                - exampleId
+                - title
+            properties:
+                exampleId:
+                    type: string
+                title:
+                    type: string
+                    description: The fallback-language title.
             additionalProperties: false
         ExamplePublishedEnvelope:
             type: object

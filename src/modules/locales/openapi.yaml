@@ -94,6 +94,7 @@ paths:
             operationId: createLocale
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:
@@ -187,6 +188,7 @@ paths:
             operationId: replaceLocale
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             requestBody:
@@ -222,6 +224,7 @@ paths:
             operationId: updateLocale
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             requestBody:
@@ -258,6 +261,7 @@ paths:
             operationId: deleteLocale
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
             responses:
@@ -326,6 +330,7 @@ paths:
             operationId: listLocaleEntries
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
@@ -363,6 +368,7 @@ paths:
             operationId: listAppLocaleEntries
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -391,6 +397,7 @@ paths:
             operationId: createLocaleEntry
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -434,6 +441,7 @@ paths:
             operationId: replaceLocaleEntries
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -468,6 +476,7 @@ paths:
             operationId: mergeLocaleEntries
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -511,6 +520,7 @@ paths:
             operationId: updateLocaleEntry
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -540,6 +550,7 @@ paths:
             operationId: deleteLocaleEntry
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/LocalePathParam'
                 - $ref: '#/components/parameters/AppPathParam'
@@ -566,6 +577,7 @@ paths:
             operationId: getEntityTranslations
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'
@@ -604,6 +616,7 @@ paths:
             operationId: replaceEntityTranslations
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'
@@ -657,6 +670,7 @@ paths:
             operationId: upsertEntityTranslations
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '#/components/parameters/TranslatableEntityTypePathParam'
                 - $ref: '#/components/parameters/TranslationEntityIdPathParam'

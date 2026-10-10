@@ -1,6 +1,6 @@
 /**
  * Both directions of one rule, proved by actually triggering every event rather than reading
- * source text for it: every event `webhooks/asyncapi.yaml` declares (and therefore
+ * source text for it: every event the registered modules declare in their `asyncapi.webhooks.yaml` (and therefore
  * `asyncapi.public.yaml` publishes) has a real producer, and nothing this module's own subscriber
  * fans out ever names an event the catalogue does not declare.
  *
@@ -10,14 +10,12 @@
  * `kernel/registry.ts` and wires the generic subscriber from them — nothing here hardcodes which
  * domain events fire which public ones. Each underlying domain event is then emitted with a
  * synthetic payload, and the `eventType` a delivery row was created with is read back. If the SET
- * of eventTypes this produces is exactly the catalogue's eleven names — no more, no fewer — both
+ * of eventTypes this produces is exactly the catalogue's names — no more, no fewer — both
  * directions hold at once.
  */
 
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import { parse as parseYaml } from 'yaml';
 import { setupTestDb } from '@tests/setup-test-db';
+import { declaredWebhookEvents } from '@tests/webhook-events';
 import { resetDomainEvents, emitDomainEvent } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
 import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_CANCELLED } from '@modules/orders';
@@ -34,6 +32,7 @@ import {
 } from '@modules/webhooks/repository';
 import { mintRingSecret } from '@modules/webhooks/secrets';
 import webhooksModule from '@modules/webhooks/module';
+import { listWebhookEventCatalogue } from '@modules/webhooks/services';
 
 setupTestDb();
 
@@ -43,16 +42,11 @@ const ORDER_ID = '507f1f77bcf86cd799439011';
 /** Same shape, a different value — so a payment's `orderId` is never mistaken for the order's own id. */
 const PAYMENT_ID = '507f1f77bcf86cd799439012';
 
-/** Every channel name `webhooks/asyncapi.yaml` declares — the catalogue `GET /webhooks/events` serves. */
-const declaredCatalogue = (): string[] => {
-    const document = parseYaml(
-        readFileSync(
-            path.join(__dirname, '..', '..', 'src', 'modules', 'webhooks', 'asyncapi.yaml'),
-            'utf8'
-        )
-    ) as { channels?: Record<string, unknown> };
-    return Object.keys(document.channels ?? {});
-};
+/** The modules this test registers, whose fragments name the events that must fire. */
+const REGISTERED_OWNERS = ['orders', 'payments', 'returns', 'example'] as const;
+
+/** Every event those modules' `asyncapi.webhooks.yaml` fragments declare. */
+const declaredCatalogue = (): string[] => declaredWebhookEvents(REGISTERED_OWNERS);
 
 /** One subscription wanting every event (`'*'`), so any producer's fan-out reaches it. */
 const createCatchAllSubscription = () => {
@@ -84,7 +78,7 @@ describe('every public webhook event has exactly one producer, and no producer n
         resetDomainEvents();
     });
 
-    it('the eleven declared events are produced, and nothing else is', async () => {
+    it('every declared event is produced, and nothing else is', async () => {
         await createCatchAllSubscription();
 
         // The domain-event emits the registered modules' `publicEvents` declarations project
@@ -136,21 +130,11 @@ describe('every public webhook event has exactly one producer, and no producer n
         expect([...produced].toSorted()).toEqual(declaredCatalogue().toSorted());
     });
 
-    it('the catalogue names exactly the eleven events v1 fixes — no silent addition or removal', () => {
-        expect(declaredCatalogue().toSorted()).toEqual(
-            [
-                'example.published',
-                'order.cancelled',
-                'order.created',
-                'order.paid',
-                'order.shipped',
-                'payment.failed',
-                'payment.refunded',
-                'payment.succeeded',
-                'return.closed',
-                'return.received',
-                'return.requested'
-            ].toSorted()
-        );
+    it('GET /webhooks/events lists exactly what the registered modules declare', () => {
+        expect(
+            listWebhookEventCatalogue()
+                .map((event) => event.name)
+                .toSorted()
+        ).toEqual(declaredCatalogue());
     });
 });

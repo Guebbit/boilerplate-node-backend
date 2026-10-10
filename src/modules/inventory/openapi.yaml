@@ -20,6 +20,7 @@ paths:
             operationId: listInventoryLevels
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -50,6 +51,7 @@ paths:
             operationId: listStockMovements
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -85,6 +87,7 @@ paths:
             operationId: receiveStock
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -116,6 +119,7 @@ paths:
             operationId: adjustStock
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdempotencyKeyHeader'
             requestBody:
@@ -154,6 +158,7 @@ paths:
             operationId: sweepReservations
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             responses:
                 '200':
                     description: How many holds were expired

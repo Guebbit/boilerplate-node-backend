@@ -1,0 +1,49 @@
+# The browsing events a product page reports through `POST /analytics/events`.
+#
+# A FRAGMENT, not a document: components only, assembled into `AnalyticsEventRequest` (a `oneOf`
+# discriminated on `event`) by `scripts/contracts/analytics-browser-events.ts`, and only while
+# `analytics` exists. Each schema names its event once, as a one-value `event` enum; that value is
+# the discriminator and the key `browserEvents` registers on `module.ts`. Refs to shared schemas
+# are written against the root file, as in any module fragment.
+components:
+    schemas:
+        ProductViewedEvent:
+            type: object
+            additionalProperties: false
+            required: [event, productId]
+            properties:
+                event:
+                    type: string
+                    enum: [product_viewed]
+                productId:
+                    allOf:
+                        [
+                            {
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            }
+                        ]
+                    description: The product whose page was opened.
+
+        ProductsSearchedEvent:
+            type: object
+            additionalProperties: false
+            required: [event, resultCount, page]
+            properties:
+                event:
+                    type: string
+                    enum: [products_searched]
+                text:
+                    allOf:
+                        [
+                            {
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Text'
+                            }
+                        ]
+                    description: The free-text term searched for, when there was one.
+                resultCount:
+                    type: integer
+                    minimum: 0
+                    maximum: 100000
+                    description: How many products the search found.
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'

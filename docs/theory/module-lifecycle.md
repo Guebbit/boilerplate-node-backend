@@ -259,6 +259,10 @@ the module's public event catalogue — an SSE stream, a websocket — and lands
 copied to the paired frontend. `asyncapi.internal.yaml` is a queue crossing a broker the frontend
 cannot open, and never leaves this bundle. A domain can own either, both, or neither.
 
+A module that fires a public webhook adds `asyncapi.webhooks.yaml` (a fragment of the `webhooks`
+section, merged only while `webhooks` exists) and a `publicEvents` entry on its manifest; `example`
+is the one to copy.
+
 A listed order entry with no fragment on disk is ignored, and a fragment on disk with no entry is
 appended — neither fails the bundle, because membership is what is on disk. The same goes for a
 `probes.ts`: the client collections find it by scanning the module folders.

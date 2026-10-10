@@ -121,9 +121,13 @@ Every operation declares `security`, and the `operation-security-declared` Spect
 | --- | --- |
 | `[]` | public, no credential read |
 | `[{}, {bearerAuth: []}]` | a session is optional; one changes the answer (an admin sees inactive rows) |
-| `[{bearerAuth: []}]` | a session token is required |
+| `[{}, {bearerAuth: []}, {apiKeyAuth: []}]` | as above, and an API key may also be the credential: the three product reads, where a key holding the wider keys sees drafts and stock |
+| `[{bearerAuth: []}]` | a session token is required, and an API key is refused |
+| `[{bearerAuth: []}, {apiKeyAuth: []}]` | a session token or an `sk_...` API key: the route mounts `isAuthOrCredential` and its permission has no step-up |
 | `[{cookieAuth: []}]` | the refresh cookie is required: the two SSE streams, since `EventSource` cannot set a header |
 | `[{metricsBearer: []}]` | the static scrape credential, for `GET /observability/metrics` |
+
+`apiKeyAuth` is written by hand on each operation a key can use, and `tests/cross-cutting/api-key-security.test.ts` derives the list from the mounted guards: an operation names it exactly when its route mounts `isAuthOrCredential` and its permission has no `stepUp` (a key can never re-authenticate). A route that gains or loses the guard fails the test until the spec follows. The three optional product reads mount no guard, so the test lists them by hand.
 
 ## Orval configuration
 

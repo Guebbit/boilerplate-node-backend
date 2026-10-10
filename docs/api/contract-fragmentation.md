@@ -363,7 +363,7 @@ What does not change:
 ### `asyncapi.yaml` — one whole document per section, merged
 
 A domain appears three times in this document (`channels:`, `components.messages:`,
-`components.schemas:`). **A section is one complete AsyncAPI document**:
+`components.schemas:`). **A section is one complete AsyncAPI document** (one exception: [`webhooks`](#module-owned-webhook-events)):
 `src/modules/<name>/asyncapi.yaml` for a domain's public events, exactly as it carries one
 `openapi.yaml`; `src/modules/<name>/asyncapi.internal.yaml` for a queue the module owns; and
 `shared/contracts/asyncapi.workers.yaml` for the `worker.*` queues that belong to no domain — the
@@ -396,6 +396,40 @@ with nothing to follow. So the merge happens in a small function in
 carrying `$ref` strings across untouched because every section already resolves its own refs
 internally. That file's header is the full argument. See also
 [AsyncAPI Workflow](./asyncapi-workflow.md).
+
+### Module-owned webhook events {#module-owned-webhook-events}
+
+The `webhooks` section is the one section that is not complete on its own. Its file keeps the server
+and the headers schema every event shares; each event is declared by the module that fires it, in
+`src/modules/<module>/asyncapi.webhooks.yaml` (`orders`, `payments`, `returns`, `example`).
+`scripts/contracts/asyncapi-webhook-events.ts` finds those files on disk and
+`withWebhookEvents` folds them into the section before it joins the bundle: one call, in
+`asyncapi-bundles.ts`. The same collision refusal applies, so two modules claiming one event name
+fail the bundle.
+
+```mermaid
+flowchart LR
+    W["webhooks/asyncapi.yaml<br/>server + WebhookHeaders"] --> S["webhooks section"]
+    O["orders/asyncapi.webhooks.yaml"] --> S
+    P["payments/asyncapi.webhooks.yaml"] --> S
+    R["returns/asyncapi.webhooks.yaml"] --> S
+    E["example/asyncapi.webhooks.yaml"] --> S
+    S --> B["asyncapi.yaml +<br/>asyncapi.public.yaml"]
+```
+
+Why: removing `orders` removes its events from the contract with no hand edit, and removing `webhooks`
+leaves the fragments unmerged. The fragments are not documents (they ref the shared server), so
+`lint:asyncapi:modules` skips them and `lint:asyncapi` lints the merged result.
+
+### Module-owned browser events {#module-owned-browser-events}
+
+`POST /analytics/events` accepts a closed set of events, and each belongs to the module whose page
+reports it. A module ships `src/modules/<m>/openapi.browser-events.yaml` (components only, one schema
+per event, each with a one-value `event` enum). After the bundle is built,
+`scripts/contracts/analytics-browser-events.ts` adds those schemas and replaces `analytics`'
+placeholder `AnalyticsEventRequest` with a `oneOf` discriminated on `event`: one call in
+`openapi-bundle.ts`. With `analytics` absent nothing is added; with no fragment the placeholder stays.
+The runtime half is `AppModule.browserEvents`, the same shape as `publicEvents` for webhooks.
 
 ### The analytics names — owned by the module, published to no one
 

@@ -19,6 +19,7 @@ import { router } from './routes';
 import { productRepository } from './repository';
 import { checkProductTranslationFields } from './model';
 import { productsConfig } from './config';
+import { productsBrowserEvents } from './browser-events';
 import './events';
 
 /** This module's manifest entry: routes, its VAT config gate, locales, the image target and the translatable fields. */
@@ -79,6 +80,8 @@ export default {
             'product.heavy'
         ]
     },
+    // Reported by the browser through `analytics`' relay; the request shapes are in `openapi.browser-events.yaml`.
+    browserEvents: productsBrowserEvents,
     // The catalogue — nothing here is scoped to a person. An order's line embeds its own frozen
     // snapshot, and that copy is `orders`' section to export, not this module's.
     personalData: 'none'

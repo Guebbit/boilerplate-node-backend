@@ -36,6 +36,7 @@ import path from 'node:path';
 import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
+import { withBrowserEvents } from './analytics-browser-events';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 
@@ -573,7 +574,9 @@ const compile = (): string => {
         pruneUnused(
             withErrorCodes(
                 withModuleStamps(
-                    withVersionedResources(withAppLevelResponses(readFileSync(temporary, 'utf8'))),
+                    withVersionedResources(
+                        withAppLevelResponses(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                    ),
                     moduleOfPath()
                 ),
                 collectErrorCodes()

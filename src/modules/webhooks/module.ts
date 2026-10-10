@@ -20,7 +20,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { isQueueEnabled } from '@infrastructure/adapters/queue';
 import { WORKER_CHANNELS, WebhookDeliverJobPayloadSchema } from '@types';
 import { router } from './routes';
-import { subscribeToWebhookEvents, processDeliveryJob } from './services';
+import { subscribeToWebhookEvents, processDeliveryJob, registerWebhookCatalogue } from './services';
 import { webhooksConfig } from './config';
 
 /**
@@ -33,6 +33,7 @@ import { webhooksConfig } from './config';
  */
 const onRegistered = (modules: readonly AppModule[]): void => {
     subscribeToWebhookEvents(resolvePublicEvents(modules));
+    registerWebhookCatalogue(modules.map((appModule) => appModule.name));
     if (!isQueueEnabled())
         logger.warn({
             message:

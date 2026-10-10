@@ -18,6 +18,7 @@ paths:
             security:
                 - {}
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -104,6 +105,7 @@ paths:
             operationId: createProduct
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:
@@ -138,6 +140,7 @@ paths:
             x-alias-of: deleteProductById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             # The flag is readable from the query here too, exactly as it is on the `{id}` form:
             # one controller serves both, and `surface: 'delete'` reads params, query and body on
             # whichever route it is mounted on. Declared rather than merely tolerated.
@@ -205,6 +208,7 @@ paths:
             security:
                 - {}
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -231,6 +235,7 @@ paths:
             operationId: replaceProductById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -283,6 +288,7 @@ paths:
             operationId: updateProductById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -321,6 +327,7 @@ paths:
             operationId: deleteProductById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/HardDeleteParam'
@@ -354,6 +361,7 @@ paths:
             operationId: getProductAdmin
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -378,6 +386,7 @@ paths:
             operationId: restoreProductById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -406,6 +415,7 @@ paths:
             x-alias-of: deleteProductById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -426,6 +436,7 @@ paths:
             security:
                 - {}
                 - bearerAuth: []
+                - apiKeyAuth: []
             x-alias-of: listProducts
             requestBody:
                 required: true

@@ -3,7 +3,8 @@
 ::: tip At a glance
 **Owns** — `POST /analytics/events`: the relay a browser uses to report the browsing events the
 server cannot see (a product page opened, a search made).
-**Depends on** — no module, and no module depends on it; only the paired frontend calls it. The events go through the analytics port in
+**Depends on** — no module, and no module depends on it; only the paired frontend calls it. It reads no module by name: each event is declared by the module that owns it (`products`, today), and
+`analytics` collects them from the registry. The events go through the analytics port in
 `infrastructure/observability/analytics`, like every other module's.
 **Breaks if you change** — the closed event list in the contract (`AnalyticsEventRequest`), which
 the paired frontend's `trackBrowsing` sends from.
@@ -43,6 +44,14 @@ sequenceDiagram
 one alike, so a page learns nothing about its own measurement. Consent is read the way every other
 emit reads it: the account's stored choice, or the `X-Analytics-Consent` header for a guest.
 
+**The events belong to the modules that own them.** A module reporting an event ships two things: its
+request shape in `src/modules/<m>/openapi.browser-events.yaml`, and an `AppModule.browserEvents` entry
+whose `toReport` builds the provider event. The bundler assembles the shapes into
+`AnalyticsEventRequest` (a `oneOf` on `event`); the relay looks the body's `event` up in the registry
+(`resolveBrowserEvents`). Remove `products` and both halves go with it, with no edit here.
+`tests/cross-cutting/browser-events.test.ts` holds the two halves equal. See
+[Contract Fragmentation](../api/contract-fragmentation.md#module-owned-browser-events).
+
 **The set is closed.** The body is one of two events, each with bounded fields, and anything else
 is a `422`. A cart, checkout, order, payment, signup or login event is never accepted: those are
 facts the server decides, and a relay for them would let a console forge them.
@@ -54,4 +63,4 @@ without consent it does no work beyond parsing the body.
 
 - [Modules overview](./index.md) — the whole context map
 - [Product analytics](../tools/analytics.md) — the port, consent, and who sends which event
-- [products](./products.md) — declares the two event names this relay carries
+- [products](./products.md) — declares the two events this relay carries

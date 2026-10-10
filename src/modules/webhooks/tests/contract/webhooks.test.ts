@@ -11,6 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
 import { webhookDeliveryRepository, webhookSubscriptionRepository } from '../../repository';
 import { setEnvironment } from '@tests/environment';
+import { declaredWebhookEvents } from '@tests/webhook-events';
 import {
     clearSsrfExemptOrigins,
     registerSsrfExemptOrigin
@@ -455,7 +456,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
 });
 
 describe('GET /webhooks/events', () => {
-    it('serves the eleven-event public catalogue', async () => {
+    it('serves the events the deployed modules declare', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
         const response = await api().get('/webhooks/events').set('Authorization', bearer);
@@ -463,21 +464,7 @@ describe('GET /webhooks/events', () => {
         expect(response.status).toBe(200);
         expect(
             (response.body.data as { name: string }[]).map((event) => event.name).toSorted()
-        ).toEqual(
-            [
-                'example.published',
-                'order.cancelled',
-                'order.created',
-                'order.paid',
-                'order.shipped',
-                'payment.failed',
-                'payment.refunded',
-                'payment.succeeded',
-                'return.closed',
-                'return.received',
-                'return.requested'
-            ].toSorted()
-        );
+        ).toEqual(declaredWebhookEvents());
     });
 
     it('401s an unauthenticated request', async () => {
@@ -485,6 +472,63 @@ describe('GET /webhooks/events', () => {
 
         expect(response.status).toBe(401);
     });
+});
+
+/** Creates a valid subscription and returns its id, for the replace and update cases. */
+const createSubscription = async (bearer: string): Promise<string> => {
+    const created = await api()
+        .post('/webhooks/subscriptions')
+        .set('Authorization', bearer)
+        .send(subscriptionBody());
+    return String(created.body.data.id);
+};
+
+describe('an event filter must name events the catalogue lists', () => {
+    it('422s a create naming an unknown event, listing it under the eventTypes field', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+
+        const response = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody({ eventTypes: ['order.paid', 'order.payd'] }));
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field: 'eventTypes' });
+        expect(response.body.errors[0].message).toContain('order.payd');
+        expect(await webhookSubscriptionRepository.count({})).toBe(0);
+    });
+
+    it('accepts the * wildcard, alone or beside a listed name', async () => {
+        const { bearer } = await authenticateAsRole('manager');
+
+        const response = await api()
+            .post('/webhooks/subscriptions')
+            .set('Authorization', bearer)
+            .send(subscriptionBody({ eventTypes: ['*', 'order.paid'] }));
+
+        expect(response.status).toBe(201);
+    });
+
+    it.each([
+        ['PUT', { enabled: true }],
+        ['PATCH', {}]
+    ] as const)(
+        '422s a %s naming an unknown event and keeps the stored filter',
+        async (verb, rest) => {
+            const { bearer } = await authenticateAsRole('manager');
+            const id = await createSubscription(bearer);
+
+            const response = await api()
+                [verb === 'PUT' ? 'put' : 'patch'](`/webhooks/subscriptions/${id}`)
+                .set('Authorization', bearer)
+                .send({ ...subscriptionBody({ eventTypes: ['not.an.event'] }), ...rest });
+
+            expect(response.status).toBe(422);
+            expect(response.body.errors[0].details).toEqual({ field: 'eventTypes' });
+            const stored = await webhookSubscriptionRepository.findById(id);
+            expect(stored?.eventTypes).toEqual(['order.paid']);
+        }
+    );
 });
 
 /** The next lookup answers a private address, as a hostile DNS record would. */

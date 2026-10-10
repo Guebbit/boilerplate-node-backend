@@ -3,7 +3,7 @@
 ::: tip At a glance
 **Owns** — subscriptions, the delivery log, signing, retries and auto-disable for outbound webhook delivery.
 **Depends on** — [`orders`](./orders.md) and [`payments`](./payments.md) for their domain-event constants, `users` for the disable-notice recipient's email — no reach back the other way.
-**Breaks if you change** — the eleven event names in `asyncapi.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
+**Breaks if you change** — an event name in any module's `asyncapi.webhooks.yaml`, or the queue payload shape in `asyncapi.internal.yaml`.
 :::
 
 ## What a webhook is
@@ -84,16 +84,29 @@ subscribes to each one generically on the kernel's domain-event bus, the same sh
 [`delivery`](./delivery.md) uses for `order.status_changed`. The only import left is `users`, for
 the email a disable notice is sent to — never a call back into either module's business logic.
 
-**The public event catalogue is a contract, not an accident.** This module's own `asyncapi.yaml`
-fragment declares the eleven events this shop's clone is willing to promise (ten from the shop, plus the `example` module's one), and both
-`GET /webhooks/events` and `tests/cross-cutting/webhook-event-producers.test.ts`'s producer-coverage
-check read that fragment directly — `asyncapi.public.yaml` is a derived sibling output, not the
-source either reads. A module reaching for the internal domain-event bus and calling it "public"
-would publish internal coupling as an external promise; declaring them here instead is what
-keeps that from happening. The mapping (which domain event becomes which public name) lives on
-`orders`'/`payments`'/`returns`' own manifests; this file still owns the channel CATALOGUE itself, because
-every channel shares one server and one header schema declared once here — see this file's own
-header comment for why splitting the catalogue by owning module is a separate, unresolved question.
+**The public event catalogue is a contract, not an accident.** Each module that fires a webhook
+declares its own events in `src/modules/<module>/asyncapi.webhooks.yaml` (`orders`, `payments`,
+`returns`, and `example`, the one to copy). This module's `asyncapi.yaml` keeps only what every
+event shares: the `subscriberEndpoint` server and the `WebhookHeaders` schema. The bundler merges
+the fragments into the `webhooks` section while this module exists (see
+[Contract Fragmentation](../api/contract-fragmentation.md#module-owned-webhook-events)).
+
+Three things read the same files, so they cannot drift apart:
+
+- `asyncapi.public.yaml`, the contract a subscriber reads.
+- `GET /webhooks/events`, which lists the events of the modules that are **registered**
+  (`services/catalogue.ts`, built in `onRegistered`).
+- The subscribe check: `POST`, `PUT` and `PATCH` on a subscription answer 422 on an `eventTypes`
+  name the catalogue does not list. `*` stays valid. A typo would otherwise be accepted and never
+  fire; Stripe (`enabled_events`) and Shopify (topics) refuse the same way.
+
+A module reaching for the internal domain-event bus and calling it "public" would publish
+internal coupling as an external promise; declaring the event in a fragment is what keeps that from
+happening. The mapping (which domain event becomes which public name) lives on the owner's
+`publicEvents`; the fragment says what a subscriber receives.
+
+To add a webhook: write the fragment, add the `publicEvents` entry, run `npm run regenerate`.
+`tests/cross-cutting/webhook-event-producers.test.ts` fails if a declared event has no producer.
 
 ### The delivery path
 
@@ -201,7 +214,7 @@ on purpose — a command, not state, gets its own route rather than a flag on th
 **The body is the Standard Webhooks envelope too.** `{ type, timestamp, data }` — `type` is the
 event name (`order.created`, `payment.failed`, …), `timestamp` is when the event occurred (fixed
 across every retry of one delivery, unlike `webhook-timestamp`, which is stamped fresh on each
-attempt), and `data` is the per-event payload `asyncapi.yaml` already documented. Built once, in
+attempt), and `data` is the per-event payload its module's `asyncapi.webhooks.yaml` documents. Built once, in
 `services/attempt.ts`, from the delivery row's own `eventType`/`createdAt`/`payload` — the id
 stays in `webhook-id` alone, never repeated in the body.
 
@@ -217,9 +230,9 @@ infrastructure and not `domain/`: it does I/O.
 Every ingredient it is built from — the domain-event bus, the queue, the cron container, the public
 AsyncAPI bundle — is still there and still used by whatever remains. `orders` and `payments` lose
 nothing: they never knew this module existed, and deleting them along with it needs no separate
-step here either — `orders`'/`payments`' `publicEvents` declarations go with their own manifests,
-and this module's `asyncapi.yaml` fragment (the eleven channels, hand-authored, not generated from
-those modules) is deleted with the rest of the folder.
+step here either — `orders`'/`payments`' `publicEvents` declarations and their
+`asyncapi.webhooks.yaml` fragments go with their own folders, and delete this one and the fragments
+stay unmerged. Nothing is left to prune by hand.
 :::
 
 ## Managing it

@@ -27,6 +27,7 @@ paths:
             operationId: listUsers
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
@@ -79,6 +80,7 @@ paths:
             operationId: createUser
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:
@@ -143,6 +145,7 @@ paths:
             operationId: getUserById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             responses:
@@ -163,6 +166,7 @@ paths:
             operationId: replaceUserById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -197,6 +201,7 @@ paths:
             operationId: updateUserById
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
             requestBody:
@@ -310,6 +315,7 @@ paths:
             x-alias-of: listUsers
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:

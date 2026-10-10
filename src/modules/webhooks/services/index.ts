@@ -14,7 +14,7 @@ export { subscribeToWebhookEvents } from './publish';
 export { sweepDueWebhookDeliveries } from './sweep';
 export { reencryptWebhookSecrets } from './reencrypt';
 export { processDeliveryJob } from './attempt';
-export { listWebhookEventCatalogue } from './catalogue';
+export { listWebhookEventCatalogue, registerWebhookCatalogue } from './catalogue';
 export type { WebhookEventCatalogueEntry } from '@types';
 export type { SubscriptionWithMintedSecrets } from './subscriptions';
 export type { DeliveryListFilters } from './deliveries';
