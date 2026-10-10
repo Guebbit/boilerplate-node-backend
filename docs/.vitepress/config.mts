@@ -217,6 +217,7 @@ export default withMermaid(
                                 link: '/tools/observability-reference'
                             },
                             { text: 'Prometheus', link: '/tools/prometheus' },
+                            { text: 'Gatus', link: '/tools/gatus' },
                             { text: 'OpenTelemetry', link: '/tools/opentelemetry' },
                             { text: 'Tempo', link: '/tools/tempo' },
                             { text: 'Grafana', link: '/tools/grafana' },

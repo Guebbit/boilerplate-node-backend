@@ -122,6 +122,21 @@ Same routing for every client and for dev; only the values differ.
 - **Local stack.** Email defaults to mailpit (`integrations` profile, `http://localhost:8025`) and needs no
   `.env` change.
 
+### The local drill
+
+Proves the whole chain on your machine: a rule fires, Alertmanager routes it, a mail arrives.
+Mailpit lives in the `integrations` profile, so start it with the `observability` one.
+
+1. `npm run compose -- --profile observability --profile integrations up -d`
+2. `npm run compose -- stop app`.
+3. Within about 2 minutes `[FIRING:1] ApiDown` arrives in the mailpit inbox (`http://localhost:8025`):
+   1 minute for the rule's `for`, 30 seconds of grouping.
+4. `npm run compose -- start app`: the resolution mail follows.
+
+The heartbeat drill is the same idea one level up: stop `alertmanager` instead, and within about 3 minutes Gatus
+mails that the heartbeat is missing. See [Gatus](./gatus.md#the-local-drill).
+Repeat the first drill on a staging stack before go-live.
+
 ## Observability endpoints
 
 See [Observability Endpoints](../api/observability.md) for the full list. Key routes:

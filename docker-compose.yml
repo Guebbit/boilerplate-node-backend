@@ -445,8 +445,9 @@ services:
             ALERT_EMAIL_TO: '${ALERT_EMAIL_TO-ops@example.test}'
             ALERT_EMAIL_FROM: '${ALERT_EMAIL_FROM-alertmanager@example.test}'
             ALERT_WEBHOOK_URL: '${ALERT_WEBHOOK_URL:-}'
-            ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL:-}'
-            ALERT_HEARTBEAT_TOKEN: '${ALERT_HEARTBEAT_TOKEN:-}'
+            # Default: the local `gatus` below, so the heartbeat drill works without any .env.
+            ALERT_HEARTBEAT_URL: '${ALERT_HEARTBEAT_URL-http://gatus:8080/api/v1/endpoints/dev_alertmanager-heartbeat/external?success=true}'
+            ALERT_HEARTBEAT_TOKEN: '${ALERT_HEARTBEAT_TOKEN-dev-heartbeat-token}'
             # The sink is mailpit, never the app's real SMTP server: a drill must not send real mail.
             NODE_SMTP_HOST: 'mailpit'
             NODE_SMTP_PORT: '1025'
@@ -456,6 +457,20 @@ services:
             - ./docker/observability/alertmanager.config.template.yaml:/etc/alertmanager/template.yml:ro,Z
         ports:
             - '127.0.0.1:${ALERTMANAGER_PORT:-9093}:9093'
+
+    # Gatus: stands in for the off-host heartbeat service. Alertmanager pings it every minute; when
+    # the pings stop (stop `alertmanager` to drill it) it mails mailpit (`integrations` profile).
+    # In production it runs on another machine: docs/tools/gatus.md.
+    # https://github.com/TwiN/gatus#external-endpoints
+    gatus:
+        logging: *container-logging
+        profiles: ['observability']
+        image: twinproduction/gatus:v5.37.0
+        restart: unless-stopped
+        volumes:
+            - ./docker/observability/gatus.dev.config.yaml:/config/config.yaml:ro,Z
+        ports:
+            - '127.0.0.1:${GATUS_PORT:-3071}:8080'
 
     # Loki: stores log lines shipped by Promtail. Grafana queries it for log exploration.
     loki:

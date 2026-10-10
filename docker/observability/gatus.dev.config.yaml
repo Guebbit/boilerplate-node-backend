@@ -1,0 +1,48 @@
+# Gatus for the LOCAL stack: the off-host heartbeat service of docs/tools/prometheus.md#alert-routing,
+# standing in on this machine so the whole chain can be drilled. In production it runs on ANOTHER
+# machine (docs/tools/gatus.md); this file only differs in where it mails (mailpit) and how fast.
+# The /livez and TLS checks of the production example are left out: they have nothing to watch here.
+#
+# Drill: stop `alertmanager`; within ~3 minutes Gatus mails mailpit (http://localhost:8025) that
+# the heartbeat is missing.
+# https://github.com/TwiN/gatus#external-endpoints
+
+storage:
+    type: memory
+
+alerting:
+    email:
+        from: 'gatus@example.test'
+        host: 'mailpit'
+        port: 1025
+        to: 'ops@example.test'
+        # mailpit speaks plain SMTP; skip the certificate check so a STARTTLS offer never blocks.
+        client:
+            insecure: true
+        default-alert:
+            enabled: true
+            failure-threshold: 1
+            send-on-resolved: true
+
+external-endpoints:
+    # Alertmanager's `Watchdog` pings this every minute (the dev default of ALERT_HEARTBEAT_URL).
+    # No ping within `interval` marks it unhealthy, which sends the email above.
+    - name: alertmanager-heartbeat
+      group: dev
+      token: 'dev-heartbeat-token'
+      heartbeat:
+          interval: 3m
+      alerts:
+          - type: email
+
+# Gatus refuses to start with no plain endpoint, and this one is a useful second signal in the drill:
+# the mail for it arrives straight away, the heartbeat mail a couple of minutes later.
+endpoints:
+    - name: alertmanager-healthy
+      group: dev
+      url: 'http://alertmanager:9093/-/healthy'
+      interval: 30s
+      conditions:
+          - '[STATUS] == 200'
+      alerts:
+          - type: email

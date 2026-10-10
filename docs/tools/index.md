@@ -70,6 +70,7 @@ flowchart LR
 | Observability | **[Observability Reference](./observability-reference.md)** | Full picture of logs, metrics, traces, and dashboards as one system — start here.                                               |
 | Observability | **[Winston & Audit Logs](./winston.md)**                    | Structured request/app logs to Loki, and the audit trail — logged for compliance, stored in Mongo for the admin endpoint.       |
 | Observability | **[Prometheus](./prometheus.md)**                           | Numeric time-series: request rates, latency histograms, business counters, alert rules.                                         |
+| Observability | **[Gatus](./gatus.md)**                                     | The off-host heartbeat: raises the alarm when Alertmanager's `Watchdog` pings stop, and checks `/livez` and TLS from outside.   |
 | Observability | **[OpenTelemetry](./opentelemetry.md)**                     | Distributed tracing: auto-instruments HTTP, Mongoose, Redis; exports spans to Tempo; injects `trace_id` into every log line.    |
 | Observability | **[Tempo](./tempo.md)**                                     | Stores and queries distributed traces; correlates with Loki logs via shared `trace_id`.                                         |
 | Observability | **[Loki](./loki.md)**                                       | Stores and queries log streams; links forward to Tempo traces via injected `trace_id`.                                          |

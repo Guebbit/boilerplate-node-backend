@@ -24,7 +24,7 @@ route:
         - receiver: '@RECEIVER_WATCHDOG@'
           matchers: ['alertname="Watchdog"']
           group_wait: 0s
-          group_interval: 1m
+          group_interval: 30s
           repeat_interval: 1m
         # Email is the thing that is broken here, so the webhook only.
         - receiver: '@RECEIVER_NOTIFY_FAILING@'

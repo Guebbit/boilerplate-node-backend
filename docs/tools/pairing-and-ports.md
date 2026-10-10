@@ -63,6 +63,7 @@ The paired frontend owns **`8080–8099`**.
 | API                          | `3000`            | `NODE_PORT`                                       |
 | Grafana                      | `3001`            | `GRAFANA_PORT`                                    |
 | webhook-tester (https proxy) | `3070`            | `WEBHOOK_TESTER_PORT`                             |
+| Gatus (heartbeat status UI)  | `3071`            | `GATUS_PORT`                                      |
 | Mailpit (SMTP / inbox UI)    | `1025` / `8025`   | `MAILPIT_SMTP_PORT` / `MAILPIT_UI_PORT`           |
 | Umami dashboard / tracker    | `3080`            | `UMAMI_PORT`                                      |
 | Docs (VitePress + Nginx)     | `3090`            | `DOCS_PORT`                                       |
