@@ -97,6 +97,8 @@
             "detail-partial": "That is part of what you paid; the rest of the payment stays with the order. How long it takes to show up depends on your bank or card issuer."
         },
         "insufficient-stock": "Some items on this order are no longer available in the quantity requested — see `details.lines`.",
+        "line-limit-lines": "This order has more than {{limit}} lines.",
+        "line-limit-quantity": "A line on this order asks for more than {{limit}} units.",
         "restored": "Order restored.",
         "not-deleted": "This order is not deleted."
     }

@@ -59,6 +59,8 @@ export const ordersConfig = defineConfig({
         NODE_BANK_TRANSFER_BIC: text(),
         NODE_BANK_TRANSFER_HOLD_HOURS: int({ default: 168, min: 1 }),
         NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({ default: 2, min: 1 }),
+        NODE_ADMIN_ORDER_MAX_LINES: int({ default: 100, min: 1 }),
+        NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: int({ default: 99_999, min: 1 }),
         NODE_ORDER_EFFECT_RETRY_MINUTES: int({ default: 5, min: 0 }),
         NODE_WITHDRAWAL_PERIOD_DAYS: int({ default: 30, min: 21 }),
         NODE_ORDER_PII_RETENTION_DAYS: int({ default: 3650, min: 1 }),
@@ -258,6 +260,28 @@ export const bankTransferHoldHours = (): number => ordersConfig().NODE_BANK_TRAN
  */
 export const maxOpenUnpaidOrdersPerAccount = (): number =>
     ordersConfig().NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT;
+
+/** The contract's hard ceiling on lines per admin-created order (`CreateOrderRequest.items.maxItems`). */
+export const ADMIN_ORDER_LINES_CEILING = 1000;
+
+/** The contract's hard ceiling on one line's quantity (`OrderLineInput.quantity.maximum`). */
+export const ADMIN_ORDER_LINE_QUANTITY_CEILING = 999_999;
+
+/**
+ * How many lines an admin-created order may carry: `NODE_ADMIN_ORDER_MAX_LINES`, never above the
+ * contract's ceiling. A value over the ceiling has no effect (the schema refuses first).
+ * @returns the line cap
+ */
+export const maxAdminOrderLines = (): number =>
+    Math.min(ordersConfig().NODE_ADMIN_ORDER_MAX_LINES, ADMIN_ORDER_LINES_CEILING);
+
+/**
+ * The largest quantity one line of an admin-created order may ask for:
+ * `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`, never above the contract's ceiling.
+ * @returns the quantity cap
+ */
+export const maxAdminOrderLineQuantity = (): number =>
+    Math.min(ordersConfig().NODE_ADMIN_ORDER_MAX_LINE_QUANTITY, ADMIN_ORDER_LINE_QUANTITY_CEILING);
 
 /**
  * Whether this deployment offers `bank_transfer` at all — both the beneficiary and the IBAN must

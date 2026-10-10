@@ -6,6 +6,7 @@ info:
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`inventory.any.read`).' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
+    ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
 
@@ -84,6 +85,11 @@ paths:
                 `userId`. The rank rule applies to that account: an operator raises orders for
                 customers, never for an equal or a superior (`OUTRANKED`). Raising one for oneself
                 is allowed, but the steps that move its money then refuse the caller.
+
+                A body is bounded twice. The schema caps it at 1000 lines of at most 999999 units
+                (what the contract promises); a deployment may set a lower limit in
+                `NODE_ADMIN_ORDER_MAX_LINES` and `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`, and a body over
+                it answers `422` with `ORDER_LINE_LIMIT_EXCEEDED`.
             operationId: createOrder
             security:
                 - bearerAuth: []
@@ -554,9 +560,26 @@ components:
                 items:
                     type: array
                     minItems: 1
+                    maxItems: 1000
                     items:
-                        $ref: '../cart/openapi.yaml#/components/schemas/CartItem'
+                        $ref: '#/components/schemas/OrderLineInput'
             description: Create a new order.
+
+        # One line of an admin-created order. Not the cart's `CartItem`: the cart caps a quantity
+        # at what a shopper buys, an operator may book a bulk order. The stock guard is the real
+        # bound; this ceiling only keeps the schema finite (OWASP API4:2023, unrestricted resource
+        # consumption). A deployment lowers it with `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`.
+        OrderLineInput:
+            type: object
+            additionalProperties: false
+            required: [productId, quantity]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                quantity:
+                    type: integer
+                    minimum: 1
+                    maximum: 999999
 
         # `status` is deliberately not a field here — see the route's own description. Writing it
         # through this body would let an admin skip `processing` by writing `paid → shipped`
