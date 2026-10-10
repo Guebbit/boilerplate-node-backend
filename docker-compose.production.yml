@@ -789,6 +789,9 @@ services:
         volumes:
             - ./docker/observability/alertmanager-render.sh:/etc/alertmanager/render.sh:ro
             - ./docker/observability/alertmanager.config.template.yaml:/etc/alertmanager/template.yml:ro
+            # Silences and the notification log: without it a restart forgets every silence and
+            # re-sends what it already sent.
+            - alertmanager-data:/alertmanager
 
     # Loki: stores the container logs Alloy ships. Its config is the local stack's.
     loki:
@@ -866,6 +869,7 @@ volumes:
     rabbitmq-data:
     # The monitoring profile's stores.
     prometheus-data:
+    alertmanager-data:
     loki-data:
     alloy-data:
     uploads:
