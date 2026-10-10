@@ -37,15 +37,22 @@ import type { ApiKeyDocument } from '../model';
 /**
  * Is `key` something `caller` may hand out on a credential?
  *
- * Three conditions, all required: the key must be DECLARED (an invented string grants nothing
+ * Four conditions, all required: the key must be DECLARED (an invented string grants nothing
  * while looking like it does — `assertDeclared`'s own reasoning), TENANT-scoped (a credential is
- * tenant-scoped only, see `docs/tools/security.md#machine-to-machine-credentials`), and actually
- * HELD by the minter right now. `heldKeys`, the literal keys the ability was built from: `holdsKey`
+ * tenant-scoped only, see `docs/tools/security.md#machine-to-machine-credentials`), free of a
+ * STEP-UP tier (a credential can never re-authenticate, so it would hold a permission that is
+ * always refused), and actually HELD by the minter right now.
+ *
+ * `heldKeys` is the literal keys the ability was built from: `holdsKey`
  * collapses `orders.self.read` into `orders.any.read` (both are `read` on `Order`), which would let a
  * customer mint a key for the wide read.
  */
-const isMintable = (key: string, caller: Caller): boolean =>
-    findKey(key)?.scope === 'tenant' && heldKeys(caller).has(key);
+const isMintable = (key: string, caller: Caller): boolean => {
+    const declared = findKey(key);
+    return (
+        declared?.scope === 'tenant' && declared.stepUp === undefined && heldKeys(caller).has(key)
+    );
+};
 
 /**
  * The latest moment a credential may expire at: one year from `now`. A calendar year, not a count

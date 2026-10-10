@@ -154,6 +154,12 @@ kills every key they ever minted, without the credential document itself ever be
 same defensive shape as `kernel/permissions.ts`'s own caller flooring (never trust a cached
 permission list; re-derive from the authoritative source on every check).
 
+**A key can never hold a step-up permission.** `isMintable` refuses any permission that carries a
+`stepUp` tier (`users.any.delete`, for one) with a 422 at mint time. A credential has no
+`authTime`, so `requirePermission` would answer "re-authenticate" forever: the key would hold a
+permission that is dead on arrival. GitHub's sudo mode likewise keeps sensitive actions to a fresh
+human login.
+
 **Tenant-scoped only.** A credential can never satisfy a `platform.` key — `requirePermission`
 refuses one outright, distinctly from a missing permission, since this repo's deployment model is a
 silo (one organisation per stack) and every real use case is shop-level.
