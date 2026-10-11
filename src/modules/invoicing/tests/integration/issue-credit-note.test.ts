@@ -1,7 +1,7 @@
 /**
  * @module
  * Credit-note issuance, end to end: a `succeeded` payment moving to `refunded` is the ONLY thing
- * that ever freezes a credit note — reached here through `payments`' real `performRefund` and the
+ * that ever freezes a credit note — reached here through `payments`' real `refundForOrder` and the
  * real `module.ts` subscription to `PAYMENT_REFUNDED`, never by calling `issueCreditNote` directly.
  */
 
@@ -14,7 +14,7 @@ import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
-import { createIntent, confirmPayment, performRefund, paymentService } from '@modules/payments';
+import { createIntent, confirmPayment, refundForOrder, paymentService } from '@modules/payments';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -97,7 +97,7 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
             invoicingRepository.findInvoiceByOrderId(String(order._id))
         );
 
-        await performRefund(String(order._id));
+        await refundForOrder(String(order._id));
         const [creditNote] = await waitUntil(() =>
             invoicingRepository
                 .findCreditNotesByOrderId(String(order._id))
@@ -223,9 +223,9 @@ describe('issuing a credit note off PAYMENT_REFUNDED', () => {
         const product = await createProduct({ price: 25 });
         const order = await createOrder(user, [toOrderItem(product, 1)]);
 
-        // No payment was ever taken on this order — `performRefund` finds nothing `succeeded`
+        // No payment was ever taken on this order — `refundForOrder` finds nothing `succeeded`
         // and never fires `PAYMENT_REFUNDED`, so there is nothing for a credit note to correct.
-        await performRefund(String(order._id));
+        await refundForOrder(String(order._id));
         await new Promise((resolve) => setTimeout(resolve, 50));
 
         await expect(
