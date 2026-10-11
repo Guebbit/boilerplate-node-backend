@@ -100,6 +100,18 @@ describe('scrubReturnText', () => {
         expect(await stored(id)).not.toHaveProperty('declineReason');
     });
 
+    it('wipes a return holding only a note', async () => {
+        const { id } = await returnAged(WINDOW_DAYS + 1);
+        await returnModel.updateOne(
+            { _id: id },
+            { $unset: { declineReason: 1 } },
+            { timestamps: false }
+        );
+
+        expect(await scrubReturnText()).toBe(1);
+        expect(await stored(id)).not.toHaveProperty('note');
+    });
+
     it('changes nothing on a rerun', async () => {
         await returnAged(WINDOW_DAYS + 1);
         await scrubReturnText();

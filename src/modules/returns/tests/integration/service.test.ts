@@ -34,6 +34,7 @@ import {
     callerContextAs
 } from '@tests/callers';
 import { asReject } from '@tests/response';
+import { asStub } from '@tests/stub';
 import {
     approveReturn,
     createReturn,
@@ -45,6 +46,9 @@ import {
 import { collectPersonalData } from '../../services/personal-data';
 import { RETURN_CLOSED, RETURN_REQUESTED } from '../../events';
 import { returnRepository } from '../../repository';
+import { returnsAuditActions } from '../../audit';
+import * as auditPort from '@infrastructure/observability/audit';
+import { orderService } from '@modules/orders';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
     __esModule: true,
@@ -52,14 +56,41 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
 
+/* Replaced, not spied on — `recordAudit` closes over its own module's `emitAuditEvent`. */
+jest.mock('@infrastructure/observability/audit', () => {
+    const actual = jest.requireActual<typeof import('@infrastructure/observability/audit')>(
+        '@infrastructure/observability/audit'
+    );
+    const emitAuditEvent = jest.fn();
+    return {
+        __esModule: true,
+        ...actual,
+        emitAuditEvent,
+        recordAudit: (
+            context: Parameters<typeof actual.recordAudit>[0],
+            fields: Parameters<typeof actual.recordAudit>[1]
+        ) => {
+            if (!context) return;
+            emitAuditEvent(actual.buildAuditEvent(context, fields));
+        }
+    };
+});
+const mockEmitAuditEvent = auditPort.emitAuditEvent as jest.MockedFunction<
+    typeof auditPort.emitAuditEvent
+>;
+
 setupTestDb();
 
 beforeEach(() => {
     registerCheckoutModules([paymentsModule, returnsModule]);
     mockEnqueueEmail.mockClear();
+    mockEmitAuditEvent.mockClear();
 });
 
-afterEach(() => resetDomainEvents());
+afterEach(() => {
+    resetDomainEvents();
+    jest.restoreAllMocks();
+});
 
 /** A distinct address per customer — the users collection keeps one row per email. */
 let customers = 0;
@@ -714,5 +745,260 @@ describe('the account export', () => {
 
         expect(declinedSection).toMatchObject({ declineReason: 'Worn beyond a trial' });
         expect(openSection).not.toHaveProperty('declineReason');
+    });
+});
+
+/** The `data` payload of the nth mail queued, or a loud failure. */
+const mailData = (call = 0): { address?: string; body: string } => {
+    const data: unknown = mockEnqueueEmail.mock.calls[call]?.[2];
+    return asStub<{ address?: string; body: string }>(data);
+};
+
+/** The subject of the nth mail queued. */
+const mailSubject = (call = 0): string | undefined =>
+    mockEnqueueEmail.mock.calls[call]?.[0].subject;
+
+/** The audit events recorded under one action. */
+const auditedAs = (action: string) =>
+    mockEmitAuditEvent.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event.action === action);
+
+describe('what a refusal says', () => {
+    it('names the order as missing when a customer opens a return on one that is not theirs', async () => {
+        const { orderId } = await deliveredOrder();
+        const stranger = await createUser({ email: 'stranger-refusal@example.com' });
+
+        const outcome = await createReturn(
+            { orderId, reason: 'defective' },
+            buyer(stranger),
+            testCallerContext
+        );
+
+        expect(outcome.kind === 'refused' && outcome.reject.errors[0]).toMatchObject({
+            message: 'The order was not found'
+        });
+    });
+
+    it('says which line check failed, in words', async () => {
+        const { user, shirt, orderId } = await deliveredOrder();
+        const other = await createProduct();
+        const refuse = (productId: string, quantity: number) =>
+            createReturn(
+                { orderId, reason: 'defective', lines: [{ productId, quantity }] },
+                buyer(user),
+                testCallerContext
+            ).then((outcome) =>
+                outcome.kind === 'refused' ? outcome.reject.errors[0] : undefined
+            );
+
+        expect(await refuse(String(other._id), 1)).toMatchObject({
+            code: 'RETURN_LINES_INVALID',
+            message: 'One of the lines names a product that is not on this order.'
+        });
+        expect(await refuse(String(shirt._id), 3)).toMatchObject({
+            code: 'RETURN_LINES_INVALID',
+            message: 'One of the lines asks to return more than is left of it.'
+        });
+    });
+
+    it('says nothing is left to return once everything has been taken back', async () => {
+        const { user, orderId } = await deliveredOrder();
+        await createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext);
+
+        const again = await createReturn(
+            { orderId, reason: 'defective' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(again.kind === 'refused' && again.reject.errors[0]).toMatchObject({
+            code: 'RETURN_LINES_INVALID',
+            message: 'Nothing on this order is left to return.'
+        });
+    });
+
+    it('says the goods are excluded, whether the lines are named or a whole order is withdrawn from', async () => {
+        const named = await orderWithExcluded();
+        const whole = await orderWithExcluded();
+        await forceOrderStatus(whole.orderId, OrderStatus.paid);
+        const excludedMessage = 'Some of these goods are excluded from the right of withdrawal.';
+
+        const byLine = await createReturn(
+            {
+                orderId: named.orderId,
+                reason: 'withdrawal',
+                lines: [{ productId: String(named.engraved._id), quantity: 1 }]
+            },
+            buyer(named.user),
+            testCallerContext
+        );
+        const beforeDispatch = await createReturn(
+            { orderId: whole.orderId, reason: 'withdrawal' },
+            buyer(whole.user),
+            testCallerContext
+        );
+
+        expect(byLine.kind === 'refused' && byLine.reject.errors[0].message).toBe(excludedMessage);
+        expect(beforeDispatch.kind === 'refused' && beforeDispatch.reject.errors[0].message).toBe(
+            excludedMessage
+        );
+    });
+});
+
+describe('what a new return leaves behind', () => {
+    it('audits the request with its order and reason, for a return and for a withdrawal alike', async () => {
+        const { user, orderId } = await deliveredOrder();
+        const early = await orderIn(OrderStatus.paid);
+
+        const shipped = await createReturn(
+            { orderId, reason: 'defective' },
+            buyer(user),
+            testCallerContext
+        );
+        const withdrawn = await createReturn(
+            { orderId: early.orderId, reason: 'withdrawal' },
+            buyer(early.user),
+            testCallerContext
+        );
+
+        if (shipped.kind !== 'created' || withdrawn.kind !== 'created')
+            throw new Error('expected two returns');
+        expect(auditedAs(returnsAuditActions.RETURN_REQUESTED)).toEqual([
+            expect.objectContaining({
+                outcome: 'success',
+                targetType: 'return',
+                targetId: String(shipped.created._id),
+                metadata: { orderId, reason: 'defective' }
+            }),
+            expect.objectContaining({
+                outcome: 'success',
+                targetType: 'return',
+                targetId: String(withdrawn.created._id),
+                metadata: { orderId: early.orderId, reason: 'withdrawal' }
+            })
+        ]);
+    });
+
+    it('mails a request without an address to send to, and a shipped withdrawal with one', async () => {
+        const requested = await deliveredOrder();
+        const withdrawing = await orderIn(OrderStatus.shipped);
+        await setWithdrawUntil(withdrawing.orderId, new Date(Date.now() + 86_400_000));
+
+        await createReturn(
+            { orderId: requested.orderId, reason: 'defective' },
+            buyer(requested.user),
+            testCallerContext
+        );
+        await createReturn(
+            { orderId: withdrawing.orderId, reason: 'withdrawal' },
+            buyer(withdrawing.user),
+            testCallerContext
+        );
+
+        expect(mailSubject(0)).toBe('We received your return request');
+        expect(mailData(0).address).toBeUndefined();
+        expect(mailSubject(1)).toBe('We received your withdrawal');
+        expect(mailData(1).address).toEqual(expect.stringContaining('Send the goods to:'));
+    });
+
+    it('answers a withdrawal before dispatch with the cancel refusal untouched when the order cannot be cancelled', async () => {
+        const { user, orderId } = await orderIn(OrderStatus.paid);
+        jest.spyOn(orderService, 'cancelById').mockResolvedValue(
+            asStub<Awaited<ReturnType<typeof orderService.cancelById>>>({
+                success: false,
+                status: 409,
+                message: 'nope',
+                errors: [{ message: 'cancel refused' }]
+            })
+        );
+
+        const outcome = await createReturn(
+            { orderId, reason: 'withdrawal' },
+            buyer(user),
+            testCallerContext
+        );
+
+        expect(outcome.kind === 'refused' && outcome.reject.status).toBe(409);
+        expect(await returnRepository.findByOrderId(orderId)).toHaveLength(0);
+    });
+});
+
+describe('what a decision leaves behind', () => {
+    it('audits an approval and a decline under their own actions, naming the order', async () => {
+        const approved = await requestedReturn();
+        const declined = await requestedReturn();
+
+        await approveReturn(approved.returnId, callerContextAs('admin'));
+        await declineReturn(declined.returnId, 'Worn', callerContextAs('admin'));
+
+        expect(auditedAs(returnsAuditActions.ADMIN_RETURN_APPROVED)).toEqual([
+            expect.objectContaining({
+                outcome: 'success',
+                targetType: 'return',
+                targetId: approved.returnId,
+                metadata: { orderId: approved.orderId }
+            })
+        ]);
+        expect(auditedAs(returnsAuditActions.ADMIN_RETURN_DECLINED)).toEqual([
+            expect.objectContaining({
+                outcome: 'success',
+                targetType: 'return',
+                targetId: declined.returnId,
+                metadata: { orderId: declined.orderId }
+            })
+        ]);
+    });
+
+    it('tells the customer where to send the goods on an approval, and not on a decline', async () => {
+        const approved = await requestedReturn();
+        const declined = await requestedReturn();
+        mockEnqueueEmail.mockClear();
+
+        const approval = await approveReturn(approved.returnId, callerContextAs('admin'));
+        const decline = await declineReturn(declined.returnId, 'Worn', callerContextAs('admin'));
+
+        expect(mailSubject(0)).toBe('Your return was approved');
+        expect(mailData(0).address).toEqual(expect.stringContaining('Send the goods to:'));
+        expect(mailSubject(1)).toBe('Your return was declined');
+        expect(mailData(1).address).toBeUndefined();
+        expect(approval.success && approval.message).toBe('Return approved.');
+        expect(decline.success && decline.message).toBe('Return declined.');
+    });
+
+    it('still decides when the order has vanished — the decision is never lost for want of a mail', async () => {
+        const { returnId, orderId } = await requestedReturn();
+        jest.spyOn(orderService, 'getById').mockResolvedValue(undefined);
+        mockEnqueueEmail.mockClear();
+
+        const result = await approveReturn(returnId, callerContextAs('admin'));
+
+        expect(result.success && result.data.status).toBe('approved');
+        expect(orderId).toBeTruthy();
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+});
+
+describe('the account export, field by field', () => {
+    it('carries the customer’s note and the moment the return was opened', async () => {
+        const fixture = await deliveredOrder();
+        await createReturn(
+            { orderId: fixture.orderId, reason: 'defective', note: 'The handle snapped' },
+            buyer(fixture.user),
+            testCallerContext
+        );
+
+        const [section] = await collectPersonalData(fixture.user.id);
+
+        expect(section.note).toBe('The handle snapped');
+        expect(section.createdAt).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/u));
+    });
+
+    it('omits the note when the customer wrote none', async () => {
+        const fixture = await requestedReturn();
+
+        const [section] = await collectPersonalData(fixture.user.id);
+
+        expect(section).not.toHaveProperty('note');
     });
 });

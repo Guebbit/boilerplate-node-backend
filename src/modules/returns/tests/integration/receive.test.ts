@@ -21,6 +21,7 @@ import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
+import { orderService } from '@modules/orders';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
 import paymentsModule from '@modules/payments/module';
 import invoicingModule from '@modules/invoicing/module';
@@ -458,5 +459,79 @@ describe('the credit note a received return issues', () => {
 
         expect(refund).not.toHaveProperty('lines');
         expect(refund).not.toHaveProperty('shipping');
+    });
+});
+
+describe('what receiving answers and announces', () => {
+    it('says the goods are back on sale and announces the receipt with its return and order', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture);
+        const heard: unknown[] = [];
+        onDomainEvent(RETURN_RECEIVED, (payload) => heard.push(payload));
+
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+
+        expect(result.success && result.message).toBe(
+            'Return received — the goods are back on sale.'
+        );
+        expect(heard).toEqual([{ returnId: id, orderId: fixture.orderId }]);
+    });
+
+    it('refunds the delivery only when every unit of every line comes back', async () => {
+        // One shirt of the two stays with the customer: not the whole order, so no delivery refund.
+        const fixture = await paidAndDelivered(15, 'express');
+        const id = await approvedReturn(fixture, 'withdrawal', [
+            { productId: String(fixture.shirt._id), quantity: 1 },
+            { productId: String(fixture.mug._id), quantity: 1 }
+        ]);
+
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+
+        // One shirt at 30 and the mug at 10; the 5.00 of delivery stays with the shop.
+        expect(result.success && result.data.refundAmount).toBe(40);
+    });
+
+    it('closes a return worth nothing without asking the provider for a refund', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture);
+        const refund = jest.spyOn(paymentService, 'refundForReturn');
+
+        const result = await receiveReturn(id, { handlingDeduction: 70 }, callerContextAs('admin'));
+
+        expect(result.success && result.data).toMatchObject({ status: 'closed', refundAmount: 0 });
+        expect(refund).not.toHaveBeenCalled();
+    });
+
+    it('names a missing order as missing', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture);
+        jest.spyOn(orderService, 'getById').mockResolvedValue(undefined);
+
+        const result = await receiveReturn(id, {}, callerContextAs('admin'));
+
+        expect(asReject(result).status).toBe(404);
+        expect(asReject(result).errors[0]).toMatchObject({ message: 'The order was not found' });
+    });
+
+    it('answers a return not awaiting its goods before it looks at who is receiving', async () => {
+        const fixture = await paidAndDelivered();
+        const outcome = await createReturn(
+            { orderId: fixture.orderId, reason: 'defective' },
+            asCustomer(fixture.user.id),
+            testCallerContext
+        );
+        if (outcome.kind !== 'created') throw new Error('expected a return');
+        await assignRole(fixture.user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'warehouse');
+
+        const result = await receiveReturn(
+            String(outcome.created._id),
+            {},
+            callerContextAs('warehouse', fixture.user.id)
+        );
+
+        expect([asReject(result).status, asReject(result).errors[0].message]).toEqual([
+            409,
+            'This return is not awaiting its goods.'
+        ]);
     });
 });
