@@ -100,6 +100,7 @@
         "compose:restart": "npm run compose -- down && npm run compose -- up -d",
         "compose:rebuild": "npm run compose -- down -v && npm run compose -- build --no-cache && npm run compose -- up -d",
         "compose:kill": "npm run compose -- kill",
+        "backup:drill": "bash docker/backup/drill.sh",
         "docs:dev": "vitepress dev docs",
         "docs:build": "vitepress build docs",
         "docs:preview": "vitepress preview docs",

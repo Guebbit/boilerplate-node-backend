@@ -194,14 +194,15 @@ hostname-redirecting script appears.
 Five verbs, either engine. Use them instead of a bare `compose up`: they pass the runtime's
 Promtail override with `-f`, which is what gives Promtail a host log path to tail.
 
-| Script            | Job                                                                                   | Read more                                 |
-| ----------------- | ------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `compose:up`      | start the stack detached                                                              | [Docker & Podman](./docker-and-podman.md) |
-| `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                    | [Docker & Podman](./docker-and-podman.md) |
-| `compose:restart` | restart the compose stack                                                             | [Docker & Podman](./docker-and-podman.md) |
-| `compose:rebuild` | rebuild images and restart the stack                                                  | [Docker & Podman](./docker-and-podman.md) |
-| `compose:kill`    | force-stop this project's compose containers                                          | [Docker & Podman](./docker-and-podman.md) |
-| `compose`         | the bare compose invocation the three share; call it directly for one-off subcommands | [Docker & Podman](./docker-and-podman.md) |
+| Script            | Job                                                                                                                                            | Read more                                 |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `compose:up`      | start the stack detached                                                                                                                       | [Docker & Podman](./docker-and-podman.md) |
+| `compose:up:full` | start it with the `observability`, `analytics` and `docs` profiles                                                                             | [Docker & Podman](./docker-and-podman.md) |
+| `compose:restart` | restart the compose stack                                                                                                                      | [Docker & Podman](./docker-and-podman.md) |
+| `compose:rebuild` | rebuild images and restart the stack                                                                                                           | [Docker & Podman](./docker-and-podman.md) |
+| `compose:kill`    | force-stop this project's compose containers                                                                                                   | [Docker & Podman](./docker-and-podman.md) |
+| `backup:drill`    | build the backup image, back up a real replica-set Mongo, restore it, and prove the second machine refuses a delete (needs Docker; CI runs it) | [Backups](./backups.md#the-restore-drill) |
+| `compose`         | the bare compose invocation the three share; call it directly for one-off subcommands                                                          | [Docker & Podman](./docker-and-podman.md) |
 
 ```bash
 npm run compose -- logs -f app                   # any compose subcommand

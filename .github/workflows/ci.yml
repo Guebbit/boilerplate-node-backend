@@ -24,6 +24,7 @@ name: CI
 #                     `docker/Dockerfile` actually ships, with no services and no network
 #                     `boot` — the PRODUCTION image starts against a real Mongo, answers `/livez`, and
 #                     its runtime user cannot write under `src/`
+#                     `backup-drill` — the backup image backs up a real Mongo and the restore drill restores it
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
 #   - adoption        demo-strip-measure — report-only, like audit
@@ -822,6 +823,28 @@ jobs:
 
             - name: Boot it and check the runtime user
               run: docker/boot-check.sh boot-check:${{ github.sha }}
+
+    backup-drill:
+        # Proves BACKUP and RESTORE end to end, not just their config: a replica-set Mongo started
+        # as docker-compose.production.yml starts it, the backup image dumping it through the
+        # `backup` role into a local repository, deduplication, the restore drill into a throwaway
+        # Mongo, the Gatus heartbeat going green and red, a damaged repository failing the drill,
+        # and the second machine's append-only server (a delete is refused, its upkeep prunes).
+        # The same script runs on a laptop: `npm run backup:drill`. Plain `docker run` on one
+        # private network, no published port.
+        # Not in the `ci` job's `needs:` until its first real run on GitHub has passed.
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Build the images, back up, restore, compare
+              run: bash docker/backup/drill.sh
 
     audit:
         # Reports known moderate-and-above vulnerabilities in production dependencies.

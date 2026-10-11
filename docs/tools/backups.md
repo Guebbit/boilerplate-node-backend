@@ -5,8 +5,8 @@ and copies the uploaded files into an encrypted [restic](./restic.md) repository
 It is **off until you ask for it** (the `backup` profile) and **dormant until you name a
 repository** (`BACKUP_REPOSITORY`).
 
-A backup you have never restored is a hope, not a backup: restore it on a calendar, into a scratch
-database, not on good intentions.
+A backup you have never restored is a hope, not a backup. [The restore drill](#the-restore-drill)
+restores the latest one, for real, with one command; CI runs the same thing on every change.
 
 ## The design
 
@@ -188,6 +188,117 @@ different 5% slice of the stored data, so a corrupted pack is found weeks before
 restore. The same weekly job first runs `restic prune` when `BACKUP_PRUNE=true`, to reclaim what the
 hourly `forget` released. A failure turns the heartbeat red; the next good backup turns it green.
 
+## The restore drill
+
+One command, on the real deployment, against the real repository:
+
+```bash
+docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
+    --profile restore-drill run --rm restore-drill
+```
+
+It starts a **throwaway** Mongo (`restore-drill-db`: a plain instance on a tmpfs, no auth, no published
+port, gone afterwards) and never touches the live database. Then, in order:
+
+1. Restores the latest `db` snapshot into it (`mongorestore --oplogReplay`).
+2. Counts every collection in the restored copy and compares it with the counts saved at backup time.
+   A live dump window moves a count a little (the oplog replay lands later writes), so a collection may
+   drift by up to `max(5, 1%)`; a missing or emptied collection always fails.
+3. Restores the latest `files` snapshot and verifies every byte (`restic restore --verify`).
+4. `restic check --read-data-subset=10%` on the repository.
+5. Prints how long it took: **that is how long the shop is down on a bad day**, plus your own reaction time.
+
+```
+ok       `api.orders` 4000
+ok       `api.products` 4000
+ok       `api.users` 4100
+5 collections match, 0 do not
+... [backup] DRILL PASSED: restore and verification took 6s.
+```
+
+Exit code 0 only when every step passed. Knobs: `DRILL_CHECK_SUBSET` (default `10%`) and
+`DRILL_RESTORE_FILES` (default `true`; the files land in a 1 GB tmpfs, raise it for large uploads).
+Point `BACKUP_REPOSITORY` at the second machine's `rest:` URL to drill the off-site copy.
+
+**Run it quarterly**, and after any change to the backup settings. With more than a handful of clients,
+rotate which one gets drilled rather than testing all of them every time.
+On the real deployment, the first drill is the production readiness check for backups: this command, once, before launch.
+
+### CI proves it on every change
+
+The `backup-drill` job (`npm run backup:drill`, which anyone with Docker can run, `docker/backup/drill.sh`)
+builds the backup image and then, on one private network with no published port:
+
+| Step                                                               | What it proves                                                                                                         |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| a replica-set Mongo, started as the compose file starts `database` | `docker/mongo-init.js` really creates the `backup` account, and the role can run `mongodump --oplog`                   |
+| back up, change 2.5%, back up, back up again                       | the second run after a small change stores a chunk or two; the third, with nothing changed, stores nothing             |
+| the restore drill                                                  | dump, counts, files and `restic check` all pass                                                                        |
+| a Gatus container as the heartbeat                                 | a good run pings green, a failed run (wrong database user) pings red                                                   |
+| an every-minute schedule, and an empty repository                  | the scheduler really runs the job, and a dormant container idles healthy                                               |
+| a repository with a data file deleted                              | the drill **fails**: it can say no                                                                                     |
+| the second machine's append-only server                            | a backup is accepted, `forget` is **refused** (403), the upkeep prunes on its own disk, and the drill restores from it |
+
+Backup **and** restore are tested end to end, not just the config.
+
+## Restoring
+
+The drill proves the machinery. For a real incident:
+
+| Situation                                           | Restore command                                                                        | Why                                                                                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Give one client its own data back                   | `mongorestore --archive --ssl --sslCAFile ... --nsInclude="<client>.*" --drop`         | `--nsInclude` and `--oplogReplay` cannot be combined; this restores the client's collections as of the dump's end, not perfectly cross-collection consistent |
+| Disaster recovery: the host, or the volume, is gone | `mongorestore --archive --ssl --sslCAFile ... --oplogReplay` into a **fresh** instance | Full, oplog-consistent. Restoring `admin` and `config` over a LIVE replica set's own identity is not what you want, hence a fresh target                     |
+
+Both read the dump from restic: `restic dump <snapshot> mongodump.archive | mongorestore --archive ...`.
+The Database Tools spell TLS `--ssl --sslCAFile`, and the bundled `database` requires it.
+
+1. **Stop the writers.** `docker compose stop app cron`.
+2. **List the erasures since the snapshot, before restoring.** See below: this list lives in the
+   database you are about to replace.
+3. **Restore the database**, then the files (`restic restore <files snapshot> --target <dir>`, then copy
+   into the `uploads` volume and `storage/mail-spool`).
+4. **Start the stack** and look: log in, open an order, fetch an image.
+5. **Re-apply the erasures** from the list of step 2.
+
+### Erasures after a restore
+
+A backup kept for six months holds accounts erased since. GDPR's accepted standard (the ICO's and CNIL's
+guidance) lets a backup keep them until it ages out, **if** they stay "beyond use" and **every erasure is
+re-applied after a restore**. This repo's promise is exactly that: [Data retention](../theory/data-retention.md#backups-and-erasure).
+
+The erasure events (`admin.user.erased`, `system.user.erased`, and `auth.account_delete.completed` for a
+self-deletion) are rows in `auditlogs`, **inside the database being restored**: the restored copy only
+knows erasures from before the snapshot. So take the list **first**:
+
+- **The database still answers** (a bad migration, a corruption): query it by date, from the snapshot to now.
+
+    ```js
+    db.auditlogs.find(
+        {
+            action: {
+                $in: ['admin.user.erased', 'system.user.erased', 'auth.account_delete.completed']
+            },
+            outcome: 'success',
+            timestamp: { $gt: ISODate('<the snapshot time>') }
+        },
+        { action: 1, targetId: 1, actorUserId: 1, timestamp: 1 }
+    );
+    ```
+
+    The erased user is `targetId` for the admin and system events, `actorUserId` for a self-deletion.
+
+- **The database is gone** (the whole host): the same events were also logged as Winston lines in Loki
+  (`{service="api"} |= "user.erased"`), if the logs survived off the host.
+
+`auditlogs` keeps 90 days (`NODE_AUDIT_RETENTION_DAYS`) and backups up to six months: a snapshot older
+than 90 days needs Loki for the older part.
+
+After the restore, erase each listed user again (admin `DELETE /users/{id}?hardDelete=true`, a self-deletion
+the same way). **If neither source survives**, write it in the incident log, as the
+[Art. 33 runbook](../theory/data-protection.md#breach-runbook-art-33-72-hours) already asks: the erasures
+that could not be re-applied, and why. There is no automatic re-application, on purpose.
+
 ## Uploaded images and the mail spool
 
 The dump covers the database only. Two named volumes hold durable state of their own: `uploads`
@@ -205,11 +316,12 @@ that a customer swears was sent.
 
 ## The tools
 
-| Tool                                                                   | Role                                        | Page                                          |
-| ---------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------- |
-| [restic](https://restic.net)                                           | encrypted, deduplicating snapshots          | [restic](./restic.md)                         |
-| [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/) | `mongodump`, `mongorestore`                 | [Database Tools](./mongodb-database-tools.md) |
-| [supercronic](https://github.com/aptible/supercronic)                  | the scheduler, also in the `cron` container | [Health checks](./health-checks.md)           |
+| Tool                                                                   | Role                                               | Page                                          |
+| ---------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------- |
+| [restic](https://restic.net)                                           | encrypted, deduplicating snapshots                 | [restic](./restic.md)                         |
+| [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/) | `mongodump`, `mongorestore`                        | [Database Tools](./mongodb-database-tools.md) |
+| [supercronic](https://github.com/aptible/supercronic)                  | the scheduler, also in the `cron` container        | [Health checks](./health-checks.md)           |
+| [rclone](https://rclone.org)                                           | `serve restic --append-only` on the second machine | [rclone](./rclone.md)                         |
 
 Considered and not used: **resticprofile** (restic now does natively what it added: `--stdin-from-command`,
 `--retry-lock`, `RESTIC_*` variables; one maintainer), **Percona Backup for MongoDB** (see

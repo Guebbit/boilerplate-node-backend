@@ -44,9 +44,9 @@
 #
 #   mongo_root_password  database, mongo-rs-init    The only place the root account's password exists.
 #   mongo_app_password   database, app, cron, setup
-#   mongo_backup_password  database, backup   The `backup` role's login. Never root.
-#   restic_password      backup     Encrypts every snapshot. Lose it, lose the backups.
-#   restic_repository_env  backup     The repository's own login as `NAME=value` lines (the
+#   mongo_backup_password  database, backup, restore-drill   The `backup` role's login. Never root.
+#   restic_password      backup, restore-drill     Encrypts every snapshot. Lose it, lose the backups.
+#   restic_repository_env  backup, restore-drill     The repository's own login as `NAME=value` lines (the
 #                                                    REST server's, S3's). Empty for a local disk.
 #   redis_password       cache, app, cron        The response cache's Redis (it evicts).
 #   limits_password      limits, app, cron       The limits Redis: counters and single-use claims.
@@ -186,6 +186,8 @@ x-monitoring-hardening: &monitoring-hardening
 #   least privilege the database login is MongoDB's `backup` role (`docker/mongo-init.js`): it can
 #                   read what a dump needs and can neither write nor delete.
 #   read-only       the uploads and `storage` volumes are mounted `:ro`; there is no Docker socket.
+#   the drill       `profiles: [restore-drill]`: `docker compose --profile restore-drill run --rm restore-drill`
+#                   restores the latest snapshot into a throwaway Mongo and compares the counts.
 #
 # docs/tools/backups.md has the design, the knobs and the runbook.
 x-backup-env: &backup-env
@@ -811,6 +813,57 @@ services:
             database:
                 condition: service_healthy
                 required: false
+
+    # The restore drill's throwaway Mongo: a plain instance on a tmpfs, no auth, no published port,
+    # gone when the drill ends. It shares nothing with the live `database`.
+    restore-drill-db:
+        logging: *logging
+        image: docker.io/library/mongo:8@sha256:d731d77bfd7afd66bd487bdf627b5bf7ce4c3602ec461d635977021db529ebbc
+        profiles: [restore-drill]
+        <<: *data-hardening
+        command: ['mongod', '--bind_ip_all', '--noauth']
+        tmpfs:
+            - /data/db:size=2g
+        healthcheck:
+            test: ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+            interval: 5s
+            timeout: 5s
+            retries: 20
+
+    # The drill itself: restore the latest snapshot into `restore-drill-db`, compare the counts,
+    # restore the files, check a slice of the repository, print how long it took.
+    #   docker compose --env-file "clients/$COMPOSE_PROJECT_NAME/.env" -f docker-compose.production.yml \
+    #       --profile restore-drill run --rm restore-drill
+    restore-drill:
+        logging: *logging
+        image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
+        profiles: [restore-drill]
+        restart: 'no'
+        read_only: true
+        cap_drop: [ALL]
+        security_opt: [no-new-privileges:true]
+        user: '1000:1000'
+        entrypoint: ['backup-restore-drill']
+        environment:
+            <<: *backup-env
+            DRILL_MONGO_HOST: restore-drill-db
+            DRILL_CHECK_SUBSET: '${DRILL_CHECK_SUBSET:-10%}'
+            DRILL_RESTORE_FILES: '${DRILL_RESTORE_FILES:-true}'
+        secrets:
+            - restic_password
+            - restic_repository_env
+        tmpfs:
+            - /tmp:mode=1777,size=256m,noexec,nosuid
+            # Where the files snapshot is restored to verify it; sized for the uploads, raise it.
+            - /restore:mode=1777,size=1g,noexec,nosuid
+        volumes:
+            - backup-cache:/cache
+            - backup-repo:/repo
+        depends_on:
+            restore-drill-db:
+                condition: service_healthy
+        healthcheck:
+            disable: true
 
     # ── monitoring profile (see "MONITORING, OFF BY DEFAULT" above) ──────────────────────────────
 

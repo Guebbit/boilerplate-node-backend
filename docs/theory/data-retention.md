@@ -159,3 +159,26 @@ against contact details; the box stays optional for every reason.
 
 **What never leaves the database.** The `return.requested` webhook carries the `reason` code, never
 the `note` (`returns/module.ts`).
+
+## Backups and erasure
+
+A backup is a copy of everything, kept for as long as the keep knobs say (24 hourly, 7 daily, 4 weekly,
+6 monthly by default, so up to about six months). It therefore holds accounts that were erased _after_
+the snapshot was taken.
+
+| Question                                   | Answer                                                                                                                                               |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Must an erasure reach the backups at once? | No. The ICO and CNIL both accept that a backup keeps the data until it ages out, **if** it is "beyond use": nobody reads it to serve the subject     |
+| What keeps it "beyond use"?                | Backups are encrypted (restic, client side), reachable only through the restore path, and never queried for live work                                |
+| What is promised after a restore?          | **Every erasure since the snapshot is re-applied.** An erased account does not come back to life                                                     |
+| Who re-applies it, and how?                | A person, by the runbook: [Erasures after a restore](../tools/backups.md#erasures-after-a-restore). There is no automatic re-application, on purpose |
+| Where does the list come from?             | The `auditlogs` events, taken **before** the restore (the restored database only knows older erasures), or the Winston lines in Loki                 |
+
+The audit log keeps 90 days (`NODE_AUDIT_RETENTION_DAYS`) and the backups up to six, so restoring a
+snapshot older than 90 days needs Loki for the older part. If neither source survives (the whole host
+lost), the runbook says to record it in the incident log, as the
+[Art. 33 runbook](./data-protection.md#breach-runbook-art-33-72-hours) already asks.
+
+**Why not erase from the backups themselves.** restic repositories are immutable by design (and the
+second machine is append-only on purpose): rewriting history to remove one person would remove the
+property that makes the backup worth having. Ageing out is the standard.

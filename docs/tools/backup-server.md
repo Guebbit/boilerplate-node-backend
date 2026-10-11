@@ -117,8 +117,9 @@ password of its own, which you can revoke without touching the client's.
 
 ## Restoring from it
 
-The repository is an ordinary restic repository, so any machine with restic and the client's password
-can read it:
+The [restore drill](./backups.md#the-restore-drill) reads any repository, so the second machine is just
+a `BACKUP_REPOSITORY`: run the drill with the `rest:` URL to prove the off-site copy restores. By hand,
+from any machine with restic and the client's password:
 
 ```bash
 export RESTIC_REPOSITORY=rest:https://acme:PASSWORD@backups.example.com:8000/acme/
@@ -126,6 +127,8 @@ export RESTIC_PASSWORD_FILE=./restic_password
 restic snapshots                         # find the snapshot
 restic dump <db snapshot> mongodump.archive | mongorestore --archive --oplogReplay ...
 ```
+
+The runbook, including re-applying erasures, is [Restoring](./backups.md#restoring).
 
 ## What it does not cover
 
