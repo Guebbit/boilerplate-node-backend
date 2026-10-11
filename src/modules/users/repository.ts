@@ -12,6 +12,7 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { AUTHENTICATABLE_FILTER } from './authenticatable';
+import { twoFactorWritePipeline, type TwoFactorWrite } from './two-factor-write';
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
@@ -89,6 +90,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     resetMfaAttempts: (id: string) => Promise<void>;
     bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
+    writeTwoFactor: (id: string, write: TwoFactorWrite) => Promise<boolean>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
@@ -528,6 +530,29 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Apply one request's 2FA changes as a single atomic update: per-method field writes, entries
+     * added or dropped, and the account-level fields of the same change — see
+     * `./two-factor-write.ts` for why this is not a `save()`.
+     *
+     * `timestamps: false`: a factor's bookkeeping is not an edit of the account, so it neither
+     * moves `updatedAt` nor `editRevision` (the same rule `claimTotpStep` follows).
+     *
+     * @param id - the account
+     * @param write - what the request changed, from `planTwoFactorWrite`
+     * @returns whether the account still existed to take the write
+     */
+    writeTwoFactor: (id: string, write: TwoFactorWrite) =>
+        userModel
+            // `updatePipeline: true` is Mongoose's opt-in to an aggregation-pipeline update:
+            // https://mongoosejs.com/docs/api/model.html#Model.updateOne()
+            .updateOne({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
+                timestamps: false,
+                updatePipeline: true
+            })
+            .exec()
+            .then(({ matchedCount }) => matchedCount > 0),
 
     /**
      * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in

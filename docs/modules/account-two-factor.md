@@ -94,6 +94,39 @@ gains a channel adds a handler, not a migration. Device fields (`secret`, `lastU
 delivered fields (`codeHash`, `codeExpiresAt`, `codeSentAt`, `codeAttempts`) are all optional on
 the same record, and which half a method uses follows from its `delivers`.
 
+## Concurrent writes
+
+Two requests on one account run side by side: a login that is mailing a code, a confirm, a TOTP
+check. A `save()` of the whole `twoFactorMethods` array would let the slower one write back what it
+loaded, which undid a TOTP step the faster one had just claimed (the RFC 6238 §5.2 replay window)
+and made unrelated requests fail each other with a lost-race `412`.
+
+So `userService.persistTwoFactorMethods` writes a **diff**, not the array:
+
+```mermaid
+flowchart LR
+    L[request loads its copy] --> M[handlers change fields on entries]
+    M --> P[planTwoFactorWrite<br/>per-entry set / unset,<br/>entries added, methods dropped,<br/>account-level fields]
+    P --> W[one updateOne with an<br/>aggregation pipeline]
+    W --> D[(users)]
+    C[claimTotpStep<br/>conditional write] --> D
+```
+
+- **Per entry, by the entry's `_id`.** Only the fields the request assigned are written, so a
+  request that touched `email` cannot disturb `totp`, and a neighbour spliced away changes nothing.
+- **`lastUsedStep` is never set by this write.** `claimTotpStep` owns the high-water mark; the
+  in-memory copy of it is only a mirror. Re-enrolling still clears it, because a new secret starts
+  over.
+- **Removal is named.** The loaded copy no longer holds a removed entry, so the caller says which
+  method (or `'all'`) to drop. An entry two requests both started is kept once.
+- **One write.** The armed flag, backup codes and session epoch ride in the same update, so a
+  factor change and its session revocation still land together.
+- **Not an edit.** The update runs with `timestamps: false`: it moves neither `updatedAt` nor the
+  `ETag` an admin editor holds, like the other credential bookkeeping writes.
+
+A delivered code's `codeAttempts` is still read-then-write; what bounds guessing is the
+per-account reservation above, not that counter.
+
 ## The endpoint surface, and what guards each one
 
 Reading your own factors is not a privileged act. Changing them is, and every mutation sits behind

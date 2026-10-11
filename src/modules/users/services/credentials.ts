@@ -3,9 +3,10 @@
  * The `account` end of the shared kernel, write side: one narrow mutation per operation.
  */
 
-import type { ClientSession } from 'mongoose';
+import { Error as MongooseError, type ClientSession } from 'mongoose';
 import type { MfaReservation, UserDocument } from '../model';
 import { userRepository } from '../repository';
+import { isEmptyWrite, planTwoFactorWrite, settleTwoFactorWrite } from '../two-factor-write';
 
 /**
  * Set an account's password — `account/services/profile.ts`'s `passwordChange` is the only
@@ -106,17 +107,32 @@ export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> 
 };
 
 /**
- * Persist a 2FA method array mutated in place — `account/services/two-factor.ts` calls this
- * directly as the last step of every enrollment, confirmation, removal, disable and backup-code
- * action. `markModified` is not belt-and-braces: several of those paths UNSET a
- * field on a subdocument (a spent code, a replaced secret), and Mongoose does not always see a
- * delete inside an array element as a change on its own — the write would silently do nothing.
- * The mutation itself stays `account`'s: this operation only knows "persist whatever changed",
- * the same way a `save` on any other ORM does once a caller already holds a loaded, owned document.
+ * Persist the 2FA changes a request made on its loaded copy — `account/services/two-factor.ts`
+ * calls this as the last step of every enrollment, confirmation, removal, disable and backup-code
+ * action. The mutation stays `account`'s; this writes only what changed, per method and in one
+ * atomic update, so a request holding an older copy cannot undo what a concurrent one wrote (a
+ * claimed TOTP step above all) nor fail it with a lost-race error. A write that changes nothing
+ * sends nothing.
+ *
+ * @param user - the loaded copy, credentials included, as the request left it
+ * @param dropped - the methods the request removed from the copy, or `'all'` for a disable;
+ *   the copy no longer holds them, so the write cannot find them by itself
+ * @returns `user`, now settled
+ * @throws DocumentNotFoundError when the account is gone, which `isLostRace` recognises
  */
-export const persistTwoFactorMethods = (user: UserDocument): Promise<UserDocument> => {
-    user.markModified('twoFactorMethods');
-    return userRepository.save(user);
+export const persistTwoFactorMethods = (
+    user: UserDocument,
+    dropped: readonly string[] | 'all' = []
+): Promise<UserDocument> => {
+    const write = planTwoFactorWrite(user, dropped);
+    if (isEmptyWrite(write)) return Promise.resolve(user);
+
+    return userRepository.writeTwoFactor(user.id, write).then((found) => {
+        // The error Mongoose's own `save` raises for a vanished row, so `isLostRace` treats both alike.
+        if (!found) throw new MongooseError.DocumentNotFoundError(user.id);
+        settleTwoFactorWrite(user);
+        return user;
+    });
 };
 
 /**

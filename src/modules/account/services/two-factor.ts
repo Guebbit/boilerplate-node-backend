@@ -127,8 +127,8 @@ const audited = <T>(
  * code's attempt budget, and dropping that write is how an attempt ceiling silently becomes no
  * ceiling at all. A miss that changed nothing (a wrong or replayed TOTP) writes nothing, so a
  * burst of them cannot collide with each other or with the one right code among them.
- * A save that loses a race to a concurrent write is logged, not failed: the per-account
- * reservation, not this write, is what bounds the guessing.
+ * A write that finds the account gone is logged, not failed: the per-account reservation, not
+ * this write, is what bounds the guessing.
  */
 const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
     (user.isModified()
@@ -137,7 +137,7 @@ const rejectWrongCode = (user: UserDocument): Promise<ResponseReject> =>
     )
         .catch((error: unknown) => {
             if (!isLostRace(error)) throw error;
-            logger.warn({ message: 'A wrong-code write lost a race to a concurrent one.', error });
+            logger.warn({ message: 'A wrong-code write found the account already gone.', error });
         })
         .then(() => generateReject(422, [t('account.two-factor.wrong-code')]));
 
@@ -705,19 +705,22 @@ export const removeTwoFactorMethod = (
             user.twoFactorMethods.splice(enrolledIndex, 1);
             discardIfDisarmed(user);
             userService.markSessionsEnded(user);
-            return userService
-                .persistTwoFactorMethods(user)
-                .then(() => dropRefreshTokens(user))
-                .then(() => {
-                    // Removing the last factor is 2FA going off: say that, not just "a method left".
-                    notifyChange(
-                        user,
-                        user.twoFactorEnabledAt ? 'removed' : 'disabled',
-                        method,
-                        context
-                    );
-                    return generateSuccess(undefined);
-                });
+            return (
+                userService
+                    // Named, because the copy no longer holds the entry the write has to remove.
+                    .persistTwoFactorMethods(user, [method])
+                    .then(() => dropRefreshTokens(user))
+                    .then(() => {
+                        // Removing the last factor is 2FA going off: say that, not just "a method left".
+                        notifyChange(
+                            user,
+                            user.twoFactorEnabledAt ? 'removed' : 'disabled',
+                            method,
+                            context
+                        );
+                        return generateSuccess(undefined);
+                    })
+            );
         }
     );
 
@@ -750,7 +753,7 @@ export const disableTwoFactor = (
             discardIfDisarmed(user);
             userService.markSessionsEnded(user);
             return userService
-                .persistTwoFactorMethods(user)
+                .persistTwoFactorMethods(user, 'all')
                 .then(() => dropRefreshTokens(user))
                 .then(() => {
                     notifyChange(user, 'disabled', '', context);
