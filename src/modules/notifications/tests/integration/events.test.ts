@@ -16,6 +16,7 @@ import { notificationsService } from '@modules/notifications/services';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enabledModules } from '../../../../modules';
 
 setupTestDb();
@@ -39,6 +40,8 @@ describe('the module subscriptions', () => {
 
             await productService.removeById(String(doomed._id), true);
 
+            await settleOutboxNudges();
+
             const [message, ...rest] = await inboxOf(holder.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
@@ -56,6 +59,8 @@ describe('the module subscriptions', () => {
 
             await productService.removeById(String(doomed._id), true);
 
+            await settleOutboxNudges();
+
             const [message] = await inboxOf(saver.id);
             expect(message).toMatchObject({
                 code: 'notifications.wishlist-item-removed',
@@ -70,6 +75,8 @@ describe('the module subscriptions', () => {
             await wishlistService.wishlistAdd(user.id, String(doomed._id), testCallerContext);
 
             await productService.removeById(String(doomed._id), true);
+
+            await settleOutboxNudges();
 
             const inbox = await inboxOf(user.id);
             const codes = inbox.map(({ code }) => code).toSorted();
@@ -86,6 +93,8 @@ describe('the module subscriptions', () => {
 
             await productService.removeById(String(hidden._id), false);
 
+            await settleOutboxNudges();
+
             await expect(inboxOf(holder.id)).resolves.toHaveLength(1);
         });
 
@@ -94,6 +103,8 @@ describe('the module subscriptions', () => {
             const unheld = await createProduct();
 
             await productService.removeById(String(unheld._id), true);
+
+            await settleOutboxNudges();
 
             await expect(inboxOf(user.id)).resolves.toEqual([]);
         });
@@ -106,7 +117,9 @@ describe('the module subscriptions', () => {
             const gone = await createProduct({ title: 'Soon gone' });
             const hidden = await createProduct({ title: 'Hidden' });
             await productService.removeById(String(gone._id), false);
+            await settleOutboxNudges();
             await productService.removeById(String(hidden._id), false);
+            await settleOutboxNudges();
 
             await cartService.cartMerge(
                 user.id,
@@ -191,6 +204,7 @@ describe('the module subscriptions', () => {
         const product = await createProduct();
         await cartService.cartItemAddById(user.id, String(product._id), 1);
         await productService.removeById(String(product._id), true);
+        await settleOutboxNudges();
         await expect(inboxOf(user.id)).resolves.toHaveLength(1);
 
         await userService.removeById(user.id, true);

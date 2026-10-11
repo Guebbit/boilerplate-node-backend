@@ -9,6 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { testCallerContext } from '@tests/callers';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { wishlistService } from '@modules/wishlist/service';
@@ -292,6 +293,8 @@ describe('wishlistMoveToCart', () => {
 
         await productService.removeById(String(product._id));
 
+        await settleOutboxNudges();
+
         const result = await wishlistService.wishlistMoveToCart(
             user.id,
             String(product._id),
@@ -346,6 +349,8 @@ describe('the module subscriptions', () => {
         await wishlistService.wishlistAdd(bob.id, String(doomed._id), testCallerContext);
 
         await productService.removeById(String(doomed._id), true);
+
+        await settleOutboxNudges();
 
         expect(await savedIds(alice.id)).toEqual([String(kept._id)]);
         expect(await savedIds(bob.id)).toEqual([]);

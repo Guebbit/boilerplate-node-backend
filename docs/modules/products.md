@@ -171,6 +171,9 @@ automatic cancel is an unpaid order timing out (the reservation expiry, in
   present afterwards. It stays `pending`, nobody is emailed, and the buyer can still pay it, by card
   or offline. A real problem with such an order is an admin's to cancel by hand. No event is emitted
   for hiding or taking off sale: nothing would listen.
+- `product.deleted` is written to the [outbox](../tools/outbox.md) in the transaction that deletes
+  (soft or hard, `aggregateId` = the product), so it exists exactly when the delete committed and
+  is retried until every subscriber has handled it. The cascade lands just after the response.
 - Only a delete pulls lines. `cart` and `wishlist` drop the line and announce whose lists held it,
   so [`notifications`](./notifications.md) can tell those users. `product.deleted` carries `titles`
   (the name in every language, locale → title) for exactly that: it is read before a hard delete
