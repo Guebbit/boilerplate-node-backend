@@ -24,3 +24,22 @@ db.createUser({
     pwd: appPassword,
     roles: [{ role: 'readWrite', db: process.env.MONGO_INITDB_DATABASE }]
 });
+
+// The backup account (docker/Dockerfile.backup). MongoDB's built-in `backup` role reads everything a
+// full `mongodump --oplog` needs, the oplog included, and can neither write nor delete: a backup
+// container that is compromised cannot drop the database, which a root login could.
+// It lives in `admin`, because a full dump spans every database. The password file is the one the
+// `backup` service mounts. Skipped when no file is named, so a stack without the backup profile
+// keeps working.
+// https://www.mongodb.com/docs/manual/reference/built-in-roles/#backup
+if (process.env.MONGO_BACKUP_PASSWORD_FILE) {
+    const backupPassword = require('fs')
+        .readFileSync(process.env.MONGO_BACKUP_PASSWORD_FILE, 'utf8')
+        .trim();
+
+    db.getSiblingDB('admin').createUser({
+        user: process.env.MONGO_BACKUP_USER,
+        pwd: backupPassword,
+        roles: [{ role: 'backup', db: 'admin' }]
+    });
+}

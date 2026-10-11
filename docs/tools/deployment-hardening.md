@@ -173,7 +173,7 @@ What a deployment adds beyond that:
 
 ## Backups and tested restore
 
-Already written up: [Backups](./backups.md) — resticprofile, the config, and `--oplog`.
+Already written up: [Backups](./backups.md): the `backup` container, its knobs, the `backup` database role and `--oplog`.
 
 The one thing worth repeating, because it is the failure everyone actually has: **an untested
 restore is not a backup.** Schedule a real restore into a scratch database on a calendar, not on

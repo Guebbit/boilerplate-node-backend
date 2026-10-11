@@ -1,0 +1,90 @@
+# Backup image: restic + the MongoDB Database Tools + supercronic, and the scripts that use them.
+#
+# The `backup` service: entrypoint.sh turns the BACKUP_* knobs into a crontab and runs supercronic.
+#
+# Why its own image: the backup holds the restic password, the repository credentials and a
+# database login; the app image holds the app's keys. Each secret lives in one container.
+# Why Ubuntu: MongoDB ships its Database Tools as glibc builds for Debian/Ubuntu/RHEL on amd64,
+# and arm64 only for Ubuntu 24.04. Alpine has no official build.
+#
+# Every download is pinned by SHA-256 per architecture; a mismatch fails the build.
+# docs/tools/backups.md#the-tools lists each tool, its licence and why it was chosen.
+#
+# Build: docker build -f docker/Dockerfile.backup -t boilerplate-backup:latest .
+
+FROM docker.io/library/ubuntu:24.04@sha256:534baea6a22c03a63003dbc8dbe78fe34bc0d7e595d9a9dc9834884ff530eb55
+
+# Release versions, bumped together with the digests below.
+ARG RESTIC_VERSION=0.19.1
+ARG MONGO_TOOLS_VERSION=100.19.1
+ARG SUPERCRONIC_VERSION=v0.2.49
+
+# bash for the scripts, jq to read `restic ... --json`, curl for the heartbeat and the health
+# check, bzip2 to unpack restic's release asset. The apt lists are dropped in the same layer.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends bash bzip2 ca-certificates curl jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# restic, https://github.com/restic/restic/releases (BSD-2-Clause). Digest = the release asset's.
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) asset=amd64; sum=f415415624dcc452f2a02b8c33641791a8c6d6d3b65bbb3543fcf9a25151585c ;; \
+        arm64) asset=arm64; sum=a5f64aaab53d51e311fa3829124c5b703f2d14cf187d8640b6be3b2b49376465 ;; \
+        *) echo "no pinned restic for this architecture" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/restic.bz2 "https://github.com/restic/restic/releases/download/v${RESTIC_VERSION}/restic_${RESTIC_VERSION}_linux_${asset}.bz2"; \
+    echo "${sum}  /tmp/restic.bz2" | sha256sum -c -; \
+    bunzip2 -c /tmp/restic.bz2 > /usr/local/bin/restic; \
+    chmod 0755 /usr/local/bin/restic; \
+    rm /tmp/restic.bz2
+
+# MongoDB Database Tools (mongodump, mongorestore), Apache-2.0.
+# https://www.mongodb.com/try/download/database-tools
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) asset=x86_64; sum=f34b84a67ab96b4ff52571ec5d15e2148d96cb140b1ea9ef8c29ac33c48e3480 ;; \
+        arm64) asset=arm64; sum=ebf518d9a303b36e612e40be106cd0ecc7135dc15d098626f81ac3ee8654a821 ;; \
+        *) echo "no pinned database tools for this architecture" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /tmp/tools.tgz "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-${asset}-${MONGO_TOOLS_VERSION}.tgz"; \
+    echo "${sum}  /tmp/tools.tgz" | sha256sum -c -; \
+    tar -xzf /tmp/tools.tgz -C /tmp; \
+    install -m 0755 "/tmp/mongodb-database-tools-ubuntu2404-${asset}-${MONGO_TOOLS_VERSION}/bin/mongodump" \
+        "/tmp/mongodb-database-tools-ubuntu2404-${asset}-${MONGO_TOOLS_VERSION}/bin/mongorestore" /usr/local/bin/; \
+    rm -rf /tmp/tools.tgz /tmp/mongodb-database-tools-*
+
+# supercronic, the same scheduler the `cron` service runs (docker/install-supercronic.mjs, MIT).
+# Digests are the ones pinned there.
+RUN set -eu; \
+    case "$(dpkg --print-architecture)" in \
+        amd64) asset=amd64; sum=a53ae236602c7338aba3fbaff40bda6300eae3b9fedb8261eb06cfe3724430c1 ;; \
+        arm64) asset=arm64; sum=02aa0cb229ba09050cba6638059dadb9eedc2276632ea43d6a57a2f8c1629dd5 ;; \
+        *) echo "no pinned supercronic for this architecture" >&2; exit 1 ;; \
+    esac; \
+    curl -fsSL -o /usr/local/bin/supercronic "https://github.com/aptible/supercronic/releases/download/${SUPERCRONIC_VERSION}/supercronic-linux-${asset}"; \
+    echo "${sum}  /usr/local/bin/supercronic" | sha256sum -c -; \
+    chmod 0755 /usr/local/bin/supercronic
+
+# The scripts. `common.sh` is sourced by the others.
+COPY docker/backup/ /usr/local/lib/backup/
+RUN chmod 0755 /usr/local/lib/backup/*.sh \
+    && ln -s /usr/local/lib/backup/entrypoint.sh /usr/local/bin/backup-entrypoint \
+    && ln -s /usr/local/lib/backup/backup.sh /usr/local/bin/backup-job \
+    && ln -s /usr/local/lib/backup/maintenance.sh /usr/local/bin/backup-maintenance
+
+# Same uid as the app's `node` user (1000), so the read-only uploads and mail-spool mounts are
+# readable whatever mode the app wrote them with. restic's cache lives in /cache and a local-disk
+# repository in /repo; both are volumes, and an empty volume takes the ownership set here.
+# Ubuntu 24.04 ships a `ubuntu` user at uid 1000 (removed so the id is free) and a system `backup` user (hence the name).
+RUN userdel --remove ubuntu \
+    && useradd --uid 1000 --create-home --shell /usr/sbin/nologin backupjob \
+    && mkdir -p /cache /repo && chown backupjob:backupjob /cache /repo
+USER backupjob
+
+ENV RESTIC_CACHE_DIR=/cache
+
+# The scheduler's own liveness: supercronic serves /health while it runs (`entrypoint.sh` turns it on).
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -fsS http://127.0.0.1:9746/health || exit 1
+
+ENTRYPOINT ["backup-entrypoint"]

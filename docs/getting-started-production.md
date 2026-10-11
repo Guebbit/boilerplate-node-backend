@@ -97,7 +97,8 @@ whitespace-delimited config line:
 
 ```bash
 mkdir -p -m 0700 "clients/acme/secrets"
-for name in mongo_root_password mongo_app_password redis_password limits_password rabbitmq_password \
+for name in mongo_root_password mongo_app_password mongo_backup_password restic_password \
+            redis_password limits_password rabbitmq_password \
             token_access token_refresh totp_encryption_key pii_encryption_key \
             webhook_secret_encryption_key pseudonym_key metrics_token; do
   openssl rand -hex 32 > "clients/acme/secrets/$name"
@@ -105,6 +106,11 @@ for name in mongo_root_password mongo_app_password redis_password limits_passwor
 done
 ```
 
+- **Backups:** `mongo_backup_password` is the `backup` role's login
+  ([Backups](tools/backups.md#the-database-login)); `database` creates the account from it, so a bundled
+  stack needs the file even with the `backup` profile off. `restic_password` encrypts the repository: keep
+  a copy off the host. The `backup` profile also mounts `restic_repository_env` (the repository's own
+  login as `NAME=value` lines; create it empty with `: > clients/acme/secrets/restic_repository_env`).
 - **Modes:** the files are `0644` inside a `0700` directory. Compose ignores `uid`/`mode` for a file
   secret, and Redis (uid 999) and node (uid 1000) must both read it; the directory is what keeps
   other host users out.

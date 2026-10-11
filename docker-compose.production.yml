@@ -44,6 +44,10 @@
 #
 #   mongo_root_password  database, mongo-rs-init    The only place the root account's password exists.
 #   mongo_app_password   database, app, cron, setup
+#   mongo_backup_password  database, backup   The `backup` role's login. Never root.
+#   restic_password      backup     Encrypts every snapshot. Lose it, lose the backups.
+#   restic_repository_env  backup     The repository's own login as `NAME=value` lines (the
+#                                                    REST server's, S3's). Empty for a local disk.
 #   redis_password       cache, app, cron        The response cache's Redis (it evicts).
 #   limits_password      limits, app, cron       The limits Redis: counters and single-use claims.
 #   rabbitmq_password    queue, app, cron
@@ -172,6 +176,33 @@ x-data-hardening: &data-hardening
 x-monitoring-hardening: &monitoring-hardening
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+
+# ── BACKUPS, OFF BY DEFAULT ─────────────────────────────────────────────────────────────────────
+# `profiles: [backup]` starts the `backup` service: COMPOSE_PROFILES=bundled,backup
+# It stays DORMANT while `BACKUP_REPOSITORY` is empty: it idles, healthy, and runs nothing.
+#
+#   own container   the restic password, the repository credentials and a database login live here
+#                   and nowhere else. `cron` runs the app image with the app's keys, so it is not used.
+#   least privilege the database login is MongoDB's `backup` role (`docker/mongo-init.js`): it can
+#                   read what a dump needs and can neither write nor delete.
+#   read-only       the uploads and `storage` volumes are mounted `:ro`; there is no Docker socket.
+#
+# docs/tools/backups.md has the design, the knobs and the runbook.
+x-backup-env: &backup-env
+    BACKUP_REPOSITORY: '${BACKUP_REPOSITORY:-}'
+    BACKUP_HOST: '${COMPOSE_PROJECT_NAME}'
+    BACKUP_DATABASE: '${BACKUP_DATABASE:-true}'
+    BACKUP_PRUNE: '${BACKUP_PRUNE:-true}'
+    BACKUP_SCHEDULE: '${BACKUP_SCHEDULE:-0 * * * *}'
+    BACKUP_KEEP_HOURLY: '${BACKUP_KEEP_HOURLY:-24}'
+    BACKUP_KEEP_DAILY: '${BACKUP_KEEP_DAILY:-7}'
+    BACKUP_KEEP_WEEKLY: '${BACKUP_KEEP_WEEKLY:-4}'
+    BACKUP_KEEP_MONTHLY: '${BACKUP_KEEP_MONTHLY:-6}'
+    BACKUP_CHECK_SCHEDULE: '${BACKUP_CHECK_SCHEDULE:-30 3 * * 0}'
+    BACKUP_CHECK_SUBSET: '${BACKUP_CHECK_SUBSET:-5%}'
+    BACKUP_HEARTBEAT_URL: '${BACKUP_HEARTBEAT_URL:-}'
+    BACKUP_HEARTBEAT_TOKEN: '${BACKUP_HEARTBEAT_TOKEN:-}'
+    MONGO_BACKUP_USER: '${MONGO_BACKUP_USER:-backup}'
 
 x-app-env: &app-env
     NODE_ENV: 'production'
@@ -527,6 +558,7 @@ services:
         secrets:
             - mongo_root_password
             - mongo_app_password
+            - mongo_backup_password
         environment:
             # Root stays maintenance-only — the app authenticates as MONGO_APP_USER instead
             # (see `NODE_DB_URI` above and `docker/mongo-init.js`), so a leaked connection
@@ -541,6 +573,9 @@ services:
             MONGO_APP_USER: '${MONGO_APP_USER:-api}'
             # Read by `docker/mongo-init.js`, which creates the app user from it.
             MONGO_APP_PASSWORD_FILE: '/run/secrets/mongo_app_password'
+            # Read by the same script: the `backup` role's account (see `backup` below).
+            MONGO_BACKUP_USER: '${MONGO_BACKUP_USER:-backup}'
+            MONGO_BACKUP_PASSWORD_FILE: '/run/secrets/mongo_backup_password'
         volumes:
             - mongo-data:/data/db
             - mongo-keyfile-dir:/keyfile-dir
@@ -733,6 +768,50 @@ services:
             retries: 5
             start_period: 30s
 
+    # ── backup profile (see "BACKUPS, OFF BY DEFAULT" above) ─────────────────────────────────────
+
+    # The scheduler of the backup job: dump -> restic, files -> restic, forget, heartbeat.
+    # Its crontab is built at start from the BACKUP_* knobs (docker/backup/entrypoint.sh).
+    # Not `<<: *hardening`: that anchor carries a 64m tmpfs, and this one needs room for the
+    # dump's log; the three controls are the same.
+    backup:
+        logging: *logging
+        image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
+        build:
+            context: .
+            dockerfile: docker/Dockerfile.backup
+        restart: unless-stopped
+        profiles: [backup]
+        read_only: true
+        cap_drop: [ALL]
+        security_opt: [no-new-privileges:true]
+        # 1000 = the app's `node` uid, so the read-only mounts below are readable whatever mode the
+        # app wrote the files with.
+        user: '1000:1000'
+        tmpfs:
+            - /tmp:mode=1777,size=256m,noexec,nosuid
+        environment:
+            <<: *backup-env
+        secrets:
+            - restic_password
+            - restic_repository_env
+            - mongo_backup_password
+        volumes:
+            # Read-only: a compromised backup container can read the files, never change them.
+            - uploads:/data/uploads:ro
+            # The whole volume is mounted; only `mail-spool/` is backed up (the PDFs are regenerable).
+            - storage:/data/storage:ro
+            - mongo-ca-dir:/ca-dir:ro
+            # restic's cache: makes `forget`/`check` fast. Losing it costs time, never data.
+            - backup-cache:/cache
+            # A repository on a local disk: `BACKUP_REPOSITORY=/repo`. Unused for a remote one.
+            # Bind a host path here in an override file to put the repository on another disk.
+            - backup-repo:/repo
+        depends_on:
+            database:
+                condition: service_healthy
+                required: false
+
     # ── monitoring profile (see "MONITORING, OFF BY DEFAULT" above) ──────────────────────────────
 
     # Prometheus: scrapes the API with the shared metrics token and evaluates the alert rules.
@@ -859,6 +938,12 @@ secrets:
         file: ./clients/${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME to the client's name}/secrets/mongo_root_password
     mongo_app_password:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/mongo_app_password
+    mongo_backup_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/mongo_backup_password
+    restic_password:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/restic_password
+    restic_repository_env:
+        file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/restic_repository_env
     redis_password:
         file: ./clients/${COMPOSE_PROJECT_NAME}/secrets/redis_password
     limits_password:
@@ -892,6 +977,9 @@ volumes:
     alertmanager-data:
     loki-data:
     alloy-data:
+    # The backup profile's: restic's cache, and a repository on a local disk.
+    backup-cache:
+    backup-repo:
     uploads:
     # Both exist because `app` runs with a read-only root — see `app`'s own `volumes:` for why
     # neither may be a tmpfs.

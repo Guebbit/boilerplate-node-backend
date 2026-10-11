@@ -194,7 +194,12 @@ export default withMermaid(
                         items: [
                             { text: 'MongoDB & Mongoose', link: '/tools/mongodb-mongoose' },
                             { text: 'Redis Cache', link: '/tools/redis-cache' },
-                            { text: 'Backups', link: '/tools/backups' }
+                            { text: 'Backups', link: '/tools/backups' },
+                            { text: 'restic', link: '/tools/restic' },
+                            {
+                                text: 'MongoDB Database Tools',
+                                link: '/tools/mongodb-database-tools'
+                            }
                         ]
                     },
                     {

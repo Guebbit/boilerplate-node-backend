@@ -1,152 +1,219 @@
 # Backups
 
-The compose file bundles a database. Nothing bundles a backup — that is deliberate: a backup only
-matters once it can restore, so this page is config an operator owns and verifies, not a script the
-app ships and forgets.
+The production compose file ships a `backup` service: a small container that dumps the database
+and copies the uploaded files into an encrypted [restic](./restic.md) repository, on a schedule.
+It is **off until you ask for it** (the `backup` profile) and **dormant until you name a
+repository** (`BACKUP_REPOSITORY`).
+
+A backup you have never restored is a hope, not a backup: restore it on a calendar, into a scratch
+database, not on good intentions.
+
+## The design
 
 ```mermaid
 flowchart LR
-    Cron["systemd timer\n(resticprofile schedule)"] --> RP["resticprofile"]
-    RP -->|"stdin-command"| Dump["docker compose exec database\nmongodump --oplog --archive --gzip"]
-    RP -->|"stdin-command"| Files["docker compose exec app\ntar public/images + storage/mail-spool"]
-    Dump -->|"stdout"| RP
-    Files -->|"stdout"| RP
-    RP -->|"restic backup --stdin"| Repo[("restic repository\nS3 / B2 / SFTP / disk")]
+    subgraph stack["one client stack"]
+        DB[("database<br/>replica set of one")]
+        Files[("uploads +<br/>mail spool<br/>read-only")]
+        B["backup container<br/>supercronic"]
+        DB -->|"mongodump --oplog<br/>the backup role"| B
+        Files --> B
+    end
+    B -->|"restic backup<br/>encrypted before it leaves"| Repo[("restic repository<br/>local disk, SFTP, S3,<br/>or the second machine")]
+    B -->|"ping every run"| G["Gatus<br/>(off-host)"]
 
     classDef proc fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef store fill:#dcfce7,stroke:#16a34a,color:#111827;
-    class Cron,RP,Dump,Files proc;
-    class Repo store;
+    class B proc;
+    class DB,Files,Repo store;
 ```
 
-## Why resticprofile, not a shell script
+| Piece          | What                                                                                                                            |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Image          | `docker/Dockerfile.backup`: restic, the [MongoDB Database Tools](./mongodb-database-tools.md), supercronic. Non-root, read-only |
+| Service        | `backup` in `docker-compose.production.yml`, `profiles: [backup]`. One per client stack                                         |
+| Mounts         | `uploads` and `storage` volumes **read-only**, the Mongo CA certificate. **No Docker socket**                                   |
+| Secrets        | `restic_password`, `mongo_backup_password`, `restic_repository_env`: this container holds them, the app and `cron` do not       |
+| Scheduler      | supercronic builds its crontab at start from the knobs below (`docker/backup/entrypoint.sh`). It serves `/health` for the check |
+| Why not `cron` | the `cron` container runs the app image with the app's keys. Backups need other secrets, and each secret lives in one container |
 
-**[restic](https://restic.net)** is the consensus default for this kind of job: one static binary,
-the largest community of the options, and a release cadence that keeps up
-(0.19.1, 2026-07-05). It is provider-neutral by construction — the same command writes to an
-S3-compatible bucket, Backblaze B2, Azure, GCS, an SFTP host, a REST server or a local disk;
-[Where to run it](./hosting.md) is a choice a deployment makes on its own, never one this repo
-makes for it.
-
-**[resticprofile](https://creativeprojects.github.io/resticprofile/)** is what keeps N
-near-identical client profiles from becoming N near-identical shell scripts. One base profile
-carries what every client shares — the retention policy, the check settings — and each client
-profile `inherit`s it, overriding only what actually differs: the repository and the dump command.
-Silo means one profile per client is the same shape every time, which is exactly what inheritance
-is for.
-
-## The config
-
-`docker/resticprofile.example.toml` ships the shape, not real secrets — copy it outside the repo
-the same way `clients/<name>/.env` lives outside the repo, and add one `[<client>]` section per
-stack:
-
-```toml
-[default]
-    password-file = '/etc/resticprofile/restic-password'
-    repository = 's3:https://s3.example.com/change-me'
-    [default.retention]
-        keep-daily = 7
-        keep-weekly = 4
-        keep-monthly = 6
-        prune = true
-
-[acme]
-    inherit = 'default'
-    repository = 's3:https://s3.example.com/change-me/acme'
-    [acme.backup]
-        stdin = true
-        stdin-command = '''
-            docker compose --env-file clients/acme/.env -f docker-compose.production.yml \
-                exec -T database sh -c 'mongodump --host localhost --port 27017 \
-                --tls --tlsCAFile /keyfile-dir/mongo-ca.crt \
-                -u "$MONGO_INITDB_ROOT_USERNAME" -p "$(cat /run/secrets/mongo_root_password)" \
-                --authenticationDatabase admin --oplog --archive --gzip'
-        '''
-    [acme.schedule]
-        schedule = '03:30'
-```
-
-**No secret touches the host shell.** `$MONGO_INITDB_ROOT_USERNAME` is expanded by the `database`
-container's own shell from the environment `docker-compose.production.yml` sets there, and the
-password is read from the secret file compose mounts there (`/run/secrets/mongo_root_password`) —
-the same credentials the container was started with, never typed or interpolated on the host. The
-image's `MONGO_INITDB_ROOT_PASSWORD_FILE` is not expanded into a variable for a later `exec`, which
-is why the command reads the file itself.
-
-Install the schedule once, per host, after adding every client's section:
+Start it by adding `backup` to the stack's profiles and creating the three secret files:
 
 ```bash
-resticprofile schedule --all
+# in clients/acme/.env
+COMPOSE_PROFILES=bundled,backup
+BACKUP_REPOSITORY=/repo            # a local disk; see "The knobs" for the others
+
+# once, next to the other secrets (docs/getting-started-production.md#secrets)
+openssl rand -hex 32 > clients/acme/secrets/restic_password
+openssl rand -hex 32 > clients/acme/secrets/mongo_backup_password
+: > clients/acme/secrets/restic_repository_env     # empty for a local disk
 ```
+
+**Keep the restic password somewhere that is not this host.** It encrypts every snapshot: lose it
+and every backup is unreadable.
+
+## One run
+
+`docker/backup/backup.sh`, on `BACKUP_SCHEDULE`. In order:
+
+1. **The dump.** `mongodump --oplog --archive --numParallelCollections=1`, streamed into restic.
+   No gzip: restic compresses and deduplicates raw bytes, and a gzip stream defeats both.
+   restic runs the command itself (`--stdin-from-command`) and refuses the snapshot if the dump
+   exits non-zero, so a half-written dump is never kept.
+2. **The counts.** The dump's own log says how many documents each collection had
+   (`done dumping api.users (4100 documents)`). They are saved as a tiny snapshot of the same run
+   (tagged `counts`), for a restore to compare against.
+3. **The files.** The uploads and the mail spool, as plain files. The rendered invoice PDFs are
+   left out: regenerable.
+4. **Forget.** `restic forget` per the keep knobs, unless `BACKUP_PRUNE=false`.
+5. **The heartbeat.** Green when all of it worked, red with the reason when any step failed.
+
+All snapshots of one run share a `run:<timestamp>` tag. Each stack labels its snapshots with its own
+`--host` (the compose project name), so two stacks sharing one repository never prune each other.
+
+The first run creates the repository (`restic init`) when it does not exist yet; any other failure
+to open it (wrong password, unreachable server) stays a failure.
+
+### Why the dump is one stream
+
+`mongodump --oplog` is the only way to a copy that is **consistent across collections** while orders
+keep arriving: an order, its payment and its stock reservation are captured together or not at all.
+It refuses to run scoped to one database ("`--oplog mode only supported on full dumps`"), so the
+dump covers the whole deployment: `admin`, the client's database and the few `config` collections it
+keeps. `local` is skipped by design.
+
+Measured against a real replica set: an unchanged database stores **zero** new
+bytes on the second run. A small change costs about the ~1 MiB restic chunks it touches: 100 added
+documents (2.5%) stored 1.5 MiB on a 6 MiB database. That is chunk granularity, not a failure of
+deduplication, and it shrinks in proportion as the database grows.
+
+### The database login
+
+The dump logs in as `backup`, never as root. `docker/mongo-init.js` creates it on the first boot of an
+empty volume, from the `mongo_backup_password` secret, in the `admin` database with MongoDB's built-in
+[`backup` role](https://www.mongodb.com/docs/manual/reference/built-in-roles/#backup). The role reads
+everything a full `--oplog` dump needs (the oplog included) and **can neither write nor delete**: a
+compromised backup container cannot drop the database, which root could.
+
+`mongo-init.js` runs only against an empty data directory. On an existing volume, create the account
+once by hand, then add the secret file:
+
+```js
+db.getSiblingDB('admin').createUser({
+    user: 'backup',
+    pwd: '<the contents of mongo_backup_password>',
+    roles: [{ role: 'backup', db: 'admin' }]
+});
+```
+
+The Database Tools take the password from a `0600` config file in the container's tmpfs, so it never
+appears in `ps` or in `/proc/*/cmdline`.
+
+## The knobs
+
+All in the client's `.env` (the block is in `.env-example`, Part D6). The compose file passes them
+to the container; none reaches the app.
+
+| Knob                                                     | Default                     | Meaning                                                                                               |
+| -------------------------------------------------------- | --------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `BACKUP_REPOSITORY`                                      | empty                       | Any restic repository. **Empty = dormant**: the container idles, healthy, runs nothing, no warning    |
+| secret `restic_password`                                 | -                           | Encrypts the repository                                                                               |
+| secret `restic_repository_env`                           | empty file                  | The repository's own login as `NAME=value` lines (`RESTIC_REST_USERNAME`, `AWS_SECRET_ACCESS_KEY`...) |
+| `BACKUP_SCHEDULE`                                        | `0 * * * *`                 | Cron expression (UTC). Hourly: cheap once deduplication works                                         |
+| `BACKUP_KEEP_HOURLY` / `_DAILY` / `_WEEKLY` / `_MONTHLY` | 24 / 7 / 4 / 6              | How many snapshots to keep. The only "size" control restic has; a hard cap is the storage's quota     |
+| `BACKUP_PRUNE`                                           | `true`                      | `false` when the repository is append-only: that side deletes, this one only adds                     |
+| `BACKUP_CHECK_SCHEDULE` / `BACKUP_CHECK_SUBSET`          | `30 3 * * 0` / `5%`         | The [weekly upkeep](#integrity-check)                                                                 |
+| `BACKUP_DATABASE`                                        | `true`                      | `false` when the database is not in this stack (a managed Mongo): the files are still backed up       |
+| `BACKUP_HEARTBEAT_URL` / `_TOKEN`                        | empty                       | The [off-host freshness check](#the-heartbeat)                                                        |
+| `MONGO_BACKUP_USER`                                      | `backup`                    | The database account name                                                                             |
+| `BACKUP_IMAGE`                                           | `boilerplate-backup:latest` | The image tag                                                                                         |
+
+`BACKUP_PRUNE` defaults to `true` on purpose. Forgotten `false` on a plain disk or S3 repository, the
+repository grows forever, silently. Forgotten `true` on an append-only server, `forget` is refused,
+the run goes red and the heartbeat alerts: loud on day one, one line to fix.
+
+**Which repository:**
+
+| `BACKUP_REPOSITORY`                        | What it is                                                                                             |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `/repo`                                    | The `backup-repo` volume. Same host as the stack: a convenience, **not** an off-site copy              |
+| `rest:https://host:8000/<client>/`         | A second machine running an append-only restic REST server: off-site, tamper-proof                     |
+| `sftp:user@host:/path`, `s3:...`, `b2:...` | restic's other backends. Credentials go in `restic_repository_env`; SFTP keys need a mount of your own |
+
+[Where to run it](./hosting.md) is a choice a deployment makes, never one this repo makes for it.
+
+No size cap exists in restic. The keep knobs bound the number of snapshots, and because identical
+data is stored once, the repository grows with what _changed_, not with how often you back up.
+
+**An external database** (`bundled` profile off): the provider backs it up. Set `BACKUP_DATABASE=false`:
+the dump is skipped, the uploads and mail spool are still backed up.
+
+## The heartbeat
+
+`BACKUP_HEARTBEAT_URL` is a [Gatus](./gatus.md) external endpoint, with `?success=true` in it, the
+same shape as `ALERT_HEARTBEAT_URL`. Every run pings it: green on success, red (`success=false`
+and the reason) on failure. Gatus raises the alarm when a ping is **late** too, so a dead container,
+a dead host and a failing job all end in the same alert.
+
+```yaml
+# on the Gatus machine: a second external endpoint per client (docs/tools/gatus.md)
+- name: acme-backup
+  group: clients
+  token: ANOTHER_LONG_RANDOM_TOKEN
+  heartbeat:
+      interval: 2h # hourly schedule; one missed run is an alert
+  alerts:
+      - type: ntfy
+```
+
+Gatus has no "started" signal, so there is no start ping: the endpoint only knows finished runs.
+Left empty, nothing is sent and nothing warns.
+
+## Integrity check
+
+`restic check --read-data-subset=5%`, on `BACKUP_CHECK_SCHEDULE` (weekly). Each run reads a
+different 5% slice of the stored data, so a corrupted pack is found weeks before the day you
+restore. The same weekly job first runs `restic prune` when `BACKUP_PRUNE=true`, to reclaim what the
+hourly `forget` released. A failure turns the heartbeat red; the next good backup turns it green.
 
 ## Uploaded images and the mail spool
 
-The `mongodump` above backs up the database only. Two named volumes hold durable state of their
-own — `uploads` (uploaded images, `image-store.ts`) and the `mail-spool/` subdirectory of `storage`
-(queued outbound mail a restart must not lose) — and a restore that skips them brings back rows
-pointing at files that no longer exist.
+The dump covers the database only. Two named volumes hold durable state of their own: `uploads`
+(uploaded images) and the `mail-spool/` directory of `storage` (queued outbound mail a restart must
+not lose). A restore that skips them brings back rows pointing at files that no longer exist, so the
+backup container mounts both read-only and backs them up as plain files.
 
-Each client gets a **second** resticprofile section for this, `[<client>-uploads]` in the example
-file: restic snapshots one stdin stream per backup run, so a second source is a second profile
-sharing the same repository, not a second entry under the mongo profile's own `[<client>.backup]`.
-It tars both trees straight out of the `app` container (`docker compose exec app tar`) and pipes
-the result to `restic backup --stdin`, the same shape the mongo dump already uses.
+**`storage/documents/` is deliberately left out.** It holds rendered invoice and credit-note PDFs, a
+regenerable copy of the frozen rows: losing it costs a re-render, never data.
 
-**`storage/documents/` is deliberately left out.** It holds rendered invoice and credit-note PDFs
-(`NODE_DOCUMENT_STORE_PATH`), a regenerable copy of the frozen rows, so losing it costs a re-render,
-never data. Only `mail-spool/` inside that volume is backed up.
+**Moving to a new host:** restore the files snapshot onto the new host's volumes before the new
+stack's first boot (`restic restore latest --tag files --target <dir>`, then copy into the volumes).
+Skipping this looks fine until a customer clicks a broken image or the reaper finds no mail queued
+that a customer swears was sent.
 
-**Moving to a new host:** carry `uploads` and `storage` across the same way `mongo-data` already
-has to — a `docker run --rm -v <volume>:/from -v /dest:/to alpine cp -a /from/. /to/` per volume
-(or a restic restore of the `-uploads` snapshot straight onto the new host) before the new stack's
-first boot. Skipping this is the same class of mistake as forgetting the database dump: the new
-host starts empty and looks fine until a customer clicks a broken image or the reaper finds no
-mail queued that a customer swears was sent.
+## The tools
 
-## Why `--oplog`, and the restriction it comes with
+| Tool                                                                   | Role                                        | Page                                          |
+| ---------------------------------------------------------------------- | ------------------------------------------- | --------------------------------------------- |
+| [restic](https://restic.net)                                           | encrypted, deduplicating snapshots          | [restic](./restic.md)                         |
+| [MongoDB Database Tools](https://www.mongodb.com/docs/database-tools/) | `mongodump`, `mongorestore`                 | [Database Tools](./mongodb-database-tools.md) |
+| [supercronic](https://github.com/aptible/supercronic)                  | the scheduler, also in the `cron` container | [Health checks](./health-checks.md)           |
 
-**`--oplog` makes the dump consistent ACROSS collections**, not just within one — without it, a
-dump that takes several seconds while orders keep arriving can capture an order after its payment
-but before its inventory reservation, or the reverse. A one-node replica set (see
-[Two Client Stacks](./two-client-stacks.md)) genuinely populates `local.oplog.rs`, so `--oplog`
-is a real mechanism here, not a no-op on a single member.
+Considered and not used: **resticprofile** (restic now does natively what it added: `--stdin-from-command`,
+`--retry-lock`, `RESTIC_*` variables; one maintainer), **Percona Backup for MongoDB** (see
+[When you outgrow this](#when-you-outgrow-this)) and **kopia / S3 object lock** (would replace restic;
+the append-only server needs no S3).
 
-**Verified directly against this repo's own compose stack, the restriction the original sketch
-missed:** `mongodump --oplog` refuses to run scoped to one database —
-_"bad option: --oplog mode only supported on full dumps"_. So the command above dumps the whole
-deployment (`admin`, `local`, `config`, and the client's own database together), never
-`--db=<name>`. That is the correct shape for a consistent snapshot; restoring is where the
-distinction matters:
+## When you outgrow this
 
-| Situation                                       | Restore command                                                                 | Why                                                                                                                                                                                                            |
-| ----------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Ordinary case — give a client its own data back | `mongorestore --archive=... --gzip --nsInclude="<client>.*" --drop`             | `--nsInclude` and `--oplogReplay` cannot be combined; this restores the client's collections as of the dump's end, not perfectly cross-collection consistent, which is an acceptable trade for the common case |
-| Disaster recovery / the quarterly drill below   | `mongorestore --archive=... --gzip --oplogReplay` into a **throwaway** instance | Full, oplog-consistent restore — but restoring `admin`/`local` over a LIVE replica set's own identity is not what you want, hence a throwaway target                                                           |
+`mongodump` reads the whole database on every run and evicts the working set; MongoDB calls it a tool
+for small deployments. Past tens of GB, or when minutes of data loss matter:
 
-Both verified end to end against this repo's own stack: a full `--oplog` dump, a selective
-`--nsInclude` restore of just the client's database, and — separately — a full `--oplogReplay`
-restore.
-
-Both `mongorestore` commands above also need `--tls --tlsCAFile <path to the target's CA cert>`
-once the restore target requires TLS — the bundled `database` does (see
-[Reaching the store](../theory/defences/data-layer.md#reaching-the-store)); a scratch throwaway
-instance you spin up for the disaster-recovery drill only needs it if you turned TLS on there too.
-
-## The rules that hold wherever it runs
-
-- **Snapshots from the same provider are a complement, not a backup.** Same account, same blast
-  radius as a compromised API token — keep the restic repository with a different provider than
-  wherever the client's own stack runs.
-- **[3-2-1-1-0](https://www.avepoint.com/blog/backup/3-2-1-backup-rule):** three copies, two media,
-  one off-site, one immutable (restic's append-only mode), zero unverified restores.
-- **A full restore drill, quarterly.** Restore into a throwaway container (the disaster-recovery
-  row above) and count documents. At more than a handful of clients, rotate which one gets drilled
-  rather than testing all of them every time.
-- **[Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/index.html)** is
-  the upgrade path once a single `mongodump` window stops being fast enough — physical backups
-  plus real point-in-time recovery. It refuses a standalone instance outright, which is one more
-  reason the bundled database runs as a replica set from day one.
+- **[Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/index.html)**:
+  logical backups with point-in-time recovery (needs a real replica set, not one node). Physical
+  backups need Percona Server, not the stock MongoDB this stack runs.
+- **Disk snapshots** (LVM or ZFS) of the data volume.
 
 ## Where to go next
 
