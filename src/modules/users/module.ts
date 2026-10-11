@@ -21,7 +21,7 @@ import type { ExportSession } from '@types';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './services';
-import { isLiveRefreshSession, type Token } from './model';
+import { isLiveRefreshSession, sessionIdOf, type Token } from './model';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
 import './events';
 import { usersConfig } from './config';
@@ -47,7 +47,7 @@ const ownSessions = (tokens: Token[]): ExportSession[] =>
     tokens
         .filter((token) => isLiveRefreshSession(token))
         .map((token) => ({
-            id: String(token._id),
+            id: sessionIdOf(token),
             type: 'refresh' as const,
             ...(token.expiration ? { expiration: token.expiration.toISOString() } : {}),
             ...(token.lastUsedAt ? { lastUsedAt: token.lastUsedAt.toISOString() } : {})

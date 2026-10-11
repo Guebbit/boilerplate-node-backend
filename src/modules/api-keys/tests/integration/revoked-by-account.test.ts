@@ -11,7 +11,13 @@ import { setEnvironment } from '@tests/environment';
 import { credentialOf } from '@tests/credentials';
 import apiKeysModule from '@modules/api-keys/module';
 import { mint } from '@modules/api-keys/services/api-keys';
-import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
+import {
+    createUser,
+    userRepository,
+    PLAIN_PASSWORD,
+    REPLACEMENT_PASSWORD
+} from '@modules/users/tests/factories';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { permissionsOfRole } from '@kernel/permissions';
 import type { TenantCallerContext } from '@types';
@@ -65,6 +71,9 @@ describe('keys end with the sessions that may be compromised', () => {
 
         const response = await api().post('/account/logout-all').set('Authorization', bearer);
 
+        // The event rides the outbox: the relay delivers it right after the commit.
+        await settleOutboxNudges();
+
         expect(response.status).toBe(200);
         expect(await credentialOf(secret)).toBeUndefined();
     });
@@ -78,6 +87,26 @@ describe('keys end with the sessions that may be compromised', () => {
             password: REPLACEMENT_PASSWORD,
             passwordConfirm: REPLACEMENT_PASSWORD
         });
+
+        // The event rides the outbox: the relay delivers it right after the commit.
+        await settleOutboxNudges();
+
+        expect(response.status).toBe(200);
+        expect(await credentialOf(secret)).toBeUndefined();
+    });
+
+    it('reporting an email change as not theirs revokes them too', async () => {
+        const { user, secret } = await adminWithKey();
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { previousEmail: 'before@example.com' } }
+        );
+        await user.tokenAdd('email-change-undo', 3_600_000, 'undo-revokes-keys');
+
+        const response = await api()
+            .post('/account/email-change-undo')
+            .send({ token: 'undo-revokes-keys' });
+        await settleOutboxNudges();
 
         expect(response.status).toBe(200);
         expect(await credentialOf(secret)).toBeUndefined();

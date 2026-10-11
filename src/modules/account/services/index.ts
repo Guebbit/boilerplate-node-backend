@@ -65,7 +65,8 @@ export {
     loginOrCreateFromOAuth,
     recordOAuthFailure,
     OAuthEmailUnverifiedError,
-    OAuthAccountUnverifiedError
+    OAuthAccountUnverifiedError,
+    OAuthAccountUnavailableError
 } from './oauth';
 
 /**

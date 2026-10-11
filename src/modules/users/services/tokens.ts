@@ -3,6 +3,7 @@
  * Token writes: append, spend, supersede, touch and sweep, one named door each.
  */
 
+import type { Types } from 'mongoose';
 import type { Token, UserDocument } from '../model';
 import { hashToken } from '../model';
 import { userRepository } from '../repository';
@@ -42,8 +43,9 @@ export const tokenAdd = (
     type: Token['type'],
     expirationMs: number,
     token: string,
-    amr?: string[]
-): Promise<string> => user.tokenAdd(type, expirationMs, token, amr);
+    amr?: string[],
+    familyId?: Types.ObjectId
+): Promise<string> => user.tokenAdd(type, expirationMs, token, amr, familyId);
 
 /** Spend every token of one type at once — "log out everywhere" for that token type. Same reasoning as {@link tokenAdd}. */
 export const tokenRemoveAll = (user: UserDocument, type: Token['type']): Promise<void> =>

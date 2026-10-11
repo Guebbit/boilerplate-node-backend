@@ -31,6 +31,7 @@ import {
 } from './lookups';
 import {
     setPassword,
+    markSessionsEnded,
     markEmailVerified,
     applyEmailChange,
     restorePreviousEmail,
@@ -76,6 +77,7 @@ import {
  * The names below are published as well as carried by `userService`: the suites drive the
  * operations directly, and the barrel's surface must not shrink when a file moves.
  */
+export { isAuthenticatable } from '../authenticatable';
 export { validateData } from './validation';
 export { search, getById, findByEmail } from './read';
 export { enqueueIfPending } from './image';
@@ -113,6 +115,7 @@ export const userService = {
     findByToken,
     findByTokenValue,
     setPassword,
+    markSessionsEnded,
     markEmailVerified,
     applyEmailChange,
     restorePreviousEmail,

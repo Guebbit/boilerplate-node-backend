@@ -11,9 +11,10 @@ import {
     type ReencryptSpec,
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
+import { AUTHENTICATABLE_FILTER } from './authenticatable';
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
-import type { UpdateQuery, QueryFilter, UpdateWriteOpResult } from 'mongoose';
+import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
 import {
     createRepository,
     toObjectId,
@@ -29,13 +30,6 @@ import type { ImageWriteback } from '@infrastructure/adapters/image.worker';
  */
 const CREDENTIAL_FIELDS =
     '+password +tokens +twoFactorMethods +twoFactorBackupCodes +twoFactorBackupCodeSalt +reauthCode +oauthAccounts +pendingEmail +previousEmail';
-
-/**
- * The clause every login-adjacent lookup filters on. `{ $ne: false }` rather than `true`: a
- * document carrying no `active` field is enabled, and must not be locked out by its absence.
- * Shared by `findAuthenticatableById` and `findByTokenValue` so the two can't drift.
- */
-const AUTHENTICATABLE_FILTER = { active: { $ne: false }, deletedAt: undefined };
 
 /**
  * A user's last proof of life, as an aggregation `$expr`: `lastActiveAt` (stamped on every session
@@ -89,11 +83,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     tokenSupersede: (token: string) => Promise<boolean>;
     sessionRemove: (id: string, sessionId: string) => Promise<UpdateWriteOpResult>;
-    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<void>;
+    linkOAuthAccount: (userId: string, account: OAuthAccount) => Promise<boolean>;
     unlinkOAuthAccount: (userId: string, provider: string) => Promise<boolean>;
     reserveMfaAttempt: (id: string, maxFailures: number, lockMs: number) => Promise<MfaReservation>;
     resetMfaAttempts: (id: string) => Promise<void>;
-    bumpSessionEpoch: (id: string, at: Date) => Promise<void>;
+    bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
@@ -350,7 +344,9 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
-     * Revoke one refresh token by its SUBDOCUMENT id — "log out that device". The id filter
+     * Revoke a whole session by its FAMILY id — "log out that device": the live token and any
+     * rotated-away predecessor still in its retention window go together, so a revoked session
+     * cannot be replayed into a reuse alarm either. The id filter
      * carries the owner as well as the session, so a leaked session id from someone else's
      * listing matches nothing and reports `modifiedCount: 0` (404). `type` is pinned to `refresh`
      * so this handle can't be turned against the other token kinds — a pending reset or delete
@@ -360,7 +356,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         userModel
             .updateOne(
                 { _id: toObjectId(id) },
-                { $pull: { tokens: { _id: toObjectId(sessionId), type: TokenType.REFRESH } } },
+                { $pull: { tokens: { familyId: toObjectId(sessionId), type: TokenType.REFRESH } } },
                 { timestamps: false }
             )
             .exec(),
@@ -378,12 +374,14 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     linkOAuthAccount: (userId: string, account: OAuthAccount) =>
         userModel
             .updateOne(
-                { _id: toObjectId(userId) },
+                // One entry per provider: a link for a provider the account already holds matches
+                // nothing, so a repeated callback cannot grow the array.
+                { _id: toObjectId(userId), 'oauthAccounts.provider': { $ne: account.provider } },
                 { $push: { oauthAccounts: account } },
                 { timestamps: false }
             )
             .exec()
-            .then(() => undefined),
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * Remove the link to one provider — atomic `$pull`, the mirror of {@link linkOAuthAccount} and
@@ -491,7 +489,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * working. A plain `$set` — and never backwards, so a slow earlier bump cannot undo a later
      * one. `timestamps: false`, since revoking is not an edit of the profile.
      */
-    bumpSessionEpoch: (id: string, at: Date) =>
+    bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) =>
         userModel
             .updateOne(
                 {
@@ -499,7 +497,8 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                     $or: [{ tokensValidAfter: null }, { tokensValidAfter: { $lt: at } }]
                 },
                 { $set: { tokensValidAfter: at } },
-                { timestamps: false }
+                // `session`: the caller's transaction, so the epoch commits with its other writes.
+                { timestamps: false, session }
             )
             .exec()
             .then(() => undefined),
@@ -656,8 +655,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findInactiveUnwarned: (cutoff: Date) =>
         userModel
             .find({
-                active: { $ne: false },
-                deletedAt: { $exists: false },
+                ...AUTHENTICATABLE_FILTER,
                 $expr: { $and: [{ $lt: [LAST_ACTIVE_EXPR, cutoff] }, NOT_WARNED_THIS_STRETCH] }
             })
             .exec(),
@@ -670,8 +668,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findWarnedStillInactive: (warnedBefore: Date) =>
         userModel
             .find({
-                active: { $ne: false },
-                deletedAt: { $exists: false },
+                ...AUTHENTICATABLE_FILTER,
                 inactivityWarnedAt: { $lt: warnedBefore },
                 $expr: { $lt: [LAST_ACTIVE_EXPR, '$inactivityWarnedAt'] }
             })

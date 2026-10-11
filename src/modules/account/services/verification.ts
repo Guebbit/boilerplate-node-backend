@@ -10,13 +10,12 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import { accountConfig } from '../config';
 import { userService, type UserDocument } from '@modules/users';
 import { tokenAdd } from './authentication';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
-import { revokeAllSessions } from './revocation';
+import { announceSessionsRevoked, dropRefreshTokens } from './revocation';
 import { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types';
 
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
@@ -319,9 +318,8 @@ export const completeEmailVerification = (
  *
  * The revoke is deliberate: an email change is the stronger takeover primitive of the two, and
  * this is the same treatment `passwordChange` already gives a changed password
- * (docs/modules/account.md#proving-an-address). Its own failure is swallowed, not a rejection —
- * the swap already succeeded, and a lost revoke is defense in depth this codebase can afford to
- * lose once.
+ * (docs/modules/account.md#proving-an-address). The epoch moves in the swap's own save, so no
+ * failing second write can leave the old sessions live; only the refresh-token cleanup is separate.
  * @param user - the token's holder, loaded with credentials (`pendingEmail`, `tokens`)
  * @param context - the caller context, for the audit record
  */
@@ -343,17 +341,7 @@ export const completeEmailChange = (
             // the audit below, for the same reason.
             promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
         )
-        .then((saved) =>
-            revokeAllSessions(saved)
-                .catch((error: unknown) => {
-                    logger.warn({
-                        message: 'Email changed, but its session revoke failed.',
-                        userId: saved.id,
-                        error
-                    });
-                })
-                .then(() => saved)
-        )
+        .then((saved) => dropRefreshTokens(saved).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)
         );
@@ -379,16 +367,20 @@ export const undoEmailChange = (
     user: UserDocument,
     context: CallerContext
 ): Promise<UserDocument> =>
-    (user.pendingEmail === undefined
-        ? userService.restorePreviousEmail(user)
-        : userService.cancelPendingEmail(user)
-    )
+    // The sessions end FIRST, as their own write: the undo token is already spent, so a restore
+    // that fails (409) must not leave a thief signed in with no way for the owner to retry.
+    announceSessionsRevoked(user, 'email-change-undo')
+        .then(() =>
+            user.pendingEmail === undefined
+                ? userService.restorePreviousEmail(user)
+                : userService.cancelPendingEmail(user)
+        )
         .then((saved) =>
             // The confirmation link is dead whichever way this went: it would swap back in the
             // address the owner just refused.
             userService.tokenRemoveAll(saved, EMAIL_CHANGE_TOKEN_TYPE).then(() => saved)
         )
-        .then((saved) => revokeAllSessions(saved).then(() => saved))
+        .then((saved) => dropRefreshTokens(saved).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
         );

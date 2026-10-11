@@ -11,8 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
 import type { ResolveMissReason } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, TokenType, hashToken } from '@modules/users';
-import type { UserDocument } from '@modules/users';
+import { userService, TokenType, hashToken, isAuthenticatable } from '@modules/users';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
@@ -74,17 +73,6 @@ const carriedClaims = ({ id, auth_time: authTime, amr, remember }: TokenData): T
     amr,
     ...(remember && { remember })
 });
-
-/**
- * Refuse to mint for a user already loaded (unfiltered, by id) rather than found through a
- * pre-filtered query — `createRefreshToken` and `reissueRotated` both load `userService`'s own
- * `findByIdWithCredentials`, which GDPR export/erase deliberately still need unfiltered. Mirrors
- * the `active`/`deletedAt` clause `users/repository.ts`'s `AUTHENTICATABLE_FILTER` applies at the
- * query, the backstop for every path that reaches a mint without going through `findForLogin` —
- * an OAuth login that resolved through a linked identity or an email fallback, chiefly.
- */
-const isAuthenticatable = (user: Pick<UserDocument, 'active' | 'deletedAt'>): boolean =>
-    user.active !== false && !user.deletedAt;
 
 /**
  * The `typ` header each token kind is signed with (RFC 9068 for the access token, the same shape
@@ -355,7 +343,11 @@ const revokeAllRefreshTokens = (userId: string): Promise<void> =>
  * and for the same reason: rotation mints a new token, and stamping the clock is what minting
  * normally does, which is exactly the trap here.
  */
-const reissueRotated = (claims: TokenData, remainingMs: number): Promise<RotatedSession> =>
+const reissueRotated = (
+    claims: TokenData,
+    oldToken: string,
+    remainingMs: number
+): Promise<RotatedSession> =>
     userService.findByIdWithCredentials(claims.id).then((user) => {
         if (!user || !isAuthenticatable(user)) throw new Error('User not found');
         // The epoch may have moved since the presented token was minted: a rotation must not
@@ -364,10 +356,20 @@ const reissueRotated = (claims: TokenData, remainingMs: number): Promise<Rotated
             throw new Error('Forbidden');
 
         const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
+        // The successor continues the session: same family id, so the id the owner sees (and
+        // revokes by) does not change with the token.
+        const familyId = user.tokens.find((entry) => entry.token === hashToken(oldToken))?.familyId;
 
         return (
             userService
-                .tokenAdd(user, TokenType.REFRESH, remainingMs, newRefreshToken)
+                .tokenAdd(
+                    user,
+                    TokenType.REFRESH,
+                    remainingMs,
+                    newRefreshToken,
+                    undefined,
+                    familyId
+                )
                 .then((refreshToken) =>
                     recordRefreshTokenUse(refreshToken).then(() => refreshToken)
                 )
@@ -416,13 +418,13 @@ const resolveLostRotation = (
         // Still live (no `supersededAt`) despite losing the claim: only reachable through
         // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
         // credential is exactly as valid as the caller believes it is.
-        if (!entry.supersededAt) return reissueRotated(claims, remainingMs);
+        if (!entry.supersededAt) return reissueRotated(claims, oldToken, remainingMs);
 
         const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
         if (supersededMsAgo <= getRotationGraceMilliseconds())
             // The benign race: someone else's rotation of this SAME token already won,
             // moments ago. Reissue rather than reject — see the module doc above.
-            return reissueRotated(claims, remainingMs);
+            return reissueRotated(claims, oldToken, remainingMs);
 
         // Superseded well outside the grace window: THIS is the signal that distinguishes
         // reuse from an ordinary dead credential — a token this account rotated away, on
@@ -459,7 +461,7 @@ export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
             .tokenSupersede(oldToken)
             .then((won) =>
                 won
-                    ? reissueRotated(claims, remainingMs)
+                    ? reissueRotated(claims, oldToken, remainingMs)
                     : resolveLostRotation(claims, oldToken, remainingMs)
             );
     });

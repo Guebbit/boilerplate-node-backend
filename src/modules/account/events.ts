@@ -6,14 +6,15 @@
  */
 
 /** Why an account's sessions were ended wholesale — the cases a subscriber must treat as a compromise. */
-export type SessionsRevokedReason = 'logout-all' | 'password-reset';
+export type SessionsRevokedReason = 'logout-all' | 'password-reset' | 'email-change-undo';
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {
     interface DomainEventMap {
         /**
-         * The account's owner ended every session (logout everywhere) or recovered the account
-         * through a password reset: both mean "I may be compromised". `api-keys` is the subscriber,
+         * The account's owner ended every session (logout everywhere), recovered the account
+         * through a password reset, or reported an email change as not theirs: each means "I may be
+         * compromised". `api-keys` is the subscriber,
          * revoking what the person minted, since a key outlives every session. Internal only: no
          * AsyncAPI channel carries it, nothing outside this application needs to know.
          */

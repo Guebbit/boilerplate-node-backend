@@ -11,6 +11,7 @@ import { setEnvironment } from '@tests/environment';
 import { codeFor } from '@tests/totp';
 import { cookieHeader } from '@tests/cookies';
 import { TokenType, userService } from '@modules/users';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import {
     createUser,
     userRepository,
@@ -208,5 +209,93 @@ describe('the events that move the epoch', () => {
         // The old cookie no longer refreshes; the new one does.
         const stale = await api().post('/account/refresh').set('Cookie', caller.cookie);
         expect(stale.status).toBe(401);
+    });
+});
+
+/** An account whose address was changed away from `old@example.com`, with the undo link live. */
+const changedAccount = async () => {
+    const user = await createUser({ verifiedAt: new Date(), email: 'new@example.com' });
+    await userRepository.updateMany(
+        { _id: user.id },
+        { $set: { previousEmail: 'old@example.com' } }
+    );
+    await user.tokenAdd('email-change-undo', 3_600_000, 'undo-me');
+    return user;
+};
+
+describe('"this wasn\'t me" ends the sessions before it touches the address', () => {
+    it('refuses every old token even when the old address was taken meanwhile (409)', async () => {
+        const user = await changedAccount();
+        await createUser({ verifiedAt: new Date(), email: 'old@example.com', username: 'taker' });
+        const thief = await loginAs(user.email);
+        await nextSecond();
+
+        const response = await api().post('/account/email-change-undo').send({ token: 'undo-me' });
+
+        expect(response.status).toBe(409);
+        expect(await statusWith(thief.bearer)).toBe(401);
+        const refresh = await api().post('/account/refresh').set('Cookie', thief.cookie);
+        expect(refresh.status).toBe(401);
+    });
+
+    it('announces the revoke with its own reason, even when the restore fails', async () => {
+        const user = await changedAccount();
+        await createUser({ verifiedAt: new Date(), email: 'old@example.com', username: 'taker' });
+
+        await api().post('/account/email-change-undo').send({ token: 'undo-me' });
+        await settleOutboxNudges();
+
+        const rows = await outboxEventModel.find({ name: 'account.sessions-revoked' }).lean();
+        expect(rows.map((row) => row.payload)).toEqual([
+            { userId: user.id, reason: 'email-change-undo' }
+        ]);
+    });
+});
+
+describe('a credential change moves the epoch in its own write', () => {
+    // The bump is made to fail: only a change that no longer depends on it can still end the sessions.
+    beforeEach(() => {
+        jest.spyOn(userService, 'bumpSessionEpoch').mockRejectedValue(new Error('bump failed'));
+    });
+
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
+    it('email-change confirm', async () => {
+        const user = await createUser({ verifiedAt: new Date() });
+        const other = await loginAs(user.email);
+        await userRepository.updateMany(
+            { _id: user.id },
+            { $set: { pendingEmail: 'confirmed@example.com' } }
+        );
+        await user.tokenAdd('email-change', 3_600_000, 'confirm-me');
+        await nextSecond();
+
+        const response = await api()
+            .post('/account/email-change-confirm')
+            .send({ token: 'confirm-me' });
+
+        expect(response.status).toBe(200);
+        expect(await statusWith(other.bearer)).toBe(401);
+    });
+
+    it('2FA confirm', async () => {
+        const user = await createUser({ verifiedAt: new Date() });
+        const other = await loginAs(user.email);
+        const caller = await loginAs(user.email);
+        const setup = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', caller.bearer)
+            .send();
+        await nextSecond();
+
+        const confirm = await api()
+            .post('/account/2fa/methods/totp/confirm')
+            .set('Authorization', caller.bearer)
+            .send({ code: await codeFor(setup.body.data.secret as string, 0) });
+
+        expect(confirm.status).toBe(200);
+        expect(await statusWith(other.bearer)).toBe(401);
     });
 });

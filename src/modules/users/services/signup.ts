@@ -89,7 +89,11 @@ export const discardFailedSignup = (user: UserDocument): Promise<void> =>
 export const unlinkOAuthAccount = (userId: string, provider: string): Promise<boolean> =>
     userRepository.unlinkOAuthAccount(userId, provider);
 
-/** Attach a federated identity to an existing account. */
+/**
+ * Attach a federated identity to an existing account.
+ *
+ * @returns whether the link was written; `false` when the account already holds that provider
+ */
 export const linkOAuthAccount = (
     userId: string,
     account: Parameters<typeof userRepository.linkOAuthAccount>[1]

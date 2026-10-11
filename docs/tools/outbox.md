@@ -64,6 +64,7 @@ no-op — see [Consumers](#writing-a-consumer).
 | `order.cancelled`                         | `src/modules/orders/services/cancel.ts`                  |
 | `inventory.reservation_expired`           | `src/modules/inventory/services/sweep.ts`                |
 | `product.created`                         | `src/modules/products/services/crud.ts`                  |
+| `account.sessions-revoked`                | `src/modules/account/services/{revocation,profile}.ts`   |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary
