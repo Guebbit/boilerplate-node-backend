@@ -66,8 +66,7 @@ const _heapSizeLimitGauge = new Gauge({
  * gauges above: the fact it reports happened in a DIFFERENT process (the cron container), so
  * there is no in-memory value here to read instead.
  *
- * `reset()` first, so a job the TTL index has reclaimed (`lease.ts`'s own retention window) stops
- * being reported. A job with no value for this gauge is left unset, not `0`: the Unix epoch would
+ * `reset()` first, so a job whose lease row was deleted by hand stops being reported. A job with no value for this gauge is left unset, not `0`: the Unix epoch would
  * fire a staleness alert on a fresh deployment's first scrape, before the job ever had a chance
  * to run.
  *
