@@ -308,9 +308,17 @@ export const rateLimitStore = (
     escalation?: Escalation
 ): Store => {
     warnPerProcessCounting(namespace);
-    return escalation
+    const store = escalation
         ? escalatingStore(namespace, onStoreError, escalation)
         : plainStore(namespace, onStoreError);
+    /*
+     * `express-rate-limit`'s double-count check (`ERR_ERL_DOUBLE_COUNT`) tells two stores apart by
+     * `store.prefix`, falling back to the class name. Our wrappers are plain objects, so without a
+     * prefix every budget looks like one store, and two budgets keyed alike on one request (the
+     * account-keyed `/payments/:id/confirm` pair) read as one hit counted twice.
+     * https://express-rate-limit.github.io/ERR_ERL_DOUBLE_COUNT/
+     */
+    return Object.assign(store, { prefix: `${namespace}:` });
 };
 
 /**

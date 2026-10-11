@@ -369,6 +369,13 @@ which is exactly the signal worth limiting.
 
 The test suites raise the budget tenfold — see `tests/support/setup.ts`.
 
+**Every budget's store carries its own prefix.** `express-rate-limit` refuses to count one request
+twice in the same store (`ERR_ERL_DOUBLE_COUNT`) and tells stores apart by `store.prefix`. The
+Redis and failover wrappers are plain objects, so `rateLimitStore` stamps `<namespace>:` on each.
+Without it, two budgets keyed alike on one request — the account-keyed attempt and decline budgets
+on `POST /payments/:id/confirm` — were reported as one hit counted twice, though each counted once
+in its own namespace.
+
 **A third budget, the same shape as neither.** `submissionLimiter` guards `feedback`'s
 `POST /contact` — a public write that causes an outbound email (signup and reset also do, under their own budgets; this one reaches the operator) — and it inverts the rule
 above: `skipSuccessfulRequests` is deliberately **off**. A credential attempt is abusive when it
