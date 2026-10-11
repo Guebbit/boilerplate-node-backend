@@ -324,10 +324,8 @@ charge. Publishing it as a capability while withholding it as a transition is th
 between "you may see this is possible" and "you may do this".
 
 **One function, three doors.** `domain/lifecycle.ts`'s `isPayable(status)` is the single answer to
-"can this order still be paid" — `pending` only. `system` may still write a `paid → paid` echo (the
-payment webhook's own retries), but that echo is not a fresh offer to pay, so `isPayable` excludes
-it even though `canTransition` alone would not. Every door that moves money asks it instead of
-comparing a status literal:
+"can this order still be paid" — `pending` only, the one status with a `system` edge into `paid`.
+Every door that moves money asks it instead of comparing a status literal:
 
 ```mermaid
 flowchart LR
@@ -338,9 +336,9 @@ flowchart LR
     P -- false --> REFUSE["409 PAYMENT_ORDER_NOT_PAYABLE<br/>or actions.pay: false"]
 ```
 
-A `paid → paid` echo settling twice (a webhook retry, or an admin resending the same status) is a
-settlement detail `system` alone may write — never a second offer to pay, which is why the door and
-the transition disagree on purpose: see "Why `paid` is never in `transitions`" above.
+A settlement arriving twice (a webhook retry) finds the order no longer `pending`, so the
+conditional write matches nothing: no table says "staying put is allowed", and no door treats it
+as a second offer to pay.
 
 The client's side of the bargain is to decide nothing. A control is enabled when the server says so
 and disabled otherwise, which is what makes a rule change on the API move the interface without the

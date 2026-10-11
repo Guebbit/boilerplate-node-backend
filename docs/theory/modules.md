@@ -546,16 +546,19 @@ sequenceDiagram
     participant B as kernel/events
     participant C as cart
     Note over C,P: cart → products is the only IMPORT
-    P->>B: emitDomainEvent('product.deleted')
+    Note over P: row deleted + outbox row, one transaction
+    P->>B: the relay emits 'product.deleted'
     B->>C: handler (awaited)
     C-->>B: cart lines removed
     B-->>P: all handlers settled
-    Note over P: only now is the row deleted
+    Note over P: a handler that threw is retried by the relay
 ```
 
-Handlers are **awaited in registration order**, so the dependent rows are gone before the owning row
-disappears. A handler that throws is logged and does not fail the emitter — a listener must not roll
-back an operation that was already authorised.
+Handlers are **awaited in registration order** within one delivery. `product.deleted` rides the
+[transactional outbox](../tools/outbox.md), so the event is written with the delete and the relay
+delivers it right after the commit; a handler that throws leaves the row pending and the relay
+redelivers, so every handler must be idempotent. On the plain bus a throwing handler is logged and
+does not fail the emitter — a listener must not roll back an operation that was already authorised.
 
 ### The bus is not transactional, and must not be made so
 

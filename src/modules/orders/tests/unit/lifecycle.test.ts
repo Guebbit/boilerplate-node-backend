@@ -192,21 +192,11 @@ describe('direction', () => {
 });
 
 describe('canTransition', () => {
-    it('allows a write that changes nothing', () => {
-        // An admin editing an email sends the status the order already has.
+    it('refuses a write that changes nothing, from every actor', () => {
+        // Only a declared edge is a transition: staying put is not one, `paid → paid` included.
         for (const status of EVERY_STATUS)
             for (const actor of EVERY_ACTOR)
-                if (status !== OrderStatus.paid)
-                    expect(canTransition(status, status, actor)).toBe(true);
-    });
-
-    it('refuses an echo write onto `paid` from anyone but the payment confirmation', () => {
-        // The one status where "changes nothing" must not bypass who may write it — an admin
-        // resending `status: 'paid'` on an already-paid order is not a free pass.
-        for (const actor of EVERY_ACTOR)
-            expect(canTransition(OrderStatus.paid, OrderStatus.paid, actor)).toBe(
-                actor === 'system'
-            );
+                expect(canTransition(status, status, actor)).toBe(false);
     });
 
     it('agrees with both directions of the table', () => {
@@ -250,13 +240,6 @@ describe('isPayable', () => {
     it('is true for pending alone, over every status', () => {
         for (const status of EVERY_STATUS)
             expect(isPayable(status)).toBe(status === OrderStatus.pending);
-    });
-
-    it('refuses the echo `system` may still write onto `paid`', () => {
-        // `canTransition(paid, paid, 'system')` is `true` (the webhook's own retries) — `isPayable`
-        // must not surface that as "you may pay this order again".
-        expect(canTransition(OrderStatus.paid, OrderStatus.paid, 'system')).toBe(true);
-        expect(isPayable(OrderStatus.paid)).toBe(false);
     });
 
     it("agrees with `orderActionsFor`'s `pay` field for every status", () => {

@@ -13,7 +13,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { imageStore } from '@infrastructure/adapters/image-store';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
 import { PRODUCT_DELETED } from '../events';
@@ -26,11 +26,10 @@ import { titlesOf } from './lookups';
  * soft delete stamps `deletedAt`, and repeating it is a no-op — DELETE must be safe to retry, so
  * undoing it is {@link restoreById}'s job, never a second DELETE's.
  *
- * `product.deleted` is emitted and awaited AFTER the write, not before it — a past-tense event is
- * a report, not an "about to happen" hook: firing it first and having the write then fail would
- * leave every subscriber's cascade (cart and wishlist pulling the line)
- * already run against a product that, as far as the database is concerned, was never removed at
- * all. This module still doesn't know who listens, which keeps the dependency arrow one-way.
+ * `product.deleted` goes through the outbox, written in the same transaction as the delete: it
+ * exists exactly when the delete committed, and the relay retries it until every subscriber (cart
+ * and wishlist pulling the line) has handled it. This module still doesn't know who listens, which
+ * keeps the dependency arrow one-way. The response does not wait for the cascade.
  *
  * @param hardDelete - `true` destroys the row; `false` stamps `deletedAt` once
  * @param context - records `ADMIN_PRODUCT_DELETED`; omit for a caller with no request behind it
@@ -54,25 +53,26 @@ export const remove = (
     };
 
     // HARD delete
-    // Translations go with it, in this same operation — through the port, never the
-    // `PRODUCT_DELETED` event above: that event fires on a SOFT delete too, with the same
-    // `productId` — `hardDelete` on the payload is what lets a subscriber (`inventory`'s level
-    // row) tell the two apart. A soft delete can be
-    // restored, so both the rows and the counters must survive it.
+    // Translations go with it, in this same transaction — through the port, never the
+    // `PRODUCT_DELETED` event: that event fires on a SOFT delete too, with the same `productId` —
+    // `hardDelete` on the payload is what lets a subscriber (`inventory`'s level row) tell the two
+    // apart. A soft delete can be restored, so both the rows and the counters must survive it.
     if (hardDelete)
         // Titles are read first: `removeTranslations` below takes the other languages with it.
         return titlesOf(product)
             .then((titles) =>
-                productRepository
-                    .deleteOne(product)
-                    .then(() => removeTranslations('product', id))
-                    .then(() =>
-                        emitDomainEvent(PRODUCT_DELETED, {
-                            productId: id,
-                            hardDelete: true,
-                            titles
-                        })
-                    )
+                announceInTransaction(
+                    (session) =>
+                        productRepository
+                            .deleteOne(product, session)
+                            .then(() => removeTranslations('product', id, session))
+                            .then(() => product),
+                    () => ({
+                        name: PRODUCT_DELETED,
+                        payload: { productId: id, hardDelete: true, titles },
+                        aggregateId: id
+                    })
+                )
             )
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => auditDeleted())
@@ -85,12 +85,13 @@ export const remove = (
     product.deletedAt = new Date();
     return titlesOf(product)
         .then((titles) =>
-            productRepository.save(product).then((saved) =>
-                emitDomainEvent(PRODUCT_DELETED, {
-                    productId: id,
-                    hardDelete: false,
-                    titles
-                }).then(() => saved)
+            announceInTransaction(
+                (session) => productRepository.save(product, session),
+                () => ({
+                    name: PRODUCT_DELETED,
+                    payload: { productId: id, hardDelete: false, titles },
+                    aggregateId: id
+                })
             )
         )
         .then((saved) => {

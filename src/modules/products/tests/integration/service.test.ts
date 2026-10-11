@@ -15,6 +15,7 @@ import type { ResponseReject } from '@infrastructure/http/response';
 import type { ProductDocument } from '../../model';
 import type { Caller } from '@types';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { callerAs, testCallerContext } from '@tests/callers';
 import { registerTranslationPort, type TranslationPort } from '@kernel/translation';
@@ -637,6 +638,8 @@ describe('productService.removeById', () => {
         expect(await cartService.cartGet(userId)).toHaveLength(1);
 
         const result = await productService.removeById(pid, true);
+        // The cascade rides the outbox: it lands after the response, not before it.
+        await settleOutboxNudges();
 
         expect(result.success).toBe(true);
         // Product must be gone from DB
@@ -747,7 +750,8 @@ describe('productService.remove', () => {
 
             await productService.remove(product, true);
 
-            expect(removeAll).toHaveBeenCalledWith('product', pid);
+            // The third argument is the delete's transaction: the rows go with the product or not at all.
+            expect(removeAll).toHaveBeenCalledWith('product', pid, expect.anything());
         });
 
         it('does not call the port on a soft delete', async () => {

@@ -16,9 +16,10 @@ declare module '@kernel/events' {
          * done, since a restore puts the product back on sale, not undoes
          * the past — see `restoreById`'s own docblock.
          *
-         * Emitted and awaited AFTER the write, not before it: this is a past-tense fact, and firing
-         * it first would let every listener's cascade (cart and wishlist pulling the line) run
-         * even if the write that follows then fails.
+         * Goes through the transactional outbox (`aggregateId` = the product), written in the same
+         * transaction as the delete: a past-tense fact exists exactly when the write committed, and
+         * the relay redelivers it until every listener has handled it, so a listener must be
+         * idempotent on `meta.eventId`.
          *
          * `hardDelete` is what lets a listener tell the destructive half apart from the reversible
          * one — `inventory` deletes this product's level row ONLY when it is `true`: a soft delete

@@ -81,6 +81,22 @@ Every move is one conditional write from the statuses that may precede it
 the database and exactly one wins — the loser is told it was already decided (409). The one move
 that is not conditional is the first: a withdrawal before dispatch is written `closed` at birth.
 
+## The events
+
+`return.requested`, `return.received` and `return.closed` are public webhooks, so each rides the
+[transactional outbox](../tools/outbox.md): the row is written in the transaction of the move it
+announces, keyed on the **order** (`aggregateId`), so one order's events reach `webhooks` in the
+order they were written.
+
+| Event              | Written with                                             | Where                 |
+| ------------------ | -------------------------------------------------------- | --------------------- |
+| `return.requested` | the return row, under the order's lock                   | `services/create.ts`  |
+| `return.received`  | the `approved → received` claim and the restock          | `services/receive.ts` |
+| `return.closed`    | the `received → closed` claim (only the caller that won) | `services/close.ts`   |
+
+A return that is lost to a race writes nothing, and a failed event write takes the move down with
+it. The mail, the audit row and the order's `returnStatus` stay after the commit, best effort.
+
 ## The withdrawal button
 
 The button is **server-driven**: `OrderActions.withdraw` says whether to show it and
@@ -115,7 +131,7 @@ flowchart TD
   carries no `returnId`, and `returns` does not close anything on it: the Return was closed already.
   The credit note follows that event as usual.
 - **Events:** the order's own `order.cancelled` first, then `return.requested` and `return.closed`
-  back to back. A subscriber to `return.closed` therefore also hears about withdrawals that never
+  back to back (both written in the transaction that writes the return). A subscriber to `return.closed` therefore also hears about withdrawals that never
   had goods.
 - **One mail from this module:** the acknowledgement, with no postage line and no address (nothing
   is posted). `return-closed` is for a return whose goods came back, so it is never sent here. Any
