@@ -12,7 +12,7 @@
 import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { userService, type UserDocument } from '@modules/users';
-import { tokenAdd } from './authentication';
+import { tokenAdd } from './tokens';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
 import { announceSessionsRevoked, dropRefreshTokens } from './revocation';
@@ -49,7 +49,7 @@ export const VERIFY_RESEND_SECONDS = 60;
 
 /**
  * The error code a client branches on to render a resend countdown rather than a generic 429.
- * Module-private, like `services/two-factor.ts`'s equivalent: a client reads it off the response,
+ * Module-private, like `services/two-factor-outcomes.ts`'s equivalent: a client reads it off the response,
  * not off an exported constant.
  */
 const VERIFY_RESEND_TOO_SOON_CODE = ERROR_CODES.EMAIL_VERIFY_RESEND_TOO_SOON;
@@ -251,7 +251,7 @@ export const resendPendingEmailVerificationFor = (
  *
  * Mutates `verifiedAt` on the document, unpersisted — the caller's own `save` covers it — but the
  * role promotion is a MEMBERSHIP write, with no document field to ride along on, so this cannot
- * be purely synchronous. `profile.ts#passwordResetChange` is the one caller, passing this as
+ * be purely synchronous. `password-reset.ts#passwordResetChange` is the one caller, passing this as
  * `passwordChange`'s `beforeSave`, awaited there, so a verification can still land in the same
  * request `userService.setPassword` handles — a spent reset token proves the same mailbox a
  * verify token does. `completeEmailVerification`/`completeEmailChange` below do NOT call this:

@@ -43,7 +43,7 @@ import {
 } from '../two-factor';
 import { maskEmail } from '../two-factor/methods/email';
 import { sendAccountMail } from './mail';
-import { proveSecondFactor } from './two-factor';
+import { proveSecondFactor } from './two-factor-lockout';
 
 /**
  * The RFC 8176 `amr` value each method earns the session. `email` is this app's own value, not a

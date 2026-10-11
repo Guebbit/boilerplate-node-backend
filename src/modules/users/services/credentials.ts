@@ -9,7 +9,7 @@ import { userRepository } from '../repository';
 import { isEmptyWrite, planTwoFactorWrite, settleTwoFactorWrite } from '../two-factor-write';
 
 /**
- * Set an account's password — `account/services/profile.ts`'s `passwordChange` is the only
+ * Set an account's password — `account/services/password.ts`'s `passwordChange` is the only
  * caller, itself the funnel both a password reset and an authenticated password change go
  * through. Takes the already-loaded, already-validated account: `passwordChange` refuses a weak
  * or breached password well before this point, so nothing here re-checks either.
@@ -107,7 +107,7 @@ export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> 
 };
 
 /**
- * Persist the 2FA changes a request made on its loaded copy — `account/services/two-factor.ts`
+ * Persist the 2FA changes a request made on its loaded copy — `account/services/two-factor-enrollment.ts`
  * calls this as the last step of every enrollment, confirmation, removal, disable and backup-code
  * action. The mutation stays `account`'s; this writes only what changed, per method and in one
  * atomic update, so a request holding an older copy cannot undo what a concurrent one wrote (a

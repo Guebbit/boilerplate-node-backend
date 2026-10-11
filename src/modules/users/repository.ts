@@ -198,7 +198,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * Fetch a user by email, but only if the account may still authenticate — same
      * `AUTHENTICATABLE_FILTER` as `findAuthenticatableById`. WITH credential fields
      * (`select: false`), since the caller is always about to compare a password hash.
-     * `login` (`account/services/authentication.ts`) is the only caller.
+     * `login` (`account/services/login.ts`) is the only caller.
      */
     findAuthenticatableByEmail: (email: string) =>
         userModel

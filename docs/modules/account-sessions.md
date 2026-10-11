@@ -248,7 +248,7 @@ Neither is a layer — they are the repeated ends of controllers.
 | `login-observability.ts` | the metrics / audit / analytics emit meaning "a login happened"           | `post-login.ts`, `post-login-2fa.ts`                  |
 
 ::: tip Why the observability tail is not in the service
-`services/authentication.ts` checks credentials; it cannot know whether a session exists. The
+`services/login.ts` checks credentials; it cannot know whether a session exists. The
 SUCCESS emit must fire only **after** cookies and an access token are real, which is a
 controller-layer fact — so `login()` and `verifyLoginChallenge()` are deliberately kept ignorant of
 it.

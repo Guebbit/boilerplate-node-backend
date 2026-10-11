@@ -30,7 +30,7 @@ import { accountAuthResolver } from './session/resolver';
 import { accountConfig } from './config';
 import { sessionConfig } from './session/config';
 import { oauthConfig } from './oauth/config';
-import { requestAccountSetup } from './services/authentication';
+import { requestAccountSetup } from './services/password-reset-request';
 import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
 import { setPersonalDataSections } from './services/personal-data-registry';

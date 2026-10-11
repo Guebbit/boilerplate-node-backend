@@ -2,7 +2,7 @@
  * @module
  * The metrics/audit/analytics tail every completed login fires — extracted from `post-login.ts`
  * so `post-login-2fa.ts` (the second step of a 2FA login) reuses it instead of re-implementing what "a
- * login happened" means a second time. Deliberately not in `services/authentication.ts`: the
+ * login happened" means a second time. Deliberately not in `services/login.ts`: the
  * SUCCESS emit must fire only after a session actually exists (cookies, access token), which is a
  * controller-layer fact, not something `login()`/`verifyLoginChallenge()` — credential/code
  * checks only — know about.

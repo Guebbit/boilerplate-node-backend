@@ -144,14 +144,25 @@ Split by **what the operations do**, never by size alone. `cart` is the worked e
 One of those files is usually internal — here `view.ts`, whose helpers the others share and no
 caller asks for by name. Export its **types** from the barrel, not its helpers.
 
-`account` took the same step, and then a second one: `services/` splits into `authentication.ts`,
-`profile.ts`, `verification.ts`, `tokens.ts`, `token-cleanup.ts`, `mail.ts` and `oauth.ts`
-(`accountService`) and `two-factor.ts` (`twoFactorService`) — two namespaces behind one
-`index.ts`, not one; `export.ts` stays out of both on purpose (see the barrel's own docblock), and
-the address book left entirely, as `@modules/addresses`. A single object meant every
-caller of `accountService.login` was, to TypeScript, also coupled to 2FA;
-splitting along the same file boundaries removes that coupling without adding new ones, since
-neither group calls the other. `tokens.ts` is the one worth reading for the reason a
+`account` took the same step, and then a second one: two namespaces behind one `index.ts`, not one
+— `accountService` and `twoFactorService`. `export.ts` stays out of both on purpose (see the
+barrel's own docblock), and the address book left entirely, as `@modules/addresses`. A single
+object meant every caller of `accountService.login` was, to TypeScript, also coupled to 2FA;
+splitting along file boundaries removes that coupling without adding new ones, since
+neither group calls the other.
+
+Inside `services/`, one file per flow, as `cart` does:
+
+| Files                                                                          | The flow                                                      |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `signup.ts`, `login.ts`, `logout.ts`, `refresh.ts`                             | getting in, getting out, staying in                           |
+| `password-reset-request.ts`, `password-reset.ts`, `password.ts`                | asking for a reset link, spending it, changing                |
+| `deletion-request.ts`, `self-delete.ts`                                        | asking to delete the account, and doing it                    |
+| `email-change.ts`, `verification.ts`, `profile.ts`                             | the address, its proof, and the other profile fields          |
+| `two-factor-enrollment.ts`, `two-factor-challenge.ts`, `two-factor-lockout.ts` | `twoFactorService`: managing factors, the login step, the cap |
+| `two-factor-outcomes.ts`                                                       | internal: what the 2FA flows say back                         |
+
+`tokens.ts` is the one worth reading for the reason a
 split like this pays off in the first place:
 what makes a one-time token live — right type, not expired — is one function there, because a flow
 that forgot the expiry comparison would ship a link that worked forever.

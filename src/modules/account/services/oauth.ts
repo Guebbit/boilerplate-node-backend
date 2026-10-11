@@ -1,6 +1,6 @@
 /**
  * @module
- * OAuth login/signup — the OAuth counterpart to `./authentication.ts`'s `login`/`signup`, one
+ * OAuth login/signup — the OAuth counterpart to `./login.ts`'s `login` and `./signup.ts`'s `signup`, one
  * layer above `../oauth/`'s provider mechanics (which know nothing about `UserDocument` or
  * audit/analytics — see that folder's own files). Three outcomes only: an already-linked identity
  * logs in, an email BOTH sides call verified links a NEW identity onto an existing password
@@ -44,7 +44,7 @@ export class OAuthEmailUnverifiedError extends Error {
  * account with the squatter's password still on it.
  *
  * The victim's way in is the password reset, which proves the same mailbox and marks it verified
- * — see `profile.ts#passwordResetChange`. The callback controller turns this into an
+ * — see `password-reset.ts#passwordResetChange`. The callback controller turns this into an
  * `?error=account_unverified` redirect.
  */
 export class OAuthAccountUnverifiedError extends Error {

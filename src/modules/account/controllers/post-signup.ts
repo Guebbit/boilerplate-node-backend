@@ -118,7 +118,7 @@ export const postSignup = (
             return issueSession(response, data.id).then(() => {
                 // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
                 // ever grant this one role, so it's what the membership just written holds, by
-                // construction — see `authentication.ts#signup`.
+                // construction — see `signup.ts#signup`.
                 createdResponse<User>(
                     response,
                     userService.toUser(data, SIGNUP_DEFAULT_ROLE),

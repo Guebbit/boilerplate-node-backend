@@ -140,7 +140,7 @@ describe('backup codes', () => {
     });
 });
 
-/** A bare method entry, the shape `services/two-factor.ts` hands a handler. */
+/** A bare method entry, the shape `services/two-factor-enrollment.ts` hands a handler. */
 const entry = (): TwoFactorMethodRecord => ({ method: 'email' });
 
 /** A fixed instant, so nothing here depends on how long the suite took to get here. */
