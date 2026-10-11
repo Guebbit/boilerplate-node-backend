@@ -23,7 +23,6 @@ import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 // rejection that is not an `Error` still yields its message. `String(error)` is the fallback
 // rather than the toolkit's default empty string. https://github.com/Guebbit/js-toolkit
 import { extractErrorMessage } from '@guebbit/js-toolkit';
-import { persistenceConfig } from '@infrastructure/persistence/config';
 
 /**
  * A stored lease, one document per job name.
@@ -68,33 +67,10 @@ export const leaseSchema: Schema<LeaseDocument, LeaseModel> = new Schema<LeaseDo
         }
     },
     {
-        // `updatedAt` is what the TTL index below reads, and it is what re-acquiring an active
-        // lease bumps on every job run — see the index comment.
+        // `updatedAt` is when the job last ran (`lastRunAt` in the summaries). No TTL index reads
+        // it: a row lives until a technician deletes it, so a retired job stays visible as stale.
         timestamps: true
     }
-);
-
-/**
- * How long a lease document survives with no acquisition, in days, before Mongo's TTL index
- * removes it. Deliberately generous and unrelated to any job's own `ttlMs` argument: THIS window
- * is garbage collection for a job retired from the roster, not the mutual-exclusion window a
- * running job holds its lease for.
- */
-const leaseRetentionDays = persistenceConfig().NODE_LEASE_RETENTION_DAYS;
-
-/*
- * TTL index on `updatedAt`, not `expiresAt`: every successful `findOneAndUpdate` in
- * `acquireLease` and `releaseLease` bumps `updatedAt` (via `timestamps: true` above), so a job
- * that keeps running on schedule never gets near this window — only a lease nobody has touched in
- * `leaseRetentionDays` is abandoned rather than merely between runs.
- *
- * Same caveat as every other TTL index in this repo: Mongo will not modify an existing index's
- * `expireAfterSeconds` in place, so changing `NODE_LEASE_RETENTION_DAYS` and restarting FAILS THE
- * BOOT — `npm run db:sync` is what applies it, by dropping the index and rebuilding it.
- */
-leaseSchema.index(
-    { updatedAt: 1 },
-    { name: 'leases_updatedAt_ttl', expireAfterSeconds: leaseRetentionDays * 24 * 60 * 60 }
 );
 
 /** Lease model entrypoint. Collection name `leases`, Mongoose's default pluralization of `Lease`. */
@@ -117,7 +93,8 @@ export interface LeaseSummary {
  *
  * Only jobs that have attempted to acquire their lease at least once appear here — there is no
  * separate registry of "expected" job names to compare against, so a job removed from the
- * crontab simply stops updating its row until the TTL index above reclaims it.
+ * crontab simply stops updating its row. The row stays (no TTL), so the staleness alerts keep
+ * firing until the job runs again or its row is deleted by hand.
  */
 export const listLeaseSummaries = (): Promise<LeaseSummary[]> =>
     leaseModel

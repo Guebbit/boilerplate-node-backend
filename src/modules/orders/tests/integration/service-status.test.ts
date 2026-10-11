@@ -6,7 +6,13 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { seedOrder, readOrder, createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    seedOrder,
+    seedDigitalOrder,
+    readOrder,
+    createOrder,
+    toOrderItem
+} from '@modules/orders/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { withEnvironment } from '@tests/environment';
@@ -167,8 +173,18 @@ describe('markDelivered', () => {
 });
 
 describe('markFulfilled', () => {
-    it('moves a processing order straight to delivered and announces it once', async () => {
+    it('refuses a physical order, which must pass through shipped', async () => {
         const order = await seedOrder(OrderStatus.processing);
+
+        const updated = await markFulfilled(String(order._id));
+
+        expect(updated).toBeNull();
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.processing);
+    });
+
+    it('moves a processing order straight to delivered and announces it once', async () => {
+        const order = await seedDigitalOrder(OrderStatus.processing);
         const events: unknown[] = [];
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
 
@@ -208,7 +224,7 @@ describe('markFulfilled', () => {
     // `markDelivered`'s own edge into `delivered` is `shipped`, not `processing` — the two must
     // stay independent, or one door's move would silently also satisfy the other's gate.
     it("never satisfies markDelivered's own gate — the two edges into `delivered` stay independent", async () => {
-        const order = await seedOrder(OrderStatus.processing);
+        const order = await seedDigitalOrder(OrderStatus.processing);
 
         await markFulfilled(String(order._id));
         const viaShippedDoor = await markDelivered(String(order._id), new Date());

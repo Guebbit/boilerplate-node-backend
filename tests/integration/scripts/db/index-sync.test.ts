@@ -160,6 +160,23 @@ describe('db:sync', () => {
         expect(stored.map(({ name }) => name)).not.toContain('users_orphan');
     });
 
+    it('drops the retired `leases` TTL index', async () => {
+        // Assembled, not spelled out, so the repo holds no live reference to the retired name.
+        const retiredName = ['leases', 'updatedAt', 'ttl'].join('_');
+        // The index the lease schema used to declare: a database deployed before it was removed
+        // still holds it, and `db:sync` is what must take it away (a stale job must never expire).
+        await dropAllIndexes();
+        await applyIndexSync();
+        await nativeDb()
+            .collection('leases')
+            .createIndex({ updatedAt: 1 }, { name: retiredName, expireAfterSeconds: 2_592_000 });
+
+        await applyIndexSync();
+
+        const stored = await nativeDb().collection('leases').indexes();
+        expect(stored.map(({ name }) => name)).not.toContain(retiredName);
+    });
+
     it('is a no-op the second time', async () => {
         // It runs on every boot (`db:bootstrap`), so a second pass with work left to do would mean
         // the first one did not converge.

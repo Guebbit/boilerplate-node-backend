@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { seedOrder, readOrder } from '@modules/orders/tests/factories';
+import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
 import { overrideStatus, forceMove } from '../../services/override';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -20,6 +20,41 @@ setupTestDb();
 beforeEach(() => markDomainEventsWired());
 
 afterEach(() => resetDomainEvents());
+
+describe('overrideStatus on a digital-only order', () => {
+    it('refuses shipped: there is no parcel to have left', async () => {
+        const order = await seedDigitalOrder(OrderStatus.processing);
+
+        const result = await overrideStatus(
+            String(order._id),
+            OrderStatus.shipped,
+            'nothing to ship',
+            callerContextAs('admin', 'admin-1')
+        );
+
+        expect(result).toMatchObject({ success: false, status: 409 });
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.processing);
+    });
+
+    it('counts the withdrawal period from payment when it lands on delivered', async () => {
+        const order = await seedDigitalOrder(
+            OrderStatus.processing,
+            new Date('2026-03-01T10:00:00Z')
+        );
+
+        const result = await overrideStatus(
+            String(order._id),
+            OrderStatus.delivered,
+            'fulfilled by hand',
+            callerContextAs('admin', 'admin-1')
+        );
+
+        expect(result.success).toBe(true);
+        const stored = await readOrder(String(order._id));
+        expect(stored?.withdrawUntil?.toISOString()).toBe('2026-03-31T23:59:59.999Z');
+    });
+});
 
 describe('overrideStatus', () => {
     it('moves an order forward, records the history entry, and fires the status-changed event', async () => {

@@ -127,6 +127,8 @@ at 2am.
 racing over the same collection — nothing here is meant to scale. `withLease`
 (`src/infrastructure/persistence/lease.ts`) is the backstop if it ever is: an atomic Mongo upsert
 that only one caller can hold at a time, TTL-bounded so a crashed holder's lease still expires.
+The `leases` row itself never expires: **retire a job by deleting its `leases` row** (by hand, once the job is
+out of `docker/crontab`).
 `reap:inactive-accounts` wraps its work in it, as the reference implementation — it hard-deletes
 accounts, so it is where "exactly one runner" earns its keep. Every other job is correct today
 under `replicas: 1` alone and is not wrapped — the frequent sweeps included, each with its
@@ -142,7 +144,7 @@ crontab job silently failing or silently not running at all is visible on the pr
 already looks at. `job_last_success_timestamp_seconds{task="…"}` (`infrastructure/observability/metrics-registry.ts`)
 exposes the same value to Prometheus, next to `job_last_run_timestamp_seconds{task="…"}` (when the row was last touched,
 success or not); `ScheduledJobStale` (`docker/observability/prometheus.alert-rules.yaml`)
-fires when a nightly job's last success is more than 48 hours old. The 5-minute-or-faster
+fires when a nightly job's last success is more than 48 hours old, and keeps firing until the job runs again or its row is deleted. The 5-minute-or-faster
 jobs are excluded from that alert, each covered by its own faster-firing one instead:
 `sweep:webhook-retries` by `WebhookRetriesStalled` (15 min), and `sweep:outbox` /
 `sweep:payment-effects` / `sweep:reservations` / `sweep:order-effects` by `FrequentSweepStale`
@@ -156,8 +158,7 @@ See `docs/tools/observability-layer.md`.
 
 Several collections delete their own rows on a timer, via a Mongo TTL index rather than a scheduled
 job — that is cleanup with no scheduler involved at all, the cheapest form there is, and it stays
-right for state with no retry story (a cart, an audit entry, a feedback ticket, an abandoned lease
-never need a second attempt at expiring). The jobs above are the other half: retention and
+right for state with no retry story (a cart, an audit entry, or a feedback ticket never needs a second attempt at expiring). The jobs above are the other half: retention and
 periodic work that DOES need to run as a step, with a real success/failure outcome — see Scheduled
 jobs above.
 
@@ -173,11 +174,10 @@ rebuilds it, which is why `db:bootstrap` syncs before the server starts there. P
 `docker-compose.production.yml`'s one-shot `setup` service is what runs `db:sync` on deploy instead,
 see [Data — TTL windows](./data.md#ttl-windows). `feedback`'s window
 is the longest on purpose: a contact request can be evidence in a commercial dispute, and 24 months
-sits inside the common limitation periods. `carts` and `leases` both tie to `updatedAt`, so any
-edit — a cart line changed, a lease re-acquired — restarts the clock; only a genuinely abandoned row
-is ever removed. For `leases` that window is unrelated to the mutual-exclusion lease a job actually
-holds (`withLease`'s own `ttlMs` argument, typically minutes): it is garbage collection for a job
-retired from the crontab entirely, not the lock a running job holds.
+sits inside the common limitation periods. `carts` ties to `updatedAt`, so any edit (a cart line changed) restarts the clock; only a genuinely
+abandoned row is ever removed. `leases` has no TTL on purpose: a job that stopped running entirely must
+keep alerting (`ScheduledJobStale`), and an expired row would make that alert resolve on its own. Pushgateway
+and Healthchecks.io behave the same way: a silent job stays down until someone deletes it.
 
 `orders` and a SETTLED `payments` row must NOT be removed on a timer — both are invoices, kept for
 tax and commercial-law reasons. `orders` carries PII (both addresses, notes, email) that survives

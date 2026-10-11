@@ -9,6 +9,7 @@
  */
 
 import { OrderStatus } from '@types';
+import { isDigitalOnlyOrder, type ShippableLineCandidate } from './rules';
 
 /** One day, in milliseconds. */
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -59,6 +60,24 @@ export const withdrawUntilFrom = (start: Date, days: number): Date => {
     );
     return new Date(startOfEventDay + (days + 1) * DAY_MS - 1);
 };
+
+/** What {@link withdrawalStartFor} reads off an order. */
+export interface WithdrawalClockCandidate {
+    items: readonly ShippableLineCandidate[];
+    paidAt?: Date | null;
+}
+
+/**
+ * The instant the withdrawal clock starts for an order arriving at `delivered`: payment for a
+ * digital-only order (digital content, Art. 9(2)(c) — the contract's conclusion), the arrival
+ * itself for goods (Art. 9(2)(b)). The one owner of that rule, so every door into `delivered`
+ * counts the same way.
+ * @param order - the order arriving
+ * @param at - when it arrived
+ * @returns the clock's start, to hand to {@link withdrawUntilFrom}
+ */
+export const withdrawalStartFor = (order: WithdrawalClockCandidate, at: Date): Date =>
+    isDigitalOnlyOrder(order.items) ? (order.paidAt ?? at) : at;
 
 /** The one fact about a line that decides whether the right of withdrawal reaches it. */
 export interface WithdrawableLine {

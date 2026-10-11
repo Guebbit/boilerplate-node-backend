@@ -220,7 +220,9 @@ const deliveryAndOverrideActions = (
         // `reachesVia` about, since `delivery/service.ts`'s `fulfillOrder` gates this move
         // directly rather than through `ORDER_LIFECYCLE` (see `services/status.ts#markFulfilled`).
         fulfill: canRecordFulfilment && digitalOnly && status === OrderStatus.processing,
-        override: holdsKey(caller, 'orders.any.override') ? [...overridableTargetsFrom(status)] : []
+        override: holdsKey(caller, 'orders.any.override')
+            ? [...overridableTargetsFrom(status, digitalOnly)]
+            : []
     };
 };
 

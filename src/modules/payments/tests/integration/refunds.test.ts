@@ -9,7 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
@@ -378,6 +378,35 @@ describe('the payment.refunded announcement', () => {
 
         // The provider was asked, but the record never settled, so the payment is not `refunded`
         // and the sweep finishes the refund under the same idempotency key.
+        const payment = await paymentOf(orderId);
+        expect(payment.status).toBe('succeeded');
+        expect(payment.refunds[0].status).not.toBe('succeeded');
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_REFUNDED })).toBe(0);
+    });
+});
+
+describe('the order payment status', () => {
+    it('reads partially_refunded after a part, then refunded after the last one', async () => {
+        const { orderId } = await paidOrder();
+
+        await refund(orderId, { amount: 30 });
+        const afterPart = await readOrder(orderId);
+        await refund(orderId, { amount: 70 });
+        const afterLast = await readOrder(orderId);
+
+        expect(afterPart?.paymentStatus).toBe('partially_refunded');
+        expect(afterLast?.paymentStatus).toBe('refunded');
+    });
+
+    it('is stamped in the settlement transaction: a failing stamp settles nothing', async () => {
+        const { orderId } = await paidOrder();
+        jest.spyOn(orderService, 'markPaymentStatus').mockRejectedValueOnce(
+            new Error('stamp failed')
+        );
+
+        await expect(refund(orderId)).rejects.toThrow('stamp failed');
+
+        // Settled-but-unstamped is the state that never heals: no later refund exists to repair it.
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');
         expect(payment.refunds[0].status).not.toBe('succeeded');

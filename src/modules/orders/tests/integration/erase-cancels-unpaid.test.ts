@@ -20,6 +20,9 @@ import { inventoryService } from '@modules/inventory';
 import { resetDomainEvents } from '@kernel/events';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
+import * as analyticsPort from '@infrastructure/observability/analytics';
+import { observePort } from '@tests/ports';
+import { ordersAnalyticsEvents } from '../../analytics';
 import { OrderStatus, StockMovementReason } from '@types';
 
 // The queue, not the copy: the assertion is that no mail goes to an erased account's address.
@@ -28,6 +31,13 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
     enqueueEmail: jest.fn()
 }));
 const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail>;
+
+/* Replaced, not spied on — see `tests/support/ports.ts` for why. */
+jest.mock('@infrastructure/observability/analytics', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/observability/analytics'),
+    emitAnalyticsEvent: jest.fn()
+}));
 
 setupTestDb();
 
@@ -113,6 +123,21 @@ describe('orders — erasing an account cancels its never-paid orders', () => {
         await userService.remove(user, true);
 
         expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+
+    it('reports a cancel, not a reservation expiry', async () => {
+        const user = await createUser();
+        await heldOrderFor(user);
+        const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
+
+        await userService.remove(user, true);
+
+        expect(analyticsSpy).toHaveBeenCalledWith(
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_CANCELLED })
+        );
+        expect(analyticsSpy).not.toHaveBeenCalledWith(
+            expect.objectContaining({ event: ordersAnalyticsEvents.ORDER_RESERVATION_EXPIRED })
+        );
     });
 
     it('leaves a paid order paid — it is the invoice, only detached', async () => {

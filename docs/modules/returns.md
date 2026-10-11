@@ -186,8 +186,9 @@ outside, so it derives from `status`.
 | `fulfillmentStatus` | `unfulfilled` · `in_progress` · `shipped` · `fulfilled`                  | derived from `status`                                         |
 | `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned` | `returns`, after every move (`services/projection.ts`)        |
 
-A stamp is a report of a fact already decided, so a failed one is logged and never undoes the move;
-the next move stamps again.
+`returnStatus` is a report of a fact already decided, so a failed stamp is logged and never undoes the
+move; the next move stamps again. `paymentStatus` is not: `payments` stamps it inside the refund's
+settlement transaction, because no later refund exists to repair it after the last one.
 
 ## What the customer gets back
 

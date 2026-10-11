@@ -14,11 +14,48 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { inventoryService } from '@modules/inventory';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { outrankedOrderRefusal } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
+
+/** The 409 a hard delete answers with once the order is paid: its invoice must survive it. */
+const orderInvoiced = (): ResponseReject =>
+    generateReject(409, [{ code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }]);
+
+/** The 404 a hard delete answers with when the order vanished between the read and the write. */
+const orderMissing = (): ResponseReject => generateReject(404, [t('orders.not-found')]);
+
+/**
+ * Thrown inside {@link hardDeleteUnpaid}'s transaction when the conditional delete removed
+ * nothing, so the stock release made just before it rolls back with it.
+ */
+class NothingDeleted extends Error {}
+
+/**
+ * The hard delete, as one transaction: release the order's hold, then delete the row only while it
+ * is still unpaid. The `paidAt` check on the caller's own document is a fast path; this is the
+ * one that holds, because a settlement may commit after that read.
+ * @param order - the order, as the caller read it
+ * @param id - its id
+ * @throws {NothingDeleted} when the delete matched nothing (nothing is released either)
+ */
+const hardDeleteUnpaid = (order: OrderDocument, id: string): Promise<void> =>
+    withTransaction((session) =>
+        // Released BEFORE the row goes, so the release can still name the order it belongs to.
+        // Whether it released is not checked, for the same reason `cancelById` does not: a hold
+        // that already expired is an ordinary sequence with nothing left to do about it.
+        inventoryService
+            .releaseForOrder(id, 'release', session)
+            .then(() => orderRepository.deleteUnpaid(order, session))
+            .then((deleted) => {
+                if (!deleted) throw new NothingDeleted();
+            })
+    )
+        // The catalogue's stock copy leaves this module's transaction, so it follows the commit.
+        .then(() => inventoryService.refreshStockCacheForOrder(id));
 
 /**
  * Remove an order document (soft or hard delete). Soft stamps `deletedAt` once — an order is a
@@ -42,35 +79,29 @@ export const remove = (
 ): Promise<ResponseSuccess<OrderDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     const id = String(order._id);
 
-    if (hardDelete && order.paidAt)
-        return Promise.resolve(
-            generateReject(409, [
-                { code: ERROR_CODES.ORDER_INVOICED, message: t('orders.invoiced') }
-            ])
-        );
+    if (hardDelete && order.paidAt) return Promise.resolve(orderInvoiced());
 
     // HARD delete
     if (hardDelete)
-        return (
-            inventoryService
-                // Released BEFORE the row goes, so the release can still name the order it
-                // belongs to. Whether it released is not checked, for the same reason
-                // `cancelById` does not check: a hold that already expired is an ordinary
-                // sequence with nothing left to do about it.
-                .releaseForOrder(id)
-                .then(() => orderRepository.deleteOne(order))
-                .then(() => {
-                    if (context)
-                        recordAudit(context, {
-                            action: ordersAuditActions.ORDER_DELETED,
-                            outcome: 'success',
-                            targetType: 'order',
-                            targetId: id,
-                            metadata: { hardDelete: true }
-                        });
-                })
-                .then(() => generateSuccess(undefined, 200, t('orders.hard-deleted')))
-        );
+        return hardDeleteUnpaid(order, id)
+            .then(() => {
+                if (context)
+                    recordAudit(context, {
+                        action: ordersAuditActions.ORDER_DELETED,
+                        outcome: 'success',
+                        targetType: 'order',
+                        targetId: id,
+                        metadata: { hardDelete: true }
+                    });
+                return generateSuccess(undefined, 200, t('orders.hard-deleted'));
+            })
+            .catch((error: unknown) => {
+                if (!(error instanceof NothingDeleted)) throw error;
+                // Paid since the read (409) or already gone (404): the delete said which.
+                return orderRepository
+                    .findById(id)
+                    .then((current) => (current ? orderInvoiced() : orderMissing()));
+            });
 
     // SOFT delete — the default path for an order, which is a financial record. Already
     // deleted: nothing to do. DELETE must be safe to retry; undoing it is `restoreById`.

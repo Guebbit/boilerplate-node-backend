@@ -10,11 +10,14 @@
 
 import { announceInTransaction } from '@kernel/outbox';
 import { OrderStatus } from '@types';
+import type { ClientSession } from 'mongoose';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { statusChangedEvent } from './announce';
 import {
+    isDigitalOnlyOrder,
     statusesLeadingTo,
+    withdrawalStartFor,
     withdrawUntilFrom,
     type StampedPaymentStatus,
     type StampedReturnStatus
@@ -169,18 +172,19 @@ export const markDelivered = (
  * for exactly this reason; `delivery/service.ts`'s `fulfillOrder` is what actually gates who may
  * call this and when.
  * @param orderId - the order marked fulfilled
- * @returns the order as it now stands, or `null` if it was not awaiting fulfilment
+ * @returns the order as it now stands, or `null` if it was not awaiting fulfilment or still has
+ *   a physical line
  */
 export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
     orderRepository.findById(orderId).then((order) => {
-        if (!order) return null;
-        // Digital content: the period runs from the conclusion of the contract, not from the
-        // moment staff marked it fulfilled (Art. 9(2)(c)) — `paidAt` is that moment here.
-        const start = order.paidAt ?? new Date();
+        // A physical order must pass through `shipped`: the parcel record and the stock leaving
+        // the shelf both hang on that step, so the aggregate refuses to skip it.
+        if (!order || !isDigitalOnlyOrder(order.items)) return null;
+
         return markArrived(
             orderId,
             OrderStatus.processing,
-            withdrawUntilFrom(start, withdrawalPeriodDays()),
+            withdrawUntilFrom(withdrawalStartFor(order, new Date()), withdrawalPeriodDays()),
             true
         );
     });
@@ -193,11 +197,14 @@ export const markFulfilled = (orderId: string): Promise<OrderDocument | null> =>
  * @param orderId - the order whose payment was refunded
  * @param paymentStatus - `partially_refunded` while some of the money is still with the shop,
  *   `refunded` once all of it went back
+ * @param session - the refund settlement's transaction, so the stamp and the settlement commit or
+ *   roll back together
  */
 export const markPaymentStatus = (
     orderId: string,
-    paymentStatus: StampedPaymentStatus
-): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus });
+    paymentStatus: StampedPaymentStatus,
+    session?: ClientSession
+): Promise<boolean> => orderRepository.setProjection(orderId, { paymentStatus }, session);
 
 /**
  * Report where the order's returns stand. `returns`' own door for this. `undefined` clears it: no

@@ -264,3 +264,33 @@ describe('listLeaseSummaries', () => {
         expect(summary?.lastRunAt?.getTime()).toBeGreaterThanOrEqual(before);
     });
 });
+
+/**
+ * A lease row has no TTL: a job that stopped running entirely must stay visible as stale, since
+ * the alert on `job_last_success_timestamp_seconds` reads it from here.
+ */
+describe('listLeaseSummaries', () => {
+    it('still reports a row untouched for longer than any retention window', async () => {
+        const longAgo = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000);
+        await leaseModel.create({
+            _id: 'scheduled-jobs-test.abandoned',
+            owner: 'none',
+            expiresAt: new Date(0),
+            lastSuccessAt: longAgo
+        });
+        // `timestamps: false` stops Mongoose stamping `updatedAt` with now over the old value.
+        await leaseModel.updateOne(
+            { _id: 'scheduled-jobs-test.abandoned' },
+            { $set: { updatedAt: longAgo } },
+            { timestamps: false }
+        );
+        await leaseModel.syncIndexes();
+
+        const summaries = await listLeaseSummaries();
+        expect(summaries.find(({ name }) => name === 'scheduled-jobs-test.abandoned')).toEqual(
+            expect.objectContaining({ lastSuccessAt: longAgo, lastRunAt: longAgo })
+        );
+        const indexes = await leaseModel.collection.indexes();
+        expect(indexes.some((index) => index.expireAfterSeconds !== undefined)).toBe(false);
+    });
+});

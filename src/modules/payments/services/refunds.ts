@@ -176,31 +176,6 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
     remainingOf(payment) === 0 && payment.refunds.every((refund) => refund.status === 'succeeded');
 
 /**
- * Tell `orders` where the money stands now, so its `paymentStatus` reads right without `orders`
- * ever asking here. Fire-and-forget: a projection is a report, and a failed one must not undo a
- * refund that already went back — the next refund stamps it again.
- * @param payment - the payment after a refund settled
- */
-const reportRefundedToOrder = (payment: PaymentDocument): void => {
-    // Started inside a promise so a synchronous throw (a malformed id) is reported, not raised.
-    void Promise.resolve()
-        .then(() =>
-            orderService.markPaymentStatus(
-                String(payment.orderId),
-                payment.status === 'refunded' ? 'refunded' : 'partially_refunded'
-            )
-        )
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not report the refund state to order ${String(payment.orderId)}`,
-                error
-            });
-            // Stryker restore all
-        });
-};
-
-/**
  * Tell the buyer their money went back, when it went back outside a return — a refund that
  * followed a cancel, or an operator's goodwill one. A return's refund is announced by `returns`'
  * own closing notice, so one carrying a `returnId` is skipped here, as is a refund that moved no
@@ -276,7 +251,6 @@ const announceRefund = (
         targetId: orderId,
         metadata: { refundId: String(refund._id), amount: refund.amount }
     });
-    reportRefundedToOrder(payment);
     if (outcome === 'success') mailRefundIssued(payment, refund);
 };
 
@@ -312,8 +286,24 @@ const refundedPayload = (
 });
 
 /**
+ * Tell `orders` where the money stands now, so its `paymentStatus` reads right without `orders`
+ * ever asking here. Part of the settlement's transaction, not a report after it: nothing later
+ * repairs a missed stamp after the last refund, so it commits with the settlement or not at all.
+ *
+ * @param payment - the payment after the refund settled
+ * @param session - the settlement's transaction
+ */
+const stampOrder = (payment: PaymentDocument, session: ClientSession): Promise<boolean> =>
+    orderService.markPaymentStatus(
+        String(payment.orderId),
+        payment.status === 'refunded' ? 'refunded' : 'partially_refunded',
+        session
+    );
+
+/**
  * The settlement's writes, inside the caller's transaction: the refund record goes `succeeded`,
- * and the payment moves to `refunded` when that was the last of it.
+ * the payment moves to `refunded` when that was the last of it, and the order's payment status
+ * is stamped to match.
  *
  * @param payment - the payment the refund belongs to
  * @param refund - the record being settled
@@ -341,7 +331,8 @@ const writeSettlement = (
                     session
                 )
                 .then((moved) => moved ?? settled);
-        });
+        })
+        .then((final) => (final ? stampOrder(final, session).then(() => final) : null));
 
 /**
  * Settle one open refund, and move the payment to `refunded` if that was the last of it. The

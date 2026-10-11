@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { seedOrder, readOrder } from '@modules/orders/tests/factories';
+import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { OrderStatus, StockMovementReason } from '@types';
@@ -25,10 +25,11 @@ afterEach(() => {
  * the state every dispatch starts from.
  *
  * @param status - where the order stands
+ * @param digital - whether the order is digital-only
  */
-const paidOrderHolding = async (status: OrderStatus) => {
+const paidOrderHolding = async (status: OrderStatus, digital = false) => {
     const product = await createProduct({ onHand: 10 });
-    const order = await seedOrder(status);
+    const order = await (digital ? seedDigitalOrder(status) : seedOrder(status));
     const orderId = String(order._id);
     await inventoryService.reserveForOrder(orderId, [
         { productId: String(product._id), quantity: 3 }
@@ -128,7 +129,7 @@ describe('markDelivered', () => {
 
 describe('markFulfilled', () => {
     it('is a digital order’s dispatch: the units leave when it is delivered', async () => {
-        const { orderId, productId } = await paidOrderHolding(OrderStatus.processing);
+        const { orderId, productId } = await paidOrderHolding(OrderStatus.processing, true);
 
         const moved = await markFulfilled(orderId);
 

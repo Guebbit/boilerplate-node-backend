@@ -6,6 +6,7 @@
  */
 import type { PaymentDocument } from '../../model';
 import { paymentRepository } from '../../repository';
+import { orderService } from '@modules/orders';
 import { asStub } from '@tests/stub';
 
 /*
@@ -60,6 +61,8 @@ describe('performRefund — a succeeded payment with no providerRef', () => {
         );
         jest.spyOn(paymentRepository, 'settleRefund').mockResolvedValue(refunded);
         jest.spyOn(paymentRepository, 'updateStatusIfIn').mockResolvedValue(refunded);
+        // The stamp is part of the settlement; this suite has no database for it to write to.
+        jest.spyOn(orderService, 'markPaymentStatus').mockResolvedValue(true);
 
         // Imported after the mocks above are in place, so `performRefund` closes over the
         // replaced `recordAudit`.

@@ -93,6 +93,25 @@ export const seedOrder = (status: OrderStatus): Promise<OrderDocument> =>
         createOrder(user, [toOrderItem(product, 1)], { status })
     );
 
+/**
+ * {@link seedOrder}'s digital twin: one line whose product needs no shipping, so the order is
+ * digital-only and `fulfill` — not `ship` — is its door.
+ *
+ * @param status - where the order stands
+ * @param paidAt - when it was paid, when the test depends on the withdrawal clock
+ */
+export const seedDigitalOrder = (status: OrderStatus, paidAt?: Date): Promise<OrderDocument> =>
+    Promise.all([createUser(), createProduct({ requiresShipping: false })])
+        .then(([user, product]) => createOrder(user, [toOrderItem(product, 1)], { status }))
+        .then((order) =>
+            paidAt
+                ? orderModel
+                      .findByIdAndUpdate(order._id, { paidAt }, { returnDocument: 'after' })
+                      .exec()
+                      .then((paid) => paid ?? order)
+                : order
+        );
+
 /** The raw stored document, hydrated — a sibling's own assertion on persisted state. */
 export const readOrder = (id: string): Promise<OrderDocument | null> =>
     orderRepository.findById(id);
