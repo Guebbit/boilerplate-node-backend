@@ -9,6 +9,7 @@
 
 import { z } from 'zod';
 import { getCurrentLocale, t } from '@infrastructure/i18n';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { accountConfig } from '../config';
 import { cooldownRemaining } from '../cooldown';
 import { hashPasswordSync, verifyPassword } from '@infrastructure/security/password-hash';
@@ -419,37 +420,40 @@ const createAccountIfEmailFree = (
         .emailTaken(input.email)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((taken) => {
             if (taken) return generateReject(409, [t('account.signup.email-already-used')]);
-            return userService
-                .registerSelfService({
-                    username: input.username,
-                    email: input.email,
-                    password: input.password,
-                    analyticsConsent: input.analyticsConsent,
-                    termsAccepted: input.termsAccepted,
-                    // The language they signed up in, kept for work that happens later without a
-                    // request to read `Accept-Language` from — a queued email, a nightly job.
-                    // Editable afterwards from the user endpoints.
-                    locale: getCurrentLocale()
-                })
-                .then((createdUser) =>
-                    // The membership, not a caller-supplied name — `assignDefaultRole` never
-                    // accepts one, which is what makes self-service signup structurally unable to
-                    // grant anything but `unverified`. A refused grant undoes the row rather than
-                    // leaving an account nobody can sign into and the email permanently unable to
-                    // retry.
-                    assignDefaultRole(String(createdUser._id), DEPLOYMENT_TENANT_ID).then(
-                        () => createdUser,
-                        (error: unknown) =>
-                            userService.discardFailedSignup(createdUser).then(() => {
-                                throw error;
-                            })
+            // The account and its starting role commit together or not at all, so a refused or
+            // failed grant leaves no row to hold the email hostage — and no compensating delete
+            // that could itself fail. `assignDefaultRole` never accepts a name, which is what
+            // makes self-service signup structurally unable to grant anything but `unverified`.
+            // https://www.mongodb.com/docs/manual/core/transactions/
+            return withTransaction((session) =>
+                userService
+                    .registerSelfService(
+                        {
+                            username: input.username,
+                            email: input.email,
+                            password: input.password,
+                            analyticsConsent: input.analyticsConsent,
+                            termsAccepted: input.termsAccepted,
+                            // The language they signed up in, kept for work that happens later without a
+                            // request to read `Accept-Language` from — a queued email, a nightly job.
+                            // Editable afterwards from the user endpoints.
+                            locale: getCurrentLocale()
+                        },
+                        session
                     )
-                )
-                .then((createdUser) =>
-                    userService
-                        .enqueueIfPending(createdUser)
-                        .then((user) => generateSuccess<UserDocument>(user))
-                );
+                    .then((createdUser) =>
+                        assignDefaultRole(
+                            String(createdUser._id),
+                            DEPLOYMENT_TENANT_ID,
+                            'tenant',
+                            session
+                        ).then(() => createdUser)
+                    )
+            ).then((createdUser) =>
+                userService
+                    .enqueueIfPending(createdUser)
+                    .then((user) => generateSuccess<UserDocument>(user))
+            );
         })
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 

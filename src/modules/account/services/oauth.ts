@@ -8,6 +8,7 @@
  */
 
 import { getCurrentLocale } from '@infrastructure/i18n';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { userService, isAuthenticatable, type UserDocument } from '@modules/users';
 import { imageStore } from '@infrastructure/adapters/image-store';
 import { rehostRemoteImage } from '@infrastructure/adapters/remote-image';
@@ -145,41 +146,49 @@ const signupFromOAuth = (
     // Downloaded ONCE, here: the account keeps a local copy, never the provider's url, so no
     // render ever sends a viewer's IP to the provider's host. Absent on any failure.
     rehostRemoteImage(presentClaim(identity.imageUrl)).then((avatar) =>
-        userService
-            .registerFromOAuth({
-                email: identity.email,
-                // No display name from the provider: the address is at least unique, unlike a blank.
-                username: presentClaim(identity.name) ?? identity.email,
-                imageUrl: avatar?.imageUrl,
-                thumbnailUrl: avatar?.thumbnailUrl,
-                // The provider vouches for this identity, same reasoning `userService.create`'s admin
-                // path already applies to a typed-in address — no password, so no email loop either.
-                // This account skips `unverified` entirely, the same as an operator-created one; the
-                // `customer` grant itself is the membership write just below, not a document field.
-                verifiedAt: new Date(),
-                active: true,
-                locale: getCurrentLocale(),
-                oauthAccounts: [
-                    { provider, providerId: identity.providerId, connectedAt: new Date() }
-                ]
-                // A concurrent signup for this SAME identity is the race `users_oauth_identity`
-                // (unique) exists for: the loser's `create` rejects with E11000, which the callback
-                // controller's catch turns into a generic `?error=provider_error` — the caller simply
-                // tries again, and the second attempt finds case 1.
-            })
-            .catch((error: unknown) => discardAvatar(avatar, error))
-            .then((created) =>
-                // Not `assignDefaultRole`'s `unverified`: the provider already vouches for this
-                // address, the same reasoning `verifiedAt` above applies. A refused grant undoes the
-                // row — same compensation as the self-service signup path in `authentication.ts`.
-                assignRole(created.id, DEPLOYMENT_TENANT_ID, 'tenant', VERIFIED_CUSTOMER_ROLE).then(
-                    () => created,
-                    (error: unknown) =>
-                        userService
-                            .discardFailedSignup(created)
-                            .then(() => discardAvatar(avatar, error))
+        // The account and its `customer` grant commit together or not at all — not
+        // `assignDefaultRole`'s `unverified`: the provider already vouches for this address.
+        // A failure leaves no row behind, only the re-hosted avatar to discard.
+        // https://www.mongodb.com/docs/manual/core/transactions/
+        withTransaction((session) =>
+            userService
+                .registerFromOAuth(
+                    {
+                        email: identity.email,
+                        // No display name from the provider: the address is at least unique, unlike a blank.
+                        username: presentClaim(identity.name) ?? identity.email,
+                        imageUrl: avatar?.imageUrl,
+                        thumbnailUrl: avatar?.thumbnailUrl,
+                        // The provider vouches for this identity, same reasoning `userService.create`'s admin
+                        // path already applies to a typed-in address — no password, so no email loop either.
+                        // This account skips `unverified` entirely, the same as an operator-created one; the
+                        // `customer` grant itself is the membership write just below, not a document field.
+                        verifiedAt: new Date(),
+                        active: true,
+                        locale: getCurrentLocale(),
+                        oauthAccounts: [
+                            { provider, providerId: identity.providerId, connectedAt: new Date() }
+                        ]
+                        // A concurrent signup for this SAME identity is the race `users_oauth_identity`
+                        // (unique) exists for: the loser's `create` rejects with E11000, which the callback
+                        // controller's catch turns into a generic `?error=provider_error` — the caller simply
+                        // tries again, and the second attempt finds case 1.
+                    },
+                    session
                 )
-            )
+                .then((created) =>
+                    assignRole(
+                        created.id,
+                        DEPLOYMENT_TENANT_ID,
+                        'tenant',
+                        VERIFIED_CUSTOMER_ROLE,
+                        undefined,
+                        undefined,
+                        session
+                    ).then(() => created)
+                )
+        )
+            .catch((error: unknown) => discardAvatar(avatar, error))
             .then((created) => {
                 recordAudit(context, {
                     action: accountAuditActions.AUTH_SIGNED_UP,

@@ -391,10 +391,9 @@ describe('userService.create', () => {
         expect(roles.tenant).toBe('customer');
     });
 
-    it('deletes the orphan row when the requested role is an escalation the caller cannot grant', async () => {
-        // `moderator` can create accounts but cannot grant `admin` — before the fix this wrote
-        // the user row, THEN refused the grant, leaving a document with no membership at all and
-        // the email permanently unusable for a retry.
+    it('creates no row when the requested role is an escalation the caller cannot grant', async () => {
+        // `moderator` can create accounts but cannot grant `admin`: the grant is refused before the
+        // user row is written, so no row holds the email without a membership.
         await expect(
             userService.create(
                 {

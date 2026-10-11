@@ -72,6 +72,12 @@ an administrator, rather than matching against a hardcoded list here. One fact, 
 side of that line.
 :::
 
+`assignRole` and `assignDefaultRole` take an optional `session`, so an account write and its
+membership can share one transaction (see [`users`](./users.md#creating-and-updating-with-a-role)).
+Given a session, `assignRole` audits only its failures; the success is recorded with
+`auditRoleAssigned` once the caller has committed, and a grant refused before the account even
+exists is audited by `assertCanGrantAudited`.
+
 Every invariant here is a refusal, not a comment: a granter cannot hand over a role they do not
 themselves hold, and self-service signup can only ever assign the one default role (`assignDefaultRole`) — never a caller-supplied name, which
 is what would turn signup into a privilege-escalation door. The same exemption covers an admin

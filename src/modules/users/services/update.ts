@@ -3,6 +3,7 @@
  * Admin-side user update: field assignment, role change, save-and-react, and the audit row.
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -15,11 +16,19 @@ import { heldKeys } from '@kernel/ability';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
+import { rearmPrecondition } from '@infrastructure/persistence/versioning';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import type { CallerContext, UpdateUserByIdRequest, WithServerImage } from '@types';
-import { assignRole, assertCanGrant, outrankedRefusal, rolesOf } from '@modules/access';
+import {
+    assertCanGrantAudited,
+    assignRole,
+    auditRoleAssigned,
+    outrankedRefusal,
+    rolesOf
+} from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { TokenType } from '../model';
 import type { UserDocument } from '../model';
@@ -125,8 +134,96 @@ const updateSavedUser = (
     );
 
 /**
- * {@link updateSavedUser} once the role is known to be a real change (or none): check the grant,
- * save, then revoke sessions, write the membership and clean up the old avatar.
+ * The write half of an update, inside the caller's transaction: the document's save and, for a
+ * real role change, the membership write — both or neither.
+ *
+ * @param user - the loaded, already-mutated document
+ * @param role - {@link changedRole}'s answer, never the raw request's
+ * @param context - the caller, whose keys bound the role they may grant
+ * @param session - the transaction both writes join
+ */
+const saveAndGrant = (
+    user: UserDocument,
+    role: string | undefined,
+    context: CallerContext,
+    session: ClientSession
+): Promise<UserDocument> => {
+    // The transaction may re-run this on a transient conflict: each attempt checks the caller's
+    // `If-Match` against the row it holds, instead of the first attempt's having used it up.
+    rearmPrecondition();
+
+    // The role lives in the membership, not on this document, so a role-only edit changes
+    // nothing Mongoose would write — and the user's version (its ETag, `editRevision`) would
+    // stay put while the role moved. Marking the stamp modified makes `save()` move it, and
+    // fence the write, so two admins holding the same tag cannot both change the role.
+    if (role !== undefined) user.markModified('updatedAt');
+
+    return userRepository
+        .save(user, session)
+        .then((saved) =>
+            role === undefined
+                ? saved
+                : assignRole(
+                      String(saved._id),
+                      DEPLOYMENT_TENANT_ID,
+                      'tenant',
+                      role,
+                      context.caller.permissions,
+                      context,
+                      session
+                  ).then(() => saved)
+        );
+};
+
+/**
+ * What follows a committed update: the new avatar's cleanup, the sessions a ban ends, and the
+ * role grant's audit row.
+ *
+ * @param savedUser - the committed document
+ * @param data - `role` here is {@link changedRole}'s answer; `active` the request's
+ * @param context - the caller
+ * @param oldImageUrl - the image the update replaced, or `undefined` when the avatar was not touched
+ */
+const finishUpdate = (
+    savedUser: UserDocument,
+    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
+    context: CallerContext,
+    oldImageUrl?: string
+): Promise<ResponseSuccess<UserDocument>> => {
+    // Only after the commit: the old avatar is unreachable the moment the field is overwritten.
+    const imageCleanup: Promise<void> = oldImageUrl
+        ? imageStore.remove(oldImageUrl).then(() => undefined)
+        : Promise.resolve();
+
+    // Deactivation ends every live session. Defense in depth on top of
+    // `findAuthenticatableById`, which already blocks a deactivated account's next
+    // request — this also makes `GET /account/sessions` honest and drops credentials with
+    // no live account behind them. Swallowed on failure: a revoke that doesn't reach every
+    // token must not turn an otherwise-successful deactivation into a reported failure.
+    const revoke =
+        data.active === false
+            ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
+            : Promise.resolve();
+
+    // The grant is true only now: it committed with the document.
+    if (data.role !== undefined)
+        auditRoleAssigned(
+            context,
+            String(savedUser._id),
+            data.role,
+            DEPLOYMENT_TENANT_ID,
+            'tenant'
+        );
+
+    return revoke
+        .then(() => imageCleanup)
+        .then(() => enqueueIfPending(savedUser))
+        .then(generateSuccess);
+};
+
+/**
+ * {@link updateSavedUser} once the role is known to be a real change (or none): check the grant
+ * and audit a refusal, write the document and the membership in one transaction, then clean up.
  *
  * @param data - `role` here is {@link changedRole}'s answer, never the raw request's
  */
@@ -135,64 +232,24 @@ const saveWithRole = (
     data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
     context: CallerContext,
     oldImageUrl?: string
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
-    // Validated BEFORE anything is written: a refused role change must not leave the rest of the
-    // update — a deactivation included — committed underneath a request that, as a whole, failed.
-    // `assertCanGrant` runs the same checks `assignRole` below does; asking first costs one more
-    // in-memory pass, never a round trip, since the escalation rule needs no database read.
-    const grantChecked =
-        data.role === undefined
-            ? Promise.resolve()
-            : Promise.resolve().then(() =>
-                  assertCanGrant('tenant', data.role!, context.caller.permissions)
-              );
-
-    return grantChecked
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
+    Promise.resolve()
         .then(() => {
-            // The role lives in the membership, not on this document, so a role-only edit changes
-            // nothing Mongoose would write — and the user's version (its ETag, `editRevision`) would
-            // stay put while the role moved. Marking the stamp modified makes `save()` move it, and
-            // fence the write, so two admins holding the same tag cannot both change the role.
-            if (data.role !== undefined) user.markModified('updatedAt');
-            return userRepository.save(user);
+            // Validated BEFORE anything is written, and a refusal audited: a refused role change
+            // must not leave the rest of the update — a deactivation included — committed
+            // underneath a request that, as a whole, failed. The escalation rule needs no
+            // database read, so asking first costs one more in-memory pass.
+            if (data.role !== undefined)
+                assertCanGrantAudited(
+                    'tenant',
+                    data.role,
+                    context.caller.permissions,
+                    context,
+                    String(user._id)
+                );
         })
-        .then((savedUser) => {
-            // Only after the save: the old avatar is unreachable the moment the field is overwritten.
-            const imageCleanup: Promise<void> = oldImageUrl
-                ? imageStore.remove(oldImageUrl).then(() => undefined)
-                : Promise.resolve();
-
-            // Deactivation ends every live session. Defense in depth on top of
-            // `findAuthenticatableById`, which already blocks a deactivated account's next
-            // request — this also makes `GET /account/sessions` honest and drops credentials with
-            // no live account behind them. Swallowed on failure: a revoke that doesn't reach every
-            // token must not turn an otherwise-successful deactivation into a reported failure.
-            const revoke =
-                data.active === false
-                    ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
-                    : Promise.resolve();
-
-            // Already validated above, so this should only ever resolve — `assignRole` is kept as
-            // the one place that WRITES the membership, rather than duplicating its upsert here.
-            const membership =
-                data.role === undefined
-                    ? Promise.resolve()
-                    : assignRole(
-                          String(savedUser._id),
-                          DEPLOYMENT_TENANT_ID,
-                          'tenant',
-                          data.role,
-                          context.caller.permissions,
-                          context
-                      ).then(() => undefined);
-
-            return revoke
-                .then(() => membership)
-                .then(() => imageCleanup)
-                .then(() => enqueueIfPending(savedUser))
-                .then(generateSuccess);
-        });
-};
+        .then(() => withTransaction((session) => saveAndGrant(user, data.role, context, session)))
+        .then((savedUser) => finishUpdate(savedUser, data, context, oldImageUrl));
 
 /**
  * The key a writable field needs on top of the route's own `users.any.update` — the one

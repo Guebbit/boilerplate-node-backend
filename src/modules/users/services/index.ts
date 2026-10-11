@@ -60,7 +60,6 @@ import {
     registerSelfService,
     registerFromOAuth,
     buildSignupDecoy,
-    discardFailedSignup,
     linkOAuthAccount,
     unlinkOAuthAccount
 } from './signup';
@@ -98,7 +97,6 @@ export const userService = {
     registerSelfService,
     registerFromOAuth,
     buildSignupDecoy,
-    discardFailedSignup,
     update,
     updateById,
     remove,

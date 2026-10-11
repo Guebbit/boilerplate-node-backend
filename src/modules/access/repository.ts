@@ -49,18 +49,23 @@ export const membershipRepository = {
     ): Promise<MembershipDocument | null> =>
         membershipModel.findOne({ userId, tenantId, scope }).exec(),
 
-    /** Create-or-overwrite the role a person holds in one place. */
+    /**
+     * Create-or-overwrite the role a person holds in one place.
+     *
+     * @param session - joins the write to the caller's transaction (an account create or update)
+     */
     upsertRole: (
         userId: string,
         tenantId: string | null,
         scope: AuthorizationScope,
-        role: string
+        role: string,
+        session?: ClientSession
     ): Promise<MembershipDocument> =>
         membershipModel
             .findOneAndUpdate(
                 { userId, tenantId, scope },
                 { $set: { role } },
-                { returnDocument: 'after', upsert: true }
+                { returnDocument: 'after', upsert: true, session }
             )
             // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
             // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.

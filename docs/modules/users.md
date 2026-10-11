@@ -100,6 +100,33 @@ and resending what the account already has is no ban and no promotion. The same 
 soft delete, hard delete and restore. A refused attempt on a rank is audited as `security.forbidden`
 with `metadata.reason: outranked`.
 
+### Creating and updating with a role
+
+An account and its role live in two collections (`users`, and `access`' memberships), and an admin
+write touches both. It is **one transaction**, with the grant checked first:
+
+```mermaid
+sequenceDiagram
+    participant A as admin write
+    participant X as access (grant check)
+    participant D as database
+    A->>X: assertCanGrantAudited(role)
+    X-->>A: refused? audited as a failed grant, nothing written
+    A->>D: transaction: save user, upsert membership
+    D-->>A: commit, or roll both back
+    A->>A: audit the grant, then react (image, sessions, setup mail)
+```
+
+- **Before any write**, the grant is validated (a role that exists, nothing the granter does not
+  hold) and a refusal is audited as `access.role.assigned` / `failure`, even though no account
+  exists yet to point at.
+- **One commit.** A failure of the role write rolls the account write back: no row left holding an
+  email with no role, and no half-applied update (a ban, a rename) under a request that failed.
+- **Audit after commit.** The success row for the grant is written once the transaction has
+  committed, because it is not true before.
+- **Self-service and OAuth signup follow the same shape** (see [`account`](./account.md)): the row
+  and its starting role commit together or not at all.
+
 **Credentials are the owner's alone.** `POST /users` takes no password: the account is created
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
 [`account`](./account.md)), so no administrator ever types, sees or resets another person's

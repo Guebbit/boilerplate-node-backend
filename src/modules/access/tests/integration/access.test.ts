@@ -18,7 +18,9 @@ import { setupTestDb } from '@tests/setup-test-db';
 import {
     AccessInvariantError,
     assertCanGrant,
+    assertCanGrantAudited,
     assignRole,
+    auditRoleAssigned,
     assignDefaultRole,
     bootstrapAccessModel,
     DEPLOYMENT_TENANT_SLUG,
@@ -304,6 +306,87 @@ describe('auditing a role change', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
 
         await assignRole('target-user', String(shop._id), 'tenant', 'manager');
+
+        expect(auditSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('assignRole inside a caller transaction', () => {
+    it('audits no success of its own, leaving that to the caller once it has committed', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const context = callerContextAs('admin');
+
+        await withTransaction((session) =>
+            assignRole('in-tx', String(shop._id), 'tenant', 'manager', undefined, context, session)
+        );
+        expect(auditSpy).not.toHaveBeenCalled();
+
+        auditRoleAssigned(context, 'in-tx', 'Manager', String(shop._id), 'tenant');
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accessAuditActions.ROLE_ASSIGNED,
+                outcome: 'success',
+                targetId: 'in-tx',
+                metadata: { role: 'manager', tenantId: String(shop._id), scope: 'tenant' }
+            })
+        );
+    });
+
+    it('rolls its membership back with the transaction', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+
+        await expect(
+            withTransaction((session) =>
+                assignRole(
+                    'rolled-back',
+                    String(shop._id),
+                    'tenant',
+                    'manager',
+                    undefined,
+                    undefined,
+                    session
+                ).then(() => {
+                    throw new Error('a later write failed');
+                })
+            )
+        ).rejects.toThrow('a later write failed');
+
+        expect(await membershipsOf('rolled-back')).toEqual([]);
+    });
+});
+
+describe('assertCanGrantAudited', () => {
+    it('audits a refused grant as a failure, with no target when the account does not exist yet', () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        expect(() =>
+            assertCanGrantAudited(
+                'tenant',
+                'admin',
+                ['feedback.any.read'],
+                callerContextAs('moderator')
+            )
+        ).toThrow(AccessInvariantError);
+
+        expect(auditSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+                action: accessAuditActions.ROLE_ASSIGNED,
+                outcome: 'failure',
+                metadata: expect.objectContaining({ role: 'admin' })
+            })
+        );
+    });
+
+    it('audits nothing for a grant that would be accepted', () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+
+        assertCanGrantAudited(
+            'tenant',
+            'manager',
+            permissionsOfRole('admin'),
+            callerContextAs('admin')
+        );
 
         expect(auditSpy).not.toHaveBeenCalled();
     });
