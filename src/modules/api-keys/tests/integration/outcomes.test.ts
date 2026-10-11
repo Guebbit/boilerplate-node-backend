@@ -203,11 +203,13 @@ describe('listing', () => {
         expect(listed.items.map(({ id }) => id)).toEqual([second.id, first.id]);
     });
 
-    it('exports a person’s own credentials, newest first', async () => {
+    it('exports a person’s own credentials, newest first, and nobody else’s', async () => {
         const user = await createRealUser('exporter');
+        const other = await createRealUser('not-the-exporter');
         const context = contextFor(String(user._id));
         const first = await mintKey(context, 'first');
         const second = await mintKey(context, 'second');
+        await mintKey(contextFor(String(other._id)), 'theirs');
 
         const own = await findOwnApiKeys(String(user._id));
 
@@ -327,6 +329,7 @@ describe('revoking everything a person minted', () => {
             })
         ]);
         const mail = mockOutbox.find(({ template }) => template === 'api-keys.revoked');
+        expect(mail?.to).toBe('compromised@example.com');
         expect(mail?.data.locale).toBe('it');
         expect(String(mail?.data.list)).toMatch(
             /^one \(.+\), two \(.+\)$|^two \(.+\), one \(.+\)$/u

@@ -43,6 +43,9 @@ describe('create — the subscription cap boundary', () => {
         expect(rejected[0]?.success).toBe(false);
         if (rejected[0]?.success) throw new Error('unreachable — asserted above');
         expect(rejected[0].status).toBe(422);
+        expect(rejected[0].errors[0]).toMatchObject({
+            message: 'This shop has reached its webhook subscription limit.'
+        });
 
         // The loser's row does not linger — the rollback that closes the race actually deletes it.
         const stored = await webhookSubscriptionRepository.search(

@@ -216,6 +216,23 @@ describe('what a create refuses', () => {
         expect(mockChecked).toEqual([]);
     });
 
+    it('counts only this tenant’s subscriptions against its limit', async () => {
+        setEnvironment({ NODE_WEBHOOK_SUBSCRIPTION_CAP: '1' });
+        await webhookSubscriptionRepository.create({
+            tenant: 'another-tenant',
+            url: 'https://hooks.example.com/foreign',
+            eventTypes: ['*'],
+            secrets: [mintRingSecret().entry]
+        });
+
+        const result = await create(
+            { url: 'https://hooks.example.com/mine', eventTypes: ['*'] },
+            context
+        );
+
+        expect(result.success).toBe(true);
+    });
+
     it('audits a creation with the new row’s id', async () => {
         const created = await subscribe();
 
@@ -424,6 +441,7 @@ describe('the secret ring', () => {
         const result = await removeSecret(String(created._id), 'not-in-the-ring', context);
 
         expect(!result.success && result.status).toBe(404);
+        expect(!result.success && result.errors[0].message).toBe('That item no longer exists.');
         expect(await read(String(created._id), 'secrets')).toHaveLength(1);
     });
 

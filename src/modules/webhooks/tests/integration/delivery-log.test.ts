@@ -100,6 +100,9 @@ describe('a replay with nothing to re-send', () => {
         const result = await replay(String(delivery._id), context);
 
         expect(!result.success && result.status).toBe(404);
+        expect(!result.success && result.errors[0]).toMatchObject({
+            message: 'The subscription for this delivery no longer exists.'
+        });
         const after = await webhookDeliveryRepository.findById(String(delivery._id));
         expect(after?.status).toBe('succeeded');
     });
