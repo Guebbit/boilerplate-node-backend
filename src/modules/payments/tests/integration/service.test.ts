@@ -475,6 +475,9 @@ describe('refund on cancel', () => {
                 .spyOn(fakePaymentProvider, 'confirm')
                 .mockImplementationOnce(async (providerRef, methodRef) => {
                     await orderService.cancelById(String(order._id), auth(user));
+                    // The cancel's own listeners finish before the charge lands: the other order
+                    // (charge first, then the listener) is the cancel path's reconciliation.
+                    await settleOutboxNudges();
                     return originalConfirm(providerRef, methodRef);
                 });
 

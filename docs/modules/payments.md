@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — an order's money, behind a provider port. The intent freezes a total; the confirm moves the order to `paid`.
-**Depends on** — [`orders`](./orders.md), [`inventory`](./inventory.md), [`users`](./users.md).
+**Depends on** — [`orders`](./orders.md), [`inventory`](./inventory.md).
 **Breaks if you change** — the confirm path. It is the single moment held units become a sale.
 :::
 
@@ -22,14 +22,12 @@ flowchart LR
     invoicing["invoicing"]
     orders["orders"]
     returns["returns"]
-    users["users"]
 
     cart --> payments
     invoicing --> payments
     returns --> payments
     payments --> inventory
     payments --> orders
-    payments --> users
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
     payments -. "payment.refunded" .-> invoicing
@@ -41,7 +39,6 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class inventory,invoicing,returns supporting;
-    class users generic;
     class payments centre;
 ```
 
@@ -112,10 +109,9 @@ re-reads the payment's state from the provider and settles that, never the body'
 Deliveries are deduplicated by event id, because a provider retries for days and the inventory
 commit is not conditional on anything else.
 
-The dependency on [`users`](./users.md) is groundwork rather than a current feature. The order
-already carries a `userId`; resolving it against the account record is what makes the id on a
-payment document worth querying later, when "everything this account has paid" becomes a screen.
-An unresolvable payer is logged rather than refused.
+A payment's payer is the order's own `userId`, copied as it stands. `payments` does not import
+[`users`](./users.md): an account's erasure reaches it through the `personalData.erase` hook it
+registers, not through an import, so no account lookup stands between an intent and the order it pays.
 
 `unique: true` on `orderId` is the guard against a double charge: one payment per order is a
 database fact, not a check somebody has to remember.
@@ -198,6 +194,34 @@ commits the stock, writes the row, and the relay publishes it. Nothing is announ
 that was lost — the refund path owns that.
 
 `pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
+
+## Lost webhooks
+
+A provider's webhook is the authority on a payment, and a webhook can be lost: a deploy at the wrong
+moment, a retry window that ran out, a browser closed before the sync. Two nets sit under it, and
+both end in the one settlement the webhook, the confirm and the sync already share
+(`settlement.ts#settleFromProvider`), so none can drift from the others.
+
+```mermaid
+flowchart LR
+    sweep["sweep:payment-effects<br/>reconcileStalePayments"] --> ask["provider.retrieve"]
+    cancel["order.cancelled<br/>cancelOpenIntentForOrder"] -- "provider refuses to close<br/>(already succeeded)" --> ask
+    hook["webhook"] --> ask
+    ask --> settle["settlePayment"]
+    settle -- "order still payable" --> paid["order paid, stock committed"]
+    settle -- "order gone" --> refund["money returned"]
+```
+
+- **The sweep.** Every unsettled payment holding a provider intent, untouched for
+  `NODE_PAYMENT_RECONCILE_MINUTES` (default 15), is asked about. A payment the webhook already
+  settled is not asked at all, and every write inside the settlement is conditional, so the sweep
+  racing a late webhook settles once.
+- **The cancel path.** Cancelling an order closes its open intent at the provider. A provider that
+  answers "already succeeded" has taken money in the last minutes before the cancel, which no sweep
+  window can be short enough to catch. The cancel path reconciles that payment on the spot: the order
+  is gone, so the money goes straight back. A provider still mid-flight is left to the sweep.
+
+Neither net adds a marker or a field: the payment's own status and `updatedAt` are the whole state.
 
 ## Status transitions
 
@@ -500,6 +524,7 @@ flowchart LR
 | `NODE_BANK_TRANSFER_HOLD_HOURS`             | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`   | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
 | `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
+| `NODE_PAYMENT_RECONCILE_MINUTES`            | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
 | `NODE_STRIPE_SECRET_KEY`                    | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves

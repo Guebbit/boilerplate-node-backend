@@ -678,15 +678,32 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
     });
 
 /**
+ * Ask the provider what became of a payment and settle the answer — the step the webhook, the
+ * reconciliation sweep and the cancel path's catch all share, so they cannot drift apart.
+ *
+ * A payment already past `SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
+ * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
+ *
+ * @param payment - the payment to reconcile; it must hold a `providerRef`
+ * @returns what the settlement did, or `null` when the payment was already settled and the
+ *   provider was not asked
+ */
+export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement | null> => {
+    if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status) || !payment.providerRef)
+        return Promise.resolve(null);
+
+    return providerNamed(payment.provider)
+        .retrieve(payment.providerRef)
+        .then((state) => settlePayment(payment, state));
+};
+
+/**
  * Settle one payment from what the PROVIDER says about it now: find the payment the intent names,
  * ask the provider that payment was made with (`retrieve`), settle the answer.
  *
  * Separate from {@link applyWebhookDelivery} because the tests that pin the SETTLEMENT should not
- * have to mint an event id to reach it, and because the reconciliation job that will eventually
- * sweep unsettled intents has no delivery.
- *
- * A payment already past `SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
- * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
+ * have to mint an event id to reach it, and because the reconciliation sweep
+ * (`./effects.ts#reconcileStalePayments`) has no delivery either.
  *
  * Unattended, so outcomes are logged rather than audited — the same rule the cancel listener and
  * the token-cleanup job follow.
@@ -705,19 +722,15 @@ export const applyWebhookSettlement = (providerRef: string): Promise<void> =>
             return;
         }
 
-        if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status)) return;
-
-        return providerNamed(payment.provider)
-            .retrieve(providerRef)
-            .then((state) => settlePayment(payment, state))
-            .then(({ payment: settled, orderLost }) => {
-                // Stryker disable all
-                logger.info({
-                    message: 'Payment webhook applied.',
-                    providerRef,
-                    status: settled.status,
-                    orderLost
-                });
-                // Stryker restore all
+        return settleFromProvider(payment).then((settlement) => {
+            if (!settlement) return;
+            // Stryker disable all
+            logger.info({
+                message: 'Payment webhook applied.',
+                providerRef,
+                status: settlement.payment.status,
+                orderLost: settlement.orderLost
             });
+            // Stryker restore all
+        });
     });

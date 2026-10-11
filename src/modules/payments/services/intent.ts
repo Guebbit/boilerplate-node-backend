@@ -14,12 +14,17 @@ import {
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
 import { orderService, orderTotal, isPayable } from '@modules/orders';
-import { userService } from '@modules/users';
-import { resolvePaymentProvider, providerNamed, type PaymentProvider } from '../providers';
+import {
+    resolvePaymentProvider,
+    providerNamed,
+    PaymentInFlightError,
+    type PaymentProvider
+} from '../providers';
 import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
 import { cardNotAvailable, notPayable } from './errors';
+import { settleFromProvider } from './settlement';
 import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -64,36 +69,6 @@ const rejectStrayIntent = (
         });
 
 /**
- * Who is paying, resolved against `users` rather than copied off the order — a payment history
- * wants an id that pointed at a real account when the money moved, not the order's stale copy.
- * An unresolvable payer does NOT refuse the payment: orders survive account deletion, so the
- * order's id is kept and the gap logged.
- *
- * `orderUserId` is `undefined` for an order whose account has already been detached (erased) —
- * a live admin intent against a long-erased order's own account is gone, not merely
- * unresolvable, so there is nothing to look up or fall back to.
- *
- * @param orderUserId - the account id the order carries, or `undefined` once detached
- * @returns the id to persist on the payment, or `undefined` to persist none
- */
-export const resolvePayerId = (orderUserId: string | undefined): Promise<string | undefined> => {
-    if (orderUserId === undefined) return Promise.resolve(undefined);
-
-    return userService
-        .getById(orderUserId)
-        .then((user) => {
-            if (user) return user.id;
-            // Stryker disable all
-            logger.warn(
-                `Payment intent for a user that no longer resolves (${orderUserId}) — recording the order's id unverified`
-            );
-            // Stryker restore all
-            return orderUserId;
-        })
-        .catch(() => orderUserId);
-};
-
-/**
  * Create (or refresh) the payment intent for an order.
  *
  * The amount is frozen here through `orderTotal` — the same function the order's serializer and
@@ -130,7 +105,7 @@ export const createIntent = async (
     // No provider configured: this deployment takes no card payments, and the order stays unpaid.
     const provider = resolvePaymentProvider();
     if (!provider) return cardNotAvailable();
-    const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const payerId = order.userId ? String(order.userId) : undefined;
     const { currency } = order;
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
@@ -191,7 +166,8 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
  * Best-effort, unlike {@link cancelOpenIntent}'s other caller (`recordOfflinePayment`): the order
  * is already cancelled by the time this runs, so there is no request left here to refuse — a
  * provider failure is only logged, never rethrown, so it cannot stop the cancel that already
- * happened.
+ * happened. A provider that says the intent already succeeded is the one case acted on: the
+ * payment is reconciled on the spot, which refunds money that landed on the cancelled order.
  *
  * @param orderId - the order that was cancelled
  */
@@ -200,12 +176,21 @@ export const cancelOpenIntentForOrder = (orderId: string): Promise<void> =>
         if (!payment || payment.status === 'succeeded' || payment.status === 'refunded')
             return undefined;
 
-        return cancelOpenIntent(payment, 'Order cancelled').catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not cancel order ${orderId}'s open intent at the provider — left open there; the abandoned-payment sweep will eventually delete this row without ever telling it`,
-                error
+        return cancelOpenIntent(payment, 'Order cancelled')
+            .catch((error: unknown) => {
+                if (!(error instanceof PaymentInFlightError)) throw error;
+                // The provider refused to close the intent: the customer's money landed (or is on
+                // its way) in the last minutes before this cancel. Settling what the provider now
+                // says finds the order gone and puts the money straight back; still mid-flight,
+                // the reconciliation sweep finishes it once the provider has decided.
+                return settleFromProvider(payment).then(() => undefined);
+            })
+            .catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Payments: could not close order ${orderId}'s open intent at the provider — left as it is; the reconciliation sweep asks the provider about it again`,
+                    error
+                });
+                // Stryker restore all
             });
-            // Stryker restore all
-        });
     });

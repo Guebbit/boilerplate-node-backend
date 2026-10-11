@@ -108,6 +108,7 @@ export const paymentsConfig = defineConfig({
         }),
         NODE_STRIPE_SECRET_KEY: text({ sensitive: true }),
         NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
+        NODE_PAYMENT_RECONCILE_MINUTES: int({ default: 15, min: 0 }),
         NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 }),
         NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS: int({ default: 30, min: 1 })
     },
@@ -133,6 +134,16 @@ export const paymentsConfig = defineConfig({
  */
 export const paymentEffectRetryMinutes = (): number =>
     paymentsConfig().NODE_PAYMENT_EFFECT_RETRY_MINUTES;
+
+/**
+ * How long an unsettled payment sits untouched before `effects.ts#reconcileStalePayments` asks
+ * the provider what became of it. Longer than a normal confirm-then-webhook round trip, so the
+ * sweep does not spend a provider call on a customer still typing a card number. Read per call,
+ * like {@link paymentEffectRetryMinutes}.
+ * @returns the grace window in minutes
+ */
+export const paymentReconcileMinutes = (): number =>
+    paymentsConfig().NODE_PAYMENT_RECONCILE_MINUTES;
 
 /**
  * Days an abandoned payment attempt is kept before `reapAbandonedPayments` deletes it.

@@ -105,7 +105,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                                |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                           |
 | `npm run sweep:outbox`           | every minute   | No     | Publishes every due [outbox](../tools/outbox.md) event — the backstop for the writer's own after-commit nudge.                                                                  |
-| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                                                                                                |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing, and settles unsettled payments whose webhook never arrived.                                    |
 | `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                            |
 | `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.                                                                       |
 
@@ -250,6 +250,11 @@ the order can still use it — safe, since claiming a hold is exactly-once — o
 on before settlement's own `orderLost` branch could react, marks the refund owed instead, for
 `sweep:order-effects` above to pick up. Runs every 5 minutes, comfortably inside the 15-minute
 reservation hold. See [payments](../modules/payments.md#pending-effects).
+
+The same job reconciles lost webhooks: an unsettled payment untouched for
+`NODE_PAYMENT_RECONCILE_MINUTES` (default 15) is asked about at the provider and settled through the
+same function the webhook uses, so a payment the webhook did deliver is left alone. See
+[payments](../modules/payments.md#lost-webhooks).
 
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this
