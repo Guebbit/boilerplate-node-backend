@@ -11,7 +11,13 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-import { PaymentStatus, PaymentMethod, RefundReason, RefundStatus } from '@types';
+import {
+    PaymentStatus,
+    PaymentMethod,
+    RefundFailureReason,
+    RefundReason,
+    RefundStatus
+} from '@types';
 import { paymentWebhookEventRetentionDays } from './config';
 
 /**
@@ -58,10 +64,13 @@ export interface RefundRecord {
     lines?: RefundLine[];
     /** The delivery cost inside `amount`, beside `lines` — a decimal. Never published. */
     shipping?: number;
-    /** The provider's id for the refund, once it answered. Never published, like `providerRef`. */
+    /** The provider's id for the refund, once it answered. Staff only, like `providerRef`. */
     providerRefundRef?: string;
-    /** What the provider last said when it refused. Never published: it is the provider's wording. */
-    lastError?: string;
+    /**
+     * Why the provider last refused, as a closed code. Staff only. The provider's own wording is
+     * logged, never stored: it can carry anything.
+     */
+    failureReason?: RefundFailureReason;
     /** When the money was confirmed back, or (for a hand-paid one) reported back. */
     settledAt?: Date;
     createdAt: Date;
@@ -167,7 +176,7 @@ const refundSchema = new Schema<RefundRecord>(
         },
         shipping: { type: Number, min: 0 },
         providerRefundRef: { type: String },
-        lastError: { type: String },
+        failureReason: { type: String, enum: Object.values(RefundFailureReason) },
         settledAt: { type: Date }
     },
     { timestamps: { createdAt: true, updatedAt: false } }
@@ -252,6 +261,15 @@ export const paymentSchema = new Schema<PaymentDocument>(
     }
 );
 
+// The staff list: newest first, optionally by status.
+paymentSchema.index({ createdAt: -1 }, { name: 'payments_createdAt' });
+paymentSchema.index({ status: 1, createdAt: -1 }, { name: 'payments_status_createdAt' });
+// The Refunds tab and the needs-attention read, which `$match` on a refund's status first.
+paymentSchema.index(
+    { 'refunds.status': 1, 'refunds.createdAt': -1 },
+    { name: 'payments_refunds_status_createdAt' }
+);
+
 // Backs `effects.ts#retryPendingEffects`'s own scan: which payments still owe an effect, oldest
 // first. `updatedAt` in the key (not just a query filter) is what lets the sweep skip a payment
 // this same second's settlement is still in the middle of, without a second index for that alone.
@@ -260,20 +278,23 @@ paymentSchema.index(
     { name: 'payments_pendingEffects_updatedAt' }
 );
 
-/** The keys of an embedded refund that never reach the wire. */
+/**
+ * The keys of an embedded refund the serializer strips. `providerRefundRef` and `failureReason` are
+ * put back for staff by `presenter.ts`; the rest never reach any client.
+ */
 const REFUND_INTERNAL_KEYS = [
     '_id',
     'providerRefundRef',
     'idempotencyKey',
-    'lastError',
+    'failureReason',
     'lines',
     'shipping'
 ] as const;
 
 /**
- * A refund record as the contract publishes it: `_id` → `id`, and the provider-facing bookkeeping
- * (its own refund id, the idempotency key, its error wording) and the credit note's input left
- * behind.
+ * A refund record as the contract publishes it to a payer: `_id` → `id`, and the provider-facing
+ * bookkeeping (its own refund id, the idempotency key, its failure reason) and the credit note's
+ * input left behind.
  *
  * @param refund - one embedded refund, as a plain object
  * @returns the same record without the fields no client operation reads

@@ -86,6 +86,13 @@ export interface OrderDocumentItem {
     locale: string;
 }
 
+/** An order as another module's list composes it: which order, and who it is for. */
+export interface OrderReference {
+    id: string;
+    orderNumber: string;
+    email: string;
+}
+
 /** Every effect a cancel can still owe — the schema's `enum`, and the source of {@link OrderPendingEffect}. */
 const ORDER_PENDING_EFFECTS = ['refund'] as const;
 
@@ -557,6 +564,10 @@ orderSchema.index(
     { pendingEffects: 1, updatedAt: 1 },
     { name: 'orders_pendingEffects', sparse: true }
 );
+/*
+ * The Awaiting-transfer tab: pending orders, nearest `payBy` first.
+ */
+orderSchema.index({ status: 1, payBy: 1 }, { name: 'orders_status_payBy' });
 /*
  * `GET /payments/order-by-reference`'s lookup. Unique — two orders minting the same reference
  * would make the code ambiguous about which one a transfer paid — and sparse for the same reason

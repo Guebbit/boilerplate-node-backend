@@ -12,7 +12,12 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { orderModel, applyOrderTransform, orderNumberCounterModel } from './model';
-import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
+import type {
+    OrderDocument,
+    OrderPendingEffect,
+    OrderReference,
+    OrderStatusOverride
+} from './model';
 import type { StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
@@ -42,7 +47,12 @@ import { checkedDelete, type DeleteOutcome } from '@infrastructure/persistence/v
  * What `sort` may order by: wire field → column. `totalPrice` is derived at serialisation, so it
  * is not a column and not sortable.
  */
-const ORDER_SORTABLE = { createdAt: 'createdAt', status: 'status', email: 'email' };
+const ORDER_SORTABLE = {
+    createdAt: 'createdAt',
+    status: 'status',
+    email: 'email',
+    payBy: 'payBy'
+};
 
 /** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
 const base = createRepository<OrderDocument, Order>(orderModel, {
@@ -348,6 +358,26 @@ const findWithPendingEffects = (cutoff: Date, limit: number): Promise<OrderDocum
         .exec();
 
 /**
+ * What a sibling that lists something else composes onto its rows: the order's number and email.
+ * Lean and projected, so no line, address or note is read.
+ *
+ * @param ids - the orders wanted; unknown ids are simply absent from the answer
+ * @returns one reference per order found
+ */
+const findManyReferences = (ids: readonly string[]): Promise<OrderReference[]> =>
+    orderModel
+        .find({ _id: { $in: ids.map((id) => toObjectId(id)) } }, { orderNumber: 1, email: 1 })
+        .lean()
+        .exec()
+        .then((rows) =>
+            rows.map((row) => ({
+                id: String(row._id),
+                orderNumber: row.orderNumber,
+                email: row.email
+            }))
+        );
+
+/**
  * Discharge one effect, once its listener has actually returned.
  *
  * Conditional on the effect still being there, so a retry racing the original drain resolves at
@@ -640,6 +670,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
+    findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
@@ -666,6 +697,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     setProjection,
     applyStatusOverride,
     findWithPendingEffects,
+    findManyReferences,
     clearPendingEffect,
     addPendingEffect,
     findOpenUnpaidIdsOf,

@@ -109,6 +109,7 @@ export const paymentsConfig = defineConfig({
         NODE_STRIPE_SECRET_KEY: text({ sensitive: true }),
         NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
         NODE_PAYMENT_RECONCILE_MINUTES: int({ default: 15, min: 0 }),
+        NODE_PAYMENT_ATTENTION_MINUTES: int({ default: 60, min: 1 }),
         NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 }),
         NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS: int({ default: 30, min: 1 })
     },
@@ -144,6 +145,15 @@ export const paymentEffectRetryMinutes = (): number =>
  */
 export const paymentReconcileMinutes = (): number =>
     paymentsConfig().NODE_PAYMENT_RECONCILE_MINUTES;
+
+/**
+ * How long a refund may stay open before the payments page lists it under "needs attention". The
+ * retry window is a minute, which is useless as "stuck": this is how long a person would wait.
+ * Read per call, like {@link paymentReconcileMinutes}.
+ * @returns the threshold in minutes
+ */
+export const paymentAttentionMinutes = (): number =>
+    paymentsConfig().NODE_PAYMENT_ATTENTION_MINUTES;
 
 /**
  * Days an abandoned payment attempt is kept before `reapAbandonedPayments` deletes it.

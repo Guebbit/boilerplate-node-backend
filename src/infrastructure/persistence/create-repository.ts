@@ -96,6 +96,8 @@ export interface SearchSpec {
     sortable?: Record<string, string>;
     /** Mongo path → the two filter keys bounding it, e.g. `price: { min: 'minPrice', … }`. */
     ranges?: Record<string, { min: string; max: string }>;
+    /** Mongo path → the two filter keys bounding it as instants, e.g. `createdAt: { min: 'createdFrom', … }`. */
+    dateRanges?: Record<string, { min: string; max: string }>;
     /**
      * Whether a field holds a value at all, from a boolean filter — `deleted: 'deletedAt'` reads
      * `true` as "soft-deleted" and `false` as "not". Same pre-decoded boolean as `booleans`.
@@ -115,6 +117,17 @@ const isPresent = (value: unknown): boolean =>
  * rather than as the bad input it is.
  */
 export const toObjectId = (value: unknown): Types.ObjectId => new Types.ObjectId(String(value));
+
+/**
+ * A filter value as a `Date`, or `undefined` when it is absent or not an instant.
+ * @param value - an ISO string or a `Date`
+ */
+const toDate = (value: unknown): Date | undefined => {
+    if (!isPresent(value) || (typeof value !== 'string' && !(value instanceof Date)))
+        return undefined;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? undefined : date;
+};
 
 /**
  * Compile a filter bag into a Mongo query, per the collection's declared spec.
@@ -180,6 +193,16 @@ const buildWhere = (filters: object, spec: SearchSpec): Record<string, unknown> 
         // `NaN` checked separately: a non-numeric bound is dropped, not sent to Mongo.
         if (isPresent(bag[bounds.min]) && !Number.isNaN(min)) range.$gte = min;
         if (isPresent(bag[bounds.max]) && !Number.isNaN(max)) range.$lte = max;
+        if (Object.keys(range).length > 0) where[path] = range;
+    }
+
+    // Same one-sided rule as `ranges`, over dates. An unparseable bound is dropped like a NaN one.
+    for (const [path, bounds] of Object.entries(spec.dateRanges ?? {})) {
+        const range: Record<string, Date> = {};
+        const min = toDate(bag[bounds.min]);
+        const max = toDate(bag[bounds.max]);
+        if (min) range.$gte = min;
+        if (max) range.$lte = max;
         if (Object.keys(range).length > 0) where[path] = range;
     }
 

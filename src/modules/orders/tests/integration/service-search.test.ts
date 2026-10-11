@@ -300,3 +300,57 @@ describe('orderService.search — current (live) image', () => {
         expect(items[0].items[0].current).toBeNull();
     });
 });
+
+describe('orderService.search — the Awaiting-transfer view', () => {
+    it('lists pending bank transfers by nearest payBy, soonest first', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 5 });
+        const later = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer',
+            payBy: '2026-07-20T00:00:00Z'
+        });
+        const sooner = await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'bank_transfer',
+            payBy: '2026-07-10T00:00:00Z'
+        });
+        await createOrder(user, [toOrderItem(product, 1)], {
+            paymentMethod: 'card',
+            payBy: '2026-07-01T00:00:00Z'
+        });
+
+        const asc = await orderService.search({
+            paymentMethod: 'bank_transfer',
+            status: 'pending',
+            sort: ['payBy']
+        });
+        const desc = await orderService.search({
+            paymentMethod: 'bank_transfer',
+            sort: ['-payBy']
+        });
+
+        expect(asc.items.map((order) => order.id)).toEqual([String(sooner._id), String(later._id)]);
+        expect(desc.items.map((order) => order.id)).toEqual([
+            String(later._id),
+            String(sooner._id)
+        ]);
+    });
+});
+
+describe('orderService.findManyByIds', () => {
+    it("answers each named order's number and email, and nothing for an unknown id", async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 5 });
+        const order = await createOrder(user, [toOrderItem(product, 1)]);
+        await createOrder(user, [toOrderItem(product, 1)]);
+
+        const found = await orderService.findManyByIds([
+            String(order._id),
+            '6acc1a53bafa7d9bbbad22c6'
+        ]);
+
+        expect(found).toEqual([
+            { id: String(order._id), orderNumber: order.orderNumber, email: order.email }
+        ]);
+        expect(await orderService.findManyByIds([])).toEqual([]);
+    });
+});

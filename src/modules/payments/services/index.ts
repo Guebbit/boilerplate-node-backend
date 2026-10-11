@@ -19,6 +19,8 @@
  *        its `actions`. `retention.ts` is erasure/export/the abandoned sweep. `scope.ts` decides
  *        who may see what. `lookup.ts` matches an admin-pasted RF reference back to the order it
  *        pays, the step before `recordOfflinePayment` settles it.
+ *        `list.ts` is the staff Payments page's three reads: the list, the refunds, and what
+ *        needs attention.
  */
 
 import { createIntent, cancelOpenIntentForOrder } from './intent';
@@ -39,6 +41,7 @@ import {
     reapAbandonedPayments
 } from './retention';
 import { getOrderByReference } from './lookup';
+import { listPayments, listRefunds, listAttention } from './list';
 import { listPaymentMethods } from '../config';
 
 /*
@@ -68,8 +71,9 @@ export {
     findOwnPaymentsForExport,
     reapAbandonedPayments
 } from './retention';
-export { callerScope, payerScope, buyerOrderScope } from './scope';
+export { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
 export { getOrderByReference } from './lookup';
+export { listPayments, listRefunds, listAttention } from './list';
 export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
@@ -89,6 +93,9 @@ export const paymentService = {
     reconcileStalePayments,
     recordOfflinePayment,
     getOrderByReference,
+    listPayments,
+    listRefunds,
+    listAttention,
     detachUserId,
     findOwnPayments,
     findOwnPaymentsForExport,

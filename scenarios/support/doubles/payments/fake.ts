@@ -14,8 +14,10 @@
 import { createHmac } from 'node:crypto';
 import { logger } from '@infrastructure/adapters/logger';
 import { ReceivePaymentWebhookBody } from '@api/schemas.zod';
+import type { RefundFailureReason } from '@types';
 import {
     PaymentInFlightError,
+    PaymentProviderError,
     verifyWebhookSignature,
     WebhookRejected,
     type PaymentProvider,
@@ -118,6 +120,24 @@ export const setFakeOutcome = (providerRef: string, state: ProviderPaymentState)
     outcomes.set(providerRef, state);
 };
 
+/** Refunds a test has told the provider to refuse, per intent, with the reason to give. */
+const refundFailures = new Map<string, RefundFailureReason>();
+
+/**
+ * Test lever: make every refund on this intent refuse with `reason`, the way a real adapter's
+ * classified error would arrive. Pass `undefined` to let refunds through again.
+ *
+ * @param providerRef - the intent whose refunds should fail
+ * @param reason - the closed code to throw, or `undefined` to clear
+ */
+export const setFakeRefundFailure = (
+    providerRef: string,
+    reason: RefundFailureReason | undefined
+): void => {
+    if (reason) refundFailures.set(providerRef, reason);
+    else refundFailures.delete(providerRef);
+};
+
 /**
  * `providerRef`s this stub has already cancelled — so a second `cancel` of the same one is the
  * provider's own idempotent success, never a repeat refusal.
@@ -188,6 +208,11 @@ export const fakePaymentProvider: PaymentProvider = {
     // This fake never leaves the process, so there is no second network attempt to deduplicate —
     // a real provider's own client sends `idempotencyKey` as a request header instead.
     refund: (providerRef, charge, { idempotencyKey }) => {
+        const failure = refundFailures.get(providerRef);
+        if (failure)
+            return Promise.reject(
+                new PaymentProviderError(failure, `[fake-psp] simulated refund failure: ${failure}`)
+            );
         outcomes.delete(providerRef);
         // Stryker disable next-line all
         logger.info(

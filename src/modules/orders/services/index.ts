@@ -8,7 +8,15 @@
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  */
 
-import { search, getById, getForCaller, openUnpaidOrderIds, getByTransferReference } from './read';
+import {
+    search,
+    getById,
+    getForCaller,
+    openUnpaidOrderIds,
+    getByTransferReference,
+    findManyByIds,
+    findOwedRefunds
+} from './read';
 import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
@@ -52,6 +60,8 @@ export {
     billingAddressOf,
     openUnpaidOrderIds,
     getByTransferReference,
+    findManyByIds,
+    findOwedRefunds,
     ownOrderIds,
     findOwnOrders
 } from './read';
@@ -133,6 +143,8 @@ export const orderService = {
     mailBuyer,
     openUnpaidOrderIds,
     getByTransferReference,
+    findManyByIds,
+    findOwedRefunds,
     recordCreated,
     update,
     updateById,

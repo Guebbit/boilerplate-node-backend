@@ -456,10 +456,10 @@ components:
         OrderSort:
             type: array
             minItems: 1
-            maxItems: 3
+            maxItems: 4
             items:
                 type: string
-                enum: [createdAt, -createdAt, status, -status, email, -email]
+                enum: [createdAt, -createdAt, status, -status, email, -email, payBy, -payBy]
 
         # ---------- orders — the schemas only this module's paths reference. ----------
         OrderEnvelope:

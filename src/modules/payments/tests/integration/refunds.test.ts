@@ -23,6 +23,7 @@ import {
 import { PAYMENT_REFUNDED } from '@modules/payments/events';
 import { paymentRepository } from '@modules/payments/repository';
 import { presentPayment } from '@modules/payments/presenter';
+import { PaymentProviderError } from '@modules/payments/providers';
 import { withEnvironment } from '@tests/environment';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
@@ -240,7 +241,7 @@ describe('a refund that asks for too much', () => {
 });
 
 describe('a refund the provider refuses', () => {
-    it('stays on the record as failed, and the wire never carries the provider wording', async () => {
+    it('stays on the record as failed with a closed reason, and the wire never carries the provider wording', async () => {
         const { orderId } = await paidOrder();
         jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(
             new Error('provider secret detail')
@@ -251,16 +252,34 @@ describe('a refund the provider refuses', () => {
         const payment = await paymentOf(orderId);
         expect(payment.refunds[0]).toMatchObject({
             status: 'failed',
-            lastError: 'provider secret detail'
+            failureReason: 'unknown'
         });
         // Still counted: the sweep will finish THIS refund, so nothing may be opened beside it.
         expect(payment.amountRefunded).toBe(30);
         const wire: Record<string, unknown> = { ...presentPayment(payment).refunds[0] };
         expect(wire).toMatchObject({ status: 'failed', amount: 30 });
         expect(wire).not.toHaveProperty('lastError');
+        expect(wire).not.toHaveProperty('failureReason');
         expect(wire).not.toHaveProperty('idempotencyKey');
         expect(wire).not.toHaveProperty('providerRefundRef');
         expect(wire).not.toHaveProperty('_id');
+    });
+
+    it('stores the code a typed provider error carries, and shows it to staff only', async () => {
+        const { orderId } = await paidOrder();
+        jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(
+            new PaymentProviderError('insufficient_funds', 'raw provider text')
+        );
+
+        await expect(refund(orderId, { amount: 30 })).rejects.toThrow('raw provider text');
+
+        const payment = await paymentOf(orderId);
+        expect(payment.refunds[0].failureReason).toBe('insufficient_funds');
+        expect(presentPayment(payment).refunds[0]).not.toHaveProperty('failureReason');
+        expect(presentPayment(payment, true).refunds[0]).toMatchObject({
+            failureReason: 'insufficient_funds'
+        });
+        expect(JSON.stringify(presentPayment(payment, true))).not.toContain('raw provider text');
     });
 
     it('is finished by the sweep with the same idempotency key', () =>
@@ -274,7 +293,7 @@ describe('a refund the provider refuses', () => {
 
             const payment = await paymentOf(orderId);
             expect(payment.refunds[0]).toMatchObject({ status: 'succeeded' });
-            expect(payment.refunds[0].lastError).toBeUndefined();
+            expect(payment.refunds[0].failureReason).toBeUndefined();
             expect(spy.mock.calls[1][2].idempotencyKey).toBe(spy.mock.calls[0][2].idempotencyKey);
             // A second pass finds nothing open.
             expect(await retryOpenRefunds()).toBe(0);

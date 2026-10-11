@@ -5,7 +5,7 @@
  */
 
 import type { SearchOrdersRequest, Order, CallerContext, AuthContext } from '@types';
-import type { OrderDocument } from '../model';
+import type { OrderDocument, OrderReference } from '../model';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import {
     readAll,
@@ -125,6 +125,37 @@ export const billingAddressOf = (order: OrderDocument): Order['billingAddress'] 
  */
 export const openUnpaidOrderIds = (userId: string): Promise<string[]> =>
     orderRepository.findOpenUnpaidIdsOf(userId);
+
+/**
+ * The number and email of each named order — what a list of something else (a payment, say) shows
+ * beside its own columns. Narrower than {@link getById} on purpose: no lines, no addresses.
+ *
+ * @param ids - the orders wanted
+ * @returns the references found, in no particular order
+ */
+export const findManyByIds = (ids: readonly string[]): Promise<OrderReference[]> =>
+    ids.length === 0 ? Promise.resolve([]) : orderRepository.findManyReferences(ids);
+
+/**
+ * Orders cancelled after payment whose refund is still owed, oldest first — the payments page's
+ * needs-attention read. Only a refund the retry sweep has had its chance at: the grace window
+ * is the caller's `cutoff`.
+ *
+ * @param cutoff - orders untouched at or before this instant
+ * @param limit - the most to return
+ * @returns the order id and when the debt was last touched
+ */
+export const findOwedRefunds = (
+    cutoff: Date,
+    limit: number
+): Promise<{ orderId: string; since: Date }[]> =>
+    orderRepository
+        .findWithPendingEffects(cutoff, limit)
+        .then((orders) =>
+            orders
+                .filter((order) => order.pendingEffects?.includes('refund'))
+                .map((order) => ({ orderId: String(order._id), since: order.updatedAt ?? cutoff }))
+        );
 
 /**
  * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,

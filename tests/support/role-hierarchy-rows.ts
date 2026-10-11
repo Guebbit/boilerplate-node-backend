@@ -338,6 +338,7 @@ export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
     'users POST /search': 'a read wearing a POST',
     'users POST /': 'creates an account; there is no owner yet',
     'orders POST /search': 'a read wearing a POST',
+    'payments POST /search': 'a read wearing a POST',
     'payments POST /webhook': 'the provider reporting an outcome, signed, no account',
     'payments POST /intent': 'the buyer’s own step, scoped to their own orders in the service',
     'payments POST /:id/confirm':

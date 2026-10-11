@@ -263,6 +263,15 @@ An override into `shipped` or `delivered` also takes the order's units off the s
 shipment triggers. An override into `processing` moves no stock. A hold already `shipped` makes the
 second call silent.
 
+## Reads other modules compose
+
+- `orderService.findManyByIds(ids)` answers each order's number and email, nothing more (no lines,
+  no addresses). The staff payments list uses it to name its rows.
+- `orderService.findOwedRefunds(cutoff, limit)` lists orders cancelled after payment whose refund
+  is still owed: the payments page's needs-attention read.
+- `GET /orders` sorts by `payBy` (index `{status, payBy}`), which is how the Awaiting-transfer tab
+  reads: `?paymentMethod=bank_transfer&status=pending&sort=payBy`.
+
 ## The invoice
 
 `orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine, and it names this

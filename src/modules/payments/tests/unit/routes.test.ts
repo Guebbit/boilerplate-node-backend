@@ -35,6 +35,10 @@ describe('payment routes', () => {
         expect(routeSignatures(router)).toEqual([
             WEBHOOK,
             METHODS,
+            'GET /',
+            'POST /search',
+            'GET /refunds',
+            'GET /attention',
             'POST /intent',
             'GET /order/:orderId',
             'GET /order-by-reference',
@@ -76,7 +80,7 @@ describe('payment routes', () => {
         expect(routeSignatures(router).indexOf(WEBHOOK)).toBe(0);
     });
 
-    it('admin-guards the refund, the offline record, and the reference lookup, and nothing else', () => {
+    it('admin-guards the staff reads, the refund, the offline record and the reference lookup, and nothing else', () => {
         // The three routes an operator drives instead of a customer's own checkout — money moving
         // back out, a claim that money moved in some way the provider never saw, or finding the
         // order that claim is about. The shopper's keys are excluded: `cart.self.update` and
@@ -91,6 +95,10 @@ describe('payment routes', () => {
             .map(({ method, path }) => `${method} ${path}`);
 
         expect(adminGuarded).toEqual([
+            'GET /',
+            'POST /search',
+            'GET /refunds',
+            'GET /attention',
             'GET /order-by-reference',
             'POST /order/:orderId/refund',
             'POST /order/:orderId/offline'
