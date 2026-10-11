@@ -14,7 +14,6 @@ import {
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
 import { orderService, orderTotal, isPayable } from '@modules/orders';
-import { userService } from '@modules/users';
 import { resolvePaymentProvider, providerNamed, type PaymentProvider } from '../providers';
 import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
@@ -64,36 +63,6 @@ const rejectStrayIntent = (
         });
 
 /**
- * Who is paying, resolved against `users` rather than copied off the order — a payment history
- * wants an id that pointed at a real account when the money moved, not the order's stale copy.
- * An unresolvable payer does NOT refuse the payment: orders survive account deletion, so the
- * order's id is kept and the gap logged.
- *
- * `orderUserId` is `undefined` for an order whose account has already been detached (erased) —
- * a live admin intent against a long-erased order's own account is gone, not merely
- * unresolvable, so there is nothing to look up or fall back to.
- *
- * @param orderUserId - the account id the order carries, or `undefined` once detached
- * @returns the id to persist on the payment, or `undefined` to persist none
- */
-export const resolvePayerId = (orderUserId: string | undefined): Promise<string | undefined> => {
-    if (orderUserId === undefined) return Promise.resolve(undefined);
-
-    return userService
-        .getById(orderUserId)
-        .then((user) => {
-            if (user) return user.id;
-            // Stryker disable all
-            logger.warn(
-                `Payment intent for a user that no longer resolves (${orderUserId}) — recording the order's id unverified`
-            );
-            // Stryker restore all
-            return orderUserId;
-        })
-        .catch(() => orderUserId);
-};
-
-/**
  * Create (or refresh) the payment intent for an order.
  *
  * The amount is frozen here through `orderTotal` — the same function the order's serializer and
@@ -130,7 +99,7 @@ export const createIntent = async (
     // No provider configured: this deployment takes no card payments, and the order stays unpaid.
     const provider = resolvePaymentProvider();
     if (!provider) return cardNotAvailable();
-    const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const payerId = order.userId ? String(order.userId) : undefined;
     const { currency } = order;
     const upserted = await paymentRepository.upsertIntent(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose

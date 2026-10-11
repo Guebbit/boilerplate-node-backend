@@ -2,7 +2,7 @@
 
 ::: tip At a glance
 **Owns** — an order's money, behind a provider port. The intent freezes a total; the confirm moves the order to `paid`.
-**Depends on** — [`orders`](./orders.md), [`inventory`](./inventory.md), [`users`](./users.md).
+**Depends on** — [`orders`](./orders.md), [`inventory`](./inventory.md).
 **Breaks if you change** — the confirm path. It is the single moment held units become a sale.
 :::
 
@@ -22,14 +22,12 @@ flowchart LR
     invoicing["invoicing"]
     orders["orders"]
     returns["returns"]
-    users["users"]
 
     cart --> payments
     invoicing --> payments
     returns --> payments
     payments --> inventory
     payments --> orders
-    payments --> users
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
     payments -. "payment.refunded" .-> invoicing
@@ -41,7 +39,6 @@ flowchart LR
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
     class inventory,invoicing,returns supporting;
-    class users generic;
     class payments centre;
 ```
 
@@ -112,10 +109,9 @@ re-reads the payment's state from the provider and settles that, never the body'
 Deliveries are deduplicated by event id, because a provider retries for days and the inventory
 commit is not conditional on anything else.
 
-The dependency on [`users`](./users.md) is groundwork rather than a current feature. The order
-already carries a `userId`; resolving it against the account record is what makes the id on a
-payment document worth querying later, when "everything this account has paid" becomes a screen.
-An unresolvable payer is logged rather than refused.
+A payment's payer is the order's own `userId`, copied as it stands. `payments` does not import
+[`users`](./users.md): an account's erasure reaches it through the `personalData.erase` hook it
+registers, not through an import, so no account lookup stands between an intent and the order it pays.
 
 `unique: true` on `orderId` is the guard against a double charge: one payment per order is a
 database fact, not a check somebody has to remember.

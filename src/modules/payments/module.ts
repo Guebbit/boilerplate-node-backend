@@ -5,9 +5,8 @@
  * total, refunds answer `ORDER_REFUND_OWED` rather than the customer-facing `ORDER_CANCELLED` —
  * see `docs/modules/payments.md` — and `ORDER_CANCELLED` itself is only a best-effort trigger to
  * close a still-open intent at the provider, never a refund) and on inventory (the confirm commits
- * an order's held stock into a sale). Depends on users to resolve the payer, and to detach one
- * through its own `personalData.erase` hook — the payment survives account erasure, same as the
- * order it paid for.
+ * an order's held stock into a sale). Detaches an erased account through its own
+ * `personalData.erase` hook — the payment survives account erasure, same as the order it paid for.
  *
  * See: docs/modules/payments.md
  */

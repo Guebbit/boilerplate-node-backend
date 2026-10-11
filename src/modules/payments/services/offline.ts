@@ -24,7 +24,7 @@ import { paymentsAuditActions } from '../audit';
 import { paymentsAnalyticsEvents } from '../analytics';
 import type { PaymentDocument } from '../model';
 import { PaymentInFlightError } from '../providers';
-import { resolvePayerId, cancelOpenIntent } from './intent';
+import { cancelOpenIntent } from './intent';
 import { settlePayment, settlementResponse } from './settlement';
 import { notPayable } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
@@ -86,7 +86,7 @@ export const recordOfflinePayment = async (
         if (refusal) return refusal;
     }
 
-    const payerId = await resolvePayerId(order.userId ? String(order.userId) : undefined);
+    const payerId = order.userId ? String(order.userId) : undefined;
     const { currency } = order;
     const upserted = await paymentRepository.upsertOffline(orderId, payerId, {
         // Explicit fields, not `{ ...order, currency }` — `order` is a hydrated Mongoose
