@@ -109,6 +109,7 @@ const toReservationItems = (
  */
 export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLevelDocument>> & {
     ensure: (productId: string, session?: ClientSession) => Promise<StockLevelDocument>;
+    insertIfAbsent: (productId: string, session?: ClientSession) => Promise<boolean>;
     findManyByProductIds: (productIds: readonly string[]) => Promise<StockLevelDocument[]>;
     findByProductId: (
         productId: string,
@@ -139,8 +140,8 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * leave it — never overwrite an existing level. Racing twice (a redelivered `PRODUCT_CREATED`)
      * is safe because `productId`'s unique index makes the upsert a no-op the second time. A
      * product without a row yet genuinely has none, never a cached count worth adopting — see
-     * `docs/modules/inventory.md#why-products-still-carries-a-copy`. The listener's own real
-     * opening-quantity write (a separate `receive` call) is not covered by this guarantee.
+     * `docs/modules/inventory.md#why-products-still-carries-a-copy`. The opening quantity is
+     * booked through `insertIfAbsent` instead, which reports whether the row was new.
      *
      * @param productId - the product
      * @param session - the caller's transaction, when the write belongs to one
@@ -154,6 +155,24 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 { upsert: true, returnDocument: 'after', session }
             )
             .exec(),
+
+    /**
+     * Create the row at zero when absent, and say whether THIS call created it. The answer is what
+     * lets a redelivered `PRODUCT_CREATED` book the opening stock only the first time.
+     *
+     * @param productId - the product
+     * @param session - the caller's transaction, so the insert and the stock booked after it commit together
+     * @returns `true` when the row was inserted now, `false` when it was already there
+     */
+    insertIfAbsent: (productId: string, session?: ClientSession) =>
+        stockLevelModel
+            .updateOne(
+                { productId: toObjectId(productId) },
+                { $setOnInsert: { onHand: 0, reserved: 0, available: 0 } },
+                { upsert: true, session }
+            )
+            .exec()
+            .then(({ upsertedCount }) => upsertedCount > 0),
 
     /**
      * One read for several products' levels.

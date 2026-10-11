@@ -8,10 +8,29 @@ import {
     canWithdraw,
     isBeforeDispatch,
     isExcludedFromWithdrawal,
+    withdrawalStartFor,
     withdrawUntilFrom
 } from '../../domain';
 
 const NOW = new Date('2026-03-10T12:00:00Z');
+
+describe('withdrawalStartFor', () => {
+    const PAID = new Date('2026-03-01T10:00:00Z');
+    const physical = { items: [{ product: { requiresShipping: true } }], paidAt: PAID };
+    const digital = { items: [{ product: { requiresShipping: false } }], paidAt: PAID };
+
+    it('starts a physical order at the arrival, whatever it was paid', () => {
+        expect(withdrawalStartFor(physical, NOW)).toBe(NOW);
+    });
+
+    it('starts a digital-only order at payment', () => {
+        expect(withdrawalStartFor(digital, NOW)).toBe(PAID);
+    });
+
+    it('falls back to the arrival for an unpaid digital order', () => {
+        expect(withdrawalStartFor({ ...digital, paidAt: undefined }, NOW)).toBe(NOW);
+    });
+});
 
 describe('withdrawUntilFrom', () => {
     it('does not count the event day, and ends with the last hour of the 14th day after it', () => {

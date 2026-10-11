@@ -116,9 +116,13 @@ const OVERRIDABLE_SEQUENCE: readonly OrderStatus[] = [
  * enforces, so reusing that table here would defeat the feature it is called from.
  * @param from - the order's current status
  * @param to - the status an override is being asked to move it to
+ * @param digitalOnly - whether every line is digital: such an order has no parcel to have left, so
+ *   `shipped` is never a target (it goes `processing → delivered` through fulfilment)
  * @returns whether the move is a legal forward override
  */
-export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
+export const canOverrideTo = (from: OrderStatus, to: OrderStatus, digitalOnly = false): boolean => {
+    if (digitalOnly && to === OrderStatus.shipped) return false;
+
     // Stryker disable next-line ConditionalExpression: equivalent, `paid`/`pending`/`cancelled` fail the index test below anyway.
     if (to !== OrderStatus.processing && to !== OrderStatus.shipped && to !== OrderStatus.delivered)
         return false;
@@ -134,10 +138,14 @@ export const canOverrideTo = (from: OrderStatus, to: OrderStatus): boolean => {
  * {@link statusesOverridableInto}, for a caller building "what could I move this order to"
  * rather than "what could have led here".
  * @param from - the order's current status
+ * @param digitalOnly - whether every line is digital, see {@link canOverrideTo}
  * @returns every status later than `from` in the overridable sequence, in contract order
  */
-export const overridableTargetsFrom = (from: OrderStatus): readonly OrderStatus[] =>
-    OVERRIDABLE_SEQUENCE.filter((to) => canOverrideTo(from, to));
+export const overridableTargetsFrom = (
+    from: OrderStatus,
+    digitalOnly = false
+): readonly OrderStatus[] =>
+    OVERRIDABLE_SEQUENCE.filter((to) => canOverrideTo(from, to, digitalOnly));
 
 /**
  * Every status a forced or status-only override starting from `to` could have legally come FROM —

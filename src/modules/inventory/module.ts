@@ -19,7 +19,7 @@ import type { AppModule } from '@kernel/registry';
 import { onDomainEvent } from '@kernel/events';
 import { PRODUCT_CREATED, PRODUCT_DELETED } from '@modules/products';
 import { router } from './routes';
-import { ensureLevel, receive, removeLevel } from './services';
+import { openLevel, removeLevel } from './services';
 import './events';
 // Registers the two domain gauges with the metrics registry at module load.
 import './metrics';
@@ -34,21 +34,13 @@ export default {
     /*
      * `products` cannot call this module back (it already imports `products`, and the graph must
      * stay acyclic — see `.dependency-cruiser.cjs`), so this is how a new product gets its opening
-     * stock. `ensureLevel` runs REGARDLESS of the opening quantity — a product created with zero
-     * units is still a product the stock board and the low-stock gauge must be able to see, and
-     * both start from this collection, not from the product's own cache. `receive()` then runs
-     * only past zero: the real call every other receipt uses, which creates the row too if
-     * `ensureLevel` somehow raced it, and syncs the cache back onto the product document in the
-     * same call. No audit context to pass either call — an admin already sees
-     * `ADMIN_PRODUCT_CREATED` for this row; a second, contextless stock-received entry would just
-     * be noise on top of it.
+     * stock. `openLevel` creates the row REGARDLESS of the opening quantity — a zero-stock product
+     * must still be visible to the stock board and the low-stock gauge — and books the units only
+     * when it inserted the row, so the outbox's redelivery cannot double them. No audit context:
+     * an admin already sees `ADMIN_PRODUCT_CREATED` for this row.
      */
     subscribe: () => {
-        onDomainEvent(PRODUCT_CREATED, ({ productId, onHand }) =>
-            ensureLevel(productId).then(() =>
-                onHand > 0 ? receive(productId, onHand, 'Opening stock') : undefined
-            )
-        );
+        onDomainEvent(PRODUCT_CREATED, ({ productId, onHand }) => openLevel(productId, onHand));
         // Only the HARD half — a soft delete (or its restore) must leave the counters exactly
         // where a restore has to come back to them. See `removeLevel`'s own docblock.
         onDomainEvent(PRODUCT_DELETED, ({ productId, hardDelete }) =>

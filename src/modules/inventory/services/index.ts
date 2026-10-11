@@ -23,7 +23,7 @@ import { restockReturnedLines, refreshStockCacheForProducts } from './returns';
 import { runReservationSweep } from './sweep';
 import {
     availableFor,
-    ensureLevel,
+    openLevel,
     removeLevel,
     listLevels,
     lowStockCount,
@@ -33,7 +33,7 @@ import { receive, adjust } from './admin';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` and
- * `metrics.ts` call `ensureLevel`, `removeLevel`, `receive` and `lowStockCount` directly, and the
+ * `metrics.ts` call `openLevel`, `removeLevel`, `receive` and `lowStockCount` directly, and the
  * suites drive the rest. The barrel's surface must not shrink when a file moves.
  */
 export type {
@@ -56,7 +56,7 @@ export { restockReturnedLines, refreshStockCacheForProducts } from './returns';
 export { runReservationSweep } from './sweep';
 export {
     availableFor,
-    ensureLevel,
+    openLevel,
     removeLevel,
     listLevels,
     lowStockCount,
@@ -79,7 +79,7 @@ export const inventoryService = {
     isHoldReleased,
     runReservationSweep,
     availableFor,
-    ensureLevel,
+    openLevel,
     removeLevel,
     receive,
     adjust,

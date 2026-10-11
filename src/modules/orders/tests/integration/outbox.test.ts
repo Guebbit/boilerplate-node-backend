@@ -12,6 +12,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import {
     createOrder,
     seedOrder,
+    seedDigitalOrder,
     readOrder,
     countOrders,
     toOrderItem
@@ -93,8 +94,10 @@ describe('a status move reported to orders', () => {
         ['markFulfilled', OrderStatus.processing, (id: string) => orderService.markFulfilled(id)]
     ])(
         '%s leaves the order where it was when its event cannot be written',
-        async (_, from, move) => {
-            const order = await seedOrder(from);
+        async (name, from, move) => {
+            const order = await (name === 'markFulfilled'
+                ? seedDigitalOrder(from)
+                : seedOrder(from));
             failNextOutboxWrite();
 
             await expect(move(String(order._id))).rejects.toThrow('disk full');

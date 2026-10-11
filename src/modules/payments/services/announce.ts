@@ -58,19 +58,29 @@ export const announcePaymentSucceeded = (paymentId: string, orderId: string): Pr
  * announced and one that lost its race never is — a redelivered decline must not tell `webhooks`
  * the attempt happened twice.
  *
+ * What counts as a decline worth announcing depends on who saw it. A confirm is itself an attempt,
+ * so a second card declined after a first IS a new decline (`newAttempt`). A report that merely
+ * observes the provider (the webhook, a sync) describes an attempt already recorded when the
+ * payment is `declined` already: Stripe sends two events for one decline, and a poll repeats it.
+ *
  * @param orderId - the order whose payment the provider declined
  * @param extra - the fields recorded beside the status (the provider's own reference, last error)
- * @returns the payment as it now stands, or `null` when another call already moved it
+ * @param newAttempt - `true` when the caller is the attempt itself (a confirm), so a payment
+ *   already `declined` is declined again
+ * @returns the payment as it now stands, or `null` when this call did not move it
  */
 export const recordDecline = (
     orderId: string,
-    extra: Partial<PaymentDocument>
+    extra: Partial<PaymentDocument>,
+    newAttempt = false
 ): Promise<PaymentDocument | null> =>
     announceInTransaction(
         (session) =>
             paymentRepository.updateStatusIfIn(
                 orderId,
-                SETTLEABLE_PAYMENT_STATUSES,
+                newAttempt
+                    ? SETTLEABLE_PAYMENT_STATUSES
+                    : SETTLEABLE_PAYMENT_STATUSES.filter((status) => status !== 'declined'),
                 'declined',
                 extra,
                 session

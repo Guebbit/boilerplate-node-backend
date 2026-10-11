@@ -55,9 +55,10 @@ export {
     canWithdraw,
     isBeforeDispatch,
     isExcludedFromWithdrawal,
-    withdrawUntilFrom
+    withdrawUntilFrom,
+    withdrawalStartFor
 } from './withdrawal';
-export type { WithdrawalCandidate, WithdrawableLine } from './withdrawal';
+export type { WithdrawalCandidate, WithdrawableLine, WithdrawalClockCandidate } from './withdrawal';
 
 /** The three statuses beside `status`: the money, the goods, any return. */
 export { fulfillmentStatusOf, paymentStatusOf, returnStatusOf } from './projections';

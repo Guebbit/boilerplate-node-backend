@@ -36,6 +36,7 @@ import {
 } from '@infrastructure/persistence/search';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import { setAndUnset } from '@infrastructure/persistence/changes';
+import { checkedDelete, type DeleteOutcome } from '@infrastructure/persistence/versioning';
 
 /**
  * What `sort` may order by: wire field → column. `totalPrice` is derived at serialisation, so it
@@ -269,6 +270,7 @@ const markDelivered = (
  * same value, and `undefined` clears it — "no return holds goods" is the absence of the field.
  * @param id - the order
  * @param fields - the projection(s) to set; a key set to `undefined` is unset
+ * @param session - the caller's transaction, when the stamp must commit or roll back with it
  * @returns whether an order was found
  */
 const setProjection = (
@@ -276,7 +278,8 @@ const setProjection = (
     fields: {
         paymentStatus?: StampedPaymentStatus | undefined;
         returnStatus?: StampedReturnStatus | undefined;
-    }
+    },
+    session?: ClientSession
 ): Promise<boolean> => {
     // `in`, not a truthiness check: a key present as `undefined` means clear, absent means leave.
     const changes = Object.fromEntries(
@@ -286,7 +289,7 @@ const setProjection = (
     );
 
     return orderModel
-        .updateOne({ _id: toObjectId(id) }, setAndUnset(changes))
+        .updateOne({ _id: toObjectId(id) }, setAndUnset(changes), { session })
         .exec()
         .then(({ matchedCount }) => matchedCount > 0);
 };
@@ -552,6 +555,35 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
         .then((counter) => counter.seq);
 
 /**
+ * Permanently remove an order that is still unpaid, as one conditional write: the delete's own
+ * filter carries `paidAt: null`, so a settlement that committed after the caller read the document
+ * stops it (Optimistic Offline Lock). Checked against the request's `If-Match` like `deleteOne`.
+ *
+ * @param document - the order, as the caller read it
+ * @param session - the caller's transaction
+ * @returns `false` when nothing was removed: the order was paid meanwhile, or is already gone
+ */
+const deleteUnpaid = (document: OrderDocument, session?: ClientSession): Promise<boolean> => {
+    let deleted = false;
+
+    return checkedDelete(document, () => {
+        // Mongoose merges a document's `$where` into its delete filter. `null` matches a missing
+        // `paidAt`, so an order never paid matches. Cleared after, as `versioning.ts` does, so a
+        // second use of the same object is not filtered on this one.
+        // https://mongoosejs.com/docs/api/document.html#Document.prototype.$where
+        Object.assign(document, { $where: { ...(document.$where as object), paidAt: null } });
+        return (document.deleteOne(session ? { session } : undefined) as Promise<DeleteOutcome>)
+            .then((outcome) => {
+                deleted = outcome.deletedCount > 0;
+                return outcome;
+            })
+            .finally(() => {
+                Reflect.deleteProperty(document, '$where');
+            });
+    }).then(() => deleted);
+};
+
+/**
  * `search` is narrower than the base signature (no caller-supplied sort — the pipeline fixes it),
  * so it is omitted from the base contract rather than intersected with it.
  *
@@ -569,6 +601,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         id: string,
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | undefined>;
+    deleteUnpaid: (document: OrderDocument, session?: ClientSession) => Promise<boolean>;
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,
@@ -589,7 +622,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         fields: {
             paymentStatus?: StampedPaymentStatus | undefined;
             returnStatus?: StampedReturnStatus | undefined;
-        }
+        },
+        session?: ClientSession
     ) => Promise<boolean>;
     markDelivered: (
         id: string,
@@ -624,6 +658,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     aggregate,
     search,
     findByIdScoped,
+    deleteUnpaid,
     ownerScope,
     updateStatusIfIn,
     markPaid,

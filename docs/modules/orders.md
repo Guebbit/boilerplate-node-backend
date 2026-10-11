@@ -107,7 +107,10 @@ their personal fields, since order history is part of the contract
 ([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
 this reap is what protects the far more common case, the order nobody ever deletes. A paid order
 refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
-legal document from that same transition, and it must survive the order it was issued for. `npm run
+legal document from that same transition, and it must survive the order it was issued for. The
+refusal does not trust the document the caller read: the hard delete runs in one transaction with
+the stock release, and its `deleteOne` filters on `paidAt: null`, so a settlement that commits in
+between turns the delete into the same 409 and leaves the hold as it was. `npm run
 sweep:order-effects`, every 5 minutes, re-announces `order.refund_owed` for a refund the event bus's one delivery
 attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
 full mechanism.
@@ -252,6 +255,10 @@ name. Two modes, both requiring a `reason`, both writing an embedded override-hi
 `PUT /orders/:id` carries no `status` field at all — the override's own two doors are the only way
 to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.
 
+A digital-only order has no parcel, so an override into `shipped` is refused with the same 409 as
+any other illegal target; `delivered` stays reachable. Likewise `markFulfilled` refuses an order
+with a physical line: a physical order must pass through `shipped`.
+
 An override into `shipped` or `delivered` also takes the order's units off the shelf
 (`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a normal
 shipment triggers. An override into `processing` moves no stock. A hold already `shipped` makes the
@@ -315,7 +322,8 @@ flowchart LR
   operator reading it) while the status is withdrawable and the window is open; `withdrawUntil`
   rides along once the clock has started. A client never counts days.
 - An admin override into `delivered` starts the clock at the override, since no delivery timestamp
-  exists for it.
+  exists for it. A digital-only order is the exception: its clock starts at `paidAt`, as it does
+  through fulfilment (`withdrawalStartFor` owns that rule).
 
 ## Cancel and refund mails
 
@@ -329,6 +337,10 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 | The account was erased                             | none: the address belongs to an account that no longer exists                 |                                                              |
 | Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |
 | Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
+
+The analytics event follows the same split: only a hold that timed out reports
+`order_reservation_expired`. An erasure's cancel, which also has no request behind it, reports
+`order_cancelled` like any other.
 
 An anonymised order is never mailed: its email is a `.invalid` placeholder (`mailBuyer` skips it), so
 any mail to it would only bounce.

@@ -54,6 +54,12 @@ interface Settlement {
      * the one thing the status alone does not say.
      */
     orderLost: boolean;
+    /**
+     * Whether THIS call's own write moved the payment. A call that lost the race (a webhook
+     * retry, a poll of something settled) reports `false`, and so reports nothing: the call that
+     * won already did.
+     */
+    transitioned: boolean;
 }
 
 /**
@@ -168,7 +174,7 @@ const settleMismatch = (
             ...(state.currency ? { currency: state.currency } : {})
         })
         .then(async (recorded) => {
-            if (!recorded) return { payment, orderLost: true };
+            if (!recorded) return { payment, orderLost: true, transitioned: false };
 
             for (const field of fields) paymentAmountMismatchTotal.inc({ field });
             // Stryker disable all
@@ -203,7 +209,7 @@ const settleMismatch = (
 
             await cancelMismatchedOrder(orderId);
             const current = await paymentRepository.findByOrderId(orderId);
-            return { payment: current ?? recorded, orderLost: true };
+            return { payment: current ?? recorded, orderLost: true, transitioned: true };
         });
 };
 
@@ -221,10 +227,13 @@ const settleMismatch = (
  *
  * @param payment - the payment the provider named
  * @param state - what the provider reported
+ * @param newAttempt - `true` when the caller is itself a fresh attempt at paying (a confirm), so
+ *   a decline of an already-declined payment is a new decline and not a repeat report of one
  */
 export const settlePayment = (
     payment: PaymentDocument,
-    state: ProviderPaymentState
+    state: ProviderPaymentState,
+    newAttempt = false
 ): Promise<Settlement> => {
     const orderId = String(payment.orderId);
     const extra = state.cardLast4 ? { cardLast4: state.cardLast4 } : {};
@@ -254,13 +263,18 @@ export const settlePayment = (
                             });
                             // Stryker restore all
                         });
-                return { payment: updated ?? payment, orderLost: false };
+                return {
+                    payment: updated ?? payment,
+                    orderLost: false,
+                    transitioned: updated !== null
+                };
             });
 
     if (state.status === 'declined')
-        return recordDecline(orderId, extra).then((updated) => ({
+        return recordDecline(orderId, extra, newAttempt).then((updated) => ({
             payment: updated ?? payment,
-            orderLost: false
+            orderLost: false,
+            transitioned: updated !== null
         }));
 
     // The money must be the money we asked for, checked before anything is paid. A hand-recorded
@@ -295,7 +309,14 @@ export const settlePayment = (
         // writes are terminal-once-applied), or this delivery lost every race there was —
         // either way, whoever won already did (or is doing) the rest, or there is nothing to
         // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
-        if (!succeeded) return { payment, orderLost: false };
+        // The answer is the payment as the winner left it, never the pre-read this call holds:
+        // that copy still says `requires_confirmation`.
+        if (!succeeded)
+            return paymentRepository.findByOrderId(orderId).then((current) => ({
+                payment: current ?? payment,
+                orderLost: false,
+                transitioned: false
+            }));
 
         // The order's CURRENT status, read after the payment write — never what `markPaid`
         // answered, which is a copy from before it. Between the two writes the customer may
@@ -310,7 +331,7 @@ export const settlePayment = (
             // The money moved but the order was gone (cancelled, or a racing tab won). Put it
             // straight back — the invariant is the module docblock's rule 2.
             const refunded = await refundLostPayment(orderId);
-            return { payment: refunded ?? succeeded, orderLost: true };
+            return { payment: refunded ?? succeeded, orderLost: true, transitioned: true };
         }
 
         /*
@@ -346,7 +367,7 @@ export const settlePayment = (
             );
         });
 
-        return { payment: succeeded, orderLost: false };
+        return { payment: succeeded, orderLost: false, transitioned: true };
     });
 };
 
@@ -377,18 +398,28 @@ export const settlementResponse = ({
 };
 
 /**
- * Report a confirm or sync attempt, once its answer is known.
+ * Report a confirm or sync attempt, once its answer is known and only when this call's own write
+ * made it so.
  *
  * Only these two outcomes are events: `PAYMENT_DECLINED` is a method the provider refused,
  * reportable like any other attempt. The other rejections (payment not found, not in a confirmable
  * state, the order gone) are request-shape or race problems, not a fact about the money — nothing
  * there to attribute to a card. An in-flight answer is not an outcome yet, so it is not one either.
+ * A call that did not move the payment (it lost a race, or polled something already settled)
+ * reports nothing: the call that did already did.
+ *
+ * @param settlement - what the settlement did
+ * @param result - the HTTP answer the settlement turned into
+ * @param paymentId - the payment, for the audit and analytics properties
+ * @param context - the caller the attempt is attributed to
  */
 const reportAttempt = (
+    settlement: Settlement,
     result: ResponseSuccess<PaymentDocument> | ResponseReject,
     paymentId: string,
     context: CallerContext
 ): ResponseSuccess<PaymentDocument> | ResponseReject => {
+    if (!settlement.transitioned) return result;
     const declined =
         !result.success && result.errors.some(({ code }) => code === 'PAYMENT_DECLINED');
     const settled = result.success && result.data.status === 'succeeded';
@@ -468,9 +499,11 @@ const confirmableOrder = (orderId: string): Promise<ResponseReject | null> =>
  * @param providerCall - the provider-specific action (confirm or re-read), given the payment
  *   itself — narrowed to prove `providerRef` is present — so it can reach the provider named on
  *   THIS payment rather than the deployment's currently configured one
- * @param precheck - an extra async gate run before `providerCall`, for a refusal that needs a
- *   read `findConfirmable`'s own synchronous check cannot make — {@link confirmPayment}'s only,
- *   today. Absent for `syncPayment`, which never needs one.
+ * @param context - the caller the attempt is reported against
+ * @param options - `precheck` is an extra async gate run before `providerCall`, for a refusal
+ *   that needs a read `findConfirmable`'s own synchronous check cannot make — {@link confirmPayment}'s
+ *   only, today; `newAttempt` marks the caller as itself an attempt at paying (see
+ *   {@link settlePayment})
  */
 const settleFound = (
     payment: PaymentDocument,
@@ -478,17 +511,29 @@ const settleFound = (
     providerCall: (
         payment: PaymentDocument & { providerRef: string }
     ) => Promise<ProviderPaymentState>,
-    precheck?: (
-        payment: PaymentDocument & { providerRef: string }
-    ) => Promise<ResponseReject | null>
+    context: CallerContext,
+    options: {
+        precheck?: (
+            payment: PaymentDocument & { providerRef: string }
+        ) => Promise<ResponseReject | null>;
+        newAttempt?: boolean;
+    } = {}
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     const found = findConfirmable(payment, allowed);
     if ('success' in found) return Promise.resolve(found);
+    const { precheck, newAttempt = false } = options;
     return (precheck ? precheck(found) : Promise.resolve(null)).then((refusal) => {
         if (refusal) return refusal;
         return providerCall(found)
-            .then((state) => settlePayment(found, state))
-            .then(settlementResponse);
+            .then((state) => settlePayment(found, state, newAttempt))
+            .then((settlement) =>
+                reportAttempt(
+                    settlement,
+                    settlementResponse(settlement),
+                    String(found._id),
+                    context
+                )
+            );
     });
 };
 
@@ -515,13 +560,15 @@ const settleVia = (
         payment: PaymentDocument & { providerRef: string }
     ) => Promise<ResponseReject | null>
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository
-        .findByIdScoped(paymentId, payerScope(authContext))
-        .then((payment) => {
-            if (!payment) return generateReject(404, [t('payments.not-found')]);
-            return settleFound(payment, allowed, providerCall, precheck);
-        })
-        .then((result) => reportAttempt(result, paymentId, context));
+    paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
+        // Confirming IS an attempt at paying, so a decline here is a new one even when the
+        // payment is already `declined` from the card before.
+        return settleFound(payment, allowed, providerCall, context, {
+            precheck,
+            newAttempt: true
+        });
+    });
 
 /**
  * Confirm a payment — the browser handing over the method its provider widget tokenised.
@@ -568,20 +615,20 @@ export const syncPayment = (
     authContext: AuthContext | undefined,
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> =>
-    paymentRepository
-        .findByIdScoped(paymentId, payerScope(authContext))
-        .then((payment) => {
-            if (!payment) return generateReject(404, [t('payments.not-found')]);
-            // Terminal already: there is nothing the provider could say that this module would
-            // act on, and asking would spend a call to be told so.
-            if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
-                return generateSuccess(payment, 200);
+    paymentRepository.findByIdScoped(paymentId, payerScope(authContext)).then((payment) => {
+        if (!payment) return generateReject(404, [t('payments.not-found')]);
+        // Terminal already: there is nothing the provider could say that this module would
+        // act on, and asking would spend a call to be told so.
+        if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status))
+            return generateSuccess(payment, 200);
 
-            return settleFound(payment, SETTLEABLE_PAYMENT_STATUSES, (found) =>
-                providerNamed(found.provider).retrieve(found.providerRef)
-            );
-        })
-        .then((result) => reportAttempt(result, paymentId, context));
+        return settleFound(
+            payment,
+            SETTLEABLE_PAYMENT_STATUSES,
+            (found) => providerNamed(found.provider).retrieve(found.providerRef),
+            context
+        );
+    });
 
 /**
  * Apply a webhook delivery the provider has already been authenticated for.

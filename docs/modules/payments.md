@@ -235,6 +235,15 @@ stateDiagram-v2
     refunded --> [*]
 ```
 
+**Each fact is reported once, by the call whose write made it true.** `settlePayment` says whether
+its own write moved the payment (`transitioned`); only then do the `payment.confirmed` / `payment.failed`
+audit row and the `payment_succeeded` / `payment_declined` analytics event fire. So a poll of a
+payment that already succeeded, or a webhook for a decline the confirm already recorded (Stripe sends
+two events for one decline), reports nothing. Only a confirm may decline an already-`declined`
+payment, because a confirm is itself a new attempt: card A refused, then card B refused, are two
+`payment.failed` rows. A confirm that loses the race to the webhook answers the payment as the
+winner left it, not the copy it read first.
+
 `POST /payments/order/{orderId}/offline` (below) is a fourth way to reach `succeeded`, alongside
 confirm, sync and the webhook — it calls the exact same `settlePayment`, so nothing about this
 diagram's terminal states or their guards changes for it.
@@ -300,6 +309,7 @@ sequenceDiagram
     alt provider answers
         P->>D: record succeeded (conditional on it still being open)
         P->>D: payment refunded, only if the records add up to amount
+        P->>D: order.paymentStatus stamped (same transaction)
         P-->>C: payment.refunded (once per refund)
     else provider refuses
         P->>D: record failed + lastError, still counted
@@ -314,6 +324,9 @@ sequenceDiagram
   `orders`), never by adding decimals.
 - **One key per record.** `refund:{paymentId}:{refundId}` — a retry of a refund is safe at the
   provider, and two different partial refunds are never mistaken for one.
+- **The order's status commits with the settlement.** `order.paymentStatus` (`partially_refunded`
+  or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
+  missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
 - **A refusal stays open.** The record is `failed` (its `lastError` is stored, never published) and
   keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run sweep:payment-effects`) and the next cancel or operator call both finish it.
