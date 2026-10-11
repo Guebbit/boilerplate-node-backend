@@ -17,7 +17,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
-import { outrankedRefusal, revokeAllOf } from '@modules/access';
+import { outrankedRefusal } from '@modules/access';
 import { TokenType } from '../model';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -72,13 +72,10 @@ const runAfterErase = (userId: string, deferred: readonly AfterErase[]): Promise
 
 /**
  * Remove a user document (soft or hard delete). Soft delete stamps `deletedAt` once;
- * `restoreById` undoes it. A hard delete first revokes EVERY membership the account holds —
- * `revokeAllOf`, not a single tenant-scoped `revokeRole`: an account can hold a platform seat
- * alongside its tenant one, and either row surviving the user it points at is an erasure gap.
- * `revokeAllOf` stays outside the transaction below: membership lives in `access`'s own
- * collection, and the cascade is scoped to the modules that hold personal data, not to every
- * write a hard delete makes. Only the hard path touches either, since a soft delete is a
- * restore waiting to happen.
+ * `restoreById` undoes it. A hard delete runs the erasure cascade, `access`'s hook included, so
+ * every membership the account holds (a tenant seat AND a platform one) goes in the same
+ * transaction as the row. Only the hard path does, since a soft delete is a restore waiting to
+ * happen.
  *
  * @param context - who did this. Absent for a caller with no request behind it that also has no
  * stake in the trail (a test, a script's dry run). Present and `caller.system` for the inactivity
@@ -92,8 +89,7 @@ export const remove = (
     context?: CallerContext
 ): Promise<ResponseSuccess<UserDocument> | ResponseSuccess<undefined> | ResponseReject> => {
     if (hardDelete)
-        return revokeAllOf(user.id)
-            .then(() => withTransaction((session) => runErasureCascade(user, session)))
+        return withTransaction((session) => runErasureCascade(user, session))
             .then((deferred) => runAfterErase(user.id, deferred))
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => {

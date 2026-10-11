@@ -10,6 +10,7 @@
  * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
  */
 
+import type { ClientSession } from 'mongoose';
 import type { AuthorizationScope, CallerContext, RoleLevel } from '@types';
 import {
     findRole,
@@ -373,10 +374,10 @@ export const revokeRole = (
 };
 
 /**
- * Take away every role a person holds, in every place — the hard-delete cascade's own half: once
- * the account itself is gone, no membership row may keep pointing at its dead id, a tenant seat OR
- * a platform one. Walks {@link membershipsOf} rather than assuming the single tenant row most
- * callers care about, since a platform operator can hold both at once.
+ * Take away every role a person holds, in every place, one revoke at a time. Walks
+ * {@link membershipsOf} rather than assuming the single tenant row most callers care about, since
+ * a platform operator can hold both at once. A hard delete does not use it: it erases through
+ * {@link eraseMemberships}, inside its own transaction.
  */
 export const revokeAllOf = (userId: string): Promise<void> =>
     membershipsOf(userId).then((memberships) =>
@@ -384,6 +385,20 @@ export const revokeAllOf = (userId: string): Promise<void> =>
             () => undefined
         )
     );
+
+/**
+ * The `personalData.erase` hook of this module's `roles` section: every role the person holds,
+ * in every place, goes in the same transaction as the account itself. Once the account is gone no
+ * membership row may keep pointing at its dead id, a tenant seat OR a platform one; and because it
+ * rides the cascade, a failed erasure takes no role away from an account that stays.
+ *
+ * Allowed even when it removes a place's last administrator, like {@link revokeRole}.
+ *
+ * @param userId - the erased account
+ * @param session - the hard delete's transaction; every write here must take it
+ */
+export const eraseMemberships = (userId: string, session: ClientSession): Promise<void> =>
+    membershipRepository.deleteByUserId(userId, session).then(() => undefined);
 
 /**
  * The two role names a person holds, and the shop they hold the first one in — `null` for a scope

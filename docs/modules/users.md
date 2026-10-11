@@ -126,6 +126,9 @@ so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.
 actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
 answerable from the log alone, not from remembering which flag an admin clicked.
 
+[`access`](./access.md#when-the-account-is-erased) is one of the modules in that cascade: the account's roles, tenant and platform, leave in the same
+transaction as the row, so a failed erasure takes no role from an account that stays.
+
 A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel
 the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).

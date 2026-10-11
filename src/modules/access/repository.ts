@@ -6,7 +6,7 @@
  * See: docs/theory/authorization.md
  */
 
-import { Types } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import type { AuthorizationScope } from '@types';
 import { membershipModel, tenantModel } from './model';
 import type { MembershipDocument, TenantDocument } from './model';
@@ -69,6 +69,15 @@ export const membershipRepository = {
     /** Remove one row by its own id. */
     deleteById: (id: MembershipDocument['_id']): Promise<{ deletedCount?: number }> =>
         membershipModel.deleteOne({ _id: id }).exec(),
+
+    /**
+     * Every row a person holds, in every place.
+     *
+     * @param session - joins the delete to the caller's transaction (a hard delete's cascade)
+     */
+    deleteByUserId: (userId: string, session?: ClientSession): Promise<{ deletedCount?: number }> =>
+        // https://mongoosejs.com/docs/api/model.html#Model.deleteMany()
+        membershipModel.deleteMany({ userId }, { session }).exec(),
 
     /** Every membership row for a set of people, in one place — the batched sibling of `findOne`. */
     findByUserIds: (

@@ -23,6 +23,7 @@ import {
     bootstrapAccessModel,
     DEPLOYMENT_TENANT_SLUG,
     ensureTenant,
+    eraseMemberships,
     membershipIn,
     membershipsOf,
     revokeAllOf,
@@ -35,6 +36,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { permissionsOfRole } from '@kernel/permissions';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { testCallerContext, callerContextAs } from '@tests/callers';
 import { accessAuditActions } from '../../audit';
 
@@ -316,6 +318,35 @@ describe('revokeAllOf', () => {
         await revokeAllOf('person-1');
 
         expect(await membershipsOf('person-1')).toEqual([]);
+    });
+});
+
+describe('eraseMemberships', () => {
+    it('removes every membership one person holds, and nobody else’s', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('erased', String(shop._id), 'tenant', 'admin');
+        await assignRole('erased', null, 'platform', 'operator');
+        await assignRole('bystander', String(shop._id), 'tenant', 'customer');
+
+        await withTransaction((session) => eraseMemberships('erased', session));
+
+        expect(await membershipsOf('erased')).toEqual([]);
+        expect(await membershipsOf('bystander')).toHaveLength(1);
+    });
+
+    it('is undone with the transaction it joined', async () => {
+        const shop = await ensureTenant('shop', 'The Shop');
+        await assignRole('kept', String(shop._id), 'tenant', 'admin');
+
+        await expect(
+            withTransaction((session) =>
+                eraseMemberships('kept', session).then(() => {
+                    throw new Error('a later step failed');
+                })
+            )
+        ).rejects.toThrow('a later step failed');
+
+        expect(await membershipsOf('kept')).toHaveLength(1);
     });
 });
 

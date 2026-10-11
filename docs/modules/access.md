@@ -85,6 +85,28 @@ is one database write: give somebody an administrator membership again, with the
 [The first admin](../getting-started-production.md#the-first-admin).
 :::
 
+## When the account is erased
+
+Roles are personal data, so this module declares a `personalData.erase` hook (`eraseMemberships`)
+beside its export section. A hard delete of the account runs it inside the same transaction as
+every other module's hook and the row itself:
+
+```mermaid
+sequenceDiagram
+    participant U as users (hard delete)
+    participant A as access (erase hook)
+    participant M as other modules' hooks
+    U->>U: open transaction
+    U->>A: eraseMemberships(userId, session)
+    A-->>U: tenant and platform rows deleted
+    U->>M: their hooks, one at a time
+    U->>U: delete the user row, commit
+```
+
+Either the account and all its roles go, or none of them does: a failing later hook rolls the
+role deletion back with it, so no account is ever left alive without the roles it held. No
+membership row survives the user it points at.
+
 ## Whose things a role may touch
 
 A key says what kind of thing; it never said whose. Every role carries a **level** (`admin`,
@@ -100,6 +122,6 @@ the question, never the places it is asked.
 
 - [`account`](./account.md) — resolves a bearer token into an `AuthContext` via `rolesOf`
 - [`api-keys`](./api-keys.md) — re-derives a minted key's current role at check time
-- [`users`](./users.md) — writes a membership on create, update and email verification
+- [`users`](./users.md) — writes a membership on create, update and email verification, and runs `eraseMemberships` in a hard delete
 - [Authorization](../theory/authorization.md) — the whole model, kernel half and module half together
 - [Tenancy](../theory/tenancy.md) — why one deployment pins one tenant id
