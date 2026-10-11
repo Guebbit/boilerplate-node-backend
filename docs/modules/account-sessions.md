@@ -254,6 +254,30 @@ controller-layer fact — so `login()` and `verifyLoginChallenge()` are delibera
 it.
 :::
 
+### The mint guard {#the-mint-guard}
+
+"No session without the second factor" is enforced where a session is minted, not only where a
+login branches. `createRefreshToken` refuses a **first** session for an account whose
+`twoFactorEnabledAt` is set unless `amr` carries `otp`, with `SecondFactorRequiredError`:
+
+```mermaid
+flowchart LR
+    P["password login"] --> Q{"2FA armed?"}
+    O["OAuth callback"] --> Q
+    Q -->|no| M["createRefreshToken<br/><i>first session</i>"]
+    Q -->|yes| C["challenge, then code<br/><i>amr gains 'otp'</i>"]
+    C --> M
+    X["a login path added later<br/><i>forgot the branch</i>"] --> M
+    M -->|armed, no 'otp' in amr| E["SecondFactorRequiredError"]
+    M -->|otherwise| T["session"]
+```
+
+The controllers still branch to the challenge first, so the guard is the backstop for the path that
+forgot to: it fails loudly (a `500`, never a session) instead of handing out a session the factor
+never guarded. A **re-mint** (`reissueSession`, `remintRefreshCookie`) continues a session the
+caller already holds and is not checked; that door, and `amr` becoming required, are a separate
+decision.
+
 ## Logout everywhere
 
 The refresh tokens hang off the user document in [`users`](./users.md)' `tokens` subdocument, which
