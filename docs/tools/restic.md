@@ -35,6 +35,7 @@ static binary that writes **encrypted, deduplicated snapshots** to a repository.
 | Where              | Command                                                        |
 | ------------------ | -------------------------------------------------------------- |
 | `backup` container | `restic backup`, `forget`, `prune`, `check`, `init`            |
+| `restore-drill`    | `restic dump`, `restore --verify`, `check`                     |
 | the second machine | `restic forget --prune`, `check`, on the repository's own disk |
 
 ## External references

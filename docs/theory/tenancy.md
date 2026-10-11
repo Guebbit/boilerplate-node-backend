@@ -59,17 +59,17 @@ tenancy always carries: one forgotten `tenantId` filter away from showing a clie
 data, which is OWASP's own #1 API risk
 ([API1:2023, Broken Object Level Authorization](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/)).
 
-|                             | Silo (chosen)                      | Pooled (declined)                        |
-| --------------------------- | ---------------------------------- | ---------------------------------------- |
-| Code to write               | **~0** — it already works this way | ~30–45 days, a third security-critical   |
-| Cross-tenant leak           | **Structurally impossible**        | One forgotten filter away, always        |
-| GDPR erasure for one client | **Drop a database**                | A careful cascade across ~24 collections |
-| Data residency per client   | **Per-client, trivially**          | One region for everyone                  |
-| Noisy neighbour             | **Impossible**                     | Needs per-tenant rate limits             |
-| Cost per client             | One stack's RAM (~1–1.5 GB)        | Marginal                                 |
-| Shipping a fix to everyone  | **N deployments**                  | One deploy                               |
-| Backups                     | **N to run and test**              | One                                      |
-| Onboarding a client         | Provision a stack                  | An API call                              |
+|                             | Silo (chosen)                                                                                                                                                    | Pooled (declined)                        |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Code to write               | **~0** — it already works this way                                                                                                                               | ~30–45 days, a third security-critical   |
+| Cross-tenant leak           | **Structurally impossible**                                                                                                                                      | One forgotten filter away, always        |
+| GDPR erasure for one client | **Drop a database**                                                                                                                                              | A careful cascade across ~24 collections |
+| Data residency per client   | **Per-client, trivially**                                                                                                                                        | One region for everyone                  |
+| Noisy neighbour             | **Impossible**                                                                                                                                                   | Needs per-tenant rate limits             |
+| Cost per client             | One stack's RAM (~1–1.5 GB)                                                                                                                                      | Marginal                                 |
+| Shipping a fix to everyone  | **N deployments**                                                                                                                                                | One deploy                               |
+| Backups                     | **N backup containers, one second machine**: a `backup` service per stack, a repository and a password per client on the shared append-only server; **N drills** | One                                      |
+| Onboarding a client         | Provision a stack                                                                                                                                                | An API call                              |
 
 For non-profit clients holding EU personal data, trading operational repetition for security risk
 is the right way round.
@@ -214,4 +214,5 @@ one, not just the ones with an obvious column already sitting unused.
 | See the full authorization model this sits on | [Authorization](./authorization.md)                |
 | Run two stacks for real                       | [Two Client Stacks](../tools/two-client-stacks.md) |
 | Back up what one stack holds                  | [Backups](../tools/backups.md)                     |
+| Share one off-site machine between stacks     | [Backup server](../tools/backup-server.md)         |
 | Pick a host that can run one stack            | [Hosting](../tools/hosting.md)                     |
