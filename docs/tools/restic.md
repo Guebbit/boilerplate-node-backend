@@ -26,15 +26,16 @@ static binary that writes **encrypted, deduplicated snapshots** to a repository.
 ## What it does not do
 
 - **No append-only mode of its own.** Tamper resistance comes from the server in front of the
-  repository, not from restic.
+  repository, not from restic: [Backup server](./backup-server.md).
 - **No point-in-time recovery.** A snapshot is the state at the end of one dump.
 - **No size cap.** The keep knobs bound the number of snapshots; a hard cap is the storage's quota.
 
 ## Where it runs
 
-| Where              | Command                                             |
-| ------------------ | --------------------------------------------------- |
-| `backup` container | `restic backup`, `forget`, `prune`, `check`, `init` |
+| Where              | Command                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| `backup` container | `restic backup`, `forget`, `prune`, `check`, `init`            |
+| the second machine | `restic forget --prune`, `check`, on the repository's own disk |
 
 ## External references
 

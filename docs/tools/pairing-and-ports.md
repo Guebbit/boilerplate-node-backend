@@ -77,6 +77,9 @@ The paired frontend owns **`8080–8099`**.
 | MongoDB                      | `27017`           | `NODE_MONGODB_PORT`                               |
 | Redis (rate-limit counters)  | `6380`            | `NODE_LIMITS_REDIS_PORT`                          |
 
+The [backup server](./backup-server.md) publishes `8000` (`BACKUP_SERVER_PORT`) too, but on the **second
+machine**, not beside a stack, so it needs no slot in this map.
+
 New services belong inside `3000–3099`. Every entry is overridable through the env var in the
 right-hand column if a port is already taken.
 

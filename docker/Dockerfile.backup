@@ -1,6 +1,8 @@
 # Backup image: restic + the MongoDB Database Tools + supercronic, and the scripts that use them.
 #
-# The `backup` service: entrypoint.sh turns the BACKUP_* knobs into a crontab and runs supercronic.
+# One image, two jobs:
+#   backup service        entrypoint.sh: turns the BACKUP_* knobs into a crontab, runs supercronic
+#   second-machine prune  server-maintenance.sh: `forget --prune` + `check` on the append-only server's disk
 #
 # Why its own image: the backup holds the restic password, the repository credentials and a
 # database login; the app image holds the app's keys. Each secret lives in one container.
@@ -70,7 +72,8 @@ COPY docker/backup/ /usr/local/lib/backup/
 RUN chmod 0755 /usr/local/lib/backup/*.sh \
     && ln -s /usr/local/lib/backup/entrypoint.sh /usr/local/bin/backup-entrypoint \
     && ln -s /usr/local/lib/backup/backup.sh /usr/local/bin/backup-job \
-    && ln -s /usr/local/lib/backup/maintenance.sh /usr/local/bin/backup-maintenance
+    && ln -s /usr/local/lib/backup/maintenance.sh /usr/local/bin/backup-maintenance \
+    && ln -s /usr/local/lib/backup/server-maintenance.sh /usr/local/bin/backup-server-maintenance
 
 # Same uid as the app's `node` user (1000), so the read-only uploads and mail-spool mounts are
 # readable whatever mode the app wrote them with. restic's cache lives in /cache and a local-disk

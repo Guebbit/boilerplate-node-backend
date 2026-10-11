@@ -1,0 +1,137 @@
+# The second machine: where every client's backups land, and the only place they are deleted.
+#
+# Two services, one disk:
+#   rest         `rclone serve restic --append-only`: accepts new backups, REFUSES deletes. An attacker
+#                who owns a client's app server holds that client's restic password and still cannot
+#                erase the history, because the server says no.
+#   maintenance  weekly `restic forget --prune` + `restic check` on the same disk, where deletes are allowed.
+#
+# DORMANT until someone starts it on a second machine: nothing in a client stack points here until
+# that client sets `BACKUP_REPOSITORY=rest:https://<host>:8000/<client>/`. Run from this directory,
+# with its own `.env` (the BACKUP_SERVER_* and BACKUP_KEEP_* knobs; `.env-example` has the block):
+#
+#   docker compose -f docker-compose.backup-server.yml up -d
+#
+# Files this stack reads, all under ./backup-server/ (gitignored, never baked into an image):
+#   htpasswd                 one line per client: user = client name, bcrypt hash
+#   tls.crt, tls.key         the certificate the clients verify (any CA, Let's Encrypt included)
+#   clients/<name>/password  the client's restic password, for the prune job
+#
+# `--private-repos` ties each user to the folder of the same name, so `acme` reaches /acme/ only.
+# Setup, adding a client, restoring from here: docs/tools/backup-server.md
+#
+# Provider-neutral: any host that runs Docker or Podman. No Docker socket, no host path but the above.
+
+x-logging: &logging
+    driver: ${CONTAINER_LOG_DRIVER:-json-file}
+    options:
+        max-size: 10m
+        max-file: '5'
+
+x-hardening: &hardening
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    user: '1000:1000'
+
+services:
+    # Creates the repositories' folder and hands it to uid 1000, the user both services below run as.
+    # A named volume starts root-owned; this is the one moment root is needed, then it exits.
+    # A SUBfolder, not the volume root: an image that has its own /data (rclone's) resets the
+    # ownership of an empty volume's root on first mount.
+    init:
+        logging: *logging
+        image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
+        build:
+            context: .
+            dockerfile: docker/Dockerfile.backup
+        restart: 'no'
+        user: '0:0'
+        cap_drop: [ALL]
+        cap_add: [CHOWN]
+        security_opt: [no-new-privileges:true]
+        entrypoint: ['sh', '-c', 'mkdir -p /data/repos && chown 1000:1000 /data/repos']
+        volumes:
+            - backup-data:/data
+        healthcheck:
+            disable: true
+
+    # The append-only restic server. https://rclone.org/commands/rclone_serve_restic/
+    #   --private-repos  a user reaches only the folder named like itself
+    #   --append-only    new files yes, deleting repository data no
+    #   --min-tls-version  the htpasswd credentials travel on this connection
+    rest:
+        logging: *logging
+        image: docker.io/rclone/rclone:1.75.2@sha256:2687085f718d3c628f7fdfb77c52a1d344332aed543110bb88088f2c70d43eb5
+        restart: unless-stopped
+        <<: *hardening
+        command:
+            - 'serve'
+            - 'restic'
+            - '/data/repos'
+            - '--addr=:8000'
+            - '--append-only'
+            - '--private-repos'
+            - '--htpasswd=/run/secrets/htpasswd'
+            - '--cert=/run/secrets/tls_cert'
+            - '--key=/run/secrets/tls_key'
+            - '--min-tls-version=tls1.2'
+        ports:
+            # The one published port. Bind it to a specific interface if the machine has several.
+            - '${BACKUP_SERVER_BIND:-0.0.0.0}:${BACKUP_SERVER_PORT:-8000}:8000'
+        secrets:
+            - htpasswd
+            - tls_cert
+            - tls_key
+        environment:
+            # rclone writes its own config under $HOME; the root is read-only.
+            HOME: /tmp
+        tmpfs:
+            - /tmp:mode=1777,size=64m,noexec,nosuid
+        volumes:
+            - backup-data:/data
+        depends_on:
+            init:
+                condition: service_completed_successfully
+
+    # The upkeep: forget + prune + check on every client's repository, on the server's own disk.
+    maintenance:
+        logging: *logging
+        image: '${BACKUP_IMAGE:-boilerplate-backup:latest}'
+        restart: unless-stopped
+        <<: *hardening
+        environment:
+            BACKUP_SERVER_MODE: 'true'
+            BACKUP_SERVER_DATA_DIR: /data/repos
+            BACKUP_SERVER_SCHEDULE: '${BACKUP_SERVER_SCHEDULE:-0 4 * * 0}'
+            BACKUP_KEEP_HOURLY: '${BACKUP_KEEP_HOURLY:-24}'
+            BACKUP_KEEP_DAILY: '${BACKUP_KEEP_DAILY:-7}'
+            BACKUP_KEEP_WEEKLY: '${BACKUP_KEEP_WEEKLY:-4}'
+            BACKUP_KEEP_MONTHLY: '${BACKUP_KEEP_MONTHLY:-6}'
+            BACKUP_CHECK_SUBSET: '${BACKUP_CHECK_SUBSET:-5%}'
+            # This machine's own freshness check (a second Gatus endpoint). Empty = off.
+            BACKUP_HEARTBEAT_URL: '${BACKUP_HEARTBEAT_URL:-}'
+            BACKUP_HEARTBEAT_TOKEN: '${BACKUP_HEARTBEAT_TOKEN:-}'
+        tmpfs:
+            - /tmp:mode=1777,size=64m,noexec,nosuid
+        volumes:
+            - backup-data:/data
+            # Each client's restic password, read-only. The only secret this machine holds besides TLS.
+            - ./backup-server/clients:/clients:ro
+            - backup-cache:/cache
+        depends_on:
+            init:
+                condition: service_completed_successfully
+
+secrets:
+    htpasswd:
+        file: ./backup-server/htpasswd
+    tls_cert:
+        file: ./backup-server/tls.crt
+    tls_key:
+        file: ./backup-server/tls.key
+
+volumes:
+    # Every client's repository, one folder each. The thing to back up and the thing to size.
+    backup-data:
+    backup-cache:

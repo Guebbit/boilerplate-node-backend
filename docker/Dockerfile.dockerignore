@@ -23,6 +23,9 @@ node_modules
 # Per-client deployment config, one directory each. Mounted at runtime, never baked into the image.
 clients
 
+# The second machine's secrets (docker-compose.backup-server.yml), kept out of every build context.
+backup-server
+
 # IDE
 .idea
 

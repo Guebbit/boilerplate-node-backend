@@ -7,7 +7,10 @@ set -euo pipefail
 
 CRONTAB="${BACKUP_CRONTAB:-/tmp/crontab}"
 
-if [ -z "${BACKUP_REPOSITORY:-}" ]; then
+if [ "${BACKUP_SERVER_MODE:-false}" = true ]; then
+    # The second machine's kit (docker-compose.backup-server.yml): prune and check, nothing else.
+    printf '%s backup-server-maintenance\n' "${BACKUP_SERVER_SCHEDULE:-0 4 * * 0}" >"$CRONTAB"
+elif [ -z "${BACKUP_REPOSITORY:-}" ]; then
     printf '# dormant: BACKUP_REPOSITORY is empty\n' >"$CRONTAB"
 else
     {

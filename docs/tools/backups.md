@@ -138,7 +138,7 @@ the run goes red and the heartbeat alerts: loud on day one, one line to fix.
 | `BACKUP_REPOSITORY`                        | What it is                                                                                             |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | `/repo`                                    | The `backup-repo` volume. Same host as the stack: a convenience, **not** an off-site copy              |
-| `rest:https://host:8000/<client>/`         | A second machine running an append-only restic REST server: off-site, tamper-proof                     |
+| `rest:https://host:8000/<client>/`         | The second machine ([Backup server](./backup-server.md)): append-only, off-site, tamper-proof          |
 | `sftp:user@host:/path`, `s3:...`, `b2:...` | restic's other backends. Credentials go in `restic_repository_env`; SFTP keys need a mount of your own |
 
 [Where to run it](./hosting.md) is a choice a deployment makes, never one this repo makes for it.
@@ -148,6 +148,17 @@ data is stored once, the repository grows with what _changed_, not with how ofte
 
 **An external database** (`bundled` profile off): the provider backs it up. Set `BACKUP_DATABASE=false`:
 the dump is skipped, the uploads and mail spool are still backed up.
+
+## The second machine
+
+A backup on the same machine dies with the machine, and an attacker who owns the server finds the restic
+password on it, deletes every backup, then encrypts the database: encryption does not help, they have the
+key. The answer is a repository on **another machine that refuses deletes**: the
+[Backup server](./backup-server.md), shipped as `docker-compose.backup-server.yml`.
+
+On the client side it is two knobs: `BACKUP_REPOSITORY=rest:https://<host>:8000/<client>/` and
+`BACKUP_PRUNE=false`. The cleaning up (`forget --prune`, the keep knobs) then runs **on the second machine**,
+weekly, against its own disk. It stays dormant until someone starts it there.
 
 ## The heartbeat
 

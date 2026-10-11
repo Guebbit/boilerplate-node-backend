@@ -7,7 +7,8 @@ looks for it there by name.
 ::: tip Also at the root, explained elsewhere
 The REST and realtime specs, the client collections and the Spectral rulesets (now under
 `shared/contracts/`) are on [Contracts](./contracts.md). The compose files and `.dockerignore`
-are on [Ops & Assets](./ops.md).
+are on [Ops & Assets](./ops.md), `docker-compose.backup-server.yml` (the second machine for
+backups) included.
 :::
 
 ---
