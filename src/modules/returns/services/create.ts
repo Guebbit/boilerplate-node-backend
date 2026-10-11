@@ -19,7 +19,7 @@ import { generateReject, type ResponseReject } from '@infrastructure/http/respon
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { ClientSession } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { emitDomainEvent } from '@kernel/events';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import {
     orderService,
     orderTotal,
@@ -116,8 +116,26 @@ const refundOwedOn = (order: OrderDocument): number =>
         : 0;
 
 /**
- * The facts a new return leaves behind, whatever shape it has: the audit row, and the event
- * `webhooks` fans out.
+ * Writes `return.requested` for a return just created — in the creating transaction, so the
+ * event exists exactly when the return does. Keyed on the order: its events stay in order.
+ * @param created - the return just written
+ * @param session - the transaction that wrote it
+ */
+const enqueueRequested = (created: ReturnDocument, session: ClientSession): Promise<unknown> =>
+    enqueueOutboxEvent(
+        RETURN_REQUESTED,
+        {
+            returnId: String(created._id),
+            orderId: String(created.orderId),
+            reason: created.reason
+        },
+        String(created.orderId),
+        session
+    );
+
+/**
+ * The audit row a new return leaves behind, whatever shape it has. Its events were written with
+ * the return itself.
  * @param order - the order the return is about
  * @param created - the return just written
  * @param context - for audit
@@ -134,17 +152,13 @@ const recordOpened = (
         targetId: String(created._id),
         metadata: { orderId: String(order._id), reason: created.reason }
     });
-    void emitDomainEvent(RETURN_REQUESTED, {
-        returnId: String(created._id),
-        orderId: String(order._id),
-        reason: created.reason
-    });
 };
 
 /**
  * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing
  * is coming back), the full refund owed. The cancel's own pending-refund marker and the payment
- * sweep carry the money; this row is the dated proof of what the customer asked for.
+ * sweep carry the money; this row is the dated proof of what the customer asked for. Its
+ * `return.requested` and `return.closed` are written with it, in that order.
  *
  * @param order - the order that was withdrawn from
  * @param context - for audit
@@ -154,29 +168,45 @@ const writeWithdrawalRecord = (
     context: CallerContext
 ): Promise<ReturnDocument> => {
     const now = new Date();
-    return returnRepository
-        .create({
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            currency: order.currency,
-            status: 'closed',
-            reason: 'withdrawal',
-            lines: [],
-            returnPostage: returnPostagePayer(),
-            decidedAt: now,
-            closedAt: now,
-            refundAmount: refundOwedOn(order)
-        })
-        .then((created) => {
-            recordOpened(order, created, context);
-            void emitDomainEvent(RETURN_CLOSED, {
-                returnId: String(created._id),
-                orderId: String(order._id),
-                refundAmount: created.refundAmount ?? 0,
-                currency: created.currency
-            });
-            return created;
-        });
+    return withTransaction((session) =>
+        returnRepository
+            .create(
+                {
+                    orderId: order._id,
+                    orderNumber: order.orderNumber,
+                    currency: order.currency,
+                    status: 'closed',
+                    reason: 'withdrawal',
+                    lines: [],
+                    returnPostage: returnPostagePayer(),
+                    decidedAt: now,
+                    closedAt: now,
+                    refundAmount: refundOwedOn(order)
+                },
+                session
+            )
+            .then((created) =>
+                enqueueRequested(created, session)
+                    .then(() =>
+                        enqueueOutboxEvent(
+                            RETURN_CLOSED,
+                            {
+                                returnId: String(created._id),
+                                orderId: String(order._id),
+                                refundAmount: created.refundAmount ?? 0,
+                                currency: created.currency
+                            },
+                            String(order._id),
+                            session
+                        )
+                    )
+                    .then(() => created)
+            )
+    ).then((created) => {
+        nudgeOutbox();
+        recordOpened(order, created, context);
+        return created;
+    });
 };
 
 /**
@@ -222,8 +252,8 @@ const alreadyReturned = (orderId: string, session: ClientSession): Promise<Produ
         );
 
 /**
- * Write the return once its lines are decided: freeze what is coming back. Announcing it is the
- * caller's job, after the transaction commits.
+ * Write the return once its lines are decided: freeze what is coming back, and write
+ * `return.requested` with it. Waking the relay is the caller's job, after the commit.
  *
  * @param order - the order the goods came from
  * @param input - the customer's request
@@ -238,30 +268,32 @@ const writeReturn = (
 ): Promise<ReturnDocument> => {
     const byProduct = new Map(order.items.map((item) => [String(item.product._id), item]));
 
-    return returnRepository.create(
-        {
-            orderId: order._id,
-            orderNumber: order.orderNumber,
-            currency: order.currency,
-            status: initialStatusFor(input.reason),
-            reason: input.reason,
-            ...(input.note ? { note: input.note } : {}),
-            lines: lines.map(({ productId, quantity }) => {
-                // `checkRequestedLines` only accepts products the order holds, so this is present.
-                const item = byProduct.get(productId)!;
-                return {
-                    productId: new Types.ObjectId(productId),
-                    quantity,
-                    title: item.product.title,
-                    unitPrice: item.product.price
-                };
-            }),
-            returnPostage: returnPostagePayer(),
-            // A withdrawal is opened already decided — there is nothing for staff to decide.
-            ...(input.reason === 'withdrawal' ? { decidedAt: new Date() } : {})
-        },
-        session
-    );
+    return returnRepository
+        .create(
+            {
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                currency: order.currency,
+                status: initialStatusFor(input.reason),
+                reason: input.reason,
+                ...(input.note ? { note: input.note } : {}),
+                lines: lines.map(({ productId, quantity }) => {
+                    // `checkRequestedLines` only accepts products the order holds, so this is present.
+                    const item = byProduct.get(productId)!;
+                    return {
+                        productId: new Types.ObjectId(productId),
+                        quantity,
+                        title: item.product.title,
+                        unitPrice: item.product.price
+                    };
+                }),
+                returnPostage: returnPostagePayer(),
+                // A withdrawal is opened already decided — there is nothing for staff to decide.
+                ...(input.reason === 'withdrawal' ? { decidedAt: new Date() } : {})
+            },
+            session
+        )
+        .then((created) => enqueueRequested(created, session).then(() => created));
 };
 
 /**
@@ -373,7 +405,9 @@ export const createReturn = (
 
         // The mail, the audit row and the order's return status follow the commit: they must not
         // describe a return a lost race never wrote.
-        return openUnderLock(order, input).then((outcome) =>
-            outcome.kind === 'created' ? announceOpened(order, outcome.created, context) : outcome
-        );
+        return openUnderLock(order, input).then((outcome) => {
+            if (outcome.kind !== 'created') return outcome;
+            nudgeOutbox();
+            return announceOpened(order, outcome.created, context);
+        });
     });

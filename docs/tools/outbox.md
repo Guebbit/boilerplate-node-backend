@@ -66,6 +66,9 @@ no-op — see [Consumers](#writing-a-consumer).
 | `product.created`                         | `src/modules/products/services/crud.ts`                  |
 | `product.deleted`                         | `src/modules/products/services/remove.ts`                |
 | `account.sessions-revoked`                | `src/modules/account/services/{revocation,profile}.ts`   |
+| `return.requested`                        | `src/modules/returns/services/create.ts`                 |
+| `return.received`                         | `src/modules/returns/services/receive.ts`                |
+| `return.closed`                           | `src/modules/returns/services/{close,create}.ts`         |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary

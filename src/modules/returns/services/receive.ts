@@ -26,7 +26,7 @@ import {
 } from '@infrastructure/http/response';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { emitDomainEvent } from '@kernel/events';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
 import { cheapestStandardShipping } from '@modules/delivery';
 import { orderService, sumLineItems } from '@modules/orders';
@@ -90,7 +90,8 @@ const quote = (returned: ReturnDocument, order: OrderDocument, handlingDeduction
     });
 
 /**
- * The move that IS the receipt: the conditional status claim and the restock, in one transaction.
+ * The move that IS the receipt: the conditional status claim, the restock and `return.received`,
+ * in one transaction.
  * @param returned - the return
  * @param breakdown - what it is owed, stamped in the same write
  * @param handlingDeduction - what staff keep back
@@ -120,6 +121,15 @@ const claimAndRestock = (
             { reference: String(received.orderId), note: `return ${String(received._id)}` },
             session
         );
+        await enqueueOutboxEvent(
+            RETURN_RECEIVED,
+            { returnId: String(received._id), orderId: String(received.orderId) },
+            String(received.orderId),
+            session
+        );
+        return received;
+    }).then((received) => {
+        if (received) nudgeOutbox();
         return received;
     });
 
@@ -219,10 +229,6 @@ const receiveFor = (
                         orderId: String(received.orderId),
                         refundAmount: verdict.breakdown.total
                     }
-                });
-                void emitDomainEvent(RETURN_RECEIVED, {
-                    returnId: id,
-                    orderId: String(received.orderId)
                 });
                 return refundAndClose(received, verdict.breakdown.shipping, context);
             })

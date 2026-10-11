@@ -20,6 +20,7 @@ import {
     markOrderPaidAt
 } from '@modules/orders/tests/factories';
 import { resetDomainEvents, onDomainEvent } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import paymentsModule from '@modules/payments/module';
@@ -140,8 +141,8 @@ describe('a withdrawal before dispatch', () => {
 
         await createReturn({ orderId, reason: 'withdrawal' }, buyer(user), testCallerContext);
 
-        // The events are announced fire-and-forget: let their listeners run.
-        await new Promise((resolve) => setImmediate(resolve));
+        // The events ride the outbox: let the relay deliver them.
+        await settleOutboxNudges();
         expect(heard).toEqual([`requested ${orderId}`, `closed ${orderId}`]);
     });
 
@@ -298,6 +299,7 @@ describe('a return on goods that have shipped', () => {
                 buyer(user),
                 testCallerContext
             );
+            await settleOutboxNudges();
 
             if (outcome.kind !== 'created') throw new Error('expected a return');
             expect(outcome.created).toMatchObject({
@@ -431,6 +433,7 @@ describe('a return on goods that have shipped', () => {
             createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext),
             createReturn({ orderId, reason: 'defective' }, buyer(user), testCallerContext)
         ]);
+        await settleOutboxNudges();
 
         // Snapshot isolation alone would let both read "nothing returned" and both commit.
         expect(outcomes.filter(({ kind }) => kind === 'created')).toHaveLength(1);
