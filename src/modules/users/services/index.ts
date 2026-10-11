@@ -53,6 +53,7 @@ import {
     sessionRemove,
     tokenRemoveByValue,
     tokenRemoveExpired,
+    clearLapsedPreviousEmail,
     tokenSupersede,
     tokenTouch
 } from './tokens';
@@ -132,6 +133,7 @@ export const userService = {
     sessionRemove,
     tokenRemoveByValue,
     tokenRemoveExpired,
+    clearLapsedPreviousEmail,
     tokenSupersede,
     tokenTouch,
     linkOAuthAccount,

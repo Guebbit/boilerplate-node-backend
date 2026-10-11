@@ -19,6 +19,7 @@ import {
     recipientLocale
 } from '../emails';
 import { sendAccountMail } from './mail';
+import { emailChangeNext, emailChangeStateOf } from '../domain';
 import { announceInTransaction } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import type { SessionsRevokedReason } from '../events';
@@ -528,7 +529,9 @@ export const cancelPendingEmailChange = (
         .findByIdWithPendingEmail(userId)
         .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
             if (!user) return generateReject(401, []);
-            const hadPending = Boolean(user.pendingEmail);
+            // Only `pendingEmail` is loaded here: enough to tell whether `cancel` applies, which
+            // is all the table is asked for.
+            const hadPending = emailChangeNext(emailChangeStateOf(user), 'cancel') !== undefined;
             return userService
                 .cancelPendingEmail(user)
                 .then((saved) => revokeCancelledChange(hadPending, saved, context))

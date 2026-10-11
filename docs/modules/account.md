@@ -161,7 +161,29 @@ flowchart TB
     class O,W,V,V2,S,X done;
 ```
 
-Three things in that diagram are decisions rather than mechanics:
+The flow has four states, read from `pendingEmail` and `previousEmail`, never stored. Which event
+applies in which state is one table, `domain/email-change.ts`; an event that does not apply is a
+no-op, not an error.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> pending: request
+    pending --> pending: request, resend
+    pending --> changed: confirm
+    pending --> idle: cancel, undo
+    changed --> changedPending: request
+    changed --> idle: undo, lapse
+    changedPending --> changedPending: request, resend
+    changedPending --> changed: confirm, cancel, undo
+    changedPending --> pending: lapse
+```
+
+`lapse` is the end of the undo window: the nightly `reap:expired-tokens` job clears `previousEmail`
+on an account with no live undo link. See
+[the retention page](../theory/data-retention.md#the-previous-email-after-a-change).
+
+Three things in the flow above are decisions rather than mechanics:
 
 - **The notice goes to the old address when the change is _requested_, not when it completes.** A
   warning that arrives before a takeover is a warning; one that arrives after is a receipt. It

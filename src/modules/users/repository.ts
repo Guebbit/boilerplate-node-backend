@@ -80,6 +80,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveExpired: (supersededRetentionMs: number, userId?: string) => Promise<number>;
+    clearLapsedPreviousEmail: (undoTokenType: string) => Promise<number>;
     findByTokenValue: (token: string) => Promise<UserDocument | null>;
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     tokenSupersede: (token: string) => Promise<boolean>;
@@ -282,6 +283,34 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .exec()
             .then(({ modifiedCount }) => modifiedCount);
     },
+
+    /**
+     * Forget the previous address of every account whose undo window has closed: it holds a
+     * `previousEmail` and no live token of the undo type. The address is only there for that link,
+     * so keeping it past the link is personal data kept for nothing. Nightly job only: an
+     * unindexed whole-collection `updateMany`, like `tokenRemoveExpired`.
+     *
+     * @param undoTokenType - the `tokens.type` of the undo link; passed in because it belongs to
+     *   `account`, which this module may not import.
+     * @returns how many accounts were cleared
+     */
+    clearLapsedPreviousEmail: (undoTokenType: string) =>
+        userModel
+            .updateMany(
+                {
+                    previousEmail: { $exists: true },
+                    // `$not` + `$elemMatch`: no entry of that type that has not yet expired.
+                    tokens: {
+                        $not: {
+                            $elemMatch: { type: undoTokenType, expiration: { $gt: new Date() } }
+                        }
+                    }
+                },
+                { $unset: { previousEmail: '' } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount),
 
     /**
      * The holder of this token value, whatever kind it is. Deliberately untyped by kind, unlike

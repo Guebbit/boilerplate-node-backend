@@ -114,6 +114,19 @@ An account that comes back and goes quiet again is minimised again.
 What this leaves forever: an email and a password hash, for an account nobody uses. Small, with a
 clear purpose, and what Amazon does. A controller who wants more turns full deletion on.
 
+## The previous email after a change
+
+A confirmed email change keeps the old address in `previousEmail`, for one purpose: the 7-day undo
+link mailed to that old address. When the link lapses the purpose is over, so the address goes.
+
+- **Who clears it:** the nightly `reap:expired-tokens` job, in the same lease as the token sweep.
+  It unsets `previousEmail` on every account that holds one and has no live undo token.
+- **Why that test:** the link's own expiry is the window, so the clock is the one the user was told.
+  A link that was spent or revoked ends the window early, and the same test catches that too.
+- **The undo itself** still clears it at once; the sweep only covers the case nobody undid.
+
+The states are in [Proving an address](../modules/account.md#proving-an-address).
+
 ## Free text on returns
 
 A return carries a required `reason` (`withdrawal`, `defective`, `wrong_item`, `other`) and two

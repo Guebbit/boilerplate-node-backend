@@ -28,6 +28,7 @@ import type { EmailVerificationRequested } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { AuditAction } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
+import { emailChangeNext, emailChangeStateOf, undoRestoresPreviousEmail } from '../domain';
 import { isUnrestrictedCaller } from '../roles';
 import { promoteVerifiedCustomer } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
@@ -209,7 +210,7 @@ export const resendPendingEmailVerificationFor = (
     userService.findByIdWithCredentials(userId).then((user) => {
         // A valid token for a since-deleted account is unauthenticated, as on `PUT /account`.
         if (!user) return generateReject(401, []);
-        if (!user.pendingEmail)
+        if (emailChangeNext(emailChangeStateOf(user), 'resend') === undefined || !user.pendingEmail)
             return generateSuccess<EmailVerificationRequested>(
                 { resendAfter: 0 },
                 200,
@@ -330,8 +331,9 @@ export const completeEmailChange = (
     const newEmail = user.pendingEmail;
     // Defensive: `findLiveToken` only returns a holder of a live `email-change` token. Issuing one
     // always sets `pendingEmail` first, and cancelling one revokes it before clearing `pendingEmail`
-    // (`cancelPendingEmailChange`) — this is unreachable outside a caller bug.
-    if (!newEmail) return Promise.resolve(user);
+    // (`cancelPendingEmailChange`) — the table refuses `confirm` outside a caller bug.
+    if (emailChangeNext(emailChangeStateOf(user), 'confirm') === undefined || !newEmail)
+        return Promise.resolve(user);
 
     return userService
         .applyEmailChange(user, newEmail)
@@ -371,7 +373,7 @@ export const undoEmailChange = (
     // that fails (409) must not leave a thief signed in with no way for the owner to retry.
     announceSessionsRevoked(user, 'email-change-undo')
         .then(() =>
-            user.pendingEmail === undefined
+            undoRestoresPreviousEmail(emailChangeStateOf(user))
                 ? userService.restorePreviousEmail(user)
                 : userService.cancelPendingEmail(user)
         )
