@@ -306,6 +306,30 @@ describe('reading an actor’s own trail by cursor', () => {
         expect(collected).toEqual(['at-3', 'at-2', 'at-1', 'at-0']);
     });
 
+    it('starts the next page right after the oldest entry of the last one, however many a page holds', async () => {
+        for (const [index, minutes] of [0, 5, 10, 15, 20, 25].entries())
+            await auditLogRepository.create(
+                makeEntry({
+                    actorUserId: 'ada',
+                    requestId: `spread-${String(index)}`,
+                    timestamp: new Date(AT.getTime() + minutes * 60_000)
+                })
+            );
+
+        const first = await auditLogRepository.ownEntriesPage('ada', undefined, 3);
+        const { collected } = await walk('ada', 3);
+
+        expect(first.next?.timestamp).toEqual(new Date(AT.getTime() + 15 * 60_000));
+        expect(collected).toEqual([
+            'spread-5',
+            'spread-4',
+            'spread-3',
+            'spread-2',
+            'spread-1',
+            'spread-0'
+        ]);
+    });
+
     it('never reads another actor’s entries', async () => {
         await auditLogRepository.create(makeEntry({ actorUserId: 'ada', requestId: 'mine' }));
         await auditLogRepository.create(makeEntry({ actorUserId: 'grace', requestId: 'theirs' }));

@@ -118,6 +118,42 @@ describe('create', () => {
     });
 });
 
+describe('create — the operator notification', () => {
+    it('files a request that names nobody', async () => {
+        const { name: _omitted, ...withoutName } = makePayload();
+
+        const feedback = await create(withoutName);
+
+        expect(feedback.name).toBeUndefined();
+        expect(feedback.email).toBe('ada@example.com');
+    });
+
+    it('goes to the configured mailbox, with the ticket’s own words and the moment it was filed', async () => {
+        const feedback = await create(makePayload());
+
+        const [envelope, template, data] = mockEnqueueEmail.mock.calls[0];
+        expect(envelope).toMatchObject({ to: 'admin@example.com' });
+        expect(envelope.subject).toContain('Broken checkout');
+        expect(template).toBe('feedback.contact');
+        expect(data).toMatchObject({
+            name: 'Ada Lovelace',
+            email: 'ada@example.com',
+            subject: 'Broken checkout',
+            message: 'The cart total is wrong.',
+            createdAt: feedback.createdAt?.toISOString()
+        });
+    });
+
+    it('sends nothing when no mailbox is configured at all', async () => {
+        setEnvironment({ NODE_CONTACT_NOTIFY_EMAIL: undefined, NODE_SMTP_SENDER: undefined });
+
+        const feedback = await create(makePayload());
+
+        expect(feedback.status).toBe(FeedbackRequestStatus.new);
+        expect(mockEnqueueEmail).not.toHaveBeenCalled();
+    });
+});
+
 describe('create — honeypot', () => {
     it('sends the operator notification when the honeypot is empty', async () => {
         await create(makePayload());

@@ -34,6 +34,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { webhooksAuditActions } from '@modules/webhooks/audit';
 import { logger } from '@infrastructure/adapters/logger';
+import { webhookDeliveryAttemptsTotal } from '@modules/webhooks/metrics';
 
 // The real `node:https`, with this suite's own throwaway CA injected into every request — see
 // `https-test-server.ts`'s own doc for why `NODE_TLS_REJECT_UNAUTHORIZED` does NOT work here.
@@ -206,6 +207,12 @@ const runChainToCompletion = async (deliveryId: string): Promise<void> => {
     }
 };
 
+/** How many delivery attempts the counter holds for one outcome label. */
+const attemptsCounted = (outcome: 'success' | 'failure'): Promise<number> =>
+    webhookDeliveryAttemptsTotal
+        .get()
+        .then(({ values }) => values.find(({ labels }) => labels.outcome === outcome)?.value ?? 0);
+
 describe('a successful delivery', () => {
     let server: HttpsTestServer;
 
@@ -213,6 +220,20 @@ describe('a successful delivery', () => {
         server = await startHttpsTestServer((response) => response.writeHead(200).end('ok'));
     });
     afterEach(() => server.close());
+
+    it('counts the attempt as a success, and only as one', async () => {
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+        const before = {
+            success: await attemptsCounted('success'),
+            failure: await attemptsCounted('failure')
+        };
+
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        expect(await attemptsCounted('success')).toBe(before.success + 1);
+        expect(await attemptsCounted('failure')).toBe(before.failure);
+    });
 
     it('arrives signed, and the log records it as succeeded', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
@@ -264,6 +285,20 @@ describe('a 500 response', () => {
         server = await startHttpsTestServer((response) => response.writeHead(500).end('nope'));
     });
     afterEach(() => server.close());
+
+    it('counts the attempt as a failure, and only as one', async () => {
+        const subscription = await createSubscription(`${server.url}/hook`);
+        const job = await createPendingDelivery(subscription);
+        const before = {
+            success: await attemptsCounted('success'),
+            failure: await attemptsCounted('failure')
+        };
+
+        await processDeliveryJob({ deliveryId: job.deliveryId });
+
+        expect(await attemptsCounted('failure')).toBe(before.failure + 1);
+        expect(await attemptsCounted('success')).toBe(before.success);
+    });
 
     it('schedules a retry rather than exhausting on the first failure', async () => {
         const subscription = await createSubscription(`${server.url}/hook`);
