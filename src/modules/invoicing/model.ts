@@ -69,7 +69,7 @@ export interface FrozenTaxDocument {
     orderId: Types.ObjectId;
     /** `{year}-{sequence}`, this series' own — see `services/numbering.ts`. */
     number: string;
-    /** The moment this document was issued — an order's `paidAt` for an invoice, a payment's refund moment for a credit note. */
+    /** The moment this document was issued: the listener's own clock, a moment after the payment or refund it records. */
     issuedAt: Date;
     /** ISO-4217, frozen from the ORDER's own `currency` — never re-read from config. */
     currency: string;

@@ -87,17 +87,19 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
 
     // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
     const _id = new Types.ObjectId();
+    // One instant for the number's year and the stored date; fixed here so a retry keeps it.
+    const issuedAt = new Date();
     // The order stores its address under ITS id; the invoice re-encrypts it under its own.
     const billingAddress = billingAddressOf(order);
 
     return withTransaction((session) =>
-        allocateInvoiceNumber(session).then((number) =>
+        allocateInvoiceNumber(issuedAt, session).then((number) =>
             invoicingRepository.insertInvoice(
                 {
                     _id,
                     orderId: order._id,
                     number,
-                    issuedAt: new Date(),
+                    issuedAt,
                     currency,
                     locale: order.items[0].locale,
                     orderNumber: order.orderNumber,

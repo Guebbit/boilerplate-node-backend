@@ -103,6 +103,7 @@ export {
     shopCurrency,
     shopCountry,
     shopIdentity,
+    shopTimezone,
     withdrawalPeriodDays,
     shipToCountries,
     returnAddress,

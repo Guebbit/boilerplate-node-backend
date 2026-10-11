@@ -115,6 +115,11 @@ the counter, and the loser reads the row the winner wrote (`services/issue-invoi
 series therefore have no gaps (VAT Directive Art. 226(2); a credit note is an invoice in law,
 Art. 219), unlike `orderNumber`, which is a label (`orders/services/order-numbering.ts`).
 
+The number's year is the year of the document's own `issuedAt` on the shop's calendar
+(`NODE_SHOP_TIMEZONE`, [orders](./orders.md#configuration)), taken from the very instant that is stored,
+so a sale at 00:30 on 1 January in Rome starts the new series instead of ending the old one. The
+date printed on the document uses the same zone.
+
 A listener failure is logged by `emitDomainEvent` and never rolls back the write that triggered
 it: an order that reached `paid` stays `paid` whether or not its invoice freeze succeeded, so an
 invoice can be missing, but a number is never skipped.

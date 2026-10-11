@@ -63,3 +63,6 @@ export type { WithdrawalCandidate, WithdrawableLine, WithdrawalClockCandidate } 
 /** The three statuses beside `status`: the money, the goods, any return. */
 export { fulfillmentStatusOf, paymentStatusOf, returnStatusOf } from './projections';
 export type { StampedPaymentStatus, StampedReturnStatus } from './projections';
+
+/** The shop-calendar year of an instant: the year every numbered series is cut at. */
+export { yearInZone } from './shop-time';

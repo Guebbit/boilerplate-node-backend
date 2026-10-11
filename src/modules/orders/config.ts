@@ -18,7 +18,7 @@
  */
 
 import { ConfigError, defineConfig } from '@infrastructure/config/define';
-import { choice, csv, email, int, text } from '@infrastructure/config/fields';
+import { choice, csv, email, int, text, timeZone } from '@infrastructure/config/fields';
 import { currencyConfig } from '@infrastructure/runtime/config';
 import { frontendLink } from '@infrastructure/http/frontend-link';
 import type { OrderTransferInstructions } from '@types';
@@ -40,6 +40,7 @@ export const ordersConfig = defineConfig({
     name: 'orders',
     shape: {
         NODE_SHOP_COUNTRY: text({ required: { minLength: 1 } }),
+        NODE_SHOP_TIMEZONE: timeZone({ required: { minLength: 1 } }),
         NODE_SHOP_LEGAL_NAME: text({ required: { minLength: 1 } }),
         NODE_SHOP_VAT_NUMBER: text(),
         NODE_SHOP_STREET: text({ required: { minLength: 1 } }),
@@ -77,6 +78,17 @@ export const ordersConfig = defineConfig({
  * @returns the configured ISO-3166 country code, or `undefined`
  */
 export const shopCountry = (): string | undefined => ordersConfig().NODE_SHOP_COUNTRY;
+
+/**
+ * The shop's own time zone — whose calendar every year-numbered series, and every "day" a report
+ * counts, follows. One named zone (not a fixed offset, which ignores summer time) so a sale at
+ * 00:30 on 1 January in Rome lands in the new year's series. Required at boot via this module's
+ * manifest; the throw is the same `NODE_ENV=test` backstop {@link shopIdentity} has.
+ * @returns the canonical IANA zone name, e.g. `Europe/Rome`
+ * @throws {ConfigError} when it is unset (only possible under `NODE_ENV=test`)
+ */
+export const shopTimezone = (): string =>
+    requiredValue('NODE_SHOP_TIMEZONE', ordersConfig().NODE_SHOP_TIMEZONE);
 
 /**
  * A required variable's value. `NODE_ENV=test` skips the boot check, so a suite that forgot to
