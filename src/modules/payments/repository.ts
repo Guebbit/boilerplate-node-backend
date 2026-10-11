@@ -10,7 +10,11 @@ import type { ClientSession } from 'mongoose';
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
 import type { PaymentDocument, RefundRecord } from './model';
-import { CONFIRMABLE_PAYMENT_STATUSES, OPEN_REFUND_STATUSES } from './domain';
+import {
+    CONFIRMABLE_PAYMENT_STATUSES,
+    OPEN_REFUND_STATUSES,
+    SETTLEABLE_PAYMENT_STATUSES
+} from './domain';
 import {
     createRepository,
     toObjectId,
@@ -139,6 +143,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         lastError: string
     ) => Promise<PaymentDocument | null>;
     findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
+    findStaleInFlight: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
 } = {
     ...createRepository<PaymentDocument, PaymentWire>(paymentModel, {
         transform: applyPaymentTransform
@@ -449,6 +454,28 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentModel
             .find({
                 refunds: { $elemMatch: { status: { $in: OPEN_REFUND_STATUSES } } },
+                updatedAt: { $lte: updatedBefore }
+            })
+            .sort({ updatedAt: 1 })
+            .limit(limit)
+            .exec(),
+
+    /**
+     * Payments the provider may have moved on without this application hearing of it: still in a
+     * state a settlement moves away from, holding an intent to ask about, and untouched since
+     * `updatedBefore`. A `manual` payment has no provider to ask. Oldest first, so a capped batch
+     * reaches the longest-waiting ones; a payment that is asked and still unsettled is rewritten
+     * by the settlement, which moves it to the back of the line.
+     *
+     * @param updatedBefore - payments last touched at or before this instant are due
+     * @param limit - the most to return
+     */
+    findStaleInFlight: (updatedBefore: Date, limit: number) =>
+        paymentModel
+            .find({
+                status: { $in: [...SETTLEABLE_PAYMENT_STATUSES] },
+                providerRef: { $exists: true, $ne: null },
+                provider: { $ne: 'manual' },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

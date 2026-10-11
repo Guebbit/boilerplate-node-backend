@@ -195,6 +195,34 @@ that was lost — the refund path owns that.
 
 `pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
 
+## Lost webhooks
+
+A provider's webhook is the authority on a payment, and a webhook can be lost: a deploy at the wrong
+moment, a retry window that ran out, a browser closed before the sync. Two nets sit under it, and
+both end in the one settlement the webhook, the confirm and the sync already share
+(`settlement.ts#settleFromProvider`), so none can drift from the others.
+
+```mermaid
+flowchart LR
+    sweep["sweep:payment-effects<br/>reconcileStalePayments"] --> ask["provider.retrieve"]
+    cancel["order.cancelled<br/>cancelOpenIntentForOrder"] -- "provider refuses to close<br/>(already succeeded)" --> ask
+    hook["webhook"] --> ask
+    ask --> settle["settlePayment"]
+    settle -- "order still payable" --> paid["order paid, stock committed"]
+    settle -- "order gone" --> refund["money returned"]
+```
+
+- **The sweep.** Every unsettled payment holding a provider intent, untouched for
+  `NODE_PAYMENT_RECONCILE_MINUTES` (default 15), is asked about. A payment the webhook already
+  settled is not asked at all, and every write inside the settlement is conditional, so the sweep
+  racing a late webhook settles once.
+- **The cancel path.** Cancelling an order closes its open intent at the provider. A provider that
+  answers "already succeeded" has taken money in the last minutes before the cancel, which no sweep
+  window can be short enough to catch. The cancel path reconciles that payment on the spot: the order
+  is gone, so the money goes straight back. A provider still mid-flight is left to the sweep.
+
+Neither net adds a marker or a field: the payment's own status and `updatedAt` are the whole state.
+
 ## Status transitions
 
 `requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
@@ -496,6 +524,7 @@ flowchart LR
 | `NODE_BANK_TRANSFER_HOLD_HOURS`             | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`   | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
 | `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
+| `NODE_PAYMENT_RECONCILE_MINUTES`            | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
 | `NODE_STRIPE_SECRET_KEY`                    | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves

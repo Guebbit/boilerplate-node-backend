@@ -14,11 +14,17 @@ import {
 } from '@infrastructure/http/response';
 import type { Payment, AuthContext } from '@types';
 import { orderService, orderTotal, isPayable } from '@modules/orders';
-import { resolvePaymentProvider, providerNamed, type PaymentProvider } from '../providers';
+import {
+    resolvePaymentProvider,
+    providerNamed,
+    PaymentInFlightError,
+    type PaymentProvider
+} from '../providers';
 import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
 import { cardNotAvailable, notPayable } from './errors';
+import { settleFromProvider } from './settlement';
 import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -160,7 +166,8 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
  * Best-effort, unlike {@link cancelOpenIntent}'s other caller (`recordOfflinePayment`): the order
  * is already cancelled by the time this runs, so there is no request left here to refuse — a
  * provider failure is only logged, never rethrown, so it cannot stop the cancel that already
- * happened.
+ * happened. A provider that says the intent already succeeded is the one case acted on: the
+ * payment is reconciled on the spot, which refunds money that landed on the cancelled order.
  *
  * @param orderId - the order that was cancelled
  */
@@ -169,12 +176,21 @@ export const cancelOpenIntentForOrder = (orderId: string): Promise<void> =>
         if (!payment || payment.status === 'succeeded' || payment.status === 'refunded')
             return undefined;
 
-        return cancelOpenIntent(payment, 'Order cancelled').catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not cancel order ${orderId}'s open intent at the provider — left open there; the abandoned-payment sweep will eventually delete this row without ever telling it`,
-                error
+        return cancelOpenIntent(payment, 'Order cancelled')
+            .catch((error: unknown) => {
+                if (!(error instanceof PaymentInFlightError)) throw error;
+                // The provider refused to close the intent: the customer's money landed (or is on
+                // its way) in the last minutes before this cancel. Settling what the provider now
+                // says finds the order gone and puts the money straight back; still mid-flight,
+                // the reconciliation sweep finishes it once the provider has decided.
+                return settleFromProvider(payment).then(() => undefined);
+            })
+            .catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Payments: could not close order ${orderId}'s open intent at the provider — left as it is; the reconciliation sweep asks the provider about it again`,
+                    error
+                });
+                // Stryker restore all
             });
-            // Stryker restore all
-        });
     });

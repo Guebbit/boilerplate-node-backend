@@ -6,6 +6,9 @@
  * marker itself on the normal path, so this is purely the crash-recovery half. Shaped like
  * `orders/services/cancel.ts`'s own sweep: sequential, warns on a full batch, and returns how many
  * actually settled.
+ *
+ * Also home to the reconciliation sweep: it asks the provider about payments nobody settled, the
+ * net under a webhook that never arrived.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
@@ -13,9 +16,10 @@ import { orderService, paymentSettled } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
-import { paymentEffectRetryMinutes } from '../config';
+import { paymentEffectRetryMinutes, paymentReconcileMinutes } from '../config';
 import { settleOpenRefunds } from './refunds';
 import { announcePaymentSucceeded } from './announce';
+import { settleFromProvider } from './settlement';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
@@ -71,14 +75,16 @@ const retryOne = (payment: PaymentDocument): Promise<boolean> => {
  * @param find - reads one batch of payments untouched since the cutoff
  * @param handle - settles one payment; resolves whether it did, and never rejects
  * @param label - which sweep this is, for its log lines
+ * @param graceMinutes - how long a payment sits untouched before this sweep may act on it
  * @returns how many payments were settled
  */
 const sweepDue = async (
     find: (cutoff: Date, limit: number) => Promise<PaymentDocument[]>,
     handle: (payment: PaymentDocument) => Promise<boolean>,
-    label: 'effect' | 'refund'
+    label: 'effect' | 'refund' | 'reconcile',
+    graceMinutes: number
 ): Promise<number> => {
-    const cutoff = new Date(Date.now() - paymentEffectRetryMinutes() * 60_000);
+    const cutoff = new Date(Date.now() - graceMinutes * 60_000);
     const due = await find(cutoff, SWEEP_BATCH_SIZE);
 
     let settled = 0;
@@ -108,7 +114,12 @@ const sweepDue = async (
  * @returns how many payments were settled
  */
 export const retryPendingEffects = (): Promise<number> =>
-    sweepDue(paymentRepository.findWithPendingEffects, retryOne, 'effect');
+    sweepDue(
+        paymentRepository.findWithPendingEffects,
+        retryOne,
+        'effect',
+        paymentEffectRetryMinutes()
+    );
 
 /**
  * Retry one payment's open refunds; a failure is logged and leaves them open for the next sweep.
@@ -139,4 +150,49 @@ const retryOneRefund = (payment: PaymentDocument): Promise<boolean> =>
  * @returns how many payments had at least one refund settled
  */
 export const retryOpenRefunds = (): Promise<number> =>
-    sweepDue(paymentRepository.findWithOpenRefunds, retryOneRefund, 'refund');
+    sweepDue(
+        paymentRepository.findWithOpenRefunds,
+        retryOneRefund,
+        'refund',
+        paymentEffectRetryMinutes()
+    );
+
+/**
+ * Ask the provider about one stale payment and settle the answer; a failure is logged and leaves
+ * the payment for the next sweep.
+ *
+ * @param payment - an unsettled payment holding a provider intent
+ * @returns whether this call's own write moved the payment (a call that lost a race, or found the
+ *   provider still undecided, did not)
+ */
+const reconcileOne = (payment: PaymentDocument): Promise<boolean> =>
+    settleFromProvider(payment)
+        .then(
+            (settlement) =>
+                settlement?.transitioned === true && payment.status !== settlement.payment.status
+        )
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not reconcile order ${String(payment.orderId)}'s payment with the provider — it stays as it is, and the next sweep asks again`,
+                error
+            });
+            // Stryker restore all
+            return false;
+        });
+
+/**
+ * Reconcile every unsettled payment the provider may have decided without telling us — the net
+ * under a lost webhook, the standard fix. The settlement is the same one the webhook, the confirm
+ * and the sync reach, so a payment the webhook DID deliver is a harmless no-op here: every write
+ * in it is conditional, and a settled payment is not asked about at all.
+ *
+ * @returns how many payments moved to a new state
+ */
+export const reconcileStalePayments = (): Promise<number> =>
+    sweepDue(
+        paymentRepository.findStaleInFlight,
+        reconcileOne,
+        'reconcile',
+        paymentReconcileMinutes()
+    );
