@@ -62,27 +62,22 @@ export const ORDER_LIFECYCLE: Readonly<
  * @param from - current status
  * @param to - status being written
  * @param actor - who is writing it
- * @returns whether the move is allowed — `from === to` is not a transition and always allowed,
- * EXCEPT into `paid`: the contract restricts that destination to `system` in absolute terms, so an
- * echo write must not let a non-system actor pass. `system` still gets the no-op, for the payment
- * webhook's own retries.
+ * @returns whether `actor` may make the move — only a declared edge is a transition, so staying in
+ * the same status is never one. A repeated settlement is stopped by the conditional write's own
+ * `from` filter, not by this table.
  */
 export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderActor): boolean =>
-    from === to
-        ? to !== OrderStatus.paid || actor === 'system'
-        : Boolean(ORDER_LIFECYCLE[from][to]?.includes(actor));
+    Boolean(ORDER_LIFECYCLE[from][to]?.includes(actor));
 
 /**
  * Whether an order in `status` may still be paid — the one question every payment door asks
- * instead of comparing a status literal of its own. `pending` only: `canTransition` alone also
- * answers `true` for `paid → paid`, since `system` may echo-write it on the webhook's own retries,
- * but that echo is not a fresh offer to pay — a caller asking "can I pay this" must get `false`
- * once it already has been.
+ * instead of comparing a status literal of its own. `pending` only: the one status with a
+ * `system` edge into `paid`.
  * @param status - current status
  * @returns whether a payment attempt against this order should be allowed
  */
 export const isPayable = (status: OrderStatus): boolean =>
-    canTransition(status, OrderStatus.paid, 'system') && status !== OrderStatus.paid;
+    canTransition(status, OrderStatus.paid, 'system');
 
 /**
  * Whether an order in `status` has already been paid — `paid`, or further along. `pending` has
@@ -96,7 +91,7 @@ export const paymentSettled = (status: OrderStatus): boolean =>
 
 /**
  * The forward sequence an admin override may move an order along — never `paid` (that destination
- * stays `system`-only in absolute terms, echo included, see {@link canTransition}) and never
+ * stays `system`-only in absolute terms, see {@link canTransition}) and never
  * `cancelled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
  * this array IS the "forward" rule: an override may only move to a LATER index than the order's
  * current status sits at within it. `pending` is not in it: leaving `pending` goes only through the

@@ -246,8 +246,7 @@ name. Two modes, both requiring a `reason`, both writing an embedded override-hi
 - **Forced** — the delivery doors (`ship`/`deliver`) accept `forced: true` alongside the ordinary
   request. The regular operation still runs: a parcel record is created, a tracking code is
   required if the method needs one, the shipped email still sends. Only the status GATE is skipped
-  — it may jump past `processing`, but never lands on `paid` (that stays `system`-only, absolute,
-  echo included).
+  — it may jump past `processing`, but never lands on `paid` (that stays `system`-only, absolute).
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
   alone, forward to `processing`/`shipped`/`delivered` only. No parcel, no shipped email — but
   webhooks still fire, since a subscriber's own view of the order genuinely changed.
