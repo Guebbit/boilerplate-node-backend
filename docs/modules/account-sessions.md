@@ -276,6 +276,7 @@ So every "I may be compromised" event also moves `tokensValidAfter` on the user,
 | email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
 | email change undone ("not me")        | yes, FIRST, before the address is touched                      | n/a: the undo link is the credential                                                    |
 | refresh reuse detected                | yes                                                            | n/a                                                                                     |
+| admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                | n/a: an unban or a restore does not bring the old tokens back                           |
 | plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
 
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot

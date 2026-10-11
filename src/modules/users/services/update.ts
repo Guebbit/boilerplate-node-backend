@@ -26,6 +26,7 @@ import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAnalyticsEvents } from '../analytics';
 import { usersAuditActions } from '../audit';
+import { markSessionsEnded } from './credentials';
 import { enqueueIfPending } from './image';
 
 /**
@@ -61,7 +62,12 @@ export const update = (
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
     // written below in `updateSavedUser` once the rest of the document has saved.
-    if (data.active !== undefined) user.active = data.active;
+    if (data.active !== undefined) {
+        // A ban ends every session in the SAME save: the `active` gate alone would let the old
+        // tokens back in the moment someone unbans the account.
+        if (!data.active && user.active) markSessionsEnded(user);
+        user.active = data.active;
+    }
     // The old url is captured before the overwrite so `updateSavedUser` can delete it once
     // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
     // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the

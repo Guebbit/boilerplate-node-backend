@@ -115,7 +115,9 @@ path, `toUser` (`model.ts`) decrypts it on the way out, whether the source docum
 ## Soft delete vs. erasure
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
-revoked, and a repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
+revoked (the [session epoch](./account-sessions.md#the-session-epoch) moves in the same save, as it
+does when an update bans the account, so a restore or an unban never revives an old token), and a
+repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
 signs in again. `?hardDelete=true` is the one that runs every module's `personalData.erase` hook (the cascade above) and
 actually removes the row.
 

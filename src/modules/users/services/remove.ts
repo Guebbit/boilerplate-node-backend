@@ -23,6 +23,7 @@ import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
 import { usersAuditActions } from '../audit';
+import { markSessionsEnded } from './credentials';
 
 /**
  * Runs every registered `personalData.erase` hook and then deletes the user document
@@ -113,6 +114,8 @@ export const remove = (
     if (user.deletedAt) return Promise.resolve(generateSuccess(user, 200, t('users.soft-deleted')));
 
     user.deletedAt = new Date();
+    // The epoch moves in the same save, so a restore does not bring the old tokens back.
+    markSessionsEnded(user);
     // Only the reaper's own soft delete may later be hard-deleted by it.
     if (context?.caller.system) user.deletedBy = 'reaper';
     return userRepository.save(user).then((saved) =>
