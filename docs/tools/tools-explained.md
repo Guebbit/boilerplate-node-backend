@@ -204,6 +204,30 @@ prevent.
 
 ---
 
+### restic (backups)
+
+**What it is.** restic is a backup program: one static binary that writes encrypted, deduplicated snapshots to a repository (a local disk, SFTP, S3-compatible storage, or a REST server).
+
+**Problem it solves.** A database dump taken every hour is mostly the same bytes as the last one. A tool that stores each dump whole fills a disk in a week; a tool that stores them unencrypted turns a stolen bucket into a breach. restic cuts the stream into chunks, stores each chunk once, and encrypts on the client, so the storage only ever sees ciphertext and hourly backups cost what changed.
+
+**In this repo.** The `backup` container (`backup` compose profile) streams `mongodump --oplog` into restic with no gzip, backs up the uploads and the mail spool, and applies the keep knobs. The restore drill reads the same repository back. Pinned at 0.19.1; BSD-2-Clause.
+
+→ [Backups](./backups.md) · [restic](./restic.md) · [MongoDB Database Tools](./mongodb-database-tools.md)
+
+---
+
+### rclone (the append-only second machine)
+
+**What it is.** rclone is a command-line tool for storage; its `serve restic` command speaks restic's REST protocol over a folder.
+
+**Problem it solves.** Whoever owns the app server also finds the restic password on it, and could delete every backup before encrypting the database. A repository on another machine that accepts new backups and refuses deletes (`--append-only`) makes the password alone useless for that.
+
+**In this repo.** `docker-compose.backup-server.yml`, dormant until started on a second machine: `rclone serve restic --append-only --private-repos` over TLS, one login per client, plus a weekly `forget --prune` and `check` on the machine's own disk. Pinned at 1.75.2; MIT.
+
+→ [Backup server](./backup-server.md) · [rclone](./rclone.md)
+
+---
+
 ## Outbound
 
 ### Nodemailer + EJS (email)

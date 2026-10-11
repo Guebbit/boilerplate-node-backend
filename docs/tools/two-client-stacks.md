@@ -65,8 +65,10 @@ A replica set is what the app needs, not a luxury:
   the outbox write, stock holds, product writes and the erasure cascade, and MongoDB refuses a
   transaction on a standalone `mongod`.
 - **`mongodump --oplog` is not point-in-time recovery.** It gives one dump that is consistent
-  ACROSS collections while writes keep arriving — real PITR needs continuous oplog capture
-  ([Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/index.html)).
+  ACROSS collections while writes keep arriving; a restore lands on the moment the dump ended, not on any
+  minute you choose. Real PITR needs continuous oplog capture
+  ([Percona Backup for MongoDB](https://docs.percona.com/percona-backup-mongodb/index.html)), which also
+  needs a real replica set, not one node: [When you outgrow this](./backups.md#when-you-outgrow-this).
 
 It is also MongoDB's own documented production topology, and a `mongodump --oplog` that cannot
 capture an order without its payment mid-checkout. Converting a live standalone to a set later is

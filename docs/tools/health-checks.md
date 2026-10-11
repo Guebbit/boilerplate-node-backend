@@ -20,6 +20,7 @@ A health check tests **this container's own job**. Nothing else.
 | ---------- | ----------------------------------------------- | ---------------------------------------------------- |
 | `app`      | `GET /livez`                                    | the image, and compose again (see [Podman](#podman)) |
 | `cron`     | supercronic's `GET /health` on `127.0.0.1:9746` | compose                                              |
+| `backup`   | the same supercronic `/health`, with `curl`     | `docker/Dockerfile.backup` (the image)               |
 | `setup`    | none: `healthcheck: disable: true`              | `docker-compose.production.yml`                      |
 | `database` | the database's own ping                         | compose                                              |
 | `cache`    | the cache's own ping                            | compose                                              |
@@ -107,9 +108,9 @@ on both engines.
 
 ## Supercronic's `/health`
 
-`cron` starts supercronic with `-prometheus-listen-address 127.0.0.1:9746`. That serves `/health`,
+`cron` and `backup` start supercronic with `-prometheus-listen-address 127.0.0.1:9746`. That serves `/health`,
 which answers `OK` while the scheduler runs, and `/metrics` (success and failure counters per job).
-The loopback bind keeps both private to the container. Scraping `/metrics` needs a non-loopback
+The loopback bind keeps both private to the container. `backup` is a second scheduler in a second container, on purpose: it holds the backup secrets and the app's `cron` does not ([Backups](./backups.md)). Scraping `/metrics` needs a non-loopback
 bind, which is not set up.
 [source](https://github.com/aptible/supercronic/blob/master/prometheus_metrics/prommetrics.go)
 

@@ -173,11 +173,17 @@ What a deployment adds beyond that:
 
 ## Backups and tested restore
 
-Already written up: [Backups](./backups.md): the `backup` container, its knobs, the `backup` database role and `--oplog`.
+Already written up: [Backups](./backups.md): the `backup` container, its knobs, the `backup` database role and
+`--oplog`; and [Backup server](./backup-server.md), the off-site copy.
 
-The one thing worth repeating, because it is the failure everyone actually has: **an untested
-restore is not a backup.** Schedule a real restore into a scratch database on a calendar, not on
-good intentions.
+Two things worth repeating, because they are the failures everyone actually has:
+
+- **An untested restore is not a backup.** Run `restore-drill` against the real repository, on a calendar:
+  `docker compose ... --profile restore-drill run --rm restore-drill`. It restores into a throwaway
+  Mongo, compares counts, checks the repository and prints how long the shop would be down.
+- **A backup the app server can delete is not a defence against ransomware.** An attacker who owns the
+  server finds the restic password on it. Point `BACKUP_REPOSITORY` at the append-only second machine
+  and set `BACKUP_PRUNE=false`: it accepts new backups and refuses deletes.
 
 ## Object storage for uploads
 

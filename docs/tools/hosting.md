@@ -165,6 +165,11 @@ Facts to weigh, not a verdict this page makes for you:
 - None of this is a recommendation for or against any provider — it is what a client's own DPA and
   risk tolerance should be weighed against.
 
+**Where backups go is the second machine's host, not this one's.** The stack's own backup container
+writes to any restic repository; the tamper-proof choice is an append-only server on a different machine
+([Backup server](./backup-server.md)), ideally with a different provider than the stack, so one
+compromised account or one provider outage cannot take both the shop and its history.
+
 ## 7 · Keeping it true
 
 - Re-verify a row by visiting the vendor's own docs, not its marketing page — a capability drifts

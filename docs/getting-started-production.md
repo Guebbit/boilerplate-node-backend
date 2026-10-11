@@ -246,6 +246,22 @@ loses every uploaded image. The volume still pins the deployment to one host, an
 not share what they store. The durable answer is an S3-compatible `ImageStore` implementation;
 nothing selects a backend yet, on purpose.
 
+## Backups
+
+Before the first real customer, in this order:
+
+1. **A second machine** (any host that runs Docker or Podman), running `docker-compose.backup-server.yml`:
+   an append-only restic server that refuses deletes. [Backup server](tools/backup-server.md) has the steps.
+2. **The knobs** in `clients/acme/.env`: `COMPOSE_PROFILES=bundled,backup`,
+   `BACKUP_REPOSITORY=rest:https://<second machine>:8000/acme/`, `BACKUP_PRUNE=false`, and
+   `BACKUP_HEARTBEAT_URL` if you run Gatus. The secrets are in [Secrets](#secrets); keep a copy of
+   `restic_password` off the host.
+3. **Run the restore drill once**: `docker compose ... --profile restore-drill run --rm restore-drill`.
+   It restores the latest snapshot into a throwaway Mongo and says how long that took.
+   A backup that has never been restored is a hope.
+
+Details and the knobs: [Backups](tools/backups.md).
+
 ## Monitoring and alerts
 
 The `monitoring` profile adds five services, **off by default**: Prometheus (scrapes `app` and

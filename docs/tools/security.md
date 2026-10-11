@@ -76,6 +76,13 @@ Then write the new value into the secret file and recreate the services that mou
 `mongo_root_password` the same way against the `admin` database, with
 `db.getSiblingDB("admin").updateUser("<MONGO_ROOT_USER>", ...)`.
 
+**`mongo_backup_password`** (the `backup` role's login, used only by the `backup` container). Rotate it
+like the app password, against the `admin` database, then rewrite the file and recreate `backup`:
+`db.getSiblingDB("admin").updateUser("backup", { pwd: "<new password>" })`.
+**`restic_password`** is different: it encrypts every existing snapshot, so changing the file alone
+locks the repository. Add a new key with `restic key add`, switch the file, then `restic key remove` the old one
+([Backups](./backups.md)).
+
 **`NODE_TOTP_ENCRYPTION_KEY` / `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` / `NODE_PII_ENCRYPTION_KEY`.**
 Each is a **ring**, the same shape as the JWT secrets above but with an explicit version rather
 than a derived `kid`:

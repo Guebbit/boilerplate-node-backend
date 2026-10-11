@@ -108,11 +108,35 @@ docker run -d --name gatus --restart unless-stopped \
 Put it behind TLS (Caddy or Traefik on that machine) before opening port 8080: the heartbeat token travels
 in a header.
 
+## Backup freshness
+
+The `backup` container pings Gatus after every run, so the same service that watches the alert pipeline
+also notices a backup that stopped: one more external endpoint per client, beside the heartbeat above.
+
+```yaml
+external-endpoints:
+    - name: acme-backup
+      group: clients
+      token: ANOTHER_LONG_RANDOM_TOKEN
+      heartbeat:
+          interval: 2h # hourly schedule: one missed run raises the alarm
+      alerts:
+          - type: ntfy
+```
+
+The client's `BACKUP_HEARTBEAT_URL` is
+`https://GATUS_HOST/api/v1/endpoints/clients_acme-backup/external?success=true` and
+`BACKUP_HEARTBEAT_TOKEN` is the token above. A finished run pings green; a failed one pings
+`success=false` with the reason, so a failing job, a dead container and a dead host all end in the same
+alert. The second machine's weekly upkeep can have its own endpoint the same way
+([Backup server](./backup-server.md#the-upkeep)). See [Backups](./backups.md#the-heartbeat).
+
 ## Related pages
 
 - [Prometheus](./prometheus.md#alert-routing): the routing and the knobs
 - [Grafana](./grafana.md)
 - [Docker & Podman](./docker-and-podman.md)
+- [Backups](./backups.md#the-heartbeat)
 
 ## External references
 

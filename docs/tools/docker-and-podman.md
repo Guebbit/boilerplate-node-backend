@@ -107,6 +107,24 @@ on the host clearly shows, raised from inside `/app`.
 | `limits`   | `redis:7`               | `6380` (loopback)                      | Second Redis for rate-limit counters and single-use claims. `noeviction`, so a counter is never dropped under memory pressure. The `redis` cache evicts freely.                                                                                                 | [Redis Cache](./redis-cache.md)             |
 | `rabbitmq` | `rabbitmq:4-management` | `5672` (AMQP), `15672` (management UI) | Message broker for async jobs (email, PDF generation). Management UI available in browser.                                                                                                                                                                      | [RabbitMQ](./rabbitmq.md)                   |
 
+### Backups (production, opt-in)
+
+In `docker-compose.production.yml`, behind the `backup` and `restore-drill` profiles
+(`COMPOSE_PROFILES=bundled,backup`). Built from `docker/Dockerfile.backup`, one image for all three.
+
+| Container          | Profile         | Role                                                                                                                                                  | Read next                                 |
+| ------------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| `backup`           | `backup`        | supercronic running the hourly dump and file backup into restic, and the weekly prune and check. Dormant while `BACKUP_REPOSITORY` is empty. No ports | [Backups](./backups.md)                   |
+| `restore-drill-db` | `restore-drill` | A throwaway Mongo on a tmpfs, no auth, no published port: where the drill restores to                                                                 | [Backups](./backups.md#the-restore-drill) |
+| `restore-drill`    | `restore-drill` | A one-shot: restore the latest snapshot into `restore-drill-db`, compare counts, check the repository, print how long it took                         | [Backups](./backups.md#the-restore-drill) |
+
+The second machine has its own file, `docker-compose.backup-server.yml` (run from its own directory, on
+another host): `init` (a one-shot that creates the repositories folder), `rest` (`rclone serve restic
+--append-only`, the one published port) and `maintenance` (weekly `forget --prune` and `check`). See
+[Backup server](./backup-server.md).
+
+All of them run read-only, with every capability dropped, as uid 1000.
+
 ### Observability stack
 
 Behind the `observability` profile: start it with `--profile observability` or `npm run compose:up:full`.
