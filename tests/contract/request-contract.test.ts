@@ -370,6 +370,7 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /feedback': { request: adminQuery('/feedback') },
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
+    'GET /orders/export': { request: adminQuery('/orders/export') },
     'GET /returns': { request: adminQuery('/returns') },
     'GET /returns/options': { request: adminQuery('/returns/options') },
     'GET /inventory/movements': { request: adminQuery('/inventory/movements') },
