@@ -420,6 +420,8 @@ describe('refund on cancel', () => {
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
 
         await userService.remove(user, true);
+        // The cancel's listeners run off the outbox relay, after the erasure returns.
+        await settleOutboxNudges();
 
         expect(cancelSpy).toHaveBeenCalledWith(providerRef, expect.anything());
         expect(await countersOf(line.product._id)).toMatchObject({ reserved: 0 });
