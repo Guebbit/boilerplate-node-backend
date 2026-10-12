@@ -611,3 +611,70 @@ describe('returning goods that shipped in part', () => {
         }
     });
 });
+
+/**
+ * A paid, partly shipped order: a shirt in stock (shipped) and a preorder product whose paid
+ * fulfillment order waits `on_hold` for stock. The preorder is the remainder.
+ */
+const shirtShippedPreorderWaiting = async () => {
+    customers += 1;
+    const user = await createUser({ email: `preorder-cancel-${customers}@example.com` });
+    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+    const game = await createProduct({
+        title: 'Game',
+        price: 10,
+        onHand: 0,
+        releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
+    });
+    const gameId = String(game._id);
+    await inventoryService.setPreorderLimit(gameId, 5);
+    const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(game, 2)], {
+        shippingMethod: 'standard',
+        shippingCost: 5
+    });
+    const orderId = String(order._id);
+    await inventoryService.reserveForOrder(orderId, [
+        { productId: String(shirt._id), quantity: 1 },
+        { productId: gameId, quantity: 2, kind: 'preorder' }
+    ]);
+    const intent = await createIntent(orderId, asCustomer(user.id));
+    if (!intent.success) throw new Error('intent refused');
+    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await forceOrderStatus(orderId, OrderStatus.processing);
+    const all = await fulfillmentOrdersOf(orderId);
+    const ordinary = all.find(({ status }) => status === 'open');
+    const waiting = all.find(({ status }) => status === 'on_hold');
+    if (!ordinary || !waiting) throw new Error('the order did not split');
+    const shipped = await shipFulfillmentOrder(
+        String(ordinary._id),
+        {},
+        asAdmin(),
+        callerContextAs('admin')
+    );
+    if (!shipped.success) throw new Error('ship refused');
+    return { user, game, orderId, fulfillmentOrderId: String(waiting._id) };
+};
+
+describe('cancelling a preorder that is still waiting for stock', () => {
+    it('gives back the allowance, not shelf units, and refunds the preorder lines', async () => {
+        const fixture = await shirtShippedPreorderWaiting();
+        const gameId = String(fixture.game._id);
+
+        const outcome = await createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId
+            },
+            asCustomer(fixture.user.id),
+            testCallerContext
+        );
+
+        const cancellation = created(outcome);
+        expect(cancellation.refundAmount).toBe(20);
+        const board = await inventoryService.listPreorders();
+        expect(board.items).toMatchObject([{ productId: gameId, preordered: 0, left: 5 }]);
+        expect(await countersOf(gameId)).toMatchObject({ onHand: 0, reserved: 0 });
+    });
+});

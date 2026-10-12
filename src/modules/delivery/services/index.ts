@@ -37,6 +37,7 @@ export { cancelRemainder, cancelAllForOrder, type RemainderCancel } from './canc
 export { syncWithOverride } from './override-sync';
 export { ActRefusal } from './act';
 export { splitForAllocation, type Split } from './split';
+export { releaseAllocated } from './release-allocated';
 export { scrubHoldNotes } from './retention';
 
 /** The module's one service handle — every controller in this module goes through it. */

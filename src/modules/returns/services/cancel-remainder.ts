@@ -135,7 +135,14 @@ const cancelUnderLock = (
             return cancelled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
 
         const breakdown = cancellationRefundOn(order, earlier, cancelled.lines);
-        await inventoryService.releaseLinesForOrder(orderId, cancelled.lines, session);
+        // A fulfillment order held for stock gives back its preorder allowance, not shelf units.
+        await inventoryService.releaseLinesForOrder(
+            orderId,
+            cancelled.waitingForStock
+                ? cancelled.lines.map((line) => ({ ...line, kind: 'preorder' as const }))
+                : cancelled.lines,
+            session
+        );
         const created = await returnRepository.create(
             rowFor(order, input, fulfillmentOrderId, cancelled.lines, breakdown),
             session

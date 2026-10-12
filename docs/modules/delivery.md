@@ -18,12 +18,15 @@ graph cannot see._
 flowchart LR
     delivery["delivery<br/><i>this module</i>"]
     cart["cart"]
+    inventory["inventory"]
     orders["orders"]
     returns["returns"]
 
     cart --> delivery
     returns --> delivery
+    delivery --> inventory
     delivery --> orders
+    inventory -. "inventory.preorder_allocated" .-> delivery
     orders -. "order.cancelled" .-> delivery
     orders -. "order.status_changed" .-> delivery
     orders -. "order.status_overridden" .-> delivery
@@ -33,7 +36,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class returns supporting;
+    class inventory,returns supporting;
     class delivery centre;
 ```
 
@@ -145,12 +148,13 @@ Pure, in `domain/fulfillment.ts`, over the order's **frozen** line snapshot:
 | Lines                             | Fulfillment order                                                                                                         |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | everything that is not a preorder | #1, `open`. `physical` if any line ships, `digital` otherwise. Digital lines of a mixed order ship with the physical ones |
-| preorder lines, release date D    | one per distinct D, `on_hold` for `awaiting_stock`, `agreedAt = expectedAt = D`                                           |
+| preorder lines, release day D     | one per distinct day, `on_hold` for `awaiting_stock`, `agreedAt = expectedAt =` the latest release date of its lines      |
 
 The preorder flag and the date are read from the snapshot frozen at checkout, never from the product
-at payment time: a bank transfer can be paid a week after it was ordered. Preorder as a product state
-is not built yet; the rule and the hold it makes are, and a product line that carries neither flag
-simply lands in #1.
+at payment time: a bank transfer can be paid a week after it was ordered. `agreedAt` is the date the
+buyer was shown, and it never moves; `expectedAt` starts equal to it and is rewritten if the date
+slips. A group of one day leaves together, so it is promised for the latest release instant among
+its lines. A product line that carries neither flag simply lands in #1.
 
 ### Holds
 
@@ -170,8 +174,26 @@ arrival covers everything the hold simply ends. This is the system split (Shopif
 `fulfillmentOrderSplit`, CRD Art. 9(2)(b)(i) and the FTC Mail Order Rule all expect partial
 shipment): waiting for all three would hold back goods already on the shelf, and a hand release is
 refused. Staff have no button for it — they can still hold the new `open` order to ship everything
-together. No route reaches it, and nothing calls it until preorders exist: the allocation is the
-stock lane's.
+together. No route reaches it: `inventory` allocates, and this module listens.
+
+```mermaid
+sequenceDiagram
+    participant A as Admin
+    participant I as inventory
+    participant O as outbox
+    participant D as delivery
+    A->>I: POST /inventory/receipts
+    I->>I: receive, then allocate oldest payment first (one transaction)
+    I->>O: inventory.preorder_allocated {orderId, productId, waiting}
+    O->>D: at least once
+    D->>D: ensure the fulfillment orders exist
+    D->>D: held beyond `waiting`? split that many out, earliest promise first
+```
+
+The event carries `waiting`, what the order still claims of that product, rather than how many were
+allocated. A state survives redelivery: the listener releases whatever it holds beyond `waiting`, and
+the second time there is nothing beyond it. If one order holds the same product for two release
+dates, the earliest `agreedAt` is served first.
 
 ### When they are made
 

@@ -8,7 +8,8 @@
  *
  * Listens to three `orders` events (all through the outbox): `paid` makes the fulfillment orders,
  * `cancelled` cancels them, and `status_overridden` brings the shipments in step with a status set
- * by hand.
+ * by hand. A fourth comes from `inventory`: `preorder_allocated` releases the fulfillment order
+ * that waited for the stock.
  *
  * See: docs/modules/delivery.md
  */
@@ -22,6 +23,7 @@ import {
     ORDER_STATUS_OVERRIDDEN,
     ownOrderIds
 } from '@modules/orders';
+import { PREORDER_ALLOCATED } from '@modules/inventory';
 import { OrderStatus } from '@types';
 import { router } from './routes';
 import { deliveryConfig } from './config';
@@ -30,6 +32,7 @@ import {
     ensureFulfillmentOrders,
     findFulfillmentOrdersForOrders,
     findShipmentsForOrders,
+    releaseAllocated,
     syncWithOverride
 } from './services';
 import { presentExportFulfillmentOrder, presentExportShipment } from './presenter';
@@ -110,6 +113,9 @@ export default {
         onDomainEvent(ORDER_CANCELLED, ({ orderId }) => cancelAllForOrder(orderId));
         onDomainEvent(ORDER_STATUS_OVERRIDDEN, ({ orderId, to, at }) =>
             syncWithOverride(orderId, to, new Date(at))
+        );
+        onDomainEvent(PREORDER_ALLOCATED, ({ orderId, productId, waiting }) =>
+            releaseAllocated(orderId, productId, waiting)
         );
     },
     locales: path.join(__dirname, 'locales'),

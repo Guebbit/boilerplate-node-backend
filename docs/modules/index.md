@@ -76,6 +76,7 @@ flowchart TD
     cart --> payments
     cart --> products
     cart --> users
+    delivery --> inventory
     delivery --> orders
     example --> access
     example --> users
@@ -115,14 +116,14 @@ flowchart TD
 | `cart`          | addresses, delivery, inventory, orders, payments, products, users | notifications, wishlist                            |
 | `orders`        | access, inventory, products, users                                | cart, delivery, invoicing, payments, returns       |
 | `users`         | access                                                            | account, api-keys, cart, example, orders, webhooks |
+| `inventory`     | products                                                          | cart, delivery, orders, payments, returns          |
 | `access`        | —                                                                 | account, api-keys, example, orders, users          |
-| `inventory`     | products                                                          | cart, orders, payments, returns                    |
 | `payments`      | inventory, orders                                                 | cart, invoicing, returns                           |
+| `delivery`      | inventory, orders                                                 | cart, returns                                      |
 | `products`      | —                                                                 | cart, inventory, orders, wishlist                  |
 | `returns`       | delivery, inventory, orders, payments                             | —                                                  |
 | `account`       | access, users                                                     | api-keys                                           |
 | `api-keys`      | access, account, users                                            | —                                                  |
-| `delivery`      | orders                                                            | cart, returns                                      |
 | `wishlist`      | cart, products                                                    | notifications                                      |
 | `example`       | access, users                                                     | —                                                  |
 | `invoicing`     | orders, payments                                                  | —                                                  |

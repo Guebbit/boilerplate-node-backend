@@ -20,18 +20,21 @@ graph cannot see._
 flowchart LR
     inventory["inventory<br/><i>this module</i>"]
     cart["cart"]
+    delivery["delivery"]
     orders["orders"]
     payments["payments"]
     products["products"]
     returns["returns"]
 
     cart --> inventory
+    delivery --> inventory
     orders --> inventory
     payments --> inventory
     returns --> inventory
     inventory --> products
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
+    inventory -. "inventory.preorder_allocated" .-> delivery
     inventory -. "inventory.reservation_expired" .-> orders
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -39,7 +42,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders,products core;
-    class payments,returns supporting;
+    class delivery,payments,returns supporting;
     class inventory centre;
 ```
 

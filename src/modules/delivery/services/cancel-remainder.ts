@@ -11,6 +11,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { orderService } from '@modules/orders';
+import { FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
 import type { ProductQuantity } from '../domain';
@@ -25,6 +26,11 @@ export type RemainderCancel =
           ok: true;
           /** What was cancelled, per product. */
           lines: ProductQuantity[];
+          /**
+           * The fulfillment order was held for stock: what was cancelled is a claim on the preorder
+           * allowance, not units on the shelf, and `inventory` gives back the right one.
+           */
+          waitingForStock: boolean;
       }
     | {
           ok: false;
@@ -71,6 +77,9 @@ export const cancelRemainder = async (
 
     const lines = remainderLines(fulfillmentOrder.lines);
     if (lines.length === 0) return { ok: false, reason: 'nothing-to-cancel' };
+    const waitingForStock =
+        fulfillmentOrder.status === FulfillmentOrderStatus.on_hold &&
+        fulfillmentOrder.holdReason === FulfillmentHoldReason.awaiting_stock;
 
     const cancelledLines = withRemainderCancelled(fulfillmentOrder.lines);
     const cancelled = await fulfillmentOrderRepository.claim(
@@ -89,7 +98,7 @@ export const cancelRemainder = async (
     const progress = await reportProgress(orderId, session);
     await settleOrder(orderId, progress.order.status, progress.summary, new Date(), session);
     await announceCancelled(cancelled, session);
-    return { ok: true, lines };
+    return { ok: true, lines, waitingForStock };
 };
 
 /**

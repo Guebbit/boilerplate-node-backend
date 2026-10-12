@@ -10,7 +10,7 @@
 import { OrderStatus } from '@types';
 import type { OrderDocument } from '../model';
 import type { UserDocument } from '@modules/users';
-import { resolveTaxRate, type ProductDocument } from '@modules/products';
+import { isPreorder, resolveTaxRate, type ProductDocument } from '@modules/products';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderRepository } from '../repository';
@@ -43,7 +43,15 @@ export const toOrderItem = (
 ): OrderLineInput => {
     const { _id, __v, taxClass, ...snapshot } = product.toObject();
     return {
-        product: { ...snapshot, id: String(_id), taxRate: resolveTaxRate(taxClass) },
+        product: {
+            ...snapshot,
+            id: String(_id),
+            taxRate: resolveTaxRate(taxClass),
+            // Frozen the way `freezeOrderLines` freezes it: decided now, from the date alone.
+            ...(isPreorder({ releaseDate: product.releaseDate }, new Date())
+                ? { preorder: true }
+                : {})
+        },
         quantity,
         locale
     };

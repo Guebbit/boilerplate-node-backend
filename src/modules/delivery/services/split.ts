@@ -7,8 +7,8 @@
  * goods already on the shelf. Shopify's `fulfillmentOrderSplit`; staff have no button for it (the
  * admin can still hold the new `open` order to ship everything together).
  *
- * Called by the stock allocation, never by a request: no route reaches it, and it is unused until
- * preorders exist. It is part of the published surface on purpose — see `docs/modules/delivery.md#a-short-stock-delivery`.
+ * Called by `releaseAllocated` when `inventory` allocates stock to a paid preorder, never by a
+ * request: no route reaches it. See `docs/modules/delivery.md#a-short-stock-delivery`.
  */
 
 import type { ClientSession } from 'mongoose';
@@ -42,13 +42,18 @@ const withoutAllocated = (
     allocated: readonly ProductQuantity[]
 ): FulfillmentLine[] => {
     const moved = new Map(allocated.map(({ productId, quantity }) => [productId, quantity]));
-    return lines.map((line) => ({
-        productId: line.productId,
-        title: line.title,
-        quantity: line.quantity - (moved.get(line.productId) ?? 0),
-        shippedQuantity: line.shippedQuantity,
-        cancelledQuantity: line.cancelledQuantity
-    }));
+    return (
+        lines
+            .map((line) => ({
+                productId: line.productId,
+                title: line.title,
+                quantity: line.quantity - (moved.get(line.productId) ?? 0),
+                shippedQuantity: line.shippedQuantity,
+                cancelledQuantity: line.cancelledQuantity
+            }))
+            // A line whose every unit moved has nothing left to wait for (a line holds at least one).
+            .filter((line) => line.quantity > 0)
+    );
 };
 
 /**
