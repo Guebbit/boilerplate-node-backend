@@ -66,6 +66,7 @@ does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out int
 | `product.created`                         | `src/modules/products/services/crud.ts`                  |
 | `product.deleted`                         | `src/modules/products/services/remove.ts`                |
 | `account.sessions-revoked`                | `src/modules/account/services/{revocation,profile}.ts`   |
+| `example.published`                       | `src/modules/example/services/crud.ts`                   |
 | `return.requested`                        | `src/modules/returns/services/create.ts`                 |
 | `return.received`                         | `src/modules/returns/services/receive.ts`                |
 | `return.closed`                           | `src/modules/returns/services/{close,create}.ts`         |
