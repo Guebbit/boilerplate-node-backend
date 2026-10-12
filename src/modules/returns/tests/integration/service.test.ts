@@ -255,7 +255,7 @@ describe('a withdrawal before dispatch', () => {
 });
 
 /** A delivered order of one withdrawable shirt and one excluded engraved mug. */
-const orderWithExcluded = async () => {
+const orderWithExcluded = async (carriedTo: 'delivered' | null = 'delivered') => {
     customers += 1;
     const user = await createUser({ email: `customer-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30 });
@@ -268,7 +268,7 @@ const orderWithExcluded = async () => {
         status: OrderStatus.processing
     });
     const orderId = String(order._id);
-    await carryOrderTo(orderId, 'delivered');
+    if (carriedTo) await carryOrderTo(orderId, carriedTo);
     mockEnqueueEmail.mockClear();
     await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     return { user, shirt, engraved, orderId };
@@ -835,7 +835,7 @@ describe('what a refusal says', () => {
 
     it('says the goods are excluded, whether the lines are named or a whole order is withdrawn from', async () => {
         const named = await orderWithExcluded();
-        const whole = await orderWithExcluded();
+        const whole = await orderWithExcluded(null);
         await forceOrderStatus(whole.orderId, OrderStatus.paid);
         const excludedMessage = 'Some of these goods are excluded from the right of withdrawal.';
 
