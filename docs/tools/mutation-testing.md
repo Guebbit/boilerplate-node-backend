@@ -185,7 +185,7 @@ strictly more informative about the same code, and its only real cost is speed.
 
 That cost was the entire reason the split existed, and it was worse than "slower": the unit-only
 ruler read **126 of its 214 files at 0%** — no unit test touches a service or repository at all, so
-every mutant in them scored `NoCoverage` by construction. Measured on `delivery/service.ts`: **0%**
+every mutant in them scored `NoCoverage` by construction. Measured on the delivery module's one service file at the time: **0%**
 under the unit ruler, **64.8%** under the one that also runs `tests/integration/`. Same tests, same
 code, only the ruler changed.
 

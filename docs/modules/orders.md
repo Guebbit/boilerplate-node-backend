@@ -37,6 +37,9 @@ flowchart LR
     orders --> products
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
+    orders -. "order.cancelled" .-> delivery
+    orders -. "order.status_changed" .-> delivery
+    orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
@@ -76,13 +79,13 @@ that, never re-resolve against whoever is reading it now — see
 
 The status enum is the module's public vocabulary:
 
-| Status                  | What it means                                | Who moves it                                                                                                                                                |
-| ----------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                                                        |
-| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                                                      |
-| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction)                                       |
-| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival                                                                                          |
-| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing)) |
+| Status                  | What it means                                | Who moves it                                                                                                                                                             |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                                                                     |
+| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                                                                   |
+| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction)                                                    |
+| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md): `shipped` once the LAST unit has left (an order shipped in parts stays `processing` until then), `delivered` once the last shipment arrived |
+| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing))              |
 
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
@@ -203,9 +206,9 @@ module announcing and a sibling reacting.
 flowchart LR
     P["pending<br/><i>created · units held</i>"] -->|"payments confirms<br/>(system)"| PA["paid<br/><i>units committed</i>"]
     PA -->|"system, via<br/>delivery's start door"| PR["processing"]
-    PR -->|"system, via<br/>delivery's ship door"| SH["shipped"]
-    SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
-    PR -->|"system, via<br/>delivery's fulfill door<br/>(digital-only)"| DE
+    PR -->|"system: the shipment that leaves<br/>nothing remaining"| SH["shipped"]
+    SH -->|"system: the last shipment arrives"| DE["delivered"]
+    PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
     CA -. "order.refund_owed" .-> PM["payments<br/><i>refunds if one was due</i>"]
@@ -227,41 +230,91 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                                                                                                 |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                      |
-| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override` |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`                                                                                        |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`                                                                                     |
-| `processing` → `delivered` (digital-only)   | `system`                                                                         | `POST /delivery/order/{id}/fulfill` — no parcel; refused if any line still needs shipping                               |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`                                                                                              |
+| Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
+| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override`                                              |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
+| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                      |
+
+### The fulfilment summary
+
+`orders` cannot import `delivery` (the arrow points the other way), so the order carries a small
+summary of where its goods stand, written **only** through `orderService.recordFulfillmentProgress`,
+which `delivery` calls inside its own transaction:
+
+| Field                         | Meaning                                         |
+| ----------------------------- | ----------------------------------------------- |
+| `fulfillment.shipped`         | at least one shipment exists                    |
+| `fulfillment.remaining`       | units not shipped and not cancelled             |
+| `fulfillment.onHold`          | of those, units in `on_hold` fulfillment orders |
+| `fulfillment.awaitingStock`   | of those, units on `awaiting_stock`             |
+| `fulfillment.undelivered`     | shipments not yet delivered                     |
+| `fulfillment.lastDeliveredAt` | the latest `deliveredAt`                        |
+
+It is internal: clients read the order's `fulfillmentStatus` and `actions`. The summary is recomputed
+from the fulfillment orders **inside the same transaction** as the write that changed them, so a stale
+read can never overwrite a newer one. The doors `delivery` writes through
+(`services/fulfillment.ts`, `services/status.ts`) all take the act's session — the shipment, the
+summary, the status move and the events commit together or not at all.
+
+`fulfillmentStatus` is derived from the status and that summary. First match wins:
+
+| #   | When                                       | Value                               |
+| --- | ------------------------------------------ | ----------------------------------- |
+| 1   | `pending`                                  | `unfulfilled`                       |
+| 2   | `cancelled`                                | `unfulfilled`                       |
+| 3   | `delivered`                                | `fulfilled`                         |
+| 4   | `shipped`                                  | `shipped`                           |
+| 5   | something shipped, units remain            | `partially_fulfilled`               |
+| 6   | nothing shipped, every remaining unit held | `on_hold` (wins over `in_progress`) |
+| 7   | `processing`                               | `in_progress`                       |
+| 8   | `paid`                                     | `unfulfilled`                       |
+
+`GET /orders?fulfillmentStatus=` lists by that value. The filter is built from the same table
+(`fulfillmentStatusFilter`) and ANDed into the caller's own scope, rather than storing a copy of the
+answer: the filter and the value a row serializes with cannot disagree, and a unit test holds them to
+each other.
+
+The summary is also why `cancel` and `withdraw` read the order, not its status: a whole-order cancel
+refuses once any shipment left (`actions.cancel` is `false`, and the write itself is conditional on
+`fulfillment.shipped`), and `isBeforeDispatch` reads `fulfillment.shipped`, not `processing` — a
+withdrawal after shipment 1 would otherwise refund goods the buyer already holds. What has not shipped
+is cancelled one fulfillment order at a time, through [`returns`](./returns.md#cancelling-what-has-not-shipped).
 
 ### The admin override
 
 A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
 against the wrong order — needs `orders.any.override`, a step-up permission granted to `admin` by
 name. Two modes, both requiring a `reason`, both writing an embedded override-history entry
-(who, when, from → to, mode, reason) plus an audit event:
+(who, when, from → to, mode, reason):
 
-- **Forced** — the delivery doors (`ship`/`deliver`) accept `forced: true` alongside the ordinary
-  request. The regular operation still runs: a parcel record is created, a tracking code is
-  required if the method needs one, the shipped email still sends. Only the status GATE is skipped
-  — it may jump past `processing`, but never lands on `paid` (that stays `system`-only, absolute).
+- **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
+  runs; the order skips a step (ship from `paid` without `start`, deliver without a carrier
+  confirmation) and leaves a history row through `recordForcedFulfilment` — a row **without** a move of
+  its own. It never lands on `paid` (that stays `system`-only, absolute), and never ships from `on_hold`.
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
-  alone, forward to `processing`/`shipped`/`delivered` only. No parcel, no shipped email — but
-  webhooks still fire, since a subscriber's own view of the order genuinely changed.
+  alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
+  since a subscriber's own view of the order genuinely changed.
 
-`PUT /orders/:id` carries no `status` field at all — the override's own two doors are the only way
+The status-only door announces `order.status_overridden {orderId, from, to, at}` through the outbox,
+in its own transaction, and [`delivery`](./delivery.md#the-status-override) listens: forward to
+`shipped` ships every remainder, forward to `delivered` delivers them too, all at `at` — the same
+instant `withdrawUntil` was counted from. It is **refused while any unit awaits stock**
+(`ORDER_OVERRIDE_AWAITING_STOCK`): it would ship goods the stock ledger never counted out.
+
+`PUT /orders/:id` carries no `status` field at all — the override's own doors are the only way
 to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.
 
-A digital-only order has no parcel, so an override into `shipped` is refused with the same 409 as
-any other illegal target; `delivered` stays reachable. Likewise `markFulfilled` refuses an order
-with a physical line: a physical order must pass through `shipped`.
+A digital-only order has no shipment to have left, so an override into `shipped` is refused with the
+same 409 as any other illegal target; `delivered` stays reachable.
 
-An override into `shipped` or `delivered` also takes the order's units off the shelf
-(`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a normal
-shipment triggers. An override into `processing` moves no stock. A hold already `shipped` makes the
-second call silent.
+An override into `shipped` or `delivered` also takes whatever is left of the order's hold off the
+shelf (`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a
+normal shipment triggers for its own units. An override into `processing` moves no stock. A hold
+already `shipped` makes the second call silent.
 
 ## The invoice
 
@@ -289,15 +342,20 @@ owns is the clock and the button:
 ```mermaid
 flowchart LR
     paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
-    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = end of day (deliveredAt + the period)</i>"]
-    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
+    shipped -- "markDelivered(the LAST arrival)" --> goods["delivered<br/><i>withdrawUntil = end of day (last delivery + the period)</i>"]
+    paid -- "markFulfilmentComplete (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
+    shipped -- "remainder cancelled after every arrival" --> late["delivered<br/><i>withdrawUntil = from the cancellation, the later date</i>"]
 ```
 
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
   happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
-  contract (Art. 9(2)(c)), which is `paidAt` here. `delivery` reports the timestamp through
-  `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
+  contract (Art. 9(2)(c)), which is `paidAt` here. An order that arrives in several shipments has ONE
+  window, from the last good (Art. 9(2)(b)(i), Commission Notice 2021/C 525/01 §5.1.2: "a single
+  withdrawal period should apply from the day after delivery of the last item"): `delivery` reports the
+  LAST arrival through `markDelivered(orderId, deliveredAt)`, and a remainder cancelled after every
+  shipment arrived counts from the later of the two, since the order only became complete then.
+  `orders` cannot read `delivery`'s own timestamps.
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
   the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
   3(2)(c)), in UTC.

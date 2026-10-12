@@ -78,14 +78,17 @@ language is kept per context rather than shared.
 
 ## `delivery`
 
-| Term                | What it means here                                                                                                                                                                                                                         |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Shipping method** | A named way to ship, with a rate rule. A closed set in `domain/rates.ts`, not a collection.                                                                                                                                                |
-| **Shipping cost**   | What a method charges for a given basket. Computed by a pure function so the cart can quote it without a shipment existing.                                                                                                                |
-| **Shipment**        | The parcel record for an order that has actually shipped. Recording it IS what moves the status — never the other way around.                                                                                                              |
-| **Handover**        | Staff recording that a parcel left the warehouse — the ship door's own act. Requires a tracking code when the method is tracked; creates the shipment and moves the order to `shipped`.                                                    |
-| **Delivery proof**  | Staff recording that a parcel arrived — the deliver door's own act, moving the order to `delivered`. No document is captured; the record itself is the proof.                                                                              |
-| **Override**        | A staff correction outside the ordinary sequence, always with a reason: `forced` on a handover/delivery-proof recording (still creates the real record), or status-only (no parcel, no email). Never reaches `paid`, never moves backward. |
+| Term                  | What it means here                                                                                                                                                                                                                                                                                           |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Shipping method**   | A named way to ship, with a rate rule. A closed set in `domain/rates.ts`, not a collection.                                                                                                                                                                                                                  |
+| **Shipping cost**     | What a method charges for a given basket. Computed by a pure function so the cart can quote it without a shipment existing.                                                                                                                                                                                  |
+| **Fulfillment order** | A group of an order's lines that should leave together, made by rule when the order is paid (Shopify's `FulfillmentOrder`). A normal order gets one; a preorder's lines get their own, on hold until the stock arrives. Its status is derived from its lines and its hold, never set by a caller.            |
+| **Shipment**          | What actually left, at one time, with one tracking code (Shopify's `Fulfillment`). An order has as many as it takes. Recording it IS what moves the status — never the other way around.                                                                                                                     |
+| **Remaining**         | `quantity − shippedQuantity − cancelledQuantity` on a fulfillment order's line. Served by the API, so no client counts.                                                                                                                                                                                      |
+| **Hold**              | A reason a fulfillment order may not ship: `awaiting_stock` (set and released only by the stock allocation), or one of staff's (`incorrect_address`, `high_risk`, `other`, with a note).                                                                                                                     |
+| **Handover**          | Staff cutting a shipment from a fulfillment order — the ship door's own act. Requires a tracking code when the method is tracked; the order moves to `shipped` only when nothing remains anywhere.                                                                                                           |
+| **Delivery proof**    | Staff recording that a shipment arrived — the deliver door's own act. The order moves to `delivered` on the last one, and the withdrawal window runs from THAT arrival. No document is captured; the record itself is the proof.                                                                             |
+| **Override**          | A staff correction outside the ordinary sequence, always with a reason: `forced` on a handover or delivery-proof recording (skips a step, still creates the real record), or the status-only override (delivery then brings its records in step, with no email). Never reaches `paid`, never moves backward. |
 
 ## `feedback`
 
@@ -170,11 +173,12 @@ language is kept per context rather than shared.
 
 ## `returns`
 
-| Term           | What it means here                                                                                                              |
-| -------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| **Return**     | A request to send goods back, keyed by order and never by user, so erasing an account leaves it with no personal data.          |
-| **Status**     | `requested`, `approved`, `declined`, `received` or `closed`; each write is a conditional claim from a fixed set of statuses.    |
-| **Withdrawal** | The EU right to cancel a distance sale; the order carries the deadline (`withdrawUntil`) and a return can be raised against it. |
+| Term             | What it means here                                                                                                                                                                  |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Return**       | A request to send goods back, keyed by order and never by user, so erasing an account leaves it with no personal data. Its `kind` is `return` or `cancellation`.                    |
+| **Cancellation** | A Return of `kind: cancellation`, closed when made: the unshipped remainder of one fulfillment order, cancelled and refunded. The only cancel an order that shipped in part allows. |
+| **Status**       | `requested`, `approved`, `declined`, `received` or `closed`; each write is a conditional claim from a fixed set of statuses.                                                        |
+| **Withdrawal**   | The EU right to cancel a distance sale; the order carries the deadline (`withdrawUntil`) and a return can be raised against it.                                                     |
 
 ## `users`
 

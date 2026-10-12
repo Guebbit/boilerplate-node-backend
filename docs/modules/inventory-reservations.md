@@ -39,14 +39,16 @@ cancelled first, `released`. Shelf count (`onHand`) drops at dispatch, not at pa
 Shopify, Magento MSI, Saleor and Medusa share — so a stocktake counts the same number `onHand`
 says, and `available` is identical in both models at every moment.
 
-| Transition                 | Called by                                                                                          | Counters                   | Ledger `reason` |
-| -------------------------- | -------------------------------------------------------------------------------------------------- | -------------------------- | --------------- |
-| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                 | `reserved` +n              | `reserve`       |
-| `commitForOrder`           | [`payments`](./payments.md) on confirm                                                             | none (a zero-delta row)    | `commit`        |
-| `shipForOrder`             | [`orders`](./orders.md), in the transaction of the move to `shipped` or a digital `delivered`      | `onHand` −n, `reserved` −n | `ship`          |
-| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                  | `reserved` −n              | `release`       |
-| `releaseForOrder`          | the sweep                                                                                          | `reserved` −n              | `expire`        |
-| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order) | `reserved` −n              | `release`       |
+| Transition                 | Called by                                                                                            | Counters                   | Ledger `reason` |
+| -------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------- | --------------- |
+| `reserveForOrder`          | [checkout](./cart-checkout.md), admin order create                                                   | `reserved` +n              | `reserve`       |
+| `commitForOrder`           | [`payments`](./payments.md) on confirm                                                               | none (a zero-delta row)    | `commit`        |
+| `shipLinesForOrder`        | [`delivery`](./delivery.md) (through `orders`), in the transaction of each shipment — only ITS units | `onHand` −n, `reserved` −n | `ship`          |
+| `shipForOrder`             | [`orders`](./orders.md), in the transaction of an admin override past dispatch — whatever is left    | `onHand` −n, `reserved` −n | `ship`          |
+| `releaseLinesForOrder`     | [`returns`](./returns.md), in the transaction of a remainder cancel — only the cancelled units       | `reserved` −n              | `release`       |
+| `releaseForOrder`          | [`orders`](./orders.md) on cancel                                                                    | `reserved` −n              | `release`       |
+| `releaseForOrder`          | the sweep                                                                                            | `reserved` −n              | `expire`        |
+| `releaseCommittedForOrder` | [`orders`](./orders.md) on cancel, once the release above claims nothing (a paid, unshipped order)   | `reserved` −n              | `release`       |
 
 **`releaseCommittedForOrder` is never merged into `releaseForOrder`**, on purpose: the sweep only
 ever releases a stale HOLD, and folding the paid case into that same function would let it put a
@@ -55,12 +57,20 @@ sweep's cutoff — a sale undone by a timer, not by anyone cancelling anything. 
 explicitly, only after `releaseForOrder`'s own claim on `held → released` has already missed —
 exactly what a PAID order's `committed` hold does, every time.
 
-`shipForOrder` runs in the same transaction as the status write, so an order never reads `shipped`
-while its units still count as on hand. Callers: `markShipped`, `markFulfilled` (digital-only) and
-the admin override into `shipped`/`delivered` (including `delivery`'s forced doors). It claims
-`committed → shipped`, and also `held → shipped` for a payment whose own commit crashed and has not
-been retried yet: the goods left either way, and the retry then finds a shipped hold and stays
-silent. Goods a customer sends back are a separate door: `restockReturnedLines` writes `restock`
+An order ships in parts, so the shelf follows the shipments, not the status. `shipLinesForOrder` takes
+ONE shipment's lines off the shelf in that shipment's own transaction: `onHand` and `reserved` both
+drop by what left, `available` does not change, and the hold keeps the units that have not left yet —
+it ends `shipped` with the last one. The arithmetic is a pure rule (`takeFromHold`): a line asking for
+more than the hold holds of that product takes what there is, so the counters move by exactly what was
+set aside. `releaseLinesForOrder` is its twin for a cancelled remainder, and ends the hold `released`.
+Because the shelf count follows what really left, a later return's `restock` puts back units that
+were taken out.
+
+`shipForOrder` is what remains of the whole-hold dispatch, and the admin override into
+`shipped`/`delivered` is its one caller: it ships whatever the hold still sets aside, in the status
+write's own transaction. It claims `committed → shipped`, and also `held → shipped` for a payment whose
+own commit crashed and has not been retried yet: the goods left either way, and the retry then finds
+a shipped hold and stays silent. Goods a customer sends back are a separate door: `restockReturnedLines` writes `restock`
 rows and claims nothing, because the hold is `shipped` for good.
 
 Both take an optional Mongo `session`. `orders`' cancel passes one so the status move, the release
