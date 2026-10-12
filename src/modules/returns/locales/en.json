@@ -44,7 +44,6 @@
             }
         },
         "received": "Return received — the goods are back on sale.",
-        "deduction-too-high": "The handling deduction is more than the refund is worth.",
-        "reason-reserved": "That reason is the shop's own and cannot be requested"
+        "deduction-too-high": "The handling deduction is more than the refund is worth."
     }
 }

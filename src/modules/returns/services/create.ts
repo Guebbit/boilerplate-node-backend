@@ -49,7 +49,6 @@ import { syncReturnStatus } from './projection';
 import { createCancellation } from './cancel-remainder';
 import {
     badCancellation,
-    reasonReserved,
     badLines,
     notReturnable,
     recordOpened,
@@ -358,8 +357,6 @@ export const createReturn = (
     authContext: AuthContext,
     context: CallerContext
 ): Promise<CreateReturnOutcome> => {
-    // `no_answer` is the shop's own reason, written only by the cancel a silent buyer's wait ends in.
-    if (input.reason === 'no_answer') return Promise.resolve(reasonReserved());
     if (input.kind === 'cancellation') return createCancellation(input, authContext, context);
     if (input.fulfillmentOrderId !== undefined) return Promise.resolve(badCancellation());
     return openReturn(input, authContext, context);

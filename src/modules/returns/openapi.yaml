@@ -317,7 +317,12 @@ components:
                 a faulty-goods return uses, with a legal deadline and an acknowledgement attached.
                 `no_answer` is the shop's own: a preorder's buyer was asked to keep waiting for a late
                 date and never answered, so what had not shipped was cancelled and refunded. Written
-                only by that cancellation; a request naming it is refused unless it is staff's.
+                only by that cancellation, so a request cannot name it (`ReturnRequestReason`).
+
+        ReturnRequestReason:
+            type: string
+            enum: [withdrawal, defective, wrong_item, other]
+            description: What a request may name as the reason — every `ReturnReason` but the shop's own `no_answer`.
 
         ReturnKind:
             type: string
@@ -452,7 +457,7 @@ components:
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 reason:
-                    $ref: '#/components/schemas/ReturnReason'
+                    $ref: '#/components/schemas/ReturnRequestReason'
                 note:
                     type: string
                     minLength: 1

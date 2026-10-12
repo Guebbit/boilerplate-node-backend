@@ -12,6 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironment } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import {
     asAdmin,
     asCustomer,
@@ -768,6 +769,8 @@ describe('a preorder wait nobody answered', () => {
         const board = await inventoryService.listPreorders();
         expect(board.items).toMatchObject([{ preordered: 0 }]);
         expect(await refundsOf(orderId)).toMatchObject([{ amount: 25 }]);
+        // The fulfillment orders follow the order's cancel through the outbox.
+        await settleOutboxNudges();
         const [cancelled] = await fulfillmentOrdersOf(orderId);
         expect([cancelled.status, cancelled.cancelReason]).toEqual(['cancelled', 'no_answer']);
     });

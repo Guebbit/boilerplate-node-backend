@@ -362,6 +362,10 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /returns': { request: adminQuery('/returns') },
     'GET /returns/options': { request: adminQuery('/returns/options') },
     'GET /inventory/movements': { request: adminQuery('/inventory/movements') },
+    'GET /delivery/fulfillment-orders': { request: adminQuery('/delivery/fulfillment-orders') },
+    'GET /delivery/fulfillment-orders/summary': {
+        request: adminQuery('/delivery/fulfillment-orders/summary')
+    },
     'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
     'GET /locales/{locale}/messages': {
         // Public: no `security` on this operation at all.
