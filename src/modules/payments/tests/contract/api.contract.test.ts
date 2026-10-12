@@ -20,6 +20,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import { onDomainEvent } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
 import { MISSING_ID } from '@tests/ids';
 import { setEnvironment } from '@tests/environment';
@@ -472,6 +473,8 @@ describe('POST /payments/webhook', () => {
 
         const first = await deliver(event);
         const replay = await deliver(event);
+        // The status change reaches its listener through the outbox, after the response.
+        await settleOutboxNudges();
 
         // 200 either way — a provider reads anything else as a failed delivery and retries harder.
         expect(first.status).toBe(200);
