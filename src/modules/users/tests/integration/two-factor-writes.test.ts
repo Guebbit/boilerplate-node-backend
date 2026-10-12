@@ -236,3 +236,54 @@ describe('persistTwoFactorMethods', () => {
         expect(await field(id, 'email', 'codeAttempts')).toBe(4);
     });
 });
+
+/** An armed account holding three stored digests. */
+const withCodes = () =>
+    createUser({
+        twoFactorEnabledAt: new Date().toISOString(),
+        twoFactorMethods: ARMED,
+        twoFactorBackupCodes: ['digest-a', 'digest-b', 'digest-c'],
+        twoFactorBackupCodeSalt: 'salt'
+    });
+
+/** The stored backup-code digests, read fresh. */
+const codesOf = (id: string): Promise<string[]> =>
+    load(id).then((user) => [...user.twoFactorBackupCodes]);
+
+describe('spendBackupCode', () => {
+    it('lets only one of two copies holding the same code spend it', async () => {
+        const { id } = await withCodes();
+        const first = await load(id);
+        const second = await load(id);
+
+        expect(await userService.spendBackupCode(first, 'digest-a')).toBe(true);
+        expect(await userService.spendBackupCode(second, 'digest-a')).toBe(false);
+
+        expect(await codesOf(id)).toEqual(['digest-b', 'digest-c']);
+        expect(second.twoFactorBackupCodes).toHaveLength(3);
+    });
+
+    it('keeps a code another copy spent from coming back when this copy persists', async () => {
+        const { id } = await withCodes();
+        const stale = await load(id);
+        const spender = await load(id);
+
+        await userService.spendBackupCode(spender, 'digest-a');
+        entryOf(stale, 'email').codeAttempts = 2;
+        await userService.persistTwoFactorMethods(stale);
+
+        expect(await codesOf(id)).toEqual(['digest-b', 'digest-c']);
+    });
+
+    it('settles the copy, so its next persist does not resend the list', async () => {
+        const { id } = await withCodes();
+        const user = await load(id);
+        const other = await load(id);
+
+        await userService.spendBackupCode(user, 'digest-a');
+        await userService.spendBackupCode(other, 'digest-b');
+        await userService.persistTwoFactorMethods(user);
+
+        expect(await codesOf(id)).toEqual(['digest-c']);
+    });
+});

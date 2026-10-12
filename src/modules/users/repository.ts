@@ -80,6 +80,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     resetMfaAttempts: (id: string) => Promise<void>;
     bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
+    spendBackupCode: (id: string, digest: string) => Promise<boolean>;
     writeTwoFactor: (id: string, write: TwoFactorWrite) => Promise<boolean>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
@@ -365,6 +366,26 @@ export const userRepository: Repository<UserDocument, UserWire> & {
                     }
                 },
                 { $set: { 'twoFactorMethods.$.lastUsedStep': step } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Spend one backup code: pull its digest from the stored list, but only while it is still
+     * there. The filter is the guard — of two requests holding the same code, one matches and the
+     * other finds nothing. A regenerated set has other digests, so a stale spend misses too.
+     * `timestamps: false`, like every factor bookkeeping write.
+     *
+     * @param id - the account
+     * @param digest - the stored form of the code, from `hashBackupCode`
+     * @returns whether THIS call spent the code
+     */
+    spendBackupCode: (id: string, digest: string) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), twoFactorBackupCodes: digest },
+                { $pull: { twoFactorBackupCodes: digest } },
                 { timestamps: false }
             )
             .exec()

@@ -121,6 +121,10 @@ flowchart LR
   method (or `'all'`) to drop. An entry two requests both started is kept once.
 - **One write.** The armed flag, backup codes and session epoch ride in the same update, so a
   factor change and its session revocation still land together.
+- **A backup code is spent by its own conditional write.** `spendBackupCode` pulls the one digest
+  while it is still stored, so of two requests carrying the same code exactly one takes it, and a
+  list regenerated in between (other digests) is never resurrected. The loaded copy is mirrored
+  and left unmodified, so the diff above never sends the list back.
 - **Not an edit.** The update runs with `timestamps: false`: it moves neither `updatedAt` nor the
   `ETag` an admin editor holds, like the other credential bookkeeping writes.
 

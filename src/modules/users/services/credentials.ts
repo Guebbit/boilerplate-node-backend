@@ -171,6 +171,25 @@ export const claimTotpStep = (id: string, method: string, step: number): Promise
     userRepository.claimTotpStep(id, method, step);
 
 /**
+ * Spend one backup code, atomically: `false` means a concurrent request already did (or the set
+ * was regenerated). On success the loaded copy is brought in line and left unmodified, so the
+ * request's later 2FA write does not send the list again.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param digest - the matching stored digest, from `hashBackupCode`
+ */
+export const spendBackupCode = (user: UserDocument, digest: string): Promise<boolean> =>
+    userRepository.spendBackupCode(user.id, digest).then((spent) => {
+        if (spent) {
+            user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(
+                (stored) => stored !== digest
+            );
+            user.unmarkModified('twoFactorBackupCodes');
+        }
+        return spent;
+    });
+
+/**
  * Move the account's session epoch to `at` (now by default): every access or refresh token minted
  * before it stops working. The funnel for every "I may be compromised" event — logout-all, a
  * password change or reset, a 2FA factor change, an email change, detected refresh reuse.

@@ -40,6 +40,7 @@ import {
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
+    spendBackupCode,
     bumpSessionEpoch,
     touchLastActive,
     touchApiKeyUse
@@ -109,6 +110,7 @@ export const userService = {
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
+    spendBackupCode,
     bumpSessionEpoch,
     touchLastActive,
     touchApiKeyUse,
