@@ -54,6 +54,12 @@ import type { Order } from '@types';
 export type FrozenOrderLineProduct = Omit<ProductSnapshot, 'taxClass'> & {
     /** The decimal VAT rate this line was actually charged — see the schema field's own comment. */
     taxRate: number;
+    /**
+     * The line was sold before its release date, decided once at checkout from `releaseDate` (kept
+     * on the snapshot as `ProductSnapshot` carries it). Stored rather than derived: the date
+     * passing, or an admin moving it, must not change what this order bought.
+     */
+    preorder?: boolean;
 };
 
 /**
@@ -312,6 +318,10 @@ const orderLineProductSchema = new Schema(
         sku: { type: String },
         /** Grams, frozen the same as every other line field — see `Product.weight`. */
         weight: { type: Number, min: 0 },
+        /** The promised "ships from" date, frozen — see `Product.releaseDate`. */
+        releaseDate: { type: Date },
+        /** The line was a preorder when sold, frozen — decided once at checkout, never re-derived. */
+        preorder: { type: Boolean },
         deletedAt: { type: Date },
         /*
          * The decimal rate this line was actually charged, resolved from the product's `taxClass`

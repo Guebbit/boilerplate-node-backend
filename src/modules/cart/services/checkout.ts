@@ -48,6 +48,7 @@ import {
     shippingPriceFor,
     type JoinedCartLine
 } from './view';
+import { availabilityProductOf, preorderIdsOf } from './preorder';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
@@ -443,16 +444,15 @@ const runCheckout = async (
      */
     // The ledger decides how much can be sold, never the catalogue's cached copy of it.
     const availableByProduct = await inventoryService.availableFor(
-        lines.map((line) => line.productId)
+        lines.map((line) => line.productId),
+        preorderIdsOf(lines)
     );
     const verdict = evaluateCheckout(
         lines.map((line) => ({
             ...line,
             product: line.product && {
+                ...availabilityProductOf(line.product),
                 title: line.product.title,
-                active: line.product.active,
-                purchasable: line.product.purchasable,
-                deletedAt: line.product.deletedAt,
                 available: availableByProduct.get(line.productId) ?? 0
             }
         }))

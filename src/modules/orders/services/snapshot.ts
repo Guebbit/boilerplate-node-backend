@@ -8,7 +8,7 @@
 import type { Types } from 'mongoose';
 import { localeCandidatesFor, runWithLocale } from '@infrastructure/i18n';
 import { resolveTranslations } from '@kernel/translation';
-import { resolveTaxRate, type ProductSnapshot } from '@modules/products';
+import { isPreorder, resolveTaxRate, type ProductSnapshot } from '@modules/products';
 import type { OrderDocumentItem } from '../model';
 
 /**
@@ -84,8 +84,14 @@ export const freezeOrderLines = (
                 taxClass,
                 ...frozenProduct
             } = product;
+            // Checkout already refused a hidden or off-sale product, so the date alone decides.
+            const preorder = isPreorder({ releaseDate: frozenProduct.releaseDate }, new Date());
             return {
-                product: { ...frozenProduct, taxRate: resolveTaxRate(taxClass) },
+                product: {
+                    ...frozenProduct,
+                    taxRate: resolveTaxRate(taxClass),
+                    ...(preorder ? { preorder } : {})
+                },
                 quantity: quantities[index],
                 locale
             };

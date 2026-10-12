@@ -14,6 +14,7 @@ export type LineAvailability =
     | 'insufficient_stock'
     | 'out_of_stock'
     | 'unavailable'
+    | 'preorder'
     | 'removed';
 
 /** What the rule reads off a joined product. */
@@ -24,13 +25,15 @@ export interface AvailabilityProduct {
     purchasable?: boolean;
     /** Set once the product is soft-deleted. */
     deletedAt?: Date;
+    /** On sale before its release date: `available` then counts what is left of its allowance. */
+    preorder?: boolean;
 }
 
 /** The facts one line is judged on. */
 export interface AvailabilityFacts {
     /** The joined product, or `null`/absent when the lookup found nothing (hard-deleted). */
     product: AvailabilityProduct | null | undefined;
-    /** Units for sale from the ledger; absent reads as none. */
+    /** Units for sale from the ledger — the allowance left, for a preorder; absent reads as none. */
     available: number | null | undefined;
     /** Units the line holds. Absent for a wishlist line, which can never be `insufficient_stock`. */
     quantity?: number;
@@ -38,7 +41,8 @@ export interface AvailabilityFacts {
 
 /**
  * Judge one line. First match wins, in this order: removed, unavailable, out_of_stock,
- * insufficient_stock, in_stock.
+ * insufficient_stock, then `preorder` or `in_stock`. A preorder is judged against its allowance,
+ * so `out_of_stock` for one means the allowance is full, not that the shelf is empty.
  *
  * @param facts - the joined product, the ledger's units and, for a cart line, its quantity
  * @returns the line's availability
@@ -52,5 +56,5 @@ export const lineAvailability = ({
     if (product.purchasable === false) return 'unavailable';
     if ((available ?? 0) === 0) return 'out_of_stock';
     if (quantity !== undefined && !fitsStock(quantity, available)) return 'insufficient_stock';
-    return 'in_stock';
+    return product.preorder ? 'preorder' : 'in_stock';
 };

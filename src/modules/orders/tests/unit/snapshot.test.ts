@@ -217,4 +217,44 @@ describe('freezeOrderLines — the VAT rate', () => {
             expect(item.product).not.toHaveProperty('taxClass');
         });
     });
+
+    describe('a preorder line', () => {
+        const day = 86_400_000;
+
+        it('freezes the promised date and the preorder flag when the date is still ahead', () => {
+            registerTranslationPort(fakePort());
+            const releaseDate = new Date(Date.now() + 30 * day);
+
+            return freezeOrderLines(
+                'en',
+                [{ _id: new Types.ObjectId(), title: 'Coming soon', price: 10, releaseDate }],
+                [1]
+            ).then(([item]) => {
+                expect(item.product).toMatchObject({ preorder: true, releaseDate });
+            });
+        });
+
+        it('freezes no flag for a product already released, or one that never had a date', () => {
+            registerTranslationPort(fakePort());
+
+            return freezeOrderLines(
+                'en',
+                [
+                    {
+                        _id: new Types.ObjectId(),
+                        title: 'Released',
+                        price: 10,
+                        releaseDate: new Date(Date.now() - day)
+                    },
+                    { _id: new Types.ObjectId(), title: 'Ordinary', price: 10 }
+                ],
+                [1, 1]
+            ).then((items) => {
+                expect(items.map(({ product }) => product.preorder)).toEqual([
+                    undefined,
+                    undefined
+                ]);
+            });
+        });
+    });
 });
