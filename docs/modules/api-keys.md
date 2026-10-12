@@ -106,6 +106,11 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
   a password reset or an email-change undo ("this wasn't me") revoked them. `account` only announces the event; this module owns what it
   means for keys. An ordinary password change, where the owner typed the current password, leaves
   keys alone.
+- **A replayed refresh token leaves keys alone.** It signs every device out (see
+  [Refresh rotation](./account-sessions.md#refresh-rotation)) but does not announce
+  `account.sessions-revoked`: it shows one browser's token leaked, not that the owner's account
+  was taken over. In `cookie` mode there is no rotation, so nothing to replay: a stolen cookie ends
+  with "log out that device", logout everywhere or a password reset.
 
 **Tenant-scoped only, by design.** This repo's own deployment model is a silo — one organisation
 per stack, never pooled multi-tenancy — so every real use case for a machine credential (a partner,

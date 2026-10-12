@@ -6,6 +6,7 @@
  */
 
 import { api } from '@tests/http';
+import { cookieHeader } from '@tests/cookies';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { credentialOf } from '@tests/credentials';
@@ -21,7 +22,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { permissionsOfRole } from '@kernel/permissions';
 import type { TenantCallerContext } from '@types';
-import { plantToken } from '@modules/account/tests/factories';
+import { plantToken, sessionRowsOf } from '@modules/account/tests/factories';
 
 setupTestDb();
 
@@ -29,8 +30,11 @@ setupTestDb();
 apiKeysModule.onRegistered?.();
 
 beforeEach(() => {
-    setEnvironment({ NODE_MAIL_TRANSPORT: 'log' });
+    setEnvironment({ NODE_MAIL_TRANSPORT: 'log', NODE_CORS_ORIGIN: FRONTEND });
 });
+
+/** The one allowed frontend origin of this file. */
+const FRONTEND = 'https://shop.example';
 
 /** An admin who has minted one live credential: the user, a login bearer, the key's secret. */
 const adminWithKey = async () => {
@@ -111,6 +115,30 @@ describe('keys end with the sessions that may be compromised', () => {
 
         expect(response.status).toBe(200);
         expect(await credentialOf(secret)).toBeUndefined();
+    });
+
+    it('a replayed refresh token signs every device out but leaves the keys alone', async () => {
+        const { user, secret } = await adminWithKey();
+        const login = await api()
+            .post('/account/login')
+            .send({ email: user.email, password: PLAIN_PASSWORD });
+        const stale = cookieHeader(login, '__Host-session');
+        await api().post('/account/refresh').set('Origin', FRONTEND).set('Cookie', stale);
+        // No grace left: the swapped-away token now reads as theft, not as a second tab.
+        setEnvironment({ NODE_TOKEN_ROTATION_GRACE_MS: '0' });
+
+        const replay = await api()
+            .post('/account/refresh')
+            .set('Origin', FRONTEND)
+            .set('Cookie', stale);
+        await settleOutboxNudges();
+
+        expect(replay.status).toBe(401);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+        // A key belongs to a deliberate act, not to a browser: only the owner's "log out
+        // everywhere", a reset or an undo ends it, since a thief of one refresh token is no proof
+        // the key was seen.
+        expect(await credentialOf(secret)).toBeDefined();
     });
 
     it('an ordinary password change does not: the owner proved the current password', async () => {
