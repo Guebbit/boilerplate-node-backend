@@ -649,6 +649,123 @@ This is a genuinely different shape from `orders`' retention: `orders` keeps eve
 scrubs PII in place; `payments` keeps a settled row forever and deletes an unsettled one outright.
 Neither scrubs a settled payment, because there is nothing on it left to scrub.
 
+## Writing a payment adapter
+
+The boilerplate ships no PSP adapter. Production offers bank transfer and offline payments; card
+payments exist the day a deployment adds one file and one `registerPaymentProvider` call. This
+section is what that file has to get right. Everything said about Stripe is a claim about a third
+party and can go stale: check [Stripe's docs](https://docs.stripe.com/payments/paymentintents/lifecycle)
+before relying on it, and test against the provider's sandbox on the deployment that picks it.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as This API
+    participant P as Your adapter
+    participant S as Provider
+    B->>A: POST /payments/intent
+    A->>P: prepare(charge, metadata)
+    P->>S: create intent, idempotent on paymentId
+    S-->>P: providerRef + client secret
+    B->>A: POST /payments/{id}/confirm (method reference)
+    A->>P: confirm(providerRef, ref)
+    P->>S: confirm intent
+    S-->>P: status
+    P-->>A: one of four words
+    B->>S: finish the challenge (requires_action only)
+    B->>A: POST /payments/{id}/sync
+    S->>A: webhook, signed over the raw body
+    A->>P: parseWebhook(rawBody, signature)
+    A->>P: retrieve(providerRef)
+    A->>A: settlePayment, once
+```
+
+### Status mapping
+
+The port speaks four words (`ProviderPaymentStatus`). An adapter maps its provider's own states
+onto them and nothing else is visible to the rest of the module.
+
+| Port word         | Stripe `PaymentIntent` status | Note                                                                    |
+| ----------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `requires_action` | `requires_action`             | The browser has a challenge (3-D Secure) to answer                      |
+| `processing`      | `processing`                  | Slow methods; extends the stock hold                                    |
+| `succeeded`       | `succeeded`                   | Report `amountReceived`, `currency`, `paymentId` and `cardLast4` too    |
+| `declined`        | `requires_payment_method`     | Stripe sends a refused attempt back to this state, so it is a decline   |
+| none              | `canceled`                    | No word exists for it today. Open: the vocabulary has not been extended |
+
+A decline is an answer, not an error: `confirm` returns `declined` and throws only on transport
+failure. `succeeded` without `amountReceived` is treated as a mismatch, so convert minor units to
+the decimal the payment stores.
+
+### Declines are reported once
+
+Stripe sends two events for one decline, and a payment can be declined more than once by
+different attempts. The module reports each fact once, from the call whose write made it true
+(`settlePayment` returns `transitioned`, and only then are the audit row and the analytics event written). Only a `confirm`
+may decline an already-`declined` payment, because a confirm is a new attempt: card A refused,
+then card B refused, are two failures. A webhook or a sync repeating the same decline reports
+nothing. The port carries no attempt id, so do not try to dedupe inside the adapter: return the
+status and let the settlement decide.
+
+### Idempotency keys expire
+
+`refund` receives a stable `idempotencyKey`. Stripe forgets a key after 24 hours
+([idempotent requests](https://docs.stripe.com/api/idempotent_requests)), so a refund retried by
+the effects sweep after that window, with the same key, is a NEW refund and returns the money
+twice. Before retrying an old refund, list the intent's existing refunds at the provider and
+return the matching one instead of creating another. Stamp your own reference on each refund's
+metadata so the match is exact.
+
+### The webhook
+
+`parseWebhook` receives the raw body, byte for byte. Verify the signature over those bytes first,
+then parse against the contract's schema, then return only the event id and the intent it names.
+The delivery's own claim about the outcome is never used: the settlement calls `retrieve`, so a
+late or reordered event is harmless. Throw `WebhookRejected` for anything that does not
+authenticate or parse; the route answers 400.
+
+### Refund errors
+
+Map the provider's refusal onto the closed `RefundFailureReason` and throw
+`PaymentProviderError(code, message)` (`providers/errors.ts`). Anything else an adapter throws is
+stored as `unknown`. The message is the provider's own wording and goes to the log, never the wire.
+
+### The reconcile sweep calls the provider
+
+[Lost webhooks](#lost-webhooks) are caught by `sweep:payment-effects`, which calls `retrieve` for
+each unsettled payment untouched for `NODE_PAYMENT_RECONCILE_MINUTES`, one at a time, up to 200 per
+run. That is one provider read per stale payment per run: mind the provider's rate limit, and do not
+answer a guess when it refuses.
+
+### A Stripe server-confirm walkthrough
+
+This repo confirms on the server, not through Checkout Sessions.
+
+1. `prepare` creates a `PaymentIntent` with `metadata.paymentId`, using the payment id as the
+   idempotency key, and returns its id and `client_secret`. Resuming a payment that already has
+   an intent returns that same intent.
+2. The browser mounts Stripe's Payment Element, calls `stripe.createConfirmationToken`, and posts
+   the token id (`ctoken_…`) as the method reference to `POST /payments/{id}/confirm`. This needs
+   Stripe.js in the storefront and its origins in the CSP; the storefront ships only a fake card
+   picker today.
+3. `confirm` calls `paymentIntents.confirm` with that token and maps the answer.
+4. On `requires_action` the browser calls `stripe.handleNextAction` with the client secret, then
+   `POST /payments/{id}/sync`, which `retrieve`s and settles.
+5. Whatever the browser did, the signed webhook arrives and settles the same payment once.
+
+### Port fit
+
+| The port needs...             | Embedded form (Stripe Payment Element, Adyen, Braintree) | Redirect (Mollie, PayPal, Stripe Checkout)                                        |
+| ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `prepare`: an id and a secret | Fits: intent id plus `clientSecret`                      | Partial: there is an id, but the customer needs a URL and the port has none       |
+| `confirm`: a method reference | Fits: a token or nonce from the browser                  | Does not apply: the customer pays at the provider, so there is nothing to confirm |
+| `retrieve` and the webhook    | Fits                                                     | Fits: thin event, then read the payment back                                      |
+| `refund`, `cancel`            | Fits                                                     | Fits                                                                              |
+
+The redirect gap is open. `PreparedPayment` carries only `clientSecret`, so a redirect provider
+cannot tell the storefront where to send the customer, and closing it changes the contract. Until
+it is decided, a redirect adapter has no honest place to put its URL.
+
 ## Related pages
 
 - [The provider port](./payments-provider-port.md) — the interface and the fake behind it
