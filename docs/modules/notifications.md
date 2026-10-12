@@ -18,12 +18,15 @@ graph cannot see._
 flowchart LR
     notifications["notifications<br/><i>this module</i>"]
     cart["cart"]
+    delivery["delivery"]
     wishlist["wishlist"]
 
     notifications --> cart
+    notifications --> delivery
     notifications --> wishlist
     cart -. "cart.lines_removed" .-> notifications
     cart -. "cart.merge_refused" .-> notifications
+    delivery -. "fulfillment_order.delayed" .-> notifications
     wishlist -. "wishlist.items_removed" .-> notifications
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
@@ -31,7 +34,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart core;
-    class wishlist supporting;
+    class delivery,wishlist supporting;
     class notifications centre;
 ```
 
@@ -58,11 +61,17 @@ backend keeps no copy in step with the UI.
 
 `Notification` is a discriminated union on `code`, and each variant types its own `params`:
 
-| `code`                                | `params`                                        |
-| ------------------------------------- | ----------------------------------------------- |
-| `notifications.cart-line-removed`     | `{ productId, titles }`                         |
-| `notifications.wishlist-item-removed` | `{ productId, titles }`                         |
-| `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }` |
+| `code`                                | `params`                                                         |
+| ------------------------------------- | ---------------------------------------------------------------- |
+| `notifications.cart-line-removed`     | `{ productId, titles }`                                          |
+| `notifications.wishlist-item-removed` | `{ productId, titles }`                                          |
+| `notifications.cart-merge-refused`    | `{ lines: [{ productId, requested, titles }] }`                  |
+| `notifications.preorder-delayed`      | `{ orderId, fulfillmentOrderId, titles, agreedAt, expectedAt? }` |
+| `notifications.preorder-confirm-wait` | the same, plus `answerBy`                                        |
+
+The last two are a late preorder's notice ([delivery](./delivery.md#preorders-and-a-moved-date)): the
+first only informs and offers the cancel, the second needs an answer by `answerBy` or silence cancels.
+Both are written from `fulfillment_order.delayed`, and an erased account has no inbox to write to.
 
 The stored `params` is `Mixed` in Mongo, but the document type is the same union
 (`NotificationBody` in `model.ts`), so a writer cannot pair a code with another code's params and

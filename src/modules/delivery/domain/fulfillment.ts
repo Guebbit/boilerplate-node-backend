@@ -5,7 +5,12 @@
  * testable without a database. See `docs/modules/delivery.md#the-two-records`.
  */
 
-import { FulfillmentHoldReason, FulfillmentOrderKind, FulfillmentOrderStatus } from '@types';
+import {
+    FulfillmentConsent,
+    FulfillmentHoldReason,
+    FulfillmentOrderKind,
+    FulfillmentOrderStatus
+} from '@types';
 
 /** One product on a fulfillment order, with how much of it has gone each way. */
 export interface FulfillmentLine {
@@ -319,6 +324,7 @@ export interface ActionCandidate {
     kind: FulfillmentOrderKind;
     status: FulfillmentOrderStatus;
     holdReason?: FulfillmentHoldReason | undefined;
+    consent?: FulfillmentConsent | undefined;
     lines: readonly FulfillmentLine[];
 }
 
@@ -359,3 +365,13 @@ export const isHoldable = (candidate: ActionCandidate): boolean =>
 export const isReleasable = (candidate: ActionCandidate): boolean =>
     candidate.status === FulfillmentOrderStatus.on_hold &&
     candidate.holdReason !== FulfillmentHoldReason.awaiting_stock;
+
+/**
+ * Whether the buyer has been asked to say "keep waiting" and may answer: the fulfillment order
+ * still waits for stock and its consent is `awaiting`.
+ * @param candidate - the fulfillment order
+ */
+export const isAwaitingAnswer = (candidate: ActionCandidate): boolean =>
+    candidate.status === FulfillmentOrderStatus.on_hold &&
+    candidate.holdReason === FulfillmentHoldReason.awaiting_stock &&
+    candidate.consent === FulfillmentConsent.awaiting;

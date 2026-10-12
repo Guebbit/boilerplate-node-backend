@@ -85,7 +85,15 @@ export const presentExportFulfillmentOrder = (
     ...(fulfillmentOrder.agreedAt ? { agreedAt: fulfillmentOrder.agreedAt.toISOString() } : {}),
     ...(fulfillmentOrder.expectedAt
         ? { expectedAt: fulfillmentOrder.expectedAt.toISOString() }
-        : {})
+        : {}),
+    ...(fulfillmentOrder.consent ? { consent: fulfillmentOrder.consent } : {}),
+    ...(fulfillmentOrder.consentDeadline
+        ? { consentDeadline: fulfillmentOrder.consentDeadline.toISOString() }
+        : {}),
+    ...(fulfillmentOrder.lastNoticeAt
+        ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }
+        : {}),
+    ...(fulfillmentOrder.cancelReason ? { cancelReason: fulfillmentOrder.cancelReason } : {})
 });
 
 /**

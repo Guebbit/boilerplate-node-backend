@@ -115,6 +115,7 @@ export {
     bankTransferIban,
     bankTransferIbanFriendly,
     maxOpenUnpaidOrdersPerAccount,
+    orderFrontendLink,
     shopCurrency,
     shopCountry,
     shopIdentity,

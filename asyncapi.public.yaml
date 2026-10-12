@@ -967,6 +967,99 @@ components:
                     items:
                         $ref: '#/components/schemas/CartMergeRefusedLinePayload'
             additionalProperties: false
+        PreorderDelayedParamsPayload:
+            title: PreorderDelayedParamsPayload
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+                - titles
+                - agreedAt
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                titles:
+                    type: array
+                    items:
+                        type: string
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+                answerBy:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationPreorderDelayedPayload:
+            title: NotificationPreorderDelayedPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.preorder-delayed
+                params:
+                    $ref: '#/components/schemas/PreorderDelayedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationPreorderConfirmWaitPayload:
+            title: NotificationPreorderConfirmWaitPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.preorder-confirm-wait
+                params:
+                    $ref: '#/components/schemas/PreorderDelayedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationCartLineRemovedPayload:
             title: NotificationCartLineRemovedPayload
             type: object
@@ -1072,6 +1165,8 @@ components:
                 - $ref: '#/components/schemas/NotificationCartLineRemovedPayload'
                 - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
                 - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
+                - $ref: '#/components/schemas/NotificationPreorderDelayedPayload'
+                - $ref: '#/components/schemas/NotificationPreorderConfirmWaitPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:

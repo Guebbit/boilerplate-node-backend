@@ -16,6 +16,8 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import {
+    FulfillmentCancelReason,
+    FulfillmentConsent,
     FulfillmentHoldReason,
     FulfillmentOrderKind,
     FulfillmentOrderStatus,
@@ -50,6 +52,19 @@ export interface FulfillmentOrderDocument extends Document {
     agreedAt?: Date;
     /** When it is now expected to ship. */
     expectedAt?: Date;
+    /**
+     * Where a waiting preorder stands with its buyer after a late date; absent until they were
+     * asked. See `domain/preorder.ts`.
+     */
+    consent?: FulfillmentConsent;
+    /** When silence turns into a cancel. Present exactly while `consent` is `awaiting`. */
+    consentDeadline?: Date;
+    /** When the buyer was last told the date moved or passed: what stops a daily repeat. */
+    lastNoticeAt?: Date;
+    /** How many later dates the buyer was told about: a second slip always asks for a yes. */
+    slips: number;
+    /** Who cancelled what was left, once something was. */
+    cancelReason?: FulfillmentCancelReason;
     /**
      * Counts every write. A shipment or a cancel claims the fulfillment order by matching this, so
      * two of them racing the same remainder cannot both land.
@@ -121,6 +136,11 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
         holdNote: { type: String, maxlength: 1000 },
         agreedAt: { type: Date },
         expectedAt: { type: Date },
+        consent: { type: String, enum: Object.values(FulfillmentConsent) },
+        consentDeadline: { type: Date },
+        lastNoticeAt: { type: Date },
+        slips: { type: Number, required: true, min: 0, default: 0 },
+        cancelReason: { type: String, enum: Object.values(FulfillmentCancelReason) },
         revision: { type: Number, required: true, default: 0 }
     },
     { timestamps: true }
@@ -128,6 +148,22 @@ export const fulfillmentOrderSchema = new Schema<FulfillmentOrderDocument>(
 
 // One fulfillment order per number per order: the idempotency of "made when the order is paid".
 fulfillmentOrderSchema.index({ orderId: 1, number: 1 }, { unique: true });
+
+// A moved release date finds the fulfillment orders still waiting for that product.
+fulfillmentOrderSchema.index(
+    { status: 1, holdReason: 1, 'lines.productId': 1 },
+    { name: 'fulfillmentorders_status_holdReason_linesProductId' }
+);
+
+// The daily sweep's two reads: a date that passed, and a yes that never came.
+fulfillmentOrderSchema.index(
+    { status: 1, holdReason: 1, expectedAt: 1 },
+    { name: 'fulfillmentorders_status_holdReason_expectedAt' }
+);
+fulfillmentOrderSchema.index(
+    { consent: 1, consentDeadline: 1 },
+    { name: 'fulfillmentorders_consent_consentDeadline' }
+);
 
 /**
  * Normalizes a serialized fulfillment order: `_id` → `id`, drops `__v`. Owed to the repository

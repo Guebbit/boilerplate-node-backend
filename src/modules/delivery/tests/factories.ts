@@ -6,7 +6,10 @@
  */
 
 import { asAdmin, callerContextAs } from '@tests/callers';
-import { forceOrderStatus } from '@modules/orders/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
+import { createProduct } from '@modules/products/tests/factories';
+import { inventoryService } from '@modules/inventory';
+import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
 import type { Shipment } from '@types';
 import { ensureFulfillmentOrders, shipFulfillmentOrder, deliverShipment } from '../services';
@@ -121,4 +124,46 @@ export const createShipmentFor = async (orderId: string): Promise<ShipmentDocume
         forced: false,
         shippedAt: new Date()
     });
+};
+
+/** One preorder line to place: how many units, promised for which date. */
+export interface WantedPreorder {
+    quantity: number;
+    releaseDate: Date;
+}
+
+/**
+ * A PAID order of preorder lines, held in the ledger and committed as a payment would: one product
+ * per `wanted`, each with an allowance big enough for everything asked, and no stock on the shelf.
+ * Nothing is shipped and no fulfillment order exists until something reads them (`fulfillmentOrdersOf`).
+ *
+ * @param wanted - the lines, one product each
+ * @param email - the buyer's address; distinct per order in a test that makes two
+ */
+export const paidPreorderOrder = async (
+    wanted: readonly WantedPreorder[],
+    email = 'buyer@example.com'
+) => {
+    const user = await createUser({ email });
+    const products = await Promise.all(
+        wanted.map(({ releaseDate }) =>
+            createProduct({ onHand: 0, price: 10, releaseDate: releaseDate.toISOString() })
+        )
+    );
+    const order = await createOrder(
+        user,
+        products.map((product, index) => toOrderItem(product, wanted[index].quantity)),
+        { status: OrderStatus.paid }
+    );
+    const orderId = String(order._id);
+    const lines = products.map((product, index) => ({
+        productId: String(product._id),
+        quantity: wanted[index].quantity,
+        kind: 'preorder' as const
+    }));
+    for (const { productId, quantity } of lines)
+        await inventoryService.setPreorderLimit(productId, quantity);
+    await inventoryService.reserveForOrder(orderId, lines);
+    await inventoryService.commitForOrder(orderId);
+    return { user, orderId, productIds: lines.map(({ productId }) => productId) };
 };

@@ -17,6 +17,7 @@ import { deliverShipment } from './deliver';
 import { fulfillFulfillmentOrder } from './fulfill';
 import { holdFulfillmentOrder, releaseFulfillmentOrder } from './holds';
 import { editShipmentTracking } from './tracking';
+import { confirmWait } from './confirm-wait';
 
 export { listMethods, startFulfilment } from './start';
 export {
@@ -38,6 +39,9 @@ export { syncWithOverride } from './override-sync';
 export { ActRefusal } from './act';
 export { splitForAllocation, type Split } from './split';
 export { releaseAllocated } from './release-allocated';
+export { onReleaseDateChanged } from './slip';
+export { runPreorderSweep, type PreorderSweepResult } from './preorder-sweep';
+export { confirmWait } from './confirm-wait';
 export { scrubHoldNotes } from './retention';
 
 /** The module's one service handle — every controller in this module goes through it. */
@@ -50,5 +54,6 @@ export const deliveryService = {
     fulfillFulfillmentOrder,
     holdFulfillmentOrder,
     releaseFulfillmentOrder,
-    editShipmentTracking
+    editShipmentTracking,
+    confirmWait
 };

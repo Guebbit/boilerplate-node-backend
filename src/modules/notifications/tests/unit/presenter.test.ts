@@ -65,6 +65,26 @@ describe('presentNotification, per code', () => {
                     { productId: 'p4', requested: 1, titles: {} }
                 ]
             }
+        },
+        {
+            code: 'notifications.preorder-delayed',
+            params: {
+                orderId: 'o1',
+                fulfillmentOrderId: 'f1',
+                titles: ['Coming soon'],
+                agreedAt: '2026-12-01T00:00:00.000Z',
+                expectedAt: '2026-12-20T00:00:00.000Z'
+            }
+        },
+        {
+            code: 'notifications.preorder-confirm-wait',
+            params: {
+                orderId: 'o2',
+                fulfillmentOrderId: 'f2',
+                titles: ['Coming soon', 'Also late'],
+                agreedAt: '2026-12-01T00:00:00.000Z',
+                answerBy: '2027-01-10T00:00:00.000Z'
+            }
         }
     ];
 

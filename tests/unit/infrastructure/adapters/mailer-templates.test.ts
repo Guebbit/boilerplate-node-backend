@@ -44,7 +44,11 @@ import {
     refundIssuedEmail
 } from '@modules/orders/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
-import { shipmentDeliveredEmail, shipmentShippedEmail } from '@modules/delivery/emails';
+import {
+    preorderDelayedEmail,
+    shipmentDeliveredEmail,
+    shipmentShippedEmail
+} from '@modules/delivery/emails';
 import { returnNoticeEmail } from '@modules/returns';
 import { subscriptionDisabledEmail } from '@modules/webhooks';
 import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
@@ -173,6 +177,14 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
     'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
         lines: [{ title: 'Widget', quantity: 1 }],
         withdrawUntil: new Date(Date.UTC(2026, 10, 14))
+    }),
+    'delivery.preorder-delayed': preorderDelayedEmail(locale, 'Ada', {
+        titles: ['Widget'],
+        agreedAt: new Date(Date.UTC(2026, 11, 1)),
+        expectedAt: new Date(Date.UTC(2026, 11, 20)),
+        needsAnswer: true,
+        answerBy: new Date(Date.UTC(2027, 0, 20)),
+        orderUrl: 'https://shop.example/orders/an-order-id'
     }),
     'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
         orderRef: '2026-000041',

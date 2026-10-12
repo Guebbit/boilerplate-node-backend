@@ -29,6 +29,26 @@
             "greeting": "Ciao, {{name}}!",
             "body": "La tua spedizione è arrivata.",
             "withdraw-until": "Puoi recedere dall'acquisto fino al {{date}}."
+        },
+        "not-awaiting-answer": "Questa spedizione non attende una risposta",
+        "email-preorder-delayed": {
+            "meta-title": "Il tuo preordine è in ritardo",
+            "greeting": "Ciao, {{name}}!",
+            "moved": {
+                "subject": "Il tuo preordine arriverà più tardi del previsto",
+                "body": "Ti avevamo promesso il preordine per il {{agreed}}. Ora è atteso per il {{expected}}."
+            },
+            "ask-moved": {
+                "subject": "Il tuo preordine è in ritardo: vuoi continuare ad aspettare?",
+                "body": "Ti avevamo promesso il preordine per il {{agreed}}. Ora è atteso per il {{expected}}, un ritardo che non possiamo chiederti di accettare senza il tuo consenso."
+            },
+            "ask-passed": {
+                "subject": "Il tuo preordine è in ritardo: vuoi continuare ad aspettare?",
+                "body": "Ti avevamo promesso il preordine per il {{agreed}} e non è ancora arrivato. Non possiamo darti una nuova data."
+            },
+            "answer": "Ti chiediamo di dirci entro il {{date}} che vuoi continuare ad aspettare. Se non ci risponderai, lo annulleremo e ti rimborseremo per intero.",
+            "cancel-any-time": "Puoi annullarlo in qualsiasi momento prima della spedizione e sarai rimborsato per intero. Se non fai nulla, continui ad aspettare.",
+            "link-label": "Vedi il tuo ordine"
         }
     }
 }

@@ -11,9 +11,9 @@
 
 import type { ClientSession } from 'mongoose';
 import { orderService } from '@modules/orders';
-import { FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
+import { FulfillmentCancelReason, FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
-import { remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
+import { hasWaitExpired, remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
 import { announceCancelled } from './announce';
@@ -57,12 +57,14 @@ export type RemainderCancel =
  * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
  * @param orderId - the order the caller says it belongs to
  * @param session - the caller's transaction
+ * @param reason - who cancelled it, stored on the fulfillment order
  * @throws {ActRefusal} when the fulfillment order or the order moved after the first write
  */
 export const cancelRemainder = async (
     fulfillmentOrderId: string,
     orderId: string,
-    session: ClientSession
+    session: ClientSession,
+    reason: FulfillmentCancelReason = FulfillmentCancelReason.buyer
 ): Promise<RemainderCancel> => {
     const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
         fulfillmentOrderId,
@@ -88,7 +90,8 @@ export const cancelRemainder = async (
         {
             lines: cancelledLines,
             status: statusOfLines(cancelledLines, false),
-            unset: ['holdReason', 'holdNote']
+            cancelReason: reason,
+            unset: ['holdReason', 'holdNote', 'consentDeadline']
         },
         session
     );
@@ -120,7 +123,15 @@ export const cancelAllForOrder = (orderId: string): Promise<void> =>
             const claimed = await fulfillmentOrderRepository.claim(
                 String(fulfillmentOrder._id),
                 fulfillmentOrder.revision,
-                { lines, status: statusOfLines(lines, false), unset: ['holdReason', 'holdNote'] },
+                {
+                    lines,
+                    status: statusOfLines(lines, false),
+                    // A buyer who was asked and never answered is why this order is being cancelled.
+                    cancelReason: hasWaitExpired(fulfillmentOrder, new Date())
+                        ? FulfillmentCancelReason.no_answer
+                        : FulfillmentCancelReason.order,
+                    unset: ['holdReason', 'holdNote', 'consentDeadline']
+                },
                 session
             );
             if (claimed) await announceCancelled(claimed, session);

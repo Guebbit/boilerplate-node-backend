@@ -8,8 +8,9 @@
  *
  * Listens to three `orders` events (all through the outbox): `paid` makes the fulfillment orders,
  * `cancelled` cancels them, and `status_overridden` brings the shipments in step with a status set
- * by hand. A fourth comes from `inventory`: `preorder_allocated` releases the fulfillment order
- * that waited for the stock.
+ * by hand. Two more come from siblings: `inventory`'s `preorder_allocated` releases the fulfillment
+ * order that waited for the stock, and `products`' `release_date_changed` tells the buyers who
+ * already paid that their date moved.
  *
  * See: docs/modules/delivery.md
  */
@@ -24,6 +25,7 @@ import {
     ownOrderIds
 } from '@modules/orders';
 import { PREORDER_ALLOCATED } from '@modules/inventory';
+import { PRODUCT_RELEASE_DATE_CHANGED } from '@modules/products';
 import { OrderStatus } from '@types';
 import { router } from './routes';
 import { deliveryConfig } from './config';
@@ -32,6 +34,7 @@ import {
     ensureFulfillmentOrders,
     findFulfillmentOrdersForOrders,
     findShipmentsForOrders,
+    onReleaseDateChanged,
     releaseAllocated,
     syncWithOverride
 } from './services';
@@ -116,6 +119,9 @@ export default {
         );
         onDomainEvent(PREORDER_ALLOCATED, ({ orderId, productId, waiting }) =>
             releaseAllocated(orderId, productId, waiting)
+        );
+        onDomainEvent(PRODUCT_RELEASE_DATE_CHANGED, ({ productId }) =>
+            onReleaseDateChanged(productId)
         );
     },
     locales: path.join(__dirname, 'locales'),

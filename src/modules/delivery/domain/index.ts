@@ -26,7 +26,8 @@ export {
     isShippable,
     isFulfillable,
     isHoldable,
-    isReleasable
+    isReleasable,
+    isAwaitingAnswer
 } from './fulfillment';
 export type {
     FulfillmentLine,
@@ -38,3 +39,14 @@ export type {
     SummaryInputs,
     ActionCandidate
 } from './fulfillment';
+
+export {
+    SILENT_SLIP_DAYS,
+    CONSENT_WINDOW_DAYS,
+    judgeSlip,
+    answerBy,
+    needsDatePassedNotice,
+    hasWaitExpired,
+    slippedDays
+} from './preorder';
+export type { SlipFacts, SlipVerdict, SweepFacts } from './preorder';

@@ -18,7 +18,7 @@ import type {
     ShipmentActions
 } from '@types';
 import { OrderStatus } from '@types';
-import { isFulfillable, isHoldable, isReleasable, isShippable } from '../domain';
+import { isAwaitingAnswer, isFulfillable, isHoldable, isReleasable, isShippable } from '../domain';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
@@ -28,6 +28,8 @@ export interface Standing {
     staff: boolean;
     /** The caller's rank reaches the order's buyer. */
     reaches: boolean;
+    /** The caller is the order's own buyer — the one who may answer "keep waiting". */
+    owner: boolean;
 }
 
 /**
@@ -42,9 +44,10 @@ export const standingOn = (
     authContext
         ? orderService.reachesBuyer(order, authContext).then((reaches) => ({
               staff: holdsKey(callerForSubject(authContext, 'Shipment'), 'delivery.any.update'),
-              reaches
+              reaches,
+              owner: order.userId !== undefined && String(order.userId) === authContext.id
           }))
-        : Promise.resolve({ staff: false, reaches: false });
+        : Promise.resolve({ staff: false, reaches: false, owner: false });
 
 /**
  * The order's status is one a fulfilment act can still run from: `processing` for shipping and
@@ -81,7 +84,11 @@ export const fulfillmentOrderActions = (
         release:
             may &&
             orderIn(order.status, [OrderStatus.paid, OrderStatus.processing]) &&
-            isReleasable(fulfillmentOrder)
+            isReleasable(fulfillmentOrder),
+        confirmWait:
+            standing.owner &&
+            orderIn(order.status, [OrderStatus.paid, OrderStatus.processing]) &&
+            isAwaitingAnswer(fulfillmentOrder)
     };
 };
 

@@ -8,8 +8,11 @@ import { enqueueOutboxEvent } from '@kernel/outbox';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
 import {
     FULFILLMENT_ORDER_CANCELLED,
+    FULFILLMENT_ORDER_DELAYED,
     FULFILLMENT_ORDER_HELD,
     FULFILLMENT_ORDER_RELEASED,
+    FULFILLMENT_ORDER_WAIT_EXPIRED,
+    type FulfillmentOrderDelayed,
     SHIPMENT_DELIVERED,
     SHIPMENT_SHIPPED
 } from '../events';
@@ -107,6 +110,36 @@ export const announceCancelled = (
 ): Promise<void> =>
     enqueueOutboxEvent(
         FULFILLMENT_ORDER_CANCELLED,
+        {
+            orderId: String(fulfillmentOrder.orderId),
+            fulfillmentOrderId: String(fulfillmentOrder._id)
+        },
+        String(fulfillmentOrder.orderId),
+        session
+    );
+
+/**
+ * Write `fulfillment_order.delayed`, keyed on the order so its events stay in order.
+ * @param delayed - what the buyer is told
+ * @param session - the act's transaction
+ */
+export const announceDelayed = (
+    delayed: FulfillmentOrderDelayed,
+    session: ClientSession
+): Promise<void> =>
+    enqueueOutboxEvent(FULFILLMENT_ORDER_DELAYED, delayed, delayed.orderId, session);
+
+/**
+ * Write `fulfillment_order.wait_expired`, keyed on the order so its events stay in order.
+ * @param fulfillmentOrder - the fulfillment order whose buyer never answered
+ * @param session - the act's transaction
+ */
+export const announceWaitExpired = (
+    fulfillmentOrder: FulfillmentOrderDocument,
+    session: ClientSession
+): Promise<void> =>
+    enqueueOutboxEvent(
+        FULFILLMENT_ORDER_WAIT_EXPIRED,
         {
             orderId: String(fulfillmentOrder.orderId),
             fulfillmentOrderId: String(fulfillmentOrder._id)

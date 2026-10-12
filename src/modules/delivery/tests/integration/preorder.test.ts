@@ -18,7 +18,7 @@ import { productService } from '@modules/products';
 import { testCallerContext } from '@tests/callers';
 import { inventoryService } from '@modules/inventory';
 import { OrderStatus } from '@types';
-import { fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
+import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
 import { releaseAllocated } from '@modules/delivery/services';
 import deliveryModule from '@modules/delivery/module';
 import { settleOutboxNudges } from '@kernel/outbox';
@@ -39,41 +39,6 @@ const DAY = 86_400_000;
 /** A release date `days` away. */
 const inDays = (days: number): Date => new Date(Date.now() + days * DAY);
 
-/** One preorder line to place: a product with an allowance, and how many of it. */
-interface Wanted {
-    quantity: number;
-    releaseDate: Date;
-}
-
-/**
- * A PAID order of preorder lines, held in the ledger and committed as a payment would: one product
- * per `wanted`, each with an allowance big enough for everything asked.
- */
-const paidPreorder = async (wanted: Wanted[], email = 'buyer@example.com') => {
-    const user = await createUser({ email });
-    const products = await Promise.all(
-        wanted.map(({ releaseDate }) =>
-            createProduct({ onHand: 0, price: 10, releaseDate: releaseDate.toISOString() })
-        )
-    );
-    const order = await createOrder(
-        user,
-        products.map((product, index) => toOrderItem(product, wanted[index].quantity)),
-        { status: OrderStatus.paid }
-    );
-    const orderId = String(order._id);
-    const lines = products.map((product, index) => ({
-        productId: String(product._id),
-        quantity: wanted[index].quantity,
-        kind: 'preorder' as const
-    }));
-    for (const { productId, quantity } of lines)
-        await inventoryService.setPreorderLimit(productId, quantity);
-    await inventoryService.reserveForOrder(orderId, lines);
-    await inventoryService.commitForOrder(orderId);
-    return { orderId, productIds: lines.map(({ productId }) => productId) };
-};
-
 /** Deliver `quantity` units of a product and let the outbox carry what it announces. */
 const receiveAndSettle = async (productId: string, quantity: number) => {
     await inventoryService.receive(productId, quantity);
@@ -83,7 +48,7 @@ const receiveAndSettle = async (productId: string, quantity: number) => {
 describe('grouping a paid preorder', () => {
     it('holds the preorder line for stock, promised the date the buyer saw', async () => {
         const releaseDate = inDays(30);
-        const { orderId } = await paidPreorder([{ quantity: 2, releaseDate }]);
+        const { orderId } = await paidPreorderOrder([{ quantity: 2, releaseDate }]);
 
         const all = await fulfillmentOrdersOf(orderId);
 
@@ -96,7 +61,7 @@ describe('grouping a paid preorder', () => {
     });
 
     it('ignores a release date the catalogue has since passed: the order froze its own', async () => {
-        const { orderId, productIds } = await paidPreorder([
+        const { orderId, productIds } = await paidPreorderOrder([
             { quantity: 1, releaseDate: inDays(30) }
         ]);
         await productService.updateById(
@@ -113,7 +78,7 @@ describe('grouping a paid preorder', () => {
 
 describe('stock arriving for a paid preorder', () => {
     it('releases the whole fulfillment order when the delivery covers it', async () => {
-        const { orderId, productIds } = await paidPreorder([
+        const { orderId, productIds } = await paidPreorderOrder([
             { quantity: 2, releaseDate: inDays(30) }
         ]);
         await fulfillmentOrdersOf(orderId);
@@ -130,7 +95,7 @@ describe('stock arriving for a paid preorder', () => {
 
     it('splits a short delivery: the arrived units open, the rest keep waiting', async () => {
         const releaseDate = inDays(30);
-        const { orderId, productIds } = await paidPreorder([{ quantity: 3, releaseDate }]);
+        const { orderId, productIds } = await paidPreorderOrder([{ quantity: 3, releaseDate }]);
         await fulfillmentOrdersOf(orderId);
 
         await receiveAndSettle(productIds[0], 2);
@@ -147,7 +112,7 @@ describe('stock arriving for a paid preorder', () => {
     });
 
     it('makes the fulfillment orders first when the paid listener never ran', async () => {
-        const { orderId, productIds } = await paidPreorder([
+        const { orderId, productIds } = await paidPreorderOrder([
             { quantity: 1, releaseDate: inDays(30) }
         ]);
 
@@ -159,7 +124,7 @@ describe('stock arriving for a paid preorder', () => {
     });
 
     it('is harmless when the same allocation is announced twice', async () => {
-        const { orderId, productIds } = await paidPreorder([
+        const { orderId, productIds } = await paidPreorderOrder([
             { quantity: 3, releaseDate: inDays(30) }
         ]);
         await fulfillmentOrdersOf(orderId);

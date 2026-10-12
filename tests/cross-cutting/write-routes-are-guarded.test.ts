@@ -70,6 +70,10 @@ const WRITE_EXCEPTIONS: Record<string, WriteException> = {
         requiresAuth: true,
         reason: 'the same read-as-POST, but the orders router blanket-authenticates every route'
     },
+    'delivery POST /fulfillment-orders/:id/confirm-wait': {
+        requiresAuth: true,
+        reason: "the buyer's own answer to a late preorder — the service refuses anyone who is not the order's buyer, staff included"
+    },
     'returns POST /': {
         requiresAuth: true,
         reason: "opening a return on the caller's own order, the withdrawal button included — the service scopes it to the buyer, an operator cannot exercise a consumer's right"

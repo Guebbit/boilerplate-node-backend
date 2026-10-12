@@ -17,6 +17,7 @@ x-error-codes:
     DELIVERY_NOT_DIGITAL: { status: 409, description: 'A physical fulfillment order cannot be fulfilled without a shipment; ship it instead.' }
     DELIVERY_NOT_HOLDABLE: { status: 409, description: 'Only an open or in-progress fulfillment order can be put on hold.' }
     DELIVERY_NOT_RELEASABLE: { status: 409, description: 'The fulfillment order is not on hold, or waits for stock and is released only by the stock arriving.' }
+    DELIVERY_NOT_AWAITING_ANSWER: { status: 409, description: 'The fulfillment order is not waiting for the buyer to say whether to keep waiting, so there is nothing to confirm.' }
     DELIVERY_NOT_DELIVERABLE: { status: 409, description: 'The shipment has already been delivered, or its order is no longer in a state this can run from.' }
     ORDER_NOT_PAID: { status: 409, description: 'The order must be paid before this delivery action.' }
     ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }
@@ -215,6 +216,34 @@ paths:
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}/confirm-wait:
+        post:
+            tags: [Delivery]
+            summary: Keep waiting for a late preorder
+            description: >-
+                The buyer's answer to a notice that their preorder will be later than promised (or that
+                its date passed): yes, keep waiting. Clears the deadline after which silence would
+                cancel the fulfillment order and refund it. Only the order's own buyer may answer, and
+                only while `consent` is `awaiting` (`DELIVERY_NOT_AWAITING_ANSWER` otherwise). The
+                buyer's other answer, cancel, is the existing cancel or remainder cancel.
+            operationId: confirmFulfillmentOrderWait
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order the buyer will keep waiting for
+            responses:
+                '200':
+                    description: The fulfillment order, with `consent` now `confirmed`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/fulfillment-orders/{id}/release:
@@ -425,6 +454,24 @@ components:
                 Why a fulfillment order is on hold (Shopify's hold reasons). `awaiting_stock` is set
                 only by the allocation of stock, and released only by it; the other three are staff's.
 
+        FulfillmentConsent:
+            type: string
+            enum: [awaiting, confirmed, expired]
+            description: >-
+                Where a waiting preorder stands with its buyer after a late date. Absent: the buyer was
+                never asked. `awaiting`: asked to say whether to keep waiting, and silence until
+                `consentDeadline` cancels and refunds (FTC 16 CFR 435.2, CRD Art. 18). `confirmed`: the
+                buyer said keep waiting, so a later slip asks again. `expired`: the window closed in
+                silence and the cancel and refund are on their way; too late to answer.
+
+        FulfillmentCancelReason:
+            type: string
+            enum: [buyer, staff, no_answer, order]
+            description: >-
+                Who cancelled what was left of a fulfillment order. `buyer`: the buyer's own cancel of
+                the remainder. `staff`: a refund by staff. `no_answer`: the buyer was asked to keep
+                waiting and never answered. `order`: the whole order was cancelled.
+
         FulfillmentOrderKind:
             type: string
             enum: [physical, digital]
@@ -460,11 +507,12 @@ components:
         FulfillmentOrderActions:
             type: object
             additionalProperties: false
-            required: [ship, fulfill, hold, release]
+            required: [ship, fulfill, hold, release, confirmWait]
             description: >-
                 What the requesting caller may do to this fulfillment order, decided by the server so
-                a client renders its controls from this. All are false when the buyer of the order
-                ranks at or above the caller, and for anyone without `delivery.any.update`.
+                a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
+                false when the buyer of the order ranks at or above the caller, and for anyone
+                without `delivery.any.update`; `confirmWait` is the order's own buyer's.
             properties:
                 ship:
                     type: boolean
@@ -478,6 +526,9 @@ components:
                 release:
                     type: boolean
                     description: Whether `POST /delivery/fulfillment-orders/{id}/release` would be accepted — never for `awaiting_stock`.
+                confirmWait:
+                    type: boolean
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/confirm-wait` would be accepted — the caller is the buyer and `consent` is `awaiting`.
 
         FulfillmentOrder:
             type: object
@@ -518,6 +569,18 @@ components:
                     type: string
                     format: date-time
                     description: When it is now expected to ship, when that differs from what was agreed.
+                consent:
+                    $ref: '#/components/schemas/FulfillmentConsent'
+                consentDeadline:
+                    type: string
+                    format: date-time
+                    description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
+                lastNoticeAt:
+                    type: string
+                    format: date-time
+                    description: When the buyer was last told the date had moved or passed.
+                cancelReason:
+                    $ref: '#/components/schemas/FulfillmentCancelReason'
                 actions:
                     $ref: '#/components/schemas/FulfillmentOrderActions'
                 createdAt:
@@ -676,6 +739,18 @@ components:
                 expectedAt:
                     type: string
                     format: date-time
+                consent:
+                    $ref: '#/components/schemas/FulfillmentConsent'
+                consentDeadline:
+                    type: string
+                    format: date-time
+                    description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
+                lastNoticeAt:
+                    type: string
+                    format: date-time
+                    description: When the buyer was last told the date had moved or passed.
+                cancelReason:
+                    $ref: '#/components/schemas/FulfillmentCancelReason'
 
         ShipFulfillmentOrderRequest:
             type: object

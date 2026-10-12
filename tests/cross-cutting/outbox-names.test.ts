@@ -183,6 +183,7 @@ it('publishes the set the pair agreed on', () => {
         'account.verify-request',
         'api-keys.minted',
         'api-keys.revoked',
+        'delivery.preorder-delayed',
         'delivery.shipment-delivered',
         'delivery.shipment-shipped',
         'example.published',

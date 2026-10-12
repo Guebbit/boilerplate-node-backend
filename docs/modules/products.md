@@ -19,15 +19,18 @@ graph cannot see._
 flowchart LR
     products["products<br/><i>this module</i>"]
     cart["cart"]
+    delivery["delivery"]
     inventory["inventory"]
     orders["orders"]
     wishlist["wishlist"]
 
     cart --> products
+    delivery --> products
     inventory --> products
     orders --> products
     wishlist --> products
     products -. "product.deleted" .-> cart
+    products -. "product.release_date_changed" .-> delivery
     products -. "product.created" .-> inventory
     products -. "product.deleted" .-> inventory
     products -. "product.deleted" .-> wishlist
@@ -37,7 +40,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,wishlist supporting;
+    class delivery,inventory,wishlist supporting;
     class products centre;
 ```
 
@@ -157,7 +160,7 @@ stateDiagram-v2
 Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
 transaction and only when the instant actually changed. `delivery` listens: buyers who already paid
 were promised the old date, and consumer law decides what they must be told (see
-[delivery](./delivery.md)).
+[delivery](./delivery.md#preorders-and-a-moved-date)).
 
 ### Industry mapping
 

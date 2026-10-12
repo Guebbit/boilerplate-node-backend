@@ -34,6 +34,31 @@ export interface DeliveredEmailInput {
     withdrawUntil?: Date | undefined;
 }
 
+/** What the preorder-delayed email says about one waiting fulfillment order. */
+export interface PreorderDelayedEmailInput {
+    /** The waiting products' titles, as the order froze them. */
+    titles: readonly string[];
+    /** The date promised when ordering. */
+    agreedAt: Date;
+    /** The date now expected; absent when there is none. */
+    expectedAt?: Date | undefined;
+    /** Whether the buyer must answer, or silence cancels. */
+    needsAnswer: boolean;
+    /** When silence turns into a cancel; present when `needsAnswer`. */
+    answerBy?: Date | undefined;
+    /** The buyer's own order page, where Keep waiting and Cancel are. */
+    orderUrl: string;
+}
+
+/**
+ * A date as the buyer reads it: long, in their language, in UTC like every date rule here.
+ * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat
+ * @param locale - the buyer's language
+ * @param date - the date
+ */
+const longDate = (locale: string, date: Date): string =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeZone: 'UTC' }).format(date);
+
 /**
  * The product lines as printed text: "2 × Title". The numbers and the title are data, not copy.
  * @param t - the translator for the email's language
@@ -113,6 +138,50 @@ export const shipmentDeliveredEmail = (
                       }).format(input.withdrawUntil)
                   })
                 : undefined,
+            footer: t('email.footer')
+        }
+    };
+};
+
+/**
+ * "Your preorder will be late" — sent when a waiting preorder's date moved or passed. Three
+ * wordings, one per thing the buyer is owed: a short slip (the new date, and cancel is open;
+ * silence keeps waiting), a long or repeated one (the new date and a question), and a date that
+ * came with no stock (a question with no new date). A question always says by when to answer and
+ * what silence does, because that is what makes silence a lawful cancel.
+ *
+ * @param locale - the buyer's language
+ * @param name - the buyer's name, for the greeting
+ * @param input - what changed and what the buyer may do about it
+ */
+export const preorderDelayedEmail = (
+    locale: string,
+    name: string,
+    input: PreorderDelayedEmailInput
+): EmailContent => {
+    const t = translator(locale);
+    const variant = input.needsAnswer ? (input.expectedAt ? 'ask-moved' : 'ask-passed') : 'moved';
+    return {
+        template: 'delivery.preorder-delayed',
+        subject: t(`delivery.email-preorder-delayed.${variant}.subject`),
+        data: {
+            locale,
+            pageMetaTitle: t('delivery.email-preorder-delayed.meta-title'),
+            pageMetaLinks: [],
+            greeting: t('delivery.email-preorder-delayed.greeting', { name }),
+            body: t(`delivery.email-preorder-delayed.${variant}.body`, {
+                agreed: longDate(locale, input.agreedAt),
+                expected: input.expectedAt ? longDate(locale, input.expectedAt) : ''
+            }),
+            lines: [...input.titles],
+            answer:
+                input.needsAnswer && input.answerBy
+                    ? t('delivery.email-preorder-delayed.answer', {
+                          date: longDate(locale, input.answerBy)
+                      })
+                    : t('delivery.email-preorder-delayed.cancel-any-time'),
+            linkLabel: t('delivery.email-preorder-delayed.link-label'),
+            linkUrl: input.orderUrl,
             footer: t('email.footer')
         }
     };

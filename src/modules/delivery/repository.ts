@@ -15,6 +15,7 @@ import {
 } from './model';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 import type { FulfillmentOrderDraft } from './domain';
+import { FulfillmentConsent, FulfillmentHoldReason, FulfillmentOrderStatus } from '@types';
 import {
     createRepository,
     toObjectId,
@@ -24,10 +25,22 @@ import {
 
 /** What an act changes on a fulfillment order, written under a revision claim. */
 export type FulfillmentOrderPatch = Partial<
-    Pick<FulfillmentOrderDocument, 'lines' | 'status' | 'holdReason' | 'holdNote' | 'expectedAt'>
+    Pick<
+        FulfillmentOrderDocument,
+        | 'lines'
+        | 'status'
+        | 'holdReason'
+        | 'holdNote'
+        | 'expectedAt'
+        | 'consent'
+        | 'consentDeadline'
+        | 'lastNoticeAt'
+        | 'slips'
+        | 'cancelReason'
+    >
 > & {
-    /** Fields to remove — a released hold carries no reason or note. */
-    unset?: readonly ('holdReason' | 'holdNote')[];
+    /** Fields to remove — a released hold carries no reason or note, a confirmed wait no deadline. */
+    unset?: readonly ('holdReason' | 'holdNote' | 'consentDeadline')[];
 };
 
 /** The shared factory's CRUD surface plus the fulfillment order's own reads and claims. */
@@ -53,6 +66,9 @@ export const fulfillmentOrderRepository: Repository<
         session: ClientSession
     ) => Promise<FulfillmentOrderDocument | null>;
     scrubHoldNotesBefore: (cutoff: Date) => Promise<number>;
+    findWaitingForProduct: (productId: string) => Promise<FulfillmentOrderDocument[]>;
+    findDatePassed: (now: Date) => Promise<FulfillmentOrderDocument[]>;
+    findWaitsExpired: (now: Date) => Promise<FulfillmentOrderDocument[]>;
 } = {
     ...createRepository<FulfillmentOrderDocument, Wire<FulfillmentOrderDocument>>(
         fulfillmentOrderModel,
@@ -115,7 +131,8 @@ export const fulfillmentOrderRepository: Repository<
                         revision: 0,
                         ...(draft.holdReason ? { holdReason: draft.holdReason } : {}),
                         ...(draft.agreedAt ? { agreedAt: draft.agreedAt } : {}),
-                        ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {})
+                        ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {}),
+                        slips: 0
                     }
                 },
                 { upsert: true, session }
@@ -146,6 +163,51 @@ export const fulfillmentOrderRepository: Repository<
                 },
                 { returnDocument: 'after', session }
             )
+            .exec(),
+
+    /**
+     * Every fulfillment order still waiting for stock that holds this product — the ones a moved
+     * release date concerns. Served by the `status + holdReason + lines.productId` index.
+     * @param productId - the product whose release date moved
+     */
+    findWaitingForProduct: (productId) =>
+        fulfillmentOrderModel
+            .find({
+                status: FulfillmentOrderStatus.on_hold,
+                holdReason: FulfillmentHoldReason.awaiting_stock,
+                'lines.productId': productId
+            })
+            .exec(),
+
+    /**
+     * The waiting fulfillment orders whose expected date has come, for the sweep to judge against
+     * their last notice (a date alone cannot say whether the buyer was already told).
+     * @param now - the instant of the sweep
+     */
+    findDatePassed: (now) =>
+        fulfillmentOrderModel
+            .find({
+                status: FulfillmentOrderStatus.on_hold,
+                holdReason: FulfillmentHoldReason.awaiting_stock,
+                expectedAt: { $lte: now }
+            })
+            .exec(),
+
+    /**
+     * The fulfillment orders whose buyer was asked and let the window close — including the ones
+     * already marked expired, whose cancel has not landed yet and is announced again.
+     * @param now - the instant of the sweep
+     */
+    findWaitsExpired: (now) =>
+        fulfillmentOrderModel
+            .find({
+                status: FulfillmentOrderStatus.on_hold,
+                holdReason: FulfillmentHoldReason.awaiting_stock,
+                $or: [
+                    { consent: FulfillmentConsent.expired },
+                    { consent: FulfillmentConsent.awaiting, consentDeadline: { $lte: now } }
+                ]
+            })
             .exec(),
 
     /**
