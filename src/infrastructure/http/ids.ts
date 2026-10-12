@@ -22,6 +22,7 @@ import { t } from '@infrastructure/i18n';
 import { isPlainObject } from '@infrastructure/object-guards';
 import { readInput, type RequestSurface } from '@infrastructure/http/request';
 import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
+import { attributeOf } from '@infrastructure/http/validation-messages';
 
 /**
  * The one spelling of an id this API issues: 24 hex characters.
@@ -57,7 +58,9 @@ export const isValidObjectId = (id: unknown): id is string =>
  */
 const fieldIdIssue = (field: string, value: unknown): ResponseErrorItem => ({
     code: 'VALIDATION_ERROR',
-    message: t(value === undefined ? 'validation.required' : 'validation.invalid-format'),
+    message: t(value === undefined ? 'validation.required' : 'validation.invalid-format', {
+        attribute: attributeOf(field.split('.'))
+    }),
     details: { field }
 });
 
