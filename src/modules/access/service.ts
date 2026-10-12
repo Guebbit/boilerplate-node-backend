@@ -10,6 +10,7 @@
  * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
  */
 
+import type { ClientSession } from 'mongoose';
 import type { AuthorizationScope, CallerContext, RoleLevel } from '@types';
 import {
     findRole,
@@ -195,11 +196,73 @@ export const assertCanGrant = (
 };
 
 /**
+ * {@link assertCanGrant} for a caller that writes more than the membership: a refusal is audited
+ * as a failed grant FIRST, then thrown, so the attempt leaves its row even though nothing was
+ * written. It is the check an account create or update runs before it opens its transaction.
+ *
+ * @param granter - same meaning as {@link assignRole}'s own parameter
+ * @param context - the caller, whose refused attempt is audited
+ * @param userId - the account the grant is for, or `undefined` when it does not exist yet
+ * @throws AccessInvariantError for the same two reasons `assignRole` refuses
+ */
+export const assertCanGrantAudited = (
+    scope: AuthorizationScope,
+    roleName: string,
+    granter: readonly string[] | undefined,
+    context: CallerContext,
+    userId?: string
+): void => {
+    const verdict = checkGrant(scope, roleName, granter);
+    if (!('refusal' in verdict)) return;
+
+    auditRoleChange(
+        context,
+        accessAuditActions.ROLE_ASSIGNED,
+        'failure',
+        userId,
+        roleName.toLowerCase(),
+        scope === 'tenant' ? DEPLOYMENT_TENANT_ID : null,
+        scope
+    );
+    throw new AccessInvariantError(verdict.refusal);
+};
+
+/**
+ * Record a role grant that has COMMITTED. {@link assignRole} given a `session` audits only its
+ * failures, because its success is not true until the caller's transaction commits: the caller
+ * calls this after.
+ *
+ * @param context - the caller to attribute the grant to
+ * @param userId - the account that now holds the role
+ * @param roleName - the role as the request spelled it
+ * @param tenantId - the place the role is held in, `null` for platform scope
+ * @param scope - the scope the role was assigned in
+ */
+export const auditRoleAssigned = (
+    context: CallerContext,
+    userId: string,
+    roleName: string,
+    tenantId: string | null,
+    scope: AuthorizationScope
+): void => {
+    auditRoleChange(
+        context,
+        accessAuditActions.ROLE_ASSIGNED,
+        'success',
+        userId,
+        roleName.toLowerCase(),
+        tenantId,
+        scope
+    );
+};
+
+/**
  * One audit row for a role grant or revoke, success or failure — a single shared block instead of
  * {@link assignRole}/{@link revokeRole} each emitting their own near-identical `emitAuditEvent`/
  * `buildAuditEvent` call. Four separate, near-identical blocks are exactly the shape that lets one
  * of them (revoke's failure branch) quietly drop `role` from its metadata while the others keep it.
  *
+ * @param userId - `undefined` for a grant refused before the account exists (an admin create)
  * @param role - `undefined` when nothing was there to name (an assign's `roleName` is always
  *   known; a revoke with no membership found, or whose role wasn't yet resolved when it failed,
  *   has none) — omitted from `metadata` rather than sent as `undefined`
@@ -208,7 +271,7 @@ const auditRoleChange = (
     context: CallerContext,
     action: AuditAction,
     outcome: 'success' | 'failure',
-    userId: string,
+    userId: string | undefined,
     role: string | undefined,
     tenantId: string | null,
     scope: AuthorizationScope
@@ -232,6 +295,9 @@ const auditRoleChange = (
  *   {@link assignDefaultRole} and `users/services/create.ts`'s `USER_SETUP_REQUESTED` handler for the same
  *   reasoning. An escalation attempt is audited as a FAILURE, not skipped: it is the single most
  *   useful entry this vocabulary can produce.
+ * @param session - the caller's transaction, when the grant must commit or roll back with other
+ *   writes. Given one, only failures are audited here; the caller records the success with
+ *   {@link auditRoleAssigned} once it has committed.
  * @throws AccessInvariantError synchronously refused as a REJECTION, never a thrown exception —
  *   every check below runs inside the promise chain on purpose, so a caller doing
  *   `assignRole(...).catch(...)` (every caller in this codebase does) sees a rejection, not an
@@ -244,25 +310,20 @@ export const assignRole = (
     scope: AuthorizationScope,
     roleName: string,
     granter?: readonly string[],
-    context?: CallerContext
+    context?: CallerContext,
+    session?: ClientSession
 ): Promise<MembershipDocument> => {
     const attempt = Promise.resolve()
         .then(() => validateGrant(scope, roleName, granter))
-        .then((lowered) => membershipRepository.upsertRole(userId, tenantId, scope, lowered));
+        .then((lowered) =>
+            membershipRepository.upsertRole(userId, tenantId, scope, lowered, session)
+        );
 
     if (!context) return attempt;
 
     return attempt.then(
         (membership) => {
-            auditRoleChange(
-                context,
-                accessAuditActions.ROLE_ASSIGNED,
-                'success',
-                userId,
-                roleName.toLowerCase(),
-                tenantId,
-                scope
-            );
+            if (!session) auditRoleAssigned(context, userId, roleName, tenantId, scope);
             return membership;
         },
         (error: unknown) => {
@@ -285,12 +346,16 @@ export const assignRole = (
  * grant. Deliberately NOT `assignRole` with a caller-supplied name: a signup endpoint that could
  * assign any role would be a privilege-escalation door, so this function's whole job is to make
  * that request impossible to express — there is no `roleName` parameter to pass one through.
+ *
+ * @param session - the signup's transaction, so the account and its role commit together
  */
 export const assignDefaultRole = (
     userId: string,
     tenantId: string,
-    scope: AuthorizationScope = 'tenant'
-): Promise<MembershipDocument> => assignRole(userId, tenantId, scope, SIGNUP_DEFAULT_ROLE);
+    scope: AuthorizationScope = 'tenant',
+    session?: ClientSession
+): Promise<MembershipDocument> =>
+    assignRole(userId, tenantId, scope, SIGNUP_DEFAULT_ROLE, undefined, undefined, session);
 
 /**
  * Promote an `unverified` membership to `customer` once the address is proven — through the
@@ -373,10 +438,10 @@ export const revokeRole = (
 };
 
 /**
- * Take away every role a person holds, in every place — the hard-delete cascade's own half: once
- * the account itself is gone, no membership row may keep pointing at its dead id, a tenant seat OR
- * a platform one. Walks {@link membershipsOf} rather than assuming the single tenant row most
- * callers care about, since a platform operator can hold both at once.
+ * Take away every role a person holds, in every place, one revoke at a time. Walks
+ * {@link membershipsOf} rather than assuming the single tenant row most callers care about, since
+ * a platform operator can hold both at once. A hard delete does not use it: it erases through
+ * {@link eraseMemberships}, inside its own transaction.
  */
 export const revokeAllOf = (userId: string): Promise<void> =>
     membershipsOf(userId).then((memberships) =>
@@ -384,6 +449,20 @@ export const revokeAllOf = (userId: string): Promise<void> =>
             () => undefined
         )
     );
+
+/**
+ * The `personalData.erase` hook of this module's `roles` section: every role the person holds,
+ * in every place, goes in the same transaction as the account itself. Once the account is gone no
+ * membership row may keep pointing at its dead id, a tenant seat OR a platform one; and because it
+ * rides the cascade, a failed erasure takes no role away from an account that stays.
+ *
+ * Allowed even when it removes a place's last administrator, like {@link revokeRole}.
+ *
+ * @param userId - the erased account
+ * @param session - the hard delete's transaction; every write here must take it
+ */
+export const eraseMemberships = (userId: string, session: ClientSession): Promise<void> =>
+    membershipRepository.deleteByUserId(userId, session).then(() => undefined);
 
 /**
  * The two role names a person holds, and the shop they hold the first one in — `null` for a scope

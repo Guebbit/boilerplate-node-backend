@@ -195,7 +195,7 @@ itself (6, 4 and 5 states).
 
 Everywhere else the folder stays optional, and creating an empty one to match a shape is how
 ceremony starts — most modules here don't have one. Modules with a `domain/` folder today: `orders`,
-`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns` and `example`.
+`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns`, `account` and `example`.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 a few pure functions in `rates.ts` (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,

@@ -2,8 +2,8 @@
  * @module
  * `POST /account/export` and `GET /account/export/{id}` — "give me my data" (Art. 15, 20), as a job
  * rather than a request: asking records a row and queues the build, the worker (`./export-job.ts`)
- * writes the file, and a mailed link downloads it. Its own file, beside `profile.ts` and
- * `authentication.ts`: it is neither proving identity (that's `requireFreshAuth`'s job, mounted on
+ * writes the file, and a mailed link downloads it. Its own file, beside the other
+ * account services: it is neither proving identity (that's `requireFreshAuth`'s job, mounted on
  * both routes) nor changing the account.
  *
  * One live export per account. A `building` one is returned as it is; a `ready` or `failed` one is

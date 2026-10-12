@@ -20,7 +20,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { usersAnalyticsEvents } from '../../analytics';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { assignRole, membershipsOf, rolesOf } from '@modules/access';
+import { assignRole, eraseMemberships, membershipsOf, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { presentUser } from '../../presenter';
@@ -391,10 +391,9 @@ describe('userService.create', () => {
         expect(roles.tenant).toBe('customer');
     });
 
-    it('deletes the orphan row when the requested role is an escalation the caller cannot grant', async () => {
-        // `moderator` can create accounts but cannot grant `admin` — before the fix this wrote
-        // the user row, THEN refused the grant, leaving a document with no membership at all and
-        // the email permanently unusable for a retry.
+    it('creates no row when the requested role is an escalation the caller cannot grant', async () => {
+        // `moderator` can create accounts but cannot grant `admin`: the grant is refused before the
+        // user row is written, so no row holds the email without a membership.
         await expect(
             userService.create(
                 {
@@ -851,20 +850,31 @@ describe('userService.removeById', () => {
         expect(await userRepository.findById(id)).toBeNull();
     });
 
-    it('erases a platform membership too, not only the tenant one', async () => {
-        const user = await createUser();
-        const id = user._id.toString();
-        // A second platform operator, so the platform row below is not itself the last one
-        // administering the installation — this test is about the erasure gap, not that invariant.
-        await assignRole('another-operator', null, 'platform', 'operator');
-        // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
-        // behind if the platform row is not swept too, surviving the user it points at.
-        await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
-        await assignRole(id, null, 'platform', 'operator');
+    describe('erasing roles', () => {
+        const bootErasers = personalDataErasers();
 
-        await userService.removeById(id, true);
+        afterEach(() => {
+            setPersonalDataErasers(bootErasers);
+        });
 
-        expect(await membershipsOf(id)).toEqual([]);
+        it('erases a platform membership too, not only the tenant one', async () => {
+            const user = await createUser();
+            const id = user._id.toString();
+            // A second platform operator, so the platform row below is not itself the last one
+            // administering the installation — this test is about the erasure gap, not that invariant.
+            await assignRole('another-operator', null, 'platform', 'operator');
+            // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
+            // behind if the platform row is not swept too, surviving the user it points at.
+            await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
+            await assignRole(id, null, 'platform', 'operator');
+            // This suite builds no app, so the erase hooks a deployment registers are not there:
+            // install `access`'s own, the one under test.
+            setPersonalDataErasers([eraseMemberships]);
+
+            await userService.removeById(id, true);
+
+            expect(await membershipsOf(id)).toEqual([]);
+        });
     });
 
     it('returns a 404 rejection when the user does not exist', async () => {

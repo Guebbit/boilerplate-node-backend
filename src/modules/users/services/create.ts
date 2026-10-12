@@ -10,10 +10,16 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { emitDomainEvent } from '@kernel/events';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext, CreateUserRequest, WithServerImage } from '@types';
-import { assignRole, VERIFIED_CUSTOMER_ROLE } from '@modules/access';
+import {
+    assertCanGrantAudited,
+    assignRole,
+    auditRoleAssigned,
+    VERIFIED_CUSTOMER_ROLE
+} from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
@@ -33,6 +39,8 @@ import { enqueueIfPending } from './image';
  *   their own (`POST /account/reset-confirm`).
  * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
  *   dropped `active` from `update()` below.
+ * - The account and its role grant are ONE transaction, the grant checked (and a refusal audited)
+ *   before any write. See docs/modules/users.md#creating-and-updating-with-a-role.
  * - Returns a result envelope, same protocol `update` follows.
  */
 export const create = (
@@ -49,39 +57,47 @@ export const create = (
     // An operator typing the address in is the vouching, same reasoning as `verifiedAt` above.
     const role = data.role ?? VERIFIED_CUSTOMER_ROLE;
 
-    return userRepository
-        .create({
-            verifiedAt: new Date(),
-            ...data,
-            // `null` on a create means no image: the schema default applies to `undefined` only.
-            imageUrl: data.imageUrl ?? undefined,
-            password
-        })
-        .then((user) =>
-            /*
-             * The membership is the ONLY grant — there is no column beside it.
-             * Awaited before the audit event: a rejected escalation must fail the whole create,
-             * not just a column that already saved. `assignRole` is passed `context` so a
-             * refused escalation is itself audited (the single most useful entry this
-             * vocabulary can produce) — which is also why the fix for the orphan row below is a
-             * compensating delete rather than validating ahead of the write: doing that would
-             * skip `assignRole` (and its audit) entirely on a caller who was always going to fail.
-             */
-            assignRole(
-                String(user._id),
-                DEPLOYMENT_TENANT_ID,
-                'tenant',
-                role,
-                context.caller.permissions,
-                context
-            ).then(
-                () => user,
-                (error: unknown) =>
-                    userRepository.deleteOne(user).then(() => {
-                        throw error;
-                    })
+    return Promise.resolve()
+        .then(() =>
+            // Checked, and a refusal audited, BEFORE anything is written: an escalation attempt
+            // must leave its row without ever having made a user.
+            assertCanGrantAudited('tenant', role, context.caller.permissions, context)
+        )
+        .then(() =>
+            // The account and its membership commit together or not at all: a failure between the
+            // two leaves nothing behind to undo, so no compensating delete (which could itself
+            // fail) is needed. https://www.mongodb.com/docs/manual/core/transactions/
+            withTransaction((session) =>
+                userRepository
+                    .create(
+                        {
+                            verifiedAt: new Date(),
+                            ...data,
+                            // `null` on a create means no image: the schema default applies to `undefined` only.
+                            imageUrl: data.imageUrl ?? undefined,
+                            password
+                        },
+                        session
+                    )
+                    // The membership is the ONLY grant — there is no column beside it.
+                    .then((user) =>
+                        assignRole(
+                            String(user._id),
+                            DEPLOYMENT_TENANT_ID,
+                            'tenant',
+                            role,
+                            context.caller.permissions,
+                            context,
+                            session
+                        ).then(() => user)
+                    )
             )
         )
+        .then((user) => {
+            // Only now that the transaction has committed is the grant true to audit.
+            auditRoleAssigned(context, String(user._id), role, DEPLOYMENT_TENANT_ID, 'tenant');
+            return user;
+        })
         .then((user) => {
             recordAudit(context, {
                 action: usersAuditActions.ADMIN_USER_CREATED,

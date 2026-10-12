@@ -1,8 +1,7 @@
 /**
  * @module
  * Account service — authentication, the profile a person manages, and two-factor. A folder rather
- * than one file because it passed ~300 lines, split by what each operation does — see
- * `docs/theory/layers.md`.
+ * than one file because it passed ~300 lines, one file per flow — see `docs/theory/layers.md`.
  *
  * `accountService`:   login, signup, profile, verification, tokens, OAuth.
  * `twoFactorService`: enrollment, removal, backup codes, the login challenge.
@@ -23,14 +22,24 @@
  * (the reaper) reaches nothing but this module's own store, so it is published.
  */
 
-import * as authentication from './authentication';
+import * as signup from './signup';
+import * as login from './login';
+import * as logout from './logout';
+import * as refresh from './refresh';
+import * as passwordResetRequest from './password-reset-request';
+import * as deletionRequest from './deletion-request';
+import * as password from './password';
+import * as passwordReset from './password-reset';
+import * as emailChange from './email-change';
+import * as selfDelete from './self-delete';
 import * as profile from './profile';
 import * as verification from './verification';
 import * as tokens from './tokens';
 import * as tokenCleanup from './token-cleanup';
 import * as exportRows from './export-rows';
 import * as oauth from './oauth';
-import * as twoFactor from './two-factor';
+import * as twoFactorEnrollment from './two-factor-enrollment';
+import * as twoFactorChallenge from './two-factor-challenge';
 import * as reauth from './reauth';
 import { pruneOwnExpiredTokens } from '../session/prune';
 
@@ -40,13 +49,11 @@ import { pruneOwnExpiredTokens } from '../session/prune';
  * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
  * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
-export {
-    PASSWORD_RESET_TOKEN_TYPE,
-    RESET_REQUEST_SECONDS,
-    ACCOUNT_DELETE_TOKEN_TYPE
-} from './authentication';
+export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';
+export { RESET_REQUEST_SECONDS } from './password-reset-request';
 export { amrAfterReauth } from './reauth';
-export { passwordChangeWithCurrent, updateProfile } from './profile';
+export { passwordChangeWithCurrent } from './password';
+export { updateProfile } from './profile';
 export {
     sendVerificationEmail,
     EMAIL_VERIFY_TOKEN_TYPE,
@@ -56,7 +63,7 @@ export {
     undoEmailChange
 } from './verification';
 export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from './token-types';
-export { reapExpiredTokens } from './token-cleanup';
+export { reapExpiredTokens, reapLapsedPreviousEmails } from './token-cleanup';
 export { reapExpiredExports } from './export-rows';
 export { reencryptTotpSecrets } from './reencrypt';
 export { pruneOwnExpiredTokens } from '../session/prune';
@@ -76,28 +83,28 @@ export {
  * part of this object — see this file's own docblock above.
  */
 export const accountService = {
-    tokenAdd: authentication.tokenAdd,
-    signup: authentication.signup,
-    login: authentication.login,
-    logoutEverywhere: authentication.logoutEverywhere,
-    requestAccountDeletion: authentication.requestAccountDeletion,
-    requestPasswordReset: authentication.requestPasswordReset,
-    requestAccountSetup: authentication.requestAccountSetup,
-    sessionRevoke: authentication.sessionRevoke,
-    logoutCurrentSession: authentication.logoutCurrentSession,
-    refreshAccessToken: authentication.refreshAccessToken,
+    tokenAdd: tokens.tokenAdd,
+    signup: signup.signup,
+    login: login.login,
+    logoutEverywhere: logout.logoutEverywhere,
+    requestAccountDeletion: deletionRequest.requestAccountDeletion,
+    requestPasswordReset: passwordResetRequest.requestPasswordReset,
+    requestAccountSetup: passwordResetRequest.requestAccountSetup,
+    sessionRevoke: logout.sessionRevoke,
+    logoutCurrentSession: logout.logoutCurrentSession,
+    refreshAccessToken: refresh.refreshAccessToken,
     reauth: reauth.reauth,
     reauthMethods: reauth.reauthMethods,
     sendReauthCode: reauth.sendReauthCode,
-    validatePasswordChange: profile.validatePasswordChange,
-    passwordChange: profile.passwordChange,
-    passwordChangeWithCurrent: profile.passwordChangeWithCurrent,
-    passwordResetChange: profile.passwordResetChange,
-    completePasswordReset: profile.completePasswordReset,
+    validatePasswordChange: password.validatePasswordChange,
+    passwordChange: password.passwordChange,
+    passwordChangeWithCurrent: password.passwordChangeWithCurrent,
+    passwordResetChange: passwordReset.passwordResetChange,
+    completePasswordReset: passwordReset.completePasswordReset,
     updateProfile: profile.updateProfile,
-    cancelPendingEmailChange: profile.cancelPendingEmailChange,
+    cancelPendingEmailChange: emailChange.cancelPendingEmailChange,
     getOwnProfile: profile.getOwnProfile,
-    removeOwnAccount: profile.removeOwnAccount,
+    removeOwnAccount: selfDelete.removeOwnAccount,
     sendVerificationEmail: verification.sendVerificationEmail,
     requestEmailVerification: verification.requestEmailVerification,
     requestEmailVerificationFor: verification.requestEmailVerificationFor,
@@ -111,6 +118,7 @@ export const accountService = {
     recordOneTimeTokenRejected: tokens.recordOneTimeTokenRejected,
     sessionsList: tokens.sessionsList,
     reapExpiredTokens: tokenCleanup.reapExpiredTokens,
+    reapLapsedPreviousEmails: tokenCleanup.reapLapsedPreviousEmails,
     reapExpiredExports: exportRows.reapExpiredExports,
     pruneOwnExpiredTokens,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
@@ -124,14 +132,14 @@ export const accountService = {
  * challenge/verify pair.
  */
 export const twoFactorService = {
-    buildLoginChallenge: twoFactor.buildLoginChallenge,
-    twoFactorStatus: twoFactor.twoFactorStatus,
-    setupTwoFactorMethod: twoFactor.setupTwoFactorMethod,
-    sendMethodCode: twoFactor.sendMethodCode,
-    confirmTwoFactorMethod: twoFactor.confirmTwoFactorMethod,
-    removeTwoFactorMethod: twoFactor.removeTwoFactorMethod,
-    disableTwoFactor: twoFactor.disableTwoFactor,
-    regenerateBackupCodes: twoFactor.regenerateBackupCodes,
-    sendLoginCode: twoFactor.sendLoginCode,
-    verifyLoginChallenge: twoFactor.verifyLoginChallenge
+    buildLoginChallenge: twoFactorChallenge.buildLoginChallenge,
+    twoFactorStatus: twoFactorEnrollment.twoFactorStatus,
+    setupTwoFactorMethod: twoFactorEnrollment.setupTwoFactorMethod,
+    sendMethodCode: twoFactorEnrollment.sendMethodCode,
+    confirmTwoFactorMethod: twoFactorEnrollment.confirmTwoFactorMethod,
+    removeTwoFactorMethod: twoFactorEnrollment.removeTwoFactorMethod,
+    disableTwoFactor: twoFactorEnrollment.disableTwoFactor,
+    regenerateBackupCodes: twoFactorEnrollment.regenerateBackupCodes,
+    sendLoginCode: twoFactorChallenge.sendLoginCode,
+    verifyLoginChallenge: twoFactorChallenge.verifyLoginChallenge
 };

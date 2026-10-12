@@ -31,7 +31,7 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 export enum TokenType {
     REFRESH = 'refresh',
     PASSWORD_RESET = 'password',
-    /** A login's second-factor challenge — see `account/services/two-factor.ts#buildLoginChallenge`. */
+    /** A login's second-factor challenge — see `account/services/two-factor-challenge.ts#buildLoginChallenge`. */
     MFA_CHALLENGE = 'mfa-challenge'
 }
 
@@ -95,7 +95,7 @@ export interface Token {
     familyId?: Types.ObjectId;
     /**
      * Which factor(s) were already proven when this entry was minted. Only set on an
-     * `MFA_CHALLENGE`: `account/services/two-factor.ts#verifyLoginChallenge` reads it back once
+     * `MFA_CHALLENGE`: `account/services/two-factor-challenge.ts#verifyLoginChallenge` reads it back once
      * the second factor checks out, so the finished session's own `amr` names how the FIRST one
      * was proven — `['pwd']` for a password login, `[provider]` for an OAuth one — instead of
      * assuming a password. Absent means `['pwd']`: every challenge minted before this field
@@ -778,7 +778,7 @@ userSchema.index(
 /*
  * A pending email change is claimed by at most one account at a time — same UNIQUE reasoning as
  * `users_email`, and load-bearing for the same reason: the request-time collision check
- * (`account/services/profile.ts`) and the confirm-time swap into `email` are up to 24 hours
+ * (`account/services/email-change.ts`) and the confirm-time swap into `email` are up to 24 hours
  * apart, so this index, not the request-time read, is what actually stops two accounts racing to
  * claim one address. `partialFilterExpression` restricts it to documents that HOLD one — most
  * users never have `pendingEmail` set, and an unfiltered unique index would index every absent

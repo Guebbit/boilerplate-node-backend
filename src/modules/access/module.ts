@@ -13,9 +13,9 @@
  */
 
 import type { AppModule } from '@kernel/registry';
-import { membershipsOf } from './service';
+import { eraseMemberships, membershipsOf } from './service';
 
-/** This module's manifest entry: no routes, one personal-data section. */
+/** This module's manifest entry: no routes, one personal-data section, exported and erased. */
 export default {
     name: 'access',
     personalData: [
@@ -30,7 +30,9 @@ export default {
                         role: membership.role,
                         scope: membership.scope
                     }))
-                )
+                ),
+            // Joins the caller's own hard-delete transaction — see `eraseMemberships`.
+            erase: eraseMemberships
         }
     ]
 } satisfies AppModule;

@@ -12,6 +12,7 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { AUTHENTICATABLE_FILTER } from './authenticatable';
+import { twoFactorWritePipeline, type TwoFactorWrite } from './two-factor-write';
 import { userModel, applyUserTransform, TokenType, hashToken } from './model';
 import type { UserDocument, Token, OAuthAccount, UserWire, MfaReservation } from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
@@ -79,6 +80,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     tokenRemove: (id: string, token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveByValue: (token: string) => Promise<UpdateWriteOpResult>;
     tokenRemoveExpired: (supersededRetentionMs: number, userId?: string) => Promise<number>;
+    clearLapsedPreviousEmail: (undoTokenType: string) => Promise<number>;
     findByTokenValue: (token: string) => Promise<UserDocument | null>;
     tokenTouch: (token: string) => Promise<UpdateWriteOpResult>;
     tokenSupersede: (token: string) => Promise<boolean>;
@@ -89,6 +91,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     resetMfaAttempts: (id: string) => Promise<void>;
     bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
+    writeTwoFactor: (id: string, write: TwoFactorWrite) => Promise<boolean>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
@@ -195,7 +198,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * Fetch a user by email, but only if the account may still authenticate — same
      * `AUTHENTICATABLE_FILTER` as `findAuthenticatableById`. WITH credential fields
      * (`select: false`), since the caller is always about to compare a password hash.
-     * `login` (`account/services/authentication.ts`) is the only caller.
+     * `login` (`account/services/login.ts`) is the only caller.
      */
     findAuthenticatableByEmail: (email: string) =>
         userModel
@@ -280,6 +283,34 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .exec()
             .then(({ modifiedCount }) => modifiedCount);
     },
+
+    /**
+     * Forget the previous address of every account whose undo window has closed: it holds a
+     * `previousEmail` and no live token of the undo type. The address is only there for that link,
+     * so keeping it past the link is personal data kept for nothing. Nightly job only: an
+     * unindexed whole-collection `updateMany`, like `tokenRemoveExpired`.
+     *
+     * @param undoTokenType - the `tokens.type` of the undo link; passed in because it belongs to
+     *   `account`, which this module may not import.
+     * @returns how many accounts were cleared
+     */
+    clearLapsedPreviousEmail: (undoTokenType: string) =>
+        userModel
+            .updateMany(
+                {
+                    previousEmail: { $exists: true },
+                    // `$not` + `$elemMatch`: no entry of that type that has not yet expired.
+                    tokens: {
+                        $not: {
+                            $elemMatch: { type: undoTokenType, expiration: { $gt: new Date() } }
+                        }
+                    }
+                },
+                { $unset: { previousEmail: '' } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount),
 
     /**
      * The holder of this token value, whatever kind it is. Deliberately untyped by kind, unlike
@@ -528,6 +559,29 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             )
             .exec()
             .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Apply one request's 2FA changes as a single atomic update: per-method field writes, entries
+     * added or dropped, and the account-level fields of the same change — see
+     * `./two-factor-write.ts` for why this is not a `save()`.
+     *
+     * `timestamps: false`: a factor's bookkeeping is not an edit of the account, so it neither
+     * moves `updatedAt` nor `editRevision` (the same rule `claimTotpStep` follows).
+     *
+     * @param id - the account
+     * @param write - what the request changed, from `planTwoFactorWrite`
+     * @returns whether the account still existed to take the write
+     */
+    writeTwoFactor: (id: string, write: TwoFactorWrite) =>
+        userModel
+            // `updatePipeline: true` is Mongoose's opt-in to an aggregation-pipeline update:
+            // https://mongoosejs.com/docs/api/model.html#Model.updateOne()
+            .updateOne({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
+                timestamps: false,
+                updatePipeline: true
+            })
+            .exec()
+            .then(({ matchedCount }) => matchedCount > 0),
 
     /**
      * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in

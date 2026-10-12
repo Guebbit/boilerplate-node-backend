@@ -25,7 +25,7 @@ export const totpMethod: TwoFactorMethodHandler = {
         // otplib: a fresh base32 TOTP secret, one per enrollment attempt.
         // https://github.com/yeojz/otplib
         const secret = generateSecret();
-        // A hydrated subdocument always has its `_id` by now (`two-factor.ts` pushes it first).
+        // A hydrated subdocument always has its `_id` by now (`two-factor-enrollment.ts` pushes it first).
         entry.secret = encryptTotpSecret(secret, String(entry._id));
         // A fresh secret means a fresh replay window: the old high-water mark belongs to a
         // secret that no longer exists, and keeping it would refuse the first valid code.

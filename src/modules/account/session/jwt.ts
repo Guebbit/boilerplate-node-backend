@@ -233,24 +233,57 @@ const recordActivity = (userId: string): Promise<void> =>
     });
 
 /**
+ * A first session was about to be minted for an account whose second factor is armed, on a proof
+ * that carries none. No login path should reach the mint like this: each branches to the
+ * challenge first, so this is the refusal that catches the path that forgot to.
+ */
+export class SecondFactorRequiredError extends Error {
+    /** @param userId - the account a session was refused for. */
+    constructor(public readonly userId: string) {
+        super('A second factor is armed for this account and the proof carries none');
+        this.name = 'SecondFactorRequiredError';
+    }
+}
+
+/**
+ * Whether a session being minted is the account's first for this proof, or replaces one the caller
+ * already holds. Only a first session is checked for a second factor: a re-mint continues a
+ * session that passed it.
+ */
+export type SessionMint = 'first' | 'remint';
+
+/** The `amr` value a completed second factor adds — see `postLoginTwoFactor`. */
+const SECOND_FACTOR_AMR = 'otp';
+
+/**
  * Create a refresh token, sign it, and persist it on the user document.
+ *
+ * This is the choke point of every login path: a FIRST session for an account with a second
+ * factor armed is refused unless `amr` carries it, so a path that forgot to branch to the
+ * challenge cannot hand out a session. See docs/modules/account-sessions.md#the-mint-guard.
  *
  * @param id - user ID
  * @param remember - the ticked "remember me" tier; absent for a browser-session login, whose token
  *   still lives for the `short` tier
  * @param amr - how `auth_time` was proved — `['pwd']` unless a 2FA login supplies `['pwd', 'otp']`
+ * @param mint - `'first'` (the default) for a login or signup, `'remint'` for a re-mint that
+ *   replaces a session the caller already holds
  * @returns updated user document
+ * @throws {SecondFactorRequiredError} for a first session on a 2FA account without the factor in `amr`
  */
 export const createRefreshToken = (
     id: string,
     remember?: RefreshTokenExpiryTime,
-    amr: string[] = ['pwd']
+    amr: string[] = ['pwd'],
+    mint: SessionMint = 'first'
 ) =>
     userService
         // Credentials included: minting a session pushes onto this document's `tokens`.
         .findByIdWithCredentials(id)
         .then((user) => {
             if (!user || !isAuthenticatable(user)) throw new Error('User not found');
+            if (mint === 'first' && user.twoFactorEnabledAt && !amr.includes(SECOND_FACTOR_AMR))
+                throw new SecondFactorRequiredError(id);
             /*
              * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
              * minted in the same second different. The payload is `{ id }` plus JWT's own

@@ -130,7 +130,7 @@ export const resetRequestEmail = (locale: string, name: string, token: string): 
 /**
  * Account setup: an admin created this account with no password, and asked to have the user set
  * one themselves. Same link, same token type and TTL as {@link resetRequestEmail} — see
- * `authentication.ts`'s `requestAccountSetup` — only the copy differs: the recipient did not lose a
+ * `password-reset-request.ts`'s `requestAccountSetup` — only the copy differs: the recipient did not lose a
  * password, they never had one.
  */
 export const setupRequestEmail = (locale: string, name: string, token: string): EmailContent => {
