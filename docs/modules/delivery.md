@@ -290,6 +290,23 @@ cancelled **one fulfillment order at a time**, by [`returns`](./returns.md#cance
 only module that already reaches all of them. This module only marks the lines:
 `cancelRemainder(fulfillmentOrderId, orderId, session)`, called inside `returns`' own transaction.
 
+## The order timeline
+
+Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in its own transaction
+(`services/announce.ts`), beside the outbox event it already wrote.
+
+| Row                    | Written when                                              | Carries                                                      |
+| ---------------------- | --------------------------------------------------------- | ------------------------------------------------------------ |
+| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)             | shipment and fulfillment order ids, `number`, `trackingCode` |
+| `shipment_delivered`   | a shipment arrives                                        | the same ids                                                 |
+| `fulfillment_held`     | staff hold a fulfillment order (staff only)               | `reason` code; never the note                                |
+| `fulfillment_released` | staff, or an allocation of stock, release it (staff only) | fulfillment order id                                         |
+| `remainder_cancelled`  | `returns` cancels what had not shipped                    | fulfillment order id                                         |
+
+A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
+shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). Holds
+born with a fulfillment order (`awaiting_stock`) write no row yet.
+
 ## Routes and events
 
 | Route                                                      | Key                   | Answers                                                             |

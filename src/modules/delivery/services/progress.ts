@@ -78,24 +78,26 @@ const expectMoved = (moved: OrderDocument | null): void => {
  * @param summary - where the goods stand
  * @param at - the instant the clock starts for a completed order: the last arrival, or the cancel
  * @param session - the act's transaction
+ * @param actor - the staff member whose act this is, for the order's timeline; absent for the system
  */
 export const settleOrder = (
     orderId: string,
     status: OrderStatus,
     summary: FulfillmentReport,
     at: Date,
-    session: ClientSession
+    session: ClientSession,
+    actor?: string | null
 ): Promise<void> => {
     if (summary.remaining > 0 || !summary.shipped) return Promise.resolve();
 
     if (summary.undelivered > 0)
         return status === OrderStatus.processing
-            ? orderService.markShipped(orderId, session).then(expectMoved)
+            ? orderService.markShipped(orderId, session, actor).then(expectMoved)
             : Promise.resolve();
 
     if (status === OrderStatus.processing)
-        return orderService.markFulfilmentComplete(orderId, at, session).then(expectMoved);
+        return orderService.markFulfilmentComplete(orderId, at, session, actor).then(expectMoved);
     if (status === OrderStatus.shipped)
-        return orderService.markDelivered(orderId, at, session).then(expectMoved);
+        return orderService.markDelivered(orderId, at, session, actor).then(expectMoved);
     return Promise.resolve();
 };

@@ -103,7 +103,12 @@ export const recordOfflinePayment = async (
     if (!upserted) return notPayable();
     const { payment, created } = upserted;
 
-    const settlement = await settlePayment(payment, { status: 'succeeded' });
+    const settlement = await settlePayment(
+        payment,
+        { status: 'succeeded' },
+        false,
+        context.caller.id
+    );
     // Same refusal `confirmPayment`/`syncPayment` answer with when their own settlement loses
     // the order: the money moved but there was no order left to keep it for.
     if (settlement.orderLost) return settlementResponse(settlement);

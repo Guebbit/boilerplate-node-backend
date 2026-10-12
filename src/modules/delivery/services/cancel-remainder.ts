@@ -15,7 +15,7 @@ import { ERROR_CODES } from '@api/error-codes';
 import { remainderLines, statusOfLines, withRemainderCancelled } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository } from '../repository';
-import { announceCancelled } from './announce';
+import { announceCancelled, recordRemainderCancelled } from './announce';
 import { refuse, runAct } from './act';
 import { reportProgress, settleOrder } from './progress';
 
@@ -88,6 +88,7 @@ export const cancelRemainder = async (
 
     const progress = await reportProgress(orderId, session);
     await settleOrder(orderId, progress.order.status, progress.summary, new Date(), session);
+    await recordRemainderCancelled(cancelled, session);
     await announceCancelled(cancelled, session);
     return { ok: true, lines };
 };

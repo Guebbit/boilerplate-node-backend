@@ -32,6 +32,16 @@ jest.mock('@kernel/outbox', () => ({
     announceInTransaction: (write: (session: unknown) => Promise<unknown>) => write({})
 }));
 
+/*
+ * Opening a refund is a transaction too (its timeline row commits with the record), so the
+ * transaction is replaced for the same reason.
+ */
+jest.mock('@infrastructure/runtime/database', () => ({
+    __esModule: true,
+    ...jest.requireActual('@infrastructure/runtime/database'),
+    withTransaction: (work: (session: unknown) => Promise<unknown>) => work({})
+}));
+
 afterEach(() => jest.restoreAllMocks());
 
 /** A `succeeded` payment carrying no `providerRef` — the impossible, corrupted state under test. */
@@ -63,6 +73,7 @@ describe('performRefund — a succeeded payment with no providerRef', () => {
         jest.spyOn(paymentRepository, 'updateStatusIfIn').mockResolvedValue(refunded);
         // The stamp is part of the settlement; this suite has no database for it to write to.
         jest.spyOn(orderService, 'markPaymentStatus').mockResolvedValue(true);
+        jest.spyOn(orderService, 'appendTimeline').mockResolvedValue(undefined);
 
         // Imported after the mocks above are in place, so `performRefund` closes over the
         // replaced `recordAudit`.

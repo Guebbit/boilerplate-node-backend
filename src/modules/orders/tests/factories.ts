@@ -197,9 +197,12 @@ export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefine
  * An order's timeline as an administrator reads it: every row, actor and staff text included.
  *
  * @param orderId - the order
+ * @param typePrefix - keeps only the types starting with it (`refund`, `return_`); every row when omitted
  */
-export const timelineOf = (orderId: string): Promise<OrderTimelineEntry[]> =>
-    readTimeline(orderId, asAdmin());
+export const timelineOf = (orderId: string, typePrefix = ''): Promise<OrderTimelineEntry[]> =>
+    readTimeline(orderId, asAdmin()).then((rows) =>
+        rows.filter(({ type }) => type.startsWith(typePrefix))
+    );
 
 /**
  * The last `status_overridden` row of an order's timeline, as an administrator reads it.

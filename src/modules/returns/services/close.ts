@@ -27,13 +27,33 @@ import { syncReturnStatus } from './projection';
 export const closeReturn = (id: string): Promise<ReturnDocument | null> =>
     announceInTransaction(
         (session) =>
-            returnRepository.claimStatus(
-                id,
-                CLOSABLE_RETURN_STATUSES,
-                'closed',
-                { closedAt: new Date() },
-                session
-            ),
+            returnRepository
+                .claimStatus(
+                    id,
+                    CLOSABLE_RETURN_STATUSES,
+                    'closed',
+                    { closedAt: new Date() },
+                    session
+                )
+                // The order's timeline row commits with the move; a lost race writes none.
+                .then((closed) =>
+                    closed
+                        ? orderService
+                              .appendTimeline(
+                                  String(closed.orderId),
+                                  {
+                                      type: 'return_closed',
+                                      data: {
+                                          returnId: id,
+                                          refundAmount: closed.refundAmount ?? 0,
+                                          currency: closed.currency
+                                      }
+                                  },
+                                  session
+                              )
+                              .then(() => closed)
+                        : closed
+                ),
         (closed) => ({
             name: RETURN_CLOSED,
             payload: {

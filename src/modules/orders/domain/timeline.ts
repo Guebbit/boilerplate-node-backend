@@ -64,8 +64,8 @@ export const isBuyerVisible = (type: OrderTimelineType): boolean =>
 export interface TimelineEntryInput {
     /** What happened. */
     type: OrderTimelineType;
-    /** The account that made the change: absent for the system. */
-    actor?: string | undefined;
+    /** The account that made the change, as `caller.id` gives it: absent for the system. */
+    actor?: string | null | undefined;
     /** Free text `orders` owns, such as an override's reason. Never a sibling module's text. */
     text?: string | undefined;
     /** What the type needs to say; scalars only, so a row stays small and exportable. */

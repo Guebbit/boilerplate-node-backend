@@ -65,7 +65,7 @@ const markSystemMove = (
     orderId: string,
     event: 'start' | 'ship',
     session?: ClientSession,
-    actor?: string
+    actor?: string | null
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS[event];
     return announceMove(
@@ -106,7 +106,7 @@ const markSystemMove = (
 export const markPaid = (
     orderId: string,
     paymentMethod?: 'card',
-    by: { actor?: string | undefined; method?: string | undefined } = {}
+    by: { actor?: string | null | undefined; method?: string | undefined } = {}
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS.pay;
     return announceInTransaction(
@@ -138,7 +138,7 @@ export const markPaid = (
 export const markProcessing = (
     orderId: string,
     session?: ClientSession,
-    actor?: string
+    actor?: string | null
 ): Promise<OrderDocument | null> => markSystemMove(orderId, 'start', session, actor);
 
 /**
@@ -154,7 +154,7 @@ export const markProcessing = (
 export const markShipped = (
     orderId: string,
     session?: ClientSession,
-    actor?: string
+    actor?: string | null
 ): Promise<OrderDocument | null> => markSystemMove(orderId, 'ship', session, actor);
 
 /**
@@ -163,7 +163,10 @@ export const markShipped = (
  * @param withdrawUntil - the frozen deadline
  * @param actor - the person whose act delivered the order, if any
  */
-const deliveredRow = (withdrawUntil: Date, actor: string | undefined): TimelineEntryInput => ({
+const deliveredRow = (
+    withdrawUntil: Date,
+    actor: string | null | undefined
+): TimelineEntryInput => ({
     type: 'delivered',
     actor,
     data: { withdrawUntil: withdrawUntil.toISOString() }
@@ -187,7 +190,7 @@ export const markDelivered = (
     orderId: string,
     deliveredAt: Date,
     session?: ClientSession,
-    actor?: string
+    actor?: string | null
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS.deliver;
     const withdrawUntil = withdrawUntilFrom(deliveredAt, withdrawalPeriodDays());
@@ -220,7 +223,7 @@ export const markFulfilmentComplete = (
     orderId: string,
     at: Date,
     session: ClientSession,
-    actor?: string
+    actor?: string | null
 ): Promise<OrderDocument | null> =>
     orderRepository.findInSession(orderId, session).then((order) => {
         const { from } = ORDER_EVENTS.fulfilmentComplete;

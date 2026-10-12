@@ -29,6 +29,7 @@ import {
     createOrder,
     forceOrderStatus,
     readOrder,
+    timelineOf,
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { withdrawUntilFrom } from '@modules/orders';
@@ -336,6 +337,21 @@ const staffCancels = (fixture: Fixture, role: 'moderator' | 'warehouse') =>
         role === 'moderator' ? asModerator() : asWarehouse(),
         callerContextAs(role)
     );
+
+describe('the order timeline of a cancelled remainder', () => {
+    it('says the remainder was cancelled, and leaves the return rows to the returns it is not', async () => {
+        const fixture = await partlyShipped();
+
+        created(await buyerCancels(fixture));
+
+        const rows = await timelineOf(fixture.orderId);
+        expect(rows.map(({ type }) => type)).toContain('remainder_cancelled');
+        expect(rows.find(({ type }) => type === 'remainder_cancelled')?.data).toEqual({
+            fulfillmentOrderId: fixture.fulfillmentOrderId
+        });
+        expect(rows.map(({ type }) => type)).not.toContain('return_requested');
+    });
+});
 
 describe('staff cancelling what has not shipped', () => {
     it('needs the refund key — a moderator holds it', async () => {

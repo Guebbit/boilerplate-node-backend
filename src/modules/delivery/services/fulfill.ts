@@ -43,10 +43,12 @@ interface Fulfilled {
  * The act itself, in its transaction.
  * @param fulfillmentOrderId - the digital fulfillment order
  * @param session - the act's transaction
+ * @param actor - the staff member fulfilling it, for the order's timeline
  */
 const fulfillAct = async (
     fulfillmentOrderId: string,
-    session: ClientSession
+    session: ClientSession,
+    actor: string | null | undefined
 ): Promise<Fulfilled> => {
     const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
         fulfillmentOrderId,
@@ -77,9 +79,9 @@ const fulfillAct = async (
         session
     );
     const progress = await reportProgress(orderId, session);
-    await settleOrder(orderId, progress.order.status, progress.summary, at, session);
-    await announceShipped(shipment, session);
-    await announceDelivered(shipment, session);
+    await settleOrder(orderId, progress.order.status, progress.summary, at, session, actor);
+    await announceShipped(shipment, session, actor);
+    await announceDelivered(shipment, session, actor);
 
     return { shipment, order };
 };
@@ -105,26 +107,26 @@ export const fulfillFulfillmentOrder = (
 
             return orderService.outrankedRefusalFor(order, context).then((outranked) => {
                 if (outranked) return outranked;
-                return runAct((session) => fulfillAct(fulfillmentOrderId, session)).then(
-                    (result) => {
-                        if (result.refused) return result.reject;
-                        const { shipment } = result.value;
-                        return orderService
-                            .refreshShelf(shipment.lines.map(({ productId }) => productId))
-                            .then(() => notifyDelivered(String(shipment.orderId), shipment))
-                            .then(() => {
-                                recordAudit(context, {
-                                    action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,
-                                    outcome: 'success',
-                                    targetType: 'order',
-                                    targetId: String(shipment.orderId),
-                                    metadata: { shipmentId: String(shipment._id) }
-                                });
-                            })
-                            .then(() => viewShipment(shipment, result.value.order, authContext))
-                            .then((view) => generateSuccess(view));
-                    }
-                );
+                return runAct((session) =>
+                    fulfillAct(fulfillmentOrderId, session, context.caller.id)
+                ).then((result) => {
+                    if (result.refused) return result.reject;
+                    const { shipment } = result.value;
+                    return orderService
+                        .refreshShelf(shipment.lines.map(({ productId }) => productId))
+                        .then(() => notifyDelivered(String(shipment.orderId), shipment))
+                        .then(() => {
+                            recordAudit(context, {
+                                action: deliveryAuditActions.ADMIN_ORDER_FULFILLED,
+                                outcome: 'success',
+                                targetType: 'order',
+                                targetId: String(shipment.orderId),
+                                metadata: { shipmentId: String(shipment._id) }
+                            });
+                        })
+                        .then(() => viewShipment(shipment, result.value.order, authContext))
+                        .then((view) => generateSuccess(view));
+                });
             });
         });
     });

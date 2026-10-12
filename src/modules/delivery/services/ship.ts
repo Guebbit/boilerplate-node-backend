@@ -144,7 +144,11 @@ const shipAct = async (
         session
     );
     // A forced first shipment from `paid` makes the `start` move itself, as it always has.
-    if (order.status === OrderStatus.paid && !(await orderService.markProcessing(orderId, session)))
+    const actor = context.caller.id;
+    if (
+        order.status === OrderStatus.paid &&
+        !(await orderService.markProcessing(orderId, session, actor))
+    )
         refuse(409, ERROR_CODES.ORDER_NOT_PAID, 'delivery.not-paid');
 
     const progress = await reportProgress(orderId, session);
@@ -153,7 +157,8 @@ const shipAct = async (
         progress.order.status,
         progress.summary,
         shipment.shippedAt,
-        session
+        session,
+        actor
     );
     if (forced)
         await orderService.recordForcedFulfilment(
@@ -166,7 +171,7 @@ const shipAct = async (
             },
             session
         );
-    await announceShipped(shipment, session);
+    await announceShipped(shipment, session, actor);
 
     return { shipment, order, remainingUnits: progress.summary.remaining };
 };

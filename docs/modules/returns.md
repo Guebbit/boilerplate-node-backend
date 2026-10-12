@@ -346,6 +346,16 @@ is the one that never refunds twice and never splits it:
 | Two at once  | decided under the per-order lock (`ReturnOrderLock`): exactly one is last. A receipt takes the lock too                              |
 | Never twice  | each cancel and return stores the delivery inside its refund; the next is quoted on what is still owed                               |
 
+## The order timeline
+
+A return writes `return_requested`, `return_approved` (a withdrawal is opened already approved, so
+both at once), `return_declined`, `return_received` and `return_closed` on the order's
+[timeline](./orders.md#the-timeline), each in the transaction of the move it narrates. A row holds
+the return's id, the reason code and, for received and closed, the refund amount. The customer's
+`note` and staff's `declineReason` are never copied: `reap:returns` owns their clock. A withdrawal
+before dispatch and a cancelled remainder write no return rows, since the order's `cancelled` and
+delivery's `remainder_cancelled` already say it.
+
 ## The options read
 
 `GET /returns/options?orderId=` is the server's answer to "what can I still return, and what can I
