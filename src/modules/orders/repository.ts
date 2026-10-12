@@ -18,12 +18,14 @@ import type {
     OrderReference,
     OrderStatusOverride
 } from './model';
+import { paymentStatusFilter, returnStatusFilter } from './domain';
 import type { StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { encryptOrderPii } from './pii';
 import { ANONYMIZED_EMAIL } from './domain/anonymization';
 import { OrderStatus } from '@types';
+import type { OrderPaymentStatus, OrderReturnStatus } from '@types';
 import type { Order } from '@types';
 import {
     createRepository,
@@ -51,7 +53,8 @@ const ORDER_SORTABLE = {
     createdAt: 'createdAt',
     status: 'status',
     email: 'email',
-    payBy: 'payBy'
+    payBy: 'payBy',
+    paidAt: 'paidAt'
 };
 
 /** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
@@ -67,6 +70,10 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
         },
         exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
         presence: { deleted: 'deletedAt' },
+        dateRanges: {
+            createdAt: { min: 'createdFrom', max: 'createdTo' },
+            paidAt: { min: 'paidFrom', max: 'paidTo' }
+        },
         sortable: ORDER_SORTABLE
     }
 });
@@ -107,6 +114,22 @@ const withNormalizedEmailFilter = (filters: object): object => {
 };
 
 /**
+ * The declared filters, plus the two derived statuses mapped back to the stored fields behind
+ * them. `$and`, so the two cannot overwrite each other's `paymentStatus`/`paidAt` keys.
+ *
+ * @param filters - the validated filter bag
+ */
+const withProjectionFilters = (filters: object): Record<string, unknown> => {
+    const bag = filters as { paymentStatus?: OrderPaymentStatus; returnStatus?: OrderReturnStatus };
+    const derived = [
+        ...(bag.paymentStatus ? [paymentStatusFilter(bag.paymentStatus)] : []),
+        ...(bag.returnStatus ? [returnStatusFilter(bag.returnStatus)] : [])
+    ];
+    const declared = base.buildWhere(withNormalizedEmailFilter(filters));
+    return derived.length > 0 ? { $and: [declared, ...derived] } : declared;
+};
+
+/**
  * Filter → count → page → normalize, over the aggregation framework. `$match` is built from the
  * same declared spec the other repositories use, so id coercion happens before the pipeline is
  * assembled — unlike `find()`, `$match` doesn't cast. `async` so `buildWhere`'s synchronous
@@ -121,7 +144,7 @@ const search = async (
     // `withScope`, not a spread: the scope is the authorization boundary, and a spread lets a
     // client filter on the same key (`userId`) overwrite it — or the scope's `$or` overwrite the
     // filter's. Both must match.
-    const match = withScope(base.buildWhere(withNormalizedEmailFilter(filters)), scope);
+    const match = withScope(withProjectionFilters(filters), scope);
 
     // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips

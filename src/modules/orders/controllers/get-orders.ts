@@ -27,12 +27,12 @@ const searchOrdersQuerySchema = SearchOrdersBody.extend({
 /**
  * GET /orders
  * List/search orders via query parameters or request body.
- * Non-admin users are automatically scoped to their own orders; the userId filter is ignored for non-admin callers.
+ * A caller holding only `orders.self.read` is scoped to their own orders and the userId filter is ignored; `orders.any.read` reads every order.
  */
 export const getOrders = createSearchController({
     entity: 'orders',
     schema: searchOrdersQuerySchema,
-    // Non-admin callers cannot filter by arbitrary userId; orderService.callerScope enforces their
+    // A caller without `orders.any.read` cannot filter by arbitrary userId; orderService.callerScope enforces their
     // own. `orders.any.read` by name, asked of the held KEYS rather than of CASL: `holdsKey`
     // answers true for `orders.self.read` too, since both are `read` on `Order`.
     extendInput: (input, request) => ({

@@ -269,6 +269,12 @@ second call silent.
   no addresses). The staff payments list uses it to name its rows.
 - `orderService.findOwedRefunds(cutoff, limit)` lists orders cancelled after payment whose refund
   is still owed: the payments page's needs-attention read.
+- `GET /orders` and `POST /orders/search` filter by `createdFrom`/`createdTo` and `paidFrom`/`paidTo`
+  (inclusive instants; an unpaid order has no `paidAt`, so no paid bound matches it), by
+  `paymentStatus` and `returnStatus`, and sort by `paidAt`. The two statuses are derived on read,
+  so each filter value is mapped back to the stored fields behind it (`domain/projections.ts`); the
+  integration suite checks every value both ways. `paidAt` is on the wire: the buyer's own fact.
+  Scope stays the permission key: `orders.self.read` alone sees its own orders.
 - `GET /orders` sorts by `payBy` (index `{status, payBy}`), which is how the Awaiting-transfer tab
   reads: `?paymentMethod=bank_transfer&status=pending&sort=payBy`.
 

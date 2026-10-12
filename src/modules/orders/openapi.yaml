@@ -31,7 +31,7 @@ paths:
             summary: List orders (paginated)
             description: |
                 Returns a paginated list of orders.
-                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+                A caller holding `orders.self.read` alone sees their own orders, and the `userId` filter is ignored for them; `orders.any.read` reads every order and may narrow by `userId`.
             operationId: listOrders
             security:
                 - bearerAuth: []
@@ -72,6 +72,27 @@ paths:
                       empty page for `true`.
                   schema:
                       type: boolean
+                - name: createdFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: createdTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paidFrom
+                  in: query
+                  description: Orders paid at or after this instant. Unpaid orders never match.
+                  schema: { type: string, format: date-time }
+                - name: paidTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paymentStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderPaymentStatus'
+                - name: returnStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderReturnStatus'
             responses:
                 '200':
                     description: Orders page
@@ -171,7 +192,7 @@ paths:
             summary: Search orders (DTO-friendly)
             description: |
                 Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
-                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+                A caller holding `orders.self.read` alone sees their own orders, and the `userId` filter is ignored for them; `orders.any.read` reads every order and may narrow by `userId`.
             operationId: searchOrders
             x-alias-of: listOrders
             security:
@@ -456,10 +477,10 @@ components:
         OrderSort:
             type: array
             minItems: 1
-            maxItems: 4
+            maxItems: 5
             items:
                 type: string
-                enum: [createdAt, -createdAt, status, -status, email, -email, payBy, -payBy]
+                enum: [createdAt, -createdAt, status, -status, email, -email, payBy, -payBy, paidAt, -paidAt]
 
         # ---------- orders — the schemas only this module's paths reference. ----------
         OrderEnvelope:
@@ -552,6 +573,16 @@ components:
                 # gets an empty page for `true`.
                 deleted:
                     type: boolean
+                # Instants, inclusive at both ends. `paidFrom`/`paidTo` never match an unpaid order.
+                createdFrom: { type: string, format: date-time }
+                createdTo: { type: string, format: date-time }
+                paidFrom: { type: string, format: date-time }
+                paidTo: { type: string, format: date-time }
+                # Each value maps back to the stored fields behind it.
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
 
         CreateOrderRequest:
             type: object
@@ -1176,6 +1207,12 @@ components:
                 # See docs/theory/tactical-ddd.md.
                 actions:
                     $ref: '#/components/schemas/OrderActions'
+                # When the order reached `paid`: the buyer's own fact, and the date a sale is
+                # counted on. Absent while unpaid. An offline payment's is when the admin recorded
+                # it, not when the money arrived.
+                paidAt:
+                    type: string
+                    format: date-time
                 createdAt:
                     type: string
                     format: date-time

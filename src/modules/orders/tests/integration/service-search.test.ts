@@ -8,7 +8,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, deleteProduct } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, orderRepository, toOrderItem } from '@modules/orders/tests/factories';
 import * as orderService from '@modules/orders/services';
 
 setupTestDb();
@@ -352,5 +352,88 @@ describe('orderService.findManyByIds', () => {
             { id: String(order._id), orderNumber: order.orderNumber, email: order.email }
         ]);
         expect(await orderService.findManyByIds([])).toEqual([]);
+    });
+});
+
+/** One order per case, in a fresh user's name. */
+const seed = async (extras: Parameters<typeof createOrder>[2]) => {
+    const user = await createUser({ email: `buyer${String(Math.random())}@example.com` });
+    const product = await createProduct({ price: 5 });
+    return createOrder(user, [toOrderItem(product, 1)], extras);
+};
+
+/** The ids a search answers, sorted so the comparison ignores order. */
+const sortedIds = (filters: Parameters<typeof orderService.search>[0]) =>
+    orderService.search(filters).then(({ items }) => items.map((item) => item.id).toSorted());
+
+/** The ids a search answers, in the order it answered them. */
+const idsInOrder = (filters: Parameters<typeof orderService.search>[0]) =>
+    orderService.search(filters).then(({ items }) => items.map((item) => item.id));
+
+describe('orderService.search — the staff list filters', () => {
+    it('narrows by creation date and by paid date, one-sided or both', async () => {
+        const jan = await seed({
+            createdAt: '2026-01-10T10:00:00Z',
+            paidAt: '2026-01-11T10:00:00Z'
+        });
+        const mar = await seed({
+            createdAt: '2026-03-10T10:00:00Z',
+            paidAt: '2026-03-11T10:00:00Z'
+        });
+        const unpaid = await seed({ createdAt: '2026-02-10T10:00:00Z' });
+
+        expect(await sortedIds({ createdFrom: '2026-02-01T00:00:00Z' })).toEqual(
+            [String(mar._id), String(unpaid._id)].toSorted()
+        );
+        expect(await sortedIds({ createdTo: '2026-02-01T00:00:00Z' })).toEqual([String(jan._id)]);
+        expect(
+            await sortedIds({ paidFrom: '2026-01-01T00:00:00Z', paidTo: '2026-02-01T00:00:00Z' })
+        ).toEqual([String(jan._id)]);
+        // An unpaid order carries no `paidAt`, so no paid-date bound can match it.
+        expect(await sortedIds({ paidFrom: '2020-01-01T00:00:00Z' })).not.toContain(
+            String(unpaid._id)
+        );
+    });
+
+    it('finds, for every paymentStatus and returnStatus, exactly the orders that read as it', async () => {
+        const unpaid = await seed({});
+        const paid = await seed({ paidAt: '2026-01-11T10:00:00Z' });
+        const refunded = await seed({ paidAt: '2026-01-11T10:00:00Z' });
+        await orderRepository.setProjection(String(refunded._id), {
+            paymentStatus: 'refunded',
+            returnStatus: 'returned'
+        });
+        const partial = await seed({ paidAt: '2026-01-11T10:00:00Z' });
+        await orderRepository.setProjection(String(partial._id), {
+            paymentStatus: 'partially_refunded',
+            returnStatus: 'requested'
+        });
+
+        expect(await idsInOrder({ paymentStatus: 'unpaid' })).toEqual([String(unpaid._id)]);
+        expect(await idsInOrder({ paymentStatus: 'paid' })).toEqual([String(paid._id)]);
+        expect(await idsInOrder({ paymentStatus: 'refunded' })).toEqual([String(refunded._id)]);
+        expect(await idsInOrder({ paymentStatus: 'partially_refunded' })).toEqual([
+            String(partial._id)
+        ]);
+        expect(await idsInOrder({ returnStatus: 'returned' })).toEqual([String(refunded._id)]);
+        expect(await sortedIds({ returnStatus: 'none' })).toEqual(
+            [String(unpaid._id), String(paid._id)].toSorted()
+        );
+        // Both together narrow, never widen.
+        expect(await idsInOrder({ paymentStatus: 'refunded', returnStatus: 'requested' })).toEqual(
+            []
+        );
+    });
+
+    it('sorts by paidAt and sends paidAt on the wire', async () => {
+        const late = await seed({ paidAt: '2026-05-01T00:00:00Z' });
+        const early = await seed({ paidAt: '2026-04-01T00:00:00Z' });
+
+        const { items } = await orderService.search({ sort: ['paidAt'] });
+
+        expect(items.map((item) => item.id)).toEqual([String(early._id), String(late._id)]);
+        // As the HTTP layer serializes it: the wire carries an ISO string.
+        const [first] = items;
+        expect(JSON.stringify(first.paidAt)).toBe('"2026-04-01T00:00:00.000Z"');
     });
 });

@@ -110,7 +110,7 @@ export type OrderPendingEffect = (typeof ORDER_PENDING_EFFECTS)[number];
 
 /**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
- * redeclares `deletedAt`/`payBy` as `Date` (the contract types both as ISO strings).
+ * redeclares `deletedAt`/`payBy`/`paidAt` as `Date` (the contract types both as ISO strings).
  * `totalItems`, `totalQuantity`, `totalPrice` and `transferInstructions` are omitted rather than
  * inherited — required or present on the wire but never persisted, so declaring them here would
  * claim a stored field that doesn't exist; `applyOrderTransform` derives all four at
@@ -131,6 +131,7 @@ export interface OrderDocument
             | 'updatedAt'
             | 'deletedAt'
             | 'payBy'
+            | 'paidAt'
             | 'transferInstructions'
             | 'paymentStatus'
             | 'fulfillmentStatus'
@@ -174,7 +175,7 @@ export interface OrderDocument
     /**
      * The moment `services/status.ts#markPaid` moved this order to `paid` — written in the SAME
      * conditional write as the status move, by whichever caller wins that transition, never
-     * recomputed afterwards. Internal only: never on the wire (see `applyOrderTransform`'s `omit`).
+     * recomputed afterwards. Published as `Order.paidAt`: the buyer's own fact, and the date the stats count a sale on.
      *
      * The proxy every cross-module read uses instead of asking `invoicing` whether an invoice
      * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/remove.ts#remove`'s
@@ -569,6 +570,13 @@ orderSchema.index(
  */
 orderSchema.index({ status: 1, payBy: 1 }, { name: 'orders_status_payBy' });
 /*
+ * The staff list's date ranges and the stats' `paidAt` window. `paidAt` is sparse: an unpaid order
+ * (most abandoned carts) never carries it.
+ */
+orderSchema.index({ createdAt: 1 }, { name: 'orders_createdAt' });
+orderSchema.index({ status: 1, createdAt: -1 }, { name: 'orders_status_createdAt' });
+orderSchema.index({ paidAt: 1 }, { name: 'orders_paidAt', sparse: true });
+/*
  * `GET /payments/order-by-reference`'s lookup. Unique — two orders minting the same reference
  * would make the code ambiguous about which one a transfer paid — and sparse for the same reason
  * as the two sweeps above: most orders (every `card` one) never carry this field at all.
@@ -665,9 +673,8 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * The three statuses beside `status`, resolved from what is stored — and `paidAt` stripped, since
- * this is its last reader. It is not in `omit` for that reason: `omit` runs before `after`, and the
- * `paid`/`unpaid` half of `paymentStatus` is derived from it.
+ * The three statuses beside `status`, resolved from what is stored. `paidAt` stays on the wire: the
+ * `paid`/`unpaid` half of `paymentStatus` is derived from it, and it is the buyer's own fact.
  * @param serialized - the order as it is being serialized
  */
 const applyOrderProjections = (serialized: Record<string, unknown>) => {
@@ -680,7 +687,6 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
     serialized.returnStatus = returnStatusOf(
         serialized.returnStatus as StampedReturnStatus | undefined
     );
-    delete serialized.paidAt;
 };
 
 /**
@@ -693,9 +699,7 @@ export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
     // `inactivityWarnedAt`. `statusOverrides` is staff-only history (who overrode the status, and
-    // why) — never the owning customer's to read off their own order. `paidAt` is internal
-    // bookkeeping too — see the schema field's own comment — and is stripped in
-    // `applyOrderProjections`, not here. `transferReference` is NOT
+    // why) — never the owning customer's to read off their own order. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
     omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'withdrawUntil'],

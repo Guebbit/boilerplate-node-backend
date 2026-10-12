@@ -130,14 +130,17 @@ describe('orderSchema — the embedded snapshots', () => {
 });
 
 describe('orderSchema — indexes', () => {
-    it('declares exactly the seven documented indexes, named and directed', () => {
+    it('declares exactly the ten documented indexes, named and directed', () => {
         // Names are given rather than derived, since Mongo identifies an index by name — a rename
         // leaves the old index in production. The `createdAt` DIRECTION serves "newest first"
         // from the index rather than an in-memory sort; getting it wrong is a latency incident.
         expect(indexSpecs(orderSchema)).toEqual([
             'orders_anonymizeAfter: anonymizeAfter+1',
+            'orders_createdAt: createdAt+1',
             'orders_email: email+1',
+            'orders_paidAt: paidAt+1',
             'orders_pendingEffects: pendingEffects+1, updatedAt+1',
+            'orders_status_createdAt: status+1, createdAt-1',
             'orders_status_payBy: status+1, payBy+1',
             'orders_transferReference: transferReference+1',
             'orders_userId_createdAt: userId+1, createdAt-1',
@@ -145,7 +148,7 @@ describe('orderSchema — indexes', () => {
         ]);
     });
 
-    it('declares only the reference lookup unique, and the three sparse ones sparse', () => {
+    it('declares only the reference lookup unique, and the four sparse ones sparse', () => {
         // A unique index anywhere else here would reject a customer's second order. Stated
         // explicitly because "no options" is the kind of fact that is never written down and
         // quietly acquires one. All three sparse indexes are sparse on purpose: most orders never
@@ -154,8 +157,11 @@ describe('orderSchema — indexes', () => {
         // make an incoming transfer's reference ambiguous about which one it paid.
         expect(indexOptionSpecs(orderSchema)).toEqual([
             'orders_anonymizeAfter: sparse=true',
+            'orders_createdAt: (none)',
             'orders_email: (none)',
+            'orders_paidAt: sparse=true',
             'orders_pendingEffects: sparse=true',
+            'orders_status_createdAt: (none)',
             'orders_status_payBy: (none)',
             'orders_transferReference: sparse=true, unique=true',
             'orders_userId_createdAt: (none)',

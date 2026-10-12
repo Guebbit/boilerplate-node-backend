@@ -131,6 +131,7 @@ export const makeOrder = ({
     billingAddress,
     paymentMethod,
     payBy,
+    paidAt,
     currency,
     notes,
     deletedAt,
@@ -168,6 +169,7 @@ export const makeOrder = ({
         billingAddress,
         paymentMethod,
         payBy: toDate(payBy),
+        paidAt: toDate(paidAt),
         notes,
         deletedAt: toDate(deletedAt),
         transferReference
