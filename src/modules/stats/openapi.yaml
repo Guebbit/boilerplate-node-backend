@@ -512,8 +512,8 @@ components:
             properties:
                 period:
                     $ref: '#/components/schemas/StatsPeriod'
-                customers: { type: integer, description: Accounts with at least one paid order in the period. }
-                newCustomers: { type: integer, description: Of those, accounts whose first paid order is in the period. }
+                customers: { type: integer, description: 'Accounts with at least one paid order in the period.' }
+                newCustomers: { type: integer, description: 'Of those, accounts whose first paid order is in the period.' }
                 returningCustomers: { type: integer }
                 returningRate: { type: number, format: double, minimum: 0, maximum: 1 }
 
