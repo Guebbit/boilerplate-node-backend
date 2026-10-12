@@ -172,9 +172,8 @@ export const canOverrideTo = (from: OrderStatus, to: OrderStatus, digitalOnly = 
 };
 
 /**
- * Every status an override starting FROM `from` could legally land on — the reverse of
- * {@link statusesOverridableInto}, for a caller building "what could I move this order to"
- * rather than "what could have led here".
+ * Every status an override starting FROM `from` could legally land on — for a caller building
+ * "what could I move this order to".
  * @param from - the order's current status
  * @param digitalOnly - whether every line is digital, see {@link canOverrideTo}
  * @returns every status later than `from` in the overridable sequence, in contract order
@@ -184,19 +183,6 @@ export const overridableTargetsFrom = (
     digitalOnly = false
 ): readonly OrderStatus[] =>
     OVERRIDABLE_SEQUENCE.filter((to) => canOverrideTo(from, to, digitalOnly));
-
-/**
- * Every status a forced or status-only override starting from `to` could have legally come FROM —
- * the conditional write's own `from` set, the same shape `services/status.ts`'s private
- * `markSystemMove` needs for one fixed status, but computed dynamically here since an override's
- * `from` is not fixed to one value.
- * @param to - the status being written
- * @returns every status strictly earlier than `to` in the overridable sequence
- */
-export const statusesOverridableInto = (to: OrderStatus): readonly OrderStatus[] => {
-    const toIndex = OVERRIDABLE_SEQUENCE.indexOf(to);
-    return toIndex === -1 ? [] : OVERRIDABLE_SEQUENCE.slice(0, toIndex);
-};
 
 /**
  * @param from - current status

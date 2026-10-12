@@ -375,28 +375,27 @@ const setProjection = (
 };
 
 /**
- * Move an order to `to` from any status in `from`. `from` is not one fixed status here (unlike
- * {@link updateStatusIfIn}'s normal callers): `domain/lifecycle.ts`'s `statusesOverridableInto`
- * computes the real set per call. The override's timeline row is written by the caller, in the
- * same transaction.
+ * Move an order to `to` only if it still stands at the status the caller read, so the timeline
+ * row's `from` is always the stored pre-state. The override's timeline row is written by the
+ * caller, in the same transaction.
  * @param id - the order to move
- * @param from - every status this override may legally have started from
+ * @param from - the status the caller read; the write lands only if the order is still there
  * @param to - the status being written
  * @param withdrawUntil - the withdrawal deadline to freeze in the same write, for a move into
  *   `delivered`; absent for every other destination
  * @param session - joins the write to the caller's transaction, so its outbox row rides with it
- * @returns the order as it now stands, or `null` if `id`'s current status was not in `from`
+ * @returns the order as it now stands, or `null` if `id`'s current status is no longer `from`
  */
 const applyStatusOverride = (
     id: string,
-    from: readonly OrderStatus[],
+    from: OrderStatus,
     to: OrderStatus,
     withdrawUntil?: Date,
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
-            { _id: toObjectId(id), status: { $in: [...from] } } as QueryFilter<OrderDocument>,
+            { _id: toObjectId(id), status: from } as QueryFilter<OrderDocument>,
             { $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) } },
             { returnDocument: 'after', session }
         )
@@ -774,7 +773,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     ) => Promise<OrderDocument | null>;
     applyStatusOverride: (
         id: string,
-        from: readonly OrderStatus[],
+        from: OrderStatus,
         to: OrderStatus,
         withdrawUntil?: Date,
         session?: ClientSession

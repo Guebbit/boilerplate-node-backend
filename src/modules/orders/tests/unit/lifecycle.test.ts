@@ -12,7 +12,6 @@ import {
     ORDER_EVENTS,
     canTransition,
     canOverrideTo,
-    statusesOverridableInto,
     isPayable,
     orderActionsFor,
     statusesLeadingTo,
@@ -395,19 +394,6 @@ describe('canOverrideTo — the admin override, forward only, never onto paid or
     });
 });
 
-describe("statusesOverridableInto — the conditional write's own `from` set", () => {
-    it('is every status strictly earlier than the destination, never pending', () => {
-        expect(statusesOverridableInto(OrderStatus.shipped)).toEqual([
-            OrderStatus.paid,
-            OrderStatus.processing
-        ]);
-    });
-
-    it('is empty for a destination outside the overridable sequence', () => {
-        expect(statusesOverridableInto(OrderStatus.cancelled)).toEqual([]);
-    });
-});
-
 describe('paymentSettled — true from `paid` onwards', () => {
     it('is true exactly for the statuses from `paid` on in the fulfilment sequence', () => {
         const fromPaid = FULFILMENT_SEQUENCE.slice(FULFILMENT_SEQUENCE.indexOf(OrderStatus.paid));
@@ -473,13 +459,5 @@ describe('overridableTargetsFrom — what an admin override could land on', () =
         expect(overridableTargetsFrom(OrderStatus.shipped)).toEqual([OrderStatus.delivered]);
         expect(overridableTargetsFrom(OrderStatus.delivered)).toEqual([]);
         expect(overridableTargetsFrom(OrderStatus.pending)).toEqual([]);
-    });
-
-    it('agrees with statusesOverridableInto in both directions', () => {
-        for (const from of EVERY_STATUS)
-            for (const to of EVERY_STATUS)
-                expect(overridableTargetsFrom(from).includes(to)).toBe(
-                    statusesOverridableInto(to).includes(from)
-                );
     });
 });
