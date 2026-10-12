@@ -11,6 +11,7 @@ import { productService } from '@modules/products';
 import type { ProductDocument } from '@modules/products';
 import type { Lean } from '@infrastructure/persistence/create-repository';
 import { lineAvailability, type LineAvailability } from '../domain';
+import { availabilityProductOf, preorderIdsOf } from './preorder';
 
 /** One product's shelf: the document (`null` = hard-deleted) and the units for sale. */
 export interface Shelf {
@@ -21,21 +22,31 @@ export interface Shelf {
 }
 
 /**
- * Read the shelf of every product, in two queries however many there are.
+ * Read the shelf of every product, in two queries however many there are: the catalogue first,
+ * then the ledger, which needs to know which products are preorders.
  *
  * @param productIds - the products to look up; repeats are fine
  * @returns one entry per distinct id, in the order first seen
  */
 export const readShelf = (productIds: readonly string[]): Promise<Map<string, Shelf>> => {
     const ids = [...new Set(productIds)];
-    return Promise.all([
-        productService.findManyByIds(ids),
-        inventoryService.availableFor(ids)
-    ]).then(([products, available]) => {
+    return productService.findManyByIds(ids).then((products) => {
         const byId = new Map(products.map((product) => [String(product._id), product]));
-        return new Map(
-            ids.map((id) => [id, { product: byId.get(id) ?? null, available: available.get(id) }])
+        // The catalogue says which are preorders; the ledger then answers their allowance, not the shelf.
+        const preorders = preorderIdsOf(
+            ids.map((id) => ({ productId: id, product: byId.get(id) ?? null }))
         );
+        return inventoryService
+            .availableFor(ids, preorders)
+            .then(
+                (available) =>
+                    new Map(
+                        ids.map((id) => [
+                            id,
+                            { product: byId.get(id) ?? null, available: available.get(id) }
+                        ])
+                    )
+            );
     });
 };
 
@@ -50,7 +61,8 @@ export const readShelf = (productIds: readonly string[]): Promise<Map<string, Sh
 export const shelfAvailability = (
     { product, available }: Shelf,
     quantity?: number
-): LineAvailability => lineAvailability({ product, available, quantity });
+): LineAvailability =>
+    lineAvailability({ product: availabilityProductOf(product), available, quantity });
 
 /**
  * The availability of each product as a line without a quantity: what a wishlist line reads.

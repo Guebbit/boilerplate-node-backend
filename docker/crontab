@@ -60,4 +60,8 @@
 # leave a refund owed for up to 24 hours — see docs/reference/ops.md#scheduled-jobs.
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 */5 * * * * cd /app && npm run sweep:order-effects
+# Once a day: the preorder duties are measured in days (the margin is two days wide), and both are
+# idempotent — see docs/modules/delivery.md#the-daily-sweep.
+# WARNING: owned by the delivery module — delete it when removing the module (docs/modules/delivery.md)
+20 2 * * * cd /app && npm run sweep:preorders
 30 2 * * * cd /app && npm run reap:mail-spool

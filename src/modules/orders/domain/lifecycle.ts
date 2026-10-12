@@ -15,8 +15,10 @@ import type { OrderActions } from '@types';
  * `system` is not a rank above `admin` — it is narrower: moves nobody may make by hand.
  * `withdrawal` is the consumer's right of withdrawal (Directive Art. 9): a buyer's own act, wider
  * than an ordinary customer cancel — it reaches `processing` too.
+ * `fulfilment` is a move that follows a fact `delivery` recorded about the goods. A separate actor
+ * from `system` on purpose: the reservation sweep acts as `system` and must never reach a paid order.
  */
-export type OrderActor = 'customer' | 'admin' | 'system' | 'withdrawal';
+export type OrderActor = 'customer' | 'admin' | 'system' | 'withdrawal' | 'fulfilment';
 
 /**
  * One named move of the lifecycle.
@@ -71,6 +73,16 @@ export const ORDER_EVENTS = {
         from: [OrderStatus.pending, OrderStatus.paid],
         to: OrderStatus.cancelled,
         actors: ['customer', 'admin', 'withdrawal']
+    },
+    /**
+     * A preorder's buyer was asked whether to keep waiting for a late date and never answered
+     * (FTC 16 CFR 435.2, CRD Art. 18): silence cancels, and the cancel refunds. Only `delivery`'s
+     * record of that silence makes it, and only while nothing has shipped.
+     */
+    cancelUnanswered: {
+        from: [OrderStatus.paid, OrderStatus.processing],
+        to: OrderStatus.cancelled,
+        actors: ['fulfilment']
     },
     /** A cancel once fulfilment started: staff or the right of withdrawal, never the buyer's own. */
     cancelInFulfilment: {

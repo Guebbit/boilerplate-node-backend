@@ -25,7 +25,13 @@ import {
 
 /** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(OrderStatus);
-const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'withdrawal'];
+const EVERY_ACTOR: readonly OrderActor[] = [
+    'customer',
+    'admin',
+    'system',
+    'withdrawal',
+    'fulfilment'
+];
 
 /** The two an HTTP caller can be. `system` names moves that follow a fact from outside the app. */
 const REQUEST_ACTORS: readonly OrderActor[] = ['customer', 'admin'];
@@ -177,6 +183,15 @@ describe('who may cancel', () => {
         // Goods in transit come back as a return — a flow of its own, not a rewind.
         for (const actor of EVERY_ACTOR)
             expect(canTransition(OrderStatus.shipped, OrderStatus.cancelled, actor)).toBe(false);
+    });
+
+    it("lets only `delivery`'s record of an unanswered preorder cancel a paid order for the shop", () => {
+        // The one cancel that follows a fact about the goods: nobody makes it by request.
+        expect(statusesLeadingTo(OrderStatus.cancelled, 'fulfilment')).toEqual([
+            OrderStatus.paid,
+            OrderStatus.processing
+        ]);
+        expect(ORDER_EVENTS.cancelUnanswered.actors).toEqual(['fulfilment']);
     });
 
     it("stops the system actor at `pending` — B21's race", () => {

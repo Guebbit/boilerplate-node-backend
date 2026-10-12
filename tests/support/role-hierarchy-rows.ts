@@ -395,6 +395,8 @@ export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
     'payments POST /:id/sync': 'the payer’s own step, scoped to their own payments in the service',
     'returns POST /':
         'the buyer opening a return or withdrawing on their own order; a staff remainder cancel is ranked and refused by the refund key in the returns suite',
+    'delivery POST /fulfillment-orders/:id/confirm-wait':
+        'the buyer’s own answer about their own order; staff are refused outright, not ranked',
     'api-keys POST /': 'mints a key for the caller themselves',
     'api-keys DELETE /:id': 'revoking only reduces access',
     'example POST /search': 'a read wearing a POST',

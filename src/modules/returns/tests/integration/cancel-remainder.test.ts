@@ -12,6 +12,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironment } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import {
     asAdmin,
     asCustomer,
@@ -38,14 +39,20 @@ import {
     fulfillmentOrdersOf,
     shipmentsOf
 } from '@modules/delivery/tests/factories';
-import { shipFulfillmentOrder } from '@modules/delivery';
+import { runPreorderSweep, shipFulfillmentOrder } from '@modules/delivery';
 import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
 import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import returnsModule from '../../module';
-import { approveReturn, createReturn, getReturnOptions, receiveReturn } from '../../services';
+import {
+    approveReturn,
+    cancelUnanswered,
+    createReturn,
+    getReturnOptions,
+    receiveReturn
+} from '../../services';
 import { returnRepository } from '../../repository';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -625,5 +632,162 @@ describe('returning goods that shipped in part', () => {
             expect(stored?.status).toBe(OrderStatus.cancelled);
             expect(await shipmentsOf(orderId)).toEqual([]);
         }
+    });
+});
+
+/**
+ * A paid, partly shipped order: a shirt in stock (shipped) and a preorder product whose paid
+ * fulfillment order waits `on_hold` for stock. The preorder is the remainder.
+ */
+const shirtShippedPreorderWaiting = async () => {
+    customers += 1;
+    const user = await createUser({ email: `preorder-cancel-${customers}@example.com` });
+    const shirt = await createProduct({ title: 'Shirt', price: 30, onHand: 10 });
+    const game = await createProduct({
+        title: 'Game',
+        price: 10,
+        onHand: 0,
+        releaseDate: new Date(Date.now() + 30 * 86_400_000).toISOString()
+    });
+    const gameId = String(game._id);
+    await inventoryService.setPreorderLimit(gameId, 5);
+    const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(game, 2)], {
+        shippingMethod: 'standard',
+        shippingCost: 5
+    });
+    const orderId = String(order._id);
+    await inventoryService.reserveForOrder(orderId, [
+        { productId: String(shirt._id), quantity: 1 },
+        { productId: gameId, quantity: 2, kind: 'preorder' }
+    ]);
+    const intent = await createIntent(orderId, asCustomer(user.id));
+    if (!intent.success) throw new Error('intent refused');
+    await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    await forceOrderStatus(orderId, OrderStatus.processing);
+    const all = await fulfillmentOrdersOf(orderId);
+    const ordinary = all.find(({ status }) => status === 'open');
+    const waiting = all.find(({ status }) => status === 'on_hold');
+    if (!ordinary || !waiting) throw new Error('the order did not split');
+    const shipped = await shipFulfillmentOrder(
+        String(ordinary._id),
+        {},
+        asAdmin(),
+        callerContextAs('admin')
+    );
+    if (!shipped.success) throw new Error('ship refused');
+    return { user, game, orderId, fulfillmentOrderId: String(waiting._id) };
+};
+
+describe('cancelling a preorder that is still waiting for stock', () => {
+    it('gives back the allowance, not shelf units, and refunds the preorder lines', async () => {
+        const fixture = await shirtShippedPreorderWaiting();
+        const gameId = String(fixture.game._id);
+
+        const outcome = await createReturn(
+            {
+                orderId: fixture.orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: fixture.fulfillmentOrderId
+            },
+            asCustomer(fixture.user.id),
+            testCallerContext
+        );
+
+        const cancellation = created(outcome);
+        expect(cancellation.refundAmount).toBe(20);
+        const board = await inventoryService.listPreorders();
+        expect(board.items).toMatchObject([{ productId: gameId, preordered: 0, left: 5 }]);
+        expect(await countersOf(gameId)).toMatchObject({ onHand: 0, reserved: 0 });
+    });
+});
+
+describe('a preorder wait nobody answered', () => {
+    const DAY = 86_400_000;
+
+    /** The moment the 30 days after a sweep on `day 31` have run out. */
+    const lateEnough = new Date(Date.now() + 62 * DAY);
+
+    /** Ask the buyer (day 31), then let the window close and the sweep say so (day 62). */
+    const letSilenceRunOut = async () => {
+        await runPreorderSweep(new Date(Date.now() + 31 * DAY));
+        await runPreorderSweep(lateEnough);
+    };
+
+    it('cancels what had not shipped as a no_answer return, refunds it, and gives the allowance back', async () => {
+        const fixture = await shirtShippedPreorderWaiting();
+        await letSilenceRunOut();
+
+        await cancelUnanswered(fixture.orderId, fixture.fulfillmentOrderId, lateEnough);
+
+        const [cancellation] = await returnRepository.findByOrderId(fixture.orderId);
+        expect(cancellation).toMatchObject({
+            kind: 'cancellation',
+            reason: 'no_answer',
+            status: 'closed',
+            refundAmount: 20
+        });
+        expect(await refundsOf(fixture.orderId)).toEqual([{ reason: 'cancellation', amount: 20 }]);
+        const board = await inventoryService.listPreorders();
+        expect(board.items).toMatchObject([{ preordered: 0, left: 5 }]);
+        const [, waiting] = await fulfillmentOrdersOf(fixture.orderId);
+        expect([waiting.status, waiting.cancelReason]).toEqual(['cancelled', 'no_answer']);
+    });
+
+    it('does nothing while the window is still open, so a "keep waiting" that came first wins', async () => {
+        const fixture = await shirtShippedPreorderWaiting();
+        // Asked on day 31 and not yet expired on day 40: the buyer may still answer.
+        await runPreorderSweep(new Date(Date.now() + 31 * DAY));
+
+        await cancelUnanswered(
+            fixture.orderId,
+            fixture.fulfillmentOrderId,
+            new Date(Date.now() + 40 * DAY)
+        );
+
+        expect(await returnRepository.findByOrderId(fixture.orderId)).toEqual([]);
+    });
+
+    it('cancels the whole order, refunded in full, when nothing shipped and this is its only live fulfillment order', async () => {
+        customers += 1;
+        const user = await createUser({ email: `silent-${customers}@example.com` });
+        const game = await createProduct({
+            title: 'Game',
+            price: 10,
+            onHand: 0,
+            releaseDate: new Date(Date.now() + 30 * DAY).toISOString()
+        });
+        const gameId = String(game._id);
+        await inventoryService.setPreorderLimit(gameId, 5);
+        const order = await createOrder(user, [toOrderItem(game, 2)], {
+            shippingMethod: 'standard',
+            shippingCost: 5
+        });
+        const orderId = String(order._id);
+        await inventoryService.reserveForOrder(orderId, [
+            { productId: gameId, quantity: 2, kind: 'preorder' }
+        ]);
+        const intent = await createIntent(orderId, asCustomer(user.id));
+        if (!intent.success) throw new Error('intent refused');
+        await confirmPayment(
+            intent.data.id,
+            'pm_card_visa',
+            asCustomer(user.id),
+            testCallerContext
+        );
+        const [waiting] = await fulfillmentOrdersOf(orderId);
+        await letSilenceRunOut();
+
+        await cancelUnanswered(orderId, String(waiting._id), lateEnough);
+
+        const stored = await readOrder(orderId);
+        expect(stored?.status).toBe(OrderStatus.cancelled);
+        const board = await inventoryService.listPreorders();
+        expect(board.items).toMatchObject([{ preordered: 0 }]);
+        expect(await refundsOf(orderId)).toMatchObject([{ amount: 25 }]);
+        // The fulfillment orders follow the order's cancel through the outbox.
+        await settleOutboxNudges();
+        const [cancelled] = await fulfillmentOrdersOf(orderId);
+        expect([cancelled.status, cancelled.cancelReason]).toEqual(['cancelled', 'no_answer']);
     });
 });

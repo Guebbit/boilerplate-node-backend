@@ -10,7 +10,9 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { OrderStatus } from '@types';
 import { orderService } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
-import { shipmentDeliveredEmail, shipmentShippedEmail } from '../emails';
+import { orderFrontendLink } from '@modules/orders';
+import { preorderDelayedEmail, shipmentDeliveredEmail, shipmentShippedEmail } from '../emails';
+import type { FulfillmentOrderDelayed } from '../events';
 import type { ShipmentDocument } from '../model';
 
 /**
@@ -68,4 +70,28 @@ export const notifyDelivered = (orderId: string, shipment: ShipmentDocument): Pr
             });
             void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
         });
+    });
+
+/**
+ * Tell the buyer their waiting preorder is late, or that its date came with no stock: the notice
+ * `recordNotice` just committed. Sent after the commit and best-effort, like every email here — the
+ * notice is already a fact, and the inbox row and the order page say the same.
+ *
+ * @param order - the order the fulfillment order belongs to
+ * @param delayed - what the notice says
+ */
+export const notifyDelayed = (
+    order: OrderDocument,
+    delayed: FulfillmentOrderDelayed
+): Promise<void> =>
+    orderService.mailBuyer(order, (locale, name) => {
+        const mail = preorderDelayedEmail(locale, name, {
+            titles: delayed.titles,
+            agreedAt: new Date(delayed.agreedAt),
+            ...(delayed.expectedAt ? { expectedAt: new Date(delayed.expectedAt) } : {}),
+            needsAnswer: delayed.needsAnswer,
+            ...(delayed.answerBy ? { answerBy: new Date(delayed.answerBy) } : {}),
+            orderUrl: orderFrontendLink({ locale, id: String(order._id) })
+        });
+        void enqueueEmail({ to: order.email, subject: mail.subject }, mail.template, mail.data);
     });

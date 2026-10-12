@@ -27,7 +27,9 @@ const groupableLinesOf = (order: OrderDocument): GroupableLine[] =>
         productId: String(item.product._id),
         title: item.product.title,
         quantity: item.quantity,
-        ships: isShippedItem(item)
+        ships: isShippedItem(item),
+        ...(item.product.preorder ? { preorder: true } : {}),
+        ...(item.product.releaseDate ? { releaseDate: item.product.releaseDate } : {})
     }));
 
 /**

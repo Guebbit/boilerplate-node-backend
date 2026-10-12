@@ -29,9 +29,10 @@ import {
     removeLevel,
     listLevels,
     lowStockCount,
-    listMovements
+    listMovements,
+    listPreorders
 } from './levels';
-import { receive, adjust } from './admin';
+import { receive, adjust, setPreorderLimit } from './admin';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` and
@@ -64,9 +65,10 @@ export {
     removeLevel,
     listLevels,
     lowStockCount,
-    listMovements
+    listMovements,
+    listPreorders
 } from './levels';
-export { receive, adjust } from './admin';
+export { receive, adjust, setPreorderLimit } from './admin';
 
 /** The module's one service handle. */
 export const inventoryService = {
@@ -89,7 +91,9 @@ export const inventoryService = {
     removeLevel,
     receive,
     adjust,
+    setPreorderLimit,
     listLevels,
+    listPreorders,
     lowStockCount,
     listMovements
 };

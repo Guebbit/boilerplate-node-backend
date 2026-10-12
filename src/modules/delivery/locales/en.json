@@ -29,6 +29,26 @@
             "greeting": "Hello, {{name}}!",
             "body": "Your shipment has arrived.",
             "withdraw-until": "You may withdraw from the purchase until {{date}}."
+        },
+        "not-awaiting-answer": "This fulfillment order is not waiting for an answer",
+        "email-preorder-delayed": {
+            "meta-title": "Your preorder is late",
+            "greeting": "Hello, {{name}}!",
+            "moved": {
+                "subject": "Your preorder will arrive later than planned",
+                "body": "We promised your preorder for {{agreed}}. It is now expected on {{expected}}."
+            },
+            "ask-moved": {
+                "subject": "Your preorder is delayed: do you want to keep waiting?",
+                "body": "We promised your preorder for {{agreed}}. It is now expected on {{expected}}, which is later than we can ask you to wait without your say-so."
+            },
+            "ask-passed": {
+                "subject": "Your preorder is late: do you want to keep waiting?",
+                "body": "We promised your preorder for {{agreed}}, and it has not arrived yet. We cannot give you a new date."
+            },
+            "answer": "Please tell us by {{date}} that you want to keep waiting. If we do not hear from you, we will cancel it and refund you in full.",
+            "cancel-any-time": "You may cancel it at any time before it ships, and you will be refunded in full. If you do nothing, you keep waiting.",
+            "link-label": "See your order"
         }
     }
 }

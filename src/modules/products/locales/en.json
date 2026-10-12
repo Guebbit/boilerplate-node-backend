@@ -6,6 +6,7 @@
         "field-description-empty": "Description cannot be empty — leave it out or clear it with null",
         "field-price-invalid": "Price is missing or invalid",
         "field-price-min": "Price cannot be negative",
+        "field-release-date-too-far": "The release date can be at most one year ahead",
         "field-translations-fallback-required": "The {{locale}} translation is required — it is this deployment's fallback locale.",
         "field-translations-fallback-null": "The {{locale}} translation cannot be deleted — it is this deployment's fallback locale.",
         "hard-deleted": "Product was permanently deleted.",

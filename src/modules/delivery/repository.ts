@@ -6,7 +6,7 @@
  * `Repository` exists. See: docs/modules/delivery.md
  */
 
-import type { ClientSession } from 'mongoose';
+import type { ClientSession, QueryFilter } from 'mongoose';
 import {
     fulfillmentOrderModel,
     shipmentModel,
@@ -16,18 +16,144 @@ import {
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 import type { FulfillmentOrderDraft } from './domain';
 import {
+    FulfillmentConsent,
+    FulfillmentHoldReason,
+    FulfillmentOrderStatus,
+    PreorderFulfillmentState
+} from '@types';
+import {
     createRepository,
     toObjectId,
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
 
+/** What the preorder board filters by. */
+export interface BoardFilters {
+    /** `true` keeps fulfillment orders made from a preorder line (they carry an agreed date). */
+    preorder?: boolean | undefined;
+    state?: PreorderFulfillmentState | undefined;
+    productId?: string | undefined;
+    /** Expected date passed with units remaining. */
+    late?: boolean | undefined;
+    /** Still waiting for stock, expected within this many days. */
+    dueWithin?: number | undefined;
+    /** Only fulfillment orders of these orders — a caller who may read only their own. */
+    orderIds?: readonly string[] | undefined;
+}
+
+/** One product's preorder units, as the aggregation counts them. */
+export interface ProductSummaryRow {
+    productId: string;
+    title: string;
+    firstAgreedAt: Date;
+    paid: number;
+    waiting: number;
+    awaitingYes: number;
+    allocated: number;
+    shipped: number;
+    cancelled: number;
+    late: number;
+}
+
+/** How many milliseconds a day is, for `dueWithin`. */
+const DAY_MS = 86_400_000;
+
+/**
+ * The Mongo condition each board state stands for. Kept beside the query, in step with
+ * `boardStateOf` in `./domain` by hand: the filter and the label must agree on which fulfillment
+ * orders are "waiting", and the preorder board's integration suite holds them to it.
+ *
+ * @param state - the state asked for
+ */
+const stateCondition = (state: PreorderFulfillmentState): QueryFilter<FulfillmentOrderDocument> => {
+    const awaitingStock = {
+        status: FulfillmentOrderStatus.on_hold,
+        holdReason: FulfillmentHoldReason.awaiting_stock
+    };
+    const asked = [FulfillmentConsent.awaiting, FulfillmentConsent.expired];
+    switch (state) {
+        case PreorderFulfillmentState.waiting: {
+            return { ...awaitingStock, consent: { $nin: asked } };
+        }
+        case PreorderFulfillmentState.awaiting_yes: {
+            return { ...awaitingStock, consent: { $in: asked } };
+        }
+        case PreorderFulfillmentState.allocated: {
+            return {
+                $or: [
+                    {
+                        status: {
+                            $in: [FulfillmentOrderStatus.open, FulfillmentOrderStatus.in_progress]
+                        }
+                    },
+                    {
+                        status: FulfillmentOrderStatus.on_hold,
+                        holdReason: { $ne: FulfillmentHoldReason.awaiting_stock }
+                    }
+                ]
+            };
+        }
+        case PreorderFulfillmentState.shipped: {
+            return { status: FulfillmentOrderStatus.closed };
+        }
+        case PreorderFulfillmentState.cancelled: {
+            return { status: FulfillmentOrderStatus.cancelled };
+        }
+    }
+};
+
+/**
+ * The filter a board read asks the collection, every part ANDed.
+ *
+ * @param filters - what the caller asked for, and the orders they may read
+ * @param now - the instant `late` and `dueWithin` are measured at
+ */
+const boardWhere = (filters: BoardFilters, now: Date): QueryFilter<FulfillmentOrderDocument> => {
+    const all: QueryFilter<FulfillmentOrderDocument>[] = [];
+    if (filters.preorder !== undefined) all.push({ agreedAt: { $exists: filters.preorder } });
+    if (filters.state) all.push(stateCondition(filters.state));
+    if (filters.productId) all.push({ 'lines.productId': filters.productId });
+    if (filters.late)
+        all.push({
+            status: {
+                $in: [
+                    FulfillmentOrderStatus.on_hold,
+                    FulfillmentOrderStatus.open,
+                    FulfillmentOrderStatus.in_progress
+                ]
+            },
+            expectedAt: { $lt: now }
+        });
+    if (filters.dueWithin !== undefined)
+        all.push({
+            status: FulfillmentOrderStatus.on_hold,
+            holdReason: FulfillmentHoldReason.awaiting_stock,
+            expectedAt: { $gt: now, $lte: new Date(now.getTime() + filters.dueWithin * DAY_MS) }
+        });
+    if (filters.orderIds)
+        all.push({ orderId: { $in: filters.orderIds.map((id) => toObjectId(id)) } });
+    return all.length > 0 ? { $and: all } : {};
+};
+
 /** What an act changes on a fulfillment order, written under a revision claim. */
 export type FulfillmentOrderPatch = Partial<
-    Pick<FulfillmentOrderDocument, 'lines' | 'status' | 'holdReason' | 'holdNote' | 'expectedAt'>
+    Pick<
+        FulfillmentOrderDocument,
+        | 'lines'
+        | 'status'
+        | 'holdReason'
+        | 'holdNote'
+        | 'expectedAt'
+        | 'consent'
+        | 'consentDeadline'
+        | 'lastNoticeAt'
+        | 'slips'
+        | 'cancelReason'
+    >
 > & {
-    /** Fields to remove — a released hold carries no reason or note. */
-    unset?: readonly ('holdReason' | 'holdNote')[];
+    /** Fields to remove — a released hold carries no reason or note, a confirmed wait no deadline. */
+    unset?: readonly ('holdReason' | 'holdNote' | 'consentDeadline')[];
 };
 
 /** The shared factory's CRUD surface plus the fulfillment order's own reads and claims. */
@@ -53,6 +179,19 @@ export const fulfillmentOrderRepository: Repository<
         session: ClientSession
     ) => Promise<FulfillmentOrderDocument | null>;
     scrubHoldNotesBefore: (cutoff: Date) => Promise<number>;
+    findWaitingForProduct: (productId: string) => Promise<FulfillmentOrderDocument[]>;
+    findDatePassed: (now: Date) => Promise<FulfillmentOrderDocument[]>;
+    findWaitsExpired: (now: Date) => Promise<FulfillmentOrderDocument[]>;
+    searchBoard: (
+        filters: BoardFilters,
+        now: Date,
+        page: { skip: number; limit: number }
+    ) => Promise<{ items: FulfillmentOrderDocument[]; totalItems: number }>;
+    summarizeProducts: (
+        filters: Pick<BoardFilters, 'productId' | 'orderIds'>,
+        now: Date,
+        page: { skip: number; limit: number }
+    ) => Promise<{ items: ProductSummaryRow[]; totalItems: number }>;
 } = {
     ...createRepository<FulfillmentOrderDocument, Wire<FulfillmentOrderDocument>>(
         fulfillmentOrderModel,
@@ -115,7 +254,8 @@ export const fulfillmentOrderRepository: Repository<
                         revision: 0,
                         ...(draft.holdReason ? { holdReason: draft.holdReason } : {}),
                         ...(draft.agreedAt ? { agreedAt: draft.agreedAt } : {}),
-                        ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {})
+                        ...(draft.expectedAt ? { expectedAt: draft.expectedAt } : {}),
+                        slips: 0
                     }
                 },
                 { upsert: true, session }
@@ -149,6 +289,189 @@ export const fulfillmentOrderRepository: Repository<
             .exec(),
 
     /**
+     * Every fulfillment order still waiting for stock that holds this product — the ones a moved
+     * release date concerns. Served by the `status + holdReason + lines.productId` index.
+     * @param productId - the product whose release date moved
+     */
+    findWaitingForProduct: (productId) =>
+        fulfillmentOrderModel
+            .find({
+                status: FulfillmentOrderStatus.on_hold,
+                holdReason: FulfillmentHoldReason.awaiting_stock,
+                'lines.productId': productId
+            })
+            .exec(),
+
+    /**
+     * The waiting fulfillment orders whose expected date has come, for the sweep to judge against
+     * their last notice (a date alone cannot say whether the buyer was already told).
+     * @param now - the instant of the sweep
+     */
+    findDatePassed: (now) =>
+        fulfillmentOrderModel
+            .find({
+                status: FulfillmentOrderStatus.on_hold,
+                holdReason: FulfillmentHoldReason.awaiting_stock,
+                expectedAt: { $lte: now }
+            })
+            .exec(),
+
+    /**
+     * The fulfillment orders whose buyer was asked and let the window close — including the ones
+     * already marked expired, whose cancel has not landed yet and is announced again.
+     * @param now - the instant of the sweep
+     */
+    findWaitsExpired: (now) =>
+        fulfillmentOrderModel
+            .find({
+                status: FulfillmentOrderStatus.on_hold,
+                holdReason: FulfillmentHoldReason.awaiting_stock,
+                $or: [
+                    { consent: FulfillmentConsent.expired },
+                    { consent: FulfillmentConsent.awaiting, consentDeadline: { $lte: now } }
+                ]
+            })
+            .exec(),
+
+    /**
+     * A page of fulfillment orders for the preorder board, the earliest expected first, ties broken by
+     * id so a page never repeats or skips a row.
+     *
+     * @param filters - what the board asks for
+     * @param now - the instant `late` and `dueWithin` are measured at
+     * @param page - the window
+     */
+    searchBoard: (filters, now, { skip, limit }) => {
+        const where = boardWhere(filters, now);
+        return Promise.all([
+            fulfillmentOrderModel
+                .find(where)
+                .sort({ expectedAt: 1, _id: 1 })
+                .skip(skip)
+                .limit(limit)
+                .exec(),
+            fulfillmentOrderModel.countDocuments(where).exec()
+        ]).then(([items, totalItems]) => ({ items, totalItems }));
+    },
+
+    /**
+     * A page of per-product unit counts across every preorder fulfillment order, earliest promise
+     * first. Units, not fulfillment orders; one `$group` over the unwound lines. A product's counts
+     * add up: `paid = waiting + awaitingYes + allocated + shipped + cancelled`.
+     *
+     * Mongo aggregation: https://www.mongodb.com/docs/manual/aggregation/
+     *
+     * @param filters - one product, and/or the orders the caller may read
+     * @param now - the instant `late` is measured at
+     * @param page - the window
+     */
+    summarizeProducts: (filters, now, { skip, limit }) => {
+        const remaining = {
+            $subtract: [
+                '$lines.quantity',
+                { $add: ['$lines.shippedQuantity', '$lines.cancelledQuantity'] }
+            ]
+        };
+        const onHoldForStock = {
+            $and: [
+                { $eq: ['$status', FulfillmentOrderStatus.on_hold] },
+                { $eq: ['$holdReason', FulfillmentHoldReason.awaiting_stock] }
+            ]
+        };
+        const beingAsked = {
+            $in: [
+                { $ifNull: ['$consent', 'none'] },
+                [FulfillmentConsent.awaiting, FulfillmentConsent.expired]
+            ]
+        };
+        const sumWhere = (condition: unknown) => ({
+            $sum: { $cond: [condition, remaining, 0] }
+        });
+        const match = boardWhere({ ...filters, preorder: true }, now);
+
+        return (
+            fulfillmentOrderModel
+                .aggregate<{
+                    items: (Omit<ProductSummaryRow, 'productId'> & { _id: string })[];
+                    total: { count: number }[];
+                }>([
+                    { $match: match },
+                    { $unwind: '$lines' },
+                    ...(filters.productId
+                        ? [{ $match: { 'lines.productId': filters.productId } }]
+                        : []),
+                    {
+                        $group: {
+                            _id: '$lines.productId',
+                            title: { $first: '$lines.title' },
+                            firstAgreedAt: { $min: '$agreedAt' },
+                            paid: { $sum: '$lines.quantity' },
+                            shipped: { $sum: '$lines.shippedQuantity' },
+                            cancelled: { $sum: '$lines.cancelledQuantity' },
+                            waiting: sumWhere({ $and: [onHoldForStock, { $not: [beingAsked] }] }),
+                            awaitingYes: sumWhere({ $and: [onHoldForStock, beingAsked] }),
+                            allocated: sumWhere({
+                                $or: [
+                                    {
+                                        $in: [
+                                            '$status',
+                                            [
+                                                FulfillmentOrderStatus.open,
+                                                FulfillmentOrderStatus.in_progress
+                                            ]
+                                        ]
+                                    },
+                                    {
+                                        $and: [
+                                            { $eq: ['$status', FulfillmentOrderStatus.on_hold] },
+                                            {
+                                                $ne: [
+                                                    '$holdReason',
+                                                    FulfillmentHoldReason.awaiting_stock
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }),
+                            late: sumWhere({
+                                $and: [
+                                    {
+                                        $in: [
+                                            '$status',
+                                            [
+                                                FulfillmentOrderStatus.on_hold,
+                                                FulfillmentOrderStatus.open,
+                                                FulfillmentOrderStatus.in_progress
+                                            ]
+                                        ]
+                                    },
+                                    { $lt: ['$expectedAt', now] }
+                                ]
+                            })
+                        }
+                    },
+                    {
+                        $facet: {
+                            items: [
+                                { $sort: { firstAgreedAt: 1, _id: 1 } },
+                                { $skip: skip },
+                                { $limit: limit }
+                            ],
+                            total: [{ $count: 'count' }]
+                        }
+                    }
+                ])
+                .exec()
+                // A `$facet` always answers exactly one document, even over nothing.
+                .then(([result]) => ({
+                    items: result.items.map(({ _id, ...rest }) => ({ productId: _id, ...rest })),
+                    totalItems: result.total[0]?.count ?? 0
+                }))
+        );
+    },
+
+    /**
      * Unset the hold note on every fulfillment order not changed since `cutoff` that still holds
      * one. The filter only matches a fulfillment order that still has a note, so a rerun matches
      * nothing. `timestamps: false` keeps the wipe from moving `updatedAt`, the very clock this query
@@ -174,6 +497,9 @@ export const fulfillmentOrderRepository: Repository<
 export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocument>> & {
     findByOrderId: (orderId: string, session?: ClientSession) => Promise<ShipmentDocument[]>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<ShipmentDocument[]>;
+    findByFulfillmentOrderIds: (
+        fulfillmentOrderIds: readonly string[]
+    ) => Promise<ShipmentDocument[]>;
     findInSession: (id: string, session: ClientSession) => Promise<ShipmentDocument | null>;
     nextNumber: (orderId: string, session: ClientSession) => Promise<number>;
     markDelivered: (
@@ -209,6 +535,18 @@ export const shipmentRepository: Repository<ShipmentDocument, Wire<ShipmentDocum
         shipmentModel
             .find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } })
             .sort({ orderId: 1, number: 1 })
+            .exec(),
+
+    /**
+     * Every shipment cut from a set of fulfillment orders, in one query — the preorder board's
+     * `delivered` flag for a page of rows.
+     * @param fulfillmentOrderIds - the fulfillment orders on the page
+     */
+    findByFulfillmentOrderIds: (fulfillmentOrderIds) =>
+        shipmentModel
+            .find({
+                fulfillmentOrderId: { $in: fulfillmentOrderIds.map((id) => toObjectId(id)) }
+            })
             .exec(),
 
     /**

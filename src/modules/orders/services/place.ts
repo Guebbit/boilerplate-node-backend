@@ -147,7 +147,12 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
      */
     const outcome = await inventoryService.reserveForOrder(
         orderId.toHexString(),
-        input.lines.map(({ item }) => ({ productId: item.productId, quantity: item.quantity })),
+        // A line frozen as a preorder claims the allowance, not a shelf unit.
+        input.lines.map(({ item }, index) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            ...(orderItems[index]?.product.preorder ? { kind: 'preorder' as const } : {})
+        })),
         input.shipping?.holdMinutes
     );
     if (!outcome.held)

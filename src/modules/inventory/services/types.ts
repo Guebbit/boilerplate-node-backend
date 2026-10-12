@@ -4,15 +4,25 @@
  */
 
 import type { StockMovementReason } from '@types';
+import type { HoldKind } from '../domain';
 import type { PaginationInput } from '@infrastructure/persistence/search';
 
-/** A line being held or given back. Ids as strings — the repository converts. */
+/**
+ * A line being held or given back. Ids as strings — the repository converts. `kind` says whether
+ * the units are on the shelf (`stock`, the default) or an allowance claim (`preorder`): a hold can
+ * carry the same product under both once part of a preorder is allocated, so a caller giving back
+ * or shipping a line names which.
+ */
 export interface StockLine {
     productId: string;
     quantity: number;
+    kind?: HoldKind;
 }
 
-/** One line a hold could not cover, and by how much it fell short. */
+/**
+ * One line a hold could not cover, and by how much it fell short. For a preorder line `available`
+ * is what is left of the allowance, not what is on the shelf.
+ */
 export interface StockShortfall {
     productId: string;
     title: string;

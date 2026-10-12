@@ -1,0 +1,148 @@
+/**
+ * @module
+ * The preorder slip rules, pure: what a moved date asks of the buyer, when silence turns into a
+ * cancel, and which dates the daily sweep still has to tell someone about. Every row is a row of the
+ * table in `domain/preorder.ts`, against a fixed clock.
+ */
+
+import { FulfillmentConsent } from '@types';
+import {
+    CONSENT_WINDOW_DAYS,
+    SILENT_SLIP_DAYS,
+    answerBy,
+    hasWaitExpired,
+    judgeSlip,
+    needsDatePassedNotice,
+    slippedDays
+} from '../../domain';
+
+const DAY = 86_400_000;
+const AGREED = new Date('2026-12-01T00:00:00Z');
+
+/** A date `days` after the agreed one. */
+const afterAgreed = (days: number): Date => new Date(AGREED.getTime() + days * DAY);
+
+describe('judgeSlip', () => {
+    it.each([
+        ['a first slip of a few days', 0, 5, 'notify'],
+        ['a first slip of exactly 28 days', 0, SILENT_SLIP_DAYS, 'notify'],
+        ['a first slip of 29 days', 0, SILENT_SLIP_DAYS + 1, 'ask'],
+        ['a second slip, however small', 1, 3, 'ask'],
+        ['a third slip', 2, 40, 'ask']
+    ])('%s', (_name, slips, days, expected) => {
+        const verdict = judgeSlip({
+            agreedAt: AGREED,
+            expectedAt: afterAgreed(slips === 0 ? 0 : days - 1),
+            slips,
+            next: afterAgreed(days)
+        });
+
+        expect(verdict.kind).toBe(expected);
+    });
+
+    it('counts the slip from the date PROMISED, not from the last one expected', () => {
+        // Expected had already moved 20 days; 10 more is 30 past the promise, but the first slip
+        // is the only one silence may stand for, and this is already a second.
+        expect(
+            judgeSlip({
+                agreedAt: AGREED,
+                expectedAt: afterAgreed(20),
+                slips: 1,
+                next: afterAgreed(30)
+            }).kind
+        ).toBe('ask');
+    });
+
+    it.each([
+        ['earlier than expected', afterAgreed(5)],
+        ['the same date', afterAgreed(10)]
+    ])('asks nothing for a date %s', (_name, next) => {
+        expect(
+            judgeSlip({ agreedAt: AGREED, expectedAt: afterAgreed(10), slips: 0, next }).kind
+        ).toBe('earlier');
+    });
+
+    it('asks, with no date to offer, when the date was cleared', () => {
+        expect(
+            judgeSlip({ agreedAt: AGREED, expectedAt: afterAgreed(0), slips: 0, next: undefined })
+                .kind
+        ).toBe('ask');
+    });
+});
+
+describe('answerBy', () => {
+    it('is the consent window after the question, and no earlier', () => {
+        const asked = new Date('2026-12-10T08:00:00Z');
+
+        expect(answerBy(asked).getTime() - asked.getTime()).toBe(CONSENT_WINDOW_DAYS * DAY);
+    });
+});
+
+describe('needsDatePassedNotice', () => {
+    const now = new Date('2026-12-20T00:00:00Z');
+
+    it.each([
+        ['a date that passed and was never noticed', { expectedAt: afterAgreed(10) }, true],
+        [
+            'a date that passed after the last notice',
+            { expectedAt: afterAgreed(10), lastNoticeAt: afterAgreed(2) },
+            true
+        ],
+        [
+            'a date that passed but was noticed since',
+            { expectedAt: afterAgreed(10), lastNoticeAt: afterAgreed(12) },
+            false
+        ],
+        ['a date still ahead', { expectedAt: afterAgreed(30) }, false],
+        ['no expected date at all', {}, false],
+        [
+            'a buyer already being asked',
+            { expectedAt: afterAgreed(10), consent: FulfillmentConsent.awaiting },
+            false
+        ],
+        [
+            'a buyer who said keep waiting, with the date passed again',
+            { expectedAt: afterAgreed(10), consent: FulfillmentConsent.confirmed },
+            true
+        ]
+    ])('%s', (_name, facts, expected) => {
+        expect(needsDatePassedNotice(facts, now)).toBe(expected);
+    });
+});
+
+describe('hasWaitExpired', () => {
+    const now = new Date('2026-12-20T00:00:00Z');
+
+    it.each([
+        [
+            'asked, and the deadline passed',
+            { consent: FulfillmentConsent.awaiting, consentDeadline: afterAgreed(5) },
+            true
+        ],
+        [
+            'asked, and the deadline is still ahead',
+            { consent: FulfillmentConsent.awaiting, consentDeadline: afterAgreed(30) },
+            false
+        ],
+        [
+            'already marked expired, whatever the deadline says',
+            { consent: FulfillmentConsent.expired },
+            true
+        ],
+        [
+            'answered yes, whatever the old deadline was',
+            { consent: FulfillmentConsent.confirmed, consentDeadline: afterAgreed(5) },
+            false
+        ],
+        ['never asked', {}, false]
+    ])('%s', (_name, facts, expected) => {
+        expect(hasWaitExpired(facts, now)).toBe(expected);
+    });
+});
+
+describe('slippedDays', () => {
+    it('counts whole days between the promise and the expectation, never below zero', () => {
+        expect(slippedDays(AGREED, afterAgreed(12))).toBe(12);
+        expect(slippedDays(AGREED, afterAgreed(-3))).toBe(0);
+    });
+});

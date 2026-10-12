@@ -1,10 +1,12 @@
 /**
  * @module
  * Domain events this module emits — declared by augmenting the kernel's payload map, so the
- * catalogue grows with the modules that own events and no shared file enumerates domains. Exactly
- * one: stock changes aren't events (see `products/events.ts`), since the counter and the row
+ * catalogue grows with the modules that own events and no shared file enumerates domains. Two:
+ * stock changes aren't events (see `products/events.ts`), since the counter and the row
  * explaining it are one write. A hold timing out is different — `orders` must cancel the order,
- * but already imports this module, so the event avoids importing back and forming a cycle.
+ * but already imports this module, so the event avoids importing back and forming a cycle. Stock
+ * allocated to a paid preorder is the other: `delivery` must release the fulfillment order that
+ * waits for it, and imports this module only for the event's name.
  *
  * See: docs/modules/inventory.md
  */
@@ -18,6 +20,18 @@ declare module '@kernel/events' {
          * order rather than approving a plan, so it doesn't stay `pending` with its stock gone.
          */
         'inventory.reservation_expired': { orderId: string };
+
+        /**
+         * Stock arrived for a paid preorder: some of an order's preorder units of one product just
+         * became real, set-aside units. Written through the outbox in the receipt's own
+         * transaction, so it exists exactly when the allocation does.
+         *
+         * `waiting` is what is STILL a preorder claim on that order for that product after this
+         * allocation — a state, not a delta, so a redelivery is harmless: `delivery` releases
+         * whatever it holds beyond `waiting` and, the second time, finds nothing beyond it. `0`
+         * means the order's preorder units of that product are all covered.
+         */
+        'inventory.preorder_allocated': { orderId: string; productId: string; waiting: number };
     }
 }
 
@@ -26,3 +40,6 @@ declare module '@kernel/events' {
  * spelling rather than two string literals that typo independently.
  */
 export const RESERVATION_EXPIRED = 'inventory.reservation_expired';
+
+/** See `DomainEventMap['inventory.preorder_allocated']` above for what it carries and who listens. */
+export const PREORDER_ALLOCATED = 'inventory.preorder_allocated';

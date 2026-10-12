@@ -49,6 +49,17 @@ declare module '@kernel/events' {
          * recoverable later through `POST /inventory/receipts`, never a silent lie.
          */
         'product.created': { productId: string; onHand: number };
+
+        /**
+         * A product's `releaseDate` moved, was set or was cleared. Goes through the outbox in the
+         * same transaction as the edit, so an event exists exactly when the new date does.
+         *
+         * Why it exists: buyers who already paid were promised the old date. `delivery` listens
+         * and decides, per waiting fulfillment order, whether the buyer needs a notice and
+         * whether silence now means cancel (PRODUCT_STATES P5). Both dates are ISO 8601; `from`
+         * is absent for a first date, `to` for a cleared one.
+         */
+        'product.release_date_changed': { productId: string; from?: string; to?: string };
     }
 }
 
@@ -60,3 +71,6 @@ export const PRODUCT_DELETED = 'product.deleted';
 
 /** See {@link DomainEventMap}'s `'product.created'` for why this exists and what it may trigger. */
 export const PRODUCT_CREATED = 'product.created';
+
+/** See {@link DomainEventMap}'s `'product.release_date_changed'` for what listens and why. */
+export const PRODUCT_RELEASE_DATE_CHANGED = 'product.release_date_changed';

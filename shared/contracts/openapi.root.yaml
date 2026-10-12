@@ -1171,6 +1171,10 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
     /delivery/order/{orderId}/start:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1start'
+    /delivery/fulfillment-orders:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders'
+    /delivery/fulfillment-orders/summary:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1summary'
     /delivery/fulfillment-orders/{id}/shipments:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1shipments'
     /delivery/fulfillment-orders/{id}/fulfill:
@@ -1179,6 +1183,8 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1hold'
     /delivery/fulfillment-orders/{id}/release:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1release'
+    /delivery/fulfillment-orders/{id}/confirm-wait:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1confirm-wait'
     /delivery/shipments/{id}:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1shipments~1{id}'
     /delivery/shipments/{id}/deliver:
@@ -1201,6 +1207,10 @@ paths:
     # ---------- inventory ----------
     /inventory/levels:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels'
+    /inventory/levels/{productId}/preorder-limit:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1levels~1{productId}~1preorder-limit'
+    /inventory/preorders:
+        $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1preorders'
     /inventory/movements:
         $ref: '../../src/modules/inventory/openapi.yaml#/paths/~1inventory~1movements'
     /inventory/receipts:

@@ -97,7 +97,8 @@ describe('groupOrderLines', () => {
         ]);
         expect(drafts[1].lines.map(({ productId }) => productId)).toEqual(['early', 'early-too']);
         expect(drafts[1]).toMatchObject({ holdReason: 'awaiting_stock' });
-        expect(drafts[1].agreedAt).toEqual(new Date('2026-12-12T00:00:00Z'));
+        // The day's group leaves together, so it is promised for its latest release instant.
+        expect(drafts[1].agreedAt).toEqual(new Date('2026-12-12T18:00:00Z'));
         expect(drafts[1].expectedAt).toEqual(drafts[1].agreedAt);
         expect(drafts[2].agreedAt).toEqual(new Date('2026-12-20T00:00:00Z'));
     });

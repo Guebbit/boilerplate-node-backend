@@ -79,6 +79,13 @@ whatever the storefront happened to be showing. Reading the order back later mus
 that, never re-resolve against whoever is reading it now — see
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content).
 
+The snapshot also freezes what a preorder promised: `preorder: true` and the `releaseDate` the
+buyer saw. Both are decided once at checkout and never re-derived: the date passing, or an admin moving
+it, must not change what this order bought (CRD Art. 18 treats the date shown when ordering as the
+agreed one), and a bank transfer may be paid a week after the order was placed.
+[`delivery`](./delivery.md) groups the lines into fulfillment orders from this frozen pair, and the
+hold takes the product's preorder allowance instead of a shelf unit.
+
 The status enum is the module's public vocabulary:
 
 | Status                  | What it means                                | Who moves it                                                                                                                                                             |

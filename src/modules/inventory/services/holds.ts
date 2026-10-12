@@ -16,6 +16,7 @@ import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
 import { applyToEveryLine } from './transition';
 import { refreshStockCacheForProducts } from './returns';
+import { allocateForOrder } from './allocate';
 
 /**
  * Claim a hold and move its counters as ONE unit: both land, or neither does.
@@ -89,8 +90,8 @@ const raiseOrphanAlarm = (
 
 /**
  * Settle an order's hold at payment: `held → committed`. No counter moves — the units stay on
- * the shelf, still spoken for, until {@link shipForOrder}; the ledger row (`commit`, both deltas
- * zero) dates the payment.
+ * the shelf, still spoken for, until {@link shipForOrder}; the ledger row (`commit`, every delta
+ * zero) dates the payment, and the hold's `committedAt` is the preorder queue key.
  *
  * Claiming first is what makes it at-most-once.
  *
@@ -104,7 +105,11 @@ const raiseOrphanAlarm = (
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = async (orderId: string): Promise<boolean> => {
-    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit)) return true;
+    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit)) {
+        // Paid preorder units wait for stock; stock that already arrived serves them now.
+        await allocateForOrder(orderId);
+        return true;
+    }
 
     // The claim missed. Read what the reservation actually is, to tell a benign replay from the
     // states meaning the order is paid with nothing held.
@@ -163,9 +168,10 @@ const takeLines = (
         if (!hold) return false;
 
         const { remaining, taken } = takeFromHold(
-            hold.items.map(({ productId, quantity }) => ({
+            hold.items.map(({ productId, quantity, kind }) => ({
                 productId: String(productId),
-                quantity
+                quantity,
+                ...(kind === 'preorder' ? { kind } : {})
             })),
             lines
         );

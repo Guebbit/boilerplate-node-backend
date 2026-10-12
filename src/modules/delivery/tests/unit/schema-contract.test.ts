@@ -23,13 +23,14 @@ import {
 } from '@tests/schema';
 
 describe('fulfillmentOrderSchema', () => {
-    it('requires the order, its number, its kind, its lines and its revision', () => {
+    it('requires the order, its number, its kind, its lines, its slips and its revision', () => {
         expect(requiredPaths(fulfillmentOrderSchema)).toEqual([
             'kind',
             'lines',
             'number',
             'orderId',
-            'revision'
+            'revision',
+            'slips'
         ]);
     });
 

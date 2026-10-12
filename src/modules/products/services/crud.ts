@@ -20,7 +20,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { logger } from '@infrastructure/adapters/logger';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { productsAuditActions } from '../audit';
-import { PRODUCT_CREATED } from '../events';
+import { PRODUCT_CREATED, PRODUCT_RELEASE_DATE_CHANGED } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { sanitizeStringArray } from './validation';
@@ -29,8 +29,18 @@ import { enqueueIfPending } from './image';
 /** What `create` accepts: the product's fields, plus the pending-image placeholder's key. */
 type ProductCreateData = Omit<
     Product,
-    'id' | 'currency' | 'inStock' | 'lowStock' | 'createdAt' | 'updatedAt' | 'deletedAt'
+    | 'id'
+    | 'currency'
+    | 'inStock'
+    | 'lowStock'
+    | 'preorder'
+    | 'releaseDate'
+    | 'createdAt'
+    | 'updatedAt'
+    | 'deletedAt'
 > & {
+    /** ISO date-time the product ships from; a future one makes it a preorder. */
+    releaseDate?: string;
     /** Set alongside the pending-image placeholder — see `readUploadedImage`. */
     pendingImageKey?: string;
 };
@@ -38,13 +48,13 @@ type ProductCreateData = Omit<
 /**
  * What `update` accepts.
  *
- * `imageUrl`/`weight`/`taxClass`/`rateType`/`sku` are widened to accept `null`, since the domain
+ * `imageUrl`/`weight`/`taxClass`/`rateType`/`sku`/`releaseDate` are widened to accept `null`, since the domain
  * type `Product` states them as a real value or absent-means-zero/standard/unset, never
  * explicitly cleared. `imageUrl: null` unsets the image; `weight`/`taxClass`/`rateType`/`sku: null`
  * genuinely unset them.
  */
 type ProductUpdateData = Partial<
-    Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'rateType' | 'sku'>
+    Omit<Product, 'id' | 'imageUrl' | 'weight' | 'taxClass' | 'rateType' | 'sku' | 'releaseDate'>
 > & {
     /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
     pendingImageKey?: string;
@@ -53,6 +63,8 @@ type ProductUpdateData = Partial<
     taxClass?: TaxClass | null;
     rateType?: RateType | null;
     sku?: string | null;
+    /** ISO date-time; `null` clears it, so the product is no longer a preorder. */
+    releaseDate?: string | null;
     /**
      * The edit also wrote something OUTSIDE this document (translation rows). Moves
      * `updatedAt` so the row's version — its `ETag` — moves with the edit.
@@ -79,6 +91,15 @@ const afterCommitStep = (step: string, run: () => unknown): Promise<void> =>
         });
 
 /**
+ * `data` without its `releaseDate`, which the write converts to a `Date` itself.
+ * @param data - the create body
+ */
+const withoutReleaseDate = ({
+    releaseDate: _releaseDate,
+    ...rest
+}: ProductCreateData): Omit<ProductCreateData, 'releaseDate'> => rest;
+
+/**
  * Writes a product row and announces it — inside the caller's transaction.
  *
  * Written with `onHand: 0` regardless of what `data.onHand` asks for — this module never moves
@@ -100,7 +121,11 @@ export const insertProduct = (
     productRepository
         .create(
             {
-                ...data,
+                ...withoutReleaseDate(data),
+                // Mongoose casts an ISO string, but `create`'s input is typed with the stored `Date`.
+                ...(data.releaseDate === undefined
+                    ? {}
+                    : { releaseDate: new Date(data.releaseDate) }),
                 onHand: 0,
                 categories: sanitizeStringArray(data.categories),
                 tags: sanitizeStringArray(data.tags)
@@ -171,6 +196,31 @@ export interface ProductUpdateOutcome {
 }
 
 /**
+ * Move a product's `releaseDate` and say what moved.
+ *
+ * @param product - the fetched document, mutated in place
+ * @param requested - the new ISO date, `null` to clear, `undefined` to leave it alone
+ * @returns the `from`/`to` of an actual change (ISO strings, absent for none), or `undefined` when
+ *   the stored instant is the one asked for
+ */
+const applyReleaseDate = (
+    product: ProductDocument,
+    requested: string | null | undefined
+): { from?: string; to?: string } | undefined => {
+    if (requested === undefined) return undefined;
+
+    const from = product.releaseDate;
+    const to = requested === null ? undefined : new Date(requested);
+    if (from?.getTime() === to?.getTime()) return undefined;
+
+    product.releaseDate = clearedOrValue(to ?? null);
+    return {
+        ...(from ? { from: from.toISOString() } : {}),
+        ...(to ? { to: to.toISOString() } : {})
+    };
+};
+
+/**
  * Applies a change-set to a fetched product and saves it — inside the caller's transaction.
  *
  * @param product - the fetched document
@@ -200,6 +250,8 @@ export const applyUpdate = (
     if (data.description !== undefined) product.description = data.description;
     if (data.active !== undefined) product.active = data.active;
     if (data.purchasable !== undefined) product.purchasable = data.purchasable;
+    // `null` clears the date back to unset — $unset on save, same as weight/taxClass.
+    const releaseDateChange = applyReleaseDate(product, data.releaseDate);
     if (data.categories !== undefined) product.categories = sanitizeStringArray(data.categories);
     if (data.tags !== undefined) product.tags = sanitizeStringArray(data.tags);
     // `null` clears a recorded weight back to unset — $unset on save.
@@ -219,7 +271,19 @@ export const applyUpdate = (
     // `imageUrl: null` unsets the field; the old-image deletion after the commit covers it too.
     const oldImageUrl = applyImageWriteback(product, data);
 
-    return productRepository.save(product, session).then((updated) => ({ updated, oldImageUrl }));
+    return productRepository
+        .save(product, session)
+        .then((updated) =>
+            releaseDateChange
+                ? enqueueOutboxEvent(
+                      PRODUCT_RELEASE_DATE_CHANGED,
+                      { productId: String(updated._id), ...releaseDateChange },
+                      String(updated._id),
+                      session
+                  ).then(() => updated)
+                : updated
+        )
+        .then((updated) => ({ updated, oldImageUrl }));
 };
 
 /**

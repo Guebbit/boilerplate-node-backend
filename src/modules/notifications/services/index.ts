@@ -15,7 +15,12 @@ export {
     notificationsReadAll,
     notificationsDeleteByUserId
 } from './inbox';
-export { onCartLinesRemoved, onWishlistItemsRemoved, onCartMergeRefused } from './subscribers';
+export {
+    onCartLinesRemoved,
+    onWishlistItemsRemoved,
+    onCartMergeRefused,
+    onFulfillmentOrderDelayed
+} from './subscribers';
 export { streamNotifications, publishToUser, openStreamCount } from './stream';
 
 /** The service's public surface — controllers call through this, never the bare functions. */

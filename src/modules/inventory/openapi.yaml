@@ -43,6 +43,70 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /inventory/preorders:
+        get:
+            tags: [Inventory]
+            summary: Preorder allowances
+            description: |
+                Every product with a preorder allowance or an outstanding preorder, for the admin's preorder board: the cap, what is outstanding against it and how that splits between orders still unpaid and orders already paid. `preordered` is OUTSTANDING units, not units ever sold: it falls when stock arrives and is allocated, and when an order is cancelled or expires. `ordered` is the lifetime count, read off the ledger.
+
+                The release date and the title come from the catalogue. Never public: exact counts are what a competitor wants.
+            operationId: listPreorderLevels
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+            responses:
+                '200':
+                    description: A page of preorder allowances, the most outstanding first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PreorderLevelsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /inventory/levels/{productId}/preorder-limit:
+        put:
+            tags: [Inventory]
+            summary: Set a product's preorder limit
+            description: |
+                Sets how many units of the product may be preordered at once: the allowance an order claims when it is placed. `0` closes preordering. Lowering it below what is already outstanding is allowed and leaves those orders alone; only new ones are refused. Absolute and idempotent, so a retry is safe.
+
+                Not a stock movement: nothing on the shelf changes, so it leaves no ledger row (it is audited).
+            operationId: setPreorderLimit
+            security:
+                - bearerAuth: []
+                - apiKeyAuth: []
+            parameters:
+                - name: productId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/PreorderLimitRequest'
+            responses:
+                '200':
+                    description: The counters after the change
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/InventoryLevelEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /inventory/movements:
         get:
             tags: [Inventory]
@@ -181,7 +245,7 @@ components:
         # `domain/transitions.ts`, which is the one place that mapping is written.
         StockMovementReason:
             type: string
-            enum: [reserve, commit, ship, release, expire, receive, adjust, restock]
+            enum: [reserve, commit, ship, release, expire, receive, adjust, restock, preorder, allocate]
             description: |
                 * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
                 * `commit` — the order was paid for. The claim is settled and nothing moves: the units stay on the shelf, still spoken for.
@@ -191,13 +255,17 @@ components:
                 * `receive` — a supplier delivery. `onHand` up.
                 * `adjust` — a stocktake correction, signed. `onHand` moves either way.
                 * `restock` — returned goods were received back on the shelf. `onHand` up.
+                * `preorder` — an order claimed units that do not exist yet. `preordered` up; the shelf is untouched.
+                * `allocate` — stock arrived for a paid preorder. `preordered` down, `reserved` up: the claim is now a real hold. Written in the receipt's own transaction, oldest payment first.
+
+                `release` and `expire` of a preorder claim give back the allowance (`preordered` down) instead of `reserved`.
 
         # One row of the ledger. Append-only: there is no update path, and a wrong row is
         # corrected by the next movement, the way accountants do it.
         StockMovement:
             type: object
             additionalProperties: false
-            required: [id, productId, reason, onHandDelta, reservedDelta]
+            required: [id, productId, reason, onHandDelta, reservedDelta, preorderedDelta]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -212,6 +280,8 @@ components:
                 onHandDelta:
                     type: integer
                 reservedDelta:
+                    type: integer
+                preorderedDelta:
                     type: integer
                 reference:
                     type: string
@@ -258,7 +328,7 @@ components:
         InventoryLevel:
             type: object
             additionalProperties: false
-            required: [productId, title, onHand, reserved, available]
+            required: [productId, title, onHand, reserved, available, preorderLimit, preordered]
             properties:
                 productId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -274,6 +344,14 @@ components:
                 available:
                     type: integer
                     minimum: 0
+                preorderLimit:
+                    type: integer
+                    minimum: 0
+                    description: How many units may be preordered at once. `0` means preordering is closed.
+                preordered:
+                    type: integer
+                    minimum: 0
+                    description: Preorder units outstanding against the limit, paid or not, until stock arrives and is allocated to them.
 
         InventoryLevelEnvelope:
             type: object
@@ -374,3 +452,74 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/ReservationSweepResponse'
+
+        PreorderLevel:
+            type: object
+            additionalProperties: false
+            required: [productId, title, preorderLimit, preordered, held, paid, left, ordered]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                releaseDate:
+                    $ref: '../products/openapi.yaml#/components/schemas/ReleaseDate'
+                preorderLimit:
+                    type: integer
+                    minimum: 0
+                preordered:
+                    type: integer
+                    minimum: 0
+                    description: Outstanding units, `held + paid`. Drops when stock is allocated, so it is not "units sold".
+                held:
+                    type: integer
+                    minimum: 0
+                    description: Outstanding units on orders still unpaid. They free themselves when the hold expires.
+                paid:
+                    type: integer
+                    minimum: 0
+                    description: Outstanding units on paid orders, waiting for stock oldest payment first.
+                left:
+                    type: integer
+                    minimum: 0
+                    description: '`preorderLimit - preordered`, never below zero: how many more may be ordered.'
+                ordered:
+                    type: integer
+                    minimum: 0
+                    description: Lifetime units claimed through `preorder` movements in the ledger, given back or not.
+
+        PreorderLevelsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PreorderLevel'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        PreorderLevelsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PreorderLevelsResponse'
+
+        PreorderLimitRequest:
+            type: object
+            additionalProperties: false
+            required: [preorderLimit]
+            properties:
+                preorderLimit:
+                    type: integer
+                    minimum: 0
+                    description: The new allowance. `0` closes preordering.

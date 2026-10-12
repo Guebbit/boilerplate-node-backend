@@ -9,14 +9,16 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import type { CartLineRemovedParams, CartMergeRefusedParams } from '@types';
+import type { CartLineRemovedParams, CartMergeRefusedParams, PreorderDelayedParams } from '@types';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /** Every code a notification can carry — the contract's `NotificationCode`, spelled out once. */
 export const NOTIFICATION_CODES = [
     'notifications.cart-line-removed',
     'notifications.wishlist-item-removed',
-    'notifications.cart-merge-refused'
+    'notifications.cart-merge-refused',
+    'notifications.preorder-delayed',
+    'notifications.preorder-confirm-wait'
 ] as const;
 
 /** One of {@link NOTIFICATION_CODES}. */
@@ -36,6 +38,8 @@ export interface NotificationParametersByCode {
     'notifications.cart-line-removed': CartLineRemovedParams;
     'notifications.wishlist-item-removed': CartLineRemovedParams;
     'notifications.cart-merge-refused': CartMergeRefusedParams;
+    'notifications.preorder-delayed': PreorderDelayedParams;
+    'notifications.preorder-confirm-wait': PreorderDelayedParams;
 }
 
 /**

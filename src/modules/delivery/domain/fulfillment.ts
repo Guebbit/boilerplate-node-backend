@@ -5,7 +5,12 @@
  * testable without a database. See `docs/modules/delivery.md#the-two-records`.
  */
 
-import { FulfillmentHoldReason, FulfillmentOrderKind, FulfillmentOrderStatus } from '@types';
+import {
+    FulfillmentConsent,
+    FulfillmentHoldReason,
+    FulfillmentOrderKind,
+    FulfillmentOrderStatus
+} from '@types';
 
 /** One product on a fulfillment order, with how much of it has gone each way. */
 export interface FulfillmentLine {
@@ -82,13 +87,22 @@ const toFulfillmentLine = ({ productId, title, quantity }: GroupableLine): Fulfi
 const dayKey = (date: Date): string => date.toISOString().slice(0, 10);
 
 /**
+ * The instant a group of preorder lines was promised for: the latest release date among them, since
+ * the group leaves together and cannot leave before its last product exists.
+ * @param group - lines of one release day, all with a date
+ */
+const promisedAt = (group: readonly GroupableLine[]): Date =>
+    new Date(Math.max(...group.map((line) => line.releaseDate!.getTime())));
+
+/**
  * Split an order's lines into fulfillment orders — the rule that runs when an order is paid.
  *
  * - every line that is not a preorder goes in ONE fulfillment order, `open`, `physical` if any of
  *   its lines ships and `digital` otherwise (digital lines of a mixed order ship with the
  *   physical ones);
  * - preorder lines get one fulfillment order per distinct release day, `on_hold` for
- *   `awaiting_stock`, with `agreedAt` and `expectedAt` both that day.
+ *   `awaiting_stock`, with `agreedAt` and `expectedAt` both the group's promised instant (the
+ *   latest release date among its lines).
  *
  * Numbered 1.. in that order: the one that ships now first, then the preorders by date. A preorder
  * line without a date is treated as an ordinary line: with nothing to wait for it cannot be held.
@@ -118,13 +132,13 @@ export const groupOrderLines = (lines: readonly GroupableLine[]): FulfillmentOrd
             : []),
         ...[...byDay]
             .toSorted(([a], [b]) => a.localeCompare(b))
-            .map(([key, group]) => ({
+            .map(([, group]) => ({
                 kind: kindOf(group),
                 status: FulfillmentOrderStatus.on_hold,
                 lines: group.map((line) => toFulfillmentLine(line)),
                 holdReason: FulfillmentHoldReason.awaiting_stock,
-                agreedAt: new Date(key),
-                expectedAt: new Date(key)
+                agreedAt: promisedAt(group),
+                expectedAt: promisedAt(group)
             }))
     ];
 
@@ -310,6 +324,7 @@ export interface ActionCandidate {
     kind: FulfillmentOrderKind;
     status: FulfillmentOrderStatus;
     holdReason?: FulfillmentHoldReason | undefined;
+    consent?: FulfillmentConsent | undefined;
     lines: readonly FulfillmentLine[];
 }
 
@@ -350,3 +365,13 @@ export const isHoldable = (candidate: ActionCandidate): boolean =>
 export const isReleasable = (candidate: ActionCandidate): boolean =>
     candidate.status === FulfillmentOrderStatus.on_hold &&
     candidate.holdReason !== FulfillmentHoldReason.awaiting_stock;
+
+/**
+ * Whether the buyer has been asked to say "keep waiting" and may answer: the fulfillment order
+ * still waits for stock and its consent is `awaiting`.
+ * @param candidate - the fulfillment order
+ */
+export const isAwaitingAnswer = (candidate: ActionCandidate): boolean =>
+    candidate.status === FulfillmentOrderStatus.on_hold &&
+    candidate.holdReason === FulfillmentHoldReason.awaiting_stock &&
+    candidate.consent === FulfillmentConsent.awaiting;

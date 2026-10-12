@@ -25,6 +25,11 @@ import {
     postReleaseFulfillmentOrder
 } from './controllers/post-hold-fulfillment-order';
 import { patchShipment } from './controllers/patch-shipment';
+import { postConfirmWait } from './controllers/post-confirm-wait';
+import {
+    getPreorderFulfillmentOrders,
+    getPreorderSummary
+} from './controllers/get-preorder-fulfillment-orders';
 
 /**
  * Whether this request is asking to skip the normal gate — the same flag `service.ts`'s
@@ -43,6 +48,24 @@ router.get('/methods', getShippingMethods);
 
 // GET /delivery/order/:orderId — the fulfillment orders and shipments behind one of the caller's orders
 router.get('/order/:orderId', getAuth, isAuth, getOrderFulfillment);
+
+// GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `orders.any.read`, the
+// key of the orders they are about (decided A5.2); it collapses onto a buyer's own `self` key in a
+// guard, so the service narrows the rows to the caller's own orders unless they read every order.
+router.get(
+    '/fulfillment-orders',
+    getAuth,
+    isAuth,
+    requirePermission('orders.any.read'),
+    getPreorderFulfillmentOrders
+);
+router.get(
+    '/fulfillment-orders/summary',
+    getAuth,
+    isAuth,
+    requirePermission('orders.any.read'),
+    getPreorderSummary
+);
 
 // POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.
 // No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
@@ -94,6 +117,11 @@ router.post(
     requirePermission('delivery.any.update'),
     postReleaseFulfillmentOrder
 );
+
+// POST /delivery/fulfillment-orders/:id/confirm-wait — the BUYER's "keep waiting" for a late
+// preorder. Only authentication here: it is the order's own buyer's answer, not a staff key's, and
+// the service refuses anyone else.
+router.post('/fulfillment-orders/:id/confirm-wait', getAuth, isAuth, postConfirmWait);
 
 // PATCH /delivery/shipments/:id — correct a tracking code (RFC 7396).
 router.patch(

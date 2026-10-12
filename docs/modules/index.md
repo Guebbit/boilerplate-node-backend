@@ -77,13 +77,16 @@ flowchart TD
     cart --> payments
     cart --> products
     cart --> users
+    delivery --> inventory
     delivery --> orders
+    delivery --> products
     example --> access
     example --> users
     inventory --> products
     invoicing --> orders
     invoicing --> payments
     notifications --> cart
+    notifications --> delivery
     notifications --> wishlist
     observability --> audit_logs
     orders --> access
@@ -120,19 +123,19 @@ flowchart TD
 | `orders`        | access, inventory, products, users                                | cart, delivery, invoicing, payments, returns, stats |
 | `cart`          | addresses, delivery, inventory, orders, payments, products, users | notifications, wishlist                             |
 | `users`         | access                                                            | account, api-keys, cart, example, orders, webhooks  |
+| `delivery`      | inventory, orders, products                                       | cart, notifications, returns                        |
+| `inventory`     | products                                                          | cart, delivery, orders, payments, returns           |
 | `payments`      | inventory, orders                                                 | cart, invoicing, returns, stats                     |
 | `access`        | —                                                                 | account, api-keys, example, orders, users           |
-| `inventory`     | products                                                          | cart, orders, payments, returns                     |
+| `products`      | —                                                                 | cart, delivery, inventory, orders, wishlist         |
 | `returns`       | delivery, inventory, orders, payments                             | stats                                               |
-| `products`      | —                                                                 | cart, inventory, orders, wishlist                   |
 | `stats`         | invoicing, orders, payments, returns                              | —                                                   |
 | `account`       | access, users                                                     | api-keys                                            |
 | `api-keys`      | access, account, users                                            | —                                                   |
-| `delivery`      | orders                                                            | cart, returns                                       |
 | `invoicing`     | orders, payments                                                  | stats                                               |
+| `notifications` | cart, delivery, wishlist                                          | —                                                   |
 | `wishlist`      | cart, products                                                    | notifications                                       |
 | `example`       | access, users                                                     | —                                                   |
-| `notifications` | cart, wishlist                                                    | —                                                   |
 | `addresses`     | —                                                                 | cart                                                |
 | `audit-logs`    | —                                                                 | observability                                       |
 | `observability` | audit-logs                                                        | —                                                   |
@@ -213,7 +216,7 @@ Ships with every deployment, whatever the project becomes.
 The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.
 
 - [`cart`](./cart.md) — One document per user, and checkout, the transaction the whole shop turns on. Deeper: [Checkout](./cart-checkout.md).
-- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, and the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order.
+- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order, and what a late preorder owes its buyer.
 - [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
 - [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
 - [`notifications`](./notifications.md) — A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.

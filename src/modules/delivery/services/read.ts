@@ -14,8 +14,9 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { orderService } from '@modules/orders';
+import { FulfillmentOrderStatus } from '@types';
 import type { AuthContext, OrderFulfillment } from '@types';
-import { remainderLines, remainingOfLine } from '../domain';
+import { hasWaitExpired, remainderLines, remainingOfLine } from '../domain';
 import type { ProductQuantity } from '../domain';
 import { fulfillmentOrderRepository, shipmentRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
@@ -137,3 +138,25 @@ export const findFulfillmentOrdersForOrders = (
     orderIds.length === 0
         ? Promise.resolve([])
         : fulfillmentOrderRepository.findByOrderIds(orderIds);
+
+/**
+ * Whether a fulfillment order's buyer was asked to keep waiting and the window has closed in
+ * silence — read again by `returns` before it cancels, so an answer that came in after the sweep
+ * announced the expiry is honoured. A fulfillment order that is gone, or no longer waiting for
+ * stock, has no expired wait.
+ *
+ * @param fulfillmentOrderId - the fulfillment order
+ * @param now - the instant to judge at; tests pass their own
+ */
+export const waitHasExpired = (
+    fulfillmentOrderId: string,
+    now: Date = new Date()
+): Promise<boolean> =>
+    fulfillmentOrderRepository
+        .findById(fulfillmentOrderId)
+        .then(
+            (found) =>
+                found !== null &&
+                found.status === FulfillmentOrderStatus.on_hold &&
+                hasWaitExpired(found, now)
+        );

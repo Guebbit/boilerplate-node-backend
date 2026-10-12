@@ -907,6 +907,17 @@ components:
                 weight:
                     type: integer
                     minimum: 0
+                # The date the buyer was promised, frozen at checkout (CRD Art. 18: the date shown
+                # when ordering is the agreed one). Never re-read from the catalogue, where an admin
+                # may have moved it since.
+                releaseDate:
+                    $ref: '../products/openapi.yaml#/components/schemas/ReleaseDate'
+                preorder:
+                    type: boolean
+                    description: >-
+                        The line was sold before its release date, frozen at checkout. `delivery`
+                        reads it, never the catalogue, to decide which fulfillment order the line
+                        belongs to: a bank transfer may be paid a week after the order was placed.
                 categories:
                     type: array
                     items:

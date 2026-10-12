@@ -26,6 +26,10 @@ const bodyOf = (notification: NotificationDocument): NotificationBody => {
         case 'notifications.wishlist-item-removed': {
             return { code: notification.code, params: notification.params };
         }
+        case 'notifications.preorder-delayed':
+        case 'notifications.preorder-confirm-wait': {
+            return { code: notification.code, params: notification.params };
+        }
     }
 };
 

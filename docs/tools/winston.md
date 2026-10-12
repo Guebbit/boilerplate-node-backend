@@ -167,6 +167,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | `order`                |
 | `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | `order`                |
 | `delivery`       | `ADMIN_SHIPMENT_TRACKING_EDITED`             | `admin.shipment.tracking_edited`             | `order`                |
+| `delivery`       | `BUYER_WAIT_CONFIRMED`                       | `fulfillment_order.wait_confirmed`           | `order`                |
 | `example`        | `EXAMPLE_COVER_CHANGED`                      | `example.cover_changed`                      | `example`              |
 | `example`        | `EXAMPLE_CREATED`                            | `example.created`                            | `example`              |
 | `example`        | `EXAMPLE_DELETED`                            | `example.deleted`                            | `example`              |
@@ -184,6 +185,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `infrastructure` | `SECURITY_TOKEN_MALFORMED`                   | `security.token.malformed`                   | —                      |
 | `infrastructure` | `SECURITY_UNAUTHORIZED`                      | `security.unauthorized`                      | —                      |
 | `inventory`      | `ADMIN_COMMIT_ORPHANED`                      | `admin.commit.orphaned`                      | `order`                |
+| `inventory`      | `ADMIN_PREORDER_LIMIT_SET`                   | `admin.preorder.limit.set`                   | `product`              |
 | `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                   | `admin.reservations.swept`                   | `reservation`          |
 | `inventory`      | `ADMIN_STOCK_ADJUSTED`                       | `admin.stock.adjusted`                       | —                      |
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |

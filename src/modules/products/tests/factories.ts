@@ -42,7 +42,9 @@ const seedStockLevel = (product: ProductDocument): Promise<unknown> =>
             $setOnInsert: {
                 onHand: product.onHand ?? 0,
                 reserved: product.reserved ?? 0,
-                available: availableStock(product.onHand, product.reserved)
+                available: availableStock(product.onHand, product.reserved),
+                preorderLimit: 0,
+                preordered: 0
             }
         },
         { upsert: true }

@@ -24,11 +24,14 @@ describe('delivery routes', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
             'GET /order/:orderId',
+            'GET /fulfillment-orders',
+            'GET /fulfillment-orders/summary',
             'POST /order/:orderId/start',
             'POST /fulfillment-orders/:id/shipments',
             'POST /fulfillment-orders/:id/fulfill',
             'POST /fulfillment-orders/:id/hold',
             'POST /fulfillment-orders/:id/release',
+            'POST /fulfillment-orders/:id/confirm-wait',
             'PATCH /shipments/:id',
             'POST /shipments/:id/deliver'
         ]);
@@ -58,6 +61,14 @@ describe('delivery routes', () => {
         // A customer could otherwise move their own order forward, or anyone else's — this is
         // staff's own write, not the order owner's.
         expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
+    });
+
+    it("keeps the buyer's keep-waiting answer to a session, with no staff key", () => {
+        // It is the order's own buyer's answer, not a permission: the service refuses anyone else.
+        const guards = guardsOn(router, 'POST /fulfillment-orders/:id/confirm-wait');
+
+        expect(guards).toContain('isAuth');
+        expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('leaves nothing but the methods list unauthenticated', () => {

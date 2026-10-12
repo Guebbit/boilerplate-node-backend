@@ -13,6 +13,7 @@ import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { StockMovementReason } from '@types';
 import type { StockMovement } from '@types';
+import type { HoldKind } from './domain';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
@@ -61,6 +62,11 @@ export const stockMovementSchema = new Schema<StockMovementDocument>(
             default: 0
         },
         reservedDelta: {
+            type: Number,
+            default: 0
+        },
+        // The third column, for units that do not exist yet. Same reasoning as the other two.
+        preorderedDelta: {
             type: Number,
             default: 0
         },
@@ -120,6 +126,14 @@ export interface StockLevelDocument extends Document {
      * — see `./repository`'s `stockBoard`.
      */
     available: number;
+    /** How many units may be preordered at once; `0` closes preordering. Set by an admin. */
+    preorderLimit: number;
+    /**
+     * Preorder units outstanding against {@link StockLevelDocument.preorderLimit}: claimed by an
+     * order (paid or still held) and not yet allocated stock. Written only through
+     * `applyTransition`, like the other counters — a preorder hold moves this and never `reserved`.
+     */
+    preordered: number;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -155,6 +169,17 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
         available: {
             type: Number,
             default: 0
+        },
+        // Same as the counters above: `preordered` only moves through `$inc` in `applyDelta`, whose
+        // guard (`preordered + n <= preorderLimit`) is the real ceiling.
+        preorderLimit: {
+            type: Number,
+            default: 0,
+            min: 0
+        },
+        preordered: {
+            type: Number,
+            default: 0
         }
     },
     {
@@ -164,6 +189,9 @@ export const stockLevelSchema = new Schema<StockLevelDocument>(
 
 /* The stock board's own query: scarcest first. */
 stockLevelSchema.index({ available: 1, _id: 1 }, { name: 'stocklevels_available__id' });
+/* The preorder board lists products with an allowance or something outstanding: two clauses of an `$or`. */
+stockLevelSchema.index({ preorderLimit: -1 }, { name: 'stocklevels_preorderLimit' });
+stockLevelSchema.index({ preordered: -1 }, { name: 'stocklevels_preordered' });
 
 /** `_id` → `id`, dates to ISO strings. */
 export const applyStockLevelTransform = applySerialization(stockLevelSchema);
@@ -176,10 +204,12 @@ export const stockLevelModel = model<StockLevelDocument, StockLevelModel>(
 
 /* ────────────────────────────────────────────────────────────────────────────────────────── */
 
-/** What one hold claimed, per product. */
+/** What one hold claimed, per product and kind. */
 export interface ReservationItem {
     productId: Types.ObjectId;
     quantity: number;
+    /** `stock` units sit on the shelf; `preorder` units are an allowance claim. Absent reads `stock`. */
+    kind?: HoldKind;
 }
 
 /** Every state a hold can be in — the schema's `enum`, and the source of {@link ReservationStatus}. */
@@ -202,6 +232,11 @@ export interface ReservationDocument extends Document {
     items: ReservationItem[];
     status: ReservationStatus;
     expiresAt: Date;
+    /**
+     * When the payment committed this hold. The preorder queue key: stock is allocated oldest
+     * payment first, and `inventory` does not depend on `orders`, so it cannot read `paidAt`.
+     */
+    committedAt?: Date;
     createdAt?: Date;
     updatedAt?: Date;
 }
@@ -221,6 +256,11 @@ const reservationItemSchema = new Schema<ReservationItem>(
             type: Number,
             required: true,
             min: 1
+        },
+        kind: {
+            type: String,
+            enum: ['stock', 'preorder'],
+            default: 'stock'
         }
     },
     { _id: false }
@@ -267,6 +307,9 @@ export const reservationSchema = new Schema<ReservationDocument>(
         expiresAt: {
             type: Date,
             required: true
+        },
+        committedAt: {
+            type: Date
         }
     },
     {
@@ -276,6 +319,11 @@ export const reservationSchema = new Schema<ReservationDocument>(
 
 /* The sweep's only query: holds still held, oldest deadline first. */
 reservationSchema.index({ status: 1, expiresAt: 1 }, { name: 'reservations_status_expiresAt' });
+/* The allocation's only query: paid holds with a preorder line for one product, oldest payment first. */
+reservationSchema.index(
+    { status: 1, 'items.productId': 1, committedAt: 1 },
+    { name: 'reservations_status_itemsProductId_committedAt' }
+);
 
 /** `_id` → `id`, dates to ISO strings — the shape every reservation read answers in. */
 export const applyReservationTransform = applySerialization(reservationSchema);

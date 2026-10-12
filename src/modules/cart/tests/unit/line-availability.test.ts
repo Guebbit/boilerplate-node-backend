@@ -65,6 +65,26 @@ describe('lineAvailability', () => {
             'a product that never set the flags',
             { product: {}, available: 5, quantity: 1 },
             'in_stock'
+        ],
+        [
+            'a preorder whose allowance covers the line',
+            { product: { ...LIVE, preorder: true }, available: 3, quantity: 3 },
+            'preorder'
+        ],
+        [
+            'a preorder wanting more than its allowance has left',
+            { product: { ...LIVE, preorder: true }, available: 2, quantity: 3 },
+            'insufficient_stock'
+        ],
+        [
+            'a preorder with its allowance full',
+            { product: { ...LIVE, preorder: true }, available: 0, quantity: 1 },
+            'out_of_stock'
+        ],
+        [
+            'a hidden preorder, which hidden still wins over',
+            { product: { ...LIVE, active: false, preorder: true }, available: 5, quantity: 1 },
+            'removed'
         ]
     ])('cart line, %s: %s', (_label, facts, expected) => {
         expect(lineAvailability(facts)).toBe(expected);
@@ -75,7 +95,12 @@ describe('lineAvailability', () => {
         ['none left', { product: LIVE, available: 0 }, 'out_of_stock'],
         ['off sale', { product: { ...LIVE, purchasable: false }, available: 4 }, 'unavailable'],
         ['hidden', { product: { ...LIVE, active: false }, available: 4 }, 'removed'],
-        ['gone', { product: null, available: undefined }, 'removed']
+        ['gone', { product: null, available: undefined }, 'removed'],
+        [
+            'a preorder with allowance',
+            { product: { ...LIVE, preorder: true }, available: 1 },
+            'preorder'
+        ]
     ])('wishlist line, %s: %s', (_label, facts, expected) => {
         expect(lineAvailability(facts)).toBe(expected);
     });
