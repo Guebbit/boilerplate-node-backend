@@ -3,8 +3,8 @@
  * `account/session/jwt.ts` — the token layer, at the unit level. Asserts the properties that keep
  * it SAFE: the two secrets never cross-verify, a refresh token is only valid while still stored,
  * `jwtid: randomUUID()` keeps two same-second logins from mutually revoking, and the signing ring
- * rotates without a mass logout. `@modules/users` is REPLACED rather than driven — see
- * `tests/support/ports.ts`.
+ * rotates without a mass logout. The session store and `@modules/users` are REPLACED rather than
+ * driven: what the queries do is `../integration/auth-storage.test.ts`'s, against a real store.
  *
  * Every fixture below signs with `keyid: keyId(secret)`, matching what `jwt.ts` itself stamps —
  * a fixture signed without one would verify against nothing, since `kid` is how a ring member is
@@ -17,12 +17,10 @@ import { asStub } from '@tests/stub';
 import { keyId } from '@modules/account/session/key-ring';
 
 /*
- * The SERVICE, not the model: `session/jwt.ts` reaches `userService.findByTokenValue`,
- * `.findByIdWithCredentials` and `.tokenTouch` rather than running raw `Users` queries itself, so
- * this suite doubles those instead. What the QUERIES look like is asserted in
- * `users/tests/integration/repository.test.ts`, against a real store. Every other `userService`
- * member rides through unchanged (`...actual.userService`) — only the three this file drives are
- * replaced.
+ * The session store and the SERVICE, not the model: `session/jwt.ts` reaches `sessionRepository`
+ * and `userService.findAuthenticatableById` rather than running raw queries itself, so this suite
+ * doubles those instead. What the QUERIES look like is asserted in `../integration/auth-storage.test.ts`, against a
+ * real store. Every other `userService` member rides through unchanged (`...actual.userService`).
  */
 jest.mock('@modules/users', () => {
     const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
@@ -31,9 +29,23 @@ jest.mock('@modules/users', () => {
         __esModule: true,
         userService: {
             ...actual.userService,
-            findByTokenValue: jest.fn(),
-            findByIdWithCredentials: jest.fn(),
-            tokenTouch: jest.fn()
+            findAuthenticatableById: jest.fn(),
+            touchLastActive: jest.fn()
+        }
+    };
+});
+
+jest.mock('@modules/account/repository', () => {
+    const actual = jest.requireActual<typeof import('@modules/account/repository')>(
+        '@modules/account/repository'
+    );
+    return {
+        ...actual,
+        __esModule: true,
+        sessionRepository: {
+            ...actual.sessionRepository,
+            findByHash: jest.fn(),
+            insert: jest.fn()
         }
     };
 });
@@ -42,45 +54,53 @@ import {
     verifyAccessToken,
     verifyRefreshToken,
     createRefreshToken,
-    createAccessToken,
-    recordRefreshTokenUse
+    createAccessToken
 } from '@modules/account/session/jwt';
-import { userService, TokenType, hashToken } from '@modules/users';
+import { userService } from '@modules/users';
+import { sessionRepository } from '@modules/account/repository';
+import { hashToken } from '@infrastructure/security/hash-token';
 import { setEnvironment } from '@tests/environment';
 
 const USER_ID = '507f1f77bcf86cd799439011';
 
 const mockedUsers = asStub<{
-    findByTokenValue: jest.Mock;
-    findByIdWithCredentials: jest.Mock;
-    tokenTouch: jest.Mock;
+    findAuthenticatableById: jest.Mock;
+    touchLastActive: jest.Mock;
 }>(userService);
 
+const mockedSessions = asStub<{
+    findByHash: jest.Mock;
+    insert: jest.Mock;
+}>(sessionRepository);
+
+/** A user that may sign in — the shape `findAuthenticatableById` answers, minus what jwt.ts never reads. */
+const signedInUser = () => ({
+    id: USER_ID,
+    tokensValidAfter: undefined,
+    twoFactorEnabledAt: undefined
+});
+
 /**
- * Makes `findByTokenValue` answer a holder whose stored entry for the presented token is a LIVE
- * refresh one — what `verifyRefreshToken` now reads off the document.
+ * Makes the store answer a LIVE `jwt` row for whatever token is presented, owned by a user who
+ * may still sign in — what `verifyRefreshToken` reads.
  */
 const holdingLive = () => {
-    mockedUsers.findByTokenValue.mockImplementation((value: string) =>
+    mockedSessions.findByHash.mockImplementation((digest: string) =>
         Promise.resolve({
-            _id: USER_ID,
-            tokens: [{ token: hashToken(value), type: TokenType.REFRESH }]
+            userId: USER_ID,
+            mode: 'jwt',
+            tokenHash: digest,
+            expiresAt: new Date(Date.now() + 3_600_000)
         })
     );
+    mockedUsers.findAuthenticatableById.mockResolvedValue(signedInUser());
 };
 
-/** A user document double, carrying only the one method `createRefreshToken` calls. */
-const userDouble = () => {
-    const tokenAdd = jest.fn().mockResolvedValue('stored');
-    return { tokenAdd, select: undefined };
-};
-
-/**
- * `userService.findByIdWithCredentials(id)` — one call to stub, so this file never has to walk
- * a `findById(...).select('+tokens')` chain of its own.
- */
-const findByIdReturning = (user: unknown) => {
-    mockedUsers.findByIdWithCredentials.mockResolvedValue(user);
+/** Lets `createRefreshToken` find its user and store its row. */
+const mintable = () => {
+    mockedUsers.findAuthenticatableById.mockResolvedValue(signedInUser());
+    mockedUsers.touchLastActive.mockResolvedValue(undefined);
+    mockedSessions.insert.mockResolvedValue(undefined);
 };
 
 /**
@@ -181,16 +201,39 @@ describe('verifyRefreshToken', () => {
         holdingLive();
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
-        // Looked up BY THE TOKEN, not by the id in its payload: the stored list is the authority
-        // on which sessions are live, and a payload cannot be asked whether it was revoked.
-        expect(mockedUsers.findByTokenValue).toHaveBeenCalledWith(token);
+        // Looked up BY THE TOKEN's digest, not by the id in its payload: the stored rows are the
+        // authority on which sessions are live, and a payload cannot be asked whether it was revoked.
+        expect(mockedSessions.findByHash).toHaveBeenCalledWith(hashToken(token));
     });
 
     it('rejects a validly signed token that is no longer stored', async () => {
         // Revocation. Without this branch, logout and session revocation are cosmetic: the JWT
         // still verifies until it expires, whatever the database says.
         const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue(null);
+        mockedSessions.findByHash.mockResolvedValue(null);
+
+        await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
+    });
+
+    it('rejects a stored row that was rotated away, an expired one, and one of the other mode', async () => {
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const live = { userId: USER_ID, mode: 'jwt', expiresAt: new Date(Date.now() + 60_000) };
+        mockedUsers.findAuthenticatableById.mockResolvedValue(signedInUser());
+
+        for (const dead of [
+            { ...live, supersededAt: new Date() },
+            { ...live, expiresAt: new Date(Date.now() - 1) },
+            { ...live, mode: 'cookie' }
+        ]) {
+            mockedSessions.findByHash.mockResolvedValueOnce(dead);
+            await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
+        }
+    });
+
+    it('rejects a live row whose account may no longer sign in', async () => {
+        const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        holdingLive();
+        mockedUsers.findAuthenticatableById.mockResolvedValue(null);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
     });
@@ -205,14 +248,14 @@ describe('verifyRefreshToken', () => {
         // A forged token must cost nothing: checking the signature first is what stops an
         // unauthenticated flood from becoming a database query per request.
         await expect(verifyRefreshToken('not-a-jwt')).rejects.toThrow();
-        expect(mockedUsers.findByTokenValue).not.toHaveBeenCalled();
+        expect(mockedSessions.findByHash).not.toHaveBeenCalled();
     });
 
     it('rejects rather than resolving when the lookup itself fails', async () => {
         // A database error must not be read as "no such token" OR as success. It rejects, and the
         // caller answers 500 rather than silently logging someone out or letting them in.
         const token = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockRejectedValue(new Error('connection lost'));
+        mockedSessions.findByHash.mockRejectedValue(new Error('connection lost'));
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('connection lost');
     });
@@ -220,11 +263,9 @@ describe('verifyRefreshToken', () => {
 
 describe('the signing-key ring', () => {
     it('stamps the kid of the key it actually signed with', async () => {
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID);
 
         expect(decode(token, { complete: true })!.header.kid).toBe(keyId('refresh-secret'));
     });
@@ -242,11 +283,9 @@ describe('the signing-key ring', () => {
 
     it("signs new tokens with the ring's first entry once one is prepended", async () => {
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret,refresh-secret' });
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID);
 
         expect(decode(token, { complete: true })!.header.kid).toBe(keyId('new-refresh-secret'));
     });
@@ -259,16 +298,14 @@ describe('the signing-key ring', () => {
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret' });
 
         await expect(verifyRefreshToken(token)).rejects.toThrow();
-        expect(mockedUsers.findByTokenValue).not.toHaveBeenCalled();
+        expect(mockedSessions.findByHash).not.toHaveBeenCalled();
     });
 
     it('behaves identically to an unrotated deployment when the ring holds one entry', async () => {
         // "A ring of one behaves precisely as today" — the whole point of the migration.
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID);
         holdingLive();
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
@@ -276,34 +313,34 @@ describe('the signing-key ring', () => {
 });
 
 describe('createRefreshToken', () => {
-    it('stores a refresh token against the user and returns what the model returns', async () => {
-        const user = userDouble();
-        findByIdReturning(user);
+    it('stores a `jwt` session row holding the digest of the token it returns', async () => {
+        mintable();
 
-        await expect(createRefreshToken(USER_ID)).resolves.toBe('stored');
-        expect(user.tokenAdd).toHaveBeenCalledTimes(1);
-        // The type matters: `tokenAdd` is shared with reset, verify and delete tokens, and a
-        // refresh token filed under the wrong type is revoked by the wrong operation.
-        expect(user.tokenAdd.mock.calls[0][0]).toBe(TokenType.REFRESH);
+        const token = await createRefreshToken(USER_ID);
+
+        expect(mockedSessions.insert).toHaveBeenCalledTimes(1);
+        // Only the digest is stored: the token's value is as good as a password.
+        expect(mockedSessions.insert).toHaveBeenCalledWith(
+            expect.objectContaining({ mode: 'jwt', tokenHash: hashToken(token) })
+        );
     });
 
-    it('reads the token list explicitly, which the default projection excludes', async () => {
-        // The `+tokens` projection is what makes `tokenAdd` append to a loaded field rather than
-        // an undefined one; asking for it is what `findByIdWithCredentials` MEANS, and that the
-        // repository actually applies it is asserted in its own integration spec.
-        findByIdReturning(userDouble());
+    it('starts a new session family and stamps when the sign-in happened', async () => {
+        mintable();
 
         await createRefreshToken(USER_ID);
 
-        expect(mockedUsers.findByIdWithCredentials).toHaveBeenCalledWith(USER_ID);
+        const [row] = mockedSessions.insert.mock.calls[0] as [
+            { familyId: unknown; startedAt: Date }
+        ];
+        expect(row.familyId).toBeDefined();
+        expect(row.startedAt).toBeInstanceOf(Date);
     });
 
     it('signs the id with the refresh secret, not the access one', async () => {
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID);
 
         // Verifies against the refresh secret...
         holdingLive();
@@ -315,11 +352,9 @@ describe('createRefreshToken', () => {
     it('pins HS256 rather than letting the header choose the algorithm', async () => {
         // `alg: none` and algorithm confusion are the classic JWT forgeries. Pinning at signing
         // time is half of the defence; the library's default verification is the other half.
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID);
 
         expect(decode(token, { complete: true })!.header.alg).toBe('HS256');
     });
@@ -327,65 +362,58 @@ describe('createRefreshToken', () => {
     it('gives every issued token a unique id', async () => {
         // `jwtid: randomUUID()`. Without it two logins by the same user inside the same second
         // produce byte-identical tokens, and revoking one revokes both.
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        await createRefreshToken(USER_ID);
+        const first = await createRefreshToken(USER_ID);
+        const second = await createRefreshToken(USER_ID);
 
-        const [first, second] = user.tokenAdd.mock.calls.map((call) => call[2] as string);
         expect(first).not.toBe(second);
         expect((decode(first) as { jti: string }).jti).not.toBe(
             (decode(second) as { jti: string }).jti
         );
     });
 
-    it('honours the remember-me window, in seconds on the token and milliseconds on the record', async () => {
+    it('honours the remember-me window, in seconds on the token and milliseconds on the row', async () => {
         // Two units, one setting. The JWT's `exp` is in seconds and the stored expiry is a
         // JavaScript timestamp; getting the pair out of step makes the database and the token
         // disagree about when a session ends.
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID, 'long' as never);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID, 'long' as never);
         const { iat, exp } = decode(token) as { iat: number; exp: number };
+        const [row] = mockedSessions.insert.mock.calls[0] as [{ startedAt: Date; expiresAt: Date }];
 
         expect(exp - iat).toBe(2_592_000);
-        expect(user.tokenAdd.mock.calls[0][1]).toBe(2_592_000 * 1000);
+        expect(row.expiresAt.getTime() - row.startedAt.getTime()).toBe(2_592_000 * 1000);
     });
 
     it('gives a browser-session login (no tier) the short tier as its server-side limit', async () => {
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID);
-        const token = user.tokenAdd.mock.calls[0][2] as string;
+        const token = await createRefreshToken(USER_ID);
         const { iat, exp } = decode(token) as { iat: number; exp: number };
+        const [row] = mockedSessions.insert.mock.calls[0] as [{ startedAt: Date; expiresAt: Date }];
 
         // NOT the access-token window (900s here): a session cookie still needs a real limit.
         expect(exp - iat).toBe(3600);
-        expect(user.tokenAdd.mock.calls[0][1]).toBe(3600 * 1000);
+        expect(row.expiresAt.getTime() - row.startedAt.getTime()).toBe(3600 * 1000);
     });
 
     it('stamps the ticked tier as a claim, and stamps none for a browser-session login', async () => {
-        const user = userDouble();
-        findByIdReturning(user);
+        mintable();
 
-        await createRefreshToken(USER_ID, 'long' as never);
-        await createRefreshToken(USER_ID);
-        const [remembered, session] = user.tokenAdd.mock.calls.map((call) =>
-            decode(call[2] as string)
-        );
+        const remembered = decode(await createRefreshToken(USER_ID, 'long' as never));
+        const session = decode(await createRefreshToken(USER_ID));
 
         expect(remembered).toMatchObject({ remember: 'long' });
         expect(session).not.toHaveProperty('remember');
     });
 
     it('refuses to issue a token for a user that does not exist', async () => {
-        findByIdReturning(null);
+        mockedUsers.findAuthenticatableById.mockResolvedValue(null);
 
         await expect(createRefreshToken(USER_ID)).rejects.toThrow('User not found');
+        expect(mockedSessions.insert).not.toHaveBeenCalled();
     });
 });
 
@@ -403,7 +431,7 @@ describe('createAccessToken', () => {
         // The property that makes logout mean anything: a revoked session must not be able to
         // keep issuing fresh access tokens for the remainder of the refresh token's lifetime.
         const refresh = signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
-        mockedUsers.findByTokenValue.mockResolvedValue(null);
+        mockedSessions.findByHash.mockResolvedValue(null);
 
         await expect(createAccessToken(refresh)).rejects.toThrow('Forbidden');
     });
@@ -461,39 +489,5 @@ describe('createAccessToken carrying the tier', () => {
         };
 
         expect(exp - iat).toBe(900);
-    });
-});
-
-describe('recordRefreshTokenUse', () => {
-    it('stamps the token it was given, and only that one', async () => {
-        mockedUsers.tokenTouch.mockResolvedValue({ modifiedCount: 1 });
-
-        await recordRefreshTokenUse('a-token');
-
-        /*
-         * The positional `$` that stamps the token that MATCHED — not the first in the array — is
-         * `userService.tokenTouch`'s, proven against a real document in
-         * `users/tests/integration/repository.test.ts`. What this file owns is that the right
-         * value is handed over, exactly once.
-         */
-        expect(mockedUsers.tokenTouch).toHaveBeenCalledTimes(1);
-        expect(mockedUsers.tokenTouch).toHaveBeenCalledWith('a-token');
-    });
-
-    it('resolves to undefined rather than the driver"s write result', async () => {
-        // Callers await it for ordering only; leaking the raw result invites someone to branch on
-        // `modifiedCount`, which is legitimately 0 for a token used twice in the same millisecond.
-        mockedUsers.tokenTouch.mockResolvedValue({ modifiedCount: 1 });
-
-        await expect(recordRefreshTokenUse('a-token')).resolves.toBeUndefined();
-    });
-
-    it('swallows a failure, because bookkeeping must not fail a login', async () => {
-        // Best-effort by design: this records WHEN a session was last used. If it throws, an
-        // otherwise valid token refresh turns into a 500 and the user is signed out for a
-        // statistic.
-        mockedUsers.tokenTouch.mockRejectedValue(new Error('connection lost'));
-
-        await expect(recordRefreshTokenUse('a-token')).resolves.toBeUndefined();
     });
 });

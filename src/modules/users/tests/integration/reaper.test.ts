@@ -94,9 +94,9 @@ describe('the inactivity reaper’s candidates', () => {
         expect(emailsOf(candidates)).toEqual(['customer@reaper.test']);
     });
 
-    it('keeps an account whose only recent proof of life is lastActiveAt, tokens or none', async () => {
+    it('keeps an account whose only recent proof of life is lastActiveAt or none', async () => {
         const user = await inactiveAccount('returned', 'customer');
-        await makeInactive(user.id, { lastActiveAt: new Date(), tokens: [] });
+        await makeInactive(user.id, { lastActiveAt: new Date() });
 
         expect(await userService.findInactiveUnwarned(daysAgo(30))).toEqual([]);
     });

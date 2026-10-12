@@ -12,17 +12,13 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 setupTestDb();
 
 describe('user schema', () => {
-    it('hides password and tokens from an ordinary read', async () => {
+    it('hides the password from an ordinary read', async () => {
         const created = await createUser({ email: 'hidden@example.com' });
 
         const found = await userRepository.findById(created.id);
 
         // `select: false`: a plain findById must not be able to hand a caller credentials.
         expect(found!.password).toBeUndefined();
-        // Undefined rather than an empty array: the field was never selected, which is a
-        // stronger guarantee than "selected but blank" — there is nothing to accidentally
-        // serialise.
-        expect(found!.tokens).toBeUndefined();
     });
 
     it('exposes credentials only through the explicit selector', async () => {
@@ -43,7 +39,7 @@ describe('user schema', () => {
         expect(found!.password).toMatch(/^\$argon2id\$/);
     });
 
-    it('serialises to id, never _id, __v, password or tokens', async () => {
+    it('serialises to id, never _id, __v or password', async () => {
         const created = await createUser({ email: 'json@example.com' });
 
         const serialized = created.toJSON() as Record<string, unknown>;
@@ -52,7 +48,6 @@ describe('user schema', () => {
         expect(serialized).not.toHaveProperty('_id');
         expect(serialized).not.toHaveProperty('__v');
         expect(serialized).not.toHaveProperty('password');
-        expect(serialized).not.toHaveProperty('tokens');
     });
 
     /**

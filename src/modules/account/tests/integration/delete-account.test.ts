@@ -17,6 +17,7 @@ import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { ACCOUNT_DELETE_TOKEN_TYPE } from '@modules/account/services';
+import { plantToken } from '../factories';
 
 /**
  * Every mail the app queued, newest last — same convention as `two-factor.test.ts`. Named
@@ -104,7 +105,9 @@ describe('DELETE /account — deleteAccountRequest', () => {
 describe('DELETE /account/delete-confirm — deleteAccountConfirm', () => {
     it('spends a live token, hard-deletes the account, clears the session cookies, and returns 200', async () => {
         const user = await createUser({ email: 'confirmed-gone@example.com' });
-        await user.tokenAdd(ACCOUNT_DELETE_TOKEN_TYPE, 3_600_000, 'live-delete-token');
+        await plantToken(user.id, ACCOUNT_DELETE_TOKEN_TYPE, 'live-delete-token', {
+            ttlMs: 3_600_000
+        });
 
         const response = await api()
             .delete('/account/delete-confirm')

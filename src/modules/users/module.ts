@@ -17,11 +17,9 @@ import {
     resolvePersonalDataMinimisers,
     type AppModule
 } from '@kernel/registry';
-import type { ExportSession } from '@types';
 import { router } from './routes';
 import { userRepository } from './repository';
 import { userService } from './services';
-import { isLiveRefreshSession, sessionIdOf, type Token } from './model';
 import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-registry';
 import './events';
 import { usersConfig } from './config';
@@ -37,21 +35,6 @@ const onRegistered = (modules: readonly AppModule[]): void => {
     setPersonalDataErasers(resolvePersonalDataErasers(modules));
     setPersonalDataMinimisers(resolvePersonalDataMinimisers(modules));
 };
-
-/**
- * This caller's own live refresh sessions, metadata only — keeps `type` (a stored `Session`
- * doesn't carry it, since its one filter already fixes it; an export naming every field is worth
- * the one extra key).
- */
-const ownSessions = (tokens: Token[]): ExportSession[] =>
-    tokens
-        .filter((token) => isLiveRefreshSession(token))
-        .map((token) => ({
-            id: sessionIdOf(token),
-            type: 'refresh' as const,
-            ...(token.expiration ? { expiration: token.expiration.toISOString() } : {}),
-            ...(token.lastUsedAt ? { lastUsedAt: token.lastUsedAt.toISOString() } : {})
-        }));
 
 /** This module's manifest entry: routes, locales, and the image writeback target. */
 export default {
@@ -71,16 +54,6 @@ export default {
         {
             section: 'profile',
             collect: (subject) => userService.findByIdWithCredentials(subject.userId)
-        },
-        {
-            section: 'sessions',
-            // `findByIdWithCredentials` again rather than sharing `profile`'s read: each section's
-            // `collect` is independent by design (see `kernel/registry.ts`'s own docblock), and a
-            // data export is not a hot path worth optimizing a second query out of.
-            collect: (subject) =>
-                userService
-                    .findByIdWithCredentials(subject.userId)
-                    .then((user) => (user ? ownSessions(user.tokens) : []))
         }
     ],
     // The PII encryption key: see `./config`.

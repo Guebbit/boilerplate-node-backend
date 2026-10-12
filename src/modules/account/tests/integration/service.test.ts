@@ -16,9 +16,10 @@ import {
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
-import { hashToken } from '@modules/users';
+import { hashToken } from '@infrastructure/security/hash-token';
 import { userRepository } from '@modules/users/tests/factories';
-import { TokenType, type Token, type UserDocument } from '@modules/users';
+import type { UserDocument } from '@modules/users';
+import { plantSession, plantToken, sessionRowsOf, tokenHashesOf, tokenRowsOf } from '../factories';
 import { asReject, asSuccess } from '@tests/response';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { accountAnalyticsEvents } from '../../analytics';
@@ -409,19 +410,17 @@ describe('passwordChange', () => {
     });
 });
 
-describe('tokenAdd', () => {
-    it('appends a token of the requested type and returns it', async () => {
+describe('issueToken', () => {
+    it('stores a token of the requested type and returns it', async () => {
         const user = await createUser({ email: 'tokenadd@example.com' });
 
-        const token = await accountService.tokenAdd(user, TokenType.PASSWORD_RESET);
+        const token = await accountService.issueToken(user.id, 'password', 60_000);
 
-        const stored = await userRepository.findOneWithCredentials({
-            email: 'tokenadd@example.com'
-        });
-        expect(stored?.tokens).toHaveLength(1);
+        const rows = await tokenRowsOf(user.id);
+        expect(rows).toHaveLength(1);
         // Hashed at rest — the returned `token` is the plaintext, storage holds its digest.
-        expect(stored?.tokens[0]?.token).toBe(hashToken(token));
-        expect(stored?.tokens[0]?.type).toBe(TokenType.PASSWORD_RESET);
+        expect(rows[0]?.tokenHash).toBe(hashToken(token));
+        expect(rows[0]?.type).toBe('password');
     });
 
     it('returns 32 hex characters, so the token is 16 bytes of real entropy', () => {
@@ -429,92 +428,90 @@ describe('tokenAdd', () => {
         // anything shorter is a guessable reset link, and the value is only ever compared for
         // equality, so nothing else in the system would complain.
         return createUser({ email: 'entropy@example.com' })
-            .then((user) => accountService.tokenAdd(user, TokenType.PASSWORD_RESET))
+            .then((user) => accountService.issueToken(user.id, 'password', 60_000))
             .then((token) => {
                 expect(token).toMatch(/^[\da-f]{32}$/);
             });
     });
 
-    it('keeps both tokens when two are added concurrently', async () => {
-        // The invariant: the token array is APPENDED TO, never rebuilt.
-        //
-        // Mongoose tracks the change rather than the result, so `push` becomes a `$push` and two
-        // writers cannot lose each other's entry. Rebuilding the array instead — `user.tokens =
-        // [...user.tokens, entry]`, which reads as an innocent modernisation — becomes a `$set`
-        // of the whole array, and then the second writer erases the first. This case fails under
-        // exactly that change, which is what makes it worth keeping.
-        //
-        // Concretely: two "forgot password" clicks, and one of the two emailed links silently
-        // does not work.
+    it('keeps both tokens when two of a many-live kind are issued concurrently', async () => {
+        // The invariant: each issue is its own row, so two writers cannot lose each other's token.
+        // Concretely: two "delete my account" clicks, and one of the two emailed links silently
+        // does not work, if one write could overwrite the other.
         const user = await createUser({ email: 'concurrent@example.com' });
-        const other = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
         const [first, second] = await Promise.all([
-            accountService.tokenAdd(user, TokenType.PASSWORD_RESET),
-            accountService.tokenAdd(other, TokenType.PASSWORD_RESET)
+            accountService.issueToken(user.id, 'delete', 60_000),
+            accountService.issueToken(user.id, 'delete', 60_000)
         ]);
 
-        const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored?.tokens.map(({ token }) => token).toSorted()).toEqual(
+        const rows = await tokenRowsOf(user.id);
+        expect(rows.map(({ tokenHash }) => tokenHash).toSorted()).toEqual(
             [first, second].map((value) => hashToken(value)).toSorted()
         );
+    });
+
+    it('leaves one live link when two of a one-live kind are issued concurrently', async () => {
+        // The mirror: for a reset link the point is that the OLD one dies, atomically, so a race
+        // cannot leave two working links.
+        const user = await createUser({ email: 'concurrent-reset@example.com' });
+
+        const [first, second] = await Promise.all([
+            accountService.issueToken(user.id, 'password', 60_000),
+            accountService.issueToken(user.id, 'password', 60_000)
+        ]);
+
+        const rows = await tokenRowsOf(user.id);
+        expect(rows).toHaveLength(1);
+        expect([first, second].map((value) => hashToken(value))).toContain(rows[0]?.tokenHash);
     });
 
     it('issues a different token every time', async () => {
         const user = await createUser({ email: 'distinct@example.com' });
 
-        const first = await accountService.tokenAdd(user, TokenType.PASSWORD_RESET);
-        const second = await accountService.tokenAdd(user, TokenType.PASSWORD_RESET);
+        const first = await accountService.issueToken(user.id, 'password', 60_000);
+        const second = await accountService.issueToken(user.id, 'password', 60_000);
 
         expect(first).not.toBe(second);
     });
 
-    it('sets an expiry only when one was asked for', async () => {
+    it('sets the expiry the requested lifetime from now', async () => {
         const user = await createUser({ email: 'expiry@example.com' });
         const before = Date.now();
 
-        await accountService.tokenAdd(user, TokenType.PASSWORD_RESET, 60_000);
-        await accountService.tokenAdd(user, TokenType.REFRESH);
+        await accountService.issueToken(user.id, 'password', 60_000);
 
-        const stored = await userRepository.findOneWithCredentials({ email: 'expiry@example.com' });
-        const [withExpiry, withoutExpiry] = stored!.tokens;
-
-        expect(withExpiry?.expiration).toBeInstanceOf(Date);
+        const [row] = await tokenRowsOf(user.id);
         // Offset from *now*, not an absolute constant: an expiry computed from the wrong origin
         // is either already expired or effectively permanent.
-        expect(withExpiry.expiration!.getTime()).toBeGreaterThanOrEqual(before + 60_000);
-        expect(withExpiry.expiration!.getTime()).toBeLessThan(before + 60_000 + 10_000);
-
-        expect(withoutExpiry?.expiration).toBeUndefined();
+        expect(row.expiresAt.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+        expect(row.expiresAt.getTime()).toBeLessThan(before + 60_000 + 10_000);
     });
 });
 
-/** A user holding two refresh tokens and one reset token, so "only this type" is observable. */
-const createUserWithBothTokenTypes = () =>
-    createUser({
-        email: 'removeall@example.com',
-        tokens: [
-            { type: TokenType.REFRESH, token: 'refresh-a', sentAt: new Date() },
-            { type: TokenType.REFRESH, token: 'refresh-b', sentAt: new Date() },
-            { type: TokenType.PASSWORD_RESET, token: 'reset-a', sentAt: new Date() }
-        ] as Token[]
-    });
+/** A user holding two sessions and one reset token, so "only the sessions" is observable. */
+const createUserWithSessionsAndAReset = async () => {
+    const user = await createUser({ email: 'removeall@example.com' });
+    await plantSession(user.id, 'refresh-a');
+    await plantSession(user.id, 'refresh-b');
+    await plantToken(user.id, 'password', 'reset-a');
+    return user;
+};
 
 describe('logoutEverywhere', () => {
-    it('removes every refresh token', async () => {
-        const user = await createUserWithBothTokenTypes();
+    it('removes every session', async () => {
+        const user = await createUserWithSessionsAndAReset();
 
         asSuccess(await accountService.logoutEverywhere(String(user._id), testCallerContext));
 
-        const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 
     it('reports the logout under the same name as a single-session one', async () => {
         // One funnel counts logouts, whichever route ended the session; `scope` is what tells the
         // two apart. A second event name would make every rate built on the first silently wrong.
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
-        const user = await createUserWithBothTokenTypes();
+        const user = await createUserWithSessionsAndAReset();
 
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
 
@@ -529,16 +526,15 @@ describe('logoutEverywhere', () => {
     it('leaves a pending password-reset link alone', async () => {
         // "Log out everywhere" must not also burn a link the user is midway through using; only
         // a changed password purges those.
-        const user = await createUserWithBothTokenTypes();
+        const user = await createUserWithSessionsAndAReset();
 
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
 
-        const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored?.tokens.map(({ token }) => token)).toEqual(['reset-a']);
+        expect(await tokenHashesOf(user.id)).toEqual([hashToken('reset-a')]);
     });
 
     it('moves the session epoch, so access tokens already handed out stop working', async () => {
-        const user = await createUserWithBothTokenTypes();
+        const user = await createUserWithSessionsAndAReset();
 
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
 
@@ -555,25 +551,24 @@ describe('logoutEverywhere', () => {
         expect(response.status).toBe(401);
     });
 
-    it('cannot be undone by a write holding an older copy of the token array', async () => {
+    it('cannot be undone by a write holding an older copy of the account', async () => {
         // The same invariant from the dangerous direction, stated as a sequence rather than a
-        // race — no timing is involved, which is why it is a unit test:
+        // race — no timing is involved:
         //
-        //   1. a request loads the user (its copy of `tokens` holds both refresh tokens)
-        //   2. "log out everywhere" removes them
-        //   3. that first request finishes its own work and saves
+        //   1. a request loads the user
+        //   2. "log out everywhere" removes the sessions
+        //   3. that first request finishes its own work and saves the account
         //
-        // If step 3 writes the whole array back, both refresh tokens RETURN and the logout is
-        // silently undone — the sessions the user just revoked keep working. Appending cannot do
-        // that; rebuilding can, and this case is what notices.
-        const user = await createUserWithBothTokenTypes();
+        // Sessions live in their own collection now, so saving the user cannot bring them back;
+        // this case is what notices if they ever move back onto the document.
+        const user = await createUserWithSessionsAndAReset();
         const staleCopy = (await userRepository.findByIdWithCredentials(String(user._id)))!;
 
         await accountService.logoutEverywhere(String(user._id), testCallerContext);
-        await accountService.tokenAdd(staleCopy, 'delete', 3600);
+        staleCopy.username = 'saved-late';
+        await userRepository.save(staleCopy);
 
-        const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored?.tokens.map(({ type }) => type).toSorted()).toEqual(['delete', 'password']);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 
     it('answers 422 for an id that is not an identifier at all', async () => {

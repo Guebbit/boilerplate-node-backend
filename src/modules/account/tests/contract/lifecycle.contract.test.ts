@@ -12,6 +12,7 @@ import { eventually } from '@tests/eventually';
 import { api, authenticateAs } from '@tests/http';
 import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
+import { sessionRowsOf } from '../factories';
 import * as mailerPort from '@infrastructure/adapters/mailer';
 
 // The queue, not the copy — the token each flow mails is read back from here.
@@ -174,8 +175,7 @@ describe('POST /account/logout-all', () => {
         const response = await api().post('/account/logout-all').set('Authorization', bearer);
 
         expect(response.status).toBe(200);
-        const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        expect(stored!.tokens.filter(({ type }) => type === 'refresh')).toEqual([]);
+        expect(await sessionRowsOf(String(user._id))).toEqual([]);
     });
 });
 

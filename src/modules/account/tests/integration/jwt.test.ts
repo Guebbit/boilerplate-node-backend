@@ -2,8 +2,8 @@
  * @module
  * JWT creation and verification (`session/jwt.ts`). The security-critical distinction is
  * between token types: the access token is stateless (signature and expiry only), while the
- * refresh token is stateful, checked against the user document so logout — which removes the
- * token row — actually ends the session. Secrets are set explicitly here rather than inherited
+ * refresh token is stateful, checked against its session row so logout — which removes the
+ * row — actually ends the session. Secrets are set explicitly here rather than inherited
  * from `.env`, since unit tests don't load dotenv.
  *
  * Every fixture signs with `keyid: keyId(secret)`, matching what `jwt.ts` itself stamps — the
@@ -24,7 +24,6 @@ import {
     rememberOfRefreshToken,
     TokenReuseError
 } from '@modules/account/session/jwt';
-import { reapExpiredTokens } from '@modules/account/services';
 import { withEnvironmentOverrides, setEnvironment } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
 import {
@@ -33,9 +32,9 @@ import {
     getExpiryTimeMilliseconds
 } from '@modules/account/session/config';
 import { keyId } from '@modules/account/session/key-ring';
-import { TokenType } from '@modules/users';
-import { hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
+import { sessionRepository } from '../../repository';
+import { plantSession, reapDueSessions, sessionRowFor, sessionRowsOf } from '../factories';
 
 setupTestDb();
 
@@ -175,10 +174,10 @@ describe('verifyRefreshToken after a rotation', () => {
 });
 
 describe('verifyRefreshToken', () => {
-    it('resolves when the token is signed AND present on the user document', async () => {
+    it('resolves when the token is signed AND stored as a live session', async () => {
         const user = await createUser();
         const token = signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
-        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
+        await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
     });
@@ -192,15 +191,15 @@ describe('verifyRefreshToken', () => {
         await expect(verifyRefreshToken(orphanToken)).rejects.toThrow('Forbidden');
     });
 
-    it('rejects once the token has been removed from the user document', async () => {
+    it('rejects once its session row has been removed', async () => {
         const user = await createUser();
         const token = signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
-        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
+        await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         // Precondition: it works before revocation, so the assertion below cannot pass vacuously.
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
 
-        await user.tokenRemoveAll(TokenType.REFRESH);
+        await sessionRepository.removeAll(user.id);
 
         await expect(verifyRefreshToken(token)).rejects.toMatchObject({
             reason: 'revoked',
@@ -211,7 +210,7 @@ describe('verifyRefreshToken', () => {
     it('rejects a token signed with the access secret', async () => {
         const user = await createUser();
         const token = signAs(ACCESS_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
-        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
+        await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         // Even though it is stored, the signature is checked first and must fail.
         await expect(verifyRefreshToken(token)).rejects.toThrow();
@@ -220,14 +219,14 @@ describe('verifyRefreshToken', () => {
     it('rejects an expired refresh token without consulting the database', async () => {
         const user = await createUser();
         const token = signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: -10 });
-        await user.tokenAdd(TokenType.REFRESH, 3_600_000, token);
+        await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         await expect(verifyRefreshToken(token)).rejects.toThrow();
     });
 });
 
 describe('createRefreshToken', () => {
-    it('persists a verifiable refresh token on the user document', async () => {
+    it('persists a verifiable refresh token as a session row', async () => {
         const user = await createUser();
 
         const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
@@ -237,23 +236,20 @@ describe('createRefreshToken', () => {
         await expect(verifyRefreshToken(issued)).resolves.toMatchObject({ id: String(user._id) });
     });
 
-    it('stores the token under the REFRESH type with an expiry', async () => {
+    it('stores a `jwt` session row, as a digest, with an expiry and its sign-in time', async () => {
         const user = await createUser();
 
         const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
-        // `tokens` is select:false, so it has to be re-read explicitly — the same way the
-        // revocation lookup does. Stored as a digest, never the plaintext `issued`.
-        const reloaded = await userRepository.findByIdWithCredentials(String(user._id));
-        const stored = reloaded!.tokens.find((entry) => entry.token === hashToken(issued));
+        // Stored as a digest, never the plaintext `issued`.
+        const stored = await sessionRowFor(issued);
 
-        expect(stored).toBeDefined();
-        // The type matters: `tokenRemoveAll(REFRESH)` is what logout calls, and a token filed
-        // under any other type would survive it.
-        expect(stored!.type).toBe(TokenType.REFRESH);
-        // 3600s tier ⇒ a real future expiry, not the undefined that `expirationMs > 0` produces
-        // when the tier resolves to 0.
-        expect(stored!.expiration!.getTime()).toBeGreaterThan(Date.now());
+        expect(stored).toMatchObject({ mode: 'jwt', userId: user._id });
+        expect(stored!.supersededAt).toBeUndefined();
+        // 3600s tier ⇒ a real future expiry, which is also when the database deletes the row.
+        expect(stored!.expiresAt.getTime()).toBeGreaterThan(Date.now());
+        expect(stored!.purgeAt).toEqual(stored!.expiresAt);
+        expect(stored!.startedAt.getTime()).toBeLessThanOrEqual(Date.now());
     });
 
     it('rejects for an unknown user id', async () => {
@@ -278,22 +274,21 @@ describe('createRefreshToken', () => {
         ).rejects.toThrow('User not found');
     });
 
-    it('accumulates tokens rather than replacing them, so multi-device login works', async () => {
+    it('adds a row per login rather than replacing, so multi-device login works', async () => {
         const user = await createUser();
 
         const first = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
         const second = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
 
         // Both must remain individually verifiable: signing in on a phone must not sign the
-        // laptop out. A `tokens = [new]` assignment instead of a push would break exactly this.
+        // laptop out. A write that replaced the account's rows would break exactly this.
         await expect(verifyRefreshToken(first)).resolves.toMatchObject({ id: String(user._id) });
         await expect(verifyRefreshToken(second)).resolves.toMatchObject({ id: String(user._id) });
 
-        const reloaded = await userRepository.findByIdWithCredentials(String(user._id));
-        const refreshTokens = reloaded!.tokens.filter(
-            (entry) => entry.type === (TokenType.REFRESH as string)
-        );
-        expect(refreshTokens).toHaveLength(2);
+        const rows = await sessionRowsOf(user.id);
+        expect(rows).toHaveLength(2);
+        // Two sign-ins are two sessions: each starts its own family.
+        expect(new Set(rows.map((row) => String(row.familyId))).size).toBe(2);
     });
 });
 
@@ -320,40 +315,7 @@ describe('createAccessToken', () => {
             RefreshTokenExpiryTime.SHORT
         );
 
-        // Revoke the way the real logout path does: reload with credentials, then revoke. The
-        // reload keeps this test's in-memory `tokens` in step with the database; the write itself
-        // is an atomic `$pull` that needs no reload of its own (see the note above `tokenAdd` in
-        // the user model, and the guard immediately below this test).
-        const loaded = await userRepository.findByIdWithCredentials(String(user._id));
-        await loaded!.tokenRemoveAll(TokenType.REFRESH);
-
-        await expect(createAccessToken(refreshToken)).rejects.toThrow('Forbidden');
-    });
-
-    /**
-     * The same revocation, from a document that never loaded its tokens — the call site the
-     * reload above exists to avoid.
-     *
-     * `tokens` is `select: false`, so `this.tokens` is `undefined` here rather than `[]`. The
-     * atomic `$pull` does not care: the revocation lands in the database either way. The failure
-     * mode under test is what happens next — the in-memory resync runs `undefined.filter(...)`
-     * and throws *after* the write has already succeeded, so a logout that revokes every session
-     * must not report a 500 despite that.
-     *
-     * Both halves are asserted, because either one alone is satisfiable by the wrong code: a
-     * revocation that resolves but does not revoke, or a revocation that revokes and then throws.
-     */
-    it('revokes without throwing on a document whose tokens were never loaded', async () => {
-        const user = await createUser();
-        const refreshToken = await createRefreshToken(
-            String(user._id),
-            RefreshTokenExpiryTime.SHORT
-        );
-
-        const bare = await userRepository.findById(String(user._id));
-        expect(bare!.tokens).toBeUndefined();
-
-        await expect(bare!.tokenRemoveAll(TokenType.REFRESH)).resolves.toBeUndefined();
+        await sessionRepository.removeAll(user.id);
 
         await expect(createAccessToken(refreshToken)).rejects.toThrow('Forbidden');
     });
@@ -511,8 +473,7 @@ describe('rememberOfRefreshToken', () => {
         // A password change revokes every session, THEN re-mints: the tier must outlive the row.
         const user = await createUser();
         const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.MEDIUM);
-        const loaded = await userRepository.findByIdWithCredentials(String(user._id));
-        await loaded!.tokenRemoveAll(TokenType.REFRESH);
+        await sessionRepository.removeAll(user.id);
 
         await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBe(
             RefreshTokenExpiryTime.MEDIUM
@@ -581,10 +542,10 @@ describe('rotateRefreshToken reuse detection', () => {
             await rotateRefreshToken(attacked);
             pastGrace();
 
-            // The nightly whole-collection sweep, run between the rotation and the replay.
-            // Present here on purpose: a sweep that purged the superseded tombstone before this
-            // point would leave rotateRefreshToken nothing to recognise as reuse.
-            await reapExpiredTokens();
+            // The TTL monitor, run between the rotation and the replay. Present here on purpose: a
+            // row purged before this point would leave rotateRefreshToken nothing to recognise as
+            // reuse.
+            await reapDueSessions();
 
             await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);
 
@@ -637,7 +598,7 @@ describe('rotateRefreshToken reuse detection', () => {
 
             await rotateRefreshToken(stale);
             pastGrace();
-            await reapExpiredTokens();
+            await reapDueSessions();
 
             await expect(rotateRefreshToken(stale)).rejects.toThrow('Forbidden');
             await expect(rotateRefreshToken(stale)).rejects.not.toBeInstanceOf(TokenReuseError);
@@ -649,51 +610,58 @@ describe('rotateRefreshToken reuse detection', () => {
 });
 
 /**
- * A rotation prunes the rotating account's OWN expired tokens: housekeeping on the path that
- * already loaded the document, instead of a whole-collection sweep on every refresh. It runs after
- * the lookup and the new token, never before, and it names the account, so nobody else's document
- * is touched.
+ * A rotation shortens the superseded row's `purgeAt` to the reuse-detection window, so the database
+ * deletes it on its own when nothing could still replay it. No job and no per-request prune.
  */
-/** Give the account an entry that expired a second ago. */
-const addExpiredToken = async (userId: string, token: string) => {
-    const doc = await userRepository.findByIdWithCredentials(userId);
-    doc!.tokens.push({
-        sentAt: new Date(),
-        type: TokenType.REFRESH,
-        token: hashToken(token),
-        expiration: new Date(Date.now() - 1000)
-    });
-    await userRepository.save(doc!);
-};
-
-/** The digests of every token an account holds. */
-const heldBy = (userId: string) =>
-    userRepository
-        .findByIdWithCredentials(userId)
-        .then((doc) => doc!.tokens.map(({ token }) => token));
-
-describe('rotateRefreshToken housekeeping', () => {
+describe('rotateRefreshToken retention', () => {
     const GRACE_MS = 20;
 
     beforeEach(() => freezeDate());
 
     afterEach(() => jest.useRealTimers());
 
-    it('drops the rotating account’s expired entries and leaves every other account alone', async () => {
-        const rotating = await createUser({ email: 'rotating@example.com' });
-        const bystander = await createUser({ email: 'bystander@example.com' });
-        await addExpiredToken(String(rotating._id), 'expired-of-rotating');
-        await addExpiredToken(String(bystander._id), 'expired-of-bystander');
-        const live = await createRefreshToken(String(rotating._id), RefreshTokenExpiryTime.SHORT);
+    it('shortens the superseded row to the reuse window, and leaves the successor on its own expiry', async () => {
+        await withEnvironmentOverrides(
+            {
+                NODE_TOKEN_ROTATION_GRACE_MS: String(GRACE_MS),
+                NODE_TOKEN_REUSE_WINDOW_MS: '60000'
+            },
+            async () => {
+                const user = await createUser();
+                const live = await createRefreshToken(user.id, RefreshTokenExpiryTime.SHORT);
+                const before = await sessionRowFor(live);
 
-        await rotateRefreshToken(live);
+                const { refreshToken } = await rotateRefreshToken(live);
 
-        expect(await heldBy(String(rotating._id))).not.toContain(hashToken('expired-of-rotating'));
-        expect(await heldBy(String(bystander._id))).toContain(hashToken('expired-of-bystander'));
+                const superseded = await sessionRowFor(live);
+                const successor = await sessionRowFor(refreshToken);
+                expect(superseded!.supersededAt).toEqual(new Date());
+                expect(superseded!.purgeAt).toEqual(new Date(Date.now() + 60_000));
+                // Same session: one family, one sign-in time, and the old row's absolute expiry.
+                expect(successor!.familyId).toEqual(before!.familyId);
+                expect(successor!.startedAt).toEqual(before!.startedAt);
+                // Within a second: the token's own `exp` has second resolution.
+                expect(
+                    Math.abs(successor!.expiresAt.getTime() - before!.expiresAt.getTime())
+                ).toBeLessThan(1000);
+                expect(successor!.purgeAt).toEqual(successor!.expiresAt);
+            }
+        );
     });
 
-    // The prune runs on the reuse-detection window, so the tombstone a LATER replay must be
-    // recognised against survives the rotation that pruned around it.
+    it('never moves a superseded row past its own expiry', async () => {
+        await withEnvironmentOverrides({ NODE_TOKEN_REUSE_WINDOW_MS: '999999999' }, async () => {
+            const user = await createUser();
+            const live = await createRefreshToken(user.id, RefreshTokenExpiryTime.SHORT);
+
+            await rotateRefreshToken(live);
+
+            const superseded = await sessionRowFor(live);
+            expect(superseded!.purgeAt).toEqual(superseded!.expiresAt);
+        });
+    });
+
+    // The tombstone a LATER replay must be recognised against survives another session's rotation.
     it('keeps a superseded entry reuse detection still needs', async () => {
         await withEnvironmentOverrides(
             {
@@ -708,8 +676,9 @@ describe('rotateRefreshToken housekeeping', () => {
 
                 await rotateRefreshToken(attacked);
                 advanceDate(GRACE_MS * 5);
-                // Another session's rotation prunes this account on its way through.
+                // Another session's rotation, and the TTL monitor, both pass over it.
                 await rotateRefreshToken(other);
+                await reapDueSessions();
 
                 await expect(rotateRefreshToken(attacked)).rejects.toBeInstanceOf(TokenReuseError);
             }

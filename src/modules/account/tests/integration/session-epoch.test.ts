@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { codeFor } from '@tests/totp';
 import { cookieHeader } from '@tests/cookies';
-import { TokenType, userService } from '@modules/users';
+import { userService } from '@modules/users';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import {
     createUser,
@@ -18,6 +18,7 @@ import {
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
+import { plantToken, sessionRowsOf, tokenRowsOf } from '../factories';
 
 setupTestDb();
 
@@ -177,9 +178,9 @@ describe('the events that move the epoch', () => {
             'verify',
             'email-change',
             'delete',
-            TokenType.MFA_CHALLENGE
-        ])
-            await user.tokenAdd(type, 3_600_000, `pending-${type}`);
+            'mfa-challenge'
+        ] as const)
+            await plantToken(user.id, type, `pending-${type}`, { ttlMs: 3_600_000 });
 
         const response = await api().post('/account/reset-confirm').send({
             token: 'pending-password',
@@ -189,7 +190,8 @@ describe('the events that move the epoch', () => {
 
         expect(response.status).toBe(200);
         const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.tokens).toEqual([]);
+        expect(await tokenRowsOf(user.id)).toEqual([]);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(stored?.tokensValidAfter).toBeInstanceOf(Date);
     });
 
@@ -204,8 +206,7 @@ describe('the events that move the epoch', () => {
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        const stored = await userRepository.findByIdWithCredentials(user.id);
-        expect(stored?.tokens.filter((token) => token.type === 'refresh')).toHaveLength(1);
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
         // The old cookie no longer refreshes; the new one does.
         const stale = await api().post('/account/refresh').set('Cookie', caller.cookie);
         expect(stale.status).toBe(401);
@@ -219,7 +220,7 @@ const changedAccount = async () => {
         { _id: user.id },
         { $set: { previousEmail: 'old@example.com' } }
     );
-    await user.tokenAdd('email-change-undo', 3_600_000, 'undo-me');
+    await plantToken(user.id, 'email-change-undo', 'undo-me', { ttlMs: 3_600_000 });
     return user;
 };
 
@@ -269,7 +270,7 @@ describe('a credential change moves the epoch in its own write', () => {
             { _id: user.id },
             { $set: { pendingEmail: 'confirmed@example.com' } }
         );
-        await user.tokenAdd('email-change', 3_600_000, 'confirm-me');
+        await plantToken(user.id, 'email-change', 'confirm-me', { ttlMs: 3_600_000 });
         await nextSecond();
 
         const response = await api()

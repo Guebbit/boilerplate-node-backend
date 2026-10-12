@@ -1,14 +1,15 @@
 /**
  * Nothing credential-shaped survives serialization, on any model.
  *
- * A password hash or a live refresh token is as good as the account it belongs to, and the only
+ * A password hash or a stored session digest is as good as the account it belongs to, and the only
  * thing standing between one and a response body is a string in an `omit` list — `users/model.ts`
- * passes `omit: ['password', 'tokens']` to `buildTransform`, and that is the entire defence.
+ * passes `omit: ['password', …]` and `account/model.ts` passes `omit: ['tokenHash']`, and that is
+ * the entire defence.
  * Adding a field to a schema is a one-line edit; adding it to the `omit` list beside it is a
  * second line nothing asks for. The two are related only by whoever remembers.
  *
  * ── What does NOT protect these fields ────────────────────────────────────────────────────────
- * `select: false`, which both of them carry, is a query default: it keeps a field out of reads
+ * `select: false`, which the password carries, is a query default: it keeps a field out of reads
  * that do not ask for it, and does nothing whatever to a document that HAS the value — the login
  * path selects `+password` on purpose, and anything that then serialized that document would
  * publish it. The transform is the layer that holds, which is why this file drives the transform

@@ -170,7 +170,7 @@ COPY --from=build /app/scripts/db/index-sync.ts \
     /app/scripts/db/bootstrap-access.ts ./scripts/db/
 COPY --from=build /app/scripts/ops/reap-account-exports.ts \
     /app/scripts/ops/reap-delivery.ts \
-    /app/scripts/ops/reap-expired-tokens.ts \
+    /app/scripts/ops/reap-previous-emails.ts \
     /app/scripts/ops/reap-inactive-accounts.ts \
     /app/scripts/ops/reap-invoice-pdfs.ts \
     /app/scripts/ops/reap-mail-spool.ts \

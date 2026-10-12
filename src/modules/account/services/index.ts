@@ -35,13 +35,13 @@ import * as selfDelete from './self-delete';
 import * as profile from './profile';
 import * as verification from './verification';
 import * as tokens from './tokens';
-import * as tokenCleanup from './token-cleanup';
+import * as previousEmailCleanup from './previous-email-cleanup';
+import * as sessions from './sessions';
 import * as exportRows from './export-rows';
 import * as oauth from './oauth';
 import * as twoFactorEnrollment from './two-factor-enrollment';
 import * as twoFactorChallenge from './two-factor-challenge';
 import * as reauth from './reauth';
-import { pruneOwnExpiredTokens } from '../session/prune';
 
 /*
  * Published by name as well as on the namespace, for the callers that import a single function
@@ -49,7 +49,7 @@ import { pruneOwnExpiredTokens } from '../session/prune';
  * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
  * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
-export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';
+export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from '../token-types';
 export { RESET_REQUEST_SECONDS } from './password-reset-request';
 export { amrAfterReauth } from './reauth';
 export { passwordChangeWithCurrent } from './password';
@@ -62,11 +62,10 @@ export {
     completeEmailChange,
     undoEmailChange
 } from './verification';
-export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from './token-types';
-export { reapExpiredTokens, reapLapsedPreviousEmails } from './token-cleanup';
+export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from '../token-types';
+export { reapLapsedPreviousEmails } from './previous-email-cleanup';
 export { reapExpiredExports } from './export-rows';
 export { reencryptTotpSecrets } from './reencrypt';
-export { pruneOwnExpiredTokens } from '../session/prune';
 export { sendAccountMail } from './mail';
 export {
     loginOrCreateFromOAuth,
@@ -77,13 +76,13 @@ export {
 } from './oauth';
 
 /**
- * Core account functions: login, signup, profile, verification, session tokens, the
- * token-cleanup job, OAuth. Two-factor gets its own namespace below. The address book is
+ * Core account functions: login, signup, profile, verification, sessions and one-time tokens, the
+ * previous-email sweep, OAuth. Two-factor gets its own namespace below. The address book is
  * `@modules/addresses`, a separate module entirely; data export is `./export`, deliberately not
  * part of this object — see this file's own docblock above.
  */
 export const accountService = {
-    tokenAdd: tokens.tokenAdd,
+    issueToken: tokens.issueToken,
     signup: signup.signup,
     login: login.login,
     logoutEverywhere: logout.logoutEverywhere,
@@ -116,11 +115,9 @@ export const accountService = {
     spendLiveToken: tokens.spendLiveToken,
     redeemLiveToken: tokens.redeemLiveToken,
     recordOneTimeTokenRejected: tokens.recordOneTimeTokenRejected,
-    sessionsList: tokens.sessionsList,
-    reapExpiredTokens: tokenCleanup.reapExpiredTokens,
-    reapLapsedPreviousEmails: tokenCleanup.reapLapsedPreviousEmails,
+    sessionsList: sessions.sessionsList,
+    reapLapsedPreviousEmails: previousEmailCleanup.reapLapsedPreviousEmails,
     reapExpiredExports: exportRows.reapExpiredExports,
-    pruneOwnExpiredTokens,
     loginOrCreateFromOAuth: oauth.loginOrCreateFromOAuth,
     recordOAuthFailure: oauth.recordOAuthFailure,
     listOAuthLinks: oauth.listOAuthLinks,

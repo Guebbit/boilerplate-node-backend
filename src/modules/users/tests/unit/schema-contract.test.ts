@@ -1,12 +1,12 @@
 /**
  * @module
- * The user schema's contract, and its two token-bearing methods. The most security-sensitive
- * schema in the codebase: `select: false` on `password` and `tokens` keeps them out of ordinary
- * reads, `omit` on the transform repeats the guarantee at serialization, and the `pre('save')`
+ * The user schema's contract. The most security-sensitive schema in the codebase: `select: false`
+ * on `password` keeps it out of ordinary reads, `omit` on the transform repeats the guarantee at
+ * serialization, and the `pre('save')`
  * hook hashes only when `password` is modified so a profile update can't re-hash an existing hash.
  */
 import { hashPassword, verifyPassword } from '@infrastructure/security/password-hash';
-import { userSchema, applyUserTransform, TokenType } from '@modules/users/model';
+import { userSchema, applyUserTransform } from '@modules/users/model';
 import { asStub } from '@tests/stub';
 import { PLAIN_PASSWORD } from '@modules/users/factories';
 import {
@@ -92,10 +92,6 @@ describe('userSchema — what a user must carry', () => {
         }
     );
 
-    it('starts a user with an empty token list rather than an absent one', () => {
-        expect(defaultOf(userSchema, 'tokens')).toEqual([]);
-    });
-
     it('leaves the soft-delete marker unset, and typed as a Date', () => {
         // The type is load-bearing: every visibility scope tests `deletedAt` with `$exists`, and
         // a Mixed path would accept the ISO string the contract uses on the wire — after which
@@ -116,27 +112,19 @@ describe('userSchema — the credentials never load by accident', () => {
         expect(pathOptions(userSchema, 'password').select).toBe(false);
     });
 
-    it('withholds the token list from every query that does not ask for it', () => {
-        // Live refresh tokens. A leaked one is a session, usable until it expires and invisible
-        // in any audit trail as anything other than the user's own activity.
-        expect(pathOptions(userSchema, 'tokens').select).toBe(false);
-    });
-
-    it('strips both again at serialization, independently of the projection', () => {
+    it('strips the secrets again at serialization, independently of the projection', () => {
         // The second layer. `omit` runs on the way out, so a query that DID ask for the password
         // — the login path must — still cannot serialize it by accident.
         const serialized = applyUserTransform({
             _id: 'abc',
             email: 'ada@example.com',
             password: '$2a$12$hash',
-            tokens: [{ type: TokenType.REFRESH, token: 'live-token' }],
             oauthAccounts: [
                 { provider: 'google', providerId: 'subject-1', connectedAt: new Date() }
             ]
         });
 
         expect(serialized.password).toBeUndefined();
-        expect(serialized.tokens).toBeUndefined();
         expect(serialized.oauthAccounts).toBeUndefined();
         expect(serialized.email).toBe('ada@example.com');
         // And the ordinary rename still happens, so this is the real transform and not a stub.
@@ -150,36 +138,11 @@ describe('userSchema — the credentials never load by accident', () => {
         const rendered = JSON.stringify(
             applyUserTransform({
                 _id: 'abc',
-                password: '$2a$12$hash',
-                tokens: [{ type: TokenType.REFRESH, token: 'live-token' }]
+                password: '$2a$12$hash'
             })
         );
 
         expect(rendered).not.toContain('$2a$12$hash');
-        expect(rendered).not.toContain('live-token');
-    });
-});
-
-describe('userSchema — a stored token', () => {
-    it('requires a kind, the token itself and when it was sent', () => {
-        // A token row without its `type` cannot be revoked by any flow: every revocation is
-        // `$pull` by type, so an untyped entry survives logout, reset and account deletion. `sentAt`
-        // anchors every resend cooldown, so an entry without one would never make anyone wait.
-        expect(requiredPaths(subSchema(userSchema, 'tokens'))).toEqual(['sentAt', 'token', 'type']);
-    });
-
-    it('leaves the expiry and last-use optional', () => {
-        // A refresh token issued without "remember me" has no expiry of its own, and a token
-        // never used has no last-use. Requiring either makes those states unrepresentable.
-        const token = subSchema(userSchema, 'tokens');
-
-        expect(requiredPaths(token)).not.toContain('expiration');
-        expect(requiredPaths(token)).not.toContain('lastUsedAt');
-        // Declared as Dates, not merely declared. An empty declaration still creates the path —
-        // as a Mixed field — so `tokenRemoveExpired`'s `$lt` would compare against whatever the
-        // driver stored, and the sweep would quietly stop matching anything.
-        expect(typeOf(token, 'expiration')).toBe('Date');
-        expect(typeOf(token, 'lastUsedAt')).toBe('Date');
     });
 });
 
@@ -204,17 +167,14 @@ describe('userSchema — a linked OAuth identity', () => {
 });
 
 describe('userSchema — indexes', () => {
-    it('declares exactly the four documented indexes', () => {
-        // `users_tokens_token` is what makes `verifyRefreshToken`'s lookup — by token value,
-        // across every user — an index hit rather than a collection scan on every refresh.
+    it('declares exactly the three documented indexes', () => {
         // `users_oauth_identity` is the OAuth callback's equivalent, keyed on (provider, providerId).
         // `users_pending_email` is the swap-time half of the `PUT /account` collision check — see
         // its own comment on the schema.
         expect(indexSpecs(userSchema)).toEqual([
             'users_email: email+1',
             'users_oauth_identity: oauthAccounts.provider+1, oauthAccounts.providerId+1',
-            'users_pending_email: pendingEmail+1',
-            'users_tokens_token: tokens.token+1'
+            'users_pending_email: pendingEmail+1'
         ]);
     });
 
@@ -226,8 +186,7 @@ describe('userSchema — indexes', () => {
         expect(indexOptionSpecs(userSchema)).toEqual([
             'users_email: unique=true',
             'users_oauth_identity: partialFilterExpression={"oauthAccounts.0":{"$exists":true}}, unique=true',
-            'users_pending_email: partialFilterExpression={"pendingEmail":{"$exists":true}}, unique=true',
-            'users_tokens_token: (none)'
+            'users_pending_email: partialFilterExpression={"pendingEmail":{"$exists":true}}, unique=true'
         ]);
     });
 });

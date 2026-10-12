@@ -3,7 +3,7 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Ten files** — `config.ts` reads the lifetimes, `key-ring.ts` gives a secret its `kid`, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `resolver.ts` turns claims into an `AuthContext`, `epoch.ts` holds the session-epoch rule, `prune.ts` sweeps one account's expired tokens, `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
+**Nine files** — `config.ts` reads the lifetimes, `key-ring.ts` gives a secret its `kid`, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `resolver.ts` turns claims into an `AuthContext`, `epoch.ts` holds the session-epoch rule, `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -278,11 +278,64 @@ never guarded. A **re-mint** (`reissueSession`, `remintRefreshCookie`) continues
 caller already holds and is not checked; that door, and `amr` becoming required, are a separate
 decision.
 
+## Where sessions live {#where-sessions-live}
+
+Two collections, both `account`'s own. Neither is on the user document: an array that grows with
+every refresh is the anti-pattern MongoDB names for unbounded arrays, and a credential-bearing one
+would have to be loaded (and kept out of every serialization) with the account it hangs off.
+
+```mermaid
+erDiagram
+    USER ||--o{ SESSION : "signs in as"
+    USER ||--o{ VERIFICATION_TOKEN : "holds in flight"
+    SESSION {
+        ObjectId userId
+        ObjectId familyId "the id the owner sees"
+        string mode "jwt | cookie"
+        string tokenHash "sha256, never the value"
+        Date startedAt "when this sign-in began"
+        Date lastUsedAt
+        Date supersededAt "jwt: rotated away"
+        Date expiresAt "when it stops working"
+        Date purgeAt "when the database deletes it"
+    }
+    VERIFICATION_TOKEN {
+        ObjectId userId
+        string type "closed list"
+        string tokenHash
+        Date sentAt "what a resend cooldown reads"
+        Date expiresAt "also when it is deleted"
+        string_array amr "MFA challenge only"
+    }
+```
+
+| Collection           | One row is                         | Deleted by                                                      |
+| -------------------- | ---------------------------------- | --------------------------------------------------------------- |
+| `sessions`           | one refresh token (`jwt` mode)     | its own `purgeAt` (TTL index), a logout, a revoke, an erasure   |
+| `verificationtokens` | one mailed link or login challenge | its own `expiresAt` (TTL index), being spent, a password change |
+
+- **A date on the row, not a lifetime on the index.** Both TTL indexes are `expireAfterSeconds: 0`
+  on a per-row date, so changing `NODE_TOKEN_REFRESH_TIME_*` never rebuilds an index, and a
+  rotated-away row can be given an earlier date than its original expiry. The database's monitor
+  runs about once a minute, so every read also checks `expiresAt`: a row past it is dead whether or
+  not it has been deleted yet.
+- **One live link per kind, atomically.** A reset, verification, email-change and undo link each
+  allow one live row per account, enforced by a partial unique index on `(userId, type)` for those
+  kinds only. Issuing is one upsert, so two simultaneous requests cannot leave two working links. A
+  deletion confirmation and an MFA challenge may be several at once, and are not in that index.
+- **The kinds are a closed list** (`VERIFICATION_TOKEN_TYPES` in `token-types.ts`), the schema's
+  enum: a misspelt kind is refused at the write, instead of being stored and never purged.
+- **What stays on the user:** the password, the second factors, the linked providers and the session
+  epoch. They are bounded, and the epoch has to commit with the credential write that moves it.
+- **Deactivating or soft-deleting an account** moves the epoch in the same save, which refuses every
+  session at once; the rows then age out by their own date. Nothing here reaches into `sessions`
+  from `users`.
+
 ## Logout everywhere
 
-The refresh tokens hang off the user document in [`users`](./users.md)' `tokens` subdocument, which
-is what makes "log me out of every device" a single write rather than a token blocklist. It is also
-the concrete reason the `account → users` edge is `shared-kernel`: this module writes that array.
+Every session an account holds is a row, which is what makes "log me out of every device" one
+`deleteMany` rather than a token blocklist. The epoch (below) is the part that matters; the delete
+is what keeps `GET /account/sessions` honest.
 
 ### The session epoch
 
@@ -308,10 +361,10 @@ leave an old session live: the password's transaction, the swap's `save`, the fa
 cases stand apart. Logout everywhere writes the epoch and its `account.sessions-revoked`
 [outbox](../tools/outbox.md) row in one transaction. The email undo does the same **before**
 restoring the address, because its link is already spent: if the old address was taken meanwhile
-the restore answers 409, and the owner has no retry, so the thief must already be out. Removing the
-refresh tokens afterwards is housekeeping; its failure is logged.
+the restore answers 409, and the owner has no retry, so the thief must already be out. Deleting the
+session rows afterwards is housekeeping; its failure is logged.
 
-`POST /account/reauth` retires the refresh token it was given when it re-mints, leaving one live
+`POST /account/reauth` deletes the session it was given when it re-mints, leaving one live
 session rather than two. A token stamped in the very second of a bump is kept, which is what lets
 the caller's re-minted session survive its own bump.
 
@@ -328,17 +381,19 @@ session may live past what it was granted at login. The "remember me" choice is 
 ([above](#remember-me-unticked)): a rotation that dropped it would turn a session cookie persistent
 on the first refresh.
 
-**A session keeps one id across rotation.** Every rotation stores a new token row with a new `_id`,
-so the id `GET /account/sessions` publishes is the row's `familyId` instead: minted at login and
-copied to every successor. "Log out that device" pulls the whole family, the live token and any
-rotated-away predecessor still kept for reuse detection. An id taken from `_id` would name the dead
-predecessor after the first refresh, and the revoke would answer success while the device stayed
-signed in (RFC 9700 §4.14.2: refresh-token families).
+**A session keeps one id across rotation.** Every rotation stores a new row with a new `_id`, so the
+id `GET /account/sessions` publishes is the row's `familyId` instead: minted at login and copied to
+every successor, together with `startedAt`. "Log out that device" deletes the whole family, the live
+token and any rotated-away predecessor still kept for reuse detection. An id taken from `_id` would
+name the dead predecessor after the first refresh, and the revoke would answer success while the
+device stayed signed in (RFC 9700 §4.14.2: refresh-token families). Two refreshes of one token
+inside the grace window each store a successor, so a family can briefly hold two live rows; the
+list shows the newest, once.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 32, 'rankSpacing': 46}}}%%
 flowchart TD
-    C["client presents old token"] --> S{"tokenSupersede<br/><i>atomic claim</i>"}
+    C["client presents old token"] --> S{"supersede<br/><i>atomic claim</i>"}
     S -->|"won"| N["mint new token<br/>same absolute expiry"]
     S -->|"lost"| R{"re-read the entry"}
     R -->|"absent — swept, or<br/>never existed"| F["401 — an ordinary<br/>dead credential"]
@@ -360,38 +415,32 @@ of rejected — proven under real concurrent load in
 
 ### Two windows, and why they must not be one
 
-A superseded entry stays in `tokens` — never `$pull`ed immediately — so a later presentation of it
-can still be told apart from noise. `GET /account/sessions` filters these out; they aren't a device
-the account holder should see or be able to revoke on their own. The housekeeping sweep
-(the nightly `reap:expired-tokens` job, plus each account's own prune on a login or a refresh) removes
-them eventually, alongside ordinarily expired tokens — see `tokenRemoveExpired` in
-[`users`](./users.md)'s repository.
+A superseded row stays — never deleted immediately — so a later presentation of it can still be
+told apart from noise. `GET /account/sessions` filters these out; they aren't a device the account
+holder should see or be able to revoke on their own. Rotation shortens the row's `purgeAt` to the
+reuse-detection window (never past its own expiry), and the database deletes it then. No job and no
+per-request prune is involved.
 
-How long "eventually" is, is its own setting, and the separation is load-bearing:
+How long a superseded row is kept is its own setting, and the separation is load-bearing:
 
 | Window                         | Default | Answers                                                      |
 | ------------------------------ | ------- | ------------------------------------------------------------ |
 | `NODE_TOKEN_ROTATION_GRACE_MS` | 10s     | Is this replay a benign race, to be reissued?                |
 | `NODE_TOKEN_REUSE_WINDOW_MS`   | 24h     | Do we still REMEMBER this token, so a replay reads as theft? |
 
-A sweep cutoff equal to the grace window would be the exact complement of the detection predicate
-(`supersededMsAgo > grace`). A sweep running ahead of the rotation, on the very request presenting
-the token, would delete a stale token before the reuse check could recognise it. The check would
-fall through to "genuinely absent", answer an ordinary 401, and revoke nothing. Nothing fails; the
-defence is simply unreachable.
-
-So every sweep uses the RETENTION window, and none runs AHEAD of a rotation: a refresh prunes its own
-account only after the rotation's lookup and the new token are written (`session/prune.ts`),
-and the whole-collection sweep is a nightly job. A collection-wide `updateMany` is kept off the
-login and refresh path: unindexed, on an anonymous request, it would let anyone schedule it.
+A purge date equal to the grace window would be the exact complement of the detection predicate
+(`supersededMsAgo > grace`): every token the check would have called theft would already be gone,
+the lookup would fall through to "genuinely absent", answer an ordinary 401, and revoke nothing.
+Nothing fails; the defence is simply unreachable. So a superseded row is kept for the RETENTION
+window.
 
 `account`'s manifest refuses to boot unless retention exceeds grace (the check on `sessionConfig` in `session/config.ts`) — the failure is silent by
 nature, so it is made loud at the only moment it can be.
 
 The retention default is a trade, stated plainly: an active client rotates about once per
-`NODE_TOKEN_ACCESS_TIME` (600s), so 24h keeps roughly 144 entries per session, a few tens of KB.
-Retaining for a refresh token's full lifetime would reach ~52,500 entries on the one-year tier,
-against MongoDB's 16 MB document ceiling. Past the retention window a replay is an ordinary 401
+`NODE_TOKEN_ACCESS_TIME` (600s), so 24h keeps roughly 144 rows per session alive at a time.
+Retaining for a refresh token's full lifetime would reach ~52,500 rows on the one-year tier. Past
+the retention window a replay is an ordinary 401
 with no revocation — a real limit, chosen rather than stumbled into, and asserted as such in
 `src/modules/account/tests/integration/jwt.test.ts`.
 
@@ -412,7 +461,7 @@ for where it sits among everything else this repo depends on.
 - [Two-factor authentication](./account-two-factor.md) — the second factor a login may have to pass
 - [OAuth](./account-oauth.md) — the other way a session is minted
 - [Authorization](../theory/authorization.md) — what consumes `auth_time` and `amr`
-- [`users`](./users.md) — where the refresh tokens are stored
+- [`users`](./users.md) — the account record, its epoch and its credentials
 - [Security](../tools/security.md) — hashing, headers, and rate limits
 - [Request Flow](../theory/request-flow.md) — where the guard sits
 - [Strategic DDD](../theory/strategic-ddd.md#_2-context-map-—-how-a-module-reaches-its-siblings) — what `shared-kernel` costs

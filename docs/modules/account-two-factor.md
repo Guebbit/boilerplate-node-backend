@@ -147,7 +147,7 @@ Reading your own factors is not a privileged act. Changing them is, and every mu
 The two login routes are public because they must be: the caller has no session yet, which is the
 entire point of the step. What stands in for one is the challenge — see
 [Security](../tools/security.md#the-challenge-is-a-claim-check-not-a-code) for why it is a
-single-use `tokens[]` entry rather than a JWT.
+single-use `verificationtokens` row rather than a JWT.
 
 ::: warning Two route orderings are load-bearing
 `/login/2fa/send` is registered **above** `/login/2fa`, and `DELETE /2fa/methods/:method` **last**

@@ -1,15 +1,14 @@
 /**
  * @module
- * The user record's Mongoose schema, its Zod wire-validation twin, and the token subdocument
- * methods — long, and deliberately one file, since splitting would separate the password hash
- * hook from the `select: false` that keeps the hash off every read.
+ * The user record's Mongoose schema and its Zod wire-validation twin — long, and deliberately one
+ * file, since splitting would separate the password hash hook from the `select: false` that keeps
+ * the hash off every read.
  * See: docs/modules/users.md
  */
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { hashPassword } from '@infrastructure/security/password-hash';
-import { createHash } from 'node:crypto';
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { localeConfig } from '@infrastructure/i18n/config';
@@ -24,104 +23,6 @@ import {
 import { type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
-
-/**
- * Token types used in jwt-auth
- */
-export enum TokenType {
-    REFRESH = 'refresh',
-    PASSWORD_RESET = 'password',
-    /** A login's second-factor challenge — see `account/services/two-factor-challenge.ts#buildLoginChallenge`. */
-    MFA_CHALLENGE = 'mfa-challenge'
-}
-
-/**
- * Digest a token value for storage/lookup. `users.tokens[].token`
- * holds live refresh JWTs, password-reset tokens and delete-confirmation tokens; a plain sha256
- * digest is enough because every value here already carries 128 bits of entropy from
- * `randomBytes(16)` or a signed JWT — there is no low-entropy secret to stretch, and bcrypt would
- * only slow the refresh path every authenticated client hits on a timer. Exported so callers that
- * compare an in-memory token against an already-loaded document (`account/services/tokens.ts`,
- * `users/services/tokens.ts` `consumeToken`) hash the same way storage does — a one-off script that ever
- * rewrites stored rows must reuse it rather than reimplement the digest.
- */
-export const hashToken = (token: string): string =>
-    createHash('sha256').update(token).digest('hex');
-
-/**
- * User tokens
- * Token is like an ID, but not really an ID
- */
-export interface Token {
-    /**
-     * The subdocument id Mongoose gives every entry in the array. Optional because a NEW entry
-     * has none until written — `tokenAdd` builds the object and lets mongod assign it. It's
-     * also the only part of a refresh token that may leave the server: `GET /account/sessions`
-     * presents tokens as sessions, and this id is the revocation handle, since the token VALUE
-     * itself is as good as a password.
-     */
-    _id?: Types.ObjectId;
-    token: string;
-    type: string;
-    expiration?: Date;
-    /**
-     * When `tokenAdd` minted this entry. The record a resend cooldown reads: "how long since the
-     * mail carrying this token went out" is a question `expiration` can only answer by being read
-     * backwards through the TTL that set it, which silently changes meaning the moment that TTL
-     * is reconfigured.
-     */
-    sentAt: Date;
-    /**
-     * When this token was last exchanged for an access token, absent until then — lets
-     * `GET /account/sessions` show an idle session as idle rather than indistinguishable from
-     * active. Only refresh tokens are ever exchanged, so one-time kinds (a pending reset, a
-     * verification link) stay absent.
-     */
-    lastUsedAt?: Date;
-    /**
-     * When rotation replaced this refresh token with a new one.
-     * The entry stays in `tokens` rather than being removed immediately — see `tokenSupersede`
-     * in `../users/repository.ts` for why: a short grace window is what stops two tabs racing to
-     * refresh at once from looking like theft. Absent means this token is still live.
-     */
-    supersededAt?: Date;
-    /**
-     * The session this refresh token belongs to, stable across rotation: login mints it, every
-     * rotation copies it to the successor. It is what `GET /account/sessions` publishes as the
-     * session `id` and what "log out that device" pulls, because `_id` changes with every refresh
-     * and an id taken from it names a dead predecessor after the first rotation. Set on refresh
-     * entries only.
-     */
-    familyId?: Types.ObjectId;
-    /**
-     * Which factor(s) were already proven when this entry was minted. Only set on an
-     * `MFA_CHALLENGE`: `account/services/two-factor-challenge.ts#verifyLoginChallenge` reads it back once
-     * the second factor checks out, so the finished session's own `amr` names how the FIRST one
-     * was proven — `['pwd']` for a password login, `[provider]` for an OAuth one — instead of
-     * assuming a password. Absent means `['pwd']`: every challenge minted before this field
-     * existed was, since 2FA had no OAuth path yet.
-     */
-    amr?: string[];
-}
-
-/**
- * The id a session is known by outside the server: its family, which survives rotation. Falls back
- * to the row's own id for an entry that has no family (it is not a refresh token).
- *
- * @param token - a stored token entry
- */
-export const sessionIdOf = (token: Token): string => String(token.familyId ?? token._id);
-
-/**
- * A refresh token that still represents a session someone is holding.
- *
- * `supersededAt` marks a rotated-away entry, kept only for its reuse-detection retention window —
- * its successor is the session, so listing both would show one login twice.
- */
-export const isLiveRefreshSession = (token: Token): boolean =>
-    // `Token['type']` stays `string` (see `UserMethods.tokenAdd`'s comment below), so the enum
-    // member is cast to compare — TS refuses a bare `string === TokenType` for a string enum.
-    token.type === (TokenType.REFRESH as string) && !token.supersededAt;
 
 /**
  * The full user record shape backing Mongoose documents. `createdAt`, `updatedAt`, `deletedAt`,
@@ -228,9 +129,6 @@ export interface UserRecord extends Omit<
      */
     verifiedAt?: Date | null;
 
-    /** The user's refresh, reset and delete-confirmation tokens — see `Token` above. */
-    tokens: Token[];
-
     /** The provider identities linked to this account — see `OAuthAccount` below. */
     oauthAccounts: OAuthAccount[];
 
@@ -323,7 +221,7 @@ export interface OAuthAccount {
 /**
  * The full Mongoose document: `UserRecord` plus instance methods and Document guarantees.
  */
-export interface UserDocument extends UserRecord, UserMethods, Document {
+export interface UserDocument extends UserRecord, Document {
     /** String version of _id — provided by Mongoose's Document getter */
     id: string;
 
@@ -336,27 +234,9 @@ export interface UserDocument extends UserRecord, UserMethods, Document {
 }
 
 /**
- * User Document instance methods.
- */
-export interface UserMethods {
-    // `Token['type']` rather than `TokenType`: the enum names the two token types the JWT
-    // layer knows about, while `tokens` also carries the account-deletion type the account
-    // endpoints issue. The stored field is a string, and the method has to accept every value
-    // that legitimately appears in it.
-    tokenAdd: (
-        type: Token['type'],
-        expirationMs: number,
-        token: string,
-        amr?: string[],
-        familyId?: Types.ObjectId
-    ) => Promise<string>;
-    tokenRemoveAll: (type: Token['type']) => Promise<void>;
-}
-
-/**
  * User Document model type. Business logic lives in the service and repository layers.
  */
-export type UserModel = Model<UserDocument, Record<string, never>, UserMethods>;
+export type UserModel = Model<UserDocument>;
 
 /**
  * Zod schema for user data validation, built on the orval-generated `CreateUserBody` so only
@@ -401,7 +281,7 @@ export const zodUserSchema = CreateUserBody.extend({
  * The Mongoose schema for user documents — field-level comments below cover the non-obvious
  * defaults.
  */
-export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
+export const userSchema = new Schema<UserDocument, UserModel>(
     {
         email: {
             type: String,
@@ -542,49 +422,6 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             lowercase: true,
             trim: true
         },
-        // sub documents always have _id
-        // `select: false` for the same reason as `password` — live refresh tokens are as good as
-        // a password to anyone who reads them.
-        tokens: {
-            type: [
-                {
-                    type: {
-                        type: String,
-                        required: true
-                    },
-                    token: {
-                        type: String,
-                        required: true
-                    },
-                    expiration: {
-                        type: Date,
-                        required: false
-                    },
-                    sentAt: {
-                        type: Date,
-                        required: true
-                    },
-                    lastUsedAt: {
-                        type: Date,
-                        required: false
-                    },
-                    supersededAt: {
-                        type: Date,
-                        required: false
-                    },
-                    amr: {
-                        type: [String],
-                        required: false
-                    },
-                    familyId: {
-                        type: Schema.Types.ObjectId,
-                        required: false
-                    }
-                }
-            ],
-            select: false,
-            default: []
-        },
         deletedAt: {
             type: Date
         },
@@ -697,12 +534,11 @@ export const userSchema = new Schema<UserDocument, UserModel, UserMethods>(
             select: false
         },
         /*
-         * Linked provider identities — `select: false` like `tokens`, same reasoning: not secret
+         * Linked provider identities — `select: false` like `password`, same reasoning: not secret
          * in the credential-theft sense (a `providerId` is useless without the provider's own
          * session), but nothing on the wire needs it by default. Written only through atomic
-         * `$push` (`repository.ts#linkOAuthAccount`), never read-modify-write — same rule as
-         * `tokens`, and for the same reason: two concurrent logins linking a second provider must
-         * not race each other's write away.
+         * `$push` (`repository.ts#linkOAuthAccount`), never read-modify-write — two concurrent
+         * logins linking a second provider must not race each other's write away.
          */
         oauthAccounts: {
             type: [
@@ -750,8 +586,6 @@ userSchema.plugin(revisionPlugin);
  * an existing non-unique `users_email`: a database that never synced fails loudly at startup.
  */
 userSchema.index({ email: 1 }, { name: 'users_email', unique: true });
-/* Refresh-token verification and the reset/delete flows query by token value. */
-userSchema.index({ 'tokens.token': 1 }, { name: 'users_tokens_token' });
 /*
  * The OAuth callback's primary lookup: "does this (provider, providerId) pair already exist".
  * UNIQUE for the same reason as `users_email` — the lookup is check-then-insert
@@ -813,67 +647,6 @@ userSchema.pre('save', function (this: UserDocument) {
     });
 });
 
-/*
- * Token writes are ATOMIC UPDATES ($push/$pull), never read-modify-write. Mutating `this.tokens`
- * then `save()` would send the array as loaded: two concurrent logins each load N tokens, each
- * append one, and the second write silently overwrites the first — a session lost with no error.
- * `$push`/`$pull` are evaluated by mongod at write time, so concurrent operations compose instead
- * of clobbering. The local `this.tokens` resync below is GUARDED: `tokens` is `select: false`, so
- * an unloaded document has `this.tokens === undefined`, and pushing to it would throw *after* the
- * atomic write already succeeded — reporting failure for an operation that, in fact, worked.
- */
-
-/**
- * Add a token to this user document and persist it.
- * Returns the PLAINTEXT token string so callers can use it — the cookie, the emailed link — but
- * only its {@link hashToken} digest is ever written to the document.
- */
-userSchema.methods.tokenAdd = function (
-    this: UserDocument,
-    type: Token['type'],
-    expirationMs: number,
-    token: string,
-    amr?: string[],
-    familyId?: Types.ObjectId
-): Promise<string> {
-    const entry: Token = {
-        type,
-        token: hashToken(token),
-        expiration: expirationMs > 0 ? new Date(Date.now() + expirationMs) : undefined,
-        sentAt: new Date(),
-        ...(amr && { amr }),
-        // A refresh token starts a session family unless it continues one (a rotation passes it).
-        ...(type === (TokenType.REFRESH as string) && {
-            familyId: familyId ?? new Types.ObjectId()
-        })
-    };
-
-    return (this.constructor as UserModel)
-        .updateOne({ _id: this._id }, { $push: { tokens: entry } }, { timestamps: false })
-        .then(() => {
-            // Guarded: see the note above `tokenAdd` — `tokens` is `select: false`, so an
-            // unloaded array is `undefined` and pushing to it would throw after the write landed.
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `tokens` is always loaded; `select: false` makes that a lie
-            this.tokens?.push(entry);
-            return token;
-        });
-};
-
-/**
- * Remove all tokens of the given type from this user document and persist it.
- */
-userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['type']) {
-    return (this.constructor as UserModel)
-        .updateOne({ _id: this._id }, { $pull: { tokens: { type } } }, { timestamps: false })
-        .then(() => {
-            // Guarded: see the note above `tokenAdd`. The `$pull` above has already revoked the
-            // tokens in the database — reporting a failure here would be a lie about a logout
-            // that succeeded.
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- the schema types claim `tokens` is always loaded; `select: false` makes that a lie
-            if (this.tokens) this.tokens = this.tokens.filter((t: Token) => t.type !== type);
-        });
-};
-
 /**
  * What `search()` actually hands back: {@link UserRecord}, minus the same secrets and
  * document-only bookkeeping {@link applyUserTransform}'s `omit` strips. Real `Date`s, not the
@@ -884,7 +657,6 @@ userSchema.methods.tokenRemoveAll = function (this: UserDocument, type: Token['t
 export type UserWire = Omit<
     UserRecord,
     | 'password'
-    | 'tokens'
     | 'pendingImageKey'
     | 'inactivityWarnedAt'
     | 'lastActiveAt'
@@ -904,7 +676,7 @@ export type UserWire = Omit<
 
 /**
  * Normalizes a serialized user into the OpenAPI `User` contract: `id` from `_id`, `_id`/`__v`
- * stripped, plus `password` and `tokens` — credentials that must never leave the server. Both are
+ * stripped, plus `password` — a credential that must never leave the server. It is
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
  * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./service`
  * `search()`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
@@ -914,7 +686,7 @@ export type UserWire = Omit<
  * is where a document becomes the wire shape; see `presentUser` there.
  */
 export const applyUserTransform = applySerialization(userSchema, {
-    // `password`/`tokens` are secrets; `pendingImageKey` is document-only bookkeeping for the
+    // `password` is a secret; `pendingImageKey` is document-only bookkeeping for the
     // image digest pipeline, never part of the `User` contract — same reasoning as `products`.
     // `inactivityWarnedAt`, `lastActiveAt`, `lastApiKeyUseAt`, `inactivityMinimisedAt` and `deletedBy` are the reaper's own bookkeeping, same treatment.
     // `twoFactorMethods`/`twoFactorBackupCodes`/`twoFactorBackupCodeSalt` are 2FA credential material —
@@ -923,7 +695,6 @@ export const applyUserTransform = applySerialization(userSchema, {
     // part of the `User` contract, `select: false` on the schema already, this is defense in depth.
     omit: [
         'password',
-        'tokens',
         'pendingImageKey',
         'inactivityWarnedAt',
         'lastActiveAt',

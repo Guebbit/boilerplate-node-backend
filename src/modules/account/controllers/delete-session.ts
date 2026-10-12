@@ -15,9 +15,8 @@ import { requireId } from '@infrastructure/http/ids';
 /**
  * DELETE /account/sessions/:sessionId — revoke one of the caller's own sessions ("log out that
  * device").
- * Filtered to the caller's document and `type: refresh`, so someone else's session id, or a
- * pending reset/delete/verify token id, 404s exactly like an invented one, and so does a
- * malformed id.
+ * Filtered to the caller's own sessions, so someone else's session id, or a pending
+ * reset/delete/verify token id, 404s exactly like an invented one, and so does a malformed id.
  * Revoking the CURRENT session is allowed — same effect as `POST /account/logout` minus the
  * cookie clearing, which this endpoint can't do for another client anyway.
  */
@@ -32,8 +31,8 @@ export const deleteSession = (request: Request<{ sessionId: string }>, response:
 
     return accountService
         .sessionRevoke(id, sessionId, callerContextOf(request))
-        .then(({ modifiedCount }) => {
-            if (modifiedCount === 0) {
+        .then((revoked) => {
+            if (!revoked) {
                 rejectResponse(response, 404, [t('account.sessions.not-found')]);
                 return;
             }

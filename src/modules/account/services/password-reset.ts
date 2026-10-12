@@ -23,7 +23,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedCaller } from '../roles';
 import { validatePasswordChange, passwordChange, writePassword } from './password';
-import { PASSWORD_RESET_TOKEN_TYPE } from './token-types';
+import { PASSWORD_RESET_TOKEN_TYPE } from '../token-types';
 
 /**
  * The write a completed reset rides along on: the proven mailbox verifies the address, and the
@@ -157,7 +157,7 @@ const resetWith = (
     assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return spendLiveToken(user, token).then((spentByThisRequest) =>
+        return spendLiveToken(PASSWORD_RESET_TOKEN_TYPE, token).then((spentByThisRequest) =>
             spentByThisRequest
                 ? writePassword(user, password, markResetCompleted, 'password-reset').then(
                       (result) => afterReset(result, user, context)
@@ -169,7 +169,7 @@ const resetWith = (
 /**
  * `POST /account/reset-confirm` — the whole reset, in the order that never burns a link for a
  * password that was going to be refused: shape and match, then the live token is FOUND, then the
- * breach check, and only then is the token SPENT. The spend is the atomic `$pull` that settles two
+ * breach check, and only then is the token SPENT. The spend is the atomic delete that settles two
  * simultaneous uses of one link, so it stays last; everything before it is a read.
  *
  * The same find/spend split `two-factor-challenge.ts` uses for a login challenge.

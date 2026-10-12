@@ -204,3 +204,13 @@ export const touchLastActive = (id: string, now: Date = new Date()): Promise<voi
  */
 export const touchApiKeyUse = (id: string, now: Date = new Date()): Promise<void> =>
     userRepository.touchApiKeyUse(id, now);
+
+/**
+ * Forget the previous email of every account whose undo link has lapsed — the end of the `changed`
+ * state. Whole collection: the nightly previous-email sweep is the only caller.
+ *
+ * @param keepUserIds - the accounts whose undo link still works; they keep the address
+ * @returns how many accounts were cleared
+ */
+export const clearLapsedPreviousEmail = (keepUserIds: readonly string[]): Promise<number> =>
+    userRepository.clearLapsedPreviousEmail(keepUserIds);

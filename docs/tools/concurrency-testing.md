@@ -80,17 +80,18 @@ churn and the false confidence of a test that never could have failed.
 
 Mongoose records the **change**, not the resulting value. So:
 
-| Written as                                          | Mongoose sends            | Concurrent-safe                         |
-| --------------------------------------------------- | ------------------------- | --------------------------------------- |
-| `doc.tokens.push(entry)` then `save()`              | `$push`                   | **yes** — two writers keep both entries |
-| `doc.tokens = doc.tokens.filter(…)` then `save()`   | `$set` of the whole array | **no**                                  |
-| `doc.tokens = [...doc.tokens, entry]` then `save()` | `$set` of the whole array | **no**                                  |
+| Written as                                                        | Mongoose sends            | Concurrent-safe                         |
+| ----------------------------------------------------------------- | ------------------------- | --------------------------------------- |
+| `doc.oauthAccounts.push(entry)` then `save()`                     | `$push`                   | **yes** — two writers keep both entries |
+| `doc.oauthAccounts = doc.oauthAccounts.filter(…)` then `save()`   | `$set` of the whole array | **no**                                  |
+| `doc.oauthAccounts = [...doc.oauthAccounts, entry]` then `save()` | `$set` of the whole array | **no**                                  |
 
 The hazard is **rebuilding** the array, not mutating it. And the second row is the trap, because
 filtering to remove an element is the obvious way to write it and reads as more functional than the
 alternative — while turning a targeted removal into a wholesale overwrite that erases whatever
-another request added in between. On `tokens` that means "log out everywhere" silently restoring a
-session, or a password-reset link going missing.
+another request added in between. On `oauthAccounts` that means an unlink silently restoring a provider
+link, or a fresh link going missing. (Sessions and one-time tokens used to be this kind of array on
+the user; they are their own rows now, one per session, so there is nothing to rebuild.)
 
 Two things follow, and the second is the reason this section exists:
 
@@ -111,7 +112,7 @@ When the window is too narrow to hit over HTTP, force it instead. The cancel-vs-
 
 | Path                                                           | Contents                                                                                                                              |
 | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `tests/integration/concurrency/auth-races.test.ts`             | Signup, login, token revocation, one-time reset tokens, and the limiter proof                                                         |
+| `tests/integration/concurrency/auth-races.test.ts`             | Signup, login, session revocation, one-time reset tokens, and the limiter proof                                                       |
 | `tests/integration/concurrency/cart-races.test.ts`             | Cart upsert under contention, checkout, account deletion racing a cart write                                                          |
 | `tests/integration/concurrency/payment-races.test.ts`          | Double confirm, webhook redelivery, confirm vs webhook, overselling, cancel vs pay                                                    |
 | `tests/integration/concurrency/checkout-interleavings.test.ts` | Checkout against a cart write injected at a fixed point: the loser answers `CART_CHANGED` and keeps none of its work                  |

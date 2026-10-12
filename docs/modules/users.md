@@ -1,9 +1,9 @@
 # users
 
 ::: tip At a glance
-**Owns** — the user record: email, password hash, role name, and the reset/refresh tokens hanging off it.
+**Owns** — the user record: email, password hash, role name, the second-factor and linked-provider material, and the session epoch. Sessions and one-time tokens are [`account`](./account.md)'s own collections.
 **Depends on** — nothing. Authentication is next door in [`account`](./account.md).
-**Breaks if you change** — the `tokens` subdocument. `account` reads and writes it, and it is the repo's only shared-kernel edge.
+**Breaks if you change** — the credential fields (password, second factors, linked providers, the epoch). `account` reads and writes them, and it is the repo's only shared-kernel edge.
 :::
 
 ## Its neighbourhood
@@ -55,11 +55,10 @@ The role name is a fallback, not the source of truth — a stored membership alw
 module publishes its own field alongside it purely so a staff list has something to show. See
 [Authorization](../theory/authorization.md) for where the decision actually gets made.
 
-**Authentication is not here.** Signup, login, password reset and the token lifecycle all live in
+**Authentication is not here.** Signup, login, password reset, sessions and the one-time-token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
-this module's barrel is the widest in the repo: alongside `userService`, it publishes `TokenType`,
-`zodUserSchema`, `hashToken` and `isLiveRefreshSession` straight off the model — `account` needs
-those to authenticate and mint tokens for the same document. `userRepository` and the model's
+this module's barrel is the widest in the repo: alongside `userService`, it publishes
+`zodUserSchema` straight off the model — `account` needs it to authenticate the same document. `userRepository` and the model's
 runtime value stay inside even so: every read or write, `account`'s included, goes through
 `userService`, never the collection directly.
 

@@ -48,7 +48,7 @@ and carries their whole reach rather than the two endpoints the partner needs. T
 answer: a revocable credential, scoped to a caller-chosen subset of whoever minted it.
 
 **The credential is verified, never decrypted.** `sk_<8-char prefix>_<32 bytes>`, both halves
-`base64url`. Only a sha256 digest is ever stored — `credentials.ts` reuses `hashToken`
+`base64url`. Only a sha256 digest is ever stored — `credentials.ts` reuses `hashToken` (`src/infrastructure/security/hash-token.ts`)
 (`@modules/users`), the same one-way primitive refresh/reset tokens use: a high-entropy, one-time
 secret has no search space for bcrypt/argon2 to make expensive, so the ~100ms they would cost on
 every authenticated request buys nothing. The prefix is the only part ever stored in the clear —
@@ -116,7 +116,7 @@ stated would be scope nobody asked for.
 
 ::: tip What deleting this module actually costs
 Every ingredient it is built from — `kernel/authentication.ts`'s `CredentialResolver` port,
-`hashToken`, the permission model — is still there and still used by whatever remains. Deleting
+`hashToken` (`@infrastructure/security`), the permission model — is still there and still used by whatever remains. Deleting
 `api-keys` simply means no build serves `sk_...` tokens: `resolveCredential` resolves `undefined`
 for one instead of throwing, exactly like a build with no `account` has no JWTs to verify.
 :::

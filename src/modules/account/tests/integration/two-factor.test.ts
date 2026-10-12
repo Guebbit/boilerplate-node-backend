@@ -16,12 +16,12 @@ import { codeFor } from '@tests/totp';
 import { setCookie } from '@tests/cookies';
 import { forgetSessionEpoch } from '@tests/session-epoch';
 import { getExpiryTime, RefreshTokenExpiryTime } from '@modules/account/session/config';
-import { TokenType, hashToken } from '@modules/users';
 import { userRepository } from '@modules/users/tests/factories';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
 import { DELIVERED_CODE_MAX_ATTEMPTS } from '@modules/account/two-factor';
 import { testCallerContext } from '@tests/callers';
+import { plantToken } from '../factories';
 
 /**
  * Every mail the app queued, newest last.
@@ -836,24 +836,14 @@ describe('logging in with a device factor', () => {
 
     it('refuses a challenge past its expiry, the same as a forged one', async () => {
         /*
-         * Seeded directly, like the stale-reset-token case in `self-service.test.ts`'s
-         * `findLiveToken` suite: `tokenAdd` cannot produce a past `expiration` itself, and this is
-         * the state a genuinely stale challenge reaches. Regression coverage for a design hazard: a
-         * purely signed challenge, with no server-side record, verifies for its whole TTL with no
-         * way to check it against anything; this one is refused the moment it's past its stored
-         * deadline.
+         * Planted already expired, like the stale-reset-token case in `self-service.test.ts`'s
+         * `findLiveToken` suite: `issueToken` cannot produce a past `expiresAt` itself, and this is
+         * the state a genuinely stale challenge reaches while the database's TTL monitor has yet
+         * to delete it. A purely signed challenge, with no server-side record, would verify for its
+         * whole TTL; this one is refused the moment it is past its stored deadline.
          */
-        await createUser({
-            email: 'stale-challenge@example.com',
-            tokens: [
-                {
-                    sentAt: new Date(),
-                    type: TokenType.MFA_CHALLENGE,
-                    token: hashToken('stale-mfa-challenge'),
-                    expiration: new Date(Date.now() - 1000)
-                }
-            ]
-        });
+        const user = await createUser({ email: 'stale-challenge@example.com' });
+        await plantToken(user.id, 'mfa-challenge', 'stale-mfa-challenge', { ttlMs: -1000 });
 
         const response = await api()
             .post('/account/login/2fa')
@@ -1376,7 +1366,7 @@ describe('the per-account wrong-code lock', () => {
             { _id: user.id },
             { $set: { mfaFailures: 10, mfaLockedUntil: new Date(Date.now() + 60_000) } }
         );
-        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'reset-clears-the-lock');
+        await plantToken(user.id, 'password', 'reset-clears-the-lock', { ttlMs: 60 * 60 * 1000 });
 
         const response = await api().post('/account/reset-confirm').send({
             token: 'reset-clears-the-lock',

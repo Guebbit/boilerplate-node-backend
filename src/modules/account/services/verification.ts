@@ -4,19 +4,19 @@
  * verification share this mechanism — proving the address an account already has (signup, the
  * explicit re-send), and proving the address a `PUT/PATCH /account` change has asked for
  * (docs/modules/account.md#proving-an-address) — and every flow that starts either one calls this
- * and nothing else, so they cannot drift. Old tokens of the SAME kind are removed before the new
- * one is issued — not for security, since spending any of them proves the same mailbox, but so "the
+ * and nothing else, so they cannot drift. Issuing replaces the SAME kind's previous token
+ * atomically — not for security, since spending any of them proves the same mailbox, but so "the
  * newest email is the one that works" and a re-send never confuses the user.
  */
 
 import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { userService, type UserDocument } from '@modules/users';
-import { tokenAdd } from './tokens';
+import { issueToken, removeTokens, tokenSentAt } from './tokens';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
-import { announceSessionsRevoked, dropRefreshTokens } from './revocation';
-import { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types';
+import { announceSessionsRevoked, dropSessions } from './revocation';
+import { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
 
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
@@ -54,15 +54,15 @@ export const VERIFY_RESEND_SECONDS = 60;
  */
 const VERIFY_RESEND_TOO_SOON_CODE = ERROR_CODES.EMAIL_VERIFY_RESEND_TOO_SOON;
 
-/** The two kinds a token may be. A union of the constants, so a third one cannot be passed. */
-type VerificationTokenType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;
+/** The two kinds a link here may be. A union of the constants, so a third one cannot be passed. */
+type VerifyLinkType = typeof EMAIL_VERIFY_TOKEN_TYPE | typeof EMAIL_CHANGE_TOKEN_TYPE;
 
 /**
  * Which address a token kind proves, and which frontend route its link points at — one lookup so
  * {@link sendVerificationEmail} cannot drift between a token's TYPE and the mailbox it targets.
  */
 const VERIFICATION_TARGETS: Record<
-    VerificationTokenType,
+    VerifyLinkType,
     { route: 'verify' | 'email-change'; addressOf: (user: UserDocument) => string | undefined }
 > = {
     [EMAIL_VERIFY_TOKEN_TYPE]: { route: 'verify', addressOf: (user) => user.email },
@@ -71,8 +71,8 @@ const VERIFICATION_TARGETS: Record<
 
 /**
  * Issue a fresh verification token for `user` and enqueue the email carrying it.
- * @param user - the account to verify; must carry its credential fields (`tokens`), and
- *   `pendingEmail` too when `type` is {@link EMAIL_CHANGE_TOKEN_TYPE}
+ * @param user - the account to verify; must carry `pendingEmail` when `type` is
+ *   {@link EMAIL_CHANGE_TOKEN_TYPE}
  * @param context - caller context; its `locale` is the fallback when the account has none
  * @param type - which address is being proven — defaults to the signup/re-send kind
  * @returns resolves when the job is queued — the send itself happens in the email worker
@@ -80,7 +80,7 @@ const VERIFICATION_TARGETS: Record<
 export const sendVerificationEmail = (
     user: UserDocument,
     context: CallerContext,
-    type: VerificationTokenType = EMAIL_VERIFY_TOKEN_TYPE
+    type: VerifyLinkType = EMAIL_VERIFY_TOKEN_TYPE
 ): Promise<void> => {
     const target = VERIFICATION_TARGETS[type];
     const address = target.addressOf(user);
@@ -88,24 +88,22 @@ export const sendVerificationEmail = (
     // ever requested), not a state worth mailing about.
     if (!address) return Promise.resolve();
 
-    return userService
-        .tokenRemoveAll(user, type)
-        .then(() => tokenAdd(user, type, emailVerifyTokenTtlMs()))
-        .then((token) => {
-            /*
-             * The recipient's OWN language, exactly as the reset and delete emails choose
-             * theirs: the copy is finished before the job is published, so the worker needs no
-             * locale at all.
-             */
-            const mail = verifyRequestEmail(
-                recipientLocale(user.locale, context),
-                greetableName(user, address),
-                token,
-                target.route
-            );
-            // High priority: a token-bearing link the user is actively waiting on, not a notification.
-            return sendAccountMail(address, mail);
-        });
+    // Issuing replaces the kind's one live link atomically, so "the newest email is the one that works".
+    return issueToken(user.id, type, emailVerifyTokenTtlMs()).then((token) => {
+        /*
+         * The recipient's OWN language, exactly as the reset and delete emails choose
+         * theirs: the copy is finished before the job is published, so the worker needs no
+         * locale at all.
+         */
+        const mail = verifyRequestEmail(
+            recipientLocale(user.locale, context),
+            greetableName(user, address),
+            token,
+            target.route
+        );
+        // High priority: a token-bearing link the user is actively waiting on, not a notification.
+        return sendAccountMail(address, mail);
+    });
 };
 
 /**
@@ -128,22 +126,20 @@ export const requestEmailVerification = (
 /**
  * Seconds still to wait before this account may ask for another verification email of `type`, or 0.
  *
- * The anchor is the live token's own `sentAt` — `sendVerificationEmail` removes every token of
- * the kind before adding one, so there is exactly one and it was minted by the last send.
+ * The anchor is the live token's own `sentAt` — issuing a link replaces the kind's previous one,
+ * so there is exactly one and it was minted by the last send.
  *
- * @param user - the account, carrying its credential fields
+ * @param user - the account
  * @param type - which kind of token (and so which button) is asking
  * @returns seconds to wait, or 0 when a send may go ahead
  */
 export const resendCooldownRemaining = (
     user: UserDocument,
-    type: VerificationTokenType,
+    type: VerifyLinkType,
     now: Date = new Date()
-): number =>
-    cooldownRemaining(
-        user.tokens.find((token) => token.type === type)?.sentAt,
-        VERIFY_RESEND_SECONDS,
-        now
+): Promise<number> =>
+    tokenSentAt(user.id, type).then((sentAt) =>
+        cooldownRemaining(sentAt, VERIFY_RESEND_SECONDS, now)
     );
 
 /**
@@ -162,30 +158,30 @@ export const requestEmailVerificationFor = (
     userId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
-    // Credentials included: issuing the token pushes onto this document's `tokens`.
     userService.findByIdWithCredentials(userId).then((user) => {
         if (!user) return generateReject(404, [t('users.not-found')]);
         if (user.verifiedAt) return generateReject(409, [t('account.verify.already-verified')]);
 
-        const wait = resendCooldownRemaining(user, EMAIL_VERIFY_TOKEN_TYPE);
-        if (wait > 0)
-            return resendTooSoon(
-                VERIFY_RESEND_TOO_SOON_CODE,
-                t('account.verify.resend-too-soon'),
-                wait
-            );
+        return resendCooldownRemaining(user, EMAIL_VERIFY_TOKEN_TYPE).then((wait) => {
+            if (wait > 0)
+                return resendTooSoon(
+                    VERIFY_RESEND_TOO_SOON_CODE,
+                    t('account.verify.resend-too-soon'),
+                    wait
+                );
 
-        // The recipient is the account's own stored address, so no body names it: charged here.
-        return mailRecipientRefusal(user.email).then((refusal) => {
-            if (refusal) return refusal;
+            // The recipient is the account's own stored address, so no body names it: charged here.
+            return mailRecipientRefusal(user.email).then((refusal) => {
+                if (refusal) return refusal;
 
-            return requestEmailVerification(user, context).then(() =>
-                generateSuccess<EmailVerificationRequested>(
-                    { resendAfter: VERIFY_RESEND_SECONDS },
-                    200,
-                    t('account.verify.email-sent')
-                )
-            );
+                return requestEmailVerification(user, context).then(() =>
+                    generateSuccess<EmailVerificationRequested>(
+                        { resendAfter: VERIFY_RESEND_SECONDS },
+                        200,
+                        t('account.verify.email-sent')
+                    )
+                );
+            });
         });
     });
 
@@ -206,39 +202,40 @@ export const resendPendingEmailVerificationFor = (
     userId: string,
     context: CallerContext
 ): Promise<ResponseSuccess<EmailVerificationRequested> | ResponseReject> =>
-    // Credentials included: issuing the token pushes onto this document's `tokens`.
     userService.findByIdWithCredentials(userId).then((user) => {
         // A valid token for a since-deleted account is unauthenticated, as on `PUT /account`.
         if (!user) return generateReject(401, []);
-        if (emailChangeNext(emailChangeStateOf(user), 'resend') === undefined || !user.pendingEmail)
+        const { pendingEmail } = user;
+        if (emailChangeNext(emailChangeStateOf(user), 'resend') === undefined || !pendingEmail)
             return generateSuccess<EmailVerificationRequested>(
                 { resendAfter: 0 },
                 200,
                 t('account.email-change.nothing-pending')
             );
 
-        const wait = resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE);
-        if (wait > 0)
-            return resendTooSoon(
-                VERIFY_RESEND_TOO_SOON_CODE,
-                t('account.verify.resend-too-soon'),
-                wait
-            );
-
-        // The recipient is the stored pending address: charged here, not by a middleware.
-        return mailRecipientRefusal(user.pendingEmail).then((refusal) => {
-            if (refusal) return refusal;
-
-            return sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
-                recordAudit(context, {
-                    action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
-                    outcome: 'success'
-                });
-                return generateSuccess<EmailVerificationRequested>(
-                    { resendAfter: VERIFY_RESEND_SECONDS },
-                    200,
-                    t('account.email-change.resent')
+        return resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE).then((wait) => {
+            if (wait > 0)
+                return resendTooSoon(
+                    VERIFY_RESEND_TOO_SOON_CODE,
+                    t('account.verify.resend-too-soon'),
+                    wait
                 );
+
+            // The recipient is the stored pending address: charged here, not by a middleware.
+            return mailRecipientRefusal(pendingEmail).then((refusal) => {
+                if (refusal) return refusal;
+
+                return sendVerificationEmail(user, context, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
+                    recordAudit(context, {
+                        action: accountAuditActions.AUTH_EMAIL_CHANGE_RESENT,
+                        outcome: 'success'
+                    });
+                    return generateSuccess<EmailVerificationRequested>(
+                        { resendAfter: VERIFY_RESEND_SECONDS },
+                        200,
+                        t('account.email-change.resent')
+                    );
+                });
             });
         });
     });
@@ -292,7 +289,7 @@ const auditProvenAddress = (
 /**
  * Spend a verification token and mark the account verified.
  * `postVerifyConfirm` already found and spent the token — the race is settled by the atomic
- * `$pull` in `spendLiveToken` — so this is deliberately just the write and its emit, not a
+ * delete in `spendLiveToken` — so this is deliberately just the write and its emit, not a
  * second copy of that check. See `./tokens` for why finding and spending are two calls.
  */
 export const completeEmailVerification = (
@@ -321,7 +318,7 @@ export const completeEmailVerification = (
  * this is the same treatment `passwordChange` already gives a changed password
  * (docs/modules/account.md#proving-an-address). The epoch moves in the swap's own save, so no
  * failing second write can leave the old sessions live; only the refresh-token cleanup is separate.
- * @param user - the token's holder, loaded with credentials (`pendingEmail`, `tokens`)
+ * @param user - the token's holder, loaded with credentials (`pendingEmail`)
  * @param context - the caller context, for the audit record
  */
 export const completeEmailChange = (
@@ -343,13 +340,13 @@ export const completeEmailChange = (
             // the audit below, for the same reason.
             promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
         )
-        .then((saved) => dropRefreshTokens(saved).then(() => saved))
+        .then((saved) => dropSessions(saved.id).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)
         );
 };
 
-export { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types';
+export { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
 
 /**
  * Spend an undo link's work: put the account back as it was before the change. While the change is
@@ -361,7 +358,7 @@ export { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from './token-types'
  * `postEmailChangeUndo` already found and spent the token, the same split as
  * {@link completeEmailChange}.
  *
- * @param user - the token's holder, loaded with credentials (`pendingEmail`, `previousEmail`, `tokens`)
+ * @param user - the token's holder, loaded with credentials (`pendingEmail`, `previousEmail`)
  * @param context - the caller context, for the audit record
  * @throws a duplicate-key error when another account took the previous address since
  */
@@ -371,7 +368,7 @@ export const undoEmailChange = (
 ): Promise<UserDocument> =>
     // The sessions end FIRST, as their own write: the undo token is already spent, so a restore
     // that fails (409) must not leave a thief signed in with no way for the owner to retry.
-    announceSessionsRevoked(user, 'email-change-undo')
+    announceSessionsRevoked(user.id, 'email-change-undo')
         .then(() =>
             undoRestoresPreviousEmail(emailChangeStateOf(user))
                 ? userService.restorePreviousEmail(user)
@@ -380,9 +377,9 @@ export const undoEmailChange = (
         .then((saved) =>
             // The confirmation link is dead whichever way this went: it would swap back in the
             // address the owner just refused.
-            userService.tokenRemoveAll(saved, EMAIL_CHANGE_TOKEN_TYPE).then(() => saved)
+            removeTokens(saved.id, [EMAIL_CHANGE_TOKEN_TYPE]).then(() => saved)
         )
-        .then((saved) => dropRefreshTokens(saved).then(() => saved))
+        .then((saved) => dropSessions(saved.id).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
         );

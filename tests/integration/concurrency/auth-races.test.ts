@@ -14,15 +14,13 @@
  *        `users_email` plus the E11000 → 409 branch in `databaseErrorInterpreter` closes it — in
  *        that order, because the index alone would turn the duplicate account into a 500.
  *
- *   R4 — a read-modify-write on token storage races: pushing onto the loaded `tokens` array and
- *        calling `save()` writes the WHOLE array as it looked at load time, so two concurrent
- *        logins each write N+1 tokens and the second erases the first — a successful login
- *        followed by an unauthenticated next request. `$push`/`$pull` against mongod, never
- *        against a stale in-memory copy, closes it.
+ *   R4 — a login writes its own session row, so N concurrent logins leave N rows: none lost to a
+ *        clobbering write, as they were while sessions were entries in an array on the user
+ *        document, and one revocation under contention leaves none behind.
  *
  * R5 is not about closing a race — it PROVES a design decision made explicitly:
  * refresh-token rotation must not turn "two tabs woke up and refreshed within the same instant"
- * into "this looks like theft". `tokenSupersede` (`users/repository.ts`) lets exactly one
+ * into "this looks like theft". `supersede` (`account/repository.ts`) lets exactly one
  * concurrent exchange of one token WIN atomically; every other exchange within
  * `NODE_TOKEN_ROTATION_GRACE_MS` of that win is reissued its own sibling token rather than
  * rejected. This is the suite where that guarantee has to be proven under real concurrency, not
@@ -38,15 +36,20 @@
  * `--runInBand` is irrelevant to the concurrency inside a test, and why 429 is asserted against.
  */
 import { api } from '@tests/http';
+import { testCallerContext } from '@tests/callers';
+import { accountService } from '@modules/account/services';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
-import { hashToken } from '@modules/users';
-import { userRepository } from '@modules/users/tests/factories';
-import { TokenType } from '@modules/users';
 // Not on the barrel — see `users/index.ts`. A spec may reach the model; runtime code may not.
 import { userModel } from '@modules/users/model';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 import { withReloadedRateLimits } from '@tests/rate-limit-harness';
+import {
+    plantToken,
+    sessionHashesOf,
+    sessionRowsOf,
+    tokenTypesOf
+} from '@modules/account/tests/factories';
 
 setupTestDb();
 
@@ -150,8 +153,7 @@ describe('R4 — concurrent logins for one account', () => {
         expectNoServerErrors(results);
         expect(countStatus(results, 200)).toBe(RACE_SIZE);
 
-        const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        expect(stored?.tokens).toHaveLength(RACE_SIZE);
+        expect(await sessionRowsOf(user.id)).toHaveLength(RACE_SIZE);
     });
 
     it('issues distinct tokens, so the count is not N copies of one', async () => {
@@ -161,15 +163,14 @@ describe('R4 — concurrent logins for one account', () => {
             api().post('/account/login').send({ email: user.email, password: PLAIN_PASSWORD })
         );
 
-        const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        const values = (stored?.tokens ?? []).map((entry) => entry.token);
+        const values = await sessionHashesOf(user.id);
 
         expect(new Set(values).size).toBe(RACE_SIZE);
     });
 
-    it('removes every token of a type under contention, not merely some', async () => {
-        // The `$pull` half. Read-modify-write here leaves survivors — sessions that should have
-        // been revoked and were not, which is the security-relevant direction of the same bug.
+    it('removes every session under contention, not merely some', async () => {
+        // The revocation half. A delete that raced a login could leave survivors — sessions that
+        // should have been revoked and were not, which is the security-relevant direction.
         const user = await createUser({ email: 'sessions@example.com' });
 
         const logins = await raceN(RACE_SIZE, () =>
@@ -186,8 +187,7 @@ describe('R4 — concurrent logins for one account', () => {
 
         expectNoServerErrors(results);
 
-        const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        expect(stored?.tokens?.filter((entry) => entry.type === 'refresh')).toHaveLength(0);
+        expect(await sessionRowsOf(user.id)).toHaveLength(0);
     });
 });
 
@@ -235,17 +235,16 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
 
     it('leaves exactly ONE superseded ancestor behind — the original, claimed once', async () => {
         // Every racer reissues its own sibling token (RACE_SIZE new, live entries — proven above),
-        // but they all raced to supersede the SAME starting token, and `tokenSupersede`'s atomic
+        // but they all raced to supersede the SAME starting token, and `supersede`'s atomic
         // claim means only the FIRST write can ever flip it. There is exactly one ancestor to mark,
         // and it gets marked exactly once, however many racers tried.
         const { user, jwtCookie } = await issueSession();
 
         await raceN(RACE_SIZE, () => api().post('/account/refresh').set('Cookie', jwtCookie));
 
-        const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        const refreshTokens = stored?.tokens?.filter((entry) => entry.type === 'refresh') ?? [];
-        expect(refreshTokens.filter((entry) => !entry.supersededAt)).toHaveLength(RACE_SIZE);
-        expect(refreshTokens.filter((entry) => entry.supersededAt)).toHaveLength(1);
+        const rows = await sessionRowsOf(user.id);
+        expect(rows.filter((row) => !row.supersededAt)).toHaveLength(RACE_SIZE);
+        expect(rows.filter((row) => row.supersededAt)).toHaveLength(1);
     });
 });
 
@@ -254,7 +253,7 @@ describe('one-time tokens under contention', () => {
         // A reset token is one-time. Two uses of it must not both change the password, and the
         // loser must be rejected rather than 500.
         const user = await createUser({ email: 'reset@example.com' });
-        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'one-time-reset-token');
+        await plantToken(user.id, 'password', 'one-time-reset-token', { ttlMs: 60 * 60 * 1000 });
 
         const results = await raceN(2, () =>
             api().post('/account/reset-confirm').send({
@@ -268,13 +267,22 @@ describe('one-time tokens under contention', () => {
         expect(countStatus(results, 200)).toBe(1);
 
         // And the token is spent, whichever request spent it.
-        const stored = await userRepository.findOneWithCredentials({ email: user.email });
-        // `tokens[].token` is a `hashToken` digest at rest — the
-        // stored value is never the literal token, so the comparison has to hash it too, or this
-        // assertion is vacuously true regardless of whether the token was actually spent.
-        expect(
-            stored?.tokens?.some((entry) => entry.token === hashToken('one-time-reset-token'))
-        ).toBe(false);
+        expect(await tokenTypesOf(user.id)).not.toContain('password');
+    });
+
+    it('leaves exactly one live link after simultaneous reset requests', async () => {
+        // The issue is one atomic upsert per (account, kind): requests racing it must not leave
+        // two working links, as the old remove-then-add pair could. Driven through the service,
+        // since the route answers before its detached work has finished.
+        const user = await createUser({ email: 'reset-twice@example.com' });
+
+        const results = await raceN(RACE_SIZE, () =>
+            accountService.requestPasswordReset(user.email, testCallerContext)
+        );
+
+        expect(results.every((result) => result.status === 'fulfilled')).toBe(true);
+        const types = await tokenTypesOf(user.id);
+        expect(types.filter((type) => type === 'password')).toHaveLength(1);
     });
 });
 

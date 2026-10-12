@@ -1,7 +1,7 @@
 # account
 
 ::: tip At a glance
-**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). One collection of its own, `accountexports`; the address book is [`addresses`](./addresses.md).
+**Owns** — every way into an account: signup, login, [OAuth](./account-oauth.md), [two-factor auth](./account-two-factor.md), refresh, re-auth, password reset, session listing and revocation, logout-everywhere, two-step deletion, and the [data export](#data-export). Three collections of its own: `sessions`, `verificationtokens` and `accountexports`; the address book is [`addresses`](./addresses.md).
 **Depends on** — [`users`](./users.md), whose record it authenticates. The repo's only `shared-kernel` edge.
 **Breaks if you change** — the token lifetimes or the cookie flags. Every guard in the app resolves through this module.
 :::
@@ -45,10 +45,11 @@ merely on import — because installing a function touches no connection, and ev
 application depends on it existing before the first request arrives. Registering there rather than
 at import time means importing this file for a type or a test does not install the resolver.
 
-Its one collection is `accountexports`, a row per account that asked for its data
-([below](#data-export)). The User record belongs to [`users`](./users.md) and is reached through
-that module's barrel; the address book lives in its own module,
-[`addresses`](./addresses.md) — see that page for why.
+It owns three collections. `sessions` holds who is signed in and `verificationtokens` the
+one-time links and challenges in flight ([Sessions](./account-sessions.md#where-sessions-live));
+`accountexports` is a row per account that asked for its data ([below](#data-export)). The User
+record belongs to [`users`](./users.md) and is reached through that module's barrel; the address
+book lives in its own module, [`addresses`](./addresses.md) — see that page for why.
 
 An account nobody has used in a long time — no login, no API-key use — is a live account with
 less and less live purpose. `npm run reap:inactive-accounts` (`docker/crontab`, nightly) handles it
@@ -122,7 +123,7 @@ challenge — see [OAuth](./account-oauth.md#two-consequences-worth-naming).
 Two **kinds** of email verification share one mechanism, and the distinction is the whole design.
 One proves the address an account **already has** — signup, and the explicit re-send. The other
 proves the address a `PUT`/`PATCH /account` change has **asked for**. They are stored under different
-`tokens.type` values (`verify` and `email-change`), and neither can do the other's work: a signup
+`verificationtokens.type` values (`verify` and `email-change`), and neither can do the other's work: a signup
 token that could swap in a `pendingEmail` would be an account takeover with an extra step.
 
 The old address gets a one-time **undo link** in its notice, valid for 7 days from the request and
@@ -179,7 +180,7 @@ stateDiagram-v2
     changedPending --> pending: lapse
 ```
 
-`lapse` is the end of the undo window: the nightly `reap:expired-tokens` job clears `previousEmail`
+`lapse` is the end of the undo window: the nightly `reap:previous-emails` job clears `previousEmail`
 on an account with no live undo link. See
 [the retention page](../theory/data-retention.md#the-previous-email-after-a-change).
 

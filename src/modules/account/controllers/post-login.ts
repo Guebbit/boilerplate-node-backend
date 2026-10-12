@@ -75,11 +75,6 @@ export const postLogin = (
 
             const { data } = result;
             const userId = data._id.toString();
-            // Housekeeping for the account that just proved itself — only after authentication, so
-            // an unknown address or a wrong password costs the database nothing here. Awaited
-            // before the new session is written (a prune and a push cannot share one update).
-            const pruned = accountService.pruneOwnExpiredTokens(userId);
-
             /*
              * 2FA branch: the password checked out, but the login is not complete — no
              * cookies, no access token, just a short-lived challenge naming this attempt and the
@@ -87,35 +82,31 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                return pruned
-                    .then(() => twoFactorService.buildLoginChallenge(data, ['pwd']))
-                    .then((challenge) => {
-                        successResponse<LoginOutcome>(
-                            response,
-                            challenge,
-                            200,
-                            'Two-factor authentication required'
-                        );
-                    });
+                return twoFactorService.buildLoginChallenge(data, ['pwd']).then((challenge) => {
+                    successResponse<LoginOutcome>(
+                        response,
+                        challenge,
+                        200,
+                        'Two-factor authentication required'
+                    );
+                });
             }
 
-            return pruned
-                .then(() => issueSession(response, userId, remember))
-                .then((accessToken) =>
-                    // Read fresh from the membership — the document carries no role of its own.
-                    isUnrestrictedCaller(userId).then((unrestricted) => {
-                        recordLoginSuccess(request, userId, unrestricted);
-                        // A completed login marks this browser familiar for the account, so a
-                        // lockout an attacker caused cannot keep the owner out.
-                        rememberDevice(request, response, data.email);
-                        successResponse<LoginOutcome>(
-                            response,
-                            { token: accessToken },
-                            200,
-                            'Authentication successful'
-                        );
-                    })
-                );
+            return issueSession(response, userId, remember).then((accessToken) =>
+                // Read fresh from the membership — the document carries no role of its own.
+                isUnrestrictedCaller(userId).then((unrestricted) => {
+                    recordLoginSuccess(request, userId, unrestricted);
+                    // A completed login marks this browser familiar for the account, so a
+                    // lockout an attacker caused cannot keep the owner out.
+                    rememberDevice(request, response, data.email);
+                    successResponse<LoginOutcome>(
+                        response,
+                        { token: accessToken },
+                        200,
+                        'Authentication successful'
+                    );
+                })
+            );
         })
         .catch((error: unknown) => {
             // Covers the credential check and the token/cookie steps after it. A failure in any of them is not a rejected login — the caller may well

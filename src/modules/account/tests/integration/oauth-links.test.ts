@@ -12,6 +12,7 @@ import { reauthWindowSeconds } from '@kernel/config';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { cookieHeader } from '@tests/cookies';
+import { plantToken } from '../factories';
 
 /** Every queued mail, newest last. */
 const mockOutbox: { template: string; data: Record<string, unknown> }[] = [];
@@ -165,7 +166,7 @@ describe('DELETE /account/oauth/links/{provider}', () => {
 describe('the reset-confirm mail', () => {
     it('names the providers still connected, so the owner can act on them', async () => {
         const { user } = await linkedAccount();
-        await user.tokenAdd('password', 3_600_000, 'reset-names-providers');
+        await plantToken(user.id, 'password', 'reset-names-providers', { ttlMs: 3_600_000 });
 
         const response = await resetFor('reset-names-providers');
 
@@ -176,7 +177,7 @@ describe('the reset-confirm mail', () => {
 
     it('says so when no provider is connected', async () => {
         const user = await createUser({ verifiedAt: new Date() });
-        await user.tokenAdd('password', 3_600_000, 'reset-no-providers');
+        await plantToken(user.id, 'password', 'reset-no-providers', { ttlMs: 3_600_000 });
 
         await resetFor('reset-no-providers');
 

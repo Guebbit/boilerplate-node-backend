@@ -7,7 +7,8 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { createUser, userRepository } from '@modules/users/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
+import { sessionRowsOf } from '../factories';
 import { createRefreshToken, SecondFactorRequiredError } from '../../session/jwt';
 
 setupTestDb();
@@ -20,10 +21,7 @@ const armedUser = () =>
     });
 
 /** How many refresh sessions the account holds. */
-const sessionsOf = async (id: string): Promise<number> => {
-    const user = await userRepository.findByIdWithCredentials(id);
-    return user?.tokens.length ?? 0;
-};
+const sessionsOf = (id: string): Promise<number> => sessionRowsOf(id).then((rows) => rows.length);
 
 describe('a first session for an account with a second factor armed', () => {
     it('is refused when the proof is the password alone, and stores nothing', async () => {

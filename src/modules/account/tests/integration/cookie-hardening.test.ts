@@ -8,7 +8,8 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { setCookie, cookieHeader } from '@tests/cookies';
-import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { sessionRowsOf } from '../factories';
 
 setupTestDb();
 
@@ -59,17 +60,17 @@ describe('POST /account/refresh', () => {
 
     it('refuses a foreign origin outright, valid cookie or not, and rotates nothing', async () => {
         const { user, cookie } = await login();
-        const before = await userRepository.findByIdWithCredentials(user.id);
+        const before = await sessionRowsOf(user.id);
 
         const response = await api()
             .post('/account/refresh')
             .set('Cookie', cookie)
             .set('Origin', 'https://evil.example');
 
-        const after = await userRepository.findByIdWithCredentials(user.id);
+        const after = await sessionRowsOf(user.id);
         expect(response.status).toBe(403);
-        expect(after?.tokens).toHaveLength(before?.tokens.length ?? -1);
-        expect(after?.tokens.some((token) => token.supersededAt)).toBe(false);
+        expect(after).toHaveLength(before.length);
+        expect(after.some((row) => row.supersededAt)).toBe(false);
     });
 
     it('is no longer a GET: a GET reaches no route', async () => {
@@ -101,9 +102,9 @@ describe('POST /account/logout', () => {
             .set('Cookie', cookie)
             .set('Origin', 'https://evil.example');
 
-        const stored = await userRepository.findByIdWithCredentials(user.id);
+        const rows = await sessionRowsOf(user.id);
         expect(response.status).toBe(403);
-        expect(stored?.tokens.some((token) => token.type === 'refresh')).toBe(true);
+        expect(rows.length).toBeGreaterThan(0);
     });
 });
 

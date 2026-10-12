@@ -18,7 +18,6 @@ import type { CallerContext } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
 import type { AfterErase } from '@kernel/registry';
 import { outrankedRefusal } from '@modules/access';
-import { TokenType } from '../model';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { personalDataErasers } from '../erasure-registry';
@@ -114,26 +113,19 @@ export const remove = (
     markSessionsEnded(user);
     // Only the reaper's own soft delete may later be hard-deleted by it.
     if (context?.caller.system) user.deletedBy = 'reaper';
-    return userRepository.save(user).then((saved) =>
-        // Soft delete revokes every refresh token too — same defense-in-depth reasoning as
-        // `update`'s deactivation branch above.
-        saved
-            .tokenRemoveAll(TokenType.REFRESH)
-            .catch(() => undefined)
-            .then(() => {
-                if (context)
-                    recordAudit(context, {
-                        action: context.caller.system
-                            ? usersAuditActions.SYSTEM_USER_SOFT_DELETED
-                            : usersAuditActions.ADMIN_USER_SOFT_DELETED,
-                        outcome: 'success',
-                        targetType: 'user',
-                        targetId: user.id,
-                        metadata: { hardDelete: false }
-                    });
-                return generateSuccess(saved, 200, t('users.soft-deleted'));
-            })
-    );
+    return userRepository.save(user).then((saved) => {
+        if (context)
+            recordAudit(context, {
+                action: context.caller.system
+                    ? usersAuditActions.SYSTEM_USER_SOFT_DELETED
+                    : usersAuditActions.ADMIN_USER_SOFT_DELETED,
+                outcome: 'success',
+                targetType: 'user',
+                targetId: user.id,
+                metadata: { hardDelete: false }
+            });
+        return generateSuccess(saved, 200, t('users.soft-deleted'));
+    });
 };
 
 /**

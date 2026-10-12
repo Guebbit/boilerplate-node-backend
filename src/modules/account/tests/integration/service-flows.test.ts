@@ -1,8 +1,8 @@
 /**
  * @module
- * `services/index.ts` flows: signup, login, token add and password change. The sibling
+ * `services/index.ts` flows: signup, login, one-time tokens and password change. The sibling
  * `service.test.ts` covers this file's security invariants; this covers the ordinary paths they
- * sit on — a signup that succeeds, a login that returns a user, a token that's added, a password
+ * sit on — a signup that succeeds, a login that returns a user, a token that's issued, a password
  * that changes — plus the argument-level rejections in front of them, driving a real database via
  * `setupTestDb`. Lives here rather than with `users` because the code under test is `account`'s.
  */
@@ -14,6 +14,8 @@ import { accountService } from '@modules/account/services';
 import * as auditPort from '@infrastructure/observability/audit';
 import { createRefreshToken, verifyAccessToken } from '@modules/account/session/jwt';
 import { accountAuditActions } from '../../audit';
+import { hashToken } from '@infrastructure/security/hash-token';
+import { tokenRowsOf, dropSessionOf } from '../factories';
 import { userRepository } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
@@ -198,36 +200,48 @@ describe('accountService.login', () => {
     });
 });
 
-describe('accountService.tokenAdd', () => {
-    it('adds a token to the user and returns the token string', async () => {
+describe('accountService.issueToken', () => {
+    it('stores a one-time token for the account and returns the plaintext', async () => {
         const user = await createUser();
-        const token = await accountService.tokenAdd(user, 'password-reset', 3_600_000);
+        const token = await accountService.issueToken(user.id, 'password', 3_600_000);
 
         expect(typeof token).toBe('string');
         expect(token).toHaveLength(32);
     });
 
-    it('persists the token to the database', async () => {
+    it('persists only the digest, with its kind', async () => {
         const user = await createUser();
-        const id = user._id.toString();
 
-        await accountService.tokenAdd(user, 'email-verify');
+        const token = await accountService.issueToken(user.id, 'verify', 3_600_000);
 
-        const refreshed = await userRepository.findByIdWithCredentials(id);
-        expect(refreshed!.tokens).toHaveLength(1);
-        expect(refreshed!.tokens[0].type).toBe('email-verify');
+        const rows = await tokenRowsOf(user.id);
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ type: 'verify', tokenHash: hashToken(token) });
+        expect(JSON.stringify(rows)).not.toContain(token);
     });
 
-    it('sets an expiration date when expirationTime is provided', async () => {
+    it('sets an expiry the given lifetime away', async () => {
         const user = await createUser();
-        const id = user._id.toString();
         const now = Date.now();
 
-        await accountService.tokenAdd(user, 'reset', 3_600_000);
+        await accountService.issueToken(user.id, 'password', 3_600_000);
 
-        const refreshed = await userRepository.findByIdWithCredentials(id);
-        const expiration = refreshed!.tokens[0].expiration!;
-        expect(expiration.getTime()).toBeGreaterThan(now);
+        const [row] = await tokenRowsOf(user.id);
+        expect(row.expiresAt.getTime()).toBeGreaterThanOrEqual(now + 3_600_000 - 1000);
+        expect(row.expiresAt.getTime()).toBeLessThanOrEqual(Date.now() + 3_600_000);
+    });
+
+    it('replaces the previous link of a one-live-link kind, and adds another of a many-live kind', async () => {
+        const user = await createUser();
+
+        await accountService.issueToken(user.id, 'password', 3_600_000);
+        await accountService.issueToken(user.id, 'password', 3_600_000);
+        await accountService.issueToken(user.id, 'delete', 3_600_000);
+        await accountService.issueToken(user.id, 'delete', 3_600_000);
+
+        const rows = await tokenRowsOf(user.id);
+        expect(rows.filter((row) => row.type === 'password')).toHaveLength(1);
+        expect(rows.filter((row) => row.type === 'delete')).toHaveLength(2);
     });
 });
 
@@ -278,8 +292,8 @@ describe('accountService.passwordChange', () => {
 
 /**
  * A user holding one real, stored refresh token — what the refresh cookie would have carried.
- * `createRefreshToken`'s OWN return value, not a re-read from storage: `tokens[].token` is a
- * `hashToken` digest at rest, never the plaintext JWT.
+ * `createRefreshToken`'s OWN return value, not a re-read from storage: the stored
+ * row holds a `hashToken` digest, never the plaintext JWT.
  */
 const issueRefreshToken = async () => {
     const user = await createUser({ email: 'refresh@example.com', username: 'refresher' });
@@ -425,7 +439,7 @@ describe('accountService.refreshAccessToken', () => {
     it('records a revoked token as invalid rather than refreshing it', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const refreshToken = await issueRefreshToken();
-        await userRepository.tokenRemoveByValue(refreshToken);
+        await dropSessionOf(refreshToken);
 
         await expect(
             accountService.refreshAccessToken(refreshToken, testCallerContext)

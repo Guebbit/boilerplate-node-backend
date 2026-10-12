@@ -119,7 +119,7 @@ clear purpose, and what Amazon does. A controller who wants more turns full dele
 A confirmed email change keeps the old address in `previousEmail`, for one purpose: the 7-day undo
 link mailed to that old address. When the link lapses the purpose is over, so the address goes.
 
-- **Who clears it:** the nightly `reap:expired-tokens` job, in the same lease as the token sweep.
+- **Who clears it:** the nightly `reap:previous-emails` job, under its own lease.
   It unsets `previousEmail` on every account that holds one and has no live undo token.
 - **Why that test:** the link's own expiry is the window, so the clock is the one the user was told.
   A link that was spent or revoked ends the window early, and the same test catches that too.

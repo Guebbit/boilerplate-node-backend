@@ -1,7 +1,7 @@
 /**
  * @module
- * Credentials must never reach a response body. A raw Mongoose user document carries the bcrypt
- * hash and every live token, so two independent guards are asserted here: `select: false` keeps
+ * Credentials must never reach a response body. A raw Mongoose user document carries the password
+ * hash, so two independent guards are asserted here: `select: false` keeps
  * them from loading, and `applyUserTransform`'s allowlist strips them again at serialization —
  * including `.lean()` results, which bypass `toJSON` entirely.
  */
@@ -11,7 +11,6 @@ import { createUser } from '@modules/users/tests/factories';
 import { userRepository } from '../../repository';
 import * as userService from '@modules/users/services';
 import { userService as userServiceObject } from '../../services';
-import { TokenType } from '../../model';
 import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 
 setupTestDb();
@@ -20,22 +19,11 @@ setupTestDb();
 const expectNoCredentials = (payload: unknown) => {
     const serialised = JSON.stringify(payload);
     expect(serialised).not.toContain('password');
-    expect(serialised).not.toContain('tokens');
     expect(serialised).not.toContain('$2b$');
 };
 
-// A user seeded with one live refresh token.
-const withTokens = () =>
-    createUser({
-        tokens: [
-            {
-                sentAt: new Date(),
-                type: TokenType.REFRESH,
-                token: 'refresh-token-value',
-                expiration: new Date(Date.now() + 60_000)
-            }
-        ]
-    });
+// A user, as a credential-exposure test seeds one.
+const withCredentials = () => createUser();
 
 describe('email is case-insensitive', () => {
     it('stores a mixed-case address lowercased', async () => {
@@ -66,54 +54,49 @@ describe('email is case-insensitive', () => {
 
 describe('user credential exposure', () => {
     describe('select: false (the safety net)', () => {
-        it('findById does not load password or tokens', async () => {
-            const user = await withTokens();
+        it('findById does not load the password', async () => {
+            const user = await withCredentials();
             const found = await userRepository.findById(user._id.toString());
 
             expect(found!.password).toBeUndefined();
-            expect(found!.tokens).toBeUndefined();
         });
 
-        it('findOne does not load password or tokens', async () => {
-            await withTokens();
+        it('findOne does not load the password', async () => {
+            await withCredentials();
             const found = await userRepository.findOne({ email: 'user@example.com' });
 
             expect(found!.password).toBeUndefined();
-            expect(found!.tokens).toBeUndefined();
         });
 
-        it('findAll (lean) does not load password or tokens', async () => {
-            await withTokens();
+        it('findAll (lean) does not load the password', async () => {
+            await withCredentials();
             const [found] = await userRepository.findAll();
 
             expect(found.password).toBeUndefined();
-            expect(found.tokens).toBeUndefined();
             expectNoCredentials(found);
         });
 
         it('the *WithCredentials finders still return them', async () => {
-            const user = await withTokens();
+            const user = await withCredentials();
             const found = await userRepository.findByIdWithCredentials(user._id.toString());
 
             expect(typeof found!.password).toBe('string');
-            expect(found!.tokens).toHaveLength(1);
         });
     });
 
     describe('applyUserTransform (the contract boundary)', () => {
         it('strips credentials even from a document that carries them', async () => {
-            const seeded = await withTokens();
+            const seeded = await withCredentials();
             const user = await userRepository.findByIdWithCredentials(seeded._id.toString());
 
             // Precondition: this document really does hold the secrets
             expect(user!.password).toBeTruthy();
-            expect(user!.tokens).toHaveLength(1);
 
             expectNoCredentials(user!.toJSON());
         });
 
         it('strips _id and __v in favour of the contract id', async () => {
-            const user = await withTokens();
+            const user = await withCredentials();
             const json = user.toJSON() as Record<string, unknown>;
 
             expect(json.id).toBe(user._id.toString());
@@ -122,7 +105,7 @@ describe('user credential exposure', () => {
         });
 
         it('emits only the OpenAPI User properties', async () => {
-            const user = await withTokens();
+            const user = await withCredentials();
 
             // No `role` here: it is a membership fact now, never a column on this document —
             // `@modules/access` is the sole authority, and `presentUser` (`../../presenter`) takes
@@ -185,14 +168,13 @@ describe('user credential exposure', () => {
             const user = await createUser({ email: 'gone-too@example.com', deletedAt: new Date() });
             const serialized = user.toJSON() as Record<string, unknown>;
 
-            // Exposing `deletedAt` must not loosen the others: these two are stripped because
-            // they must never leave the server, which was never true of `deletedAt`.
+            // Exposing `deletedAt` must not loosen the other: the password is stripped because it
+            // must never leave the server, which was never true of `deletedAt`.
             expect(serialized.password).toBeUndefined();
-            expect(serialized.tokens).toBeUndefined();
         });
 
         it('maps a lean list the same way, via userService.search', async () => {
-            await withTokens();
+            await withCredentials();
             const { items } = await userService.search({});
 
             expect(items).toHaveLength(1);

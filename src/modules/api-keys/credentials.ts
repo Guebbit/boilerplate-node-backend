@@ -11,7 +11,7 @@
  */
 
 import { randomBytes } from 'node:crypto';
-import { hashToken } from '@modules/users';
+import { hashToken } from '@infrastructure/security/hash-token';
 import { API_KEY_TOKEN_PREFIX } from '@kernel/authentication';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
 

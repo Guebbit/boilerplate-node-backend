@@ -5,7 +5,7 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { userRepository } from '@modules/users/tests/factories';
+import { dropAllSessions } from '@modules/account/tests/factories';
 
 /**
  * The two observability endpoints, and the credentials that reach them.
@@ -60,8 +60,8 @@ describe('GET /observability/events', () => {
     });
 
     /**
-     * Signature alone is not enough: `verifyRefreshToken` also requires the token to still be on
-     * the user document, so logging out revokes the stream too.
+     * Signature alone is not enough: `verifyRefreshToken` also requires the token to still be a
+     * live session row, so logging out revokes the stream too.
      */
     it('refuses a validly-signed token that has been revoked', async () => {
         const { user, cookie } = await signIn('admin');
@@ -69,9 +69,7 @@ describe('GET /observability/events', () => {
         // Revoked at the source rather than through `POST /account/logout-all`, which needs a
         // bearer token this test does not have. The point is that a still-signed token whose
         // record is gone must not open the stream.
-        const stored = await userRepository.findByIdWithCredentials(String(user._id));
-        stored!.tokens = [];
-        await userRepository.save(stored!);
+        await dropAllSessions(String(user._id));
 
         const response = await api().get('/observability/events').set('Cookie', cookie);
 

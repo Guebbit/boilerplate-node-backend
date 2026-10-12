@@ -39,7 +39,7 @@ describe('POST /account/export', () => {
             payments: { id: string; orderId: string }[];
             cart: unknown[];
             wishlist: unknown[];
-            sessions: { id: string; type: string }[];
+            sessions: { id: string; expiration: string }[];
         };
         expect(data.profile.email).toBe(user.email);
         expect(data.orders.map((each) => each.id)).toContain(String(order._id));
@@ -50,7 +50,12 @@ describe('POST /account/export', () => {
         expect(data.payments.find((each) => each.id === payment.id)?.orderId).toBe(
             String(order._id)
         );
-        expect(data.sessions.some((session) => session.type === 'refresh')).toBe(true);
+        // The caller's own login, as metadata only: never a credential, and nothing but its handle.
+        expect(data.sessions).toHaveLength(1);
+        expect(data.sessions[0]).toEqual({
+            id: expect.any(String),
+            expiration: expect.any(String)
+        });
     });
 
     it("never includes another account's orders", async () => {

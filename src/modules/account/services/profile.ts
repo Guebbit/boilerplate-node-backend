@@ -87,6 +87,38 @@ const zodProfileSchema = zodUserSchema
 type ProfileFields = z.infer<typeof zodProfileSchema>;
 
 /**
+ * The tail of {@link writeProfile} once the change is not paced: the mailbox budget, the write,
+ * and the two mails a genuine email change owes.
+ *
+ * @param user - the loaded account
+ * @param fields - the validated profile fields
+ * @param emailOutcome - what {@link applyEmailChangeRequest} decided
+ * @param context - the caller
+ */
+const saveProfile = (
+    user: UserDocument,
+    fields: ProfileFields,
+    emailOutcome: EmailChangeOutcome,
+    context: CallerContext
+): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
+    // A genuine change mails the NEW address, which the caller chose: spent against that mailbox's
+    // budget BEFORE anything is saved, so a refused change leaves `pendingEmail` as it was.
+    const budget =
+        emailOutcome.requested && user.pendingEmail
+            ? mailRecipientRefusal(user.pendingEmail)
+            : Promise.resolve(undefined);
+
+    return budget.then((refusal) => {
+        if (refusal) return refusal;
+
+        return userService.update(user, fields, context).then((result) => {
+            if (!result.success || !emailOutcome.requested) return result;
+            return notifyEmailChangeRequested(result.data, context).then(() => result);
+        });
+    });
+};
+
+/**
  * Persists the parsed fields, then sends the change mail when — and only when — this call is what
  * set `pendingEmail`. `email` is never forwarded: {@link applyEmailChangeRequest} has already run
  * and is the only writer of `email`/`pendingEmail` on this path.
@@ -105,32 +137,19 @@ const writeProfile = (
     // account. Answered before the mailbox budget is touched, so a paced request spends nothing.
     // The caller is signed in and the answer says nothing about any other account, so unlike the
     // reset request this can be honest about why.
-    const wait = emailOutcome.requested
-        ? resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE)
-        : 0;
-    if (wait > 0)
-        return Promise.resolve(
-            resendTooSoon(
+    return (
+        emailOutcome.requested
+            ? resendCooldownRemaining(user, EMAIL_CHANGE_TOKEN_TYPE)
+            : Promise.resolve(0)
+    ).then((wait) => {
+        if (wait > 0)
+            return resendTooSoon(
                 ERROR_CODES.EMAIL_CHANGE_TOO_SOON,
                 t('account.email-change.too-soon'),
                 wait
-            )
-        );
+            );
 
-    // A genuine change mails the NEW address, which the caller chose: spent against that mailbox's
-    // budget BEFORE anything is saved, so a refused change leaves `pendingEmail` as it was.
-    const budget =
-        emailOutcome.requested && user.pendingEmail
-            ? mailRecipientRefusal(user.pendingEmail)
-            : Promise.resolve(undefined);
-
-    return budget.then((refusal) => {
-        if (refusal) return refusal;
-
-        return userService.update(user, fields, context).then((result) => {
-            if (!result.success || !emailOutcome.requested) return result;
-            return notifyEmailChangeRequested(result.data, context).then(() => result);
-        });
+        return saveProfile(user, fields, emailOutcome, context);
     });
 };
 
@@ -151,8 +170,7 @@ export const updateProfile = (
 
     const outcome: Promise<ResponseSuccess<UserDocument> | ResponseReject> = parseResult.success
         ? userService
-              // Credentials included: a genuine email request follows with
-              // `sendVerificationEmail`, which pushes a token onto this same document.
+              // Credentials included: the update saves this same document.
               .findByIdWithCredentials(userId)
               .then<ResponseSuccess<UserDocument> | ResponseReject>((user) => {
                   // A verified token for a since-deleted account is unauthenticated, not a

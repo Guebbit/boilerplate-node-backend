@@ -5,9 +5,8 @@
  * `../controllers/post-login-2fa.ts` turns a verified challenge into cookies.
  */
 
-import { randomBytes } from 'node:crypto';
 import { t } from '@infrastructure/i18n';
-import { userService, TokenType, type UserDocument } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import {
     generateSuccess,
     generateReject,
@@ -19,7 +18,8 @@ import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { MfaChallenge, TwoFactorDelivery } from '@types';
 import { accountAuditActions } from '../audit';
-import { findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
+import { issueToken, findLiveTokenEntry, findLiveToken, spendLiveToken } from './tokens';
+import { MFA_CHALLENGE_TOKEN_TYPE } from '../token-types';
 import { deliveryCooldownRemaining } from '../two-factor';
 import { audited, summarize, tooSoon } from './two-factor-outcomes';
 import { armedEntries, verifyArmedFactor, settleVerdict } from './two-factor-lockout';
@@ -45,14 +45,14 @@ export const MFA_CHALLENGE_DELIVERED_TTL_MS = 600_000;
  * off a screen does not.
  *
  * The challenge itself is the SAME single-use, revocable, hashed-at-rest mechanism
- * `password-reset` and account-deletion confirmation use (`users/model.ts`'s `tokens[]`), not a
+ * `password-reset` and account-deletion confirmation use (`verificationtokens`), not a
  * JWT: `verifyLoginChallenge` spends it via `spendLiveToken` on a right code, so a second
  * presentation of an already-answered challenge is refused outright, not merely re-checked.
  *
  * @param user - the account whose FIRST factor just checked out, with credentials loaded
  * @param amr - how that first factor was proven — `['pwd']` for a password login, `[provider]`
  *   for an OAuth one. Stored on the challenge so `verifyLoginChallenge` can hand it back once the
- *   second factor does too; see {@link Token.amr}.
+ *   second factor does too.
  * @returns the challenge payload, ready to send
  */
 export const buildLoginChallenge = (
@@ -63,19 +63,13 @@ export const buildLoginChallenge = (
     const ttlMs = armed.some(({ handler }) => handler.delivers)
         ? MFA_CHALLENGE_DELIVERED_TTL_MS
         : MFA_CHALLENGE_TTL_MS;
-    // 128 bits of entropy, same as every other one-time token this document holds — see
-    // `hashToken`'s doc in `users/model.ts`.
-    const challenge = randomBytes(16).toString('hex');
-
-    return userService
-        .tokenAdd(user, TokenType.MFA_CHALLENGE, ttlMs, challenge, [...amr])
-        .then((token) => ({
-            mfaRequired: true,
-            challenge: token,
-            expiresAt: new Date(Date.now() + ttlMs).toISOString(),
-            methods: armed.map(({ handler }) => summarize(handler, user)),
-            ...(armed[0] && { defaultMethod: armed[0].handler.name })
-        }));
+    return issueToken(user.id, MFA_CHALLENGE_TOKEN_TYPE, ttlMs, amr).then((token) => ({
+        mfaRequired: true,
+        challenge: token,
+        expiresAt: new Date(Date.now() + ttlMs).toISOString(),
+        methods: armed.map(({ handler }) => summarize(handler, user)),
+        ...(armed[0] && { defaultMethod: armed[0].handler.name })
+    }));
 };
 
 /**
@@ -92,7 +86,7 @@ export const sendLoginCode = (
     method: string,
     context: CallerContext
 ): Promise<ResponseSuccess<TwoFactorDelivery> | ResponseReject> => {
-    const outcome = findLiveToken(TokenType.MFA_CHALLENGE, challenge)
+    const outcome = findLiveToken(MFA_CHALLENGE_TOKEN_TYPE, challenge)
         .then<ResponseSuccess<TwoFactorDelivery> | ResponseReject>((user) => {
             if (!user) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
 
@@ -137,7 +131,7 @@ export const verifyLoginChallenge = (
     code: string,
     context: CallerContext
 ): Promise<ResponseSuccess<VerifiedChallenge> | ResponseReject> => {
-    const outcome = findLiveTokenEntry(TokenType.MFA_CHALLENGE, challenge)
+    const outcome = findLiveTokenEntry(MFA_CHALLENGE_TOKEN_TYPE, challenge)
         .then<ResponseSuccess<VerifiedChallenge> | ResponseReject>((found) => {
             if (!found) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
             const { user, entry } = found;
@@ -149,14 +143,16 @@ export const verifyLoginChallenge = (
                     // it live — `mfaChallengeLimiter` bounds how often it can be tried. Only the
                     // request whose own write removed it may mint: a concurrent twin is refused
                     // like a challenge that never existed.
-                    spendLiveToken(user, challenge).then((spentByThisRequest) =>
-                        spentByThisRequest
-                            ? userService
-                                  .persistTwoFactorMethods(user)
-                                  .then((saved) =>
-                                      generateSuccess({ user: saved, amr: entry.amr ?? ['pwd'] })
+                    spendLiveToken(MFA_CHALLENGE_TOKEN_TYPE, challenge).then(
+                        (spentByThisRequest) =>
+                            spentByThisRequest
+                                ? userService.persistTwoFactorMethods(user).then((saved) =>
+                                      generateSuccess({
+                                          user: saved,
+                                          amr: entry.amr ?? ['pwd']
+                                      })
                                   )
-                            : generateReject(401, [t('account.two-factor.challenge-invalid')])
+                                : generateReject(401, [t('account.two-factor.challenge-invalid')])
                     )
                 )
             );

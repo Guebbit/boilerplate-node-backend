@@ -26,7 +26,7 @@ import {
     VERIFY_RESEND_SECONDS,
     completeEmailChange
 } from '@modules/account/services';
-import { TokenType, hashToken, sessionIdOf, type Token } from '@modules/users';
+import { hashToken } from '@infrastructure/security/hash-token';
 import { userRepository } from '@modules/users/tests/factories';
 import { asReject, asSuccess } from '@tests/response';
 import * as auditPort from '@infrastructure/observability/audit';
@@ -40,6 +40,7 @@ import * as accessPort from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { logger } from '@infrastructure/adapters/logger';
 import { imageStore } from '@infrastructure/adapters/image-store';
+import { ageTokenSend, plantSession, plantToken, sessionRowsOf, tokenRowsOf } from '../factories';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -90,14 +91,12 @@ setupTestDb();
 
 afterEach(() => jest.restoreAllMocks());
 
-/** The stored tokens of a user, credentials re-selected. */
-const readTokens = async (userId: string) => {
-    const stored = await userRepository.findByIdWithCredentials(userId);
-    return stored?.tokens ?? [];
-};
+/** The one-time tokens an account holds, as stored rows. */
+const readTokens = tokenRowsOf;
 
-/** The id a stored entry is revoked by, from a lookup that may have found nothing. */
-const sessionIdOfEntry = (token: Token | undefined): string => (token ? sessionIdOf(token) : '');
+/** The id a stored session is revoked by, from a lookup that may have found nothing. */
+const sessionIdOfRow = (row: { familyId: unknown } | undefined): string =>
+    row ? String(row.familyId) : '';
 
 describe('updateProfile', () => {
     it('updates the fields a user owns', async () => {
@@ -238,7 +237,8 @@ describe('updateProfile', () => {
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
         const emailChangeToken = () =>
             readTokens(user.id).then(
-                (tokens) => tokens.find((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)?.token
+                (tokens) =>
+                    tokens.find((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)?.tokenHash
             );
         const mailed = await emailChangeToken();
 
@@ -334,7 +334,7 @@ describe('completeEmailChange', () => {
     it('swaps pendingEmail into email, marks verified, clears pendingEmail, and revokes refresh tokens', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser({ email: 'before@example.com', verifiedAt: new Date() });
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'live-session');
+        await plantSession(user.id, 'live-session', { ttlMs: 60_000 });
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
         const loaded = await userRepository.findByIdWithCredentials(user.id);
 
@@ -346,9 +346,7 @@ describe('completeEmailChange', () => {
         const stored = await userRepository.findByIdWithCredentials(user.id);
         expect(stored?.email).toBe('after@example.com');
         expect(stored?.pendingEmail).toBeUndefined();
-        expect(stored?.tokens.some((token) => token.type === (TokenType.REFRESH as string))).toBe(
-            false
-        );
+        expect(await sessionRowsOf(user.id)).toEqual([]);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED,
@@ -362,7 +360,7 @@ describe('completeEmailChange', () => {
 describe("`verify` and `email-change` tokens do not do each other's work", () => {
     it('a `verify` token is not found under EMAIL_CHANGE_TOKEN_TYPE', async () => {
         const user = await createUser();
-        await user.tokenAdd(EMAIL_VERIFY_TOKEN_TYPE, 3_600_000, 'shared-value');
+        await plantToken(user.id, EMAIL_VERIFY_TOKEN_TYPE, 'shared-value', { ttlMs: 3_600_000 });
 
         await expect(
             accountService.findLiveToken(EMAIL_CHANGE_TOKEN_TYPE, 'shared-value')
@@ -371,7 +369,7 @@ describe("`verify` and `email-change` tokens do not do each other's work", () =>
 
     it('an `email-change` token is not found under EMAIL_VERIFY_TOKEN_TYPE', async () => {
         const user = await createUser();
-        await user.tokenAdd(EMAIL_CHANGE_TOKEN_TYPE, 3_600_000, 'shared-value');
+        await plantToken(user.id, EMAIL_CHANGE_TOKEN_TYPE, 'shared-value', { ttlMs: 3_600_000 });
 
         await expect(
             accountService.findLiveToken(EMAIL_VERIFY_TOKEN_TYPE, 'shared-value')
@@ -448,64 +446,20 @@ describe('passwordChangeWithCurrent', () => {
     });
 });
 
-describe('sessionRemove', () => {
-    it('revokes exactly the named refresh token', async () => {
-        const user = await createUser();
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-a');
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-b');
-
-        const tokens = await readTokens(user.id);
-        // `token.token` is a digest at rest — `tokenAdd` hashed 'refresh-a' before storing.
-        const target = tokens.find((token) => token.token === hashToken('refresh-a'));
-
-        const result = await userRepository.sessionRemove(user.id, sessionIdOfEntry(target));
-
-        expect(result.modifiedCount).toBe(1);
-        const remaining = await readTokens(user.id);
-        expect(remaining.map(({ token }) => token)).toEqual([hashToken('refresh-b')]);
-    });
-
-    it('does not reach the other token kinds through a session handle', async () => {
-        const user = await createUser();
-        await user.tokenAdd('password', 60_000, 'pending-reset');
-
-        const tokens = await readTokens(user.id);
-        const result = await userRepository.sessionRemove(user.id, sessionIdOfEntry(tokens[0]));
-
-        expect(result.modifiedCount).toBe(0);
-        expect(await readTokens(user.id)).toHaveLength(1);
-    });
-
-    it("cannot revoke another user's session", async () => {
-        const owner = await createUser({ email: 'owner@example.com', username: 'admin' });
-        const attacker = await createUser({ email: 'attacker@example.com', username: 'attacker' });
-        await owner.tokenAdd(TokenType.REFRESH, 60_000, 'owner-session');
-
-        const [ownerToken] = await readTokens(owner.id);
-        const result = await userRepository.sessionRemove(
-            attacker.id,
-            sessionIdOfEntry(ownerToken)
-        );
-
-        expect(result.modifiedCount).toBe(0);
-        expect(await readTokens(owner.id)).toHaveLength(1);
-    });
-});
-
 describe('sessionRevoke', () => {
     it('audits a revoke that actually matched a token', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'refresh-a');
-        const [target] = await readTokens(user.id);
+        await plantSession(user.id, 'refresh-a', { ttlMs: 60_000 });
+        const [target] = await sessionRowsOf(user.id);
 
-        const result = await accountService.sessionRevoke(
+        const revoked = await accountService.sessionRevoke(
             user.id,
-            sessionIdOfEntry(target),
+            sessionIdOfRow(target),
             testCallerContext
         );
 
-        expect(result.modifiedCount).toBe(1);
+        expect(revoked).toBe(true);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_SESSION_REVOKED,
@@ -518,33 +472,14 @@ describe('sessionRevoke', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const user = await createUser();
 
-        const result = await accountService.sessionRevoke(
+        const revoked = await accountService.sessionRevoke(
             user.id,
             String(user._id),
             testCallerContext
         );
 
-        expect(result.modifiedCount).toBe(0);
+        expect(revoked).toBe(false);
         expect(auditSpy).not.toHaveBeenCalled();
-    });
-});
-
-describe('tokenRemoveByValue', () => {
-    it('removes one session and leaves the siblings', async () => {
-        const user = await createUser();
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'phone');
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'laptop');
-
-        await userRepository.tokenRemoveByValue('phone');
-
-        const remaining = await readTokens(user.id);
-        expect(remaining.map(({ token }) => token)).toEqual([hashToken('laptop')]);
-    });
-
-    it('reports an already-spent value as a no-op', async () => {
-        const result = await userRepository.tokenRemoveByValue('never-issued');
-
-        expect(result.modifiedCount).toBe(0);
     });
 });
 
@@ -556,13 +491,13 @@ describe('logoutCurrentSession', () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
         const analyticsSpy = observePort(analyticsPort.emitAnalyticsEvent);
         const user = await createUser();
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'phone');
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'laptop');
+        await plantSession(user.id, 'phone', { ttlMs: 60_000 });
+        await plantSession(user.id, 'laptop', { ttlMs: 60_000 });
 
         await accountService.logoutCurrentSession('phone', testCallerContext);
 
-        const remaining = await readTokens(user.id);
-        expect(remaining.map(({ token }) => token)).toEqual([hashToken('laptop')]);
+        const remaining = await sessionRowsOf(user.id);
+        expect(remaining.map(({ tokenHash }) => tokenHash)).toEqual([hashToken('laptop')]);
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_LOGGED_OUT,
@@ -612,17 +547,19 @@ describe('sendVerificationEmail', () => {
         // One live link at any moment, and it is the NEWEST one — the re-send exists for the
         // user whose first mail vanished.
         expect(verifyTokens).toHaveLength(1);
-        expect(verifyTokens[0]?.token).not.toBe(first?.token);
+        expect(verifyTokens[0]?.tokenHash).not.toBe(first?.tokenHash);
     });
 
     it('leaves the other token kinds alone', async () => {
         const user = await createUser();
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'live-session');
+        await plantSession(user.id, 'live-session', { ttlMs: 60_000 });
 
         await sendVerificationEmail(user, testCallerContext);
 
-        const tokens = await readTokens(user.id);
-        expect(tokens.find(({ token }) => token === hashToken('live-session'))).toBeDefined();
+        const sessions = await sessionRowsOf(user.id);
+        expect(
+            sessions.find(({ tokenHash }) => tokenHash === hashToken('live-session'))
+        ).toBeDefined();
     });
 });
 
@@ -679,11 +616,7 @@ describe('requestEmailVerificationFor', () => {
         const user = await createUser({}, 'unverified');
         await accountService.requestEmailVerificationFor(user.id, testCallerContext);
 
-        // Ageing the recorded send, rather than a fake clock — `sentAt` is what the cooldown reads.
-        const aged = await userRepository.findByIdWithCredentials(user.id);
-        const live = aged!.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)!;
-        live.sentAt = new Date(live.sentAt.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
-        await userRepository.save(aged!);
+        await ageTokenSend(user.id, EMAIL_VERIFY_TOKEN_TYPE, (VERIFY_RESEND_SECONDS + 1) * 1000);
 
         asSuccess(await accountService.requestEmailVerificationFor(user.id, testCallerContext));
     });
@@ -703,12 +636,8 @@ describe('requestEmailVerificationFor', () => {
  * Moves the live `email-change` token's send time into the past, so the cooldown has run out.
  * Ageing the recorded send, rather than a fake clock — `sentAt` is what the cooldown reads.
  */
-const ageEmailChangeSend = async (userId: string): Promise<void> => {
-    const aged = await userRepository.findByIdWithCredentials(userId);
-    const live = aged!.tokens.find(({ type }) => type === EMAIL_CHANGE_TOKEN_TYPE)!;
-    live.sentAt = new Date(live.sentAt.getTime() - (VERIFY_RESEND_SECONDS + 1) * 1000);
-    await userRepository.save(aged!);
-};
+const ageEmailChangeSend = (userId: string): Promise<void> =>
+    ageTokenSend(userId, EMAIL_CHANGE_TOKEN_TYPE, (VERIFY_RESEND_SECONDS + 1) * 1000);
 
 /*
  * The pending address cannot be re-asked for through `PUT/PATCH /account` (a restated pending
@@ -721,7 +650,8 @@ describe('resendPendingEmailVerificationFor', () => {
         await updateProfile(user.id, { email: 'after@example.com' }, testCallerContext);
         const emailChangeToken = () =>
             readTokens(user.id).then(
-                (tokens) => tokens.find((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)?.token
+                (tokens) =>
+                    tokens.find((token) => token.type === EMAIL_CHANGE_TOKEN_TYPE)?.tokenHash
             );
         const mailed = await emailChangeToken();
         await ageEmailChangeSend(user.id);
@@ -932,17 +862,15 @@ describe('requestPasswordReset', () => {
  * Moves the live reset token's send time into the past, so the 60 s pacing has run out. Ageing the
  * recorded send, rather than a fake clock: `sentAt` is what the pacing reads.
  */
-const ageResetSend = async (userId: string): Promise<void> => {
-    const aged = await userRepository.findByIdWithCredentials(userId);
-    const live = aged!.tokens.find(({ type }) => type === PASSWORD_RESET_TOKEN_TYPE)!;
-    live.sentAt = new Date(live.sentAt.getTime() - (RESET_REQUEST_SECONDS + 1) * 1000);
-    await userRepository.save(aged!);
-};
+const ageResetSend = (userId: string): Promise<void> =>
+    ageTokenSend(userId, PASSWORD_RESET_TOKEN_TYPE, (RESET_REQUEST_SECONDS + 1) * 1000);
 
 /** The `password` tokens the account holds, by digest. */
 const resetDigests = (userId: string) =>
     readTokens(userId).then((tokens) =>
-        tokens.filter((token) => token.type === PASSWORD_RESET_TOKEN_TYPE).map(({ token }) => token)
+        tokens
+            .filter((token) => token.type === PASSWORD_RESET_TOKEN_TYPE)
+            .map(({ tokenHash }) => tokenHash)
     );
 
 describe('one live reset link per account', () => {
@@ -964,20 +892,21 @@ describe('one live reset link per account', () => {
 
     it('leaves every other kind of token alone', async () => {
         const user = await createUser();
-        await user.tokenAdd(TokenType.REFRESH, 60_000, 'keep-this-session');
+        await plantSession(user.id, 'keep-this-session', { ttlMs: 60_000 });
 
         await accountService.requestPasswordReset(user.email, testCallerContext);
         await ageResetSend(user.id);
         await accountService.requestPasswordReset(user.email, testCallerContext);
 
-        const tokens = await readTokens(user.id);
-        const kept = tokens.filter((token) => token.type !== 'password');
-        expect(kept.map(({ token }) => token)).toEqual([hashToken('keep-this-session')]);
+        const sessions = await sessionRowsOf(user.id);
+        expect(sessions.map(({ tokenHash }) => tokenHash)).toEqual([
+            hashToken('keep-this-session')
+        ]);
     });
 
     it('holds the setup link to the same rule', async () => {
         const user = await createUser();
-        await user.tokenAdd(PASSWORD_RESET_TOKEN_TYPE, 60_000, 'older-link');
+        await plantToken(user.id, PASSWORD_RESET_TOKEN_TYPE, 'older-link', { ttlMs: 60_000 });
 
         await accountService.requestAccountSetup(user);
 
@@ -1230,7 +1159,7 @@ describe('requestAccountDeletion', () => {
 describe('findLiveToken', () => {
     it('finds the holder of a live token of the right type', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'live-reset');
+        await plantToken(user.id, 'password', 'live-reset', { ttlMs: 3_600_000 });
 
         const found = await accountService.findLiveToken('password', 'live-reset');
 
@@ -1239,7 +1168,7 @@ describe('findLiveToken', () => {
 
     it('refuses a token of another type, so one link cannot be spent as another', async () => {
         const user = await createUser();
-        await user.tokenAdd('delete', 3_600_000, 'delete-token');
+        await plantToken(user.id, 'delete', 'delete-token', { ttlMs: 3_600_000 });
 
         await expect(
             accountService.findLiveToken('password', 'delete-token')
@@ -1248,37 +1177,16 @@ describe('findLiveToken', () => {
 
     it('refuses an expired token', async () => {
         /*
-         * Seeded with a past `expiration` rather than issued through `tokenAdd`, because
-         * `tokenAdd` CANNOT produce this state: a non-positive TTL stores `expiration: undefined`
-         * — "no deadline" — which is the case below, not this one. The state under test is the
-         * one a link reaches by sitting in an inbox overnight, and only the stored document can
-         * express it.
+         * Planted already expired: `issueToken` cannot produce this state, and it is the one a
+         * link reaches by sitting in an inbox overnight while the database's TTL monitor (which
+         * runs about once a minute) has yet to delete the row. Reads check the expiry themselves.
          */
-        await createUser({
-            tokens: [
-                {
-                    sentAt: new Date(),
-                    type: 'password',
-                    token: 'stale-reset',
-                    expiration: new Date(Date.now() - 1000)
-                }
-            ]
-        });
+        const user = await createUser();
+        await plantToken(user.id, 'password', 'stale-reset', { ttlMs: -1000 });
 
         await expect(
             accountService.findLiveToken('password', 'stale-reset')
         ).resolves.toBeUndefined();
-    });
-
-    it('keeps a token with no expiration, which never expires', async () => {
-        const user = await createUser();
-        // `tokenAdd` stores no expiration for a non-positive TTL, so this is the state that
-        // reaches the check — treating absent as "already past" would revoke exactly these.
-        await user.tokenAdd('password', 0, 'eternal');
-
-        const found = await accountService.findLiveToken('password', 'eternal');
-
-        expect(found?.id).toBe(user.id);
     });
 
     it('refuses a token that never existed', async () => {
@@ -1295,18 +1203,16 @@ describe('findLiveToken', () => {
 describe('spendLiveToken', () => {
     it('reports true once and false thereafter, so two clicks cannot both win', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'one-shot');
-        const found = await accountService.findLiveToken('password', 'one-shot');
+        await plantToken(user.id, 'password', 'one-shot', { ttlMs: 3_600_000 });
 
-        await expect(accountService.spendLiveToken(found!, 'one-shot')).resolves.toBe(true);
-        await expect(accountService.spendLiveToken(found!, 'one-shot')).resolves.toBe(false);
+        await expect(accountService.spendLiveToken('password', 'one-shot')).resolves.toBe(true);
+        await expect(accountService.spendLiveToken('password', 'one-shot')).resolves.toBe(false);
     });
 
     it('leaves a spent token unfindable', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'burn-me');
-        const found = await accountService.findLiveToken('password', 'burn-me');
-        await accountService.spendLiveToken(found!, 'burn-me');
+        await plantToken(user.id, 'password', 'burn-me', { ttlMs: 3_600_000 });
+        await accountService.spendLiveToken('password', 'burn-me');
 
         await expect(accountService.findLiveToken('password', 'burn-me')).resolves.toBeUndefined();
     });
@@ -1323,7 +1229,7 @@ describe('completePasswordReset', () => {
 
     it('refuses a breached password, and the SAME link still works with a good one', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'reset-link');
+        await plantToken(user.id, 'password', 'reset-link', { ttlMs: 3_600_000 });
 
         const refused = asReject(
             await accountService.completePasswordReset(
@@ -1346,7 +1252,7 @@ describe('completePasswordReset', () => {
 
     it('refuses a mistyped pair without touching the link', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'typo-link');
+        await plantToken(user.id, 'password', 'typo-link', { ttlMs: 3_600_000 });
 
         const refused = asReject(
             await accountService.completePasswordReset(
@@ -1363,7 +1269,7 @@ describe('completePasswordReset', () => {
 
     it('spends the link: a second use of it is refused like a link that never existed', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'once-link');
+        await plantToken(user.id, 'password', 'once-link', { ttlMs: 3_600_000 });
         await accountService.completePasswordReset('once-link', GOOD, GOOD, testCallerContext);
 
         const second = asReject(
@@ -1384,7 +1290,7 @@ describe('completePasswordReset', () => {
 
     it('lets exactly one of two simultaneous uses win', async () => {
         const user = await createUser();
-        await user.tokenAdd('password', 3_600_000, 'race-link');
+        await plantToken(user.id, 'password', 'race-link', { ttlMs: 3_600_000 });
 
         const results = await Promise.all([
             accountService.completePasswordReset('race-link', GOOD, GOOD, testCallerContext),

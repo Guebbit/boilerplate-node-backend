@@ -18,6 +18,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { permissionsOfRole } from '@kernel/permissions';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import type { TenantCallerContext } from '@types';
+import { plantToken } from '@modules/account/tests/factories';
 
 setupTestDb();
 
@@ -84,7 +85,7 @@ const pendingRows = () =>
 describe('account.sessions-revoked through the outbox', () => {
     it('a throwing api-keys consumer leaves the row pending, and the relay retry revokes the keys', async () => {
         const { user, secret } = await adminWithKey();
-        await user.tokenAdd('password', 3_600_000, 'outbox-reset');
+        await plantToken(user.id, 'password', 'outbox-reset', { ttlMs: 3_600_000 });
         jest.spyOn(apiKeyRepository, 'revokeMany').mockRejectedValueOnce(new Error('db blip'));
 
         const response = await resetWith('outbox-reset');
@@ -120,7 +121,7 @@ describe('account.sessions-revoked through the outbox', () => {
 
     it('a rollback leaves no row and no new password', async () => {
         const { user } = await adminWithKey();
-        await user.tokenAdd('password', 3_600_000, 'outbox-rollback');
+        await plantToken(user.id, 'password', 'outbox-rollback', { ttlMs: 3_600_000 });
         jest.spyOn(outboxEventModel, 'create').mockRejectedValueOnce(new Error('outbox down'));
 
         const response = await resetWith('outbox-rollback');
@@ -136,7 +137,7 @@ describe('account.sessions-revoked through the outbox', () => {
 
     it('a redelivery revokes nothing twice', async () => {
         const { user, secret } = await adminWithKey();
-        await user.tokenAdd('password', 3_600_000, 'outbox-redeliver');
+        await plantToken(user.id, 'password', 'outbox-redeliver', { ttlMs: 3_600_000 });
         await resetWith('outbox-redeliver');
         await settleOutboxNudges();
         expect(await credentialOf(secret)).toBeUndefined();

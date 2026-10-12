@@ -11,9 +11,9 @@ import { advanceDate, freezeDate } from '@tests/clock';
 import { auditLogger } from '@infrastructure/adapters/logger';
 import { pseudonymise } from '@infrastructure/security/pseudonymise';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
-import { TokenType } from '@modules/users';
 import { accountAuditActions } from '@modules/account/audit';
 import { authOneTimeTokenRejectedTotal } from '@modules/account/metrics';
+import { plantToken } from '../factories';
 
 setupTestDb();
 
@@ -73,7 +73,7 @@ describe('an unknown one-time token', () => {
     it('is also what an expired reset token reads as', async () => {
         freezeDate();
         const user = await createUser();
-        await user.tokenAdd(TokenType.PASSWORD_RESET, 60_000, 'soon-expired-token');
+        await plantToken(user.id, 'password', 'soon-expired-token', { ttlMs: 60_000 });
         advanceDate(3_600_000);
 
         await api().post('/account/reset-confirm').send({

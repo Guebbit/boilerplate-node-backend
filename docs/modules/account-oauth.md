@@ -69,7 +69,7 @@ A double-submit cookie, not server-side state: the value is minted and handed to
 `state` in the **same response** that sets it as `oauth_state`, and the callback trusts a request
 only when the two agree. No new server secret, unlike a signed token would need.
 
-- 128 bits, from `randomBytes(16)` — the same entropy every `tokens[]` value carries.
+- 128 bits, from `randomBytes(16)` — the same entropy every one-time token carries.
 - 5 minutes: long enough to pick a Google account, short enough to bound reuse.
 - `httpOnly` / `sameSite: 'lax'`, `secure` in production — `createRefreshCookie`'s flags exactly.
 - Cleared by **both** a successful and a failed callback.

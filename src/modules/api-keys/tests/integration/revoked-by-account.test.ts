@@ -21,6 +21,7 @@ import { settleOutboxNudges } from '@kernel/outbox';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { permissionsOfRole } from '@kernel/permissions';
 import type { TenantCallerContext } from '@types';
+import { plantToken } from '@modules/account/tests/factories';
 
 setupTestDb();
 
@@ -80,7 +81,7 @@ describe('keys end with the sessions that may be compromised', () => {
 
     it('a completed password reset revokes them too', async () => {
         const { user, secret } = await adminWithKey();
-        await user.tokenAdd('password', 3_600_000, 'reset-revokes-keys');
+        await plantToken(user.id, 'password', 'reset-revokes-keys', { ttlMs: 3_600_000 });
 
         const response = await api().post('/account/reset-confirm').send({
             token: 'reset-revokes-keys',
@@ -101,7 +102,7 @@ describe('keys end with the sessions that may be compromised', () => {
             { _id: user.id },
             { $set: { previousEmail: 'before@example.com' } }
         );
-        await user.tokenAdd('email-change-undo', 3_600_000, 'undo-revokes-keys');
+        await plantToken(user.id, 'email-change-undo', 'undo-revokes-keys', { ttlMs: 3_600_000 });
 
         const response = await api()
             .post('/account/email-change-undo')

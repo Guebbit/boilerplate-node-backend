@@ -23,7 +23,7 @@ import type {
     TwoFactorStatus
 } from '@types';
 import { accountAuditActions } from '../audit';
-import { dropRefreshTokens } from './revocation';
+import { dropSessions } from './revocation';
 import {
     availableTwoFactorMethods,
     clearDeliveredCode,
@@ -295,7 +295,7 @@ const armMethod = (
     userService.markSessionsEnded(user);
     return userService
         .persistTwoFactorMethods(user)
-        .then(() => dropRefreshTokens(user))
+        .then(() => dropSessions(user.id))
         .then(() =>
             generateSuccess({
                 method: entry.method,
@@ -348,7 +348,7 @@ export const removeTwoFactorMethod = (
                 userService
                     // Named, because the copy no longer holds the entry the write has to remove.
                     .persistTwoFactorMethods(user, [method])
-                    .then(() => dropRefreshTokens(user))
+                    .then(() => dropSessions(user.id))
                     .then(() => {
                         // Removing the last factor is 2FA going off: say that, not just "a method left".
                         notifyChange(
@@ -393,7 +393,7 @@ export const disableTwoFactor = (
             userService.markSessionsEnded(user);
             return userService
                 .persistTwoFactorMethods(user, 'all')
-                .then(() => dropRefreshTokens(user))
+                .then(() => dropSessions(user.id))
                 .then(() => {
                     notifyChange(user, 'disabled', '', context);
                     return generateSuccess(undefined);

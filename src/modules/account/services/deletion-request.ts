@@ -5,21 +5,21 @@
 
 import { deleteRequestEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
-import { ACCOUNT_DELETE_TOKEN_TYPE } from './token-types';
+import { ACCOUNT_DELETE_TOKEN_TYPE } from '../token-types';
 import { type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { tokenAdd } from './tokens';
+import { issueToken } from './tokens';
 
 /**
- * Issue a delete-confirmation token, deliver it, and record the request. Wraps `tokenAdd`
- * rather than emitting inside it, since `tokenAdd`'s other caller (`sendVerificationEmail`)
+ * Issue a delete-confirmation token, deliver it, and record the request. Wraps `issueToken`
+ * rather than emitting inside it, since `issueToken`'s other callers (`sendVerificationEmail`)
  * must stay silent. The token value never leaves this file — returning it would hand a live
  * delete credential to a layer that has no business holding one.
  */
 export const requestAccountDeletion = (user: UserDocument, context: CallerContext): Promise<void> =>
-    tokenAdd(user, ACCOUNT_DELETE_TOKEN_TYPE, 3_600_000).then((token) => {
+    issueToken(user.id, ACCOUNT_DELETE_TOKEN_TYPE, 3_600_000).then((token) => {
         recordAudit(context, {
             action: accountAuditActions.AUTH_ACCOUNT_DELETE_REQUESTED,
             actorUserId: user.id,

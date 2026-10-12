@@ -11,8 +11,7 @@
  * swc, and inside Stryker's instrumented sandbox, it throws
  * `TypeError: Cannot redefine property: emitAuditEvent` before the first assertion runs.
  *
- * `src/modules/account/tests/unit/token-cleanup-job.test.ts` hit this first and wrote the fix out
- * in prose: replace the MODULE, so every consumer resolves a plain, always-configurable
+ * The `account` unit suites hit this first and wrote the fix out in prose: replace the MODULE, so every consumer resolves a plain, always-configurable
  * `jest.fn()`, instead of trying to redefine a getter. This is that fix, factored out — the module
  * replacement is declared per test file (it must be, `jest.mock` is hoisted per module registry),
  * and this helper covers the other half.

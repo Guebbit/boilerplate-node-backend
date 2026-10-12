@@ -30,7 +30,6 @@ import {
     rolesOf
 } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import { TokenType } from '../model';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 import { usersAnalyticsEvents } from '../analytics';
@@ -176,8 +175,8 @@ const saveAndGrant = (
 };
 
 /**
- * What follows a committed update: the new avatar's cleanup, the sessions a ban ends, and the
- * role grant's audit row.
+ * What follows a committed update: the new avatar's cleanup and the role grant's audit row. A ban
+ * ends every session in the update's own save (`markSessionsEnded`), so there is nothing to revoke here.
  *
  * @param savedUser - the committed document
  * @param data - `role` here is {@link changedRole}'s answer; `active` the request's
@@ -195,16 +194,6 @@ const finishUpdate = (
         ? imageStore.remove(oldImageUrl).then(() => undefined)
         : Promise.resolve();
 
-    // Deactivation ends every live session. Defense in depth on top of
-    // `findAuthenticatableById`, which already blocks a deactivated account's next
-    // request — this also makes `GET /account/sessions` honest and drops credentials with
-    // no live account behind them. Swallowed on failure: a revoke that doesn't reach every
-    // token must not turn an otherwise-successful deactivation into a reported failure.
-    const revoke =
-        data.active === false
-            ? savedUser.tokenRemoveAll(TokenType.REFRESH).catch(() => undefined)
-            : Promise.resolve();
-
     // The grant is true only now: it committed with the document.
     if (data.role !== undefined)
         auditRoleAssigned(
@@ -215,10 +204,7 @@ const finishUpdate = (
             'tenant'
         );
 
-    return revoke
-        .then(() => imageCleanup)
-        .then(() => enqueueIfPending(savedUser))
-        .then(generateSuccess);
+    return imageCleanup.then(() => enqueueIfPending(savedUser)).then(generateSuccess);
 };
 
 /**

@@ -51,19 +51,6 @@ export const findByIdWithPendingEmail = (id: string) => userRepository.findByIdW
 export const emailOrPendingEmailTaken = (email: string, excludingId: string) =>
     userRepository.emailOrPendingEmailTaken(email, excludingId);
 
-/**
- * The account holding a token of this exact value and type — not filtered by expiry. A caller
- * that needs "live" (exists, right type, not expired) checks `entry.expiration` itself, same as
- * `account/services/tokens.ts`'s `findLiveTokenEntry`.
- */
-export const findByToken = (
-    token: string,
-    type: Parameters<typeof userRepository.findByToken>[1]
-) => userRepository.findByToken(token, type);
-
-/** The account currently holding this exact token value, any type. */
-export const findByTokenValue = (token: string) => userRepository.findByTokenValue(token);
-
 /** Whether an account already exists for this email — signup's duplicate-email pre-check. */
 export const emailTaken = (email: string): Promise<boolean> =>
     userRepository.findOne({ email }).then((user) => user !== null);

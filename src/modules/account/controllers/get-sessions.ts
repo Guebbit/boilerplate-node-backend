@@ -7,14 +7,13 @@ import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import type { SessionsResponse } from '@types';
 import { accountService } from '../services';
-import { catchAs, refused } from '@infrastructure/http/controller';
+import { catchAs } from '@infrastructure/http/controller';
 import { readRefreshCookie } from '@kernel/cookies';
 
 /**
- * GET /account/sessions — the caller's live refresh tokens, as sessions.
- * The refresh cookie is read here and passed down so the service can mark `current`; which
- * token types count as a session, and keeping token values off the wire, belong to
- * `services/tokens.ts`.
+ * GET /account/sessions — the caller's live sessions.
+ * The refresh cookie is read here and passed down so the service can mark `current`; which rows
+ * count as a session, and keeping credentials off the wire, belong to `../services/sessions.ts`.
  */
 export const getSessions = (request: Request, response: Response) => {
     /* Auth context is guaranteed by isAuth middleware */
@@ -23,10 +22,8 @@ export const getSessions = (request: Request, response: Response) => {
 
     return accountService
         .sessionsList(id, cookieToken)
-        .then((result) => {
-            if (refused(response, result)) return;
-
-            successResponse<SessionsResponse>(response, result.data);
+        .then((sessions) => {
+            successResponse<SessionsResponse>(response, { sessions });
         })
         .catch(catchAs(response, 'listSessions'));
 };

@@ -8,10 +8,11 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { reapLapsedPreviousEmails } from '@modules/account/services';
 import { createUser, userRepository } from '@modules/users/tests/factories';
+import { plantToken } from '../factories';
 
 setupTestDb();
 
-/** The `tokens.type` of the undo link, spelled out so a rename breaks this suite loudly. */
+/** The `verificationtokens.type` of the undo link, spelled out so a rename breaks this suite loudly. */
 const UNDO = 'email-change-undo';
 
 /**
@@ -24,7 +25,8 @@ const changedAccount = async (username: string, undoTtlMs?: number) => {
         { _id: user.id },
         { $set: { previousEmail: `${username}-old@example.com` } }
     );
-    if (undoTtlMs !== undefined) await user.tokenAdd(UNDO, undoTtlMs, `${username}-undo`);
+    if (undoTtlMs !== undefined)
+        await plantToken(user.id, UNDO, `${username}-undo`, { ttlMs: undoTtlMs });
     return user;
 };
 
@@ -59,7 +61,7 @@ describe('reapLapsedPreviousEmails', () => {
 
     it('is not fooled by a live token of another type', async () => {
         const other = await changedAccount('other');
-        await other.tokenAdd('email-change', 3_600_000, 'other-confirm');
+        await plantToken(other.id, 'email-change', 'other-confirm', { ttlMs: 3_600_000 });
 
         await reapLapsedPreviousEmails();
 

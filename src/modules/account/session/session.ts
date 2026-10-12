@@ -9,7 +9,8 @@
 import type { Request, Response } from 'express';
 import { readRefreshCookie } from '@kernel/cookies';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService } from '@modules/users';
+import { hashToken } from '@infrastructure/security/hash-token';
+import { sessionRepository } from '../repository';
 import {
     createRefreshToken,
     createAccessToken,
@@ -81,8 +82,8 @@ export const reissueSession = (
  */
 const retireRefreshToken = (refreshToken: string | undefined): Promise<void> =>
     refreshToken
-        ? userService
-              .tokenRemoveByValue(refreshToken)
+        ? sessionRepository
+              .removeByHash(hashToken(refreshToken))
               .then(() => undefined)
               .catch((error: unknown) => {
                   logger.warn({ message: 'Could not retire the replaced refresh token.', error });

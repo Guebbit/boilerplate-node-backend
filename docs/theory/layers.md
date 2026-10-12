@@ -166,8 +166,8 @@ Inside `services/`, one file per flow, as `cart` does:
 split like this pays off in the first place:
 what makes a one-time token live — right type, not expired — is one function there, because a flow
 that forgot the expiry comparison would ship a link that worked forever.
-`local/no-persistence-imports` is what stops a controller reaching the `tokens` array to re-derive
-it.
+`local/no-persistence-imports` is what stops a controller reaching the `verificationtokens`
+repository to re-derive it.
 
 `orders` splits into `read.ts` (search and the narrow reads siblings ask for), `crud.ts` (create and
 amend), `remove.ts` (soft and hard delete, restore), `place.ts`, `status.ts`, `cancel.ts` and
@@ -238,16 +238,16 @@ for domain code.
 There is also no top-level `middlewares/`, `jobs/`, `routes/` or `workers/`: directories named after
 a MECHANISM rather than a tier. Where each kind of file lives instead:
 
-| Not                           | But                                             | Why                                            |                           |
-| ----------------------------- | ----------------------------------------------- | ---------------------------------------------- | ------------------------- |
-| `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`         | domain-free pipeline; survives with no modules |                           |
-| `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port              | needed a user; see [Modules](./modules.md)     | <!-- doc-paths:ignore --> |
-| `src/jobs/token-cleanup.ts`   | `src/modules/account/services/token-cleanup.ts` | it is account's token lifecycle                | <!-- doc-paths:ignore --> |
-| `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`       | the consumer half of an adapter                |                           |
-| `src/routes/index.ts`         | `src/app/system-routes.ts`                      | the ping belongs to no domain                  | <!-- doc-paths:ignore --> |
-| `src/bootstrap/*`             | `src/app/*`                                     | assembling this application                    |
-| `src/core/*`                  | `src/infrastructure/*`                          | the name meant the opposite half elsewhere     |
-| `src/platform/*`              | `src/kernel/*`                                  | it is a microkernel, not a base layer          |
+| Not                           | But                                                      | Why                                            |                           |
+| ----------------------------- | -------------------------------------------------------- | ---------------------------------------------- | ------------------------- |
+| `src/middlewares/*`           | `src/infrastructure/http/middlewares/*`                  | domain-free pipeline; survives with no modules |                           |
+| `src/middlewares/auth-jwt.ts` | `src/kernel/middlewares/` + a port                       | needed a user; see [Modules](./modules.md)     | <!-- doc-paths:ignore --> |
+| `src/jobs/token-cleanup.ts`   | `src/modules/account/services/previous-email-cleanup.ts` | it is account's one-time-token lifecycle       | <!-- doc-paths:ignore --> |
+| `src/workers/*`               | `src/infrastructure/adapters/*.worker.ts`                | the consumer half of an adapter                |                           |
+| `src/routes/index.ts`         | `src/app/system-routes.ts`                               | the ping belongs to no domain                  | <!-- doc-paths:ignore --> |
+| `src/bootstrap/*`             | `src/app/*`                                              | assembling this application                    |
+| `src/core/*`                  | `src/infrastructure/*`                                   | the name meant the opposite half elsewhere     |
+| `src/platform/*`              | `src/kernel/*`                                           | it is a microkernel, not a base layer          |
 
 The `jobs/` row is the interesting one. Leaving a mechanism directory answered _which tier_ owns it —
 expiring a refresh token is `account`'s business, not the substrate's. Landing in `services/`

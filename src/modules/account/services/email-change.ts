@@ -9,7 +9,7 @@ import { emailChangeNoticeEmail, greetableName, recipientLocale } from '../email
 import { sendAccountMail } from './mail';
 import { emailChangeNext, emailChangeStateOf } from '../domain';
 import { sendVerificationEmail, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
-import { EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS } from './token-types';
+import { EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS } from '../token-types';
 import {
     generateSuccess,
     generateReject,
@@ -22,7 +22,7 @@ import { normalizeEmail } from '@infrastructure/persistence/normalize-email';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
-import { tokenAdd } from './tokens';
+import { issueToken, removeTokens } from './tokens';
 
 /**
  * Result of evaluating `PUT/PATCH /account`'s `email` field against the pending-change rules — see
@@ -110,7 +110,7 @@ const revokeCancelledChange = (
     context: CallerContext
 ): Promise<UserDocument> => {
     if (!hadPending) return Promise.resolve(user);
-    return userService.tokenRemoveAll(user, EMAIL_CHANGE_TOKEN_TYPE).then(() => {
+    return removeTokens(user.id, [EMAIL_CHANGE_TOKEN_TYPE]).then(() => {
         recordAudit(context, {
             action: accountAuditActions.AUTH_EMAIL_CHANGE_CANCELLED,
             outcome: 'success'
@@ -122,17 +122,15 @@ const revokeCancelledChange = (
 /**
  * The two mails a genuine `pendingEmail` request sends: a notice to the OLD address carrying a
  * 7-day undo link, see {@link emailChangeNoticeEmail}, and the verification link to the new one.
- * Only the newest request's undo link lives: an older one is pulled first, since it would restore
+ * Only the newest request's undo link lives: issuing replaces an older one, since it would restore
  * an address this change no longer leaves behind.
- * AWAITED, unlike most account mail: the verification half pushes a token onto this same
- * document first (`sendVerificationEmail`'s own `tokenAdd`), matching `requestEmailVerificationFor`'s
- * treatment of the identical function — responding before either finishes would race the token
- * with whatever the client does next.
+ * AWAITED, unlike most account mail: the verification half issues its token first
+ * (`sendVerificationEmail`'s own `issueToken`), matching `requestEmailVerificationFor`'s treatment
+ * of the identical function — responding before either finishes would race the token with
+ * whatever the client does next.
  */
 const sendEmailChangeMail = (user: UserDocument, context: CallerContext): Promise<void> =>
-    userService
-        .tokenRemoveAll(user, EMAIL_CHANGE_UNDO_TOKEN_TYPE)
-        .then(() => tokenAdd(user, EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS))
+    issueToken(user.id, EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS)
         .then((undoToken) =>
             sendAccountMail(
                 user.email,

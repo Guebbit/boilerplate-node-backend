@@ -22,8 +22,7 @@ import { readRefreshCookie } from '@kernel/cookies';
 export const getRefreshToken = (request: Request, response: Response) => {
     const refreshToken = readRefreshCookie(request);
 
-    // `refreshAccessToken` records an absent cookie itself as one of its three outcomes, and prunes
-    // the rotated account's own expired tokens once the rotation's lookup is done.
+    // `refreshAccessToken` records an absent cookie itself as one of its three outcomes.
     return (
         accountService
             .refreshAccessToken(refreshToken, callerContextOf(request))

@@ -21,7 +21,7 @@ import type { Response } from 'supertest';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
-import { TokenType } from '@modules/users';
+import { plantToken } from '@modules/account/tests/factories';
 
 setupTestDb();
 
@@ -90,7 +90,7 @@ const resetPath: PasswordSetPath = {
     name: 'reset',
     attempt: async () => {
         const user = await createUser({ email: 'breach-reset@example.com' });
-        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'breach-reset-token');
+        await plantToken(user.id, 'password', 'breach-reset-token', { ttlMs: 60 * 60 * 1000 });
         const response = await api().post('/account/reset-confirm').send({
             token: 'breach-reset-token',
             password: BREACHED_PASSWORD,

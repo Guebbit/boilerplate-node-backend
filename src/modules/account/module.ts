@@ -4,9 +4,9 @@
  * everywhere, and the two-step account deletion. A second service over `users`' record rather
  * than a merged one — `/account` and `/users` are different mounts.
  *
- * Owns:        `accountexports`, one row per account that asked for its data. The address book
- *              moved to `addresses`; the User record stays with `users`, kept replaceable for a
- *              future identity provider.
+ * Owns:        `accountexports` (one row per account that asked for its data), `sessions` and
+ *              `verificationtokens`. The address book moved to `addresses`; the User record stays
+ *              with `users`, kept replaceable for a future identity provider.
  * Shares:      the User document with `users` — the repo's one shared kernel, invisible to the
  *              import graph. Both read and write it, so a schema change there is agreed twice.
  * Reaches far: `POST /account/export`, without an import graph to show for it — every module
@@ -35,6 +35,7 @@ import { router } from './routes';
 import { accountRateLimits } from './rate-limits';
 import { setPersonalDataSections } from './services/personal-data-registry';
 import { eraseExports } from './services/export';
+import { exportSessions, eraseSessionsAndTokens } from './services/sessions';
 import { runExportJob } from './services/export-job';
 
 /**
@@ -74,6 +75,13 @@ export default {
             section: 'accountExports',
             collect: () => Promise.resolve(undefined),
             erase: eraseExports
+        },
+        // Metadata only. Erasing takes the one-time tokens with it: they have no section of
+        // their own, being links in flight rather than something an export describes.
+        {
+            section: 'sessions',
+            collect: ({ userId }) => exportSessions(userId),
+            erase: eraseSessionsAndTokens
         }
     ],
     /*

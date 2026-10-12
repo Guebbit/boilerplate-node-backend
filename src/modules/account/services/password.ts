@@ -151,7 +151,7 @@ export const writePassword = (
                 : withTransaction(write);
         })
         .then((savedUser) =>
-            purgeAfterPasswordChange(savedUser)
+            purgeAfterPasswordChange(savedUser.id)
                 .catch((error: unknown) => {
                     logger.warn({
                         message: 'Password written, but its token purge failed.',

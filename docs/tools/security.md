@@ -25,7 +25,7 @@ This keeps normal authenticated requests explicit (client-attached Bearer token)
 - **Access token verification**: `getAuth` middleware reads the Bearer token from `Authorization` and verifies JWT signature/expiry with `verifyAccessToken`.
 - **Refresh token verification**: `createAccessToken` calls `verifyRefreshToken`, which checks both:
     1. JWT signature/expiry with the refresh secret.
-    2. token presence in the server-side token store (`users.tokens`) to reject revoked/unknown refresh tokens.
+    2. a live row in the `sessions` collection, to reject revoked/unknown refresh tokens.
 
 If access-token verification fails, protected routes return `401`. The client can then call refresh and retry with the new access token.
 
@@ -146,8 +146,8 @@ unlike `AuthResolver`, an unregistered `CredentialResolver` is not an error — 
 verify.
 
 **Storage is a sha256 digest, not encryption.** A credential is verified, never re-signed with, so
-there is no plaintext to recover later — `hashToken` (`@modules/users`), the same one-way primitive
-refresh/reset tokens use: `randomBytes(32)` has no search space for bcrypt/argon2 to make expensive,
+there is no plaintext to recover later — `hashToken` (`src/infrastructure/security/hash-token.ts`), the same one-way primitive
+session and one-time tokens use: `randomBytes(32)` has no search space for bcrypt/argon2 to make expensive,
 so the ~100ms they would cost on every authenticated request buys nothing. Comparison is
 constant-time (`constantTimeEqual`, `infrastructure/security/constant-time.ts` — the same helper
 `isMetricsScraper` uses, see below), never `===`.
@@ -232,9 +232,9 @@ resolve, fire-and-forget, so a partner integration that stopped calling can be f
     - `httpOnly` blocks JavaScript reads of the refresh token.
     - `sameSite=lax` reduces cross-site cookie sending in common CSRF scenarios.
     - `secure` (production) limits cookie transport to HTTPS.
-- **Server-side refresh-token check**: refresh is accepted only if the signed token is still present in DB, enabling revocation/logout-all behavior.
-- **Single-use token entropy**: every value stored in `users.tokens[]` — refresh sessions, password reset, email verification, delete confirmation — carries at least 128 bits, from `randomBytes(16)` or a signed JWT. Storage is a plain sha256 digest, never the raw value, so a database dump yields nothing usable. Deliberately **not** bcrypt: there is no low-entropy secret to stretch, and a KDF would tax the refresh path every authenticated client hits on a timer.
-- **Single-use tokens are spent atomically**: a token is consumed by one `$pull` update, never by load-then-`save()`. The operation is idempotent — pulling an already-spent token matches nothing and reports `modifiedCount: 0` — and that count is the _only_ thing that distinguishes the winner when the same reset link is followed twice at once. Both callers pass the earlier "does this token exist" read; exactly one sees a non-zero count and proceeds.
+- **Server-side refresh-token check**: refresh is accepted only if the signed token still has a live `sessions` row, enabling revocation/logout-all behavior.
+- **Single-use token entropy**: every value stored in `sessions` or `verificationtokens` — refresh sessions, password reset, email verification, delete confirmation — carries at least 128 bits, from `randomBytes(16)` or a signed JWT. Storage is a plain sha256 digest, never the raw value, so a database dump yields nothing usable. Deliberately **not** bcrypt: there is no low-entropy secret to stretch, and a KDF would tax the refresh path every authenticated client hits on a timer.
+- **Single-use tokens are spent atomically**: a token is consumed by one `deleteOne`, never by load-then-`save()`. The operation is idempotent — deleting an already-spent token matches nothing and reports `deletedCount: 0` — and that count is the _only_ thing that distinguishes the winner when the same reset link is followed twice at once. Both callers pass the earlier "does this token exist" read; exactly one sees a non-zero count and proceeds.
 
 ## Login → auth → refresh request flow
 
@@ -295,8 +295,8 @@ sequenceDiagram
     A-->>U: 200 { token } + refresh cookie, amr ['pwd','otp']
 ```
 
-The challenge is a single-use, revocable, hashed-at-rest token — the same `tokens[]` mechanism
-`password-reset` and account-deletion confirmation use (`users/model.ts#tokenAdd`), not a JWT — so
+The challenge is a single-use, revocable, hashed-at-rest token — the same `verificationtokens` mechanism
+`password-reset` and account-deletion confirmation use (`account/services/tokens.ts#issueToken`), not a JWT — so
 there is no shared secret to keep straight from an access token: it simply fails ordinary token
 verification. `POST /account/login/2fa` spends it the moment a right code arrives
 (`spendLiveToken`), so a second presentation of an already-answered challenge is refused outright,

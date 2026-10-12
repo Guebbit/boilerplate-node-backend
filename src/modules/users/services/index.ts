@@ -25,8 +25,6 @@ import {
     findByOAuthIdentity,
     findByIdWithPendingEmail,
     emailOrPendingEmailTaken,
-    findByToken,
-    findByTokenValue,
     emailTaken
 } from './lookups';
 import {
@@ -46,17 +44,7 @@ import {
     touchLastActive,
     touchApiKeyUse
 } from './credentials';
-import {
-    consumeToken,
-    tokenAdd,
-    tokenRemoveAll,
-    sessionRemove,
-    tokenRemoveByValue,
-    tokenRemoveExpired,
-    clearLapsedPreviousEmail,
-    tokenSupersede,
-    tokenTouch
-} from './tokens';
+import { clearLapsedPreviousEmail } from './credentials';
 import {
     registerSelfService,
     registerFromOAuth,
@@ -86,7 +74,6 @@ export { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
 export type { TwoFactorSecretRing } from './reencrypt';
 export { update, updateById } from './update';
 export { remove, restoreById, removeById } from './remove';
-export { consumeToken } from './tokens';
 export { MFA_MAX_FAILURES, MFA_LOCK_MS } from './credentials';
 
 /** The service's public surface — the controllers call through this, never the bare functions. */
@@ -111,8 +98,6 @@ export const userService = {
     findByOAuthIdentity,
     findByIdWithPendingEmail,
     emailOrPendingEmailTaken,
-    findByToken,
-    findByTokenValue,
     setPassword,
     markSessionsEnded,
     markEmailVerified,
@@ -128,14 +113,7 @@ export const userService = {
     bumpSessionEpoch,
     touchLastActive,
     touchApiKeyUse,
-    tokenAdd,
-    tokenRemoveAll,
-    sessionRemove,
-    tokenRemoveByValue,
-    tokenRemoveExpired,
     clearLapsedPreviousEmail,
-    tokenSupersede,
-    tokenTouch,
     linkOAuthAccount,
     unlinkOAuthAccount,
     findInactiveUnwarned,
@@ -144,7 +122,6 @@ export const userService = {
     minimiseInactiveBefore,
     findWarnedStillInactive,
     findReaperSoftDeletedPastGrace,
-    consumeToken,
     enqueueIfPending,
     // A controller may not reach `./presenter` directly (the persistence wall), so the shaping
     // helper it needs to build a response rides through the service instead.

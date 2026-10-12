@@ -8,21 +8,24 @@
  */
 
 import { randomUUID } from 'node:crypto';
+import { Types } from 'mongoose';
 import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
 import type { ResolveMissReason } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, TokenType, hashToken, isAuthenticatable } from '@modules/users';
+import { hashToken } from '@infrastructure/security/hash-token';
+import { userService } from '@modules/users';
+import { sessionRepository } from '../repository';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessExpiryTime,
-    getRotationGraceMilliseconds
+    getRotationGraceMilliseconds,
+    getReuseDetectionWindowMilliseconds
 } from './config';
 import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
-import { pruneOwnExpiredTokens } from './prune';
 import { predatesSessionEpoch } from './epoch';
 
 /**
@@ -170,25 +173,26 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
 
 /**
  * Verify a refresh token — JWT check + DB revocation lookup.
- * Rejects with 'Forbidden' if the token is not in the user document as a LIVE refresh entry: a
- * rotated-away (superseded) one is refused here, though the rotation itself still reads it.
+ * Rejects with 'Forbidden' if the token is not a LIVE session row of an account that may still
+ * sign in: a rotated-away (superseded) one is refused here, though the rotation itself still reads it.
  *
  * @param token - refresh JWT string
  * @returns decoded payload
  */
 export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     verifyAgainstRing(token, getRefreshTokenRing(), 'refresh').then((data) =>
-        userService.findByTokenValue(token).then((user) => {
-            if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
+        sessionRepository.findByHash(hashToken(token)).then((row) => {
+            // A rotated-away token still has its row (reuse detection and the two-tab grace need
+            // that); as a credential for anything but the rotation itself it is dead. Reuse is
+            // only ever DETECTED at the rotation (RFC 9700 §4.14.2), never here.
+            if (row?.mode !== 'jwt' || row.supersededAt || row.expiresAt <= new Date())
                 throw new TokenRejection('revoked', 'Forbidden');
-            // A rotated-away token still matches the unfiltered lookup (reuse detection and the
-            // two-tab grace need that); as a credential for anything but the rotation itself it is
-            // dead. Reuse is only ever DETECTED at the rotation (RFC 9700 §4.14.2), never here.
-            const digest = hashToken(token);
-            const entry = user.tokens.find((stored) => stored.token === digest);
-            if (entry?.type !== (TokenType.REFRESH as string) || entry.supersededAt)
-                throw new TokenRejection('revoked', 'Forbidden');
-            return data;
+            // Scoped: a deactivated or deleted account's refresh cookie stops on its very next use.
+            return userService.findAuthenticatableById(String(row.userId)).then((user) => {
+                if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
+                    throw new TokenRejection('revoked', 'Forbidden');
+                return data;
+            });
         })
     );
 
@@ -256,7 +260,7 @@ export type SessionMint = 'first' | 'remint';
 const SECOND_FACTOR_AMR = 'otp';
 
 /**
- * Create a refresh token, sign it, and persist it on the user document.
+ * Create a refresh token, sign it, and store its session row.
  *
  * This is the choke point of every login path: a FIRST session for an account with a second
  * factor armed is refused unless `amr` carries it, so a path that forgot to branch to the
@@ -268,7 +272,7 @@ const SECOND_FACTOR_AMR = 'otp';
  * @param amr - how `auth_time` was proved — `['pwd']` unless a 2FA login supplies `['pwd', 'otp']`
  * @param mint - `'first'` (the default) for a login or signup, `'remint'` for a re-mint that
  *   replaces a session the caller already holds
- * @returns updated user document
+ * @returns the signed refresh token
  * @throws {SecondFactorRequiredError} for a first session on a 2FA account without the factor in `amr`
  */
 export const createRefreshToken = (
@@ -276,54 +280,46 @@ export const createRefreshToken = (
     remember?: RefreshTokenExpiryTime,
     amr: string[] = ['pwd'],
     mint: SessionMint = 'first'
-) =>
-    userService
-        // Credentials included: minting a session pushes onto this document's `tokens`.
-        .findByIdWithCredentials(id)
-        .then((user) => {
-            if (!user || !isAuthenticatable(user)) throw new Error('User not found');
-            if (mint === 'first' && user.twoFactorEnabledAt && !amr.includes(SECOND_FACTOR_AMR))
-                throw new SecondFactorRequiredError(id);
-            /*
-             * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
-             * minted in the same second different. The payload is `{ id }` plus JWT's own
-             * `iat`/`exp`, both at one-second resolution — so signing twice within a second for
-             * one user produced byte-identical tokens. Two devices signing in together then
-             * shared one credential stored as two identical rows, and revoking either revoked
-             * both: logging out a phone silently logged out the laptop signed in alongside it. A
-             * random `jti` gives every token its own identity — `tokens.token` is now queried as
-             * though it addressed one session, because it does; `verify` carries `jti` through
-             * without checking it.
-             */
-            const token = signRefreshToken(
-                {
-                    id,
-                    // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
-                    auth_time: Math.floor(Date.now() / 1000),
-                    amr,
-                    ...(remember && { remember })
-                },
-                getExpiryTime(remember)
-            );
-            return userService
-                .tokenAdd(user, TokenType.REFRESH, getExpiryTimeMilliseconds(remember), token)
-                .then((refreshToken) => recordActivity(id).then(() => refreshToken));
-        });
-
-/**
- * Stamp a refresh token as used, so `GET /account/sessions` can show which device is idle.
- * Called from the REFRESH route only, never from `createAccessToken` (which login also uses to
- * mint a session's first access token) — stamping there would mark every session "just now" the
- * moment it's issued, distinguishing nothing.
- * Resolves even on failure: a valid refresh must not 401 because this bookkeeping write failed —
- * same reasoning `getRefreshToken` applies to `runTokenCleanup`.
- * @param refreshToken - the refresh JWT that was just exchanged
- */
-export const recordRefreshTokenUse = (refreshToken: string): Promise<void> =>
-    userService
-        .tokenTouch(refreshToken)
-        .then(() => undefined)
-        .catch(() => undefined);
+): Promise<string> =>
+    userService.findAuthenticatableById(id).then((user) => {
+        if (!user) throw new Error('User not found');
+        if (mint === 'first' && user.twoFactorEnabledAt && !amr.includes(SECOND_FACTOR_AMR))
+            throw new SecondFactorRequiredError(id);
+        /*
+         * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
+         * minted in the same second different. The payload is `{ id }` plus JWT's own
+         * `iat`/`exp`, both at one-second resolution — so signing twice within a second for
+         * one user produced byte-identical tokens. Two devices signing in together then
+         * shared one credential stored as two identical rows, and revoking either revoked
+         * both: logging out a phone silently logged out the laptop signed in alongside it. A
+         * random `jti` gives every token its own identity — the digest is looked up as
+         * though it addressed one session, because it does; `verify` carries `jti` through
+         * without checking it.
+         */
+        const token = signRefreshToken(
+            {
+                id,
+                // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
+                auth_time: Math.floor(Date.now() / 1000),
+                amr,
+                ...(remember && { remember })
+            },
+            getExpiryTime(remember)
+        );
+        const now = new Date();
+        return sessionRepository
+            .insert({
+                userId: new Types.ObjectId(id),
+                // A first row starts a session family; a rotation's successor copies it.
+                familyId: new Types.ObjectId(),
+                mode: 'jwt',
+                tokenHash: hashToken(token),
+                startedAt: now,
+                expiresAt: new Date(now.getTime() + getExpiryTimeMilliseconds(remember))
+            })
+            .then(() => recordActivity(id))
+            .then(() => token);
+    });
 
 /**
  * Exchange a valid refresh token for a short-lived access token.
@@ -341,10 +337,10 @@ export const createAccessToken = (refreshToken: string) =>
     verifyRefreshToken(refreshToken).then((claims) => signAccessToken(carriedClaims(claims)));
 
 /**
- * A refresh token was presented that this document does not currently hold LIVE — genuinely
- * unknown, or superseded outside the grace window. Carries the
- * owning user's id so the caller can decide what to do about it without a second lookup; this
- * module has already revoked every refresh token on the account by the time it throws.
+ * A refresh token was presented that no live session holds — genuinely unknown, or superseded
+ * outside the grace window. Carries the owning user's id so the caller can decide what to do about
+ * it without a second lookup; this module has already revoked every session on the account by the
+ * time it throws.
  */
 export class TokenReuseError extends Error {
     /** @param userId - the account whose refresh tokens were all revoked. */
@@ -355,18 +351,18 @@ export class TokenReuseError extends Error {
 }
 
 /**
- * Every refresh token this account currently holds, gone, and every access token with them — the
+ * Every session this account currently holds, gone, and every access token with them — the
  * reuse-detected response. The epoch moves FIRST: if the removal then fails, the tokens are
  * already dead.
  */
 const revokeAllRefreshTokens = (userId: string): Promise<void> =>
     userService
         .bumpSessionEpoch(userId)
-        .then(() => userService.findByIdWithCredentials(userId))
-        .then((user) => (user ? userService.tokenRemoveAll(user, TokenType.REFRESH) : undefined));
+        .then(() => sessionRepository.removeAll(userId))
+        .then(() => undefined);
 
 /**
- * Sign and persist the winning half of a rotation: a new refresh token carrying the SAME absolute
+ * Sign and store the winning half of a rotation: a new refresh token carrying the SAME absolute
  * expiry as the one it replaces (`remainingMs`), plus a fresh access token. `lastUsedAt` is
  * stamped immediately rather than left absent, the way a brand-new login's token is: from the
  * account holder's side this is a continuation of the same session, not a new one, and
@@ -381,43 +377,39 @@ const reissueRotated = (
     oldToken: string,
     remainingMs: number
 ): Promise<RotatedSession> =>
-    userService.findByIdWithCredentials(claims.id).then((user) => {
-        if (!user || !isAuthenticatable(user)) throw new Error('User not found');
+    userService.findAuthenticatableById(claims.id).then((user) => {
+        if (!user) throw new Error('User not found');
         // The epoch may have moved since the presented token was minted: a rotation must not
         // carry a revoked session forward.
         if (predatesSessionEpoch(claims.auth_time, user.tokensValidAfter))
             throw new Error('Forbidden');
 
-        const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
-        // The successor continues the session: same family id, so the id the owner sees (and
-        // revokes by) does not change with the token.
-        const familyId = user.tokens.find((entry) => entry.token === hashToken(oldToken))?.familyId;
+        return sessionRepository.findByHash(hashToken(oldToken)).then((previous) => {
+            if (!previous) throw new Error('Forbidden');
 
-        return (
-            userService
-                .tokenAdd(
-                    user,
-                    TokenType.REFRESH,
-                    remainingMs,
-                    newRefreshToken,
-                    undefined,
-                    familyId
-                )
-                .then((refreshToken) =>
-                    recordRefreshTokenUse(refreshToken).then(() => refreshToken)
-                )
-                .then((refreshToken) => recordActivity(user.id).then(() => refreshToken))
-                // After the lookup and the new token, never before: the rotation reads the presented
-                // token's entry to tell a benign race from reuse, and a prune ahead of that read could
-                // take the entry with it. Contained: housekeeping cannot fail a valid refresh.
-                .then((refreshToken) => pruneOwnExpiredTokens(user.id).then(() => refreshToken))
-                .then((refreshToken) => ({
+            const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
+            const now = new Date();
+            return sessionRepository
+                .insert({
+                    userId: previous.userId,
+                    // The successor continues the session: same family id, so the id the owner
+                    // sees (and revokes by) does not change with the token, and the same
+                    // sign-in time, so "signed in on" names the session and not the token.
+                    familyId: previous.familyId,
+                    startedAt: previous.startedAt,
+                    mode: 'jwt',
+                    tokenHash: hashToken(newRefreshToken),
+                    lastUsedAt: now,
+                    expiresAt: new Date(now.getTime() + remainingMs)
+                })
+                .then(() => recordActivity(user.id))
+                .then(() => ({
                     accessToken: signAccessToken(claims),
-                    refreshToken,
+                    refreshToken: newRefreshToken,
                     // Only a persistent login keeps a persistent cookie.
                     refreshMaxAgeMs: claims.remember ? remainingMs : undefined
-                }))
-        );
+                }));
+        });
     });
 
 /**
@@ -437,23 +429,20 @@ const resolveLostRotation = (
     oldToken: string,
     remainingMs: number
 ): Promise<RotatedSession> =>
-    userService.findByTokenValue(oldToken).then((user) => {
-        const digest = hashToken(oldToken);
-        const entry = user?.tokens.find((tk) => tk.token === digest);
-
+    sessionRepository.findByHash(hashToken(oldToken)).then((row) => {
         // Genuinely absent — revoked by logout/password-change/deactivation while this
-        // JWT's signature still verified, or already cleaned up. An ordinary dead
+        // JWT's signature still verified, or already deleted by its TTL. An ordinary dead
         // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
         // already gone. `verifyRefreshToken` answers this identically for the non-rotating
         // callers that still use it.
-        if (!entry) throw new Error('Forbidden');
+        if (!row) throw new Error('Forbidden');
 
         // Still live (no `supersededAt`) despite losing the claim: only reachable through
-        // a race tighter than `tokenSupersede` itself allows for. Treat it as live — the
+        // a race tighter than `supersede` itself allows for. Treat it as live — the
         // credential is exactly as valid as the caller believes it is.
-        if (!entry.supersededAt) return reissueRotated(claims, oldToken, remainingMs);
+        if (!row.supersededAt) return reissueRotated(claims, oldToken, remainingMs);
 
-        const supersededMsAgo = Date.now() - entry.supersededAt.getTime();
+        const supersededMsAgo = Date.now() - row.supersededAt.getTime();
         if (supersededMsAgo <= getRotationGraceMilliseconds())
             // The benign race: someone else's rotation of this SAME token already won,
             // moments ago. Reissue rather than reject — see the module doc above.
@@ -490,8 +479,8 @@ export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
         // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
         const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
 
-        return userService
-            .tokenSupersede(oldToken)
+        return sessionRepository
+            .supersede(hashToken(oldToken), new Date(), getReuseDetectionWindowMilliseconds())
             .then((won) =>
                 won
                     ? reissueRotated(claims, oldToken, remainingMs)

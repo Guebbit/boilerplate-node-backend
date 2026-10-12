@@ -48,7 +48,7 @@ describe('makeUser', () => {
     it('omits unspecified fields, leaving the schema"s defaults to apply', () => {
         const user = makeUser();
 
-        for (const field of ['role', 'verifiedAt', 'deletedAt', 'tokens'])
+        for (const field of ['role', 'verifiedAt', 'deletedAt'])
             expect(Object.hasOwn(user, field)).toBe(false);
     });
 

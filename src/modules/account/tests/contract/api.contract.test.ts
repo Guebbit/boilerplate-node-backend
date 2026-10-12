@@ -15,7 +15,7 @@ import { setCookie, cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
-import { TokenType, userService } from '@modules/users';
+import { userService } from '@modules/users';
 import { decode } from 'jsonwebtoken';
 import { logger } from '@infrastructure/adapters/logger';
 import * as mailerPort from '@infrastructure/adapters/mailer';
@@ -31,6 +31,8 @@ import {
 import { MISSING_ID } from '@tests/ids';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
+import { plantToken, tokenRowOf } from '../factories';
+import { sessionRepository } from '../../repository';
 
 setupTestDb();
 
@@ -48,14 +50,12 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 }));
 
 /** Whether the account holds a verify token — a digest at rest, so only presence is checkable. */
-const readVerifyToken = async (userId: string) => {
-    const stored = await userRepository.findByIdWithCredentials(userId);
-    return stored?.tokens.find(({ type }) => type === EMAIL_VERIFY_TOKEN_TYPE)?.token;
-};
+const readVerifyToken = (userId: string) =>
+    tokenRowOf(userId, EMAIL_VERIFY_TOKEN_TYPE).then((row) => row?.tokenHash);
 
 /**
  * The PLAINTEXT verify token from the most recently queued mail — what the link in the email
- * actually carries. `tokens[].token` is a `hashToken` digest at rest, so this suite cannot read
+ * actually carries. `verificationtokens.tokenHash` is a `hashToken` digest at rest, so this suite cannot read
  * the usable token back from storage; it has to observe it the same way the account holder
  * would, via `verifyRequestEmail`'s `linkUrl`'s own `#token=` fragment.
  *
@@ -633,7 +633,7 @@ describe('POST /account/pending-email/resend', () => {
 describe('POST /account/reset-confirm', () => {
     it('answers a weak password with the password copy, not the generic size message', async () => {
         const user = await createUser({ email: 'reset-copy@example.com' });
-        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'a-live-reset-token');
+        await plantToken(user.id, 'password', 'a-live-reset-token', { ttlMs: 60 * 60 * 1000 });
 
         const response = await api()
             .post('/account/reset-confirm')
@@ -660,7 +660,7 @@ describe('POST /account/reset-confirm', () => {
      */
     it('does not consume the reset token when the new password fails validation', async () => {
         const user = await createUser({ email: 'reset-typo@example.com' });
-        await user.tokenAdd(TokenType.PASSWORD_RESET, 60 * 60 * 1000, 'a-fresh-reset-token');
+        await plantToken(user.id, 'password', 'a-fresh-reset-token', { ttlMs: 60 * 60 * 1000 });
 
         const weakAttempt = await api().post('/account/reset-confirm').send({
             token: 'a-fresh-reset-token',
@@ -744,7 +744,7 @@ describe('POST /account/password', () => {
     it('still answers 200 with no token, logged, when the re-mint fails', async () => {
         const { bearer } = await loginWithCookie();
         const loggedWarn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
-        jest.spyOn(userService, 'tokenAdd').mockRejectedValueOnce(new Error('write conflict'));
+        jest.spyOn(sessionRepository, 'insert').mockRejectedValueOnce(new Error('write conflict'));
 
         const response = await api().post('/account/password').set('Authorization', bearer).send({
             currentPassword: PLAIN_PASSWORD,
@@ -810,7 +810,7 @@ describe('POST /account/reauth', () => {
      */
     it('answers 500 with no jwt cookie when the re-mint fails, rather than a false 200', async () => {
         const { bearer } = await loginWithCookie();
-        jest.spyOn(userService, 'tokenAdd').mockRejectedValueOnce(new Error('write conflict'));
+        jest.spyOn(sessionRepository, 'insert').mockRejectedValueOnce(new Error('write conflict'));
 
         const response = await api()
             .post('/account/reauth')
@@ -833,10 +833,12 @@ describe('POST /account/export', () => {
         expect(status).toBe(200);
         const { profile, sessions } = data as {
             profile: { email: string };
-            sessions: { id: string; type: string }[];
+            sessions: { id: string; expiration: string }[];
         };
         expect(profile.email).toBe(user.email);
-        expect(sessions.some((session) => session.type === 'refresh')).toBe(true);
+        // The caller's own login, as metadata only: its handle and when it ends, never a credential.
+        expect(sessions).toHaveLength(1);
+        expect(Object.keys(sessions[0]).toSorted()).toEqual(['expiration', 'id']);
     });
 });
 

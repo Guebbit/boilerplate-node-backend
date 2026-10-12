@@ -17,6 +17,7 @@ import {
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
 import { createAccessToken, createRefreshToken } from '../../session/jwt';
+import { plantToken, removeTokensOfKind } from '../factories';
 
 /** Every queued mail, newest last — what each recipient would read. */
 const mockOutbox: { to?: string; template: string; data: Record<string, unknown> }[] = [];
@@ -285,7 +286,7 @@ describe('undoing an email change', () => {
 
     it('survives a completed password reset, which purges every other pending token', async () => {
         const { user, undoToken } = await requested();
-        await user.tokenAdd('password', 3_600_000, 'reset-after-the-change');
+        await plantToken(user.id, 'password', 'reset-after-the-change', { ttlMs: 3_600_000 });
 
         const reset = await api().post('/account/reset-confirm').send({
             token: 'reset-after-the-change',
@@ -313,10 +314,7 @@ describe('undoing an email change', () => {
         await userRepository.updateMany({ _id: user.id }, { $unset: { pendingEmail: '' } });
         mockOutbox.length = 0;
         // The cooldown between two requests is not what is under test.
-        await userRepository.updateMany(
-            { _id: user.id },
-            { $pull: { tokens: { type: 'email-change' } } }
-        );
+        await removeTokensOfKind(user.id, 'email-change');
         await requestChange(bearer, 'third@example.com');
 
         expect(await statusOf(undo(undoToken))).toBe(422);

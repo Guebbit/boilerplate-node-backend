@@ -8,15 +8,6 @@ tags:
     - name: Users
       description: Administration of user accounts and their roles.
 
-# This module's section of the account data export (`POST /account/export`): the bundler
-# adds it to `AccountExportResponse`. Removing the module removes the section.
-x-personal-data:
-    sessions:
-        schema:
-            type: array
-            items:
-                $ref: '#/components/schemas/ExportSession'
-
 paths:
     # --------- Users ---------
     /users:
@@ -606,23 +597,3 @@ components:
                         $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/User'
                 meta:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
-
-        # A live refresh session, metadata only — never the token value, which is as good as a
-        # password. Used by `POST /account/export` (`shared/contracts/openapi.root.yaml`); this
-        # module owns the shape since it owns the `Token` sub-document sessions live on.
-        ExportSession:
-            type: object
-            additionalProperties: false
-            required: [id, type]
-            properties:
-                id:
-                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                type:
-                    type: string
-                    enum: [refresh]
-                expiration:
-                    type: string
-                    format: date-time
-                lastUsedAt:
-                    type: string
-                    format: date-time

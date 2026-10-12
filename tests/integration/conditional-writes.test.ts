@@ -23,7 +23,6 @@ import {
 } from '@modules/orders/tests/factories';
 import { productModel } from '@modules/products/model';
 import { productRepository } from '@modules/products/repository';
-import { TokenType } from '@modules/users';
 import { userModel } from '@modules/users/model';
 import { userRepository } from '@modules/users/repository';
 import {
@@ -442,22 +441,6 @@ describe('writes that are not an edit leave the tag alone', () => {
             .set('Authorization', bearer)
             .set('If-Match', tag)
             .send({ tags: ['after-stock'] });
-
-        expect(write.status).toBe(200);
-    });
-
-    it('lets a user edit through after a session token was issued', async () => {
-        const { bearer } = await authenticateAs('admin');
-        const target = await createUser({ email: 'target@example.com', username: 'target' });
-        const path = `/users/${String(target._id)}`;
-        const tag = etagOf(await api().get(path).set('Authorization', bearer));
-
-        await target.tokenAdd(TokenType.REFRESH, 60_000, 'a-session-token');
-        const write = await api()
-            .patch(path)
-            .set('Authorization', bearer)
-            .set('If-Match', tag)
-            .send({ username: 'renamed' });
 
         expect(write.status).toBe(200);
     });

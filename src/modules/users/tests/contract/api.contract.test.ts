@@ -2,7 +2,7 @@
  * @module
  * Contract tests for /users and /account — the credential-leak guard. `openapi.yaml`'s `User`
  * schema declares `additionalProperties: false`, so any undeclared field on a user response
- * (password, tokens, a bcrypt hash) fails here, not just the ones we thought to name.
+ * (password, an argon2 hash) fails here, not just the ones we thought to name.
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -46,7 +46,6 @@ jest.mock('@infrastructure/observability/audit', () => {
 const assertNoCredentials = (payload: unknown) => {
     const serialized = JSON.stringify(payload);
     expect(serialized).not.toContain('password');
-    expect(serialized).not.toContain('tokens');
     expect(serialized).not.toContain('$argon2'); // a password hash, however it got there
 };
 
