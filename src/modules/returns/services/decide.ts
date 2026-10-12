@@ -15,6 +15,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { orderService, returnAddress } from '@modules/orders';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
@@ -83,14 +84,38 @@ const decide = (
     refusalForDecision(id, to, context).then<ResponseSuccess<ReturnDocument> | ResponseReject>(
         (refusal) =>
             refusal ??
-            returnRepository
-                .claimStatus(id, DECIDABLE_RETURN_STATUSES, to, {
-                    ...stamp,
-                    decidedAt: new Date()
-                })
-                .then<ResponseSuccess<ReturnDocument> | ResponseReject>((decided) =>
-                    decided ? settleDecision(decided, to, id, context) : notDecidable(id)
-                )
+            // The order's timeline row commits with the decision; a lost race writes none. A
+            // decline's reason stays on the return, where `reap:returns` owns its clock.
+            withTransaction((session) =>
+                returnRepository
+                    .claimStatus(
+                        id,
+                        DECIDABLE_RETURN_STATUSES,
+                        to,
+                        { ...stamp, decidedAt: new Date() },
+                        session
+                    )
+                    .then((decided) =>
+                        decided
+                            ? orderService
+                                  .appendTimeline(
+                                      String(decided.orderId),
+                                      {
+                                          type:
+                                              to === 'approved'
+                                                  ? 'return_approved'
+                                                  : 'return_declined',
+                                          actor: context.caller.id,
+                                          data: { returnId: id }
+                                      },
+                                      session
+                                  )
+                                  .then(() => decided)
+                            : decided
+                    )
+            ).then<ResponseSuccess<ReturnDocument> | ResponseReject>((decided) =>
+                decided ? settleDecision(decided, to, id, context) : notDecidable(id)
+            )
     );
 
 /**

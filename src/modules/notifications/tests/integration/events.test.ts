@@ -10,12 +10,14 @@ import { testCallerContext } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { productService } from '@modules/products';
+import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
 import { cartService } from '@modules/cart';
 import { wishlistService } from '@modules/wishlist';
 import { notificationsService } from '@modules/notifications/services';
 import { userService } from '@modules/users';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { enabledModules } from '../../../../modules';
 
 setupTestDb();
@@ -39,6 +41,8 @@ describe('the module subscriptions', () => {
 
             await productService.removeById(String(doomed._id), true);
 
+            await settleOutboxNudges();
+
             const [message, ...rest] = await inboxOf(holder.id);
             expect(rest).toEqual([]);
             expect(message).toMatchObject({
@@ -56,6 +60,8 @@ describe('the module subscriptions', () => {
 
             await productService.removeById(String(doomed._id), true);
 
+            await settleOutboxNudges();
+
             const [message] = await inboxOf(saver.id);
             expect(message).toMatchObject({
                 code: 'notifications.wishlist-item-removed',
@@ -70,6 +76,8 @@ describe('the module subscriptions', () => {
             await wishlistService.wishlistAdd(user.id, String(doomed._id), testCallerContext);
 
             await productService.removeById(String(doomed._id), true);
+
+            await settleOutboxNudges();
 
             const inbox = await inboxOf(user.id);
             const codes = inbox.map(({ code }) => code).toSorted();
@@ -86,6 +94,8 @@ describe('the module subscriptions', () => {
 
             await productService.removeById(String(hidden._id), false);
 
+            await settleOutboxNudges();
+
             await expect(inboxOf(holder.id)).resolves.toHaveLength(1);
         });
 
@@ -94,6 +104,8 @@ describe('the module subscriptions', () => {
             const unheld = await createProduct();
 
             await productService.removeById(String(unheld._id), true);
+
+            await settleOutboxNudges();
 
             await expect(inboxOf(user.id)).resolves.toEqual([]);
         });
@@ -106,7 +118,9 @@ describe('the module subscriptions', () => {
             const gone = await createProduct({ title: 'Soon gone' });
             const hidden = await createProduct({ title: 'Hidden' });
             await productService.removeById(String(gone._id), false);
+            await settleOutboxNudges();
             await productService.removeById(String(hidden._id), false);
+            await settleOutboxNudges();
 
             await cartService.cartMerge(
                 user.id,
@@ -191,10 +205,61 @@ describe('the module subscriptions', () => {
         const product = await createProduct();
         await cartService.cartItemAddById(user.id, String(product._id), 1);
         await productService.removeById(String(product._id), true);
+        await settleOutboxNudges();
         await expect(inboxOf(user.id)).resolves.toHaveLength(1);
 
         await userService.removeById(user.id, true);
 
         await expect(inboxOf(user.id)).resolves.toEqual([]);
+    });
+
+    describe('a late preorder', () => {
+        const DAY = 86_400_000;
+
+        /** A paid preorder promised in 30 days, its fulfillment orders made, and its date moved. */
+        const moved = async (days: number) => {
+            const placed = await paidPreorderOrder([
+                { quantity: 2, releaseDate: new Date(Date.now() + 30 * DAY) }
+            ]);
+            await fulfillmentOrdersOf(placed.orderId);
+            await productService.updateById(
+                placed.productIds[0],
+                { releaseDate: new Date(Date.now() + days * DAY).toISOString() },
+                testCallerContext
+            );
+            await settleOutboxNudges();
+            return placed;
+        };
+
+        it('tells the buyer of a short slip with preorder-delayed, naming the dates and the product', async () => {
+            const { user, orderId } = await moved(40);
+
+            const [message, ...rest] = await inboxOf(user.id);
+
+            expect(rest).toEqual([]);
+            expect(message).toMatchObject({
+                code: 'notifications.preorder-delayed',
+                severity: 'warning',
+                params: { orderId, titles: [expect.any(String)] }
+            });
+            expect(message?.params).toHaveProperty('agreedAt');
+            expect(message?.params).toHaveProperty('expectedAt');
+            expect(message?.params).not.toHaveProperty('answerBy');
+        });
+
+        it('asks a long slip with preorder-confirm-wait, carrying the deadline', async () => {
+            const { user } = await moved(90);
+
+            const [message] = await inboxOf(user.id);
+
+            expect(message?.code).toBe('notifications.preorder-confirm-wait');
+            expect(message?.params).toHaveProperty('answerBy');
+        });
+
+        it('writes nothing when the date moves earlier', async () => {
+            const { user } = await moved(10);
+
+            await expect(inboxOf(user.id)).resolves.toEqual([]);
+        });
     });
 });

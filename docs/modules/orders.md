@@ -25,6 +25,7 @@ flowchart LR
     payments["payments"]
     products["products"]
     returns["returns"]
+    stats["stats"]
     users["users"]
 
     cart --> orders
@@ -32,11 +33,15 @@ flowchart LR
     invoicing --> orders
     payments --> orders
     returns --> orders
+    stats --> orders
     orders --> access
     orders --> inventory
     orders --> products
     orders --> users
     inventory -. "inventory.reservation_expired" .-> orders
+    orders -. "order.cancelled" .-> delivery
+    orders -. "order.status_changed" .-> delivery
+    orders -. "order.status_overridden" .-> delivery
     orders -. "order.status_changed" .-> invoicing
     orders -. "order.cancelled" .-> payments
     orders -. "order.refund_owed" .-> payments
@@ -46,7 +51,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments,returns supporting;
+    class delivery,inventory,invoicing,payments,returns,stats supporting;
     class access,users generic;
     class orders centre;
 ```
@@ -74,15 +79,22 @@ whatever the storefront happened to be showing. Reading the order back later mus
 that, never re-resolve against whoever is reading it now — see
 [Internationalisation](../tools/i18n.md#tier-3-user-authored-content).
 
+The snapshot also freezes what a preorder promised: `preorder: true` and the `releaseDate` the
+buyer saw. Both are decided once at checkout and never re-derived: the date passing, or an admin moving
+it, must not change what this order bought (CRD Art. 18 treats the date shown when ordering as the
+agreed one), and a bank transfer may be paid a week after the order was placed.
+[`delivery`](./delivery.md) groups the lines into fulfillment orders from this frozen pair, and the
+hold takes the product's preorder allowance instead of a shelf unit.
+
 The status enum is the module's public vocabulary:
 
-| Status                  | What it means                                | Who moves it                                                                                                                                                |
-| ----------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                                                        |
-| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                                                      |
-| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction)                                       |
-| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md), reporting a recorded handover/arrival                                                                                          |
-| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing)) |
+| Status                  | What it means                                | Who moves it                                                                                                                                                             |
+| ----------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pending`               | created, unpaid, units held                  | checkout or an admin                                                                                                                                                     |
+| `paid`                  | money taken, units committed                 | [`payments`](./payments.md) on confirm                                                                                                                                   |
+| `processing`            | fulfilment started                           | [`delivery`](./delivery.md), reporting a recorded fulfilment-start fact (until that door exists, an admin correction)                                                    |
+| `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md): `shipped` once the LAST unit has left (an order shipped in parts stays `processing` until then), `delivered` once the last shipment arrived |
+| `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing))              |
 
 Any of these except `paid` (`system`-only, absolute) can also be reached by an admin override with
 a reason — see [Who writes the status](#who-writes-the-status) below.
@@ -104,13 +116,15 @@ erasure or that date, whichever is later — amounts, line items and dates survi
 is gone. An account inactive past `NODE_INACTIVE_MINIMISE_DAYS` starts the same clock through this
 module's `personalData.minimise` hook, keeping its `userId`; a live, active account's orders keep
 their personal fields, since order history is part of the contract
-([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an UNPAID order outright (`services/remove.ts`'s `remove`) —
-this reap is what protects the far more common case, the order nobody ever deletes. A paid order
-refuses a hard delete instead, once and for as long as `paidAt` is stamped: `invoicing` freezes a
-legal document from that same transition, and it must survive the order it was issued for. The
-refusal does not trust the document the caller read: the hard delete runs in one transaction with
-the stock release, and its `deleteOne` filters on `paidAt: null`, so a settlement that commits in
-between turns the delete into the same 409 and leaves the hold as it was. `npm run
+([why](../theory/data-retention.md#orders-kept-while-the-account-lives)). An admin can still hard-delete an order, but only one that is `cancelled` and was never paid
+(`services/remove.ts`'s `remove`): the cancel owns every end-of-order effect (stock, payment intent,
+`order.cancelled`), so an open order answers 409 `ORDER_NOT_CANCELLED` until it is cancelled. This
+reap is what protects the far more common case, the order nobody ever deletes. A paid order refuses
+a hard delete instead (409 `ORDER_INVOICED`), once and for as long as `paidAt` is stamped:
+`invoicing` freezes a legal document from that same transition, and it must survive the order it
+was issued for. The refusal does not trust the document the caller read: the hard delete is one
+`deleteOne` that filters on `status: cancelled` and `paidAt: null`, so a settlement or a reopen
+that commits in between turns it into the matching 409. `npm run
 sweep:order-effects`, every 5 minutes, re-announces `order.refund_owed` for a refund the event bus's one delivery
 attempt did not carry through. See [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the
 full mechanism.
@@ -203,9 +217,9 @@ module announcing and a sibling reacting.
 flowchart LR
     P["pending<br/><i>created · units held</i>"] -->|"payments confirms<br/>(system)"| PA["paid<br/><i>units committed</i>"]
     PA -->|"system, via<br/>delivery's start door"| PR["processing"]
-    PR -->|"system, via<br/>delivery's ship door"| SH["shipped"]
-    SH -->|"system, via<br/>delivery's deliver door"| DE["delivered"]
-    PR -->|"system, via<br/>delivery's fulfill door<br/>(digital-only)"| DE
+    PR -->|"system: the shipment that leaves<br/>nothing remaining"| SH["shipped"]
+    SH -->|"system: the last shipment arrives"| DE["delivered"]
+    PR -->|"system: a digital fulfilment, or a<br/>remainder cancelled after every<br/>shipment arrived — both moves at once"| DE
     P -.->|"admin · or an expired hold"| CA["cancelled<br/><i>units released</i>"]
     PA -.->|"admin · refund due"| CA
     CA -. "order.refund_owed" .-> PM["payments<br/><i>refunds if one was due</i>"]
@@ -227,47 +241,238 @@ override all ASK for a move, never assign the field themselves. See
 
 ## Who writes the status
 
-| Move                                        | Who asks                                                                         | Through                                                                                                                 |
-| ------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                      |
-| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override` |
-| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/order/{id}/ship`                                                                                        |
-| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/order/{id}/deliver`                                                                                     |
-| `processing` → `delivered` (digital-only)   | `system`                                                                         | `POST /delivery/order/{id}/fulfill` — no parcel; refused if any line still needs shipping                               |
-| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel`                                                                                              |
+| Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
+| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override`                                              |
+| `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
+| `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
+| `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
+| `pending`/`paid`/`processing` → `cancelled` | `customer` (own order, `pending`/`paid` only) or an operator (also `processing`) | `POST /orders/{id}/cancel` — **only while nothing has shipped**, conditional on `fulfillment.shipped` in the write's own filter                                      |
+
+### The fulfilment summary
+
+`orders` cannot import `delivery` (the arrow points the other way), so the order carries a small
+summary of where its goods stand, written **only** through `orderService.recordFulfillmentProgress`,
+which `delivery` calls inside its own transaction:
+
+| Field                         | Meaning                                         |
+| ----------------------------- | ----------------------------------------------- |
+| `fulfillment.shipped`         | at least one shipment exists                    |
+| `fulfillment.remaining`       | units not shipped and not cancelled             |
+| `fulfillment.onHold`          | of those, units in `on_hold` fulfillment orders |
+| `fulfillment.awaitingStock`   | of those, units on `awaiting_stock`             |
+| `fulfillment.undelivered`     | shipments not yet delivered                     |
+| `fulfillment.lastDeliveredAt` | the latest `deliveredAt`                        |
+
+It is internal: clients read the order's `fulfillmentStatus` and `actions`. The summary is recomputed
+from the fulfillment orders **inside the same transaction** as the write that changed them, so a stale
+read can never overwrite a newer one. The doors `delivery` writes through
+(`services/fulfillment.ts`, `services/status.ts`) all take the act's session — the shipment, the
+summary, the status move and the events commit together or not at all.
+
+`fulfillmentStatus` is derived from the status and that summary. First match wins:
+
+| #   | When                                                                            | Value                               |
+| --- | ------------------------------------------------------------------------------- | ----------------------------------- |
+| 1   | the status ignores the summary (`pending`, `shipped`, `delivered`, `cancelled`) | its trait's value                   |
+| 2   | something shipped, units remain                                                 | `partially_fulfilled`               |
+| 3   | nothing shipped, every remaining unit held                                      | `on_hold` (wins over `in_progress`) |
+| 4   | otherwise (`paid`, `processing`)                                                | its trait's value                   |
+
+The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
+
+`GET /orders?fulfillmentStatus=` lists by that value. The filter is built from the same table
+(`fulfillmentStatusFilter`) and ANDed into the caller's own scope, rather than storing a copy of the
+answer: the filter and the value a row serializes with cannot disagree, and a unit test holds them to
+each other.
+
+The summary is also why `cancel` and `withdraw` read the order, not its status: a whole-order cancel
+refuses once any shipment left (`actions.cancel` is `false`, and the write itself is conditional on
+`fulfillment.shipped`), and `isBeforeDispatch` reads `fulfillment.shipped`, not `processing` — a
+withdrawal after shipment 1 would otherwise refund goods the buyer already holds. What has not shipped
+is cancelled one fulfillment order at a time, through [`returns`](./returns.md#cancelling-what-has-not-shipped).
+
+### Status traits
+
+Every question the module asks of a status alone reads one record,
+`ORDER_STATUS_TRAITS` (`domain/status-traits.ts`), declared `satisfies Record<OrderStatus, ...>`.
+A status added to the contract fails the build there instead of falling into a default category.
+
+| Trait            | Read by                               | `pending` | `paid`    | `processing` | `shipped` | `delivered` | `cancelled` |
+| ---------------- | ------------------------------------- | --------- | --------- | ------------ | --------- | ----------- | ----------- |
+| `stockCommitted` | `paymentSettled`                      | no        | yes       | yes          | yes       | yes         | no          |
+| `beforeDispatch` | `isBeforeDispatch` (with the summary) | yes       | yes       | yes          | no        | no          | no          |
+| `withdrawable`   | `canWithdraw`                         | yes       | yes       | yes          | yes       | yes         | no          |
+| `fulfillment`    | `fulfillmentStatusOf`, its filter     | see below | see below | see below    | see below | see below   | see below   |
+
+`fulfillment` is a value plus whether the summary may refine it: `unfulfilled` (`pending`,
+`cancelled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
+summary), `shipped`, `fulfilled`. The edges between statuses are not traits; they live in the
+[event table](../theory/tactical-ddd.md#1-the-order-lifecycle).
 
 ### The admin override
 
 A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
 against the wrong order — needs `orders.any.override`, a step-up permission granted to `admin` by
-name. Two modes, both requiring a `reason`, both writing an embedded override-history entry
-(who, when, from → to, mode, reason) plus an audit event:
+name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
+[timeline](#the-timeline) (who, when, from → to, mode, reason):
 
-- **Forced** — the delivery doors (`ship`/`deliver`) accept `forced: true` alongside the ordinary
-  request. The regular operation still runs: a parcel record is created, a tracking code is
-  required if the method needs one, the shipped email still sends. Only the status GATE is skipped
-  — it may jump past `processing`, but never lands on `paid` (that stays `system`-only, absolute,
-  echo included).
+- **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
+  runs; the order skips a step (ship from `paid` without `start`, deliver without a carrier
+  confirmation) and leaves a history row through `recordForcedFulfilment` — a row **without** a move of
+  its own. It never lands on `paid` (that stays `system`-only, absolute), and never ships from `on_hold`.
 - **Status-only** — `POST /orders/{id}/status-override` with `{ to, reason }` moves the status
-  alone, forward to `processing`/`shipped`/`delivered` only. No parcel, no shipped email — but
-  webhooks still fire, since a subscriber's own view of the order genuinely changed.
+  alone, forward to `processing`/`shipped`/`delivered` only. No shipped email — but webhooks still fire,
+  since a subscriber's own view of the order genuinely changed.
 
-`PUT /orders/:id` carries no `status` field at all — the override's own two doors are the only way
+The status-only door announces `order.status_overridden {orderId, from, to, at}` through the outbox,
+in its own transaction, and [`delivery`](./delivery.md#the-status-override) listens: forward to
+`shipped` ships every remainder, forward to `delivered` delivers them too, all at `at` — the same
+instant `withdrawUntil` was counted from. It is **refused while any unit awaits stock**
+(`ORDER_OVERRIDE_AWAITING_STOCK`): it would ship goods the stock ledger never counted out.
+
+`PUT /orders/:id` carries no `status` field at all — the override's own doors are the only way
 to reach `processing`/`shipped`/`delivered` outside the ordinary sequence, override holder included.
 
-A digital-only order has no parcel, so an override into `shipped` is refused with the same 409 as
-any other illegal target; `delivered` stays reachable. Likewise `markFulfilled` refuses an order
-with a physical line: a physical order must pass through `shipped`.
+A digital-only order has no shipment to have left, so an override into `shipped` is refused with the
+same 409 as any other illegal target; `delivered` stays reachable.
 
-An override into `shipped` or `delivered` also takes the order's units off the shelf
-(`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a normal
-shipment triggers. An override into `processing` moves no stock. A hold already `shipped` makes the
-second call silent.
+An override into `shipped` or `delivered` also takes whatever is left of the order's hold off the
+shelf (`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a
+normal shipment triggers for its own units. An override into `processing` moves no stock. A hold
+already `shipped` makes the second call silent.
+
+## The timeline
+
+What happened to an order, oldest first: `GET /orders/{id}/timeline`. One append-only collection,
+`orderevents`, owned by `orders` and typed as an `AppendOnlyLedger` (the stock-movement precedent).
+It is its own collection because the alternatives fail: an array on the order collides with the
+conditional status writes siblings make in their own transactions, the audit log expires at 90
+days, and rebuilding from the siblings would need reads `orders` may not make.
+
+```mermaid
+flowchart LR
+    subgraph orders
+        M[status moves<br/>created, paid, processing,<br/>shipped, delivered, cancelled,<br/>status_overridden]
+    end
+    subgraph siblings["modules that import orders"]
+        P[payments<br/>declines, refunds]
+        D[delivery<br/>shipments, holds, remainder]
+        R[returns<br/>request to close]
+        I[invoicing<br/>invoice, credit note]
+    end
+    M -- same transaction --> E[(orderevents)]
+    P -- appendTimeline with session --> E
+    D -- appendTimeline with session --> E
+    R -- appendTimeline with session --> E
+    I -- appendTimeline with session --> E
+    E --> S[staff: every row, actor, text]
+    E --> B[buyer: buyer-visible types, no actor]
+    E --> X[data export: every row]
+```
+
+**Two writers, one door.** `orders` writes its own moves inside the move's transaction (the
+`markPaid`, `markProcessing`, `markShipped`, `markDelivered` and `markFulfilmentComplete` doors take
+an `actor`). A module that depends on `orders` calls `orderService.appendTimeline(orderId, entry,
+session)` in its own transaction, so a row commits with the fact it describes or not at all, and a
+write that lost its race leaves no row. `orders` cannot listen to them: they import it.
+
+**Types and audience.** `domain/timeline.ts` decides, per type, whether the buyer may read it
+(Magento's `is_visible_on_front`, WooCommerce's `is_customer_note`); a private row is hidden whole,
+never stripped field by field. The set of types is the contract's `OrderTimelineType`, so a type
+added there without an audience row fails to compile.
+
+| Group     | Type                                                                                         | Buyer sees |
+| --------- | -------------------------------------------------------------------------------------------- | ---------- |
+| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`                         | yes        |
+| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                       | no         |
+| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                        | yes        |
+| Payment   | `refund_failed` (a failure code, never the provider's wording)                               | no         |
+| Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                              | yes        |
+| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
+| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |
+| Documents | `invoice_issued`, `credit_note_issued`                                                       | yes        |
+
+A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
+`declineReason`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
+outlive the original. The one free text `orders` owns is an override's reason (`text`).
+
+**GDPR.**
+
+- Rows live as long as the order, and go with it on a hard delete.
+- `text` has its own clock, `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`, counted from the row's own
+  instant and swept by `npm run reap:orders`. The order's clock starts only at erasure or
+  inactivity, so a live customer's text would otherwise never go. The row stays.
+- An erased account loses its name on every row it made (`actor` unset), staff or buyer.
+- The buyer's data export (`orderTimeline` section of `POST /account/export`) carries every row of
+  their own orders, staff text and actor included: the export is their data, the screen is a view.
+- The buyer's own screen never shows `actor`: who at the shop did something is the shop's business.
+
+Not built: `note_added` (no staff-note door exists), `email_sent`, and the preorder types
+(`release_date_moved`, `delay_notice_sent`, `wait_confirmed`, `wait_expired`), which arrive with the
+preorder lane as new rows in the table above.
+
+## The CSV export
+
+`GET /orders/export` answers the list's filters as one `text/csv` file, for reconciliation and the
+accountant. A staff-only door, and a sharp one: the file holds every matching customer's email.
+
+```mermaid
+flowchart LR
+    R[GET /orders/export] --> K{orders.any.export<br/>and a fresh session?}
+    K -- no --> X[403 / step-up challenge]
+    K -- yes --> L{within the<br/>per-account budget?}
+    L -- no --> T[429]
+    L -- yes --> C[count the matches]
+    C -- over NODE_ORDER_EXPORT_MAX_ROWS --> U[422 ORDER_EXPORT_TOO_LARGE<br/>before any byte]
+    C -- within --> A[audit row: filter and row count]
+    A --> S[cursor, in the list's order]
+    S --> W[csv-stringify, escape_formulas]
+    W --> P[response, private no-store]
+```
+
+| Question              | Answer                                                                                                                                                                                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who                   | `orders.any.export`: manager and admin, `stepUp: sensitive` (the same tier as exporting your own data). A support desk that can read every order cannot export them (Shopify's separate Export permission)                               |
+| API keys              | Cannot: the step-up needs a session, which a key never has (`requireFreshAuth` refuses without an `authContext`)                                                                                                                         |
+| Synchronous, streamed | No file on disk, no reaper, no mailed link: a file that exists can be forgotten and a link forwarded (Art. 5(1)(e)). The account export is a job because it walks every module, not because exports must be                              |
+| Route order           | Mounted before `/:id`, or `requireId` answers 404 for the word `export`                                                                                                                                                                  |
+| Columns               | The list's, in file order: `createdAt`, `orderNumber`, `status`, `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `lines`, `units`, `total`, `currency`, `paymentMethod`, `paidAt`. No address: both are encrypted at rest |
+| Email                 | Kept: support and reconciliation need it, and the guards above are what make that acceptable                                                                                                                                             |
+| Audit                 | `admin.orders.exported`, with the filter and the row count, never a row. An email filter is recorded only as "an email was given"                                                                                                        |
+| Limits                | Own per-account budget (`NODE_ORDER_EXPORT_RATE_LIMIT_MAX`, default 10 a window) and a row cap (`NODE_ORDER_EXPORT_MAX_ROWS`, default 20000)                                                                                             |
+| Headers               | `Cache-Control: private, no-store` (ASVS 14.3.2)                                                                                                                                                                                         |
+
+**CSV injection.** `zod.email()` accepts `+cmd@example.com`, so the email column can start a
+formula in a spreadsheet. The writer's `escape_formulas` prefixes any cell starting with `=`, `+`,
+`-` (except a number), `@`, tab or carriage return with `'`. It does not cover `\0` or the
+full-width `＝＋－＠` variants: that gap is known and not handled. See
+[injection](../theory/defences/injection.md).
+
+## Reads other modules compose
+
+- `orderService.findManyByIds(ids)` answers each order's number and email, nothing more (no lines,
+  no addresses). The staff payments list uses it to name its rows.
+- `orderService.findOwedRefunds(cutoff, limit)` lists orders cancelled after payment whose refund
+  is still owed: the payments page's needs-attention read.
+- `orderService.paidBuckets`, `productTotals`, `categoryTotals`, `productSeries`, `customerCounts`,
+  `cancellationCohort` and `pipeline` are the grouped reads [`stats`](./stats.md) composes: each
+  answers a few hundred rows at most, counts live orders only, and dates a sale by `paidAt`.
+- `GET /orders` and `POST /orders/search` filter by `createdFrom`/`createdTo` and `paidFrom`/`paidTo`
+  (inclusive instants; an unpaid order has no `paidAt`, so no paid bound matches it), by
+  `paymentStatus` and `returnStatus`, and sort by `paidAt`. The two statuses are derived on read,
+  so each filter value is mapped back to the stored fields behind it (`domain/projections.ts`); the
+  integration suite checks every value both ways. `paidAt` is on the wire: the buyer's own fact.
+  Scope stays the permission key: `orders.self.read` alone sees its own orders.
+- `GET /orders` sorts by `payBy` (index `{status, payBy}`), which is how the Awaiting-transfer tab
+  reads: `?paymentMethod=bank_transfer&status=pending&sort=payBy`.
 
 ## The invoice
 
 `orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine, and it names this
-order alone. The actual tax invoice — a frozen document, its own numbering series, credit notes on
+order alone. Its year is the shop calendar's (`NODE_SHOP_TIMEZONE`), the same cut the invoice series
+uses, so order `2026-x` never gets invoice `2027-y`. The actual tax invoice — a frozen document, its own numbering series, credit notes on
 refund — is [`invoicing`](./invoicing.md), a module this one has no import of and no wiring for:
 `invoicing` depends on `orders`, never the reverse, and reaches its own `GET /orders/{id}/invoice`
 and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath (the same pattern
@@ -290,15 +495,20 @@ owns is the clock and the button:
 ```mermaid
 flowchart LR
     paid["paid<br/><i>right exists, no end yet</i>"] --> shipped["shipped<br/><i>still no end</i>"]
-    shipped -- "markDelivered(deliveredAt)" --> goods["delivered<br/><i>withdrawUntil = end of day (deliveredAt + the period)</i>"]
-    paid -- "markFulfilled (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
+    shipped -- "markDelivered(the LAST arrival)" --> goods["delivered<br/><i>withdrawUntil = end of day (last delivery + the period)</i>"]
+    paid -- "markFulfilmentComplete (digital)" --> digital["delivered<br/><i>withdrawUntil = end of day (paidAt + the period)</i>"]
+    shipped -- "remainder cancelled after every arrival" --> late["delivered<br/><i>withdrawUntil = from the cancellation, the later date</i>"]
 ```
 
 - **`withdrawUntil` is frozen, never recomputed** — the same "freeze the fact at the moment it
   happens" rule `shippingCost` and `currency` follow, so a config change cannot move a promise
   already made. Goods count from delivery (Art. 9(2)(b)); digital content from the conclusion of the
-  contract (Art. 9(2)(c)), which is `paidAt` here. `delivery` reports the timestamp through
-  `markDelivered(orderId, deliveredAt)`; `orders` cannot read `delivery`'s own.
+  contract (Art. 9(2)(c)), which is `paidAt` here. An order that arrives in several shipments has ONE
+  window, from the last good (Art. 9(2)(b)(i), Commission Notice 2021/C 525/01 §5.1.2: "a single
+  withdrawal period should apply from the day after delivery of the last item"): `delivery` reports the
+  LAST arrival through `markDelivered(orderId, deliveredAt)`, and a remainder cancelled after every
+  shipment arrived counts from the later of the two, since the order only became complete then.
+  `orders` cannot read `delivery`'s own timestamps.
 - **The window ends with the last hour of its last day.** The day of the event is not counted and
   the last day of the period is counted whole (CRD recital 41 → Regulation 1182/71 Art. 3(1),
   3(2)(c)), in UTC.
@@ -399,28 +609,43 @@ when the shop offers a longer withdrawal period.
 
 ## Configuration
 
-| Variable                                                           | Default             | Meaning                                                                                                                                                                                          |
-| ------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                  |
-| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                |
-| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                              |
-| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                              |
-| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                            |
-| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                         |
-| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                              |
-| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                            |
-| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
-| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30   |
-| `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                          |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                               |
-| `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                       |
-| `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                           |
-| `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                             |
+| Variable                                                           | Default             | Meaning                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                                                     |
+| `NODE_SHOP_TIMEZONE`                                               | —                   | The shop's IANA time zone (`Europe/Rome`); a fixed offset is refused. Required. The year of order, invoice and credit-note numbers and a document's printed date follow it, so a sale at 00:30 on 1 January lands in the new series |
+| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                                                   |
+| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                                                                 |
+| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                                                                 |
+| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                                                               |
+| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                                                            |
+| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                                                                 |
+| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                                                               |
+| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone                                    |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30                                      |
+| `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                                                             |
+| `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                             | `1095`              | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                                                           |
+| `NODE_ORDER_EXPORT_MAX_ROWS`                                       | `20000`             | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                                                                |
+| `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`                                 | `10`                | Exports allowed per window, per ACCOUNT                                                                                                                                                                                             |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                                                                  |
+| `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                                                          |
+| `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                                                              |
+| `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                                                                |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`
 hands it at checkout. Every getter asks its slice (`config.ts`) per call, and the slice parses once per process, so a
 correction takes effect on restart.
+
+## Libraries
+
+`csv-stringify` is this module's alone, used by the [CSV export](#the-csv-export). See
+[Package Dependencies](../tools/package-dependencies.md) for where it sits among everything else.
+
+| Library                  | Maintained                            | What it costs you                                                                                      |
+| ------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `csv-stringify` (chosen) | active, typed, MIT, zero dependencies | A Transform stream (so the file is never whole in memory) with `escape_formulas` built in              |
+| a hand-rolled writer     | —                                     | quoting, delimiters and formula escaping are exactly the parsing `CLAUDE.md` rules out writing by hand |
+| a spreadsheet library    | varies                                | binary formats, a larger tree and no stream: the file would be built in memory                         |
 
 ## Related pages
 

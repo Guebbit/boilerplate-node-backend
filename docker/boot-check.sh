@@ -55,6 +55,7 @@ docker run -d --name "$app" --network "$network" \
     -e NODE_PSEUDONYM_KEY_FILE=/run/secrets/pseudonym \
     -e NODE_METRICS_TOKEN_FILE=/run/secrets/metrics \
     -e NODE_SHOP_COUNTRY=IT \
+    -e NODE_SHOP_TIMEZONE=Europe/Rome \
     -e NODE_SHOP_LEGAL_NAME="Boot Check S.r.l." \
     -e NODE_SHOP_STREET="Via Roma 1" \
     -e NODE_SHOP_CITY=Bologna \

@@ -69,7 +69,7 @@ export interface FrozenTaxDocument {
     orderId: Types.ObjectId;
     /** `{year}-{sequence}`, this series' own — see `services/numbering.ts`. */
     number: string;
-    /** The moment this document was issued — an order's `paidAt` for an invoice, a payment's refund moment for a credit note. */
+    /** The moment this document was issued: the listener's own clock, a moment after the payment or refund it records. */
     issuedAt: Date;
     /** ISO-4217, frozen from the ORDER's own `currency` — never re-read from config. */
     currency: string;
@@ -202,6 +202,9 @@ const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(frozenTaxDocumen
 // listener's own logic.
 invoiceSchema.index({ orderId: 1 }, { name: 'invoices_orderId', unique: true });
 
+// The money buckets of the stats read by `issuedAt`, a range scan.
+invoiceSchema.index({ issuedAt: 1 }, { name: 'invoices_issuedAt' });
+
 /** Mongoose model for issued invoices. */
 export const invoiceModel = model<InvoiceDocument, InvoiceModel>('Invoice', invoiceSchema);
 
@@ -223,6 +226,9 @@ creditNoteSchema.index({ refundId: 1 }, { name: 'creditNotes_refundId', unique: 
 
 // Backs the per-order list `GET /orders/{id}/credit-notes` reads.
 creditNoteSchema.index({ orderId: 1, issuedAt: 1 }, { name: 'creditNotes_orderId_issuedAt' });
+
+// Same range scan as `invoices_issuedAt`, over the reversals.
+creditNoteSchema.index({ issuedAt: 1 }, { name: 'creditNotes_issuedAt' });
 
 /** Mongoose model for issued credit notes. */
 export const creditNoteModel = model<CreditNoteDocument, CreditNoteModel>(

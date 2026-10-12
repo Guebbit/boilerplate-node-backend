@@ -30,7 +30,7 @@ import {
     type Wire
 } from '@infrastructure/persistence/create-repository';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
-import type { CounterDelta } from './domain';
+import type { CounterDelta, HoldKind } from './domain';
 import { StockMovementReason, type StockMovement } from '@types';
 
 /**
@@ -46,11 +46,13 @@ import { StockMovementReason, type StockMovement } from '@types';
  *
  * @param reason - the transition
  * @param quantity - how many units; signed only for `adjust`
+ * @param kind - what the units are; a preorder claim is released against `preordered`, not `reserved`
  * @returns the Mongo condition `applyDelta` must match for the transition to apply
  */
 const conditionFor = (
     reason: StockMovementReason,
-    quantity: number
+    quantity: number,
+    kind: HoldKind
 ): QueryFilter<StockLevelDocument> => {
     switch (reason) {
         case StockMovementReason.reserve: {
@@ -61,7 +63,25 @@ const conditionFor = (
         }
         case StockMovementReason.release:
         case StockMovementReason.expire: {
-            return { reserved: { $gte: quantity } };
+            return kind === 'preorder'
+                ? { preordered: { $gte: quantity } }
+                : { reserved: { $gte: quantity } };
+        }
+        // The cap is the real ceiling, checked in the write's own filter like every other guard.
+        // `$ifNull`: a level written before preorders existed has neither field.
+        case StockMovementReason.preorder: {
+            return {
+                $expr: {
+                    $lte: [
+                        { $add: [{ $ifNull: ['$preordered', 0] }, quantity] },
+                        { $ifNull: ['$preorderLimit', 0] }
+                    ]
+                }
+            };
+        }
+        // The arrived units must exist and the claim must be there to convert.
+        case StockMovementReason.allocate: {
+            return { preordered: { $gte: quantity }, available: { $gte: quantity } };
         }
         // `commit` moves nothing, so it guards nothing: it only has to leave its ledger row.
         case StockMovementReason.commit:
@@ -86,6 +106,21 @@ export interface StockLevelRow {
     onHand: number;
     reserved: number;
     available: number;
+    preorderLimit: number;
+    preordered: number;
+}
+
+/** One row of the preorder board — counters only; the title and date are `products`' to give. */
+export interface PreorderLevelRow {
+    productId: string;
+    preorderLimit: number;
+    preordered: number;
+    /** Lifetime units claimed, from the ledger's `preorder` rows. */
+    ordered: number;
+    /** Outstanding units on unpaid (`held`) holds. */
+    held: number;
+    /** Outstanding units on paid (`committed`) holds. */
+    paid: number;
 }
 
 /**
@@ -95,12 +130,73 @@ export interface StockLevelRow {
  * @returns the same lines with real `ObjectId`s
  */
 const toReservationItems = (
-    lines: readonly { productId: string; quantity: number }[]
-): { productId: Types.ObjectId; quantity: number }[] =>
-    lines.map(({ productId, quantity }) => ({
+    lines: readonly { productId: string; quantity: number; kind?: HoldKind }[]
+): { productId: Types.ObjectId; quantity: number; kind: HoldKind }[] =>
+    lines.map(({ productId, quantity, kind = 'stock' }) => ({
         productId: new Types.ObjectId(productId),
-        quantity
+        quantity,
+        kind
     }));
+
+/**
+ * Lifetime preorder units per product, from the ledger's `preorder` rows. Counts every claim, given
+ * back or not: this is "how many were ever ordered", where `preordered` is "how many are still owed".
+ *
+ * @param productIds - the products on the page
+ * @returns units by product id; absent for a product never preordered
+ */
+const orderedByProduct = (productIds: readonly Types.ObjectId[]): Promise<Map<string, number>> =>
+    stockMovementModel
+        .aggregate<{
+            _id: Types.ObjectId;
+            total: number;
+        }>([
+            { $match: { productId: { $in: productIds }, reason: StockMovementReason.preorder } },
+            { $group: { _id: '$productId', total: { $sum: '$preorderedDelta' } } }
+        ])
+        .then((rows) => new Map(rows.map((row) => [String(row._id), row.total])));
+
+/**
+ * Outstanding preorder units per product, split by whether the order behind them is paid: a `held`
+ * hold is unpaid, a `committed` one is paid and waiting for stock.
+ *
+ * @param productIds - the products on the page
+ * @returns the split by product id; absent for a product with nothing outstanding on a hold
+ */
+const outstandingByProduct = (
+    productIds: readonly Types.ObjectId[]
+): Promise<Map<string, { held: number; paid: number }>> =>
+    reservationModel
+        .aggregate<{
+            _id: { productId: Types.ObjectId; status: ReservationStatus };
+            quantity: number;
+        }>([
+            {
+                $match: {
+                    status: { $in: ['held', 'committed'] },
+                    'items.productId': { $in: productIds }
+                }
+            },
+            { $unwind: '$items' },
+            { $match: { 'items.kind': 'preorder', 'items.productId': { $in: productIds } } },
+            {
+                $group: {
+                    _id: { productId: '$items.productId', status: '$status' },
+                    quantity: { $sum: '$items.quantity' }
+                }
+            }
+        ])
+        .then((rows) => {
+            const split = new Map<string, { held: number; paid: number }>();
+            for (const { _id, quantity } of rows) {
+                const key = String(_id.productId);
+                const entry = split.get(key) ?? { held: 0, paid: 0 };
+                if (_id.status === 'held') entry.held += quantity;
+                else entry.paid += quantity;
+                split.set(key, entry);
+            }
+            return split;
+        });
 
 /**
  * The stock level — one row per product, this module's only source of truth for `onHand`/
@@ -121,8 +217,14 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         reason: StockMovementReason,
         quantity: number,
         delta: CounterDelta,
-        session?: ClientSession
+        session?: ClientSession,
+        kind?: HoldKind
     ) => Promise<boolean>;
+    setPreorderLimit: (productId: string, preorderLimit: number) => Promise<boolean>;
+    preorderBoard: (options: {
+        skip: number;
+        limit: number;
+    }) => Promise<{ items: PreorderLevelRow[]; totalItems: number }>;
     stockBoard: (options: {
         skip: number;
         limit: number;
@@ -151,7 +253,15 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         stockLevelModel
             .findOneAndUpdate(
                 { productId: toObjectId(productId) },
-                { $setOnInsert: { onHand: 0, reserved: 0, available: 0 } },
+                {
+                    $setOnInsert: {
+                        onHand: 0,
+                        reserved: 0,
+                        available: 0,
+                        preorderLimit: 0,
+                        preordered: 0
+                    }
+                },
                 { upsert: true, returnDocument: 'after', session }
             )
             .exec(),
@@ -168,7 +278,15 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         stockLevelModel
             .updateOne(
                 { productId: toObjectId(productId) },
-                { $setOnInsert: { onHand: 0, reserved: 0, available: 0 } },
+                {
+                    $setOnInsert: {
+                        onHand: 0,
+                        reserved: 0,
+                        available: 0,
+                        preorderLimit: 0,
+                        preordered: 0
+                    }
+                },
                 { upsert: true, session }
             )
             .exec()
@@ -218,8 +336,9 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
      * @param productId - the product whose counters move
      * @param reason - the transition; decides the guard via `conditionFor`
      * @param quantity - how many units the transition guards for; signed only for `adjust`
-     * @param delta - the pair `counterDeltaFor` computed for this transition
+     * @param delta - the columns `counterDeltaFor` computed for this transition
      * @param session - the caller's transaction, when the write belongs to one
+     * @param kind - what the units are; `stock` unless the claim is a preorder's
      * @returns whether the condition matched and the counters actually moved
      */
     applyDelta: (
@@ -227,15 +346,17 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
         reason: StockMovementReason,
         quantity: number,
         delta,
-        session?: ClientSession
+        session?: ClientSession,
+        kind: HoldKind = 'stock'
     ) =>
         stockLevelModel
             .updateOne(
-                { productId: toObjectId(productId), ...conditionFor(reason, quantity) },
+                { productId: toObjectId(productId), ...conditionFor(reason, quantity, kind) },
                 {
                     $inc: {
                         onHand: delta.onHandDelta,
                         reserved: delta.reservedDelta,
+                        preordered: delta.preorderedDelta,
                         available: delta.onHandDelta - delta.reservedDelta
                     }
                 },
@@ -276,10 +397,77 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 productId: String(row.productId),
                 onHand: row.onHand,
                 reserved: row.reserved,
-                available: row.available
+                available: row.available,
+                preorderLimit: row.preorderLimit,
+                preordered: row.preordered
             })),
             totalItems
         }));
+    },
+
+    /**
+     * Set the allowance. Not a movement — nothing on the shelf changes — so it is a plain `$set`
+     * with no ledger row; the admin door audits it. Creates the level when the product has none
+     * yet, so a limit can be set before the first receipt.
+     *
+     * @param productId - the product
+     * @param preorderLimit - the new allowance
+     * @returns whether a level was written
+     */
+    setPreorderLimit: (productId, preorderLimit) =>
+        stockLevelModel
+            .updateOne(
+                { productId: toObjectId(productId) },
+                {
+                    $set: { preorderLimit },
+                    $setOnInsert: { onHand: 0, reserved: 0, available: 0, preordered: 0 }
+                },
+                { upsert: true }
+            )
+            .exec()
+            .then(({ matchedCount, upsertedCount }) => matchedCount + upsertedCount > 0),
+
+    /**
+     * A page of the preorder board: every product with an allowance or something outstanding, the
+     * most outstanding first. THIS module's counters, the ledger's lifetime count and the holds' paid
+     * / unpaid split; the title and release date are `products`' to give.
+     *
+     * @param options - `skip`/`limit` for the page
+     * @returns the page (titleless) and the count of everything matching
+     */
+    preorderBoard: ({ skip, limit }) => {
+        const where: QueryFilter<StockLevelDocument> = {
+            $or: [{ preorderLimit: { $gt: 0 } }, { preordered: { $gt: 0 } }]
+        };
+
+        return Promise.all([
+            stockLevelModel
+                .find(where)
+                .sort({ preordered: -1, _id: 1 })
+                .skip(skip)
+                .limit(limit)
+                .lean<Lean<StockLevelDocument>[]>()
+                .exec(),
+            stockLevelModel.countDocuments(where)
+        ]).then(([rows, totalItems]) => {
+            const ids = rows.map((row) => row.productId);
+            return Promise.all([orderedByProduct(ids), outstandingByProduct(ids)]).then(
+                ([ordered, outstanding]) => ({
+                    items: rows.map((row) => {
+                        const id = String(row.productId);
+                        return {
+                            productId: id,
+                            preorderLimit: row.preorderLimit,
+                            preordered: row.preordered,
+                            ordered: ordered.get(id) ?? 0,
+                            held: outstanding.get(id)?.held ?? 0,
+                            paid: outstanding.get(id)?.paid ?? 0
+                        };
+                    }),
+                    totalItems
+                })
+            );
+        });
     },
 
     /**
@@ -335,7 +523,7 @@ export const stockMovementRepository: AppendOnlyLedger<StockMovementDocument, St
 export const reservationRepository: Repository<ReservationDocument, Wire<ReservationDocument>> & {
     insertHold: (
         orderId: string,
-        items: readonly { productId: string; quantity: number }[],
+        items: readonly { productId: string; quantity: number; kind?: HoldKind }[],
         expiresAt: Date
     ) => Promise<ReservationDocument | null>;
     findByOrderId: (orderId: string) => Promise<ReservationDocument | null>;
@@ -345,10 +533,24 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         to: ReservationStatus,
         session?: ClientSession
     ) => Promise<ReservationDocument | null>;
+    findOpenByOrderId: (
+        orderId: string,
+        session: ClientSession
+    ) => Promise<ReservationDocument | null>;
+    replaceItems: (
+        orderId: string,
+        items: readonly { productId: string; quantity: number; kind?: HoldKind }[],
+        endsAs: ReservationStatus | undefined,
+        session: ClientSession
+    ) => Promise<ReservationDocument | null>;
+    findPaidPreorderHolds: (
+        productId: string,
+        session: ClientSession
+    ) => Promise<ReservationDocument[]>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
     narrowToTaken: (
         orderId: string,
-        items: readonly { productId: string; quantity: number }[]
+        items: readonly { productId: string; quantity: number; kind?: HoldKind }[]
     ) => Promise<void>;
     extendExpiry: (orderId: string, expiresAt: Date) => Promise<ReservationDocument | null>;
 } = {
@@ -407,10 +609,71 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         reservationModel
             .findOneAndUpdate(
                 { orderId: toObjectId(orderId), status: from },
-                { $set: { status: to } },
+                // The payment's instant is the preorder queue key, stamped in the claim itself.
+                {
+                    $set: { status: to, ...(to === 'committed' ? { committedAt: new Date() } : {}) }
+                },
                 // Return the post-update doc — caller needs the items it just claimed.
                 { returnDocument: 'after', session }
             )
+            .exec(),
+
+    /**
+     * The hold, but only while it still sets units aside (`held` or `committed`) — the read a
+     * partial shipment or a remainder cancel starts from, inside its own transaction.
+     *
+     * @param orderId - the order
+     * @param session - the caller's transaction
+     * @returns the hold, or `null` when none is open
+     */
+    findOpenByOrderId: (orderId: string, session: ClientSession) =>
+        reservationModel
+            .findOne({ orderId: toObjectId(orderId), status: { $in: ['held', 'committed'] } })
+            .session(session)
+            .exec(),
+
+    /**
+     * Rewrite an open hold's items after some left it, optionally ending the hold in the same
+     * write. Conditional on the hold still being open, so a racing cancel that already released it
+     * matches nothing.
+     *
+     * @param orderId - the order
+     * @param items - what the hold still sets aside
+     * @param endsAs - the terminal status to write when nothing is left, else `undefined`
+     * @param session - the caller's transaction
+     * @returns the hold as it now stands, or `null` if it was no longer open
+     */
+    replaceItems: (orderId, items, endsAs, session) =>
+        reservationModel
+            .findOneAndUpdate(
+                { orderId: toObjectId(orderId), status: { $in: ['held', 'committed'] } },
+                {
+                    $set: {
+                        items: toReservationItems(items),
+                        ...(endsAs ? { status: endsAs } : {})
+                    }
+                },
+                { returnDocument: 'after', session }
+            )
+            .exec(),
+
+    /**
+     * The paid holds that still wait for stock of one product, oldest payment first — the queue a
+     * receipt allocates down. A `held` hold is unpaid and is not in it: its units free themselves
+     * when the window closes.
+     *
+     * @param productId - the product whose stock arrived
+     * @param session - the receipt's transaction, so the read sees what it has already allocated
+     * @returns the holds in queue order, ties broken by id so the order is stable
+     */
+    findPaidPreorderHolds: (productId, session) =>
+        reservationModel
+            .find({
+                status: 'committed',
+                items: { $elemMatch: { productId: toObjectId(productId), kind: 'preorder' } }
+            })
+            .sort({ committedAt: 1, _id: 1 })
+            .session(session)
             .exec(),
 
     /**
@@ -438,7 +701,10 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
      * @param orderId - the order whose hold is being narrowed
      * @param items - the lines actually taken before the failure
      */
-    narrowToTaken: (orderId: string, items: readonly { productId: string; quantity: number }[]) =>
+    narrowToTaken: (
+        orderId: string,
+        items: readonly { productId: string; quantity: number; kind?: HoldKind }[]
+    ) =>
         reservationModel
             .updateOne(
                 { orderId: toObjectId(orderId), status: 'held' },

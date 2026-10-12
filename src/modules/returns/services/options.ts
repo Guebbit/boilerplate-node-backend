@@ -1,0 +1,108 @@
+/**
+ * @module
+ * What an order can still send back, and what it can still cancel — computed here, once, so no
+ * client re-derives a quantity or a refund. `returnable` is what has SHIPPED and is not already
+ * coming back; `cancellable` is each fulfillment order with a remainder and the exact refund
+ * cancelling it would owe, delivery included when it takes the last unit.
+ *
+ * See: docs/modules/returns.md#the-options-read
+ */
+
+import { t } from '@infrastructure/i18n';
+import {
+    generateReject,
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
+import { callerForSubject } from '@kernel/permissions';
+import { holdsKey } from '@kernel/ability';
+import { remainderOptions, shippedQuantities } from '@modules/delivery';
+import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
+import type { OrderDocument } from '@modules/orders';
+import type { AuthContext, ReturnOptions } from '@types';
+import { returnRepository } from '../repository';
+import { holdsReturnedGoods, returnableQuantities, wireLines } from '../domain';
+import type { ProductQuantity } from '../domain';
+import { cancellationRefundOn } from './cancellation-refund';
+import { ownOrder } from './ownership';
+
+/**
+ * The order a caller may ask about: staff holding `returns.any.read` see any; anyone else only
+ * their own.
+ * @param orderId - the order
+ * @param authContext - the caller
+ */
+const readableOrder = (
+    orderId: string,
+    authContext: AuthContext
+): Promise<OrderDocument | undefined> =>
+    holdsKey(callerForSubject(authContext, 'Return'), 'returns.any.read')
+        ? orderService.getById(orderId)
+        : ownOrder(orderId, authContext);
+
+/**
+ * Quantities as option lines, with the title the order froze for each product.
+ * @param order - the order
+ * @param quantities - product id → units
+ */
+const optionLines = (order: OrderDocument, quantities: ReadonlyMap<string, number>) => {
+    const titles = new Map(
+        order.items.map((item) => [String(item.product._id), item.product.title])
+    );
+    return [...quantities]
+        .filter(([, quantity]) => quantity > 0)
+        .map(([productId, quantity]) => ({
+            productId,
+            title: titles.get(productId) ?? '',
+            quantity
+        }));
+};
+
+/**
+ * What one order can still return and cancel.
+ *
+ * @param orderId - the order
+ * @param authContext - the caller: the buyer, or staff reading returns
+ * @returns the options, or a 404 for an order the caller may not read
+ */
+export const getReturnOptions = (
+    orderId: string,
+    authContext: AuthContext
+): Promise<ResponseSuccess<ReturnOptions> | ResponseReject> =>
+    readableOrder(orderId, authContext).then((order) => {
+        if (!order) return generateReject(404, [t('returns.order-not-found')]);
+
+        return Promise.all([
+            returnRepository.findByOrderId(orderId),
+            shippedQuantities(orderId),
+            remainderOptions(orderId, order.fulfillment?.shipped === true)
+        ]).then(([returns, shipped, remainders]) => {
+            // Excluded goods (Art. 16) never come back, so they are not offered.
+            const excluded = new Set(
+                order.items
+                    .filter((item) => isExcludedFromWithdrawal(item))
+                    .map((item) => String(item.product._id))
+            );
+            const returnable = shipped.filter(({ productId }) => !excluded.has(productId));
+            const back: ProductQuantity[] = returns
+                .filter(holdsReturnedGoods)
+                .flatMap(({ lines }) => wireLines(lines));
+
+            return generateSuccess({
+                orderId,
+                currency: order.currency,
+                returnable: optionLines(order, returnableQuantities(returnable, back)),
+                cancellable: remainders.map((remainder) => {
+                    const refund = cancellationRefundOn(order, returns, remainder.lines);
+                    return {
+                        fulfillmentOrderId: remainder.fulfillmentOrderId,
+                        number: remainder.number,
+                        lines: remainder.lines,
+                        refundAmount: refund.total,
+                        shippingRefund: refund.shipping
+                    };
+                })
+            });
+        });
+    });

@@ -9,7 +9,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { invalidateCacheTagsLogged } from '@infrastructure/adapters/cache';
 import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
-import { counterDeltaFor } from '../domain';
+import { counterDeltaFor, type HoldKind } from '../domain';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
 
 /**
@@ -53,7 +53,8 @@ export const syncStockCache = async (productId: string): Promise<void> => {
  * @param reason - the transition; decides the guard, the write and the deltas recorded
  * @param productId - the product whose counters move
  * @param quantity - how many units; signed only for `adjust`
- * @param context - what to record on the row beyond the deltas
+ * @param context - what to record on the row beyond the deltas; `kind` is not recorded, it only
+ *   decides which counter a `release`/`expire` gives back (`preordered` for a preorder claim)
  * @param session - the caller's transaction. Given one, every read and write joins it, and the
  *   catalogue's stock cache is NOT synced here: that write leaves this module and cannot roll
  *   back, so the caller runs {@link refreshStockCacheForOrder} once its transaction commits
@@ -63,17 +64,20 @@ export const applyTransition = async (
     reason: StockMovementReason,
     productId: string,
     quantity: number,
-    context: { reference?: string; note?: string } = {},
+    context: { reference?: string; note?: string; kind?: HoldKind } = {},
     session?: ClientSession
 ): Promise<boolean> => {
+    const { kind = 'stock', ...recorded } = context;
     // Only read the product back when this product has no level row yet — the common case (every
     // transition after the first) skips it entirely.
     if (!(await stockLevelRepository.findByProductId(productId, session))) {
         /*
          * A `reserve` against no row has nothing to set aside: a level that never existed reads as
          * nothing available (see `reserve.ts`), so the hold is refused, never reported as taken.
+         * A `preorder` against no row has no allowance to claim, for the same reason.
          */
-        if (reason === StockMovementReason.reserve) return false;
+        if (reason === StockMovementReason.reserve || reason === StockMovementReason.preorder)
+            return false;
 
         /*
          * `release`/`expire`/`commit` read "no row" as "nothing to move", not a failure: a
@@ -90,13 +94,14 @@ export const applyTransition = async (
 
         await stockLevelRepository.ensure(productId, session);
     }
-    const delta = counterDeltaFor(reason, quantity);
+    const delta = counterDeltaFor(reason, quantity, kind);
     const moved = await stockLevelRepository.applyDelta(
         productId,
         reason,
         quantity,
         delta,
-        session
+        session,
+        kind
     );
     if (!moved) return false;
 
@@ -105,7 +110,7 @@ export const applyTransition = async (
             productId: new Types.ObjectId(productId),
             reason,
             ...delta,
-            ...context
+            ...recorded
         },
         session
     );
@@ -130,13 +135,27 @@ export const applyTransition = async (
  */
 export const applyToEveryLine = async (
     reason: StockMovementReason,
-    lines: readonly { productId: Types.ObjectId | string; quantity: number }[],
+    lines: readonly { productId: Types.ObjectId | string; quantity: number; kind?: HoldKind }[],
     context: { reference: string; note?: string },
     session?: ClientSession
 ): Promise<void> => {
-    for (const { productId, quantity } of lines) {
+    for (const { productId, quantity, kind } of lines) {
         const id = String(productId);
-        if (!(await applyTransition(reason, id, quantity, context, session)))
+        // Units that do not exist yet cannot leave the shelf: refusing here rolls the caller's
+        // transaction back instead of taking real units for an allowance.
+        if (reason === StockMovementReason.ship && kind === 'preorder')
+            throw new Error(
+                `Inventory: cannot ship ${quantity} of product ${id} for order ${context.reference} — they are still a preorder claim`
+            );
+        if (
+            !(await applyTransition(
+                reason,
+                id,
+                quantity,
+                { ...context, ...(kind ? { kind } : {}) },
+                session
+            ))
+        )
             throw new Error(
                 `Inventory: could not ${reason} ${quantity} of product ${id} for ${context.note ?? `order ${context.reference}`} — the counters refused`
             );

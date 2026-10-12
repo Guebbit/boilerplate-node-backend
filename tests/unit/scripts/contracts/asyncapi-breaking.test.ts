@@ -30,4 +30,21 @@ describe('breakingChanges', () => {
 
         expect(changes.map(({ path }) => path)).toEqual(['/channels/order.created']);
     });
+
+    it('leaves out a break the maintainers acknowledged, and only that exact pointer', () => {
+        const removed = document('0.1.0', { 'order.created': {}, 'order.paid': {} });
+        const acknowledged = [{ path: '/channels/order.created', reason: 'replaced' }];
+
+        const changes = breakingChanges(removed, document('0.1.0', {}), acknowledged);
+
+        expect(changes.map(({ path }) => path)).toEqual(['/channels/order.paid']);
+    });
+
+    it('acknowledges the order.shipped channel the shipment events replaced', () => {
+        const before = document('0.1.0', { 'order.shipped': {} });
+
+        const changes = breakingChanges(before, document('0.1.0', {}));
+
+        expect(changes).toEqual([]);
+    });
 });

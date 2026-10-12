@@ -47,3 +47,32 @@ export const onCartMergeRefused = ({
             params: { lines }
         }
     ]);
+
+/**
+ * A waiting preorder's buyer was told its date moved or passed: the same message in their inbox, so
+ * it is still there when the email is not. One code for a notice that only informs, another for one
+ * that needs an answer, so the screen can put Keep waiting beside the second. An erased account has no
+ * inbox to write to, and nothing here invents one.
+ */
+export const onFulfillmentOrderDelayed = (
+    delayed: DomainEventMap['fulfillment_order.delayed']
+): Promise<void> =>
+    delayed.userId === undefined
+        ? Promise.resolve()
+        : notificationsCreate([
+              {
+                  userId: new Types.ObjectId(delayed.userId),
+                  code: delayed.needsAnswer
+                      ? 'notifications.preorder-confirm-wait'
+                      : 'notifications.preorder-delayed',
+                  severity: 'warning',
+                  params: {
+                      orderId: delayed.orderId,
+                      fulfillmentOrderId: delayed.fulfillmentOrderId,
+                      titles: delayed.titles,
+                      agreedAt: delayed.agreedAt,
+                      ...(delayed.expectedAt ? { expectedAt: delayed.expectedAt } : {}),
+                      ...(delayed.answerBy ? { answerBy: delayed.answerBy } : {})
+                  }
+              }
+          ]);

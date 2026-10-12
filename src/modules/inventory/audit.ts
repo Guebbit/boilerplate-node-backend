@@ -1,7 +1,7 @@
 /**
  * @module
  * Audit actions this module emits, declared by augmentation rather than a shared enum — see
- * `modules/account/audit.ts` for why. Four: the lifecycle transitions (reserve, commit, release,
+ * `modules/account/audit.ts` for why. Five: the lifecycle transitions (reserve, commit, release,
  * expire) are consequences of a checkout, payment or cancellation, each of which already audits
  * itself and leaves a ledger row naming the order — except the one case where `commitForOrder`
  * finds no hold to claim. That is not a lifecycle event with an owner elsewhere; it is this
@@ -16,7 +16,8 @@ export const inventoryAuditActions = {
     ADMIN_STOCK_RECEIVED: 'admin.stock.received',
     ADMIN_STOCK_ADJUSTED: 'admin.stock.adjusted',
     ADMIN_RESERVATIONS_SWEPT: 'admin.reservations.swept',
-    ADMIN_COMMIT_ORPHANED: 'admin.commit.orphaned'
+    ADMIN_COMMIT_ORPHANED: 'admin.commit.orphaned',
+    ADMIN_PREORDER_LIMIT_SET: 'admin.preorder.limit.set'
 } as const;
 
 /** Registers this module's actions into the app-wide `AuditActionMap` union. */

@@ -169,6 +169,7 @@ COPY --from=build /app/scripts/db/index-sync.ts \
     /app/scripts/db/sync-indexes.ts /app/scripts/db/cache-clear.ts \
     /app/scripts/db/bootstrap-access.ts ./scripts/db/
 COPY --from=build /app/scripts/ops/reap-account-exports.ts \
+    /app/scripts/ops/reap-delivery.ts \
     /app/scripts/ops/reap-expired-tokens.ts \
     /app/scripts/ops/reap-inactive-accounts.ts \
     /app/scripts/ops/reap-invoice-pdfs.ts \
@@ -181,6 +182,7 @@ COPY --from=build /app/scripts/ops/reap-account-exports.ts \
     /app/scripts/ops/sweep-order-effects.ts \
     /app/scripts/ops/sweep-outbox.ts \
     /app/scripts/ops/sweep-payment-effects.ts \
+    /app/scripts/ops/sweep-preorders.ts \
     /app/scripts/ops/sweep-reservations.ts \
     /app/scripts/ops/sweep-webhook-retries.ts ./scripts/ops/
 COPY --from=build /app/public ./public

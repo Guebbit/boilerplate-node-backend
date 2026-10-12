@@ -73,6 +73,7 @@ reads `insufficient_stock`.
 | `availability` | The line shows            | Move to cart                                      |
 | -------------- | ------------------------- | ------------------------------------------------- |
 | `in_stock`     | normal                    | ok                                                |
+| `preorder`     | "Preorder, ships from"    | ok                                                |
 | `out_of_stock` | "Sold out"                | ok, as `POST /cart` accepts a sold-out product    |
 | `unavailable`  | "Not available right now" | ok, an off-sale product moves like a sold-out one |
 | `removed`      | "No longer available"     | refused: a hidden product is a 404                |

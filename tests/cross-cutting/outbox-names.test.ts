@@ -163,7 +163,8 @@ it('publishes the set the pair agreed on', () => {
      * `orders.order-refunded` (money back outside a return) — new here, appended to the message
      * for the twin's session. So are `account.export-ready` (the link to a finished data export) and
      * `account.export-failed` (its failure notice): the twin's export is still one synchronous
-     * answer. The other eight are the agreed, mirrored set.
+     * answer. So is `delivery.shipment-delivered`, the notice that a shipment arrived: an order ships in
+     * parts on this backend first. The other eight are the agreed, mirrored set.
      */
     const agreedByPair = [
         'account.delete-confirm',
@@ -182,6 +183,8 @@ it('publishes the set the pair agreed on', () => {
         'account.verify-request',
         'api-keys.minted',
         'api-keys.revoked',
+        'delivery.preorder-delayed',
+        'delivery.shipment-delivered',
         'delivery.shipment-shipped',
         'example.published',
         'feedback.contact',

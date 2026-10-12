@@ -96,16 +96,18 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run reap:quarantine`        | 02:00 nightly  | No     | Deletes quarantined upload files past their retention window.                                                                                                                   |
 | `npm run reap:orphaned-images`   | 02:03 nightly  | No     | Deletes a stored image or thumbnail no document names, once it is over an hour old.                                                                                             |
 | `npm run reap:inactive-accounts` | 02:05 nightly  | Yes    | Minimises an account inactive past `NODE_INACTIVE_MINIMISE_DAYS`; with deletion turned on, warns, then soft-, then hard-deletes one inactive past `NODE_INACTIVE_ACCOUNT_DAYS`. |
-| `npm run reap:expired-tokens`    | 02:07 nightly  | Yes    | Drops expired and long-superseded tokens from every account (a login and a refresh prune only their own).                                                                       |
+| `npm run reap:expired-tokens`    | 02:07 nightly  | Yes    | Drops expired and long-superseded tokens from every account (a login and a refresh prune only their own), and the previous email of an account whose undo link has lapsed.      |
 | `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                       |
 | `npm run reap:account-exports`   | 02:09 nightly  | No     | Deletes built data exports (file and row) past `NODE_ACCOUNT_EXPORT_TTL_DAYS`; the account can ask again.                                                                       |
-| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                                                                                       |
+| `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.                                       |
+| `npm run reap:delivery`          | 02:11 nightly  | No     | Unsets a fulfillment order's hold note once it has not changed for its retention window.                                                                                        |
 | `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                                 |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                                 |
+| `npm run sweep:preorders`        | 02:20 nightly  | Yes    | Asks the buyer of a late preorder whether to keep waiting, and announces a wait left unanswered for 30 days, which `returns` cancels and refunds.                               |
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                                |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                           |
 | `npm run sweep:outbox`           | every minute   | No     | Publishes every due [outbox](../tools/outbox.md) event — the backstop for the writer's own after-commit nudge.                                                                  |
-| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing.                                                                                                |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing, and settles unsettled payments whose webhook never arrived.                                    |
 | `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                            |
 | `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.                                                                       |
 
@@ -210,6 +212,12 @@ See the script's own header for the stages.
 arrive never closes. Safe to repeat: the filter only matches returns still holding text, and the
 wipe does not move `updatedAt`. Why three years: [Data Retention](../theory/data-retention.md#free-text-on-returns).
 
+`delivery` has no TTL either: a fulfillment order is the record of what was promised and what left.
+`npm run reap:delivery` unsets only staff's hold note (`holdNote`) once the fulfillment order's `updatedAt`
+is older than `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), on the same terms as `reap:returns`: the filter
+only matches one still holding a note, and the wipe does not move `updatedAt`. Why a year:
+[Data Retention](../theory/data-retention.md#free-text-on-holds).
+
 `npm run sweep:order-effects` is a different kind of periodic job: not retention, but the retry
 behind a cancel's consequences. A cancel announces `ORDER_REFUND_OWED` — a separate event from the
 customer-facing `ORDER_CANCELLED`, so retrying the refund never re-delivers that webhook — and
@@ -250,6 +258,11 @@ the order can still use it — safe, since claiming a hold is exactly-once — o
 on before settlement's own `orderLost` branch could react, marks the refund owed instead, for
 `sweep:order-effects` above to pick up. Runs every 5 minutes, comfortably inside the 15-minute
 reservation hold. See [payments](../modules/payments.md#pending-effects).
+
+The same job reconciles lost webhooks: an unsettled payment untouched for
+`NODE_PAYMENT_RECONCILE_MINUTES` (default 15) is asked about at the provider and settled through the
+same function the webhook uses, so a payment the webhook did deliver is left alone. See
+[payments](../modules/payments.md#lost-webhooks).
 
 Log lines are Loki's retention, not Mongo's: `docker/observability/loki.config.yaml` sets
 `retention_period: 168h` (7 days) for the local stack. A production deployment tunes this

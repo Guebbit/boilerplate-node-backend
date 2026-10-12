@@ -60,6 +60,7 @@ flowchart TD
     payments
     products
     returns
+    stats
     users
     webhooks
     wishlist
@@ -76,13 +77,16 @@ flowchart TD
     cart --> payments
     cart --> products
     cart --> users
+    delivery --> inventory
     delivery --> orders
+    delivery --> products
     example --> access
     example --> users
     inventory --> products
     invoicing --> orders
     invoicing --> payments
     notifications --> cart
+    notifications --> delivery
     notifications --> wishlist
     observability --> audit_logs
     orders --> access
@@ -91,11 +95,14 @@ flowchart TD
     orders --> users
     payments --> inventory
     payments --> orders
-    payments --> users
     returns --> delivery
     returns --> inventory
     returns --> orders
     returns --> payments
+    stats --> invoicing
+    stats --> orders
+    stats --> payments
+    stats --> returns
     users --> access
     webhooks --> users
     wishlist --> cart
@@ -106,36 +113,37 @@ flowchart TD
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef isolated fill:#f4f4f5,stroke:#a1a1aa,color:#52525b,stroke-dasharray:4 3;
     class cart,orders,products core;
-    class addresses,delivery,inventory,invoicing,notifications,payments,returns,wishlist supporting;
+    class addresses,delivery,inventory,invoicing,notifications,payments,returns,stats,wishlist supporting;
     class access,account,api_keys,audit_logs,example,observability,users,webhooks generic;
     class analytics,antibot,feedback,locales isolated;
 ```
 
-|                 | Reaches                                                           | Reached by                                                   |
-| --------------- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
-| `cart`          | addresses, delivery, inventory, orders, payments, products, users | notifications, wishlist                                      |
-| `orders`        | access, inventory, products, users                                | cart, delivery, invoicing, payments, returns                 |
-| `users`         | access                                                            | account, api-keys, cart, example, orders, payments, webhooks |
-| `payments`      | inventory, orders, users                                          | cart, invoicing, returns                                     |
-| `access`        | —                                                                 | account, api-keys, example, orders, users                    |
-| `inventory`     | products                                                          | cart, orders, payments, returns                              |
-| `products`      | —                                                                 | cart, inventory, orders, wishlist                            |
-| `returns`       | delivery, inventory, orders, payments                             | —                                                            |
-| `account`       | access, users                                                     | api-keys                                                     |
-| `api-keys`      | access, account, users                                            | —                                                            |
-| `delivery`      | orders                                                            | cart, returns                                                |
-| `wishlist`      | cart, products                                                    | notifications                                                |
-| `example`       | access, users                                                     | —                                                            |
-| `invoicing`     | orders, payments                                                  | —                                                            |
-| `notifications` | cart, wishlist                                                    | —                                                            |
-| `addresses`     | —                                                                 | cart                                                         |
-| `audit-logs`    | —                                                                 | observability                                                |
-| `observability` | audit-logs                                                        | —                                                            |
-| `webhooks`      | users                                                             | —                                                            |
-| `analytics`     | —                                                                 | —                                                            |
-| `antibot`       | —                                                                 | —                                                            |
-| `feedback`      | —                                                                 | —                                                            |
-| `locales`       | —                                                                 | —                                                            |
+|                 | Reaches                                                           | Reached by                                          |
+| --------------- | ----------------------------------------------------------------- | --------------------------------------------------- |
+| `orders`        | access, inventory, products, users                                | cart, delivery, invoicing, payments, returns, stats |
+| `cart`          | addresses, delivery, inventory, orders, payments, products, users | notifications, wishlist                             |
+| `users`         | access                                                            | account, api-keys, cart, example, orders, webhooks  |
+| `delivery`      | inventory, orders, products                                       | cart, notifications, returns                        |
+| `inventory`     | products                                                          | cart, delivery, orders, payments, returns           |
+| `payments`      | inventory, orders                                                 | cart, invoicing, returns, stats                     |
+| `access`        | —                                                                 | account, api-keys, example, orders, users           |
+| `products`      | —                                                                 | cart, delivery, inventory, orders, wishlist         |
+| `returns`       | delivery, inventory, orders, payments                             | stats                                               |
+| `stats`         | invoicing, orders, payments, returns                              | —                                                   |
+| `account`       | access, users                                                     | api-keys                                            |
+| `api-keys`      | access, account, users                                            | —                                                   |
+| `invoicing`     | orders, payments                                                  | stats                                               |
+| `notifications` | cart, delivery, wishlist                                          | —                                                   |
+| `wishlist`      | cart, products                                                    | notifications                                       |
+| `example`       | access, users                                                     | —                                                   |
+| `addresses`     | —                                                                 | cart                                                |
+| `audit-logs`    | —                                                                 | observability                                       |
+| `observability` | audit-logs                                                        | —                                                   |
+| `webhooks`      | users                                                             | —                                                   |
+| `analytics`     | —                                                                 | —                                                   |
+| `antibot`       | —                                                                 | —                                                   |
+| `feedback`      | —                                                                 | —                                                   |
+| `locales`       | —                                                                 | —                                                   |
 
 <!-- module-graph:end -->
 
@@ -208,7 +216,7 @@ Ships with every deployment, whatever the project becomes.
 The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.
 
 - [`cart`](./cart.md) — One document per user, and checkout, the transaction the whole shop turns on. Deeper: [Checkout](./cart-checkout.md).
-- [`delivery`](./delivery.md) — Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival.
+- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order, and what a late preorder owes its buyer.
 - [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
 - [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
 - [`notifications`](./notifications.md) — A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.
@@ -216,6 +224,7 @@ The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in 
 - [`payments`](./payments.md) — An order's money, behind a provider port. Deeper: [The provider port](./payments-provider-port.md).
 - [`products`](./products.md) — The catalogue, its search surface and its cache.
 - [`returns`](./returns.md) — Sending goods back, including the EU withdrawal button.
+- [`stats`](./stats.md) — Sales numbers, read on demand from the modules that own them.
 - [`wishlist`](./wishlist.md) — Saved products, one list per user. The smallest shop domain.
 
 ### Example

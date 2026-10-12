@@ -6,17 +6,32 @@
  * because Mongoose's generics are too large for TypeScript to infer at an export boundary (TS7056).
  */
 
-import type { ClientSession } from 'mongoose';
+import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
+import { decimalSum, type ReportWindow } from '@infrastructure/persistence/report';
+import type { RefundFailureReason, RefundReason, RefundStatus } from '@types';
 import type { PaymentDocument, RefundRecord } from './model';
-import { CONFIRMABLE_PAYMENT_STATUSES, OPEN_REFUND_STATUSES } from './domain';
+import {
+    CONFIRMABLE_PAYMENT_STATUSES,
+    OPEN_REFUND_STATUSES,
+    SETTLEABLE_PAYMENT_STATUSES
+} from './domain';
 import {
     createRepository,
     toObjectId,
+    withScope,
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
+import {
+    buildPaginatedMeta,
+    DEFAULT_SORT,
+    normalizePagination,
+    SORT_COLLATION,
+    sortOf,
+    type PaginatedMeta
+} from '@infrastructure/persistence/search';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 
@@ -25,6 +40,80 @@ import { setAndUnset } from '@infrastructure/persistence/changes';
  * never part of the wire contract — so the search wire type drops both too.
  */
 export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef' | 'pendingEffects'>;
+
+/** What the staff list may order by: wire field → column. */
+const PAYMENT_SORTABLE = { createdAt: 'createdAt', amount: 'amount' };
+
+/**
+ * What the staff list filters by, declared once. `displayStatus` is not here: it is a label, not a
+ * field, so {@link searchStaff} adds its query itself.
+ */
+const PAYMENT_SEARCHABLE = {
+    objectIds: { orderId: 'orderId' },
+    exact: { method: 'method', provider: 'provider', reference: 'reference' },
+    ranges: { amount: { min: 'amountMin', max: 'amountMax' } },
+    dateRanges: {
+        createdAt: { min: 'createdFrom', max: 'createdTo' },
+        receivedAt: { min: 'receivedFrom', max: 'receivedTo' }
+    },
+    sortable: PAYMENT_SORTABLE
+};
+
+/** The payments mix, one row per method, provider and currency; `amount` is a decimal sum. */
+export interface MixSums {
+    _id: { method: PaymentMethod; provider: string; currency: string };
+    payments: number;
+    amount: unknown;
+}
+
+/** One refund with the ids of the payment it sits on, as `$unwind` hands it back. */
+export interface RefundRow {
+    paymentId: Types.ObjectId;
+    orderId: Types.ObjectId;
+    provider: string;
+    refund: RefundRecord;
+}
+
+/** What {@link paymentRepository.searchRefunds} filters by. */
+export interface RefundFilters {
+    status?: RefundStatus;
+    reason?: RefundReason;
+    orderId?: string;
+    createdFrom?: Date;
+    createdTo?: Date;
+    page?: number;
+    pageSize?: number;
+}
+
+/**
+ * The `$match` over an unwound refund for the Refunds tab.
+ * @param filters - what the caller asked for
+ * @returns conditions on `refunds.*`, empty when nothing was asked
+ */
+const refundMatch = (filters: RefundFilters): Record<string, unknown> => ({
+    ...(filters.status ? { 'refunds.status': filters.status } : {}),
+    ...(filters.reason ? { 'refunds.reason': filters.reason } : {}),
+    ...(filters.createdFrom || filters.createdTo
+        ? {
+              'refunds.createdAt': {
+                  ...(filters.createdFrom ? { $gte: filters.createdFrom } : {}),
+                  ...(filters.createdTo ? { $lte: filters.createdTo } : {})
+              }
+          }
+        : {})
+});
+
+/**
+ * Aggregation over the Payment collection.
+ * @param pipeline - the stages
+ */
+const aggregatePayments = <T>(pipeline: PipelineStage[]): Promise<T[]> =>
+    paymentModel.aggregate<T>(pipeline).exec();
+
+/** The shape every refund read projects out of the `$unwind`. */
+const REFUND_ROW_PROJECTION: PipelineStage = {
+    $project: { _id: 0, paymentId: '$_id', orderId: 1, provider: 1, refund: '$refunds' }
+};
 
 /** What an upsert answers: the row, and whether this call inserted it rather than refreshing one. */
 export interface UpsertedPayment {
@@ -77,6 +166,12 @@ const upsertConfirmable = (
             throw error;
         });
 
+/** The factory's CRUD, kept by name so the bespoke reads below can use `buildWhere`/`count`/`findAll`. */
+const base = createRepository<PaymentDocument, PaymentWire>(paymentModel, {
+    transform: applyPaymentTransform,
+    searchable: PAYMENT_SEARCHABLE
+});
+
 /** Payment CRUD, ownership scoping, and the intent/status writes the service depends on. */
 export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     ownerScope: (userId: string) => Record<string, unknown>;
@@ -125,7 +220,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         refund: Pick<
             RefundRecord,
             '_id' | 'amount' | 'currency' | 'reason' | 'idempotencyKey' | 'status'
-        >
+        >,
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     settleRefund: (
         paymentId: string,
@@ -136,13 +232,26 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     failRefund: (
         paymentId: string,
         refundId: string,
-        lastError: string
+        failureReason: RefundFailureReason,
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
+    searchStaff: (
+        filters: object,
+        label: Record<string, unknown> | undefined,
+        scope: Record<string, unknown>
+    ) => Promise<{ items: PaymentDocument[]; meta: PaginatedMeta }>;
+    searchRefunds: (filters: RefundFilters) => Promise<{ items: RefundRow[]; meta: PaginatedMeta }>;
+    sumMix: (window: ReportWindow) => Promise<MixSums[]>;
+    findOpenRefundRows: (options: {
+        manual: boolean;
+        openBefore?: Date;
+        limit: number;
+    }) => Promise<RefundRow[]>;
+    findPendingEffectsSince: (cutoff: Date, limit: number) => Promise<PaymentDocument[]>;
     findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
+    findStaleInFlight: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
 } = {
-    ...createRepository<PaymentDocument, PaymentWire>(paymentModel, {
-        transform: applyPaymentTransform
-    }),
+    ...base,
 
     /**
      * Restrict a query to one user's own payments — spread into a filter; admins pass nothing.
@@ -357,9 +466,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param expectedRefunded - `amountRefunded` as the caller read it
      * @param newRefunded - `amountRefunded` once this refund is counted
      * @param refund - the record to append
+     * @param session - the caller's transaction, when the timeline row must commit with it
      * @returns the payment as it now stands, or `null` if the guard no longer held
      */
-    addRefund: (paymentId, expectedRefunded, newRefunded, refund) =>
+    addRefund: (paymentId, expectedRefunded, newRefunded, refund, session) =>
         paymentModel
             .findOneAndUpdate(
                 {
@@ -368,7 +478,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     amountRefunded: expectedRefunded
                 },
                 { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 
@@ -405,7 +515,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                             : { 'refunds.$.providerRefundRef': fields.providerRefundRef }),
                         ...(fields.refundedByHand ? { refundedByHand: true } : {})
                     },
-                    $unset: { 'refunds.$.lastError': 1 }
+                    $unset: { 'refunds.$.failureReason': 1 }
                 },
                 { returnDocument: 'after', ...(session ? { session } : {}) }
             )
@@ -417,10 +527,11 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      *
      * @param paymentId - the payment
      * @param refundId - the refund record inside it
-     * @param lastError - what the provider said
+     * @param failureReason - the closed code for what the provider said
+     * @param session - the caller's transaction, when the timeline row must commit with it
      * @returns the payment as it now stands, or `null` if that refund was not open
      */
-    failRefund: (paymentId, refundId, lastError) =>
+    failRefund: (paymentId, refundId, failureReason, session) =>
         paymentModel
             .findOneAndUpdate(
                 {
@@ -432,9 +543,132 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                         }
                     }
                 },
-                { $set: { 'refunds.$.status': 'failed', 'refunds.$.lastError': lastError } },
-                { returnDocument: 'after' }
+                {
+                    $set: { 'refunds.$.status': 'failed', 'refunds.$.failureReason': failureReason }
+                },
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
+            .exec(),
+
+    /**
+     * One page of the staff payments list, as documents the presenter serializes. `label` is {@link displayStatusFilter}'s query, when asked for.
+     *
+     * @param filters - the validated filter bag, `page`/`pageSize`/`sort` included
+     * @param label - the stored-field query behind the `displayStatus` filter
+     * @param scope - the caller's read scope
+     */
+    searchStaff: async (filters, label, scope) => {
+        const pagination = normalizePagination(filters);
+        const chosen = sortOf(filters, PAYMENT_SORTABLE);
+        const where = withScope(
+            // `$and`, not a spread: the label may carry its own `$and` and `refunds` keys.
+            label ? { $and: [base.buildWhere(filters), label] } : base.buildWhere(filters),
+            scope
+        );
+        const totalItems = await base.count(where);
+        // Hydrated, not lean: the presenter serializes a document the one way everywhere, and the
+        // provider ids it adds for staff are read off the document, not off a mutated lean row.
+        const query = paymentModel
+            .find(where)
+            .sort(chosen ?? DEFAULT_SORT)
+            .skip(pagination.skip)
+            .limit(pagination.pageSize);
+        // Query#collation: text order for a caller-chosen sort, as every other list.
+        const items = await (chosen ? query.collation(SORT_COLLATION) : query).exec();
+        return { items, meta: buildPaginatedMeta(pagination, totalItems) };
+    },
+
+    /**
+     * Payments created in the window that took money, grouped by method, provider and currency.
+     * @param window - createdAt bounds
+     */
+    sumMix: (window) =>
+        aggregatePayments<MixSums>([
+            {
+                $match: {
+                    status: { $in: [PaymentStatus.succeeded, PaymentStatus.refunded] },
+                    createdAt: { $gte: window.from, $lt: window.to }
+                }
+            },
+            {
+                $group: {
+                    _id: { method: '$method', provider: '$provider', currency: '$currency' },
+                    payments: { $sum: 1 },
+                    amount: decimalSum('$amount')
+                }
+            }
+        ]),
+
+    /**
+     * One page of refunds across every payment, newest first — the Refunds tab. The `$match` on
+     * `refunds.status` before the `$unwind` is what lets the compound index serve it.
+     *
+     * @param filters - status, reason, order and date bounds, with the page
+     */
+    searchRefunds: async (filters) => {
+        const pagination = normalizePagination(filters);
+        const base: PipelineStage[] = [
+            {
+                $match: {
+                    ...(filters.orderId ? { orderId: toObjectId(filters.orderId) } : {}),
+                    ...refundMatch(filters)
+                }
+            },
+            { $unwind: '$refunds' },
+            { $match: refundMatch(filters) }
+        ];
+        const [counted, items] = await Promise.all([
+            aggregatePayments<{ totalItems: number }>([...base, { $count: 'totalItems' }]),
+            aggregatePayments<RefundRow>([
+                ...base,
+                { $sort: { 'refunds.createdAt': -1, 'refunds._id': -1, _id: -1 } },
+                { $skip: pagination.skip },
+                { $limit: pagination.pageSize },
+                REFUND_ROW_PROJECTION
+            ])
+        ]);
+        return { items, meta: buildPaginatedMeta(pagination, counted.at(0)?.totalItems ?? 0) };
+    },
+
+    /**
+     * Refunds still open (`pending` or `failed`), oldest first — the needs-attention read. A
+     * provider's open refund only counts once it is older than `openBefore`; a `manual` payment's
+     * has no such grace, because nothing but the operator ever finishes it.
+     *
+     * @param options - which kind, the age cutoff for provider refunds, and the cap
+     */
+    findOpenRefundRows: ({ manual, openBefore, limit }) =>
+        aggregatePayments<RefundRow>([
+            {
+                $match: {
+                    provider: manual ? 'manual' : { $ne: 'manual' },
+                    'refunds.status': { $in: [...OPEN_REFUND_STATUSES] }
+                }
+            },
+            { $unwind: '$refunds' },
+            {
+                $match: {
+                    'refunds.status': { $in: [...OPEN_REFUND_STATUSES] },
+                    ...(openBefore ? { 'refunds.createdAt': { $lte: openBefore } } : {})
+                }
+            },
+            { $sort: { 'refunds.createdAt': 1, 'refunds._id': 1, _id: 1 } },
+            { $limit: limit },
+            REFUND_ROW_PROJECTION
+        ]),
+
+    /**
+     * Payments still owing an effect, as the needs-attention read sees them: the same marker
+     * {@link findWithPendingEffects} scans, over a longer grace window.
+     *
+     * @param cutoff - only markers at least this old
+     * @param limit - the cap
+     */
+    findPendingEffectsSince: (cutoff, limit) =>
+        paymentModel
+            .find({ pendingEffects: { $exists: true, $ne: [] }, updatedAt: { $lte: cutoff } })
+            .sort({ updatedAt: 1 })
+            .limit(limit)
             .exec(),
 
     /**
@@ -449,6 +683,28 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         paymentModel
             .find({
                 refunds: { $elemMatch: { status: { $in: OPEN_REFUND_STATUSES } } },
+                updatedAt: { $lte: updatedBefore }
+            })
+            .sort({ updatedAt: 1 })
+            .limit(limit)
+            .exec(),
+
+    /**
+     * Payments the provider may have moved on without this application hearing of it: still in a
+     * state a settlement moves away from, holding an intent to ask about, and untouched since
+     * `updatedBefore`. A `manual` payment has no provider to ask. Oldest first, so a capped batch
+     * reaches the longest-waiting ones; a payment that is asked and still unsettled is rewritten
+     * by the settlement, which moves it to the back of the line.
+     *
+     * @param updatedBefore - payments last touched at or before this instant are due
+     * @param limit - the most to return
+     */
+    findStaleInFlight: (updatedBefore: Date, limit: number) =>
+        paymentModel
+            .find({
+                status: { $in: [...SETTLEABLE_PAYMENT_STATUSES] },
+                providerRef: { $exists: true, $ne: null },
+                provider: { $ne: 'manual' },
                 updatedAt: { $lte: updatedBefore }
             })
             .sort({ updatedAt: 1 })

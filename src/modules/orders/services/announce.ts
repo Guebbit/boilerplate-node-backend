@@ -8,7 +8,7 @@
 
 import type { OutboxAnnouncement } from '@kernel/outbox';
 import type { OrderStatus } from '@types';
-import { ORDER_CREATED, ORDER_STATUS_CHANGED } from '../events';
+import { ORDER_CREATED, ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '../events';
 
 /**
  * The `order.status_changed` announcement for one landed status move.
@@ -38,5 +38,26 @@ export const statusChangedEvent = (
 export const createdEvent = (orderId: string): OutboxAnnouncement<typeof ORDER_CREATED> => ({
     name: ORDER_CREATED,
     payload: { orderId },
+    aggregateId: orderId
+});
+
+/**
+ * The `order.status_overridden` announcement for one landed override, written beside its
+ * `order.status_changed` so `delivery` can bring its shipments in step at the override's own
+ * instant.
+ *
+ * @param orderId - the order that was overridden
+ * @param from - the status it was moved from
+ * @param to - the status it was moved to
+ * @param at - the override's instant, ISO-serialised in the payload
+ */
+export const statusOverriddenEvent = (
+    orderId: string,
+    from: OrderStatus,
+    to: OrderStatus,
+    at: Date
+): OutboxAnnouncement<typeof ORDER_STATUS_OVERRIDDEN> => ({
+    name: ORDER_STATUS_OVERRIDDEN,
+    payload: { orderId, from, to, at: at.toISOString(), mode: 'status' },
     aggregateId: orderId
 });

@@ -6,6 +6,8 @@
  * `findOneAndUpdate` against a real Mongo — nothing here is provable against a mock.
  */
 import { setupTestDb } from '@tests/setup-test-db';
+import { shopTimezone } from '../../config';
+import { yearInZone } from '../../domain/shop-time';
 import { allocateOrderNumber } from '../../services/order-numbering';
 import { freezeDate } from '@tests/clock';
 
@@ -22,9 +24,20 @@ describe('allocateOrderNumber', () => {
         const orderNumber = await allocateOrderNumber();
 
         const [year, sequence] = parse(orderNumber);
-        expect(year).toBe(new Date().getUTCFullYear());
+        expect(year).toBe(yearInZone(new Date(), shopTimezone()));
         expect(sequence).toBe(1);
         expect(orderNumber).toBe(`${year}-000001`);
+    });
+
+    it("cuts the year at the shop's calendar, not UTC's", async () => {
+        // 00:30 on 1 January in Rome is still 31 December in UTC.
+        freezeDate(new Date('2026-12-31T23:30:00Z'));
+
+        try {
+            await expect(allocateOrderNumber()).resolves.toBe('2027-000001');
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('advances the sequence by one on every call, serially', async () => {

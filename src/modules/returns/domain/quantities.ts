@@ -100,3 +100,29 @@ export const checkRequestedLines = (
         lines: [...summed].map(([productId, quantity]) => ({ productId, quantity }))
     };
 };
+
+/**
+ * Whether taking `lines` accounts for the LAST unit of the order: every ordered unit is then either
+ * cancelled, back, or in these lines. The rule behind "shipping is refunded by whichever cancel or
+ * return takes the last unit" — counted against ORDERED quantity, so a unit that can never come
+ * back (an excluded line) keeps the order from ever being whole, as it always has.
+ *
+ * @param ordered - the order's lines
+ * @param accountedFor - what is already cancelled or back, plus what this act takes
+ */
+export const takesLastUnit = (
+    ordered: readonly ProductQuantity[],
+    accountedFor: readonly ProductQuantity[]
+): boolean => {
+    const accounted = new Map<string, number>();
+    for (const { productId, quantity } of accountedFor)
+        accounted.set(productId, (accounted.get(productId) ?? 0) + quantity);
+
+    const needed = new Map<string, number>();
+    for (const { productId, quantity } of ordered)
+        needed.set(productId, (needed.get(productId) ?? 0) + quantity);
+
+    return [...needed].every(
+        ([productId, quantity]) => (accounted.get(productId) ?? 0) >= quantity
+    );
+};

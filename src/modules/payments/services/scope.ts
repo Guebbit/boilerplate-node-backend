@@ -4,6 +4,8 @@
  */
 
 import { accessibleFilter } from '@kernel/access/query';
+import { callerForSubject } from '@kernel/permissions';
+import { heldKeys } from '@kernel/ability';
 import { orderService } from '@modules/orders';
 import type { AuthContext } from '@types';
 import { paymentRepository } from '../repository';
@@ -35,3 +37,13 @@ export const buyerOrderScope = (context?: AuthContext): Record<string, unknown> 
     context
         ? { ...orderService.ownerScope(context.id), deletedAt: null }
         : orderService.callerScope(undefined);
+
+/**
+ * Whether the caller reads every payment, and so may be sent the provider's own ids and a refund's
+ * failure reason. By key name: `holdsKey` would also say yes to `payments.self.read`.
+ *
+ * @param context - the caller, or `undefined` for no request behind this read
+ */
+export const readsAllPayments = (context?: AuthContext): boolean =>
+    context !== undefined &&
+    heldKeys(callerForSubject(context, 'Payment')).has('payments.any.read');

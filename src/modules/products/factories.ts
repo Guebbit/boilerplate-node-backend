@@ -38,10 +38,15 @@ export const makeProduct = ({
     createdAt,
     updatedAt,
     deletedAt,
+    releaseDate,
     ...fields
 }: ProductOverrides = {}): ProductFixture => ({
     ...identityOf({ id, createdAt, updatedAt }),
     title: 'Test Product',
     price: 9.99,
-    ...stripUndefined({ ...fields, deletedAt: toDate(deletedAt) })
+    ...stripUndefined({
+        ...fields,
+        deletedAt: toDate(deletedAt),
+        releaseDate: toDate(releaseDate)
+    })
 });

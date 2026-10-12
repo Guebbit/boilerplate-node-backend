@@ -49,6 +49,19 @@ The **set** of statuses is not its business. `OrderStatus` is generated from `op
 `@api/models`, so the six values are contract-first and single-sourced. What the enum cannot carry
 is the **edges** between them, and the **actor** each edge belongs to.
 
+The table is keyed by **event**, not by status: `pay`, `start`, `ship`, `deliver`,
+`fulfilmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
+completes the order), `expire`, `cancel`, `cancelInFulfilment` and `cancelUnanswered` (a preorder's
+buyer never answered the question a late date asks; its own actor, `fulfilment`, so the expiry sweep
+still stops at `pending`). Each entry carries its `from`
+set, its `to` and its actors, so a service names the event and the conditional write is handed the
+event's own `from` — nothing is derived from a neighbouring column.
+
+What a status **is**, apart from its edges, is a second table: `ORDER_STATUS_TRAITS` in
+`domain/status-traits.ts` (stock committed, before dispatch, withdrawable, fulfilment value). It is
+total over `OrderStatus`, so a new contract status is a compile error there, not a silent default.
+See [the status traits](../modules/orders.md#status-traits).
+
 ```mermaid
 %%{init: {'stateDiagram': {'nodeSpacing': 40}}}%%
 stateDiagram-v2
@@ -60,9 +73,12 @@ stateDiagram-v2
     pending --> cancelled: withdrawal
     paid --> processing: system
     paid --> cancelled: customer, admin, withdrawal
+    paid --> cancelled: fulfilment (preorder unanswered)
+    processing --> cancelled: fulfilment (preorder unanswered)
     processing --> shipped: system
     processing --> cancelled: admin, withdrawal
     shipped --> delivered: system
+    processing --> delivered: system (digital fulfilment)
     delivered --> [*]
     cancelled --> [*]
 ```
@@ -100,8 +116,9 @@ say: WHAT records the fact before `orders` ever hears about it — the payment p
 a charge, a warehouse operator scanning a parcel, an operator's own typed reason for an override.
 `orders` only ever reports a fact something else already caused.
 
-One reported move, end to end — the warehouse records a handover, `delivery` owns the parcel, and
-`orders` is the only thing that ever writes the status:
+One reported move, end to end — the warehouse records a handover, `delivery` owns the shipment, and
+`orders` is the only thing that ever writes the status. Everything below commits in ONE transaction
+(the shipment, the units leaving the shelf, the order's summary, the status move, the outbox events):
 
 ```mermaid
 sequenceDiagram
@@ -110,19 +127,21 @@ sequenceDiagram
     participant O as orders
     participant L as listeners
 
-    W->>D: POST /delivery/order/{id}/ship<br/>{ trackingCode }
-    D->>D: create the parcel record
-    D->>O: markShipped(orderId)
+    W->>D: POST /delivery/fulfillment-orders/{id}/shipments<br/>{ trackingCode }
+    D->>D: claim the fulfillment order, write the shipment
+    D->>O: recordFulfillmentProgress(summary)
+    D->>O: markShipped(orderId, session) — only if nothing remains
     O->>O: canTransition(processing, shipped, 'system')
     O->>O: conditional write — updateStatusIfIn
-    O->>L: emit order.status_changed { from, to }
+    O->>L: emit order.status_changed { from, to } — after the commit
     L-->>D: shipped email queued
 ```
 
-`delivery` never assigns `order.status` itself — `markShipped`/`markDelivered` (`services/status.ts`)
-are the ordinary doors; a `forced` move through the same request instead goes through `forceMove`
-(`services/override.ts`), which widens which `from` statuses are accepted. A third door,
-`overrideStatus`, moves the status alone with no parcel record — see
+`delivery` never assigns `order.status` itself — `markShipped`/`markDelivered`/`markFulfilmentComplete`
+(`services/status.ts`) are the ordinary doors, each taking the act's own session so the move commits with
+the shipment. A `forced` shipment skips a step but writes the same moves and leaves its history row
+through `recordForcedFulfilment`. A third door, `overrideStatus`, moves the status alone and
+announces it, so `delivery` keeps its records in step — see
 [Who writes the status](../modules/orders.md#who-writes-the-status) for all three.
 
 ### The actor is part of the table, not beside it
@@ -166,12 +185,12 @@ lifecycle edge of its own, they all ask.
 
 ### How it is enforced
 
-| Call site                                                                               | Question asked                                                                                                                                                                   |
-| --------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `orders/services/cancel.ts` — `cancelById`                                              | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                                                  |
-| `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | `statusesLeadingTo(to, 'system')` — a single `from`, since the `system` actor has exactly one legal source per destination, read off the table rather than restated as a literal |
-| `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below)                                  |
-| `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces                                      |
+| Call site                                                                               | Question asked                                                                                                                                  |
+| --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `orders/services/cancel.ts` — `cancelById`                                              | `statusesLeadingTo(cancelled, actorOf(caller))`                                                                                                 |
+| `orders/services/status.ts` — `markPaid`/`markProcessing`/`markShipped`/`markDelivered` | the named event's own `from` and `to` (`ORDER_EVENTS.ship`, ...), read off the table rather than restated as a literal                          |
+| `payments/services/intent.ts`/`offline.ts`/`settlement.ts`/`view.ts`                    | `isPayable(status)` — asks `orders` the one question every payment door needs, never the table directly (see "One function, three doors" below) |
+| `orders/services/override.ts`                                                           | `canOverrideTo(from, to)` — its OWN rule, deliberately not `canTransition`: an override exists to skip the gate the ordinary table enforces     |
 
 `cancelById` asks as the CALLER's actor, because the table answers differently for each: a customer
 may cancel from `pending` and `paid`, an operator also from `processing`.
@@ -324,10 +343,8 @@ charge. Publishing it as a capability while withholding it as a transition is th
 between "you may see this is possible" and "you may do this".
 
 **One function, three doors.** `domain/lifecycle.ts`'s `isPayable(status)` is the single answer to
-"can this order still be paid" — `pending` only. `system` may still write a `paid → paid` echo (the
-payment webhook's own retries), but that echo is not a fresh offer to pay, so `isPayable` excludes
-it even though `canTransition` alone would not. Every door that moves money asks it instead of
-comparing a status literal:
+"can this order still be paid" — `pending` only, the one status with a `system` edge into `paid`.
+Every door that moves money asks it instead of comparing a status literal:
 
 ```mermaid
 flowchart LR
@@ -338,9 +355,9 @@ flowchart LR
     P -- false --> REFUSE["409 PAYMENT_ORDER_NOT_PAYABLE<br/>or actions.pay: false"]
 ```
 
-A `paid → paid` echo settling twice (a webhook retry, or an admin resending the same status) is a
-settlement detail `system` alone may write — never a second offer to pay, which is why the door and
-the transition disagree on purpose: see "Why `paid` is never in `transitions`" above.
+A settlement arriving twice (a webhook retry) finds the order no longer `pending`, so the
+conditional write matches nothing: no table says "staying put is allowed", and no door treats it
+as a second offer to pay.
 
 The client's side of the bargain is to decide nothing. A control is enabled when the server says so
 and disabled otherwise, which is what makes a rule change on the API move the interface without the

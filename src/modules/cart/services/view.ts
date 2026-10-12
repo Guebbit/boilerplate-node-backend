@@ -23,6 +23,7 @@ import {
 } from '@modules/delivery';
 import type { CartDocument } from '../model';
 import { basketWeight, lineAvailability, needsShipping } from '../domain';
+import { availabilityProductOf, preorderIdsOf } from './preorder';
 
 /**
  * A cart line joined with the product it references.
@@ -165,7 +166,7 @@ const buildView = (
             productId,
             quantity: lineQuantity,
             availability: lineAvailability({
-                product,
+                product: availabilityProductOf(product),
                 available: available.get(productId),
                 quantity: lineQuantity
             })
@@ -196,6 +197,9 @@ const buildView = (
 export const toCartView = (cart: CartDocument | null): Promise<CartView> =>
     readCartLines(cart).then((lines) =>
         inventoryService
-            .availableFor(lines.map(({ productId }) => productId))
+            .availableFor(
+                lines.map(({ productId }) => productId),
+                preorderIdsOf(lines)
+            )
             .then((available) => buildView(cart, lines, available))
     );

@@ -5,7 +5,7 @@
  * and the per-order reads the quantity check needs.
  */
 
-import type { ClientSession } from 'mongoose';
+import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { returnModel, returnOrderLockModel, applyReturnTransform } from './model';
 import type { ReturnDocument } from './model';
 import type { ReturnStatus } from './domain';
@@ -15,6 +15,7 @@ import {
     type Repository
 } from '@infrastructure/persistence/create-repository';
 import type { Return } from '@types';
+import type { ReportWindow } from '@infrastructure/persistence/report';
 
 /** The fields a lifecycle move may stamp in the same write as its status. */
 export type ReturnStamp = Partial<
@@ -25,6 +26,7 @@ export type ReturnStamp = Partial<
         | 'receivedAt'
         | 'handlingDeduction'
         | 'refundAmount'
+        | 'shippingRefund'
         | 'closedAt'
     >
 >;
@@ -42,6 +44,11 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
     lockOrder: (orderId: string, session: ClientSession) => Promise<void>;
     findByOrderIds: (orderIds: readonly string[]) => Promise<ReturnDocument[]>;
     scrubFreeTextBefore: (cutoff: Date) => Promise<number>;
+    sumReceived: <TRow>(
+        window: ReportWindow,
+        group: PipelineStage.Group['$group'],
+        productId?: Types.ObjectId
+    ) => Promise<TRow[]>;
 } = {
     ...createRepository<ReturnDocument, Return>(returnModel, {
         transform: applyReturnTransform,
@@ -101,6 +108,33 @@ export const returnRepository: Repository<ReturnDocument, Return> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Returns whose goods were received in the window, one row per returned line, grouped as the
+     * caller says — the stats' read. `received` and `closed` both hold goods that came back.
+     *
+     * @param window - receivedAt bounds
+     * @param group - the `$group` stage's body, over `$lines.*` and the return's own fields
+     * @param productId - only lines of this product
+     */
+    sumReceived: <TRow>(
+        window: ReportWindow,
+        group: PipelineStage.Group['$group'],
+        productId?: Types.ObjectId
+    ) =>
+        returnModel
+            .aggregate<TRow>([
+                {
+                    $match: {
+                        status: { $in: ['received', 'closed'] },
+                        receivedAt: { $gte: window.from, $lt: window.to }
+                    }
+                },
+                { $unwind: '$lines' },
+                ...(productId ? [{ $match: { 'lines.productId': productId } }] : []),
+                { $group: group }
+            ])
+            .exec(),
 
     /**
      * Every return on any of these orders, oldest first — the account export's read.

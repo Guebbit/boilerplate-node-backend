@@ -8,7 +8,7 @@ import { productService } from '@modules/products';
 import { StockMovementReason } from '@types';
 import { reservationTtlMinutes } from '../config';
 import { stockLevelRepository, reservationRepository } from '../repository';
-import type { ReservationDocument } from '../model';
+import type { ReservationDocument, StockLevelDocument } from '../model';
 import type { StockLine, StockShortfall, ReserveOutcome } from './types';
 import { applyTransition } from './transition';
 
@@ -38,7 +38,8 @@ const giveBackAndDeleteHold = async (
         taken.map((line) =>
             applyTransition(StockMovementReason.release, line.productId, line.quantity, {
                 reference: orderId,
-                note
+                note,
+                ...(line.kind ? { kind: line.kind } : {})
             }).catch((error: unknown) => {
                 // Stryker disable all
                 logger.error({
@@ -73,6 +74,24 @@ const giveBackAndDeleteHold = async (
 const inLockOrder = (lines: readonly StockLine[]): StockLine[] =>
     // Hex ids: any fixed locale orders them the same way on every worker.
     lines.toSorted((a, b) => a.productId.localeCompare(b.productId, 'en'));
+
+/**
+ * What a line takes: a shelf unit (`reserve`) or a claim on the preorder allowance (`preorder`).
+ * @param line - the line being held
+ */
+const takeReasonFor = (line: StockLine): StockMovementReason =>
+    line.kind === 'preorder' ? StockMovementReason.preorder : StockMovementReason.reserve;
+
+/**
+ * How many units of this line the product could still have given, read back after a refusal: shelf
+ * units for a stock line, what is left of the allowance for a preorder line.
+ * @param line - the refused line
+ * @param level - the product's level, or `null` when it has none
+ */
+const leftFor = (line: StockLine, level: StockLevelDocument | null): number =>
+    line.kind === 'preorder'
+        ? Math.max(0, (level?.preorderLimit ?? 0) - (level?.preordered ?? 0))
+        : (level?.available ?? 0);
 
 /**
  * Hold every line for an order, or hold none of it.
@@ -111,12 +130,9 @@ export const reserveForOrder = async (
     // eslint-disable-next-line no-restricted-syntax -- multi-step write with partial rollback: a thrown error partway through must give back only the lines actually taken, then rethrow, so no safe wrapper covers this
     try {
         for (const line of inLockOrder(lines)) {
-            const held = await applyTransition(
-                StockMovementReason.reserve,
-                line.productId,
-                line.quantity,
-                { reference: orderId }
-            );
+            const held = await applyTransition(takeReasonFor(line), line.productId, line.quantity, {
+                reference: orderId
+            });
             if (!held) {
                 /*
                  * Read the blocker back before unwinding, so the reported number is the one that
@@ -133,7 +149,7 @@ export const reserveForOrder = async (
                     productId: line.productId,
                     title: blockerProduct?.title ?? '',
                     requested: line.quantity,
-                    available: blockerLevel?.available ?? 0
+                    available: leftFor(line, blockerLevel)
                 };
 
                 await giveBackAndDeleteHold(

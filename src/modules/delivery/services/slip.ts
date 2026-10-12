@@ -1,0 +1,130 @@
+/**
+ * @module
+ * A moved release date, as the buyers who already paid for it are affected (PRODUCT_STATES P5).
+ * `products` announces `product.release_date_changed`; this is the listener. For every fulfillment
+ * order still waiting for that product it works out the date now expected and decides what the buyer
+ * is owed — the pure table is `../domain/preorder.ts`:
+ *
+ * | The new date is…                           | The buyer gets                                   |
+ * | ------------------------------------------ | ------------------------------------------------ |
+ * | not later than expected                    | nothing; the order page shows the date           |
+ * | a first slip of at most 28 days            | a notice and the cancel option; silence waits    |
+ * | longer, a second slip, or no date at all   | a question; 30 days of silence cancels           |
+ *
+ * Idempotent on the date itself, since the outbox delivers at least once: a redelivery finds the
+ * date already expected and does nothing.
+ *
+ * See: docs/modules/delivery.md#preorders-and-a-moved-date
+ */
+
+import { productService } from '@modules/products';
+import { judgeSlip } from '../domain';
+import type { SlipVerdict } from '../domain';
+import { remainingOfLine } from '../domain';
+import { fulfillmentOrderRepository } from '../repository';
+import type { FulfillmentOrderDocument } from '../model';
+import { runAct } from './act';
+import { mailNotice, recordNotice, type SentNotice } from './notice';
+import type { ClientSession } from 'mongoose';
+
+/**
+ * The date a fulfillment order is now expected: the latest release date among the products it still
+ * waits for, since it leaves together. Read from the catalogue, not from the event, so a group that
+ * holds several products stays right when one of them moves earlier.
+ *
+ * @param fulfillmentOrder - the waiting fulfillment order
+ * @returns the date, or `undefined` when none of its products has one any more
+ */
+const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date | undefined> =>
+    productService
+        .findManyByIds(
+            fulfillmentOrder.lines
+                .filter((line) => remainingOfLine(line) > 0)
+                .map(({ productId }) => productId)
+        )
+        .then((products) => {
+            const dates = products
+                .map(({ releaseDate }) => releaseDate)
+                .filter((date): date is Date => date !== undefined);
+            return dates.length === 0
+                ? undefined
+                : new Date(Math.max(...dates.map((date) => date.getTime())));
+        });
+
+/**
+ * Apply a verdict to one fulfillment order, in the act's transaction.
+ *
+ * @param fulfillmentOrder - the fulfillment order as read in `session`
+ * @param verdict - what the buyer is owed
+ * @param next - the date now expected
+ * @param now - the instant of the move
+ * @param session - the act's transaction
+ */
+const apply = async (
+    fulfillmentOrder: FulfillmentOrderDocument,
+    verdict: SlipVerdict,
+    next: Date | undefined,
+    now: Date,
+    session: ClientSession
+): Promise<SentNotice | undefined> => {
+    if (verdict.kind === 'earlier') {
+        // Quietly follow the date; the buyer is not told good news is a notice, and consent stays.
+        if (next && next.getTime() !== fulfillmentOrder.expectedAt?.getTime())
+            await fulfillmentOrderRepository.claim(
+                String(fulfillmentOrder._id),
+                fulfillmentOrder.revision,
+                { expectedAt: next },
+                session
+            );
+        return undefined;
+    }
+
+    return recordNotice(
+        fulfillmentOrder,
+        {
+            reason: 'moved',
+            expectedAt: next,
+            needsAnswer: verdict.kind === 'ask',
+            countsAsSlip: true
+        },
+        now,
+        session
+    );
+};
+
+/**
+ * Judge one waiting fulfillment order against its products' dates, in one transaction.
+ *
+ * @param fulfillmentOrderId - the fulfillment order
+ * @returns what to mail after the commit, if anything
+ */
+const judgeOne = (fulfillmentOrderId: string): Promise<SentNotice | undefined> =>
+    runAct(async (session) => {
+        const fulfillmentOrder = await fulfillmentOrderRepository.findInSession(
+            fulfillmentOrderId,
+            session
+        );
+        if (!fulfillmentOrder?.agreedAt || !fulfillmentOrder.expectedAt) return undefined;
+
+        const next = await expectedFrom(fulfillmentOrder);
+        const verdict = judgeSlip({
+            agreedAt: fulfillmentOrder.agreedAt,
+            expectedAt: fulfillmentOrder.expectedAt,
+            slips: fulfillmentOrder.slips,
+            next
+        });
+        return apply(fulfillmentOrder, verdict, next, new Date(), session);
+    }).then((result) => (result.refused ? undefined : result.value));
+
+/**
+ * React to a release date that moved: tell the buyers it concerns what the law owes them.
+ *
+ * @param productId - the product whose date moved
+ */
+export const onReleaseDateChanged = async (productId: string): Promise<void> => {
+    const waiting = await fulfillmentOrderRepository.findWaitingForProduct(productId);
+    // One after another: each judgement is its own transaction over its own fulfillment order, and
+    // the buyer's mail follows each commit.
+    for (const fulfillmentOrder of waiting)
+        await judgeOne(String(fulfillmentOrder._id)).then(mailNotice);
+};

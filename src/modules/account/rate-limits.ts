@@ -28,7 +28,7 @@ import {
     accountIdOf
 } from '@infrastructure/http/middlewares/rate-limit';
 import { humanChallengeGate } from '@infrastructure/http/middlewares/human-challenge';
-import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor';
+import { MFA_CHALLENGE_DELIVERED_TTL_MS } from './services/two-factor-challenge';
 import { MAIL_RECIPIENT_BUDGET } from './mail-budget';
 import { readMfaChallengeCookie } from './oauth/mfa-redirect';
 import { holdsDeviceCookie, presentsFailingDeviceCookie } from './session/device-cookie';

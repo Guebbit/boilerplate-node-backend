@@ -115,6 +115,9 @@ process.env.NODE_PAYMENT_INTENT_RATE_LIMIT_MAX ??= '1000';
  */
 process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 
+/** `ordersExportLimiter` is keyed on the account too, and the suites export the same seeded shop repeatedly. */
+process.env.NODE_ORDER_EXPORT_RATE_LIMIT_MAX ??= '1000';
+
 /**
  * The per-mailbox mail budget is keyed on the RECIPIENT, and the suites mail the same few seeded
  * addresses (signup, resend, reset) across many cases; ten a day is a production number.
@@ -200,6 +203,7 @@ process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
  * test's expectation and the fallback happened to agree by coincidence).
  */
 process.env.NODE_SHOP_COUNTRY ??= 'IT';
+process.env.NODE_SHOP_TIMEZONE ??= 'Europe/Rome';
 process.env.NODE_SHOP_LEGAL_NAME ??= 'Guebbit Demo Shop Srl';
 process.env.NODE_SHOP_STREET ??= 'Via Roma 1';
 process.env.NODE_SHOP_CITY ??= 'Milano';

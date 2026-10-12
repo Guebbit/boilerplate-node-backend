@@ -10,10 +10,13 @@ tags:
 
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`inventory.any.read`).' }
+    ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
+    ORDER_NOT_CANCELLED: { status: 409, description: 'A hard delete needs a cancelled order: this one is still open. Cancel it first (`POST /orders/{id}/cancel`).' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
+    ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
@@ -23,6 +26,13 @@ x-personal-data:
             type: array
             items:
                 $ref: '#/components/schemas/Order'
+    # The whole timeline of the account's own orders, staff reasons and actors included: the
+    # export is the buyer's data, not the buyer's screen.
+    orderTimeline:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/OrderTimelineExportEntry'
 
 paths:
     /orders:
@@ -31,7 +41,7 @@ paths:
             summary: List orders (paginated)
             description: |
                 Returns a paginated list of orders.
-                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+                A caller holding `orders.self.read` alone sees their own orders, and the `userId` filter is ignored for them; `orders.any.read` reads every order and may narrow by `userId`.
             operationId: listOrders
             security:
                 - bearerAuth: []
@@ -57,6 +67,14 @@ paths:
                   in: query
                   schema:
                       $ref: '#/components/schemas/OrderStatus'
+                - name: fulfillmentStatus
+                  in: query
+                  description: >-
+                      Filter to orders whose goods stand here — the same derived value
+                      `Order.fulfillmentStatus` carries, so `on_hold` and `partially_fulfilled`
+                      can be listed.
+                  schema:
+                      $ref: '#/components/schemas/OrderFulfillmentStatus'
                 - name: paymentMethod
                   in: query
                   description: >-
@@ -72,6 +90,27 @@ paths:
                       empty page for `true`.
                   schema:
                       type: boolean
+                - name: createdFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: createdTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paidFrom
+                  in: query
+                  description: Orders paid at or after this instant. Unpaid orders never match.
+                  schema: { type: string, format: date-time }
+                - name: paidTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paymentStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderPaymentStatus'
+                - name: returnStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderReturnStatus'
             responses:
                 '200':
                     description: Orders page
@@ -137,7 +176,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`.
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`.
             operationId: deleteOrder
             x-alias-of: deleteOrderById
             security:
@@ -158,20 +197,117 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A hard delete on an order `invoicing` has already issued. `errors[].code` is
-                # `ORDER_INVOICED`. Never answered for a soft delete, which the row survives.
+                # A hard delete refused. `errors[].code` is `ORDER_INVOICED` for an order that was paid,
+                # and `ORDER_NOT_CANCELLED` for one still open: only a cancelled, never-paid order
+                # may be hard-deleted. Never answered for a soft delete, which the row survives.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # Same as GET /orders, but with JSON body, more suitable for DTOs and multi-language codegen
+    /orders/export:
+        get:
+            tags: [Orders]
+            summary: Export orders as CSV
+            description: |
+                The list's filters, answered as one `text/csv` file: every matching order in the list's own
+                order, one line each, streamed. Columns: `createdAt`, `orderNumber`, `status`,
+                `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `lines`, `units`, `total`,
+                `currency`, `paymentMethod`, `paidAt`. No address: both are encrypted at rest and an export is
+                no reason to read them.
+
+                Requires `orders.any.export` (manager and admin), which is step-up gated (`sensitive`): the file
+                carries every customer's email, so the caller must have proved themselves recently. An API key
+                holds no session and cannot export. Over `NODE_ORDER_EXPORT_MAX_ROWS` rows the answer is `422`
+                `ORDER_EXPORT_TOO_LARGE`, before any byte of the file; narrow the filters. A cell that would
+                start a formula in a spreadsheet (`=`, `+`, `-`, `@`, tab, carriage return) is prefixed with
+                `'`. Every export is audited (`admin.orders.exported`: the filter and the row count, never a
+                row) and has its own per-account rate budget.
+
+                The response is never cached: `Cache-Control: private, no-store`.
+            operationId: exportOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sort
+                  in: query
+                  required: false
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/OrderSort'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
+                - $ref: '#/components/parameters/UserIdParam'
+                - $ref: '#/components/parameters/ProductIdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: status
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderStatus'
+                - name: fulfillmentStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderFulfillmentStatus'
+                - name: paymentMethod
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/PaymentMethodId'
+                - name: deleted
+                  in: query
+                  schema:
+                      type: boolean
+                - name: createdFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: createdTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paidFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paidTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paymentStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderPaymentStatus'
+                - name: returnStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderReturnStatus'
+            responses:
+                '200':
+                    description: The orders, as CSV
+                    headers:
+                        Content-Disposition:
+                            description: '`attachment; filename="orders.csv"`'
+                            schema: { type: string }
+                        Cache-Control:
+                            description: '`private, no-store`'
+                            schema: { type: string }
+                    content:
+                        text/csv:
+                            schema:
+                                type: string
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # The result is larger than the cap. `errors[].code` is `ORDER_EXPORT_TOO_LARGE`.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `ordersExportLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /orders/search:
         post:
             tags: [Orders]
             summary: Search orders (DTO-friendly)
             description: |
                 Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
-                Non-admin users are automatically scoped to their own orders; the `userId` filter is ignored for non-admin callers.
+                A caller holding `orders.self.read` alone sees their own orders, and the `userId` filter is ignored for them; `orders.any.read` reads every order and may narrow by `userId`.
             operationId: searchOrders
             x-alias-of: listOrders
             security:
@@ -288,7 +424,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid). A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
             security:
                 - bearerAuth: []
@@ -306,8 +442,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A hard delete on an order `invoicing` has already issued. `errors[].code` is
-                # `ORDER_INVOICED`. Never answered for a soft delete, which the row survives.
+                # A hard delete refused. `errors[].code` is `ORDER_INVOICED` for an order that was paid,
+                # and `ORDER_NOT_CANCELLED` for one still open: only a cancelled, never-paid order
+                # may be hard-deleted. Never answered for a soft delete, which the row survives.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -345,7 +482,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Permanently delete order
-            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
+            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`, and only for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid).
             operationId: hardDeleteOrderById
             x-alias-of: deleteOrderById
             security:
@@ -357,8 +494,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A hard delete on an order `invoicing` has already issued. `errors[].code` is
-                # `ORDER_INVOICED`. Never answered for a soft delete, which the row survives.
+                # A hard delete refused. `errors[].code` is `ORDER_INVOICED` for an order that was paid,
+                # and `ORDER_NOT_CANCELLED` for one still open: only a cancelled, never-paid order
+                # may be hard-deleted. Never answered for a soft delete, which the row survives.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -405,21 +543,51 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /orders/{id}/timeline:
+        get:
+            tags: [Orders]
+            summary: The order's timeline
+            description: >-
+                What happened to the order, oldest first: status moves, payments and refunds,
+                shipments, returns, documents. Every caller who may read the order may read this,
+                but not the same rows. A caller holding `orders.any.read` sees every row, with the
+                `actor` who made it and any `text` staff wrote. The buyer sees only the
+                buyer-visible types and never an `actor`: a manual correction, a hold and a failed
+                refund stay with staff.
+            operationId: getOrderTimeline
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+            responses:
+                '200':
+                    description: The order's timeline, oldest first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OrderTimelineEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /orders/{id}/status-override:
         post:
             tags: [Orders]
             summary: Force-correct an order's status by hand
             description: >-
-                Moves the order identified by `{id}` forward to `to` with no parcel record and no
-                shipped email — for a manual correction, never for the ordinary shipping flow
-                (`POST /delivery/order/{orderId}/ship` and `.../deliver` are that door, with their
-                own `forced` option). Only `processing`, `shipped` and `delivered` are legal
+                Moves the order identified by `{id}` forward to `to` with no shipped email — for a
+                manual correction, never for the ordinary shipping flow
+                (`POST /delivery/fulfillment-orders/{id}/shipments` and
+                `POST /delivery/shipments/{id}/deliver` are that door, with their own `forced`
+                option). Delivery then keeps its own records in step: forward to `shipped` ships every
+                remainder, forward to `delivered` delivers them, all stamped with the same instant.
+                Refused while any unit still awaits stock (`ORDER_OVERRIDE_AWAITING_STOCK`). Only `processing`, `shipped` and `delivered` are legal
                 destinations, and only moving forward from wherever the order currently stands,
                 which is `paid` or later: an order still `pending` is refused, since leaving
                 `pending` goes only through the offline-payment door, which records the money and
                 issues the invoice. Never into `paid` (that stays system-only in absolute terms)
                 and never `cancelled` (`POST /orders/{id}/cancel` is that door). Requires `orders.any.override`, itself
-                step-up gated, and a non-empty `reason` recorded on the order's override history.
+                step-up gated, and a non-empty `reason` recorded on the order's timeline (`status_overridden`).
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
             security:
@@ -456,10 +624,10 @@ components:
         OrderSort:
             type: array
             minItems: 1
-            maxItems: 3
+            maxItems: 5
             items:
                 type: string
-                enum: [createdAt, -createdAt, status, -status, email, -email]
+                enum: [createdAt, -createdAt, status, -status, email, -email, payBy, -payBy, paidAt, -paidAt]
 
         # ---------- orders — the schemas only this module's paths reference. ----------
         OrderEnvelope:
@@ -490,6 +658,104 @@ components:
                 data:
                     $ref: '#/components/schemas/OrdersResponse'
 
+        # One row of an order's history. The set of types is closed here; which audience each type
+        # is for is the server's own table (`orders/domain/timeline.ts`), answered per caller.
+        OrderTimelineType:
+            type: string
+            enum:
+                - created
+                - paid
+                - processing
+                - shipped
+                - delivered
+                - cancelled
+                - status_overridden
+                - payment_declined
+                - refund_issued
+                - refund_settled
+                - refund_failed
+                - shipment_shipped
+                - shipment_delivered
+                - fulfillment_held
+                - fulfillment_released
+                - remainder_cancelled
+                - return_requested
+                - return_approved
+                - return_declined
+                - return_received
+                - return_closed
+                - invoice_issued
+                - credit_note_issued
+            description: >-
+                What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
+                `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
+                `refund_settled`, `refund_failed`. Shipments: `shipment_shipped`,
+                `shipment_delivered`, `fulfillment_held`, `fulfillment_released`,
+                `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
+                `return_declined`, `return_received`, `return_closed`. Documents: `invoice_issued`,
+                `credit_note_issued`.
+
+        OrderTimelineEntry:
+            type: object
+            additionalProperties: false
+            required: [id, at, type, data]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                at:
+                    type: string
+                    format: date-time
+                type:
+                    $ref: '#/components/schemas/OrderTimelineType'
+                actor:
+                    allOf:
+                        - $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                    description: >-
+                        The account that made the change. Staff view only, and absent for the system
+                        or once that account was erased.
+                text:
+                    type: string
+                    description: >-
+                        Free text staff wrote with the change — an override's reason. Unset after
+                        `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`; the row stays.
+                data:
+                    type: object
+                    additionalProperties: true
+                    description: >-
+                        What the type needs to say, as ids, codes and numbers — never another
+                        module's free text. `status_overridden`: `mode` (`status` or `forced`),
+                        `from`, `to`. `paid`: `method`. `delivered`: `withdrawUntil`. `cancelled`:
+                        `by`. Shipment and hold rows: `shipmentId` or `fulfillmentOrderId`,
+                        `trackingCode`, `reason` (a hold's reason code). Refund rows: `refundId`,
+                        `amount`, `currency`, `reason`, and `failureReason` on a failure. Return
+                        rows: `returnId`. Document rows: `number`.
+
+        OrderTimelineEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderTimelineEntry'
+
+        # `POST /account/export`'s row for one timeline entry: the entry plus the order it belongs to.
+        OrderTimelineExportEntry:
+            allOf:
+                - $ref: '#/components/schemas/OrderTimelineEntry'
+                - type: object
+                  required: [orderId]
+                  properties:
+                      orderId:
+                          $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+
         CancelOrderRequest:
             type: object
             additionalProperties: false
@@ -518,7 +784,7 @@ components:
                     type: string
                     maxLength: 1000
                     minLength: 1
-                    description: Why the normal door didn't apply. Recorded on the order's override history, never optional.
+                    description: Why the normal door didn't apply. Recorded on the order's timeline, never optional.
 
         SearchOrdersRequest:
             type: object
@@ -545,6 +811,9 @@ components:
                 # status is filtering their own orders, and staff see the same shape.
                 status:
                     $ref: '#/components/schemas/OrderStatus'
+                # Filters on the derived value `Order.fulfillmentStatus` carries, so the two always agree.
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
                 paymentMethod:
                     $ref: '#/components/schemas/PaymentMethodId'
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
@@ -552,6 +821,16 @@ components:
                 # gets an empty page for `true`.
                 deleted:
                     type: boolean
+                # Instants, inclusive at both ends. `paidFrom`/`paidTo` never match an unpaid order.
+                createdFrom: { type: string, format: date-time }
+                createdTo: { type: string, format: date-time }
+                paidFrom: { type: string, format: date-time }
+                paidTo: { type: string, format: date-time }
+                # Each value maps back to the stored fields behind it.
+                paymentStatus:
+                    $ref: '#/components/schemas/OrderPaymentStatus'
+                returnStatus:
+                    $ref: '#/components/schemas/OrderReturnStatus'
 
         CreateOrderRequest:
             type: object
@@ -725,6 +1004,17 @@ components:
                 weight:
                     type: integer
                     minimum: 0
+                # The date the buyer was promised, frozen at checkout (CRD Art. 18: the date shown
+                # when ordering is the agreed one). Never re-read from the catalogue, where an admin
+                # may have moved it since.
+                releaseDate:
+                    $ref: '../products/openapi.yaml#/components/schemas/ReleaseDate'
+                preorder:
+                    type: boolean
+                    description: >-
+                        The line was sold before its release date, frozen at checkout. `delivery`
+                        reads it, never the catalogue, to decide which fulfillment order the line
+                        belongs to: a bank transfer may be paid a week after the order was placed.
                 categories:
                     type: array
                     items:
@@ -832,12 +1122,14 @@ components:
 
         OrderFulfillmentStatus:
             type: string
-            enum: [unfulfilled, in_progress, shipped, fulfilled]
+            enum: [unfulfilled, in_progress, on_hold, partially_fulfilled, shipped, fulfilled]
             description: >-
                 Where the goods stand, beside `status` — Shopify's `fulfillment_status`. Derived
-                from `status` alone: `unfulfilled` before work starts (and for a cancelled order),
-                `in_progress` while being prepared, `shipped` once handed to the carrier,
-                `fulfilled` on arrival. Read-only.
+                from the status and the fulfilment summary delivery reports. First match wins:
+                `fulfilled` once everything arrived; `shipped` once everything has left;
+                `partially_fulfilled` once something left and more remains; `on_hold` while every
+                remaining unit is held back; `in_progress` while being prepared; `unfulfilled` before
+                work starts, and for a pending or cancelled order. Read-only.
 
         OrderReturnStatus:
             type: string
@@ -859,9 +1151,6 @@ components:
                     pay,
                     recordPayment,
                     start,
-                    ship,
-                    deliver,
-                    fulfill,
                     override,
                     invoice,
                     withdraw
@@ -888,7 +1177,9 @@ components:
                     type: boolean
                     description: >-
                         Whether `POST /orders/{id}/cancel` would be accepted for this caller. A
-                        customer may cancel while unpaid or paid; an operator one step further.
+                        customer may cancel while unpaid or paid; an operator one step further — and
+                        only while nothing has shipped: once any shipment left, what remains is
+                        cancelled one fulfillment order at a time (`POST /returns`, `kind: cancellation`).
                 pay:
                     type: boolean
                     description: >-
@@ -911,25 +1202,6 @@ components:
                         Whether `POST /delivery/order/{id}/start` would be accepted for this
                         caller. Not in `transitions`: `paid → processing` is `system`-only there,
                         reached only by reporting the fact through `delivery`'s own door.
-                ship:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/order/{id}/ship` would be accepted for this
-                        caller. Not in `transitions`, for the same reason `start` is not. `false`
-                        for a digital-only order — nothing on it would ever ride in a parcel;
-                        `fulfill` is that order's door instead.
-                deliver:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/order/{id}/deliver` would be accepted for this
-                        caller. Not in `transitions`, for the same reason `start` is not.
-                fulfill:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/order/{id}/fulfill` would be accepted for this
-                        caller — the digital-only alternative to `ship`/`deliver`: `true` only for
-                        an order with no physical lines, once it is `processing`. Not in
-                        `transitions`, for the same reason `start` is not.
                 override:
                     type: array
                     items:
@@ -1176,6 +1448,12 @@ components:
                 # See docs/theory/tactical-ddd.md.
                 actions:
                     $ref: '#/components/schemas/OrderActions'
+                # When the order reached `paid`: the buyer's own fact, and the date a sale is
+                # counted on. Absent while unpaid. An offline payment's is when the admin recorded
+                # it, not when the money arrived.
+                paidAt:
+                    type: string
+                    format: date-time
                 createdAt:
                     type: string
                     format: date-time

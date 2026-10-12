@@ -1,23 +1,9 @@
 /**
  * @module
- * The three statuses beside an order's own: the fulfilment one derived from `status`, the money
- * and the return read from what their owners stamped.
+ * The statuses stamped beside an order's own: the money and the return, read from what their
+ * owners stamped. The fulfilment one reads the summary `delivery` reports, in `fulfillment.test.ts`.
  */
-import { OrderStatus } from '@types';
-import { fulfillmentStatusOf, paymentStatusOf, returnStatusOf } from '../../domain';
-
-describe('fulfillmentStatusOf', () => {
-    it.each([
-        [OrderStatus.pending, 'unfulfilled'],
-        [OrderStatus.paid, 'unfulfilled'],
-        [OrderStatus.cancelled, 'unfulfilled'],
-        [OrderStatus.processing, 'in_progress'],
-        [OrderStatus.shipped, 'shipped'],
-        [OrderStatus.delivered, 'fulfilled']
-    ] as const)('reads a %s order as %s', (status, expected) => {
-        expect(fulfillmentStatusOf(status)).toBe(expected);
-    });
-});
+import { paymentStatusOf, returnStatusOf } from '../../domain';
 
 describe('paymentStatusOf', () => {
     const paidAt = new Date('2026-03-01T00:00:00Z');

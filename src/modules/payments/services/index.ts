@@ -10,7 +10,7 @@
  *        refunded` move; the provider's own word, arriving by webhook, is the authority — the
  *        browser's is a hint that lets the happy path feel synchronous.
  *
- * Files: `intent.ts` starts a payment. `settlement.ts` is {@link settlePayment} — the whole
+ * Files: `intent.ts` starts a payment. `settlement.ts` is `settlePayment` — the whole
  *        choreography, reached from the webhook AND the browser-driven paths, since two copies
  *        would drift and drifted copies commit inventory twice. `refunds.ts` is the one place
  *        money moves back out. `effects.ts` retries the stock commit (or the refund) a settlement
@@ -19,6 +19,8 @@
  *        its `actions`. `retention.ts` is erasure/export/the abandoned sweep. `scope.ts` decides
  *        who may see what. `lookup.ts` matches an admin-pasted RF reference back to the order it
  *        pays, the step before `recordOfflinePayment` settles it.
+ *        `list.ts` is the staff Payments page's three reads: the list, the refunds, and what
+ *        needs attention.
  */
 
 import { createIntent, cancelOpenIntentForOrder } from './intent';
@@ -29,7 +31,7 @@ import {
     applyWebhookSettlement
 } from './settlement';
 import { refundByOrder, refundForOrder, refundForReturn } from './refunds';
-import { retryPendingEffects, retryOpenRefunds } from './effects';
+import { retryPendingEffects, retryOpenRefunds, reconcileStalePayments } from './effects';
 import { recordOfflinePayment } from './offline';
 import { getForOrder } from './view';
 import {
@@ -39,23 +41,29 @@ import {
     reapAbandonedPayments
 } from './retention';
 import { getOrderByReference } from './lookup';
+import { listPayments, listRefunds, listAttention } from './list';
+import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
  * `refundForOrder` and `detachUserId` into the events that trigger them, and the suites drive the
  * operations directly. Publishing only the object would break both call sites.
+ *
+ * `settlePayment` and `performRefund` are NOT published: each is the choreography beneath a door
+ * that carries the guards (scope, own-money rule, order gate), so a caller going round the door
+ * would skip them. `confirmPayment`/`syncPayment`/`applyWebhookSettlement` and
+ * `refundByOrder`/`refundForOrder`/`refundForReturn` are the doors.
  */
 export { createIntent, cancelOpenIntentForOrder } from './intent';
 export {
-    settlePayment,
     confirmPayment,
     syncPayment,
     applyWebhookDelivery,
     applyWebhookSettlement
 } from './settlement';
-export { performRefund, refundByOrder, refundForOrder, refundForReturn } from './refunds';
-export { retryPendingEffects, retryOpenRefunds } from './effects';
+export { refundByOrder, refundForOrder, refundForReturn } from './refunds';
+export { retryPendingEffects, retryOpenRefunds, reconcileStalePayments } from './effects';
 export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';
 export {
@@ -64,8 +72,10 @@ export {
     findOwnPaymentsForExport,
     reapAbandonedPayments
 } from './retention';
-export { callerScope, payerScope, buyerOrderScope } from './scope';
+export { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
 export { getOrderByReference } from './lookup';
+export { listPayments, listRefunds, listAttention } from './list';
+export { methodMix, type MixRow } from './stats';
 export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
@@ -82,8 +92,13 @@ export const paymentService = {
     refundForReturn,
     retryPendingEffects,
     retryOpenRefunds,
+    reconcileStalePayments,
     recordOfflinePayment,
     getOrderByReference,
+    listPayments,
+    listRefunds,
+    listAttention,
+    methodMix,
     detachUserId,
     findOwnPayments,
     findOwnPaymentsForExport,

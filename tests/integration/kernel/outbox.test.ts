@@ -11,6 +11,7 @@ import {
 } from '@kernel/events';
 import {
     announceInTransaction,
+    announceWithin,
     enqueueOutboxEvent,
     nudgeOutbox,
     outboxEventModel,
@@ -281,6 +282,56 @@ describe('announceInTransaction', () => {
                 throw new Error('boom');
             }, announce)
         ).rejects.toThrow('boom');
+
+        expect(await marks()).toBe(0);
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+});
+
+describe('announceInTransaction with several announcements', () => {
+    it('writes one row per announcement, in order, and delivers them in order', async () => {
+        subscribe();
+
+        await announceInTransaction(insertMark, () => [
+            { name: 'test.outbox' as const, payload: { n: 1 }, aggregateId: 'agg-1' },
+            { name: 'test.outbox' as const, payload: { n: 2 }, aggregateId: 'agg-1' }
+        ]);
+        await settleOutboxNudges();
+
+        expect(seen.map(({ n }) => n)).toEqual([1, 2]);
+    });
+});
+
+describe('announceWithin', () => {
+    it('joins the caller’s transaction: change and event commit together, and the caller wakes the relay', async () => {
+        subscribe();
+
+        await withTransaction((session) => announceWithin(session, insertMark, announce));
+        expect(await outboxEventModel.countDocuments({ status: 'pending' })).toBe(1);
+        expect(seen).toEqual([]);
+        nudgeOutbox();
+        await settleOutboxNudges();
+
+        expect(await marks()).toBe(1);
+        expect(seen.map(({ n }) => n)).toEqual([1]);
+    });
+
+    it('writes no event when the conditional write matched nothing', async () => {
+        const written = await withTransaction((session) =>
+            announceWithin(session, () => Promise.resolve(null), announce)
+        );
+
+        expect(written).toBeNull();
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+
+    it('rolls the caller’s whole transaction back with a later failure', async () => {
+        await expect(
+            withTransaction(async (session) => {
+                await announceWithin(session, insertMark, announce);
+                throw new Error('a later write failed');
+            })
+        ).rejects.toThrow('a later write failed');
 
         expect(await marks()).toBe(0);
         expect(await outboxEventModel.countDocuments()).toBe(0);

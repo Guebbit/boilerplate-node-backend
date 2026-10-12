@@ -10,7 +10,7 @@ import type { Request, Response } from 'express';
 import type { Payment } from '@types';
 import { createdOrOk } from '@infrastructure/http/response';
 import { RecordOfflinePaymentBody } from '@api/schemas.zod';
-import { paymentService } from '../services';
+import { paymentService, readsAllPayments } from '../services';
 import { presentPayment } from '../presenter';
 import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -31,7 +31,7 @@ export const postPaymentOffline = (request: Request<{ orderId?: string }>, respo
         .recordOfflinePayment(orderId, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
-            const payment = presentPayment(result.data);
+            const payment = presentPayment(result.data, readsAllPayments(request.authContext));
             // 201 when a row was inserted; 200 when this converted an unpaid card intent's row.
             createdOrOk<Payment>(
                 response,

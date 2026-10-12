@@ -14,7 +14,12 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, saveProduct, countersOf } from '@modules/products/tests/factories';
-import { countOrders, createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    countOrders,
+    createOrder,
+    forceOrderStatus,
+    toOrderItem
+} from '@modules/orders/tests/factories';
 import {
     getById,
     getForCaller,
@@ -28,7 +33,6 @@ import {
     callerScope
 } from '@modules/orders/services';
 import { orderRepository } from '../../repository';
-import { inventoryService } from '@modules/inventory';
 import { asReject, asSuccess } from '@tests/response';
 import { asCustomer, asAdmin, callerAs, callerContextAs, testCallerContext } from '@tests/callers';
 import type { CallerContext } from '@types';
@@ -93,6 +97,14 @@ const seedOrder = async () => {
     );
 
     return { user, keyboard, mouse, order: asSuccess(result).data };
+};
+
+/** {@link seedOrder}'s order after a cancel, read back the way `removeById` reads it. */
+const seedCancelledOrder = async () => {
+    const seeded = await seedOrder();
+    const cancelled = await forceOrderStatus(String(seeded.order._id), 'cancelled');
+    if (!cancelled) throw new Error('order vanished');
+    return { ...seeded, order: cancelled };
 };
 
 /** Creates an order of `quantities.length` lines, one fresh well-stocked product each. */
@@ -551,22 +563,29 @@ describe('update', () => {
     });
 });
 
-describe('remove — the hard path and the shelf', () => {
-    /**
-     * An order holds stock. Destroying the row without releasing it leaves the units held against
-     * an order that can no longer be looked up: the shop under-sells until `expiresAt`, and the
-     * sweep then records a deliberate deletion as an expiry and tries to cancel an order that is
-     * gone. Self-healing, which is exactly why nothing noticed.
-     */
-    it('gives the held units back before destroying the row', async () => {
-        const { order } = await seedOrder();
-        expect(await inventoryService.isStockBoundToOrder(String(order._id))).toBe(true);
+describe('remove — the hard path', () => {
+    it('deletes a cancelled order that was never paid', async () => {
+        const { order } = await seedCancelledOrder();
 
-        await remove(order, true);
+        const result = await remove(order, true);
 
-        expect(await inventoryService.isStockBoundToOrder(String(order._id))).toBe(false);
+        expect(result.success).toBe(true);
         await expect(orderRepository.count({})).resolves.toBe(0);
     });
+
+    it.each(['pending', 'paid', 'shipped', 'delivered'])(
+        'refuses a %s order with 409 ORDER_NOT_CANCELLED and keeps it',
+        async (status) => {
+            const { order } = await seedOrder();
+            const open = await forceOrderStatus(String(order._id), status);
+
+            const result = await remove(open!, true);
+
+            expect(asReject(result).status).toBe(409);
+            expect(asReject(result).errors[0].code).toBe('ORDER_NOT_CANCELLED');
+            await expect(orderRepository.count({})).resolves.toBe(1);
+        }
+    );
 
     /**
      * `invoicing` freezes an invoice from the same `paidAt` write — a legal document must survive
@@ -574,7 +593,7 @@ describe('remove — the hard path and the shelf', () => {
      * ever soft-deleted.
      */
     it('refuses a hard delete once the order has been paid (and therefore invoiced)', async () => {
-        const { order } = await seedOrder();
+        const { order } = await seedCancelledOrder();
         order.paidAt = new Date();
         await orderRepository.save(order);
 
@@ -672,15 +691,6 @@ describe('restoreById', () => {
 
         expect(asReject(result).status).toBe(409);
     });
-
-    it('hard-deletes when asked', async () => {
-        const { order } = await seedOrder();
-
-        const result = await remove(order, true);
-
-        expect(result.success).toBe(true);
-        await expect(orderRepository.count({})).resolves.toBe(0);
-    });
 });
 
 describe('removeById', () => {
@@ -695,8 +705,8 @@ describe('removeById', () => {
         expect(stored!.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('hard-deletes an existing order when asked', async () => {
-        const { order } = await seedOrder();
+    it('hard-deletes an existing cancelled order when asked', async () => {
+        const { order } = await seedCancelledOrder();
 
         const result = await removeById(String(order._id), true);
 

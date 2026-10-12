@@ -10,79 +10,117 @@
 
 import { OrderStatus } from '@types';
 import type { OrderActions } from '@types';
+import { ORDER_STATUS_TRAITS } from './status-traits';
 
 /**
  * `system` is not a rank above `admin` — it is narrower: moves nobody may make by hand.
  * `withdrawal` is the consumer's right of withdrawal (Directive Art. 9): a buyer's own act, wider
  * than an ordinary customer cancel — it reaches `processing` too.
+ * `fulfilment` is a move that follows a fact `delivery` recorded about the goods. A separate actor
+ * from `system` on purpose: the reservation sweep acts as `system` and must never reach a paid order.
  */
-export type OrderActor = 'customer' | 'admin' | 'system' | 'withdrawal';
+export type OrderActor = 'customer' | 'admin' | 'system' | 'withdrawal' | 'fulfilment';
 
 /**
- * The lifecycle, as a total map from each status to the moves it permits.
- * Total over `OrderStatus` so a new contract status is a compile error, not a silent dead end;
- * terminal states carry `{}` for the same reason.
+ * One named move of the lifecycle.
+ *
+ * Fields:
+ *   from:   the statuses it may start from — also the conditional write's own `from` set
+ *   to:     the status it lands on
+ *   actors: who may make it
  */
-export const ORDER_LIFECYCLE: Readonly<
-    Record<OrderStatus, Readonly<Partial<Record<OrderStatus, readonly OrderActor[]>>>>
-> = {
-    [OrderStatus.pending]: {
-        [OrderStatus.paid]: ['system'],
-        // `system` here is the reservation-sweep expiry — an unpaid hold whose window ran out.
-        // Deliberately absent from `paid`/`processing` below: the sweep must never cancel an
-        // order that landed a payment in the same race, which `admin` and `customer` legitimately
-        // still may (an operator's or buyer's own choice, not a stale deadline).
-        [OrderStatus.cancelled]: ['customer', 'admin', 'system', 'withdrawal']
+export interface OrderEvent {
+    readonly from: readonly OrderStatus[];
+    readonly to: OrderStatus;
+    readonly actors: readonly OrderActor[];
+}
+
+/**
+ * The lifecycle, keyed by the event that makes each move. The edge, its actors and the `from` set
+ * a conditional write is handed all live on one entry, so a service names the event and reads
+ * nothing else — no `from` is guessed from the other columns.
+ *
+ * `system` events follow a fact another module already recorded; a request never makes them.
+ */
+export const ORDER_EVENTS = {
+    /** The payment settled. `payments` is the only caller — nothing else may set `paid`. */
+    pay: { from: [OrderStatus.pending], to: OrderStatus.paid, actors: ['system'] },
+    /**
+     * Fulfilment started, recorded through `delivery`'s own door (`delivery.any.start`). `admin`
+     * reaches `processing` only through the override door (`canOverrideTo`).
+     */
+    start: { from: [OrderStatus.paid], to: OrderStatus.processing, actors: ['system'] },
+    /** The last unit left, as `delivery` records it. */
+    ship: { from: [OrderStatus.processing], to: OrderStatus.shipped, actors: ['system'] },
+    /** The last shipment arrived, as `delivery` records it. */
+    deliver: { from: [OrderStatus.shipped], to: OrderStatus.delivered, actors: ['system'] },
+    /**
+     * The order became complete in one act: a digital fulfilment (the one `processing -> delivered`
+     * edge), or a remainder cancel that lands after every shipment arrived.
+     */
+    fulfilmentComplete: {
+        from: [OrderStatus.processing],
+        to: OrderStatus.delivered,
+        actors: ['system']
     },
-    [OrderStatus.paid]: {
-        // `system`, not `admin`: this follows fulfilment starting being recorded through
-        // `delivery`'s own door (`POST /delivery/order/{id}/start`, `delivery.any.start`), never
-        // a direct admin write — see `src/modules/orders/services/status.ts`'s `markProcessing`.
-        // Reachable by `admin` too, only through the override door (`canOverrideTo`).
-        [OrderStatus.processing]: ['system'],
-        [OrderStatus.cancelled]: ['customer', 'admin', 'withdrawal']
+    /**
+     * The reservation sweep's expiry of an unpaid hold. Deliberately its own event: the sweep
+     * must never cancel an order that landed a payment in the same race, which `cancelBeforeDispatch`
+     * legitimately may (an operator's or buyer's own choice, not a stale deadline).
+     */
+    expire: { from: [OrderStatus.pending], to: OrderStatus.cancelled, actors: ['system'] },
+    /** A buyer's or operator's cancel before fulfilment started. */
+    cancel: {
+        from: [OrderStatus.pending, OrderStatus.paid],
+        to: OrderStatus.cancelled,
+        actors: ['customer', 'admin', 'withdrawal']
     },
-    [OrderStatus.processing]: {
-        // `system`, not `admin`: this follows a parcel's handover being recorded through
-        // `delivery`'s own door, never a direct admin write — see
-        // `src/modules/orders/services/status.ts`'s `markShipped`.
-        [OrderStatus.shipped]: ['system'],
-        [OrderStatus.cancelled]: ['admin', 'withdrawal']
+    /**
+     * A preorder's buyer was asked whether to keep waiting for a late date and never answered
+     * (FTC 16 CFR 435.2, CRD Art. 18): silence cancels, and the cancel refunds. Only `delivery`'s
+     * record of that silence makes it, and only while nothing has shipped.
+     */
+    cancelUnanswered: {
+        from: [OrderStatus.paid, OrderStatus.processing],
+        to: OrderStatus.cancelled,
+        actors: ['fulfilment']
     },
-    [OrderStatus.shipped]: {
-        // `system` likewise — a parcel's arrival, recorded through `delivery`'s own door. See
-        // `src/modules/orders/services/status.ts`'s `markDelivered`.
-        [OrderStatus.delivered]: ['system']
-    },
-    [OrderStatus.delivered]: {},
-    [OrderStatus.cancelled]: {}
-};
+    /** A cancel once fulfilment started: staff or the right of withdrawal, never the buyer's own. */
+    cancelInFulfilment: {
+        from: [OrderStatus.processing],
+        to: OrderStatus.cancelled,
+        actors: ['admin', 'withdrawal']
+    }
+} as const satisfies Record<string, OrderEvent>;
+
+/** The name of one lifecycle event. */
+export type OrderEventName = keyof typeof ORDER_EVENTS;
+
+/** Every event, as a list — what the edge queries below walk. */
+const EVERY_EVENT: readonly OrderEvent[] = Object.values(ORDER_EVENTS);
 
 /**
  * @param from - current status
  * @param to - status being written
  * @param actor - who is writing it
- * @returns whether the move is allowed — `from === to` is not a transition and always allowed,
- * EXCEPT into `paid`: the contract restricts that destination to `system` in absolute terms, so an
- * echo write must not let a non-system actor pass. `system` still gets the no-op, for the payment
- * webhook's own retries.
+ * @returns whether `actor` may make the move — only a declared edge is a transition, so staying in
+ * the same status is never one. A repeated settlement is stopped by the conditional write's own
+ * `from` filter, not by this table.
  */
 export const canTransition = (from: OrderStatus, to: OrderStatus, actor: OrderActor): boolean =>
-    from === to
-        ? to !== OrderStatus.paid || actor === 'system'
-        : Boolean(ORDER_LIFECYCLE[from][to]?.includes(actor));
+    EVERY_EVENT.some(
+        (event) => event.to === to && event.from.includes(from) && event.actors.includes(actor)
+    );
 
 /**
  * Whether an order in `status` may still be paid — the one question every payment door asks
- * instead of comparing a status literal of its own. `pending` only: `canTransition` alone also
- * answers `true` for `paid → paid`, since `system` may echo-write it on the webhook's own retries,
- * but that echo is not a fresh offer to pay — a caller asking "can I pay this" must get `false`
- * once it already has been.
+ * instead of comparing a status literal of its own. `pending` only: the one status with a
+ * `system` edge into `paid`.
  * @param status - current status
  * @returns whether a payment attempt against this order should be allowed
  */
 export const isPayable = (status: OrderStatus): boolean =>
-    canTransition(status, OrderStatus.paid, 'system') && status !== OrderStatus.paid;
+    canTransition(status, OrderStatus.paid, 'system');
 
 /**
  * Whether an order in `status` has already been paid — `paid`, or further along. `pending` has
@@ -92,11 +130,11 @@ export const isPayable = (status: OrderStatus): boolean =>
  * @returns whether the order's hold should be (or already is) `committed` or later
  */
 export const paymentSettled = (status: OrderStatus): boolean =>
-    status !== OrderStatus.pending && status !== OrderStatus.cancelled;
+    ORDER_STATUS_TRAITS[status].stockCommitted;
 
 /**
  * The forward sequence an admin override may move an order along — never `paid` (that destination
- * stays `system`-only in absolute terms, echo included, see {@link canTransition}) and never
+ * stays `system`-only in absolute terms, see {@link canTransition}) and never
  * `cancelled` (that has its own endpoint, with its own refund/stock-release sequence). Order in
  * this array IS the "forward" rule: an override may only move to a LATER index than the order's
  * current status sits at within it. `pending` is not in it: leaving `pending` goes only through the

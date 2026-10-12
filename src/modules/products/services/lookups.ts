@@ -43,15 +43,28 @@ export const findManyByIds = (ids: readonly string[]) =>
  * to remember a second, hand-rolled copy of it living in a sibling module's aggregation pipeline.
  *
  * @param ids - candidate product ids
+ * @param options - `excludePreorders` leaves out the products on sale before their release date:
+ *   they wait for stock that does not exist yet, which is not "running low"
  * @returns how many of them are active and not soft-deleted
  */
-export const countPublic = (ids: readonly string[]): Promise<number> =>
+export const countPublic = (
+    ids: readonly string[],
+    options: { excludePreorders?: boolean } = {}
+): Promise<number> =>
     ids.length === 0
         ? Promise.resolve(0)
         : Promise.resolve().then(() =>
               productRepository.count({
                   ...productRepository.publicScope(),
-                  _id: { $in: ids.map((id) => toObjectId(id)) }
+                  _id: { $in: ids.map((id) => toObjectId(id)) },
+                  // The same rule as `isPreorder`, as a filter: public scope already makes it active.
+                  ...(options.excludePreorders
+                      ? {
+                            $nor: [
+                                { releaseDate: { $gt: new Date() }, purchasable: { $ne: false } }
+                            ]
+                        }
+                      : {})
               })
           );
 

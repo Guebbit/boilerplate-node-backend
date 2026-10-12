@@ -23,7 +23,6 @@ flowchart LR
     cart["cart"]
     example["example"]
     orders["orders"]
-    payments["payments"]
     webhooks["webhooks"]
 
     account --> users
@@ -31,7 +30,6 @@ flowchart LR
     cart --> users
     example --> users
     orders --> users
-    payments --> users
     webhooks --> users
     users --> access
     users -. "user.setup-requested" .-> account
@@ -41,7 +39,6 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class payments supporting;
     class access,account,api_keys,example,webhooks generic;
     class users centre;
 ```
@@ -100,9 +97,37 @@ and resending what the account already has is no ban and no promotion. The same 
 soft delete, hard delete and restore. A refused attempt on a rank is audited as `security.forbidden`
 with `metadata.reason: outranked`.
 
+### Creating and updating with a role
+
+An account and its role live in two collections (`users`, and `access`' memberships), and an admin
+write touches both. It is **one transaction**, with the grant checked first:
+
+```mermaid
+sequenceDiagram
+    participant A as admin write
+    participant X as access (grant check)
+    participant D as database
+    A->>X: assertCanGrantAudited(role)
+    X-->>A: refused? audited as a failed grant, nothing written
+    A->>D: transaction: save user, upsert membership
+    D-->>A: commit, or roll both back
+    A->>A: audit the grant, then react (image, sessions, setup mail)
+```
+
+- **Before any write**, the grant is validated (a role that exists, nothing the granter does not
+  hold) and a refusal is audited as `access.role.assigned` / `failure`, even though no account
+  exists yet to point at.
+- **One commit.** A failure of the role write rolls the account write back: no row left holding an
+  email with no role, and no half-applied update (a ban, a rename) under a request that failed.
+- **Audit after commit.** The success row for the grant is written once the transaction has
+  committed, because it is not true before.
+- **Self-service and OAuth signup follow the same shape** (see [`account`](./account.md)): the row
+  and its starting role commit together or not at all.
+
 **Credentials are the owner's alone.** `POST /users` takes no password: the account is created
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
-[`account`](./account.md)), so no administrator ever types, sees or resets another person's
+[`account`](./account.md); it rides the [outbox](../tools/outbox.md) in the account's own
+transaction, so a lost mail is retried and a refused grant sends none), so no administrator ever types, sees or resets another person's
 password, second factor or sign-in email. Each row also carries an `actions` block (`update`,
 `ban`, `delete`) with the rank already applied, which is what a screen renders its buttons from.
 
@@ -115,7 +140,9 @@ path, `toUser` (`model.ts`) decrypts it on the way out, whether the source docum
 ## Soft delete vs. erasure
 
 `DELETE /users/:id` soft-deletes by default — `deletedAt` is stamped, the account's sessions are
-revoked, and a repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
+revoked (the [session epoch](./account-sessions.md#the-session-epoch) moves in the same save, as it
+does when an update bans the account, so a restore or an unban never revives an old token), and a
+repeated `DELETE` changes nothing. `POST /users/:id/restore` undoes it; the owner
 signs in again. `?hardDelete=true` is the one that runs every module's `personalData.erase` hook (the cascade above) and
 actually removes the row.
 
@@ -123,6 +150,9 @@ Only the hard path **discharges an Art. 17 erasure request**. The audit trail sa
 so explicitly: a soft delete emits `admin.user.soft_deleted`, a hard one `admin.user.erased` — two
 actions rather than one `admin.user.deleted`, so "was this request actually closed out" is
 answerable from the log alone, not from remembering which flag an admin clicked.
+
+[`access`](./access.md#when-the-account-is-erased) is one of the modules in that cascade: the account's roles, tenant and platform, leave in the same
+transaction as the row, so a failed erasure takes no role from an account that stays.
 
 A module's erase hook may hand back work to run once the transaction has committed (`AfterErase`):
 anything that is not a database write, so a rollback could not undo it. `orders` uses it to cancel

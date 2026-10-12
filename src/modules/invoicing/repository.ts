@@ -7,8 +7,9 @@
  */
 
 import { reencryptOf } from '@infrastructure/security/reencrypt';
+import { bucketOf, decimalSum, type ReportWindow } from '@infrastructure/persistence/report';
 import { Types } from 'mongoose';
-import type { ClientSession } from 'mongoose';
+import type { ClientSession, Document, Model } from 'mongoose';
 import {
     invoiceModel,
     creditNoteModel,
@@ -23,6 +24,65 @@ import type { FrozenTaxDocument, InvoiceDocument, CreditNoteDocument } from './m
  */
 const findInvoiceByOrderId = (orderId: string): Promise<InvoiceDocument | null> =>
     invoiceModel.findOne({ orderId: new Types.ObjectId(orderId) }).exec();
+
+/** One bucket of one currency, summed. The sums are decimals as Mongo returns them. */
+export interface DocumentBucketRow {
+    currency: string;
+    bucket: Date;
+    documents: number;
+    goodsNet: unknown;
+    shippingNet: unknown;
+    tax: unknown;
+    gross: unknown;
+}
+
+/**
+ * Documents issued in a window, summed per currency and bucket. Goods are `netTotal` minus the
+ * shipping net it includes, subtracted as decimals so cents do not drift.
+ *
+ * @param model - the invoice or credit-note collection
+ * @param window - the half-open window and the bucket size
+ */
+const sumDocuments = <TDocument extends Document>(
+    model: Model<TDocument>,
+    window: ReportWindow
+): Promise<DocumentBucketRow[]> =>
+    model
+        .aggregate<{
+            _id: { currency: string; bucket: Date };
+            documents: number;
+            goodsNet: unknown;
+            shippingNet: unknown;
+            tax: unknown;
+            gross: unknown;
+        }>([
+            { $match: { issuedAt: { $gte: window.from, $lt: window.to } } },
+            {
+                $group: {
+                    _id: { currency: '$currency', bucket: bucketOf('$issuedAt', window) },
+                    documents: { $sum: 1 },
+                    goodsNet: {
+                        $sum: {
+                            $subtract: [
+                                { $toDecimal: '$netTotal' },
+                                { $toDecimal: '$shippingNetAmount' }
+                            ]
+                        }
+                    },
+                    shippingNet: decimalSum('$shippingNetAmount'),
+                    tax: decimalSum('$taxTotal'),
+                    gross: decimalSum('$grandTotal')
+                }
+            }
+        ])
+        .exec()
+        .then((rows) =>
+            rows.map(({ _id, ...sums }) => ({
+                currency: _id.currency,
+                bucket: _id.bucket,
+                ...sums
+            }))
+        );
 
 /**
  * A document's own `_id`, chosen by the caller before the insert.
@@ -128,6 +188,8 @@ export const invoicingRepository = {
     reencryptInvoices: reencryptOf(invoiceModel),
     reencryptCreditNotes: reencryptOf(creditNoteModel),
     findInvoiceByOrderId,
+    sumInvoices: (window: ReportWindow) => sumDocuments(invoiceModel, window),
+    sumCreditNotes: (window: ReportWindow) => sumDocuments(creditNoteModel, window),
     insertInvoice,
     findCreditNotesByOrderId,
     findCreditNoteById,

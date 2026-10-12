@@ -29,10 +29,11 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { AuthContext } from '@types';
-import type { CallerContext, RefundReason } from '@types';
+import { RefundFailureReason, type CallerContext, type RefundReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
     orderService,
@@ -45,7 +46,7 @@ import {
     type Money
 } from '@modules/orders';
 import { paymentsAuditActions } from '../audit';
-import { providerNamed } from '../providers';
+import { PaymentProviderError, providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
@@ -59,7 +60,10 @@ export interface RefundRequest {
     amount?: number;
     /** Why the money goes back — recorded on the refund. */
     reason: RefundReason;
-    /** The return this pays for, when `reason` is `return` — recorded so it can be closed later. */
+    /**
+     * The return this pays for, when `reason` is `return` — recorded so it can be closed later — or
+     * the cancellation of a fulfillment order's remainder, when `reason` is `cancellation`.
+     */
     returnId?: string;
     /** The goods this pays back, when it pays for specific ones — see `RefundRecord.lines`. */
     lines?: RefundLine[];
@@ -76,8 +80,25 @@ interface OpenedRefund {
     refund: RefundRecord;
 }
 
-/** How long a provider error is kept on the record — enough to diagnose, not a log dump. */
+/** How much of a provider's own wording one log line carries. */
 const MAX_ERROR_LENGTH = 500;
+
+/**
+ * The closed reason a refund failed, for the record. An adapter that classified its error threw a
+ * {@link PaymentProviderError}; anything else is `unknown`. The wording itself is logged here and
+ * never stored: it is the provider's, and can carry anything.
+ *
+ * @param error - what the provider call rejected with
+ * @param refund - the record that failed, for the log line
+ */
+const failureReasonOf = (error: unknown, refund: RefundRecord): RefundFailureReason => {
+    logger.warn({
+        message: 'The provider refused a refund.',
+        refundId: String(refund._id),
+        error: extractErrorMessage(error, String(error)).slice(0, MAX_ERROR_LENGTH)
+    });
+    return error instanceof PaymentProviderError ? error.code : RefundFailureReason.unknown;
+};
 
 /**
  * What is still refundable on a payment, in minor units: what was paid minus what has been asked
@@ -117,20 +138,40 @@ const leaveForOperator = (orderId: string, payment: PaymentDocument): Promise<Pa
 };
 
 /**
+ * What a refund's timeline rows carry: its id, the money and the closed reason code. Never the
+ * provider's wording.
+ *
+ * @param refund - the refund record
+ */
+const refundRow = (
+    refund: Pick<RefundRecord, '_id' | 'amount' | 'currency' | 'reason'>
+): Record<string, string | number> => ({
+    refundId: String(refund._id),
+    amount: refund.amount,
+    currency: refund.currency,
+    reason: refund.reason
+});
+
+/**
  * Open a refund on a payment: reserve the amount and append its record in one conditional write.
  *
  * A miss means another write moved `amountRefunded` between the caller's read and this one — so the
  * payment is re-read and the whole check runs again against what is really left, instead of
  * refunding from a stale figure. Each miss means someone else made progress, so it ends.
  *
+ * The order's timeline row commits with the record, in one transaction: a refund exists exactly
+ * when its `refund_issued` does.
+ *
  * @param payment - the payment as the caller read it
  * @param request - the amount (absent = everything left) and the reason
+ * @param actor - the operator who asked, when one did; absent for the automatic listener
  * @returns the opened record and the payment after it, or `null` when nothing (or not that much)
  *   is left to refund
  */
 const openRefund = (
     payment: PaymentDocument,
-    request: RefundRequest
+    request: RefundRequest,
+    actor?: string | null
 ): Promise<OpenedRefund | null> => {
     const { currency, _id: paymentId, orderId, amountRefunded } = payment;
     const remaining = remainingOf(payment);
@@ -153,18 +194,42 @@ const openRefund = (
     };
     const newTotal = addMoney(toMinorUnits(amountRefunded, currency), amount);
 
-    return paymentRepository
-        .addRefund(String(paymentId), amountRefunded, toDecimalAmount(newTotal, currency), refund)
-        .then((updated) => {
-            // `createdAt` is stamped by mongoose on insert; the record this write appended is
-            // otherwise exactly `refund` — one cast for the one field the compiler cannot see.
-            if (updated) return { payment: updated, refund: refund as RefundRecord };
-            return paymentRepository
-                .findByOrderId(String(orderId))
-                .then((fresh) =>
-                    fresh?.status === REFUNDABLE_PAYMENT_STATUS ? openRefund(fresh, request) : null
-                );
-        });
+    return withTransaction((session) =>
+        paymentRepository
+            .addRefund(
+                String(paymentId),
+                amountRefunded,
+                toDecimalAmount(newTotal, currency),
+                refund,
+                session
+            )
+            .then((updated) =>
+                updated
+                    ? orderService
+                          .appendTimeline(
+                              String(orderId),
+                              {
+                                  type: 'refund_issued',
+                                  actor,
+                                  data: refundRow(refund)
+                              },
+                              session
+                          )
+                          .then(() => updated)
+                    : updated
+            )
+    ).then((updated) => {
+        // `createdAt` is stamped by mongoose on insert; the record this write appended is
+        // otherwise exactly `refund` — one cast for the one field the compiler cannot see.
+        if (updated) return { payment: updated, refund: refund as RefundRecord };
+        return paymentRepository
+            .findByOrderId(String(orderId))
+            .then((fresh) =>
+                fresh?.status === REFUNDABLE_PAYMENT_STATUS
+                    ? openRefund(fresh, request, actor)
+                    : null
+            );
+    });
 };
 
 /**
@@ -178,15 +243,16 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
 /**
  * Tell the buyer their money went back, when it went back outside a return — a refund that
  * followed a cancel, or an operator's goodwill one. A return's refund is announced by `returns`'
- * own closing notice, so one carrying a `returnId` is skipped here, as is a refund that moved no
- * money. Fire-and-forget, same reasoning as the `orderPaid` mail in `./settlement.ts`: a mail that
+ * own closing notice, so a `return` refund carrying a `returnId` is skipped here, as is a refund
+ * that moved no money. A remainder cancel's refund carries a `returnId` too but has no closing
+ * notice (its Return is closed at birth), so it is announced here like any cancellation's. Fire-and-forget, same reasoning as the `orderPaid` mail in `./settlement.ts`: a mail that
  * cannot be sent must never undo a refund that already went back.
  *
  * @param payment - the payment after the refund settled
  * @param refund - the record that settled
  */
 const mailRefundIssued = (payment: PaymentDocument, refund: RefundRecord): void => {
-    if (refund.returnId) return;
+    if (refund.returnId && refund.reason !== 'cancellation') return;
 
     const orderId = String(payment.orderId);
     // Started inside a promise so a synchronous throw (a malformed id) is reported, not raised.
@@ -309,13 +375,15 @@ const stampOrder = (payment: PaymentDocument, session: ClientSession): Promise<b
  * @param refund - the record being settled
  * @param fields - see {@link settleRefund}
  * @param session - the transaction both writes join
+ * @param actor - the operator who settled it by hand, when one did
  * @returns the payment as it now stands, or `null` when the record was no longer open
  */
 const writeSettlement = (
     payment: PaymentDocument,
     refund: RefundRecord,
     fields: { providerRefundRef?: string; refundedByHand?: true },
-    session: ClientSession
+    session: ClientSession,
+    actor?: string | null
 ): Promise<PaymentDocument | null> =>
     paymentRepository
         .settleRefund(String(payment._id), String(refund._id), fields, session)
@@ -332,7 +400,19 @@ const writeSettlement = (
                 )
                 .then((moved) => moved ?? settled);
         })
-        .then((final) => (final ? stampOrder(final, session).then(() => final) : null));
+        .then((final) =>
+            final
+                ? stampOrder(final, session)
+                      .then(() =>
+                          orderService.appendTimeline(
+                              String(final.orderId),
+                              { type: 'refund_settled', actor, data: refundRow(refund) },
+                              session
+                          )
+                      )
+                      .then(() => final)
+                : null
+        );
 
 /**
  * Settle one open refund, and move the payment to `refunded` if that was the last of it. The
@@ -355,7 +435,7 @@ const settleRefund = (
     outcome: 'success' | 'failure' = 'success'
 ): Promise<PaymentDocument | null> =>
     announceInTransaction(
-        (session) => writeSettlement(payment, refund, fields, session),
+        (session) => writeSettlement(payment, refund, fields, session, context?.caller.id),
         (final) => ({
             name: PAYMENT_REFUNDED,
             payload: refundedPayload(final, refund),
@@ -365,6 +445,37 @@ const settleRefund = (
         if (final) announceRefund(final, refund, context, outcome);
         return final;
     });
+
+/**
+ * Record that the provider refused a refund: the record goes `failed` and the order's timeline
+ * says so, in one transaction. Only an open record can fail, so a late error never walks back a
+ * refund that already succeeded, and writes no row.
+ *
+ * @param payment - the payment
+ * @param refund - the record the provider refused
+ * @param failureReason - the closed code for what it said
+ */
+const recordRefundFailure = (
+    payment: PaymentDocument,
+    refund: RefundRecord,
+    failureReason: RefundFailureReason
+): Promise<void> =>
+    withTransaction((session) =>
+        paymentRepository
+            .failRefund(String(payment._id), String(refund._id), failureReason, session)
+            .then((failed) =>
+                failed
+                    ? orderService.appendTimeline(
+                          String(payment.orderId),
+                          {
+                              type: 'refund_failed',
+                              data: { ...refundRow(refund), failureReason }
+                          },
+                          session
+                      )
+                    : undefined
+            )
+    );
 
 /**
  * Ask the provider to return one refund's money, and record its answer. A refusal marks the record
@@ -392,15 +503,9 @@ const sendToProvider = (
             ({ refundRef }) =>
                 settleRefund(payment, refund, { providerRefundRef: refundRef }, context),
             (error: unknown) =>
-                paymentRepository
-                    .failRefund(
-                        String(payment._id),
-                        String(refund._id),
-                        extractErrorMessage(error, String(error)).slice(0, MAX_ERROR_LENGTH)
-                    )
-                    .then(() => {
-                        throw error;
-                    })
+                recordRefundFailure(payment, refund, failureReasonOf(error, refund)).then(() => {
+                    throw error;
+                })
         );
 
 /**
@@ -518,12 +623,13 @@ export const performRefund = (
         return settleOpenRefunds(payment, context).then(({ payment: current, settled }) => {
             if (remainingOf(current) <= 0) return settled ? current : null;
 
-            return openRefund(current, request ?? CANCELLATION_REQUEST).then((opened) =>
-                opened
-                    ? attemptRefund(opened.payment, opened.refund, context).then(
-                          (after) => after ?? settledElsewhere(orderId, opened.refund)
-                      )
-                    : null
+            return openRefund(current, request ?? CANCELLATION_REQUEST, context?.caller.id).then(
+                (opened) =>
+                    opened
+                        ? attemptRefund(opened.payment, opened.refund, context).then(
+                              (after) => after ?? settledElsewhere(orderId, opened.refund)
+                          )
+                        : null
             );
         });
     });
@@ -620,16 +726,18 @@ export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId).then(() => undefined);
 
 /**
- * Give back the money for goods a customer returned — `returns`' one door into the refund. The
- * amount is clamped to what the payment still has left, so a goodwill refund made earlier can
- * never make a return over-refund; the refund is recorded as `return` and carries `returnId`, so
- * `returns` can close the return when the money lands — now, or later when the sweep finishes it.
+ * Give back the money for goods a customer returned, or for a remainder cancelled before it
+ * shipped — `returns`' one door into the refund. The amount is clamped to what the payment still
+ * has left, so a goodwill refund made earlier can never make a return over-refund; the refund is
+ * recorded as `return` (or `cancellation`) and carries `returnId`, so `returns` can close the
+ * return when the money lands — now, or later when the sweep finishes it.
  *
  * A provider refusal throws after the refund is recorded as `failed`: the sweep will retry it and
  * `returns` will hear of it then.
  *
  * @param orderId - the returned order
- * @param input - which return this pays for, how much (a decimal in the payment's currency), and
+ * @param input - which return this pays for, and whether it is a `return` (the default) or a
+ *   remainder `cancellation`, how much (a decimal in the payment's currency), and
  *   which goods and delivery that amount covers — what the credit note credits at their own rates
  * @param context - the staff member who received the goods, audited on the refund
  * @returns the payment as it now stands, or `null` when there is nothing to return — no succeeded
@@ -637,7 +745,13 @@ export const refundForOrder = (orderId: string): Promise<void> =>
  */
 export const refundForReturn = (
     orderId: string,
-    input: { returnId: string; amount: number; lines: RefundLine[]; shipping: number },
+    input: {
+        returnId: string;
+        amount: number;
+        lines: RefundLine[];
+        shipping: number;
+        reason?: Extract<RefundReason, 'return' | 'cancellation'>;
+    },
     context: CallerContext
 ): Promise<PaymentDocument | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
@@ -650,7 +764,7 @@ export const refundForReturn = (
 
         return performRefund(orderId, context, {
             amount: toDecimalAmount(amount, payment.currency),
-            reason: 'return',
+            reason: input.reason ?? 'return',
             returnId: input.returnId,
             lines: input.lines,
             shipping: input.shipping

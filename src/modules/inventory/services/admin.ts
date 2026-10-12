@@ -11,12 +11,15 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { productService } from '@modules/products';
+import { nudgeOutbox } from '@kernel/outbox';
+import { withTransaction } from '@infrastructure/runtime/database';
 import { StockMovementReason, type InventoryLevel, type CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { ERROR_CODES } from '@api/error-codes';
 import { stockLevelRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
-import { applyTransition } from './transition';
+import { applyTransition, syncStockCache } from './transition';
+import { allocateWithin } from './allocate';
 
 /**
  * One product's counters, read back after a write.
@@ -36,9 +39,41 @@ const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
         title: product.title,
         onHand: level.onHand,
         reserved: level.reserved,
-        available: level.available
+        available: level.available,
+        preorderLimit: level.preorderLimit,
+        preordered: level.preordered
     };
 };
+
+/**
+ * A delivery and the preorders it serves, as ONE transaction: the units arrive and are allocated
+ * to the paid preorders waiting for them oldest payment first, so they never look sellable in
+ * between. Everything that cannot roll back — waking the outbox relay, the catalogue's stock
+ * cache — waits for the commit.
+ *
+ * @param productId - the product the delivery is for
+ * @param quantity - how many units arrived
+ * @param note - the operator's words for the ledger row
+ * @returns whether the delivery landed
+ */
+const receiveAndAllocate = (
+    productId: string,
+    quantity: number,
+    note: string | undefined
+): Promise<boolean> =>
+    withTransaction((session) =>
+        applyTransition(
+            StockMovementReason.receive,
+            productId,
+            quantity,
+            note === undefined ? {} : { note },
+            session
+        ).then((moved) => (moved ? allocateWithin([productId], session).then(() => true) : false))
+    ).then((moved) => {
+        if (!moved) return false;
+        nudgeOutbox();
+        return syncStockCache(productId).then(() => true);
+    });
 
 /**
  * What varies between `receive` and `adjust` — both check the product exists, apply a signed
@@ -58,6 +93,8 @@ interface AdminStockTransition {
      * tell which one refused and answers 409 for the rule.
      */
     onFailure?: (productId: string) => Promise<ResponseReject>;
+    /** Whether the write also serves the paid preorders waiting for stock — only a receipt does. */
+    allocates?: boolean;
     auditAction: (typeof inventoryAuditActions)[keyof typeof inventoryAuditActions];
     buildAuditMetadata: (level: InventoryLevel) => Record<string, unknown>;
     successMessageKey: string;
@@ -74,6 +111,7 @@ const applyAdminStockTransition = async ({
     note,
     context,
     onFailure,
+    allocates = false,
     auditAction,
     buildAuditMetadata,
     successMessageKey
@@ -84,12 +122,9 @@ const applyAdminStockTransition = async ({
     const product = await productService.findByIdRaw(productId);
     if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
-    const applied = await applyTransition(
-        reason,
-        productId,
-        amount,
-        note === undefined ? {} : { note }
-    );
+    const applied = allocates
+        ? await receiveAndAllocate(productId, amount, note)
+        : await applyTransition(reason, productId, amount, note === undefined ? {} : { note });
     if (!applied) {
         return onFailure
             ? onFailure(productId)
@@ -132,6 +167,7 @@ export const receive = (
         amount: quantity,
         note,
         context,
+        allocates: true,
         auditAction: inventoryAuditActions.ADMIN_STOCK_RECEIVED,
         buildAuditMetadata: (level) => ({ quantity, onHand: level.onHand }),
         successMessageKey: 'inventory.receive-success'
@@ -181,3 +217,37 @@ export const adjust = (
         buildAuditMetadata: (level) => ({ delta, note, onHand: level.onHand }),
         successMessageKey: 'inventory.adjust-success'
     });
+
+/**
+ * Set how many units of a product may be preordered at once. Not a stock movement — nothing on the
+ * shelf changes — so it writes no ledger row; it is audited. Lowering it below what is outstanding
+ * is allowed: those orders stand and only new ones are refused.
+ *
+ * @param productId - the product
+ * @param preorderLimit - the new allowance; `0` closes preordering
+ * @param context - audit context for `ADMIN_PREORDER_LIMIT_SET`; tests omit it to skip the emit
+ * @returns the counters after the change, or 404 if the product is unknown
+ */
+export const setPreorderLimit = async (
+    productId: string,
+    preorderLimit: number,
+    context?: CallerContext
+): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> => {
+    const product = await productService.findByIdRaw(productId);
+    if (!product) return generateReject(404, [t('inventory.product-not-found')]);
+
+    await stockLevelRepository.setPreorderLimit(productId, preorderLimit);
+
+    const level = await levelFor(productId);
+    if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+
+    recordAudit(context, {
+        action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
+        outcome: 'success',
+        targetType: 'product',
+        targetId: productId,
+        metadata: { preorderLimit }
+    });
+
+    return generateSuccess(level, 200, t('inventory.preorder-limit-success'));
+};

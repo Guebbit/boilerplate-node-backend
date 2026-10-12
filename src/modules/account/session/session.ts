@@ -10,7 +10,12 @@ import type { Request, Response } from 'express';
 import { readRefreshCookie } from '@kernel/cookies';
 import { logger } from '@infrastructure/adapters/logger';
 import { userService } from '@modules/users';
-import { createRefreshToken, createAccessToken, rememberOfRefreshToken } from './jwt';
+import {
+    createRefreshToken,
+    createAccessToken,
+    rememberOfRefreshToken,
+    type SessionMint
+} from './jwt';
 import { createRefreshCookie, createLoggedCookie } from './cookies';
 import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './config';
 
@@ -21,16 +26,20 @@ import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './conf
  * @param remember - the ticked "remember me" tier; absent means a browser-session cookie, with a
  *   server-side TTL of the `short` tier
  * @param amr - how `auth_time` was proved; absent matches `createRefreshToken`'s own `['pwd']` default
+ * @param mint - `'first'` for a login or signup (the default), checked for a second factor;
+ *   `'remint'` only from {@link reissueSession}
  * @returns the signed access token to hand back in the response body
- * @throws when the refresh token cannot be persisted or signed
+ * @throws when the refresh token cannot be persisted or signed, or `SecondFactorRequiredError`
+ *   for a first session on an account whose second factor `amr` does not carry
  */
 export const issueSession = (
     response: Response,
     userId: string,
     remember?: RefreshTokenExpiryTime,
-    amr?: string[]
+    amr?: string[],
+    mint: SessionMint = 'first'
 ): Promise<string> =>
-    createRefreshToken(userId, remember, amr).then((refreshToken) => {
+    createRefreshToken(userId, remember, amr, mint).then((refreshToken) => {
         const maxAgeMs = getCookieMaxAgeMilliseconds(remember);
         createRefreshCookie(response, refreshToken, maxAgeMs);
         createLoggedCookie(response, maxAgeMs);
@@ -58,7 +67,7 @@ export const reissueSession = (
 ): Promise<string> => {
     const previous = readRefreshCookie(request);
     return rememberOfRefreshToken(previous, userId)
-        .then((remember) => issueSession(response, userId, remember, amr))
+        .then((remember) => issueSession(response, userId, remember, amr, 'remint'))
         .then((token) => retireRefreshToken(previous).then(() => token));
 };
 
@@ -102,7 +111,7 @@ export const remintRefreshCookie = (
 ): Promise<void> =>
     rememberOfRefreshToken(readRefreshCookie(request), userId)
         .then((remember) =>
-            createRefreshToken(userId, remember, [...amr]).then((refreshToken) => {
+            createRefreshToken(userId, remember, [...amr], 'remint').then((refreshToken) => {
                 const maxAgeMs = getCookieMaxAgeMilliseconds(remember);
                 createRefreshCookie(response, refreshToken, maxAgeMs);
                 createLoggedCookie(response, maxAgeMs);

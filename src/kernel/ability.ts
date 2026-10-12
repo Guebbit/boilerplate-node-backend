@@ -127,8 +127,9 @@ export const buildAbility = (caller: Caller): Ability => {
  * Which rows survive is the read's business — see `access/query.ts`. That also means this
  * collapses two keys that share an action and a subject but differ in breadth
  * (`orders.self.read` and `orders.any.read` both answer `can('read', 'Order')`) — never a problem
- * for a guard, since no route in this repo guards a read on the wide-breadth key specifically, but
- * the wrong question for anything ENUMERATING which keys a caller holds. Use {@link heldKeys} for
+ * for a guard that means the action, but wrong
+ * for a wide read (`requirePermission(key, { exact: true })` exists for that) and for anything
+ * ENUMERATING which keys a caller holds. Use {@link heldKeys} for
  * that.
  */
 export const holdsKey = (caller: Caller, key: string): boolean => {

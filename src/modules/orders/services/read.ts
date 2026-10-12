@@ -5,7 +5,7 @@
  */
 
 import type { SearchOrdersRequest, Order, CallerContext, AuthContext } from '@types';
-import type { OrderDocument } from '../model';
+import type { OrderDocument, OrderReference } from '../model';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import {
     readAll,
@@ -17,6 +17,28 @@ import { decryptOrderAddress } from '../pii';
 import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { callerScope, ownerScope } from './scope';
+import { fulfillmentStatusFilter } from '../domain';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
+
+/**
+ * Turn `fulfillmentStatus` — a value derived on read, not a stored column — into the conditions
+ * that make `fulfillmentStatusOf` answer it, and AND them into the scope. The rest of the search
+ * goes through unchanged. Not a stored copy of the answer: a filter built from the same table
+ * cannot disagree with the value a row serializes with.
+ *
+ * @param request - the search as it arrived
+ * @param scope - the caller's own scope
+ * @returns the arguments for `orderRepository.search`
+ */
+export const withFulfillmentFilter = (
+    request: SearchOrdersRequest,
+    scope: Record<string, unknown> | undefined
+): [SearchOrdersRequest, Record<string, unknown> | undefined] => {
+    const { fulfillmentStatus, ...rest } = request;
+    return fulfillmentStatus
+        ? [rest, { $and: [scope ?? {}, fulfillmentStatusFilter(fulfillmentStatus)] }]
+        : [rest, scope];
+};
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
@@ -32,7 +54,7 @@ export const search = (
     items: Order[];
     meta: PaginatedMeta;
 }> =>
-    orderRepository.search(search, scope).then((result) =>
+    orderRepository.search(...withFulfillmentFilter(search, scope)).then((result) =>
         // One batched `$in` for the whole page, however many orders it holds — see `./current`.
         resolveCurrentImages(result.items).then((items) => {
             if (context)
@@ -59,6 +81,49 @@ export const ownOrderIds = (userId: string): Promise<string[]> =>
                 .then((result) => result.items),
         MAX_CONFIGURED_PAGE_SIZE
     ).then((orders) => orders.map((order) => order.id));
+
+/** What a board needs to name an order's buyer and when it was paid — nothing more. */
+export interface OrderBrief {
+    id: string;
+    orderNumber: string;
+    /** Absent once the account was erased. */
+    userId?: string;
+    email: string;
+    /** When the payment settled; absent for an order never paid. */
+    paidAt?: Date;
+}
+
+/**
+ * The narrow read an admin board makes about a page of orders: who bought and when it was paid, by
+ * id, in one query however many orders the page holds. Not a view of the order — no lines, no
+ * addresses — so a board never needs the rest of it.
+ *
+ * @param orderIds - the orders on the page
+ * @returns a brief per order found, by id; an id that matches nothing is simply absent
+ */
+export const orderBriefsByIds = (orderIds: readonly string[]): Promise<Map<string, OrderBrief>> =>
+    orderIds.length === 0
+        ? Promise.resolve(new Map<string, OrderBrief>())
+        : orderRepository
+              .findAll(
+                  { _id: { $in: orderIds.map((id) => toObjectId(id)) } },
+                  { limit: orderIds.length }
+              )
+              .then(
+                  (orders) =>
+                      new Map(
+                          orders.map((order): [string, OrderBrief] => [
+                              String(order._id),
+                              {
+                                  id: String(order._id),
+                                  orderNumber: order.orderNumber,
+                                  email: order.email,
+                                  ...(order.userId ? { userId: String(order.userId) } : {}),
+                                  ...(order.paidAt ? { paidAt: order.paidAt } : {})
+                              }
+                          ])
+                      )
+              );
 
 /**
  * Every order this account placed, in wire shape — for the account's own data export. Goes
@@ -125,6 +190,37 @@ export const billingAddressOf = (order: OrderDocument): Order['billingAddress'] 
  */
 export const openUnpaidOrderIds = (userId: string): Promise<string[]> =>
     orderRepository.findOpenUnpaidIdsOf(userId);
+
+/**
+ * The number and email of each named order — what a list of something else (a payment, say) shows
+ * beside its own columns. Narrower than {@link getById} on purpose: no lines, no addresses.
+ *
+ * @param ids - the orders wanted
+ * @returns the references found, in no particular order
+ */
+export const findManyByIds = (ids: readonly string[]): Promise<OrderReference[]> =>
+    ids.length === 0 ? Promise.resolve([]) : orderRepository.findManyReferences(ids);
+
+/**
+ * Orders cancelled after payment whose refund is still owed, oldest first — the payments page's
+ * needs-attention read. Only a refund the retry sweep has had its chance at: the grace window
+ * is the caller's `cutoff`.
+ *
+ * @param cutoff - orders untouched at or before this instant
+ * @param limit - the most to return
+ * @returns the order id and when the debt was last touched
+ */
+export const findOwedRefunds = (
+    cutoff: Date,
+    limit: number
+): Promise<{ orderId: string; since: Date }[]> =>
+    orderRepository
+        .findWithPendingEffects(cutoff, limit)
+        .then((orders) =>
+            orders
+                .filter((order) => order.pendingEffects?.includes('refund'))
+                .map((order) => ({ orderId: String(order._id), since: order.updatedAt ?? cutoff }))
+        );
 
 /**
  * The order a `bank_transfer` checkout stamped with this RF reference — `payments`' admin lookup,

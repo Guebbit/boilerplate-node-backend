@@ -44,10 +44,12 @@ admin-permissions: &admin_permissions
     - orders.any.update
     - orders.any.delete
     - orders.any.override
+    - orders.any.export
     - payments.self.read
     - payments.any.read
     - payments.any.create
     - payments.any.update
+    - stats.any.read
     - inventory.any.read
     - inventory.any.create
     - inventory.any.sweep
@@ -199,6 +201,20 @@ cases:
       subject: Payment
       resource: { tenantId: shop_1, userId: usr_2 }
       expect: deny
+
+    - name: a support desk that reads every order may not export them
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [orders.any.read] }
+      action: export
+      subject: Order
+      resource: { tenantId: shop_1, userId: usr_9 }
+      expect: deny
+
+    - name: a manager holding the export key may export orders
+      caller: { id: usr_2, scope: tenant, tenantId: shop_1, permissions: [orders.any.export] }
+      action: export
+      subject: Order
+      resource: { tenantId: shop_1, userId: usr_9 }
+      expect: allow
 
     - name: the same person, member of two shops, is one caller in one of them at a time
       caller: { id: usr_2, scope: tenant, tenantId: shop_2, permissions: [products.any.update] }

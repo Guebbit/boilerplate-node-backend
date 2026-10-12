@@ -8,7 +8,15 @@
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  */
 
-import { search, getById, getForCaller, openUnpaidOrderIds, getByTransferReference } from './read';
+import {
+    search,
+    getById,
+    getForCaller,
+    openUnpaidOrderIds,
+    getByTransferReference,
+    findManyByIds,
+    findOwedRefunds
+} from './read';
 import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
@@ -27,17 +35,48 @@ import {
     reachesBuyerOf,
     withActions
 } from './scope';
-import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
+import {
+    cancelById,
+    cancelUnanswered,
+    retryPendingEffects,
+    markRefundOwed,
+    clearRefundOwed
+} from './cancel';
 import {
     markPaid,
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled,
+    markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus
 } from './status';
-import { overrideStatus, forceMove } from './override';
+import {
+    readOrder,
+    recordFulfillmentProgress,
+    recordForcedFulfilment,
+    shipStock,
+    refreshShelf
+} from './fulfillment';
+import { overrideStatus } from './override';
+import { openOrderExport } from './export';
+import {
+    appendTimeline,
+    readTimeline,
+    collectTimelineOf,
+    clearTimelineActor,
+    scrubTimelineText,
+    deleteTimelineOf
+} from './timeline';
+import {
+    paidBuckets,
+    productTotals,
+    categoryTotals,
+    productSeries,
+    customerCounts,
+    cancellationCohort,
+    pipeline
+} from './stats';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
@@ -52,24 +91,51 @@ export {
     billingAddressOf,
     openUnpaidOrderIds,
     getByTransferReference,
+    findManyByIds,
+    findOwedRefunds,
     ownOrderIds,
-    findOwnOrders
+    findOwnOrders,
+    orderBriefsByIds,
+    type OrderBrief
 } from './read';
 export { create, recordCreated, update, updateById } from './crud';
 export { remove, removeById, restoreById } from './remove';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
-export { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
+export {
+    cancelById,
+    cancelUnanswered,
+    retryPendingEffects,
+    markRefundOwed,
+    clearRefundOwed
+} from './cancel';
 export {
     markPaid,
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled,
+    markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus
 } from './status';
-export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
+export {
+    readOrder,
+    recordFulfillmentProgress,
+    recordForcedFulfilment,
+    shipStock,
+    refreshShelf,
+    type ForcedFulfilment
+} from './fulfillment';
+export { overrideStatus } from './override';
+export { openOrderExport, type OrderExport } from './export';
+export {
+    appendTimeline,
+    readTimeline,
+    collectTimelineOf,
+    clearTimelineActor,
+    scrubTimelineText,
+    deleteTimelineOf
+} from './timeline';
 export { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 export {
     callerScope,
@@ -89,6 +155,14 @@ export {
 export { freezeOrderLines } from './snapshot';
 export { reencryptOrders } from './reencrypt';
 export { allocateOrderNumber } from './order-numbering';
+export type {
+    PaidBucket,
+    ProductTotal,
+    CategoryTotal,
+    ProductSeriesRead,
+    AwaitingTransfers,
+    PipelineRead
+} from './stats';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
 // The shop's identity and return address are read by `invoicing`, `delivery` and `returns` from here.
@@ -100,9 +174,11 @@ export {
     bankTransferIban,
     bankTransferIbanFriendly,
     maxOpenUnpaidOrdersPerAccount,
+    orderFrontendLink,
     shopCurrency,
     shopCountry,
     shopIdentity,
+    shopTimezone,
     withdrawalPeriodDays,
     shipToCountries,
     returnAddress,
@@ -132,6 +208,15 @@ export const orderService = {
     mailBuyer,
     openUnpaidOrderIds,
     getByTransferReference,
+    findManyByIds,
+    findOwedRefunds,
+    paidBuckets,
+    productTotals,
+    categoryTotals,
+    productSeries,
+    customerCounts,
+    cancellationCohort,
+    pipeline,
     recordCreated,
     update,
     updateById,
@@ -142,16 +227,28 @@ export const orderService = {
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled,
+    markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus,
+    readOrder,
+    recordFulfillmentProgress,
+    recordForcedFulfilment,
+    shipStock,
+    refreshShelf,
     overrideStatus,
-    forceMove,
+    openOrderExport,
+    appendTimeline,
+    readTimeline,
+    collectTimelineOf,
+    clearTimelineActor,
+    scrubTimelineText,
+    deleteTimelineOf,
     detachUserId,
     eraseUserOrders,
     startOrderPiiClock,
     anonymizeDueOrders,
     cancelById,
+    cancelUnanswered,
     retryPendingEffects,
     markRefundOwed,
     clearRefundOwed,

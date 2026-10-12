@@ -13,6 +13,7 @@
 
 import { withTransaction } from '@infrastructure/runtime/database';
 import { announceInTransaction, enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { orderService } from '@modules/orders';
 import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '../events';
 import { SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import type { PaymentDocument } from '../model';
@@ -76,15 +77,32 @@ export const recordDecline = (
 ): Promise<PaymentDocument | null> =>
     announceInTransaction(
         (session) =>
-            paymentRepository.updateStatusIfIn(
-                orderId,
-                newAttempt
-                    ? SETTLEABLE_PAYMENT_STATUSES
-                    : SETTLEABLE_PAYMENT_STATUSES.filter((status) => status !== 'declined'),
-                'declined',
-                extra,
-                session
-            ),
+            paymentRepository
+                .updateStatusIfIn(
+                    orderId,
+                    newAttempt
+                        ? SETTLEABLE_PAYMENT_STATUSES
+                        : SETTLEABLE_PAYMENT_STATUSES.filter((status) => status !== 'declined'),
+                    'declined',
+                    extra,
+                    session
+                )
+                // The order's timeline row rides the decline's own transaction, so a decline that
+                // lost its race leaves none. The provider's wording is not copied: ids only.
+                .then((declined) =>
+                    declined
+                        ? orderService
+                              .appendTimeline(
+                                  orderId,
+                                  {
+                                      type: 'payment_declined',
+                                      data: { paymentId: String(declined._id) }
+                                  },
+                                  session
+                              )
+                              .then(() => declined)
+                        : declined
+                ),
         (declined) => ({
             name: PAYMENT_FAILED,
             payload: { paymentId: String(declined._id), orderId },

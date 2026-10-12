@@ -12,8 +12,11 @@ import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
+import { takeFromHold } from '../domain';
+import type { StockLine } from './types';
 import { applyToEveryLine } from './transition';
 import { refreshStockCacheForProducts } from './returns';
+import { allocateForOrder } from './allocate';
 
 /**
  * Claim a hold and move its counters as ONE unit: both land, or neither does.
@@ -87,8 +90,8 @@ const raiseOrphanAlarm = (
 
 /**
  * Settle an order's hold at payment: `held → committed`. No counter moves — the units stay on
- * the shelf, still spoken for, until {@link shipForOrder}; the ledger row (`commit`, both deltas
- * zero) dates the payment.
+ * the shelf, still spoken for, until {@link shipForOrder}; the ledger row (`commit`, every delta
+ * zero) dates the payment, and the hold's `committedAt` is the preorder queue key.
  *
  * Claiming first is what makes it at-most-once.
  *
@@ -102,7 +105,11 @@ const raiseOrphanAlarm = (
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = async (orderId: string): Promise<boolean> => {
-    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit)) return true;
+    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit)) {
+        // Paid preorder units wait for stock; stock that already arrived serves them now.
+        await allocateForOrder(orderId);
+        return true;
+    }
 
     // The claim missed. Read what the reservation actually is, to tell a benign replay from the
     // states meaning the order is paid with nothing held.
@@ -137,6 +144,89 @@ export const shipForOrder = async (orderId: string, session?: ClientSession): Pr
         raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'ship');
     return false;
 };
+
+/**
+ * Take some lines out of an open hold and move their counters, in the caller's transaction: the
+ * shared body of a partial shipment and a remainder cancel. The hold ends — `endsAs` — once its
+ * last unit is out.
+ *
+ * @param orderId - the order
+ * @param lines - what leaves the hold
+ * @param reason - which ledger movement each line records (`ship` or `release`)
+ * @param endsAs - the terminal status the hold takes when it empties
+ * @param session - the caller's transaction
+ * @returns whether an open hold was there to take from
+ */
+const takeLines = (
+    orderId: string,
+    lines: readonly StockLine[],
+    reason: StockMovementReason,
+    endsAs: ReservationStatus,
+    session: ClientSession
+): Promise<boolean> =>
+    reservationRepository.findOpenByOrderId(orderId, session).then((hold) => {
+        if (!hold) return false;
+
+        const { remaining, taken } = takeFromHold(
+            hold.items.map(({ productId, quantity, kind }) => ({
+                productId: String(productId),
+                quantity,
+                ...(kind === 'preorder' ? { kind } : {})
+            })),
+            lines
+        );
+        return reservationRepository
+            .replaceItems(orderId, remaining, remaining.length === 0 ? endsAs : undefined, session)
+            .then((replaced) => {
+                if (!replaced) return false;
+                return applyToEveryLine(reason, taken, { reference: orderId }, session).then(
+                    () => true
+                );
+            });
+    });
+
+/**
+ * Take SOME of an order's units off the shelf — what one shipment carries. `onHand` and
+ * `reserved` both drop by the shipped quantity, so `available` does not change; the hold keeps
+ * what has not left yet and ends `shipped` once it is empty. Runs in the shipment's transaction,
+ * so the shelf count and the shipment land together.
+ *
+ * A missing or given-up hold raises the same alarm a payment with nothing set aside does; a hold
+ * already `shipped` is a replay and is silent.
+ *
+ * @param orderId - the order whose units are leaving
+ * @param lines - what the shipment carries
+ * @param session - the shipment's transaction; see {@link refreshStockCacheForOrder}
+ * @returns whether an open hold was there
+ */
+export const shipLinesForOrder = async (
+    orderId: string,
+    lines: readonly StockLine[],
+    session: ClientSession
+): Promise<boolean> => {
+    if (await takeLines(orderId, lines, StockMovementReason.ship, 'shipped', session)) return true;
+
+    const existing = await reservationRepository.findByOrderId(orderId);
+    if (existing?.status !== 'shipped')
+        raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'ship');
+    return false;
+};
+
+/**
+ * Give SOME of an order's units back — the unshipped remainder of one fulfillment order,
+ * cancelled. `reserved` drops by the cancelled quantity, the units stay on the shelf and become
+ * sellable; the hold keeps the rest and ends `released` once it is empty.
+ *
+ * @param orderId - the order whose units are given back
+ * @param lines - the cancelled remainder
+ * @param session - the cancel's transaction; see {@link refreshStockCacheForOrder}
+ * @returns whether an open hold was there to take from
+ */
+export const releaseLinesForOrder = (
+    orderId: string,
+    lines: readonly StockLine[],
+    session: ClientSession
+): Promise<boolean> => takeLines(orderId, lines, StockMovementReason.release, 'released', session);
 
 /**
  * Give an order's hold back — the units become sellable again.

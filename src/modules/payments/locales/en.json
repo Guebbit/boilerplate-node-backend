@@ -20,6 +20,14 @@
         "webhook-unverified": "That delivery could not be verified.",
         "refund-exceeds-remaining": "That is more than is left to refund on this payment.",
         "refund-currency-mismatch": "The refund's currency is not the payment's currency.",
-        "refund-invalid-amount": "That is not a valid amount in the payment's currency."
+        "refund-invalid-amount": "That is not a valid amount in the payment's currency.",
+        "failure-reason": {
+            "declined": "The provider declined it.",
+            "insufficient_funds": "Insufficient funds.",
+            "expired_or_canceled_card": "The card is expired or cancelled.",
+            "lost_or_stolen_card": "The card was reported lost or stolen.",
+            "provider_unavailable": "The provider could not be reached.",
+            "unknown": "The provider gave no usable reason."
+        }
     }
 }

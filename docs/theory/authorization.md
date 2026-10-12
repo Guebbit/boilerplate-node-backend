@@ -228,16 +228,22 @@ without a second pair of eyes. Separation of duties closes it: **the person an o
 never the one who moves its money.** The rule on top of R1 is `ownMoneyRefusal` in `@modules/access`,
 asked through `orders` (`ownMoneyRefusalFor`) by:
 
-| Step                      | Asked in                           |
-| ------------------------- | ---------------------------------- |
-| record a payment by hand  | `payments`: `recordOfflinePayment` |
-| refund an order's payment | `payments`: `refundByOrder`        |
-| approve a return          | `returns`: `approveReturn`         |
-| receive a return's goods  | `returns`: `receiveReturn`         |
+| Step                                  | Asked in                           |
+| ------------------------------------- | ---------------------------------- |
+| record a payment by hand              | `payments`: `recordOfflinePayment` |
+| refund an order's payment             | `payments`: `refundByOrder`        |
+| approve a return                      | `returns`: `approveReturn`         |
+| receive a return's goods              | `returns`: `receiveReturn`         |
+| cancel an unshipped remainder (staff) | `returns`: `createCancellation`    |
 
 - **The answer is a plain `403 FORBIDDEN`** with its own message, audited as `security.forbidden` with
   `reason: own` (and no `ownerId`, since it is the caller). It is not `OUTRANKED`, whose contract text
   makes the caller's own thing the exception.
+- **A staff remainder cancel is a refund**, so it is gated by the refund key, `payments.any.update`
+  (`stepUp: critical`; moderator and admin — the manager and the warehouse do not hold it), and gets
+  this rule and the rank rule. No new key: it is one more thing the refund permission already means,
+  as in Shopify, where a partly shipped order cannot be cancelled and the unshipped items are refunded
+  under the Refund permission. The buyer's own withdrawal, on the same route, is never prompted.
 - **Declining a return stays R1 only**: refusing your own return gives nothing away.
 - **`POST /orders` is ranked by `userId`** (R1 only): an administrator may raise an order for
   themselves, and the four steps then stop them paying, refunding or returning it alone.

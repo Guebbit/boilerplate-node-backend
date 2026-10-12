@@ -4,6 +4,7 @@
 #          src/modules/webhooks/asyncapi.yaml
 #          src/modules/notifications/asyncapi.yaml
 #          src/modules/orders/asyncapi.webhooks.yaml
+#          src/modules/delivery/asyncapi.webhooks.yaml
 #          src/modules/payments/asyncapi.webhooks.yaml
 #          src/modules/returns/asyncapi.webhooks.yaml
 #          src/modules/example/asyncapi.webhooks.yaml
@@ -98,14 +99,6 @@ channels:
         messages:
             OrderPaidEvent:
                 $ref: '#/components/messages/OrderPaidEvent'
-    order.shipped:
-        address: order.shipped
-        description: An order was marked shipped.
-        servers:
-            - $ref: '#/servers/subscriberEndpoint'
-        messages:
-            OrderShippedEvent:
-                $ref: '#/components/messages/OrderShippedEvent'
     order.cancelled:
         address: order.cancelled
         description: An order was cancelled.
@@ -114,6 +107,22 @@ channels:
         messages:
             OrderCancelledEvent:
                 $ref: '#/components/messages/OrderCancelledEvent'
+    shipment.shipped:
+        address: shipment.shipped
+        description: A shipment left — some or all of an order's goods.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ShipmentShippedEvent:
+                $ref: '#/components/messages/ShipmentShippedEvent'
+    shipment.delivered:
+        address: shipment.delivered
+        description: A shipment arrived.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ShipmentDeliveredEvent:
+                $ref: '#/components/messages/ShipmentDeliveredEvent'
     payment.succeeded:
         address: payment.succeeded
         description: A payment settled successfully.
@@ -241,14 +250,6 @@ operations:
             Derived from `order.status_changed` (`to: 'paid'`) rather than its own domain event — see `orders/events.ts`: "listeners filter on `to`; the event doesn't know who cares."
         messages:
             - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
-    webhookOrderShipped:
-        action: send
-        channel:
-            $ref: '#/channels/order.shipped'
-        summary: An order moved to the `shipped` status.
-        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
-        messages:
-            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
     webhookOrderCancelled:
         action: send
         channel:
@@ -257,6 +258,24 @@ operations:
         description: One-to-one with the `order.cancelled` domain event — see `orders/events.ts`.
         messages:
             - $ref: '#/channels/order.cancelled/messages/OrderCancelledEvent'
+    webhookShipmentShipped:
+        action: send
+        channel:
+            $ref: '#/channels/shipment.shipped'
+        summary: A shipment was cut from a fulfillment order and left.
+        description: >-
+            One-to-one with the `shipment.shipped` domain event — see `delivery/services/ship.ts`. Fires once per shipment, so an order shipped in two goes fires it twice; the order reaching `shipped` is the last one. A status-only override's forced shipments fire nothing: no parcel left that anyone recorded.
+        messages:
+            - $ref: '#/channels/shipment.shipped/messages/ShipmentShippedEvent'
+    webhookShipmentDelivered:
+        action: send
+        channel:
+            $ref: '#/channels/shipment.delivered'
+        summary: A shipment was marked delivered.
+        description: >-
+            One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`. A digital fulfilment fires it too, right after `shipment.shipped`.
+        messages:
+            - $ref: '#/channels/shipment.delivered/messages/ShipmentDeliveredEvent'
     webhookPaymentSucceeded:
         action: send
         channel:
@@ -374,13 +393,6 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderPaidEnvelope'
-        OrderShippedEvent:
-            name: OrderShippedEvent
-            title: Order shipped
-            headers:
-                $ref: '#/components/schemas/WebhookHeaders'
-            payload:
-                $ref: '#/components/schemas/OrderShippedEnvelope'
         OrderCancelledEvent:
             name: OrderCancelledEvent
             title: Order cancelled
@@ -388,6 +400,20 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderCancelledEnvelope'
+        ShipmentShippedEvent:
+            name: ShipmentShippedEvent
+            title: Shipment shipped
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ShipmentShippedEnvelope'
+        ShipmentDeliveredEvent:
+            name: ShipmentDeliveredEvent
+            title: Shipment delivered
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ShipmentDeliveredEnvelope'
         PaymentSucceededEvent:
             name: PaymentSucceededEvent
             title: Payment succeeded
@@ -595,24 +621,6 @@ components:
                 data:
                     $ref: '#/components/schemas/OrderIdPayload'
             additionalProperties: false
-        OrderShippedEnvelope:
-            type: object
-            required:
-                - type
-                - timestamp
-                - data
-            properties:
-                type:
-                    title: OrderShippedEventType
-                    type: string
-                    enum:
-                        - order.shipped
-                timestamp:
-                    type: string
-                    format: date-time
-                data:
-                    $ref: '#/components/schemas/OrderIdPayload'
-            additionalProperties: false
         OrderCancelledEnvelope:
             type: object
             required:
@@ -630,6 +638,72 @@ components:
                     format: date-time
                 data:
                     $ref: '#/components/schemas/OrderCancelledPayload'
+            additionalProperties: false
+        ShipmentPayload:
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - fulfillmentOrderId
+                - lines
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                lines:
+                    type: array
+                    description: What the shipment carries, per product.
+                    items:
+                        type: object
+                        required:
+                            - productId
+                            - quantity
+                        properties:
+                            productId:
+                                type: string
+                            quantity:
+                                type: integer
+                        additionalProperties: false
+            additionalProperties: false
+        ShipmentShippedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    # `title` names the generated model — see `orders/asyncapi.webhooks.yaml`.
+                    title: ShipmentShippedEventType
+                    type: string
+                    enum:
+                        - shipment.shipped
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ShipmentPayload'
+            additionalProperties: false
+        ShipmentDeliveredEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ShipmentDeliveredEventType
+                    type: string
+                    enum:
+                        - shipment.delivered
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ShipmentPayload'
             additionalProperties: false
         PaymentEventPayload:
             type: object
@@ -893,6 +967,99 @@ components:
                     items:
                         $ref: '#/components/schemas/CartMergeRefusedLinePayload'
             additionalProperties: false
+        PreorderDelayedParamsPayload:
+            title: PreorderDelayedParamsPayload
+            type: object
+            required:
+                - orderId
+                - fulfillmentOrderId
+                - titles
+                - agreedAt
+            properties:
+                orderId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                titles:
+                    type: array
+                    items:
+                        type: string
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+                answerBy:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationPreorderDelayedPayload:
+            title: NotificationPreorderDelayedPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.preorder-delayed
+                params:
+                    $ref: '#/components/schemas/PreorderDelayedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
+        NotificationPreorderConfirmWaitPayload:
+            title: NotificationPreorderConfirmWaitPayload
+            type: object
+            required:
+                - id
+                - code
+                - params
+                - severity
+                - createdAt
+            properties:
+                id:
+                    type: string
+                code:
+                    type: string
+                    enum:
+                        - notifications.preorder-confirm-wait
+                params:
+                    $ref: '#/components/schemas/PreorderDelayedParamsPayload'
+                severity:
+                    type: string
+                    enum:
+                        - info
+                        - success
+                        - warning
+                        - error
+                readAt:
+                    description: When the owner read it; absent while unread.
+                    type: string
+                    format: date-time
+                createdAt:
+                    type: string
+                    format: date-time
+            additionalProperties: false
         NotificationCartLineRemovedPayload:
             title: NotificationCartLineRemovedPayload
             type: object
@@ -998,6 +1165,8 @@ components:
                 - $ref: '#/components/schemas/NotificationCartLineRemovedPayload'
                 - $ref: '#/components/schemas/NotificationWishlistItemRemovedPayload'
                 - $ref: '#/components/schemas/NotificationCartMergeRefusedPayload'
+                - $ref: '#/components/schemas/NotificationPreorderDelayedPayload'
+                - $ref: '#/components/schemas/NotificationPreorderConfirmWaitPayload'
             # A plain property name here, unlike OpenAPI's `{ propertyName }` object.
             discriminator: code
         NotificationCreatedPayload:

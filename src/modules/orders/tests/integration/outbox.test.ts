@@ -6,6 +6,7 @@
  * See docs/tools/outbox.md.
  */
 
+import { withTransaction } from '@infrastructure/runtime/database';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
@@ -15,7 +16,8 @@ import {
     seedDigitalOrder,
     readOrder,
     countOrders,
-    toOrderItem
+    toOrderItem,
+    timelineOf
 } from '@modules/orders/tests/factories';
 import { callerContextAs, asCustomer } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
@@ -91,11 +93,18 @@ describe('a status move reported to orders', () => {
             OrderStatus.shipped,
             (id: string) => orderService.markDelivered(id, new Date())
         ],
-        ['markFulfilled', OrderStatus.processing, (id: string) => orderService.markFulfilled(id)]
+        [
+            'markFulfilmentComplete',
+            OrderStatus.processing,
+            (id: string) =>
+                withTransaction((session) =>
+                    orderService.markFulfilmentComplete(id, new Date(), session)
+                )
+        ]
     ])(
         '%s leaves the order where it was when its event cannot be written',
         async (name, from, move) => {
-            const order = await (name === 'markFulfilled'
+            const order = await (name === 'markFulfilmentComplete'
                 ? seedDigitalOrder(from)
                 : seedOrder(from));
             failNextOutboxWrite();
@@ -139,7 +148,7 @@ describe('an admin override', () => {
 
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.paid);
-        expect(stored?.statusOverrides ?? []).toHaveLength(0);
+        expect(await timelineOf(String(order._id))).toHaveLength(0);
     });
 });
 

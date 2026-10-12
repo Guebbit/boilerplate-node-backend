@@ -6,25 +6,35 @@ info:
 # The tags this module's operations file themselves under, with what each is for.
 tags:
     - name: Delivery
-      description: Shipping an order and marking it delivered.
+      description: Fulfilling an order — the fulfillment orders it splits into, and the shipments that leave.
 
 x-error-codes:
-    DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'An admin status override requires a reason and none was supplied.' }
-    DELIVERY_TRACKING_CODE_REQUIRED: { status: 422, description: 'Marking a shipment shipped requires a tracking code and none was supplied.' }
-    ORDER_NOT_DIGITAL_ONLY: { status: 409, description: 'This action only applies to an order with no physical lines.' }
-    ORDER_NOTHING_TO_SHIP: { status: 409, description: 'The order has no physical lines left to ship.' }
+    DELIVERY_OVERRIDE_REASON_REQUIRED: { status: 422, description: 'A forced shipment or delivery requires a reason and none was supplied.' }
+    DELIVERY_TRACKING_CODE_REQUIRED: { status: 422, description: 'Shipping a tracked method requires a tracking code and none was supplied.' }
+    DELIVERY_LINES_INVALID: { status: 422, description: 'A shipment line names a product that is not on the fulfillment order, asks for more than remains of it, or names the same product twice.' }
+    DELIVERY_NOT_SHIPPABLE: { status: 409, description: 'The fulfillment order cannot ship now: it is on hold, closed or cancelled, or the order is cancelled.' }
+    DELIVERY_NOT_PHYSICAL: { status: 409, description: 'A digital fulfillment order has nothing to ship; fulfil it instead.' }
+    DELIVERY_NOT_DIGITAL: { status: 409, description: 'A physical fulfillment order cannot be fulfilled without a shipment; ship it instead.' }
+    DELIVERY_NOT_HOLDABLE: { status: 409, description: 'Only an open or in-progress fulfillment order can be put on hold.' }
+    DELIVERY_NOT_RELEASABLE: { status: 409, description: 'The fulfillment order is not on hold, or waits for stock and is released only by the stock arriving.' }
+    DELIVERY_NOT_AWAITING_ANSWER: { status: 409, description: 'The fulfillment order is not waiting for the buyer to say whether to keep waiting, so there is nothing to confirm.' }
+    DELIVERY_NOT_DELIVERABLE: { status: 409, description: 'The shipment has already been delivered, or its order is no longer in a state this can run from.' }
     ORDER_NOT_PAID: { status: 409, description: 'The order must be paid before this delivery action.' }
     ORDER_NOT_PROCESSING: { status: 409, description: 'The order is not in a state this delivery action can run from.' }
-    ORDER_NOT_SHIPPED: { status: 409, description: 'The order must be shipped before this delivery action.' }
 
-# This module's section of the account data export (`POST /account/export`): the bundler
-# adds it to `AccountExportResponse`. Removing the module removes the section.
+# This module's sections of the account data export (`POST /account/export`): the bundler
+# adds them to `AccountExportResponse`. Removing the module removes the sections.
 x-personal-data:
     shipments:
         schema:
             type: array
             items:
-                $ref: '#/components/schemas/Shipment'
+                $ref: '#/components/schemas/ExportShipment'
+    fulfillmentOrders:
+        schema:
+            type: array
+            items:
+                $ref: '#/components/schemas/ExportFulfillmentOrder'
 
 paths:
     /delivery/methods:
@@ -46,9 +56,15 @@ paths:
     /delivery/order/{orderId}:
         get:
             tags: [Delivery]
-            summary: Get the shipment behind an order
-            description: The parcel for one of the caller's orders — tracking code and whether it has arrived. Ownership is the order's, read through the same scope every order read uses. No parcel yet (the order has not reached `shipped`) is a 404 — absence is the answer.
-            operationId: getShipmentByOrder
+            summary: Get the fulfilment of an order
+            description: >-
+                Where an order's goods stand: its fulfillment orders (the groups of lines that leave
+                together, made by rule when the order is paid) and the shipments cut from them (what
+                actually left, with its tracking code). Each record carries its own `actions`, decided
+                per caller. Ownership is the order's, read through the same scope every order read
+                uses. An order that is not paid yet answers both lists empty — absence is the answer,
+                never a 404. `holdNote` is staff's own and is left out for anyone else.
+            operationId: getFulfillmentByOrder
             security:
                 - bearerAuth: []
             parameters:
@@ -56,44 +72,13 @@ paths:
                   description: One of the caller's own orders
             responses:
                 '200':
-                    description: The shipment
+                    description: The fulfillment orders and the shipments of the order
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ShipmentEnvelope'
+                                $ref: '#/components/schemas/OrderFulfillmentEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
-
-    /delivery/order/{orderId}/ship:
-        post:
-            tags: [Delivery]
-            summary: Record a parcel's handover to the carrier
-            description: Creates the parcel record and sends the shipped email, then reports the fact to `orders` — the order moves `processing → shipped`. `trackingCode` is required exactly when the order's shipping method is `tracked` (looked up live, not frozen); refused with a named 422 when a tracked method's code is missing. Refuses an order that is not `processing` with a named 409 — this door is how that move happens now, not `PUT /orders/{id}`. Refuses a digital-only order outright, also 409 (`ORDER_NOTHING_TO_SHIP`) — nothing on it would ever ride in a parcel; `POST /delivery/order/{orderId}/fulfill` is that order's door instead.
-            operationId: shipOrder
-            security:
-                - bearerAuth: []
-            parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: The order to ship
-            requestBody:
-                required: false
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/ShipOrderRequest'
-            responses:
-                '200':
-                    description: The shipment
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ShipmentEnvelope'
-                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
-                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
-                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /delivery/order/{orderId}/start:
@@ -102,8 +87,8 @@ paths:
             summary: Begin fulfilling a paid order
             description: >-
                 Reports that fulfilment has started — the order moves `paid → processing`. No
-                parcel exists yet at this point; that comes later, at
-                `POST /delivery/order/{orderId}/ship`. Narrower than `orders.any.update` on
+                shipment exists yet at this point; that comes later, at
+                `POST /delivery/fulfillment-orders/{id}/shipments`. Narrower than `orders.any.update` on
                 purpose — `delivery.any.start` lets the warehouse begin work on an order without
                 being handed the run of the order record. Refuses an order that is not `paid`
                 with a named 409.
@@ -126,23 +111,286 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /delivery/order/{orderId}/deliver:
-        post:
+    /delivery/fulfillment-orders:
+        get:
             tags: [Delivery]
-            summary: Record a parcel's arrival
-            description: Stamps the shipment delivered and reports the fact to `orders` — the order moves `shipped → delivered`. Refuses an order that is not `shipped` with a named 409.
-            operationId: deliverOrder
+            summary: List fulfillment orders (the preorder board)
+            description: |
+                One row per fulfillment order, with the buyer and when the order was paid, for the admin's preorder
+                board: the fulfillment orders of preorders, where they stand with their buyer, and which are late.
+                `preorder=true` keeps those made from a preorder line (the ones that carry an agreed date).
+
+                `late=true` is the Late view: the expected date has passed and units remain, whether still waiting
+                for stock, allocated and not yet shipped, or part shipped. `dueWithin=N` is its warning: still
+                waiting for stock, and expected within the next N days — see it coming, since a slip moved before
+                the date passes is a notice, and one moved after is a question.
+
+                Same audience as the orders it belongs to: staff holding `orders.any.read` see every row, anyone
+                else only their own orders'. `delivered` is true once nothing remains and every shipment arrived.
+            operationId: listPreorderFulfillmentOrders
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: The order that arrived
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: preorder
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                  description: '`true` keeps fulfillment orders made from a preorder line, `false` the others; absent keeps both.'
+                - name: state
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/PreorderFulfillmentState'
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Only fulfillment orders carrying this product.
+                - name: late
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                  description: '`true` keeps those whose expected date has passed with units remaining.'
+                - name: dueWithin
+                  in: query
+                  required: false
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 365
+                  description: Only those still waiting for stock whose expected date falls within this many days.
+            responses:
+                '200':
+                    description: A page of fulfillment orders, the earliest expected first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PreorderFulfillmentOrdersResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/summary:
+        get:
+            tags: [Delivery]
+            summary: Preorder units by product and state
+            description: |
+                For each product sold as a preorder, how its units stand across every fulfillment order made from it:
+                paid, waiting for stock, waiting for the buyer's answer, allocated, shipped, cancelled, and late. Units,
+                not fulfillment orders. `firstAgreedAt` is the earliest date any buyer was promised. For the Products
+                tab of the preorder board; same audience and scope as the list.
+            operationId: summarizePreorderFulfillmentOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Only this product.
+            responses:
+                '200':
+                    description: A page of product summaries, the earliest promise first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PreorderProductSummariesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}/shipments:
+        post:
+            tags: [Delivery]
+            summary: Ship some or all of a fulfillment order
+            description: >-
+                Cuts a shipment from the fulfillment order's remaining lines and sends the shipped
+                email. `lines` omitted ships everything that remains; named lines ship those
+                quantities (never more than remains). The order moves `processing → shipped` only
+                when this shipment leaves nothing remaining anywhere — until then it stays
+                `processing` and its `fulfillmentStatus` reads `partially_fulfilled`. The shipment, the
+                order's summary, any status move and the events are written in ONE transaction.
+                `trackingCode` is required exactly when the order's shipping method is `tracked`.
+                Refuses a fulfillment order that is on hold, closed or cancelled
+                (`DELIVERY_NOT_SHIPPABLE`), a digital one (`DELIVERY_NOT_PHYSICAL`), and an order that
+                is not `processing` (`ORDER_NOT_PROCESSING`) — unless `forced`, which lets a shipment
+                skip the `start` step from `paid`. Never ships from `on_hold`, forced or not.
+            operationId: shipFulfillmentOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order to ship from
             requestBody:
                 required: false
                 content:
                     application/json:
                         schema:
-                            $ref: '#/components/schemas/DeliverOrderRequest'
+                            $ref: '#/components/schemas/ShipFulfillmentOrderRequest'
+            responses:
+                '201':
+                    description: The shipment, as it left
+                    headers:
+                        Location: { $ref: '../../../shared/contracts/openapi.root.yaml#/components/headers/Location' }
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}/fulfill:
+        post:
+            tags: [Delivery]
+            summary: Fulfil a digital fulfillment order
+            description: >-
+                The digital act: a shipment with no tracking, born and delivered in the same write. A
+                `digital` fulfillment order has nothing to carry, so this is its only door. Refuses
+                a physical one with `DELIVERY_NOT_DIGITAL` (ship it instead). When it leaves nothing
+                remaining and nothing undelivered the order moves to `delivered`, its withdrawal
+                clock counted from payment (digital content, Art. 9(2)(c)).
+            operationId: fulfillFulfillmentOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The digital fulfillment order to fulfil
+            responses:
+                '200':
+                    description: The shipment, already delivered
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ShipmentEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}/hold:
+        post:
+            tags: [Delivery]
+            summary: Put a fulfillment order on hold
+            description: >-
+                Staff stops a fulfillment order from shipping, with a reason. Only an open or
+                in-progress one can be held (`DELIVERY_NOT_HOLDABLE`). `awaiting_stock` is never
+                a reason staff can give: only the allocation of stock sets it.
+            operationId: holdFulfillmentOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order to hold
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/HoldFulfillmentOrderRequest'
+            responses:
+                '200':
+                    description: The fulfillment order, now `on_hold`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}/confirm-wait:
+        post:
+            tags: [Delivery]
+            summary: Keep waiting for a late preorder
+            description: >-
+                The buyer's answer to a notice that their preorder will be later than promised (or that
+                its date passed): yes, keep waiting. Clears the deadline after which silence would
+                cancel the fulfillment order and refund it. Only the order's own buyer may answer, and
+                only while `consent` is `awaiting` (`DELIVERY_NOT_AWAITING_ANSWER` otherwise). The
+                buyer's other answer, cancel, is the existing cancel or remainder cancel.
+            operationId: confirmFulfillmentOrderWait
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order the buyer will keep waiting for
+            responses:
+                '200':
+                    description: The fulfillment order, with `consent` now `confirmed`
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/{id}/release:
+        post:
+            tags: [Delivery]
+            summary: Release a fulfillment order from hold
+            description: >-
+                Staff lets a held fulfillment order ship again. A hold for `awaiting_stock` is refused
+                (`DELIVERY_NOT_RELEASABLE`): a hand release would ship goods the ledger never counted
+                out, so only the stock arriving releases it.
+            operationId: releaseFulfillmentOrder
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The fulfillment order to release
+            responses:
+                '200':
+                    description: The fulfillment order, no longer on hold
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/FulfillmentOrderEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/shipments/{id}:
+        patch:
+            tags: [Delivery]
+            summary: Correct a shipment's tracking code
+            description: Merges the given fields into the shipment — RFC 7396. Only the tracking code can change (a typo), and only while the shipment is still `shipped`. The tracking code of a tracked method cannot be cleared.
+            operationId: updateShipment
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The shipment to correct
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateShipmentRequest'
+                    application/merge-patch+json:
+                        schema:
+                            $ref: '#/components/schemas/UpdateShipmentRequest'
             responses:
                 '200':
                     description: The shipment
@@ -157,34 +405,39 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
-    /delivery/order/{orderId}/fulfill:
+    /delivery/shipments/{id}/deliver:
         post:
             tags: [Delivery]
-            summary: Mark a digital-only order fulfilled, with no shipment
+            summary: Record a shipment's arrival
             description: >-
-                The digital-only alternative to `ship`/`deliver` — reports that a `processing`
-                order with no physical lines is done, moving it straight to `delivered` with no
-                parcel record. Refuses an order that is not `processing` with a named 409
-                (`ORDER_NOT_PROCESSING`), and one that carries any line that still needs shipping
-                with a named 409 (`ORDER_NOT_DIGITAL_ONLY`) — that order ships through the ordinary
-                door instead.
-            operationId: fulfillOrder
+                Stamps the shipment delivered. The order moves `shipped → delivered` when this was
+                the last undelivered shipment and nothing remains to ship; its withdrawal clock then
+                starts from the LAST delivery (CRD Art. 9(2)(b)(i)). Refuses a shipment already
+                delivered with `DELIVERY_NOT_DELIVERABLE`.
+            operationId: deliverShipment
             security:
                 - bearerAuth: []
             parameters:
-                - $ref: '../orders/openapi.yaml#/components/parameters/OrderIdPathParam'
-                  description: The digital-only order to mark fulfilled
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdPathParam'
+                  description: The shipment that arrived
+            requestBody:
+                required: false
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/DeliverShipmentRequest'
             responses:
                 '200':
-                    description: The order, now `delivered`
+                    description: The shipment
                     content:
                         application/json:
                             schema:
-                                $ref: '../orders/openapi.yaml#/components/schemas/OrderEnvelope'
+                                $ref: '#/components/schemas/ShipmentEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
 components:
@@ -283,25 +536,151 @@ components:
                 data:
                     $ref: '#/components/schemas/ShippingMethodsResponse'
 
-        Shipment:
+        FulfillmentOrderStatus:
+            type: string
+            enum: [open, in_progress, on_hold, closed, cancelled]
+            description: >-
+                Where a fulfillment order stands (Shopify's names). `open` until something ships;
+                `in_progress` once part of it has shipped and lines remain; `on_hold` while staff, or
+                the stock it awaits, holds it back; `closed` once nothing remains and something
+                shipped from it; `cancelled` once nothing remains and nothing ever shipped from it.
+
+        FulfillmentHoldReason:
+            type: string
+            enum: [awaiting_stock, incorrect_address, high_risk, other]
+            description: >-
+                Why a fulfillment order is on hold (Shopify's hold reasons). `awaiting_stock` is set
+                only by the allocation of stock, and released only by it; the other three are staff's.
+
+        FulfillmentConsent:
+            type: string
+            enum: [awaiting, confirmed, expired]
+            description: >-
+                Where a waiting preorder stands with its buyer after a late date. Absent: the buyer was
+                never asked. `awaiting`: asked to say whether to keep waiting, and silence until
+                `consentDeadline` cancels and refunds (FTC 16 CFR 435.2, CRD Art. 18). `confirmed`: the
+                buyer said keep waiting, so a later slip asks again. `expired`: the window closed in
+                silence and the cancel and refund are on their way; too late to answer.
+
+        FulfillmentCancelReason:
+            type: string
+            enum: [buyer, staff, no_answer, order]
+            description: >-
+                Who cancelled what was left of a fulfillment order. `buyer`: the buyer's own cancel of
+                the remainder. `staff`: a refund by staff. `no_answer`: the buyer was asked to keep
+                waiting and never answered. `order`: the whole order was cancelled.
+
+        FulfillmentOrderKind:
+            type: string
+            enum: [physical, digital]
+            description: '`digital` when no line rides in a parcel; its act is `fulfill`, not a shipment.'
+
+        FulfillmentOrderLine:
             type: object
             additionalProperties: false
-            required: [id, orderId, status]
+            required: [productId, title, quantity, shippedQuantity, cancelledQuantity, remaining]
+            description: One product on a fulfillment order, with how much has shipped, been cancelled and still remains.
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                    description: The product's title as the order froze it.
+                quantity:
+                    type: integer
+                    minimum: 1
+                    description: Units this fulfillment order carries.
+                shippedQuantity:
+                    type: integer
+                    minimum: 0
+                cancelledQuantity:
+                    type: integer
+                    minimum: 0
+                    description: Units cancelled before they shipped — a remainder cancel.
+                remaining:
+                    type: integer
+                    minimum: 0
+                    description: '`quantity − shippedQuantity − cancelledQuantity`, computed here so no client counts.'
+
+        FulfillmentOrderActions:
+            type: object
+            additionalProperties: false
+            required: [ship, fulfill, hold, release, confirmWait]
+            description: >-
+                What the requesting caller may do to this fulfillment order, decided by the server so
+                a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
+                false when the buyer of the order ranks at or above the caller, and for anyone
+                without `delivery.any.update`; `confirmWait` is the order's own buyer's.
+            properties:
+                ship:
+                    type: boolean
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/shipments` would be accepted — a physical order, open or in progress, with lines remaining.
+                fulfill:
+                    type: boolean
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/fulfill` would be accepted — a `digital` one, open.
+                hold:
+                    type: boolean
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/hold` would be accepted.
+                release:
+                    type: boolean
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/release` would be accepted — never for `awaiting_stock`.
+                confirmWait:
+                    type: boolean
+                    description: Whether `POST /delivery/fulfillment-orders/{id}/confirm-wait` would be accepted — the caller is the buyer and `consent` is `awaiting`.
+
+        FulfillmentOrder:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, number, kind, status, lines, actions, createdAt]
+            description: >-
+                A group of an order's lines that should leave together, made by rule when the order is
+                paid (Shopify's `FulfillmentOrder`). One order, one payment, one invoice, as many
+                fulfillment orders as the rule makes.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 orderId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
-                trackingCode:
-                    type: string
-                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false).
+                number:
+                    type: integer
+                    minimum: 1
+                    description: 1-based position within the order — `#1` is the one that ships now.
+                kind:
+                    $ref: '#/components/schemas/FulfillmentOrderKind'
                 status:
+                    $ref: '#/components/schemas/FulfillmentOrderStatus'
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FulfillmentOrderLine'
+                holdReason:
+                    $ref: '#/components/schemas/FulfillmentHoldReason'
+                holdNote:
                     type: string
-                    enum: [shipped, delivered]
-                    description: The tail of the order's lifecycle, as the carrier sees it.
-                deliveredAt:
+                    maxLength: 1000
+                    description: Staff's free text about the hold. Left out for anyone who cannot update fulfilment.
+                agreedAt:
                     type: string
                     format: date-time
+                    description: The date promised when ordering, frozen from the line snapshot (CRD Art. 18).
+                expectedAt:
+                    type: string
+                    format: date-time
+                    description: When it is now expected to ship, when that differs from what was agreed.
+                consent:
+                    $ref: '#/components/schemas/FulfillmentConsent'
+                consentDeadline:
+                    type: string
+                    format: date-time
+                    description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
+                lastNoticeAt:
+                    type: string
+                    format: date-time
+                    description: When the buyer was last told the date had moved or passed.
+                cancelReason:
+                    $ref: '#/components/schemas/FulfillmentCancelReason'
+                actions:
+                    $ref: '#/components/schemas/FulfillmentOrderActions'
                 createdAt:
                     type: string
                     format: date-time
@@ -309,10 +688,186 @@ components:
                     type: string
                     format: date-time
 
-        ShipOrderRequest:
+        ShipmentLine:
+            type: object
+            additionalProperties: false
+            required: [productId, title, quantity]
+            description: One product in a shipment.
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                quantity:
+                    type: integer
+                    minimum: 1
+
+        ShipmentActions:
+            type: object
+            additionalProperties: false
+            required: [deliver, editTracking]
+            description: What the requesting caller may do to this shipment, decided by the server.
+            properties:
+                deliver:
+                    type: boolean
+                    description: Whether `POST /delivery/shipments/{id}/deliver` would be accepted — still `shipped`.
+                editTracking:
+                    type: boolean
+                    description: Whether `PATCH /delivery/shipments/{id}` would be accepted — still `shipped`.
+
+        Shipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, fulfillmentOrderId, number, status, lines, forced, shippedAt, actions]
+            description: >-
+                What actually left, at one time, with one tracking code (Shopify's `Fulfillment`).
+                Born `shipped`; a digital fulfilment is born `delivered`.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                fulfillmentOrderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                number:
+                    type: integer
+                    minimum: 1
+                    description: 1-based position within the order, in the order shipments were cut.
+                trackingCode:
+                    type: string
+                    description: The carrier's handle on the parcel. Absent for a method that carries no tracking (ShippingMethod.tracked is false), and for a digital fulfilment.
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                    description: The tail of the order's lifecycle, as the carrier sees it.
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ShipmentLine'
+                forced:
+                    type: boolean
+                    description: Whether staff skipped a step to record it (shipped from `paid` without `start`).
+                shippedAt:
+                    type: string
+                    format: date-time
+                deliveredAt:
+                    type: string
+                    format: date-time
+                actions:
+                    $ref: '#/components/schemas/ShipmentActions'
+                createdAt:
+                    type: string
+                    format: date-time
+                updatedAt:
+                    type: string
+                    format: date-time
+
+        OrderFulfillment:
+            type: object
+            additionalProperties: false
+            required: [fulfillmentOrders, shipments]
+            description: An order's fulfilment — both lists empty until the order is paid.
+            properties:
+                fulfillmentOrders:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FulfillmentOrder'
+                shipments:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Shipment'
+
+        ExportShipment:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, fulfillmentOrderId, number, status, lines, shippedAt]
+            description: A shipment as an account export carries it — the record, without the caller's `actions`.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                fulfillmentOrderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                number:
+                    type: integer
+                    minimum: 1
+                trackingCode:
+                    type: string
+                status:
+                    type: string
+                    enum: [shipped, delivered]
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ShipmentLine'
+                shippedAt:
+                    type: string
+                    format: date-time
+                deliveredAt:
+                    type: string
+                    format: date-time
+
+        ExportFulfillmentOrder:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, number, kind, status, lines]
+            description: A fulfillment order as an account export carries it. Staff's hold note is not the buyer's data and is left out.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                number:
+                    type: integer
+                    minimum: 1
+                kind:
+                    $ref: '#/components/schemas/FulfillmentOrderKind'
+                status:
+                    $ref: '#/components/schemas/FulfillmentOrderStatus'
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FulfillmentOrderLine'
+                holdReason:
+                    $ref: '#/components/schemas/FulfillmentHoldReason'
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+                consent:
+                    $ref: '#/components/schemas/FulfillmentConsent'
+                consentDeadline:
+                    type: string
+                    format: date-time
+                    description: When silence turns into a cancel and a refund. Present exactly while `consent` is `awaiting`.
+                lastNoticeAt:
+                    type: string
+                    format: date-time
+                    description: When the buyer was last told the date had moved or passed.
+                cancelReason:
+                    $ref: '#/components/schemas/FulfillmentCancelReason'
+
+        ShipFulfillmentOrderRequest:
             type: object
             additionalProperties: false
             properties:
+                lines:
+                    type: array
+                    minItems: 1
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [productId, quantity]
+                        properties:
+                            productId:
+                                $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                            quantity:
+                                type: integer
+                                minimum: 1
+                    description: What ships, per product. Absent means everything that remains on the fulfillment order.
                 trackingCode:
                     type: string
                     maxLength: 100
@@ -320,25 +875,78 @@ components:
                     description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
                 forced:
                     type: boolean
-                    description: Skip the normal `processing`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still creates the parcel record and sends the shipped email; still refuses a tracked method with no `trackingCode`.
+                    description: Skip the `start` step — ship from `paid`. The caller must hold `orders.any.override`, and `reason` is then required. Never ships from `on_hold`.
                 reason:
                     type: string
                     maxLength: 1000
                     minLength: 1
                     description: Required exactly when `forced` is `true` — why the normal door didn't apply. Recorded on the order's override history.
 
-        DeliverOrderRequest:
+        DeliverShipmentRequest:
             type: object
             additionalProperties: false
             properties:
                 forced:
                     type: boolean
-                    description: Skip the normal `shipped`-only gate — the caller must hold `orders.any.override`, and `reason` is then required. Still stamps the shipment delivered and reports the fact.
+                    description: Record the arrival without a carrier confirmation — the caller must hold `orders.any.override`, and `reason` is then required.
                 reason:
                     type: string
                     maxLength: 1000
                     minLength: 1
                     description: Required exactly when `forced` is `true`.
+
+        UpdateShipmentRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                trackingCode:
+                    type: string
+                    maxLength: 100
+                    minLength: 1
+                    description: The corrected tracking code.
+
+        HoldFulfillmentOrderRequest:
+            type: object
+            additionalProperties: false
+            required: [reason]
+            properties:
+                reason:
+                    type: string
+                    enum: [incorrect_address, high_risk, other]
+                    description: Why it is held. `awaiting_stock` is not staff's to give.
+                note:
+                    type: string
+                    maxLength: 1000
+                    minLength: 1
+                    description: Free text for the staff who read the hold later; reaped with the other free text.
+
+        OrderFulfillmentEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/OrderFulfillment'
+
+        FulfillmentOrderEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/FulfillmentOrder'
 
         ShipmentEnvelope:
             type: object
@@ -353,3 +961,177 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/Shipment'
+
+        PreorderFulfillmentState:
+            type: string
+            enum: [waiting, awaiting_yes, allocated, shipped, cancelled]
+            description: >-
+                Where a preorder's fulfillment order stands, as the board reads it. `waiting`: paid, held for
+                stock. `awaiting_yes`: held for stock, and the buyer was asked to keep waiting (or let the
+                window close and the cancel is on its way). `allocated`: stock is set aside for it, not all
+                shipped. `shipped`: nothing remains and something shipped. `cancelled`: nothing remains and
+                nothing shipped; `cancelReason` says who.
+
+        PreorderBuyer:
+            type: object
+            additionalProperties: false
+            required: [email]
+            description: Who the order belongs to, as the order itself carries it.
+            properties:
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    type: string
+
+        PreorderFulfillmentOrder:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, orderNumber, number, status, state, lines, buyer, delivered, late, slippedDays, createdAt]
+            description: One fulfillment order of a preorder, with its buyer and what the board needs to judge it.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                number:
+                    type: integer
+                    minimum: 1
+                status:
+                    $ref: '#/components/schemas/FulfillmentOrderStatus'
+                state:
+                    $ref: '#/components/schemas/PreorderFulfillmentState'
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FulfillmentOrderLine'
+                buyer:
+                    $ref: '#/components/schemas/PreorderBuyer'
+                paidAt:
+                    type: string
+                    format: date-time
+                    description: When the order was paid. The payment's instant, which is also the queue key stock is allocated by (`inventory` stamps the hold in the same transaction).
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+                slippedDays:
+                    type: integer
+                    minimum: 0
+                    description: Whole days between the date promised and the date expected; `0` when it has not slipped.
+                late:
+                    type: boolean
+                    description: The expected date has passed and units remain.
+                delivered:
+                    type: boolean
+                    description: Nothing remains, something shipped, and every shipment arrived.
+                holdReason:
+                    $ref: '#/components/schemas/FulfillmentHoldReason'
+                consent:
+                    $ref: '#/components/schemas/FulfillmentConsent'
+                consentDeadline:
+                    type: string
+                    format: date-time
+                lastNoticeAt:
+                    type: string
+                    format: date-time
+                cancelReason:
+                    $ref: '#/components/schemas/FulfillmentCancelReason'
+                createdAt:
+                    type: string
+                    format: date-time
+
+        PreorderFulfillmentOrdersResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PreorderFulfillmentOrder'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        PreorderFulfillmentOrdersResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PreorderFulfillmentOrdersResponse'
+
+        PreorderProductSummary:
+            type: object
+            additionalProperties: false
+            required: [productId, title, firstAgreedAt, paid, waiting, awaitingYes, allocated, shipped, cancelled, late]
+            description: >-
+                One product's preorder units across every fulfillment order made from it. `paid` is every
+                unit paid for, so `waiting + awaitingYes + allocated + shipped + cancelled` equals it.
+                `late` is a subset: units remaining on fulfillment orders whose expected date has passed.
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                    description: As the earliest order froze it.
+                firstAgreedAt:
+                    type: string
+                    format: date-time
+                    description: The earliest date any buyer was promised.
+                paid:
+                    type: integer
+                    minimum: 0
+                waiting:
+                    type: integer
+                    minimum: 0
+                awaitingYes:
+                    type: integer
+                    minimum: 0
+                allocated:
+                    type: integer
+                    minimum: 0
+                shipped:
+                    type: integer
+                    minimum: 0
+                cancelled:
+                    type: integer
+                    minimum: 0
+                late:
+                    type: integer
+                    minimum: 0
+
+        PreorderProductSummariesResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PreorderProductSummary'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        PreorderProductSummariesResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PreorderProductSummariesResponse'

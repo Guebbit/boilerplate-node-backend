@@ -15,6 +15,8 @@ import { createUser } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createShipmentFor, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
+import { OrderStatus } from '@types';
 import { returnModel } from '@modules/returns/model';
 import { createExample } from '@modules/example/tests/factories';
 import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
@@ -103,7 +105,7 @@ const onUser =
     (owner) =>
         Promise.resolve({ method, url: `/users/${owner.user.id}${suffix}`, body: body(owner) });
 
-/** A delivery door, addressed by the order id. */
+/** A delivery door addressed by the order id: starting fulfilment. */
 const onDelivery =
     (door: string, body: Record<string, unknown> = {}): HierarchyRow['prepare'] =>
     async (owner) => ({
@@ -111,6 +113,38 @@ const onDelivery =
         url: `/delivery/order/${String(await orderOf(owner).then((o) => o._id))}/${door}`,
         body
     });
+
+/** An order of `owner`'s that is `processing`, so it has a fulfillment order to aim at. */
+const processingOrderOf = async (owner: Owner) =>
+    createOrder(owner.user, [toOrderItem(await createProduct(), 1)], {
+        status: OrderStatus.processing
+    });
+
+/** A delivery door addressed by the id of the order's fulfillment order. */
+const onFulfillmentOrder =
+    (suffix: string, body: Record<string, unknown> = {}): HierarchyRow['prepare'] =>
+    async (owner) => {
+        const order = await processingOrderOf(owner);
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        return {
+            method: 'post',
+            url: `/delivery/fulfillment-orders/${String(fulfillmentOrder._id)}/${suffix}`,
+            body
+        };
+    };
+
+/** A delivery door addressed by the id of one of the order's shipments. */
+const onShipment =
+    (
+        method: HierarchyRequest['method'],
+        suffix: string,
+        body: Record<string, unknown> = {}
+    ): HierarchyRow['prepare'] =>
+    async (owner) => {
+        const order = await processingOrderOf(owner);
+        const shipment = await createShipmentFor(String(order._id));
+        return { method, url: `/delivery/shipments/${String(shipment._id)}${suffix}`, body };
+    };
 
 /** A payments door, addressed by the order id. */
 const onPayment =
@@ -260,19 +294,34 @@ export const HIERARCHY_ROWS: readonly HierarchyRow[] = [
         prepare: onDelivery('start')
     },
     {
-        route: 'delivery POST /order/:orderId/ship',
+        route: 'delivery POST /fulfillment-orders/:id/shipments',
         key: 'delivery.any.update',
-        prepare: onDelivery('ship')
+        prepare: onFulfillmentOrder('shipments')
     },
     {
-        route: 'delivery POST /order/:orderId/deliver',
+        route: 'delivery POST /fulfillment-orders/:id/fulfill',
         key: 'delivery.any.update',
-        prepare: onDelivery('deliver')
+        prepare: onFulfillmentOrder('fulfill')
     },
     {
-        route: 'delivery POST /order/:orderId/fulfill',
+        route: 'delivery POST /fulfillment-orders/:id/hold',
         key: 'delivery.any.update',
-        prepare: onDelivery('fulfill')
+        prepare: onFulfillmentOrder('hold', { reason: 'other' })
+    },
+    {
+        route: 'delivery POST /fulfillment-orders/:id/release',
+        key: 'delivery.any.update',
+        prepare: onFulfillmentOrder('release')
+    },
+    {
+        route: 'delivery PATCH /shipments/:id',
+        key: 'delivery.any.update',
+        prepare: onShipment('patch', '', { trackingCode: 'TRK-RANKCHK1' })
+    },
+    {
+        route: 'delivery POST /shipments/:id/deliver',
+        key: 'delivery.any.update',
+        prepare: onShipment('post', '/deliver')
     },
     {
         route: 'payments POST /order/:orderId/refund',
@@ -338,12 +387,16 @@ export const UNOWNED_WRITES: Readonly<Record<string, string>> = {
     'users POST /search': 'a read wearing a POST',
     'users POST /': 'creates an account; there is no owner yet',
     'orders POST /search': 'a read wearing a POST',
+    'payments POST /search': 'a read wearing a POST',
     'payments POST /webhook': 'the provider reporting an outcome, signed, no account',
     'payments POST /intent': 'the buyer’s own step, scoped to their own orders in the service',
     'payments POST /:id/confirm':
         'the payer’s own step, scoped to their own payments in the service',
     'payments POST /:id/sync': 'the payer’s own step, scoped to their own payments in the service',
-    'returns POST /': 'the buyer opening a return on their own order',
+    'returns POST /':
+        'the buyer opening a return or withdrawing on their own order; a staff remainder cancel is ranked and refused by the refund key in the returns suite',
+    'delivery POST /fulfillment-orders/:id/confirm-wait':
+        'the buyer’s own answer about their own order; staff are refused outright, not ranked',
     'api-keys POST /': 'mints a key for the caller themselves',
     'api-keys DELETE /:id': 'revoking only reduces access',
     'example POST /search': 'a read wearing a POST',

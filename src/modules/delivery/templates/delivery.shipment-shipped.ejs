@@ -5,7 +5,9 @@
 <main class="centered">
     <h1><%= greeting %></h1>
     <p><%= body %></p>
+    <% if (typeof lines !== "undefined" && lines.length > 0) { %><ul><% lines.forEach(function (line) { %><li><%= line %></li><% }) %></ul><% } %>
     <% if (typeof tracking !== "undefined") { %><p><%= tracking %></p><% } %>
+    <% if (typeof more !== "undefined") { %><p><%= more %></p><% } %>
 </main>
 <%- include("/shared/templates/layouts/default-footer.ejs"); %>
 </body>

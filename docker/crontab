@@ -37,6 +37,8 @@
 9  2 * * * cd /app && npm run reap:account-exports
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 10 2 * * * cd /app && npm run reap:orders
+# WARNING: owned by the delivery module — delete it when removing the module (docs/modules/delivery.md)
+11 2 * * * cd /app && npm run reap:delivery
 # WARNING: owned by the returns module — delete it when removing the module (docs/modules/returns.md)
 12 2 * * * cd /app && npm run reap:returns
 # WARNING: owned by the payments module — delete it when removing the module (docs/modules/payments.md)
@@ -58,4 +60,8 @@
 # leave a refund owed for up to 24 hours — see docs/reference/ops.md#scheduled-jobs.
 # WARNING: owned by the orders module — delete it when removing the module (docs/modules/orders.md)
 */5 * * * * cd /app && npm run sweep:order-effects
+# Once a day: the preorder duties are measured in days (the margin is two days wide), and both are
+# idempotent — see docs/modules/delivery.md#the-daily-sweep.
+# WARNING: owned by the delivery module — delete it when removing the module (docs/modules/delivery.md)
+20 2 * * * cd /app && npm run sweep:preorders
 30 2 * * * cd /app && npm run reap:mail-spool

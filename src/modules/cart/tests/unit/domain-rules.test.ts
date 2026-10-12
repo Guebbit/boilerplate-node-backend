@@ -22,6 +22,13 @@ const line = (quantity = 1, available?: number): CartLineCandidate => ({
     product: available === undefined ? {} : { available }
 });
 
+/** A preorder line: `available` is what is left of the product's allowance, not the shelf. */
+const preorder = (quantity: number, available: number): CartLineCandidate => ({
+    quantity,
+    productId: 'p-pre',
+    product: { title: 'Coming soon', preorder: true, available }
+});
+
 describe('evaluateCheckout', () => {
     it('refuses an empty cart', () => {
         expect(evaluateCheckout([])).toEqual({ ok: false, reason: 'empty' });
@@ -29,6 +36,22 @@ describe('evaluateCheckout', () => {
 
     it('accepts a cart whose lines all resolved', () => {
         expect(evaluateCheckout([line(1, 10), line(2, 10)])).toEqual({ ok: true });
+    });
+
+    it('accepts a preorder the allowance covers, and refuses one it does not', () => {
+        expect(evaluateCheckout([line(1, 10), preorder(2, 2)])).toEqual({ ok: true });
+        expect(evaluateCheckout([preorder(3, 2)])).toEqual({
+            ok: false,
+            reason: 'insufficient-stock',
+            shortfalls: [
+                {
+                    productId: 'p-pre',
+                    title: 'Coming soon',
+                    requested: 3,
+                    availability: 'insufficient_stock'
+                }
+            ]
+        });
     });
 
     // `null` is the real case: the catalogue join resolves it when the product was hard-deleted.

@@ -8,7 +8,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import * as translation from '@kernel/translation';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { productService } from '../../services';
 import { PRODUCT_DELETED } from '../../events';
 
@@ -45,6 +46,8 @@ describe('product.deleted titles', () => {
 
     beforeEach(() => {
         resetDomainEvents();
+        // The relay only dispatches in a process where modules have subscribed.
+        markDomainEventsWired();
         deleted.mockReset();
         onDomainEvent(PRODUCT_DELETED, deleted);
     });
@@ -53,6 +56,8 @@ describe('product.deleted titles', () => {
         const product = await createProduct({ title: 'Blue mug' });
 
         await productService.removeById(String(product._id), true);
+
+        await settleOutboxNudges();
 
         expect(deleted).toHaveBeenCalledWith(
             { productId: String(product._id), hardDelete: true, titles: { en: 'Blue mug' } },
@@ -64,6 +69,8 @@ describe('product.deleted titles', () => {
         const product = await createProduct({ title: 'Blue mug' });
 
         await productService.removeById(String(product._id), false);
+
+        await settleOutboxNudges();
 
         expect(deleted).toHaveBeenCalledWith(
             { productId: String(product._id), hardDelete: false, titles: { en: 'Blue mug' } },
@@ -90,6 +97,8 @@ describe('product.deleted titles', () => {
 
         await productService.removeById(String(product._id), true);
 
+        await settleOutboxNudges();
+
         expect(order).toEqual(['read', 'remove']);
         expect(deleted).toHaveBeenCalledWith(
             expect.objectContaining({ titles: { en: 'Blue mug', it: 'Tazza blu' } }),
@@ -100,9 +109,12 @@ describe('product.deleted titles', () => {
     it('does not emit for a soft delete repeated on an already-deleted product', async () => {
         const product = await createProduct({ title: 'Blue mug' });
         await productService.removeById(String(product._id), false);
+        await settleOutboxNudges();
         deleted.mockClear();
 
         await productService.removeById(String(product._id), false);
+
+        await settleOutboxNudges();
 
         expect(deleted).not.toHaveBeenCalled();
     });
@@ -112,6 +124,7 @@ describe('productService.titlesById', () => {
     it('answers the names of a product that still exists, soft-deleted included', async () => {
         const product = await createProduct({ title: 'Blue mug' });
         await productService.removeById(String(product._id), false);
+        await settleOutboxNudges();
 
         await expect(productService.titlesById(String(product._id))).resolves.toEqual({
             en: 'Blue mug'
@@ -121,6 +134,7 @@ describe('productService.titlesById', () => {
     it('answers an empty map for a product that is gone', async () => {
         const product = await createProduct();
         await productService.removeById(String(product._id), true);
+        await settleOutboxNudges();
 
         await expect(productService.titlesById(String(product._id))).resolves.toEqual({});
     });

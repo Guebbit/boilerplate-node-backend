@@ -244,4 +244,6 @@ CI runs `lint:asyncapi` against `asyncapi.yaml` and `asyncapi.public.yaml`. Ther
 
 `/info/version` is the one pointer it ignores (an `override` entry in `scripts/contracts/asyncapi-breaking.ts`): a version number is metadata, not a shape a subscriber reads, and `@asyncapi/diff`'s own standard would otherwise fail every bump. Alpha means `0.y.z` everywhere — both roots and every module fragment carry `0.1.0`; the field stays in a fragment because its own Spectral lint requires it, and nothing checks the numbers agree.
 
+A break the maintainers decided on is listed in `ACKNOWLEDGED_BREAKS` (same file) with its JSON pointer and what replaced it, and the gate leaves exactly that pointer out. Delete the entry once the change has reached `origin/main`. Today it names `order.shipped`, replaced by `shipment.shipped` and `shipment.delivered` when an order learned to ship in parts.
+
 It is PR-only in CI (`asyncapi-breaking` in `ci.yml`) — on a push to main the code is already merged, and there is nothing left to diff against. Locally it is part of `complete`, comparing against whatever `origin/main` your machine last fetched.

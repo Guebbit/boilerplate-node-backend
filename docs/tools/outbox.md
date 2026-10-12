@@ -45,9 +45,9 @@ sequenceDiagram
 | Poison handling       | After the last attempt the row is `dead`: metric, alert, log — and it stops blocking      |
 | Cleanup               | Published rows expire by TTL (`NODE_OUTBOX_RETENTION_DAYS`). Dead rows stay for a human   |
 
-**Exactly-once is not promised.** A consumer that must not act twice dedupes on `meta.eventId`.
-`webhooks` does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out into a
-no-op — see [Consumers](#writing-a-consumer).
+**Exactly-once is not promised.** A consumer where a duplicate does harm (stock, money, webhook
+fan-out) dedupes on `meta.eventId`; a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks`
+does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out into a no-op — see [Consumers](#writing-a-consumer).
 
 ## Where the code is
 
@@ -58,13 +58,22 @@ no-op — see [Consumers](#writing-a-consumer).
 | Backstop relay, every minute              | `scripts/ops/sweep-outbox.ts` (`npm run sweep:outbox`)   |
 | Counters                                  | `src/infrastructure/observability/metrics-outbox.ts`     |
 | One write + its event, atomically         | `announceInTransaction` in `src/kernel/outbox.ts`        |
+| …inside a transaction the caller owns     | `announceWithin` in `src/kernel/outbox.ts`               |
 | `payment.succeeded`, `payment.failed`     | `src/modules/payments/services/announce.ts`              |
 | `payment.refunded`                        | `src/modules/payments/services/refunds.ts`               |
 | `order.created`, `order.status_changed`   | `src/modules/orders/services/{place,status,override}.ts` |
 | `order.cancelled`                         | `src/modules/orders/services/cancel.ts`                  |
 | `inventory.reservation_expired`           | `src/modules/inventory/services/sweep.ts`                |
 | `product.created`                         | `src/modules/products/services/crud.ts`                  |
+| `product.deleted`                         | `src/modules/products/services/remove.ts`                |
 | `account.sessions-revoked`                | `src/modules/account/services/{revocation,profile}.ts`   |
+| `user.setup-requested`                    | `src/modules/users/services/create.ts`                   |
+| `example.published`                       | `src/modules/example/services/crud.ts`                   |
+| `return.requested`                        | `src/modules/returns/services/create.ts`                 |
+| `return.received`                         | `src/modules/returns/services/receive.ts`                |
+| `return.closed`                           | `src/modules/returns/services/{close,create}.ts`         |
+| `shipment.*`, `fulfillment_order.*`       | `src/modules/delivery/services/announce.ts`              |
+| `order.status_overridden`                 | `src/modules/orders/services/override.ts`                |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary
@@ -90,6 +99,14 @@ announceInTransaction(
     (thing) => ({ name: 'thing.happened', payload: { id }, aggregateId: id })
 );
 ```
+
+`announce` may hand back one announcement or a list: one change that must say two things (an
+override says `order.status_changed` and `order.status_overridden`) writes both rows, in order.
+
+When a change spans several records and belongs to a transaction the CALLER already owns — a shipment
+writes the shipment, the units leaving the shelf, the order's summary and its events together —
+`announceWithin(session, write, announce)` is the same step without opening a transaction or waking
+the relay. The owner of the transaction calls `nudgeOutbox()` after its own commit.
 
 Rules of thumb:
 
@@ -120,8 +137,9 @@ A handler on the bus receives `(payload, meta)`. Rules:
 
 - **Throw (or reject) to ask for a retry.** The bus logs it and answers `false`; the relay
   reschedules. Do not swallow errors you want retried.
-- **Be idempotent on `meta.eventId`.** `webhooks/services/publish.ts` is the reference: a unique
-  index plus "duplicate key means already done".
+- **Be idempotent on `meta.eventId` where a duplicate does harm** (stock, money, webhook fan-out);
+  a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks/services/publish.ts` is the
+  reference: a unique index plus "duplicate key means already done".
 - **Attempt every target, then fail.** `fanOut` uses `Promise.allSettled` so one bad subscription
   does not starve the rest, then throws so the relay retries; already-created rows are skipped.
 

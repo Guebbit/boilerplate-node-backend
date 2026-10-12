@@ -112,9 +112,10 @@ assume — is the JSDoc on the `DomainEventMap` augmentation in the emitting mod
 
 ### The three properties that matter
 
-- **Handlers run sequentially and awaited.** The emitters depend on the effect having happened — a
-  product leaves every cart before it leaves the database. Fire-and-forget would turn an ordering
-  guarantee into a race.
+- **Handlers run sequentially and awaited.** An emitter that depends on the effect having happened
+  gets it: `emitDomainEvent` resolves once every handler has settled. Fire-and-forget would turn
+  an ordering guarantee into a race. (An event on the [outbox](./outbox.md), like `product.deleted`,
+  is emitted by the relay after the write commits, so its emitter's response does not wait for it.)
 - **A throwing handler is logged and skipped.** It stops neither the remaining handlers nor the
   emitter: a listener must not roll back an operation that was already authorised, and the emitting
   module cannot decide failure modes for code it has never heard of.

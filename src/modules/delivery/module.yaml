@@ -1,5 +1,7 @@
-summary: "Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival."
+summary: 'Shipping rates as pure rules, fulfillment orders, the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order, and what a late preorder owes its buyer.'
 subdomain: supporting
 group: shop
 dependsOn:
-    - orders # a shipment is about an order
+    - inventory # the event a stock allocation announces, which releases a fulfillment order held for it
+    - orders # a fulfillment order and a shipment are about an order
+    - products # the event a moved release date announces, which the buyers who already paid are told about

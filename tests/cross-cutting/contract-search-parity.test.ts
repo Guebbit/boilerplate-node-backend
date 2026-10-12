@@ -99,6 +99,7 @@ describe('a search accepts the same filters in both spellings', () => {
             ['example', 'examples'],
             ['feedback', 'feedback'],
             ['orders', 'orders'],
+            ['payments', 'payments'],
             ['products', 'products'],
             ['users', 'users']
         ];

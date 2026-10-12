@@ -89,7 +89,17 @@ describe('removeTranslations', () => {
         registerTranslationPort(port);
 
         await expect(removeTranslations('product', 'p1')).resolves.toBe(3);
-        expect(port.removeAll).toHaveBeenCalledWith('product', 'p1');
+        expect(port.removeAll).toHaveBeenCalledWith('product', 'p1', undefined);
+    });
+
+    it("hands the caller's transaction to the port", async () => {
+        const port = fakePort({ removeAll: jest.fn().mockResolvedValue(1) });
+        registerTranslationPort(port);
+        const session = asStub<ClientSession>({});
+
+        await removeTranslations('product', 'p1', session);
+
+        expect(port.removeAll).toHaveBeenCalledWith('product', 'p1', session);
     });
 });
 

@@ -9,7 +9,7 @@
 
 import { OrderStatus } from '@types';
 import {
-    ORDER_LIFECYCLE,
+    ORDER_EVENTS,
     canTransition,
     canOverrideTo,
     statusesOverridableInto,
@@ -19,12 +19,19 @@ import {
     statusesReachableFrom,
     paymentSettled,
     overridableTargetsFrom,
-    type OrderActor
+    type OrderActor,
+    type OrderEvent
 } from '../../domain/lifecycle';
 
 /** Every status in the contract enum, so a new one is covered without touching this file. */
 const EVERY_STATUS = Object.values(OrderStatus);
-const EVERY_ACTOR: readonly OrderActor[] = ['customer', 'admin', 'system', 'withdrawal'];
+const EVERY_ACTOR: readonly OrderActor[] = [
+    'customer',
+    'admin',
+    'system',
+    'withdrawal',
+    'fulfilment'
+];
 
 /** The two an HTTP caller can be. `system` names moves that follow a fact from outside the app. */
 const REQUEST_ACTORS: readonly OrderActor[] = ['customer', 'admin'];
@@ -38,29 +45,55 @@ const FULFILMENT_SEQUENCE: readonly OrderStatus[] = [
     OrderStatus.delivered
 ];
 
-describe('the table is total over the contract', () => {
-    it('has a row for every status the contract declares', () => {
-        // A seventh status in `openapi.yaml` and not here is an order that can never be left.
-        expect(Object.keys(ORDER_LIFECYCLE).toSorted()).toEqual([...EVERY_STATUS].toSorted());
+describe("the table names only the contract's statuses", () => {
+    const events: readonly OrderEvent[] = Object.values(ORDER_EVENTS);
+
+    it('uses only statuses the contract declares', () => {
+        const used = events.flatMap((event) => [...event.from, event.to]);
+
+        expect(used.every((status) => EVERY_STATUS.includes(status))).toBe(true);
     });
 
-    it('names only statuses the contract declares as destinations', () => {
-        const destinations = Object.values(ORDER_LIFECYCLE).flatMap((moves) => Object.keys(moves));
-
-        expect(destinations.every((status) => EVERY_STATUS.includes(status as OrderStatus))).toBe(
-            true
-        );
-    });
-
-    it('gives every edge at least one actor', () => {
-        // An edge nobody may take reads as permission and grants none.
-        const empty = Object.entries(ORDER_LIFECYCLE).flatMap(([from, moves]) =>
-            Object.entries(moves)
-                .filter(([, actors]) => actors.length === 0)
-                .map(([to]) => `${from} → ${to}`)
-        );
+    it('gives every event at least one actor and one origin', () => {
+        // An event nobody may make reads as permission and grants none.
+        const named: Readonly<Record<string, OrderEvent>> = ORDER_EVENTS;
+        const empty = Object.entries(named)
+            .filter(([, event]) => event.actors.length === 0 || event.from.length === 0)
+            .map(([name]) => name);
 
         expect(empty).toEqual([]);
+    });
+
+    it('never lets an event land on the status it leaves', () => {
+        expect(events.filter((event) => event.from.includes(event.to))).toEqual([]);
+    });
+
+    it('leaves a terminal status through no event', () => {
+        for (const status of [OrderStatus.delivered, OrderStatus.cancelled])
+            expect(events.filter((event) => event.from.includes(status))).toEqual([]);
+    });
+});
+
+describe('the named events', () => {
+    it('reads `ship`, `deliver` and the digital completion off the table', () => {
+        // The digital fulfilment is the one `processing -> delivered` edge.
+        expect(ORDER_EVENTS.ship).toMatchObject({
+            from: [OrderStatus.processing],
+            to: OrderStatus.shipped
+        });
+        expect(ORDER_EVENTS.deliver).toMatchObject({
+            from: [OrderStatus.shipped],
+            to: OrderStatus.delivered
+        });
+        expect(ORDER_EVENTS.fulfilmentComplete).toMatchObject({
+            from: [OrderStatus.processing],
+            to: OrderStatus.delivered,
+            actors: ['system']
+        });
+    });
+
+    it('keeps the expiry apart from every cancel an order that landed a payment may take', () => {
+        expect(ORDER_EVENTS.expire.from).toEqual([OrderStatus.pending]);
     });
 });
 
@@ -106,7 +139,7 @@ describe('who may write `shipped` and `delivered`', () => {
                 actor === 'system' ? [OrderStatus.processing] : []
             );
             expect(statusesLeadingTo(OrderStatus.delivered, actor)).toEqual(
-                actor === 'system' ? [OrderStatus.shipped] : []
+                actor === 'system' ? [OrderStatus.processing, OrderStatus.shipped] : []
             );
         }
     });
@@ -152,6 +185,15 @@ describe('who may cancel', () => {
             expect(canTransition(OrderStatus.shipped, OrderStatus.cancelled, actor)).toBe(false);
     });
 
+    it("lets only `delivery`'s record of an unanswered preorder cancel a paid order for the shop", () => {
+        // The one cancel that follows a fact about the goods: nobody makes it by request.
+        expect(statusesLeadingTo(OrderStatus.cancelled, 'fulfilment')).toEqual([
+            OrderStatus.paid,
+            OrderStatus.processing
+        ]);
+        expect(ORDER_EVENTS.cancelUnanswered.actors).toEqual(['fulfilment']);
+    });
+
     it("stops the system actor at `pending` — B21's race", () => {
         // The reservation-sweep expiry must never cancel an order a payment already reached,
         // unlike `admin`'s own wider set two tests up.
@@ -192,21 +234,11 @@ describe('direction', () => {
 });
 
 describe('canTransition', () => {
-    it('allows a write that changes nothing', () => {
-        // An admin editing an email sends the status the order already has.
+    it('refuses a write that changes nothing, from every actor', () => {
+        // Only a declared edge is a transition: staying put is not one, `paid → paid` included.
         for (const status of EVERY_STATUS)
             for (const actor of EVERY_ACTOR)
-                if (status !== OrderStatus.paid)
-                    expect(canTransition(status, status, actor)).toBe(true);
-    });
-
-    it('refuses an echo write onto `paid` from anyone but the payment confirmation', () => {
-        // The one status where "changes nothing" must not bypass who may write it — an admin
-        // resending `status: 'paid'` on an already-paid order is not a free pass.
-        for (const actor of EVERY_ACTOR)
-            expect(canTransition(OrderStatus.paid, OrderStatus.paid, actor)).toBe(
-                actor === 'system'
-            );
+                expect(canTransition(status, status, actor)).toBe(false);
     });
 
     it('agrees with both directions of the table', () => {
@@ -250,13 +282,6 @@ describe('isPayable', () => {
     it('is true for pending alone, over every status', () => {
         for (const status of EVERY_STATUS)
             expect(isPayable(status)).toBe(status === OrderStatus.pending);
-    });
-
-    it('refuses the echo `system` may still write onto `paid`', () => {
-        // `canTransition(paid, paid, 'system')` is `true` (the webhook's own retries) — `isPayable`
-        // must not surface that as "you may pay this order again".
-        expect(canTransition(OrderStatus.paid, OrderStatus.paid, 'system')).toBe(true);
-        expect(isPayable(OrderStatus.paid)).toBe(false);
     });
 
     it("agrees with `orderActionsFor`'s `pay` field for every status", () => {

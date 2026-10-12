@@ -1,0 +1,11 @@
+{
+    "stats": {
+        "product-not-found": "No such product.",
+        "range": {
+            "invalid-day": "A date must be a real day written YYYY-MM-DD.",
+            "out-of-order": "The first day must not come after the last.",
+            "too-long": "A period may cover at most two years.",
+            "too-many-buckets": "That period would need more than 400 buckets; choose a larger interval or a shorter period."
+        }
+    }
+}

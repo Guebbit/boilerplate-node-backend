@@ -1,6 +1,6 @@
 /**
  * @module
- * The delivery route table. Six routes, three different audiences — the guards are per route, so
+ * The delivery route table. Nine routes, three different audiences — the guards are per route, so
  * each one is its own decision rather than an inherited default. That's the arrangement most
  * likely to drift: a new route added here gets no guard at all unless someone remembers, which is
  * what the sweep at the end of this file is for.
@@ -9,15 +9,31 @@
 import { routeSignatures, guardsOn } from '@tests/routes';
 import { router } from '@modules/delivery/routes';
 
+/** Every door that writes a fulfillment order or a shipment. */
+const WRITES = [
+    'POST /fulfillment-orders/:id/shipments',
+    'POST /fulfillment-orders/:id/fulfill',
+    'POST /fulfillment-orders/:id/hold',
+    'POST /fulfillment-orders/:id/release',
+    'PATCH /shipments/:id',
+    'POST /shipments/:id/deliver'
+];
+
 describe('delivery routes', () => {
     it('mounts exactly the documented endpoints, in the documented order', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
             'GET /order/:orderId',
+            'GET /fulfillment-orders',
+            'GET /fulfillment-orders/summary',
             'POST /order/:orderId/start',
-            'POST /order/:orderId/ship',
-            'POST /order/:orderId/deliver',
-            'POST /order/:orderId/fulfill'
+            'POST /fulfillment-orders/:id/shipments',
+            'POST /fulfillment-orders/:id/fulfill',
+            'POST /fulfillment-orders/:id/hold',
+            'POST /fulfillment-orders/:id/release',
+            'POST /fulfillment-orders/:id/confirm-wait',
+            'PATCH /shipments/:id',
+            'POST /shipments/:id/deliver'
         ]);
     });
 
@@ -28,9 +44,9 @@ describe('delivery routes', () => {
         expect(guardsOn(router, 'GET /methods')).not.toContain('isAuth');
     });
 
-    it('requires a session to read the parcel behind an order', () => {
-        // The shipment is tied to one caller's order. The ownership check itself lives in the
-        // controller/service; this is the gate that guarantees there is a caller to check.
+    it('requires a session to read the fulfilment behind an order', () => {
+        // The fulfilment is tied to one caller's order. The ownership check itself lives in the
+        // service; this is the gate that guarantees there is a caller to check.
         const guards = guardsOn(router, 'GET /order/:orderId');
 
         expect(guards).toContain('isAuth');
@@ -41,22 +57,18 @@ describe('delivery routes', () => {
         expect(guardsOn(router, 'POST /order/:orderId/start')).toContain('requirePermissionGuard');
     });
 
-    it('restricts recording a shipment to an operator', () => {
+    it.each(WRITES)('restricts %s to an operator', (signature) => {
         // A customer could otherwise move their own order forward, or anyone else's — this is
         // staff's own write, not the order owner's.
-        expect(guardsOn(router, 'POST /order/:orderId/ship')).toContain('requirePermissionGuard');
+        expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
     });
 
-    it('restricts recording a delivery to an operator', () => {
-        expect(guardsOn(router, 'POST /order/:orderId/deliver')).toContain(
-            'requirePermissionGuard'
-        );
-    });
+    it("keeps the buyer's keep-waiting answer to a session, with no staff key", () => {
+        // It is the order's own buyer's answer, not a permission: the service refuses anyone else.
+        const guards = guardsOn(router, 'POST /fulfillment-orders/:id/confirm-wait');
 
-    it('restricts marking a digital-only order fulfilled to an operator', () => {
-        expect(guardsOn(router, 'POST /order/:orderId/fulfill')).toContain(
-            'requirePermissionGuard'
-        );
+        expect(guards).toContain('isAuth');
+        expect(guards).not.toContain('requirePermissionGuard');
     });
 
     it('leaves nothing but the methods list unauthenticated', () => {

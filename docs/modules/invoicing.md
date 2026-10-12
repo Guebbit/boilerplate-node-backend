@@ -21,7 +21,9 @@ flowchart LR
     invoicing["invoicing<br/><i>this module</i>"]
     orders["orders"]
     payments["payments"]
+    stats["stats"]
 
+    stats --> invoicing
     invoicing --> orders
     invoicing --> payments
     orders -. "order.status_changed" .-> invoicing
@@ -32,7 +34,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class payments supporting;
+    class payments,stats supporting;
     class invoicing centre;
 ```
 
@@ -115,6 +117,15 @@ the counter, and the loser reads the row the winner wrote (`services/issue-invoi
 series therefore have no gaps (VAT Directive Art. 226(2); a credit note is an invoice in law,
 Art. 219), unlike `orderNumber`, which is a label (`orders/services/order-numbering.ts`).
 
+The number's year is the year of the document's own `issuedAt` on the shop's calendar
+(`NODE_SHOP_TIMEZONE`, [orders](./orders.md#configuration)), taken from the very instant that is stored,
+so a sale at 00:30 on 1 January in Rome starts the new series instead of ending the old one. The
+date printed on the document uses the same zone.
+
+`invoicingService.moneyBuckets` sums invoices and credit notes per currency and shop-local bucket by
+`issuedAt` (indexed). It is where every money figure of [`stats`](./stats.md) comes from: the
+documents are frozen and dated, and carry the VAT and shipping split a payment's refund does not.
+
 A listener failure is logged by `emitDomainEvent` and never rolls back the write that triggered
 it: an order that reached `paid` stays `paid` whether or not its invoice freeze succeeded, so an
 invoice can be missing, but a number is never skipped.
@@ -169,6 +180,13 @@ integrations, not built here — both transmit a structured document to a third 
 delivery outcome, a shape genuinely different from "hand back some bytes", so a real adapter's
 `issue` would also need to report that outcome onto the document. Left for whoever builds the
 first one.
+
+## The order timeline
+
+Issuing an invoice writes `invoice_issued` (`invoiceId`, `number`) and a credit note
+`credit_note_issued` (`creditNoteId`, `number`, `refundId`) on the order's
+[timeline](./orders.md#the-timeline), in the same transaction as the document. The race's loser
+aborts both, so each document leaves exactly one row.
 
 ## Configuration
 

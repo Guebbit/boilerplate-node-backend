@@ -31,7 +31,7 @@ const resolveClaims =
             // on its very next request, not merely at its next login. See `findAuthenticatableById`.
             // An MFA login challenge can never reach here at all — it isn't a JWT, so it fails
             // `verify()` outright rather than needing a dedicated rejection; see
-            // `account/services/two-factor.ts#buildLoginChallenge`.
+            // `account/services/two-factor-challenge.ts#buildLoginChallenge`.
             .then((claims) =>
                 userService
                     .findAuthenticatableById(claims.id)

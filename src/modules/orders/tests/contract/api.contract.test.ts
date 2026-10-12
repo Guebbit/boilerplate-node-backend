@@ -13,13 +13,15 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
+import { orderService } from '../../services';
+import { OrderStatus } from '@types';
 
 setupTestDb();
 
 /** An order with real lines — the download-scope suite is `invoicing`'s own, not this file's. */
-const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
+const seedOrderFor = async (user: Parameters<typeof createOrder>[0], status?: OrderStatus) => {
     const product = await createProduct();
-    return createOrder(user, [toOrderItem(product, 2)]);
+    return createOrder(user, [toOrderItem(product, 2)], status ? { status } : undefined);
 };
 
 describe('GET /orders — the filters it now publishes', () => {
@@ -492,9 +494,9 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('matches the contract for a hard delete, and the row is gone', async () => {
+    it('matches the contract for a hard delete of a cancelled order, and the row is gone', async () => {
         const { bearer, user } = await authenticateAs('admin');
-        const order = await seedOrderFor(user);
+        const order = await seedOrderFor(user, OrderStatus.cancelled);
 
         const response = await api()
             .delete(`/orders/${String(order._id)}/hard`)
@@ -502,6 +504,19 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
 
         expect(response.status).toBe(200);
         await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
+    });
+
+    it('refuses a hard delete of an open order with 409 ORDER_NOT_CANCELLED, and keeps it', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .delete(`/orders/${String(order._id)}/hard`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELLED');
+        await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
     });
 
     it('matches the error contract for a hard delete of an id nobody holds', async () => {
@@ -536,5 +551,56 @@ describe('GET /orders — sort', () => {
             'pending'
         ]);
         expect(refused.status).toBe(422);
+    });
+});
+
+describe('GET /orders/{id}/timeline', () => {
+    it('shows staff every row with its actor, and the buyer only theirs, never an actor', async () => {
+        const staff = await authenticateAs('admin');
+        const buyer = await authenticateAs('user');
+        const order = await seedOrderFor(buyer.user);
+        const id = String(order._id);
+        await orderService.markPaid(id, 'card');
+        await api()
+            .post(`/orders/${id}/status-override`)
+            .set('Authorization', staff.bearer)
+            .send({ to: 'processing', reason: 'a staff-only reason' });
+
+        const asStaff = await api()
+            .get(`/orders/${id}/timeline`)
+            .set('Authorization', staff.bearer);
+        const asBuyer = await api()
+            .get(`/orders/${id}/timeline`)
+            .set('Authorization', buyer.bearer);
+
+        expect(asStaff.status).toBe(200);
+        expect(asStaff.body.data).toMatchObject([
+            { type: 'paid', data: { method: 'card' } },
+            {
+                type: 'status_overridden',
+                text: 'a staff-only reason',
+                actor: String(staff.user._id)
+            }
+        ]);
+        expect(asBuyer.status).toBe(200);
+        expect(asBuyer.body.data).toHaveLength(1);
+        expect(asBuyer.body.data[0]).toMatchObject({ type: 'paid' });
+        expect(asBuyer.body.data[0]).not.toHaveProperty('actor');
+    });
+
+    it('answers another buyer with the same 404 as an order that does not exist', async () => {
+        const owner = await authenticateAs('user');
+        const order = await seedOrderFor(owner.user);
+        const stranger = await authenticateAsRole('customer');
+
+        const other = await api()
+            .get(`/orders/${String(order._id)}/timeline`)
+            .set('Authorization', stranger.bearer);
+        const missing = await api()
+            .get('/orders/65dcdec2b18ad5e4bd597f01/timeline')
+            .set('Authorization', stranger.bearer);
+
+        expect(other.status).toBe(404);
+        expect(missing.status).toBe(404);
     });
 });

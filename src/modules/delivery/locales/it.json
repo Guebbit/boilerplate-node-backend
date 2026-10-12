@@ -1,20 +1,54 @@
 {
     "delivery": {
         "order-not-found": "L'ordine non è stato trovato",
+        "fulfillment-order-not-found": "L'ordine di evasione non è stato trovato",
+        "shipment-not-found": "La spedizione non è stata trovata",
         "not-paid": "Questo ordine non è in attesa di evasione",
-        "not-shipped": "Per questo ordine non è ancora partito nulla",
         "not-processing": "Questo ordine non è pronto per la spedizione",
-        "not-shippable-for-delivery": "Questo ordine non è ancora stato spedito",
-        "nothing-to-ship": "Questo ordine non ha nulla da spedire — contrassegnalo come evaso",
-        "not-digital-only": "Questo ordine contiene articoli fisici — spediscilo invece di contrassegnarlo come evaso",
+        "not-shippable": "Questo ordine di evasione non può essere spedito adesso",
+        "not-physical": "Questo ordine di evasione non ha nulla da spedire — contrassegnalo come evaso",
+        "not-digital": "Questo ordine di evasione contiene articoli fisici — spediscilo invece di contrassegnarlo come evaso",
+        "lines-invalid": "Le righe indicano un prodotto che non c'è, o più di quanto resta",
+        "not-holdable": "Solo un ordine di evasione aperto può essere messo in attesa",
+        "not-releasable": "Questo ordine di evasione non è in attesa, oppure attende le scorte e si sblocca solo quando arrivano",
+        "not-deliverable": "Questa spedizione è già stata consegnata, oppure il suo ordine non può ricevere una consegna ora",
         "tracking-code-required": "Per questo metodo di spedizione è richiesto un codice di tracciamento",
         "override-reason-required": "Per forzare questo spostamento è richiesto un motivo",
+        "email-line": "{{quantity}} × {{title}}",
         "email-shipped": {
             "subject": "Il tuo ordine è in viaggio",
             "meta-title": "Ordine spedito",
             "greeting": "Ciao, {{name}}!",
-            "body": "Buone notizie — il tuo ordine ha lasciato il magazzino.",
-            "tracking": "Traccia il tuo pacco con il codice {{code}}."
+            "body": "Buone notizie — una parte del tuo ordine ha lasciato il magazzino.",
+            "tracking": "Traccia il tuo pacco con il codice {{code}}.",
+            "more": "Altri {{count}} articoli arriveranno con un'altra spedizione."
+        },
+        "email-delivered": {
+            "subject": "La tua spedizione è arrivata",
+            "meta-title": "Spedizione consegnata",
+            "greeting": "Ciao, {{name}}!",
+            "body": "La tua spedizione è arrivata.",
+            "withdraw-until": "Puoi recedere dall'acquisto fino al {{date}}."
+        },
+        "not-awaiting-answer": "Questa spedizione non attende una risposta",
+        "email-preorder-delayed": {
+            "meta-title": "Il tuo preordine è in ritardo",
+            "greeting": "Ciao, {{name}}!",
+            "moved": {
+                "subject": "Il tuo preordine arriverà più tardi del previsto",
+                "body": "Ti avevamo promesso il preordine per il {{agreed}}. Ora è atteso per il {{expected}}."
+            },
+            "ask-moved": {
+                "subject": "Il tuo preordine è in ritardo: vuoi continuare ad aspettare?",
+                "body": "Ti avevamo promesso il preordine per il {{agreed}}. Ora è atteso per il {{expected}}, un ritardo che non possiamo chiederti di accettare senza il tuo consenso."
+            },
+            "ask-passed": {
+                "subject": "Il tuo preordine è in ritardo: vuoi continuare ad aspettare?",
+                "body": "Ti avevamo promesso il preordine per il {{agreed}} e non è ancora arrivato. Non possiamo darti una nuova data."
+            },
+            "answer": "Ti chiediamo di dirci entro il {{date}} che vuoi continuare ad aspettare. Se non ci risponderai, lo annulleremo e ti rimborseremo per intero.",
+            "cancel-any-time": "Puoi annullarlo in qualsiasi momento prima della spedizione e sarai rimborsato per intero. Se non fai nulla, continui ad aspettare.",
+            "link-label": "Vedi il tuo ordine"
         }
     }
 }

@@ -341,6 +341,17 @@ const adminQuery =
         return api().get(`${path}?${query}`).set('Authorization', bearer);
     };
 
+/**
+ * {@link adminQuery} for an operation that refuses a request without its required parameters:
+ * `base` rides along, and the case's own invalid parameter is appended to it.
+ */
+const adminQueryWith =
+    (path: string, base: string) =>
+    async (query: string): Promise<Response> => {
+        const { bearer } = await authenticateAs('admin');
+        return api().get(`${path}?${base}&${query}`).set('Authorization', bearer);
+    };
+
 /** A locale row real enough for `/locales/{locale}/...` to reach its own query validation, rather than 404ing on an unknown tag first. */
 const withRealLocale = async (): Promise<string> => {
     const tag = 'qp';
@@ -359,9 +370,26 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /feedback': { request: adminQuery('/feedback') },
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
+    'GET /orders/export': { request: adminQuery('/orders/export') },
     'GET /returns': { request: adminQuery('/returns') },
+    'GET /returns/options': { request: adminQuery('/returns/options') },
     'GET /inventory/movements': { request: adminQuery('/inventory/movements') },
+    'GET /delivery/fulfillment-orders': { request: adminQuery('/delivery/fulfillment-orders') },
+    'GET /delivery/fulfillment-orders/summary': {
+        request: adminQuery('/delivery/fulfillment-orders/summary')
+    },
     'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
+    'GET /payments': { request: adminQuery('/payments') },
+    'GET /payments/refunds': { request: adminQuery('/payments/refunds') },
+    'GET /stats/sales': {
+        request: adminQueryWith('/stats/sales', 'from=2026-03-01&to=2026-03-31')
+    },
+    'GET /stats/products/{productId}': {
+        request: adminQueryWith(
+            '/stats/products/ffffffffffffffffffffffff',
+            'from=2026-03-01&to=2026-03-31'
+        )
+    },
     'GET /locales/{locale}/messages': {
         // Public: no `security` on this operation at all.
         request: async (query) => {
@@ -542,7 +570,11 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     createPaymentIntent: { orderId: (world) => world.orderId },
     createReturn: {
         orderId: (world) => world.orderId,
-        lines: (world) => [{ productId: world.productId, quantity: 1 }]
+        lines: (world) => [{ productId: world.productId, quantity: 1 }],
+        // A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
+        // the legal body is the goods return the generated `lines` belong to.
+        kind: () => 'return',
+        fulfillmentOrderId: () => undefined
     },
     receiveStock: { productId: (world) => world.productId },
     adjustStock: { productId: (world) => world.productId },

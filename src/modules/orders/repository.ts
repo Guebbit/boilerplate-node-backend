@@ -11,20 +11,35 @@ import {
     type ReencryptSpec,
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
-import { orderModel, applyOrderTransform, orderNumberCounterModel } from './model';
-import type { OrderDocument, OrderPendingEffect, OrderStatusOverride } from './model';
-import type { StampedPaymentStatus, StampedReturnStatus } from './domain';
+import {
+    orderModel,
+    applyOrderTransform,
+    orderNumberCounterModel,
+    orderEventModel,
+    applyOrderEventTransform
+} from './model';
+import type {
+    OrderDocument,
+    OrderEventDocument,
+    OrderPendingEffect,
+    OrderReference
+} from './model';
+import { paymentStatusFilter, returnStatusFilter } from './domain';
+import type { FulfillmentSummary, StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { encryptOrderPii } from './pii';
 import { ANONYMIZED_EMAIL } from './domain/anonymization';
 import { OrderStatus } from '@types';
+import type { OrderPaymentStatus, OrderReturnStatus } from '@types';
 import type { Order } from '@types';
 import {
     createRepository,
     toObjectId,
     withScope,
-    type Repository
+    type AppendOnlyLedger,
+    type Repository,
+    type Wire
 } from '@infrastructure/persistence/create-repository';
 import {
     normalizePagination,
@@ -42,7 +57,13 @@ import { checkedDelete, type DeleteOutcome } from '@infrastructure/persistence/v
  * What `sort` may order by: wire field → column. `totalPrice` is derived at serialisation, so it
  * is not a column and not sortable.
  */
-const ORDER_SORTABLE = { createdAt: 'createdAt', status: 'status', email: 'email' };
+const ORDER_SORTABLE = {
+    createdAt: 'createdAt',
+    status: 'status',
+    email: 'email',
+    payBy: 'payBy',
+    paidAt: 'paidAt'
+};
 
 /** Plain CRUD from the repository factory; `search` below overrides its aggregation-free default. */
 const base = createRepository<OrderDocument, Order>(orderModel, {
@@ -57,6 +78,10 @@ const base = createRepository<OrderDocument, Order>(orderModel, {
         },
         exact: { email: 'email', status: 'status', paymentMethod: 'paymentMethod' },
         presence: { deleted: 'deletedAt' },
+        dateRanges: {
+            createdAt: { min: 'createdFrom', max: 'createdTo' },
+            paidAt: { min: 'paidFrom', max: 'paidTo' }
+        },
         sortable: ORDER_SORTABLE
     }
 });
@@ -97,6 +122,22 @@ const withNormalizedEmailFilter = (filters: object): object => {
 };
 
 /**
+ * The declared filters, plus the two derived statuses mapped back to the stored fields behind
+ * them. `$and`, so the two cannot overwrite each other's `paymentStatus`/`paidAt` keys.
+ *
+ * @param filters - the validated filter bag
+ */
+const withProjectionFilters = (filters: object): Record<string, unknown> => {
+    const bag = filters as { paymentStatus?: OrderPaymentStatus; returnStatus?: OrderReturnStatus };
+    const derived = [
+        ...(bag.paymentStatus ? [paymentStatusFilter(bag.paymentStatus)] : []),
+        ...(bag.returnStatus ? [returnStatusFilter(bag.returnStatus)] : [])
+    ];
+    const declared = base.buildWhere(withNormalizedEmailFilter(filters));
+    return derived.length > 0 ? { $and: [declared, ...derived] } : declared;
+};
+
+/**
  * Filter → count → page → normalize, over the aggregation framework. `$match` is built from the
  * same declared spec the other repositories use, so id coercion happens before the pipeline is
  * assembled — unlike `find()`, `$match` doesn't cast. `async` so `buildWhere`'s synchronous
@@ -111,7 +152,7 @@ const search = async (
     // `withScope`, not a spread: the scope is the authorization boundary, and a spread lets a
     // client filter on the same key (`userId`) overwrite it — or the scope's `$or` overwrite the
     // filter's. Both must match.
-    const match = withScope(base.buildWhere(withNormalizedEmailFilter(filters)), scope);
+    const match = withScope(withProjectionFilters(filters), scope);
 
     // `DEFAULT_SORT`, not a bare `createdAt` — the count and the page below are two separate
     // `aggregate()` calls, so a tie between them puts one order on page 1 AND page 2 and skips
@@ -135,6 +176,45 @@ const search = async (
         }
     );
 };
+
+/**
+ * How many orders a filter and a scope match — the count an export is refused on before it reads a
+ * row. The same `$match` {@link search} builds, so the two can never disagree about "these orders".
+ *
+ * @param filters - the validated filter bag
+ * @param scope - what the caller may read
+ */
+const countMatching = (
+    filters: object = {},
+    scope: Record<string, unknown> = {}
+): Promise<number> =>
+    aggregate<{ totalItems?: number }>([
+        { $match: withScope(withProjectionFilters(filters), scope) },
+        { $count: 'totalItems' }
+    ]).then((counted) => counted.at(0)?.totalItems ?? 0);
+
+/**
+ * Every order a filter and a scope match, in the list's own order, read through a cursor so a large
+ * export holds one batch in memory rather than the lot. Each row is normalized exactly like a list
+ * row, so the file and the page can never disagree about a figure.
+ *
+ * @param filters - the validated filter bag, `sort` included
+ * @param scope - what the caller may read
+ */
+async function* streamMatching(
+    filters: object = {},
+    scope: Record<string, unknown> = {}
+): AsyncGenerator<Order> {
+    const chosen = sortOf(filters, ORDER_SORTABLE);
+    const run = orderModel.aggregate<OrderDocument>([
+        { $match: withScope(withProjectionFilters(filters), scope) },
+        { $sort: chosen ?? DEFAULT_SORT }
+    ]);
+    // Aggregate#cursor: a server-side cursor; `batchSize` is how many documents each round trip
+    // brings. https://mongoosejs.com/docs/api/aggregate.html#Aggregate.prototype.cursor()
+    const cursor = (chosen ? run.collation(SORT_COLLATION) : run).cursor({ batchSize: 500 });
+    for await (const document of cursor) yield* base.normalize([document]);
+}
 
 /**
  * Fetch one order, restricted to a caller's own rows when `scope` narrows it — one query,
@@ -295,15 +375,13 @@ const setProjection = (
 };
 
 /**
- * Move an order to `to` from any status in `from`, appending one override-history entry in the
- * SAME write — an override's history entry and the status move it describes must never come
- * apart, the same reasoning {@link updateStatusIfIn}'s `effects` parameter already follows for
- * cancellation. `from` is not one fixed status here (unlike {@link updateStatusIfIn}'s normal
- * callers): `domain/lifecycle.ts`'s `statusesOverridableInto` computes the real set per call.
+ * Move an order to `to` from any status in `from`. `from` is not one fixed status here (unlike
+ * {@link updateStatusIfIn}'s normal callers): `domain/lifecycle.ts`'s `statusesOverridableInto`
+ * computes the real set per call. The override's timeline row is written by the caller, in the
+ * same transaction.
  * @param id - the order to move
  * @param from - every status this override may legally have started from
  * @param to - the status being written
- * @param entry - the override-history entry to append
  * @param withdrawUntil - the withdrawal deadline to freeze in the same write, for a move into
  *   `delivered`; absent for every other destination
  * @param session - joins the write to the caller's transaction, so its outbox row rides with it
@@ -313,17 +391,56 @@ const applyStatusOverride = (
     id: string,
     from: readonly OrderStatus[],
     to: OrderStatus,
-    entry: OrderStatusOverride,
     withdrawUntil?: Date,
     session?: ClientSession
 ): Promise<OrderDocument | null> =>
     orderModel
         .findOneAndUpdate(
             { _id: toObjectId(id), status: { $in: [...from] } } as QueryFilter<OrderDocument>,
+            { $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) } },
+            { returnDocument: 'after', session }
+        )
+        .exec();
+
+/**
+ * One order read inside the caller's transaction — the act that reads an order and then writes
+ * beside it must see the same snapshot its own writes land in.
+ * @param id - the order
+ * @param session - the caller's transaction
+ */
+const findInSession = (id: string, session: ClientSession): Promise<OrderDocument | null> =>
+    orderModel.findById(toObjectId(id)).session(session).exec();
+
+/**
+ * Write the fulfilment summary `delivery` computed, but only while the order can still be
+ * fulfilled: not `pending`, not `cancelled`. `delivered` is allowed: an admin override forward to
+ * `delivered` is brought in step by `delivery` AFTER the status landed. The condition rides in the filter, so a shipment
+ * racing a cancel cannot both win — whichever write commits second matches nothing (or conflicts
+ * and is retried against the other's result).
+ * @param id - the order
+ * @param summary - where the goods stand, recomputed in the caller's transaction
+ * @param session - the act's transaction
+ * @returns the order as it now stands, or `null` when it can no longer be fulfilled
+ */
+const writeFulfillment = (
+    id: string,
+    summary: FulfillmentSummary,
+    session: ClientSession
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
             {
-                $set: { status: to, ...(withdrawUntil ? { withdrawUntil } : {}) },
-                $push: { statusOverrides: entry }
-            },
+                _id: toObjectId(id),
+                status: {
+                    $in: [
+                        OrderStatus.paid,
+                        OrderStatus.processing,
+                        OrderStatus.shipped,
+                        OrderStatus.delivered
+                    ]
+                }
+            } as QueryFilter<OrderDocument>,
+            { $set: { fulfillment: summary } },
             { returnDocument: 'after', session }
         )
         .exec();
@@ -346,6 +463,26 @@ const findWithPendingEffects = (cutoff: Date, limit: number): Promise<OrderDocum
         .sort({ updatedAt: 1 })
         .limit(limit)
         .exec();
+
+/**
+ * What a sibling that lists something else composes onto its rows: the order's number and email.
+ * Lean and projected, so no line, address or note is read.
+ *
+ * @param ids - the orders wanted; unknown ids are simply absent from the answer
+ * @returns one reference per order found
+ */
+const findManyReferences = (ids: readonly string[]): Promise<OrderReference[]> =>
+    orderModel
+        .find({ _id: { $in: ids.map((id) => toObjectId(id)) } }, { orderNumber: 1, email: 1 })
+        .lean()
+        .exec()
+        .then((rows) =>
+            rows.map((row) => ({
+                id: String(row._id),
+                orderNumber: row.orderNumber,
+                email: row.email
+            }))
+        );
 
 /**
  * Discharge one effect, once its listener has actually returned.
@@ -555,15 +692,15 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
         .then((counter) => counter.seq);
 
 /**
- * Permanently remove an order that is still unpaid, as one conditional write: the delete's own
- * filter carries `paidAt: null`, so a settlement that committed after the caller read the document
- * stops it (Optimistic Offline Lock). Checked against the request's `If-Match` like `deleteOne`.
+ * Permanently remove an order that is cancelled and was never paid, as one conditional write: the
+ * delete's own filter carries both, so a settlement or a status move that landed after the caller
+ * read the document stops it (Optimistic Offline Lock). Checked against the request's `If-Match`
+ * like `deleteOne`.
  *
  * @param document - the order, as the caller read it
- * @param session - the caller's transaction
- * @returns `false` when nothing was removed: the order was paid meanwhile, or is already gone
+ * @returns `false` when nothing was removed: the order moved on meanwhile, or is already gone
  */
-const deleteUnpaid = (document: OrderDocument, session?: ClientSession): Promise<boolean> => {
+const deleteCancelledUnpaid = (document: OrderDocument): Promise<boolean> => {
     let deleted = false;
 
     return checkedDelete(document, () => {
@@ -571,8 +708,10 @@ const deleteUnpaid = (document: OrderDocument, session?: ClientSession): Promise
         // `paidAt`, so an order never paid matches. Cleared after, as `versioning.ts` does, so a
         // second use of the same object is not filtered on this one.
         // https://mongoosejs.com/docs/api/document.html#Document.prototype.$where
-        Object.assign(document, { $where: { ...(document.$where as object), paidAt: null } });
-        return (document.deleteOne(session ? { session } : undefined) as Promise<DeleteOutcome>)
+        Object.assign(document, {
+            $where: { ...(document.$where as object), status: OrderStatus.cancelled, paidAt: null }
+        });
+        return (document.deleteOne() as Promise<DeleteOutcome>)
             .then((outcome) => {
                 deleted = outcome.deletedCount > 0;
                 return outcome;
@@ -597,11 +736,13 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         filters?: object,
         scope?: Record<string, unknown>
     ) => Promise<{ items: Order[]; meta: PaginatedMeta }>;
+    countMatching: (filters?: object, scope?: Record<string, unknown>) => Promise<number>;
+    streamMatching: (filters?: object, scope?: Record<string, unknown>) => AsyncGenerator<Order>;
     findByIdScoped: (
         id: string,
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | undefined>;
-    deleteUnpaid: (document: OrderDocument, session?: ClientSession) => Promise<boolean>;
+    deleteCancelledUnpaid: (document: OrderDocument) => Promise<boolean>;
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,
@@ -635,11 +776,17 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         id: string,
         from: readonly OrderStatus[],
         to: OrderStatus,
-        entry: OrderStatusOverride,
         withdrawUntil?: Date,
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
+    findInSession: (id: string, session: ClientSession) => Promise<OrderDocument | null>;
+    writeFulfillment: (
+        id: string,
+        summary: FulfillmentSummary,
+        session: ClientSession
+    ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
+    findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
     addPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<void>;
     findOpenUnpaidIdsOf: (userId: string, session?: ClientSession) => Promise<string[]>;
@@ -657,15 +804,20 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     create,
     aggregate,
     search,
+    countMatching,
+    streamMatching,
     findByIdScoped,
-    deleteUnpaid,
+    deleteCancelledUnpaid,
     ownerScope,
     updateStatusIfIn,
     markPaid,
     markDelivered,
     setProjection,
     applyStatusOverride,
+    findInSession,
+    writeFulfillment,
     findWithPendingEffects,
+    findManyReferences,
     clearPendingEffect,
     addPendingEffect,
     findOpenUnpaidIdsOf,
@@ -673,4 +825,89 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     startPiiClock,
     scrubDueForAnonymization,
     incrementOrderNumberCounter
+};
+
+/**
+ * The timeline's ledger. {@link AppendOnlyLedger} for the writes the app makes in the course of
+ * business; the three removals below are the only edits a row ever sees, each for a reason the
+ * law gives rather than the app:
+ *
+ * - `clearActor`: the staff account was erased.
+ * - `scrubTextBefore`: the free text outlived its retention window; the row stays.
+ * - `deleteByOrderId`: the order itself was hard-deleted, so there is nothing left to narrate.
+ */
+export const orderEventRepository: AppendOnlyLedger<
+    OrderEventDocument,
+    Wire<OrderEventDocument>
+> & {
+    findByOrderId: (orderId: string) => Promise<OrderEventDocument[]>;
+    findByOrderIds: (orderIds: readonly string[]) => Promise<OrderEventDocument[]>;
+    clearActor: (actor: string, session?: ClientSession) => Promise<number>;
+    scrubTextBefore: (cutoff: Date) => Promise<number>;
+    deleteByOrderId: (orderId: string) => Promise<number>;
+} = {
+    ...createRepository<OrderEventDocument, Wire<OrderEventDocument>>(orderEventModel, {
+        transform: applyOrderEventTransform
+    }),
+
+    /**
+     * One order's rows, oldest first. Ties on `at` end on the id, so two rows written in one
+     * transaction keep the order they were appended in.
+     *
+     * @param orderId - the order
+     */
+    findByOrderId: (orderId) =>
+        orderEventModel
+            .find({ orderId: toObjectId(orderId) })
+            .sort({ at: 1, _id: 1 })
+            .exec(),
+
+    /**
+     * Every row of several orders, grouped by order and oldest first within it — the data export's read.
+     *
+     * @param orderIds - the orders
+     */
+    findByOrderIds: (orderIds) =>
+        orderEventModel
+            .find({ orderId: { $in: orderIds.map((id) => toObjectId(id)) } })
+            .sort({ orderId: 1, at: 1, _id: 1 })
+            .exec(),
+
+    /**
+     * Unset the `actor` on every row one account made.
+     *
+     * @param actor - the erased account's id
+     * @param session - joins the clear to the erasure's transaction
+     * @returns how many rows lost their actor
+     */
+    clearActor: (actor, session) =>
+        orderEventModel
+            .updateMany({ actor }, { $unset: { actor: 1 } }, { session })
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount),
+
+    /**
+     * Unset the free text on rows older than `cutoff`. Only rows still holding text match, so a
+     * repeat run touches nothing.
+     *
+     * @param cutoff - rows at or before this instant lose their text
+     * @returns how many rows lost their text
+     */
+    scrubTextBefore: (cutoff) =>
+        orderEventModel
+            .updateMany({ text: { $exists: true }, at: { $lte: cutoff } }, { $unset: { text: 1 } })
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount),
+
+    /**
+     * Remove every row of an order that no longer exists.
+     *
+     * @param orderId - the deleted order
+     * @returns how many rows went
+     */
+    deleteByOrderId: (orderId) =>
+        orderEventModel
+            .deleteMany({ orderId: toObjectId(orderId) })
+            .exec()
+            .then(({ deletedCount }) => deletedCount)
 };

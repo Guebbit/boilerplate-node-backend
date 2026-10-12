@@ -14,3 +14,7 @@ export {
     REFUNDABLE_PAYMENT_STATUS,
     OPEN_REFUND_STATUSES
 } from './lifecycle';
+
+/** The label a payment shows, and the query behind each label. */
+export { displayStatusOf, displayStatusFilter } from './display-status';
+export type { DisplayStatusInput } from './display-status';

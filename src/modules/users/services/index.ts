@@ -53,6 +53,7 @@ import {
     sessionRemove,
     tokenRemoveByValue,
     tokenRemoveExpired,
+    clearLapsedPreviousEmail,
     tokenSupersede,
     tokenTouch
 } from './tokens';
@@ -60,7 +61,6 @@ import {
     registerSelfService,
     registerFromOAuth,
     buildSignupDecoy,
-    discardFailedSignup,
     linkOAuthAccount,
     unlinkOAuthAccount
 } from './signup';
@@ -98,7 +98,6 @@ export const userService = {
     registerSelfService,
     registerFromOAuth,
     buildSignupDecoy,
-    discardFailedSignup,
     update,
     updateById,
     remove,
@@ -134,6 +133,7 @@ export const userService = {
     sessionRemove,
     tokenRemoveByValue,
     tokenRemoveExpired,
+    clearLapsedPreviousEmail,
     tokenSupersede,
     tokenTouch,
     linkOAuthAccount,

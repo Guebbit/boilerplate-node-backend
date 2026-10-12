@@ -8,9 +8,12 @@
  */
 
 import { OrderStatus } from '@types';
+import type { OrderTimelineEntry } from '@types';
+import { asAdmin } from '@tests/callers';
+import { readTimeline } from '../services/timeline';
 import type { OrderDocument } from '../model';
 import type { UserDocument } from '@modules/users';
-import { resolveTaxRate, type ProductDocument } from '@modules/products';
+import { isPreorder, resolveTaxRate, type ProductDocument } from '@modules/products';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { orderRepository } from '../repository';
@@ -43,7 +46,15 @@ export const toOrderItem = (
 ): OrderLineInput => {
     const { _id, __v, taxClass, ...snapshot } = product.toObject();
     return {
-        product: { ...snapshot, id: String(_id), taxRate: resolveTaxRate(taxClass) },
+        product: {
+            ...snapshot,
+            id: String(_id),
+            taxRate: resolveTaxRate(taxClass),
+            // Frozen the way `freezeOrderLines` freezes it: decided now, from the date alone.
+            ...(isPreorder({ releaseDate: product.releaseDate }, new Date())
+                ? { preorder: true }
+                : {})
+        },
         quantity,
         locale
     };
@@ -189,3 +200,22 @@ export const setWithdrawUntil = (orderId: string, withdrawUntil: Date | undefine
         )
         .exec()
         .then(() => undefined);
+
+/**
+ * An order's timeline as an administrator reads it: every row, actor and staff text included.
+ *
+ * @param orderId - the order
+ * @param typePrefix - keeps only the types starting with it (`refund`, `return_`); every row when omitted
+ */
+export const timelineOf = (orderId: string, typePrefix = ''): Promise<OrderTimelineEntry[]> =>
+    readTimeline(orderId, asAdmin()).then((rows) =>
+        rows.filter(({ type }) => type.startsWith(typePrefix))
+    );
+
+/**
+ * The last `status_overridden` row of an order's timeline, as an administrator reads it.
+ *
+ * @param orderId - the order
+ */
+export const lastOverrideOf = (orderId: string): Promise<OrderTimelineEntry | undefined> =>
+    timelineOf(orderId).then((rows) => rows.findLast(({ type }) => type === 'status_overridden'));

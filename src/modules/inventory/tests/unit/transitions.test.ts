@@ -20,21 +20,24 @@ describe('counterDeltaFor', () => {
         for (const reason of EVERY_REASON)
             expect(counterDeltaFor(reason, 1)).toEqual({
                 onHandDelta: expect.any(Number),
-                reservedDelta: expect.any(Number)
+                reservedDelta: expect.any(Number),
+                preorderedDelta: expect.any(Number)
             });
     });
 
     // `openapi.yaml`'s literal signed table — the shape check above passes on any
     // pair of numbers, so this pins the actual value each reason produces.
     it.each([
-        [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3 }],
-        [StockMovementReason.commit, { onHandDelta: 0, reservedDelta: 0 }],
-        [StockMovementReason.ship, { onHandDelta: -3, reservedDelta: -3 }],
-        [StockMovementReason.release, { onHandDelta: 0, reservedDelta: -3 }],
-        [StockMovementReason.expire, { onHandDelta: 0, reservedDelta: -3 }],
-        [StockMovementReason.receive, { onHandDelta: 3, reservedDelta: 0 }],
-        [StockMovementReason.adjust, { onHandDelta: 3, reservedDelta: 0 }],
-        [StockMovementReason.restock, { onHandDelta: 3, reservedDelta: 0 }]
+        [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3, preorderedDelta: 0 }],
+        [StockMovementReason.commit, { onHandDelta: 0, reservedDelta: 0, preorderedDelta: 0 }],
+        [StockMovementReason.ship, { onHandDelta: -3, reservedDelta: -3, preorderedDelta: 0 }],
+        [StockMovementReason.release, { onHandDelta: 0, reservedDelta: -3, preorderedDelta: 0 }],
+        [StockMovementReason.expire, { onHandDelta: 0, reservedDelta: -3, preorderedDelta: 0 }],
+        [StockMovementReason.receive, { onHandDelta: 3, reservedDelta: 0, preorderedDelta: 0 }],
+        [StockMovementReason.adjust, { onHandDelta: 3, reservedDelta: 0, preorderedDelta: 0 }],
+        [StockMovementReason.restock, { onHandDelta: 3, reservedDelta: 0, preorderedDelta: 0 }],
+        [StockMovementReason.preorder, { onHandDelta: 0, reservedDelta: 0, preorderedDelta: 3 }],
+        [StockMovementReason.allocate, { onHandDelta: 0, reservedDelta: 3, preorderedDelta: -3 }]
     ])('gives %s the contract-documented signed delta', (reason, expected) => {
         expect(counterDeltaFor(reason, 3)).toEqual(expected);
     });
@@ -59,7 +62,8 @@ describe('counterDeltaFor', () => {
     it('commits without moving a counter', () => {
         expect(counterDeltaFor(StockMovementReason.commit, 7)).toEqual({
             onHandDelta: 0,
-            reservedDelta: 0
+            reservedDelta: 0,
+            preorderedDelta: 0
         });
     });
 
@@ -98,11 +102,33 @@ describe('counterDeltaFor', () => {
         // `Math.abs` sneaking in here would silently turn every write-off into a windfall.
         expect(counterDeltaFor(StockMovementReason.adjust, -3)).toEqual({
             onHandDelta: -3,
-            reservedDelta: 0
+            reservedDelta: 0,
+            preorderedDelta: 0
         });
         expect(counterDeltaFor(StockMovementReason.adjust, 3)).toEqual({
             onHandDelta: 3,
-            reservedDelta: 0
+            reservedDelta: 0,
+            preorderedDelta: 0
         });
+    });
+
+    it('moves only the allowance for a preorder claim, and gives it back through release or expire', () => {
+        const claimed = counterDeltaFor(StockMovementReason.preorder, 4);
+
+        for (const undoing of [StockMovementReason.release, StockMovementReason.expire]) {
+            const given = counterDeltaFor(undoing, 4, 'preorder');
+
+            // Units that never existed never touch the shelf, going or coming back.
+            expect(given).toEqual({ onHandDelta: 0, reservedDelta: 0, preorderedDelta: -4 });
+            expect(claimed.preorderedDelta + given.preorderedDelta).toBe(0);
+        }
+    });
+
+    it('turns an allocated claim into a real hold without changing what exists', () => {
+        const allocated = counterDeltaFor(StockMovementReason.allocate, 5);
+
+        // `reserved` rises by exactly what `preordered` falls by, and the shelf count is untouched.
+        expect(allocated.reservedDelta).toBe(-allocated.preorderedDelta);
+        expect(allocated.onHandDelta).toBe(0);
     });
 });

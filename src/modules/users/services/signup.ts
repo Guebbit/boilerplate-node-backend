@@ -3,6 +3,7 @@
  * Account creation for `account`'s flows: self-service, OAuth, the decoy, and the undo.
  */
 
+import type { ClientSession } from 'mongoose';
 import type { UserDocument } from '../model';
 import { userRepository } from '../repository';
 
@@ -43,8 +44,11 @@ export type SelfServiceSignupFields = Pick<
  * this, never `create()`'s admin-panel one (role assignment, admin audit/analytics). Writes no
  * role of its own: the document holds none, and the caller grants `unverified` separately through
  * `assignDefaultRole` — never this function, which never sees a role name to misuse.
+ *
+ * @param session - the signup's transaction: the row and its starting role commit together
  */
-export const registerSelfService = (data: SelfServiceSignupFields) => userRepository.create(data);
+export const registerSelfService = (data: SelfServiceSignupFields, session?: ClientSession) =>
+    userRepository.create(data, session);
 
 /** The fields an OAuth-vouched signup may set — see {@link registerFromOAuth}. */
 export type OAuthSignupFields = Pick<
@@ -68,18 +72,11 @@ export type OAuthSignupFields = Pick<
  * {@link registerSelfService} rather than merged despite the identical one-line body: the two
  * field sets below are what actually matters, and a caller passing the wrong one is exactly the
  * mistake narrowing each exists to catch at compile time.
+ *
+ * @param session - the signup's transaction: the row and its starting role commit together
  */
-export const registerFromOAuth = (data: OAuthSignupFields) => userRepository.create(data);
-
-/**
- * Undo a just-created signup row whose starting-role grant then failed — a hard delete, not
- * `remove()`: that runs the full erasure cascade and revokes a membership through `access`, both
- * wrong for a row that never finished becoming an account. Left behind, it would keep the email
- * permanently unusable for a retry. Not `remove()`, so not the barrel: this is a compensating step
- * for `account`'s own signup orchestration, not a general-purpose delete.
- */
-export const discardFailedSignup = (user: UserDocument): Promise<void> =>
-    userRepository.deleteOne(user).then(() => undefined);
+export const registerFromOAuth = (data: OAuthSignupFields, session?: ClientSession) =>
+    userRepository.create(data, session);
 
 /**
  * Detach one provider from an account.

@@ -567,6 +567,32 @@ describe('requirePermission', () => {
         expect(response.status).toHaveBeenCalledWith(403);
     });
 
+    it('with `exact`, refuses a caller holding only the narrow key of the same action and subject', () => {
+        // `payments.self.read` and `payments.any.read` are both `read` on `Payment`: without
+        // `exact` the guard cannot tell them apart and a customer reads the staff list.
+        const run = (guard: ReturnType<typeof requirePermission>, authContext: AuthContext) => {
+            const next = jest.fn();
+            const response = makeResponseStub();
+            guard(makeRequest({ authContext }), response, next);
+            return { next, response };
+        };
+
+        const loose = run(requirePermission('payments.any.read'), asCustomer('user-1'));
+        const exact = run(
+            requirePermission('payments.any.read', { exact: true }),
+            asCustomer('user-1')
+        );
+        const staff = run(
+            requirePermission('payments.any.read', { exact: true }),
+            asAdmin('user-2')
+        );
+
+        expect(loose.next).toHaveBeenCalledTimes(1);
+        expect(exact.next).not.toHaveBeenCalled();
+        expect(exact.response.status).toHaveBeenCalledWith(403);
+        expect(staff.next).toHaveBeenCalledTimes(1);
+    });
+
     it('answers 401, not 403, for an unauthenticated caller', () => {
         // No `authContext` at all means no credentials were presented — 401, distinct from the
         // case above (authenticated, just not admin), which is 403.

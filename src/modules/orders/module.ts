@@ -22,21 +22,28 @@ import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
-import { cancelById, eraseUserOrders, findOwnOrders, startOrderPiiClock } from './services';
+import {
+    cancelById,
+    collectTimelineOf,
+    eraseUserOrders,
+    findOwnOrders,
+    startOrderPiiClock
+} from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
 import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
+import { ordersRateLimits } from './rate-limits';
 
 /**
  * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
  * subscribes to these generically, through `kernel/registry.ts`'s `resolvePublicEvents`, instead
  * of importing `ORDER_CREATED` and siblings by name.
  *
- * `order.status_changed` is the one that ISN'T a straight rename: it derives two different public
- * names, `order.paid`/`order.shipped`, filtered on `to` — "listeners filter on `to`; the event
- * doesn't know who cares" — and produces neither for any other transition.
+ * `order.status_changed` is the one that ISN'T a straight rename: it derives `order.paid`,
+ * filtered on `to` — "listeners filter on `to`; the event doesn't know who cares" — and produces
+ * nothing for any other transition. Shipping is `delivery`'s own `shipment.*` pair.
  */
 const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
     [ORDER_CREATED]: {
@@ -46,13 +53,10 @@ const publicEvents: Readonly<Record<string, PublicEventTarget>> = {
         })
     },
     [ORDER_STATUS_CHANGED]: {
-        toPublicEvent: (payload: DomainEventMap[typeof ORDER_STATUS_CHANGED]) => {
-            if (payload.to === 'paid')
-                return { eventType: 'order.paid', data: { orderId: payload.orderId } };
-            if (payload.to === 'shipped')
-                return { eventType: 'order.shipped', data: { orderId: payload.orderId } };
-            return undefined;
-        }
+        toPublicEvent: (payload: DomainEventMap[typeof ORDER_STATUS_CHANGED]) =>
+            payload.to === 'paid'
+                ? { eventType: 'order.paid', data: { orderId: payload.orderId } }
+                : undefined
     },
     [ORDER_CANCELLED]: {
         toPublicEvent: (payload: DomainEventMap[typeof ORDER_CANCELLED]) => ({
@@ -70,6 +74,7 @@ export default {
     publicEvents,
     // Jurisdiction, currency, bank transfer and the order link: see `./config`.
     config: [ordersConfig.slice],
+    rateLimits: ordersRateLimits,
     personalData: [
         {
             section: 'orders',
@@ -80,6 +85,13 @@ export default {
             erase: eraseUserOrders,
             // An inactive account keeps its orders and its link to them; only the PII clock starts.
             minimise: startOrderPiiClock
+        },
+        {
+            // The timeline of the same orders, in full: staff text and actors included, since
+            // the export is the buyer's data and not the buyer's screen. Erased with the orders'
+            // own detach (`eraseUserOrders` clears the actor), never separately.
+            section: 'orderTimeline',
+            collect: (subject) => collectTimelineOf(subject.userId)
         }
     ],
     /*
@@ -111,6 +123,11 @@ export default {
             'order.paid',
             'order.paidExpress',
             'order.shipped',
+            // Shipped in part, held back by staff, and shipped in part with the rest cancelled by
+            // the buyer: the states splitting an order into shipments adds.
+            'order.partiallyFulfilled',
+            'order.onHold',
+            'order.remainderCancelled',
             'order.delivered',
             // One delivered order per withdrawal state, aged from the period: open (1 day back),
             // last day (exactly `period` days back, closes at the end of today UTC), closed.

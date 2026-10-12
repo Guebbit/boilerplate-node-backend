@@ -160,10 +160,14 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `api-keys`       | `SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE`      | `system.api_keys.revoked_on_compromise`      | `user`                 |
 | `cart`           | `USER_CART_ITEM_REMOVED`                     | `user.cart.item_removed`                     | `product`              |
 | `cart`           | `USER_CART_REORDERED`                        | `user.cart.reordered`                        | —                      |
-| `delivery`       | `ADMIN_ORDER_DELIVERED`                      | `admin.order.delivered`                      | —                      |
-| `delivery`       | `ADMIN_ORDER_FULFILLED`                      | `admin.order.fulfilled`                      | —                      |
-| `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | —                      |
-| `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | —                      |
+| `delivery`       | `ADMIN_FULFILLMENT_ORDER_HELD`               | `admin.fulfillment_order.held`               | —                      |
+| `delivery`       | `ADMIN_FULFILLMENT_ORDER_RELEASED`           | `admin.fulfillment_order.released`           | —                      |
+| `delivery`       | `ADMIN_ORDER_DELIVERED`                      | `admin.order.delivered`                      | `order`                |
+| `delivery`       | `ADMIN_ORDER_FULFILLED`                      | `admin.order.fulfilled`                      | `order`                |
+| `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | `order`                |
+| `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | `order`                |
+| `delivery`       | `ADMIN_SHIPMENT_TRACKING_EDITED`             | `admin.shipment.tracking_edited`             | `order`                |
+| `delivery`       | `BUYER_WAIT_CONFIRMED`                       | `fulfillment_order.wait_confirmed`           | `order`                |
 | `example`        | `EXAMPLE_COVER_CHANGED`                      | `example.cover_changed`                      | `example`              |
 | `example`        | `EXAMPLE_CREATED`                            | `example.created`                            | `example`              |
 | `example`        | `EXAMPLE_DELETED`                            | `example.deleted`                            | `example`              |
@@ -181,6 +185,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `infrastructure` | `SECURITY_TOKEN_MALFORMED`                   | `security.token.malformed`                   | —                      |
 | `infrastructure` | `SECURITY_UNAUTHORIZED`                      | `security.unauthorized`                      | —                      |
 | `inventory`      | `ADMIN_COMMIT_ORPHANED`                      | `admin.commit.orphaned`                      | `order`                |
+| `inventory`      | `ADMIN_PREORDER_LIMIT_SET`                   | `admin.preorder.limit.set`                   | `product`              |
 | `inventory`      | `ADMIN_RESERVATIONS_SWEPT`                   | `admin.reservations.swept`                   | `reservation`          |
 | `inventory`      | `ADMIN_STOCK_ADJUSTED`                       | `admin.stock.adjusted`                       | —                      |
 | `inventory`      | `ADMIN_STOCK_RECEIVED`                       | `admin.stock.received`                       | —                      |
@@ -194,6 +199,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `locales`        | `ADMIN_LOCALE_UPDATED`                       | `admin.locale.updated`                       | `locale`               |
 | `locales`        | `ADMIN_TRANSLATION_UPDATED`                  | `admin.translation.updated`                  | —                      |
 | `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | `order`                |
+| `orders`         | `ADMIN_ORDERS_EXPORTED`                      | `admin.orders.exported`                      | `order`                |
 | `orders`         | `ORDER_CANCELLED`                            | `order.cancelled`                            | `order`                |
 | `orders`         | `ORDER_CREATED`                              | `order.created`                              | `order`                |
 | `orders`         | `ORDER_DELETED`                              | `order.deleted`                              | `order`                |

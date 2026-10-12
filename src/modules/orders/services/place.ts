@@ -26,6 +26,7 @@ import { freezeOrderLines } from './snapshot';
 import { allocateOrderNumber } from './order-numbering';
 import { orderRepository } from '../repository';
 import { createdEvent } from './announce';
+import { appendTimeline } from './timeline';
 import { shopCurrency } from '../config';
 // `userId` is stored as an ObjectId, so writes have to coerce it — same rule `crud.ts`'s `create`
 // follows for its own writes.
@@ -146,7 +147,12 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
      */
     const outcome = await inventoryService.reserveForOrder(
         orderId.toHexString(),
-        input.lines.map(({ item }) => ({ productId: item.productId, quantity: item.quantity })),
+        // A line frozen as a preorder claims the allowance, not a shelf unit.
+        input.lines.map(({ item }, index) => ({
+            productId: item.productId,
+            quantity: item.quantity,
+            ...(orderItems[index]?.product.preorder ? { kind: 'preorder' as const } : {})
+        })),
         input.shipping?.holdMinutes
     );
     if (!outcome.held)
@@ -196,15 +202,23 @@ export const placeOrder = async (input: PlaceOrderInput): Promise<PlaceOrderOutc
         // path has moved on: a slow or failing listener never delays this function's callers.
         const order = await announceInTransaction(
             (session) =>
-                orderRepository.create(orderData, session).then((written) =>
-                    // Throwing is what aborts the transaction, taking the order and its event with it.
-                    input.commitWith
-                        ? input.commitWith(session).then((landed) => {
-                              if (!landed) throw new OrderSuperseded();
-                              return written;
-                          })
-                        : written
-                ),
+                orderRepository
+                    .create(orderData, session)
+                    // The timeline opens with the order, in the same transaction.
+                    .then((written) =>
+                        appendTimeline(String(written._id), { type: 'created' }, session).then(
+                            () => written
+                        )
+                    )
+                    .then((written) =>
+                        // Throwing is what aborts the transaction, taking the order and its event with it.
+                        input.commitWith
+                            ? input.commitWith(session).then((landed) => {
+                                  if (!landed) throw new OrderSuperseded();
+                                  return written;
+                              })
+                            : written
+                    ),
             (written) => createdEvent(String(written._id))
         );
 

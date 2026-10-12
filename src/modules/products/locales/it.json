@@ -6,6 +6,7 @@
         "field-description-empty": "La descrizione non può essere vuota — omettila oppure cancellala con null",
         "field-price-invalid": "Il prezzo è mancante o non valido",
         "field-price-min": "Il prezzo non può essere negativo",
+        "field-release-date-too-far": "La data di uscita può essere al massimo tra un anno",
         "field-translations-fallback-required": "La traduzione in {{locale}} è obbligatoria: è la lingua di fallback di questo deployment.",
         "field-translations-fallback-null": "La traduzione in {{locale}} non può essere eliminata: è la lingua di fallback di questo deployment.",
         "hard-deleted": "Il prodotto è stato eliminato definitivamente.",

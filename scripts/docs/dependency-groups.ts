@@ -70,9 +70,12 @@ export const RUNTIME_GROUPS: DependencyGroup[] = [
     },
     {
         name: 'Email, rendering, media',
-        purpose: 'transactional email, templates, PDF rendering, and image processing',
-        readMore: '[Email & PDF Rendering](./email-and-rendering.md)',
-        match: ['nodemailer', 'ejs', 'puppeteer-core', 'sharp']
+        purpose:
+            'transactional email, templates, PDF rendering, CSV export with formula escaping, ' +
+            'and image processing',
+        readMore:
+            '[Email & PDF Rendering](./email-and-rendering.md), [orders](../modules/orders.md#libraries)',
+        match: ['nodemailer', 'ejs', 'puppeteer-core', 'sharp', 'csv-stringify']
     },
     {
         name: 'Observability',

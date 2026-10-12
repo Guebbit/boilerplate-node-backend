@@ -109,6 +109,8 @@ roles:
           - orders.any.create
           - orders.any.update
           - orders.any.delete
+          # The order list as a spreadsheet, for reconciliation and the accountant.
+          - orders.any.export
           - locales.any.read
           - locales.any.create
           - locales.any.update
@@ -120,6 +122,8 @@ roles:
           # The manager cancels paid orders, which refunds them, so it reads the money; refunding
           # itself stays `payments.any.update`.
           - payments.any.read
+          # The sales numbers are the manager's job; they can already see every payment.
+          - stats.any.read
           - inventory.any.read
           # A manager may start fulfilment on a paid order — POST /delivery/order/{id}/start.
           - delivery.any.start
@@ -285,10 +289,12 @@ roles:
           - orders.any.update
           - orders.any.delete
           - orders.any.override
+          - orders.any.export
           - payments.self.read
           - payments.any.read
           - payments.any.create
           - payments.any.update
+          - stats.any.read
           - inventory.any.read
           - inventory.any.create
           - inventory.any.sweep

@@ -90,9 +90,10 @@ export interface TranslationPort {
      * candidate, and a restored product with no translated name is the bug this port exists to
      * prevent.
      *
+     * @param session - joins the removal to the caller's transaction; omitted, it stands alone
      * @returns how many rows were removed
      */
-    removeAll: (entityType: string, entityId: string) => Promise<number>;
+    removeAll: (entityType: string, entityId: string, session?: ClientSession) => Promise<number>;
 
     /**
      * Every entity whose translated fields match a search pattern, in the caller's locale chain —
@@ -197,8 +198,12 @@ export const resolveTranslations = (
  * The hard-delete path's entry point. A no-op — zero removed, no query — when nothing is
  * registered, for the same reason {@link resolveTranslations} is.
  */
-export const removeTranslations = (entityType: string, entityId: string): Promise<number> =>
-    translationPort ? translationPort.removeAll(entityType, entityId) : Promise.resolve(0);
+export const removeTranslations = (
+    entityType: string,
+    entityId: string,
+    session?: ClientSession
+): Promise<number> =>
+    translationPort ? translationPort.removeAll(entityType, entityId, session) : Promise.resolve(0);
 
 /**
  * The search path's entry point. An empty list — never a query — when nothing is registered, for

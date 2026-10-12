@@ -12,7 +12,8 @@ import { asReject, asSuccess } from '@tests/response';
 import { callerContextAs, testCallerContext } from '@tests/callers';
 import { MISSING_ID } from '@tests/ids';
 import { createUser } from '@modules/users/tests/factories';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { ExampleStatus } from '@types';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
@@ -343,6 +344,8 @@ describe('update', () => {
 
 /** Collects every `example.published` event the bus carries. */
 const collectPublished = () => {
+    // The relay only dispatches in a process where modules have subscribed.
+    markDomainEventsWired();
     const seen: unknown[] = [];
     onDomainEvent(EXAMPLE_PUBLISHED, (payload) => {
         seen.push(payload);
@@ -359,10 +362,37 @@ describe('publishing', () => {
         const saved = asSuccess(
             await update(String(mine._id), { status: ExampleStatus.published }, context)
         );
-        await new Promise((resolve) => setImmediate(resolve));
+        await settleOutboxNudges();
 
         expect(saved.data.publishedAt).toBeDefined();
         expect(seen).toEqual([{ exampleId: String(mine._id), userId: user.id, title: 'Out soon' }]);
+    });
+
+    it('writes exactly one outbox row for one publish, keyed by the example', async () => {
+        const { user, context } = await aCustomer();
+        const mine = await createExample({ userId: user.id });
+
+        await update(String(mine._id), { status: ExampleStatus.published }, context);
+        await settleOutboxNudges();
+
+        const rows = await outboxEventModel.find({ name: EXAMPLE_PUBLISHED }).lean().exec();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({ aggregateId: String(mine._id) });
+    });
+
+    it('announces once when two requests publish the same draft', async () => {
+        const { user, context } = await aCustomer();
+        const seen = collectPublished();
+        const mine = await createExample({ userId: user.id, title: 'Race' });
+        const publish = () =>
+            update(String(mine._id), { status: ExampleStatus.published }, context);
+
+        const [first, second] = await Promise.all([publish(), publish()]);
+        await settleOutboxNudges();
+
+        expect([asSuccess(first).status, asSuccess(second).status]).toEqual([200, 200]);
+        expect(await outboxEventModel.countDocuments({ name: EXAMPLE_PUBLISHED })).toBe(1);
+        expect(seen).toHaveLength(1);
     });
 
     it('records the publish as an analytics event', async () => {
@@ -387,7 +417,7 @@ describe('publishing', () => {
         });
 
         await update(String(published._id), { title: 'Reworded' }, context);
-        await new Promise((resolve) => setImmediate(resolve));
+        await settleOutboxNudges();
 
         expect(seen).toEqual([]);
     });
@@ -402,7 +432,7 @@ describe('publishing', () => {
         await update(id, { status: ExampleStatus.archived }, context);
         await update(id, { status: ExampleStatus.draft }, context);
         const again = asSuccess(await update(id, { status: ExampleStatus.published }, context));
-        await new Promise((resolve) => setImmediate(resolve));
+        await settleOutboxNudges();
 
         expect(seen).toHaveLength(2);
         expect(again.data.publishedAt).toEqual(first.data.publishedAt);

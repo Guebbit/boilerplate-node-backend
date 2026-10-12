@@ -5,3 +5,6 @@
  */
 
 export { availableStock, stockFlags } from './stock';
+
+export { isPreorder, latestReleaseDate } from './preorder';
+export type { PreorderFacts } from './preorder';

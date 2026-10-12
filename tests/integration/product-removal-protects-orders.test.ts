@@ -9,6 +9,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { testCallerContext, asCustomer, callerContextAs } from '@tests/callers';
 import { resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -72,6 +73,7 @@ describe('hard-deleting a product with a pending order against it', () => {
 
         const deleted = await readProduct(String(product._id));
         const result = await productService.remove(deleted!, true);
+        await settleOutboxNudges();
 
         expect(result.success).toBe(true);
         const order = await readOrder(orderId);
@@ -87,6 +89,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         const { orderId, user } = await placePendingOrder(product);
         const deleted = await readProduct(String(product._id));
         await productService.remove(deleted!, true);
+        await settleOutboxNudges();
 
         const result = await createIntent(orderId, asCustomer(user.id));
 
@@ -98,6 +101,7 @@ describe('hard-deleting a product with a pending order against it', () => {
         const { orderId } = await placePendingOrder(product);
         const deleted = await readProduct(String(product._id));
         await productService.remove(deleted!, true);
+        await settleOutboxNudges();
 
         const result = await recordOfflinePayment(
             orderId,
@@ -117,6 +121,8 @@ describe('soft-deleting a product with a pending order against it', () => {
         const { orderId, user } = await placePendingOrder(product);
 
         await productService.remove(product, false);
+
+        await settleOutboxNudges();
 
         const order = await readOrder(orderId);
         expect(order!.status).toBe('pending');

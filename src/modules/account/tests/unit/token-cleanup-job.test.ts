@@ -15,7 +15,7 @@ import { logger } from '@infrastructure/adapters/logger';
 /*
  * Only `userService.tokenRemoveExpired` is replaced. The rest of `userService` stays REAL, same as
  * the rest of `@modules/users`: this file reaches the sweeps through `@modules/account/services`,
- * and that barrel evaluates every sibling service at load time — `profile.ts` builds its zod
+ * and that barrel evaluates every sibling service at load time — `profile.ts` and `signup.ts` build its zod
  * schema from `zodUserSchema` at module scope, so a mock omitting it throws before a single test
  * runs. Spreading both the actual module and the actual `userService` keeps the barrel loadable.
  */

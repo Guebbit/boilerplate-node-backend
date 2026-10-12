@@ -475,11 +475,17 @@ const removeEntityLocale = (
  * Delete every locale's row for one entity — a product's HARD delete taking its translations with
  * it, in the same operation. Backs the `kernel/translation.ts` translation port's `removeAll`.
  *
+ * @param session - joins the delete to the caller's transaction; omitted, it stands alone
  * @returns how many rows were removed
  */
-const removeEntityTranslations = (entityType: string, entityId: string): Promise<number> =>
+const removeEntityTranslations = (
+    entityType: string,
+    entityId: string,
+    session?: ClientSession
+): Promise<number> =>
     translationModel
         .deleteMany({ entityType, entityId })
+        .session(session ?? null)
         .exec()
         .then(({ deletedCount }) => deletedCount);
 

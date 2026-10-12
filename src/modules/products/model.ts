@@ -22,13 +22,14 @@ import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { TranslationFieldIssue } from '@kernel/registry';
 import { availableStock, stockFlags } from './domain/stock';
+import { isPreorder, latestReleaseDate } from './domain/preorder';
 import { lowStockThreshold, productCurrency } from './config';
 import { RateType, TaxClass, type Product } from '@types';
 
 /**
  * A product's stored fields, without Mongoose's document machinery — `Product` from
- * `openapi.yaml` with its three dates as real `Date`s. `available`, `inStock` and `lowStock` are
- * omitted: they are derived at serialization, never persisted. Kept separate from `ProductDocument` so a plain object (a lean
+ * `openapi.yaml` with its three dates as real `Date`s. `available`, `inStock`, `lowStock` and `preorder`
+ * are omitted: they are derived at serialization, never persisted. Kept separate from `ProductDocument` so a plain object (a lean
  * read, a fixture) can satisfy the shape without also satisfying `Document`.
  */
 export interface ProductRecord extends Omit<
@@ -37,13 +38,17 @@ export interface ProductRecord extends Omit<
     | 'available'
     | 'inStock'
     | 'lowStock'
+    | 'preorder'
     | 'currency'
+    | 'releaseDate'
     | 'createdAt'
     | 'updatedAt'
     | 'deletedAt'
 > {
     /** Spelled exactly as Mongoose spells it on a document, so `ProductDocument` can extend this. */
     _id: Types.ObjectId;
+    /** When it ships from; `preorder` is derived from it and never stored. */
+    releaseDate?: Date;
     createdAt?: Date;
     updatedAt?: Date;
     deletedAt?: Date;
@@ -175,6 +180,26 @@ const refineFallbackLocale = (
 };
 
 /**
+ * A release date may sit at most one year ahead. A past date is fine: it simply reads as released.
+ * Shared by create, PUT and PATCH, like {@link refineFallbackLocale}.
+ *
+ * @param releaseDate - the date in the body; absent or `null` (a clear) always passes
+ * @param context - the Zod context to report into
+ */
+const refineReleaseDate = (
+    releaseDate: string | null | undefined,
+    context: z.RefinementCtx
+): void => {
+    if (releaseDate === undefined || releaseDate === null) return;
+    if (new Date(releaseDate).getTime() > latestReleaseDate(new Date()).getTime())
+        context.addIssue({
+            code: 'custom',
+            message: t('products.field-release-date-too-far'),
+            path: ['releaseDate']
+        });
+};
+
+/**
  * Zod schema for a product CREATE, built on the generated `CreateProductBody` — only fields
  * needing custom i18n messages, stricter rules, or a fallback-locale invariant are overridden;
  * every other contract constraint applies.
@@ -188,7 +213,10 @@ export const zodProductCreateSchema = CreateProductBody.extend({
         .number({ error: () => t('products.field-price-invalid') })
         .min(0, { error: () => t('products.field-price-min') }),
     translations: zodProductTranslations
-}).superRefine((data, context) => refineFallbackLocale(data.translations, context, true));
+}).superRefine((data, context) => {
+    refineFallbackLocale(data.translations, context, true);
+    refineReleaseDate(data.releaseDate, context);
+});
 
 /**
  * Zod schema for a product PUT, built on the generated `ReplaceProductByIdBody` — every writable
@@ -201,7 +229,10 @@ export const zodProductReplaceSchema = ReplaceProductByIdBody.extend({
         .number({ error: () => t('products.field-price-invalid') })
         .min(0, { error: () => t('products.field-price-min') }),
     translations: zodProductTranslations
-}).superRefine((data, context) => refineFallbackLocale(data.translations, context, true));
+}).superRefine((data, context) => {
+    refineFallbackLocale(data.translations, context, true);
+    refineReleaseDate(data.releaseDate, context);
+});
 
 /**
  * Zod schema for a product PATCH, built on the generated `UpdateProductByIdBody` — every field is
@@ -214,7 +245,10 @@ export const zodProductUpdateSchema = UpdateProductByIdBody.extend({
         .min(0, { error: () => t('products.field-price-min') })
         .optional(),
     translations: zodProductTranslationsPatch.optional()
-}).superRefine((data, context) => refineFallbackLocale(data.translations, context, false));
+}).superRefine((data, context) => {
+    refineFallbackLocale(data.translations, context, false);
+    refineReleaseDate(data.releaseDate, context);
+});
 
 /**
  * Mongoose Schema for the Product model
@@ -330,6 +364,15 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             default: true
         },
         /*
+         * "Ships from". A future date on an active, purchasable product makes it a preorder; the
+         * flag itself is derived (`./domain/preorder`), never stored, so the date passing needs no
+         * job. No default: absent means the product is simply on sale.
+         * See: docs/modules/products.md#preorder
+         */
+        releaseDate: {
+            type: Date
+        },
+        /*
          * Default `true`, matching `openapi.yaml`: most products are physical. `false` marks a
          * digital good — `cart` reads this to decide whether a checkout even needs a shipping
          * method, not this module's own concern.
@@ -386,7 +429,7 @@ productSchema.index({ active: 1, deletedAt: 1 }, { name: 'products_active_delete
 productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: true });
 
 /**
- * Derives `available` and stamps the live `currency`, at the single serialization point every
+ * Derives `available` and `preorder` and stamps the live `currency`, at the single serialization point every
  * product response passes through — listing, detail, both write paths and an order's embedded
  * snapshots all agree. Neither is stored: `currency` is this deployment's CURRENT
  * `NODE_DEFAULT_CURRENCY`, read fresh rather than frozen onto the catalogue row.
@@ -396,7 +439,18 @@ const applyProductAvailability = (serialized: Record<string, unknown>) => {
     const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
     const available = availableStock(onHand, reserved);
     serialized.available = available;
+    const preorder = isPreorder(
+        {
+            active: serialized.active === false ? false : undefined,
+            purchasable: serialized.purchasable === false ? false : undefined,
+            releaseDate: serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined
+        },
+        new Date()
+    );
+    serialized.preorder = preorder;
     Object.assign(serialized, stockFlags(available, lowStockThreshold()));
+    // A preorder is waiting for stock that does not exist yet: it is not "running low".
+    if (preorder) serialized.lowStock = false;
     serialized.currency = productCurrency();
 };
 

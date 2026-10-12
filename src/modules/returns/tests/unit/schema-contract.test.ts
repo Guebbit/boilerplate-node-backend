@@ -10,6 +10,7 @@ describe('returnSchema', () => {
     it('requires what a return is about, and why', () => {
         expect(requiredPaths(returnSchema)).toEqual([
             'currency',
+            'kind',
             'lines',
             'orderId',
             'orderNumber',
@@ -40,9 +41,13 @@ describe('returnSchema', () => {
             'withdrawal',
             'defective',
             'wrong_item',
-            'other'
+            'other',
+            'no_answer'
         ]);
         expect(enumOf(returnSchema, 'returnPostage')).toEqual(['consumer', 'shop']);
+        // A return is goods coming back unless it says it cancelled what never shipped.
+        expect(defaultOf(returnSchema, 'kind')).toBe('return');
+        expect(enumOf(returnSchema, 'kind')).toEqual(['return', 'cancellation']);
     });
 
     it('indexes the two reads it serves — one order’s returns, and the staff queue', () => {

@@ -40,9 +40,13 @@ beforeEach(() => {
     mockOutbox.length = 0;
 });
 
-/** A session minted straight from the token layer, proving `amr` — fresh, whatever it proved. */
+/**
+ * A session minted straight from the token layer, proving `amr` — fresh, whatever it proved. A
+ * re-mint, not a first session: it stands for the session that existed before the account armed
+ * its factor, which a first-session mint would rightly refuse.
+ */
 const sessionWith = async (userId: string, amr: string[]) => {
-    const refreshToken = await createRefreshToken(userId, undefined, amr);
+    const refreshToken = await createRefreshToken(userId, undefined, amr, 'remint');
     const token = await createAccessToken(refreshToken);
     return { bearer: `Bearer ${token}`, cookie: `__Host-jwt=${refreshToken}` };
 };

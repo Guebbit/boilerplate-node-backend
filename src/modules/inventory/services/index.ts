@@ -12,6 +12,8 @@ import { reserveForOrder } from './reserve';
 import {
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,
@@ -27,9 +29,10 @@ import {
     removeLevel,
     listLevels,
     lowStockCount,
-    listMovements
+    listMovements,
+    listPreorders
 } from './levels';
-import { receive, adjust } from './admin';
+import { receive, adjust, setPreorderLimit } from './admin';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` and
@@ -47,6 +50,8 @@ export { reserveForOrder } from './reserve';
 export {
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,
@@ -60,15 +65,18 @@ export {
     removeLevel,
     listLevels,
     lowStockCount,
-    listMovements
+    listMovements,
+    listPreorders
 } from './levels';
-export { receive, adjust } from './admin';
+export { receive, adjust, setPreorderLimit } from './admin';
 
 /** The module's one service handle. */
 export const inventoryService = {
     reserveForOrder,
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,
@@ -83,7 +91,9 @@ export const inventoryService = {
     removeLevel,
     receive,
     adjust,
+    setPreorderLimit,
     listLevels,
+    listPreorders,
     lowStockCount,
     listMovements
 };

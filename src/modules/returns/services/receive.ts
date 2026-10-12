@@ -26,7 +26,7 @@ import {
 } from '@infrastructure/http/response';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { emitDomainEvent } from '@kernel/events';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { inventoryService } from '@modules/inventory';
 import { cheapestStandardShipping } from '@modules/delivery';
 import { orderService, sumLineItems } from '@modules/orders';
@@ -38,10 +38,10 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { RETURN_RECEIVED } from '../events';
-import { RECEIVABLE_RETURN_STATUSES, wireLines } from '../domain';
+import { RECEIVABLE_RETURN_STATUSES, accountsOf, takesLastUnit, wireLines } from '../domain';
 import { closeReturn } from './close';
 import { syncReturnStatus } from './projection';
-import { refundAmountFor, type RefundBreakdown } from './refund-amount';
+import { refundAmountFor, shippingStillOwed, type RefundBreakdown } from './refund-amount';
 
 /** What staff may enter when the goods arrive. */
 export interface ReceiveReturnInput {
@@ -55,72 +55,117 @@ const notReceivable = (): ResponseReject =>
         { code: ERROR_CODES.RETURN_NOT_RECEIVABLE, message: t('returns.not-receivable') }
     ]);
 
-/**
- * Whether one return carries every unit its order held — the condition for refunding delivery.
- * @param returned - the return
- * @param order - the order it came from
- */
-const carriesWholeOrder = (returned: ReturnDocument, order: OrderDocument): boolean => {
-    const returnedBy = new Map(
-        returned.lines.map(({ productId, quantity }) => [String(productId), quantity])
-    );
-    return (
-        order.items.length === returnedBy.size &&
-        order.items.every((item) => returnedBy.get(String(item.product._id)) === item.quantity)
-    );
-};
+/** What {@link claimAndRestock} decided. */
+type Claimed =
+    | { kind: 'deduction-too-high' }
+    | { kind: 'lost' }
+    | { kind: 'received'; received: ReturnDocument; breakdown: RefundBreakdown };
 
 /**
- * What this return is owed, from its frozen lines and the order's own money.
+ * What this return is owed, from its frozen lines and the order's own money — given what the
+ * order's other returns and cancels have already settled. Takes the delivery only if it is the one
+ * that brings the order whole, and only the part not already refunded.
+ *
  * @param returned - the return being received
  * @param order - the order it came from
+ * @param earlier - every OTHER return on the order, as the transaction reads them
  * @param handlingDeduction - what staff keep back
  */
-const quote = (returned: ReturnDocument, order: OrderDocument, handlingDeduction: number) =>
-    refundAmountFor({
+const quote = (
+    returned: ReturnDocument,
+    order: OrderDocument,
+    earlier: readonly ReturnDocument[],
+    handlingDeduction: number
+) => {
+    const accounts = accountsOf(earlier);
+    const ordered = order.items.map((item) => ({
+        productId: String(item.product._id),
+        quantity: item.quantity
+    }));
+    return refundAmountFor({
         currency: returned.currency,
         reason: returned.reason,
         lines: returned.lines,
-        fullReturn: carriesWholeOrder(returned, order),
-        shippingPaid: order.shippingCost ?? 0,
+        takesLastUnit: takesLastUnit(ordered, [
+            ...accounts.accountedFor,
+            ...wireLines(returned.lines)
+        ]),
+        shippingPaid: shippingStillOwed(
+            returned.currency,
+            order.shippingCost ?? 0,
+            accounts.shippingRefunded
+        ),
         cheapestStandardShipping: cheapestStandardShipping(
             sumLineItems(order.items, order.currency).price
         ),
         handlingDeduction
     });
+};
 
 /**
- * The move that IS the receipt: the conditional status claim and the restock, in one transaction.
+ * The move that IS the receipt: under the order's lock row, quote what is owed — whether this is
+ * the return that brings the order whole is decided here, so two receipts racing cannot both take
+ * the delivery — then the conditional status claim, the restock and `return.received`, in one
+ * transaction.
  * @param returned - the return
- * @param breakdown - what it is owed, stamped in the same write
+ * @param order - the order it came from
  * @param handlingDeduction - what staff keep back
- * @returns the return as it now stands, or `null` when it was no longer `approved`
+ * @param actor - the staff member receiving the goods, for the order's timeline
+ * @returns what the transaction decided: a refusal of the deduction, a lost race, or the receipt
  */
 const claimAndRestock = (
     returned: ReturnDocument,
-    breakdown: RefundBreakdown,
-    handlingDeduction: number
-): Promise<ReturnDocument | null> =>
-    withTransaction(async (session) => {
+    order: OrderDocument,
+    handlingDeduction: number,
+    actor: string | null | undefined
+): Promise<Claimed> =>
+    withTransaction(async (session): Promise<Claimed> => {
+        const orderId = String(returned.orderId);
+        await returnRepository.lockOrder(orderId, session);
+        const everyReturn = await returnRepository.findByOrderId(orderId, session);
+        const others = everyReturn.filter(({ _id }) => String(_id) !== String(returned._id));
+
+        const verdict = quote(returned, order, others, handlingDeduction);
+        if (!verdict.ok) return { kind: 'deduction-too-high' };
+
         const received = await returnRepository.claimStatus(
             String(returned._id),
             RECEIVABLE_RETURN_STATUSES,
             'received',
             {
                 receivedAt: new Date(),
-                refundAmount: breakdown.total,
+                refundAmount: verdict.breakdown.total,
+                shippingRefund: verdict.breakdown.shipping,
                 ...(handlingDeduction > 0 ? { handlingDeduction } : {})
             },
             session
         );
-        if (!received) return null;
+        if (!received) return { kind: 'lost' };
 
         await inventoryService.restockReturnedLines(
             wireLines(received.lines),
             { reference: String(received.orderId), note: `return ${String(received._id)}` },
             session
         );
-        return received;
+        await enqueueOutboxEvent(
+            RETURN_RECEIVED,
+            { returnId: String(received._id), orderId: String(received.orderId) },
+            String(received.orderId),
+            session
+        );
+        await orderService.appendTimeline(
+            String(received.orderId),
+            {
+                type: 'return_received',
+                actor,
+                data: { returnId: String(received._id), refundAmount: verdict.breakdown.total }
+            },
+            session
+        );
+        return { kind: 'received', received, breakdown: verdict.breakdown };
+    }).then((claimed) => {
+        if (claimed.kind === 'received') nudgeOutbox();
+        return claimed;
     });
 
 /**
@@ -190,45 +235,40 @@ const receiveFor = (
     order: OrderDocument,
     input: ReceiveReturnInput,
     context: CallerContext
-): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
-    const deduction = input.handlingDeduction ?? 0;
-    const verdict = quote(returned, order, deduction);
-    if (!verdict.ok)
-        return Promise.resolve(
-            generateReject(422, [
-                {
-                    code: ERROR_CODES.RETURN_DEDUCTION_INVALID,
-                    message: t('returns.deduction-too-high')
-                }
-            ])
-        );
-
-    return claimAndRestock(returned, verdict.breakdown, deduction).then((received) => {
-        if (!received) return notReceivable();
-
-        return inventoryService
-            .refreshStockCacheForProducts(received.lines.map(({ productId }) => String(productId)))
-            .then(() => syncReturnStatus(String(received.orderId)))
-            .then(() => {
-                recordAudit(context, {
-                    action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
-                    outcome: 'success',
-                    targetType: 'return',
-                    targetId: id,
-                    metadata: {
-                        orderId: String(received.orderId),
-                        refundAmount: verdict.breakdown.total
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
+    claimAndRestock(returned, order, input.handlingDeduction ?? 0, context.caller.id).then(
+        (claimed) => {
+            if (claimed.kind === 'deduction-too-high')
+                return generateReject(422, [
+                    {
+                        code: ERROR_CODES.RETURN_DEDUCTION_INVALID,
+                        message: t('returns.deduction-too-high')
                     }
-                });
-                void emitDomainEvent(RETURN_RECEIVED, {
-                    returnId: id,
-                    orderId: String(received.orderId)
-                });
-                return refundAndClose(received, verdict.breakdown.shipping, context);
-            })
-            .then((after) => generateSuccess(after, 200, t('returns.received')));
-    });
-};
+                ]);
+            if (claimed.kind === 'lost') return notReceivable();
+
+            const { received, breakdown } = claimed;
+            return inventoryService
+                .refreshStockCacheForProducts(
+                    received.lines.map(({ productId }) => String(productId))
+                )
+                .then(() => syncReturnStatus(String(received.orderId)))
+                .then(() => {
+                    recordAudit(context, {
+                        action: returnsAuditActions.ADMIN_RETURN_RECEIVED,
+                        outcome: 'success',
+                        targetType: 'return',
+                        targetId: id,
+                        metadata: {
+                            orderId: String(received.orderId),
+                            refundAmount: breakdown.total
+                        }
+                    });
+                    return refundAndClose(received, breakdown.shipping, context);
+                })
+                .then((after) => generateSuccess(after, 200, t('returns.received')));
+        }
+    );
 
 /**
  * Record that a return's goods arrived: restock them, pay the customer back, close the return.

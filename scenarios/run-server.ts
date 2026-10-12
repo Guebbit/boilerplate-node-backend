@@ -96,6 +96,7 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // profile too, so it satisfies the gate the ordinary way, with the same values `.env-example`
     // ships for a plain developer checkout.
     NODE_SHOP_COUNTRY: 'IT',
+    NODE_SHOP_TIMEZONE: 'Europe/Rome',
     NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
     NODE_SHOP_STREET: 'Via Roma 1',
     NODE_SHOP_CITY: 'Milano',

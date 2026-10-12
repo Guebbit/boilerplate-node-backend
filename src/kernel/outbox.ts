@@ -5,7 +5,8 @@
  * no durability; this is the durable path for an event that must not be lost.
  *
  * Guarantee:  at-least-once. The relay marks a row published only after every consumer returned.
- *             A crash in between re-dispatches it, so a consumer dedupes on `meta.eventId`.
+ *             A crash in between re-dispatches it, so a consumer where a duplicate does harm
+ *             (stock, money, webhook fan-out) dedupes on `meta.eventId`; a mail may repeat.
  * Ordering:   per aggregate. An aggregate's oldest unpublished row blocks its later ones.
  * Failure:    retried with exponential backoff, parked as `dead` after the last attempt.
  *             A dead row never blocks its aggregate.
@@ -355,6 +356,50 @@ export interface OutboxAnnouncement<TEventName extends DomainEventName> {
     aggregateId: string;
 }
 
+/** What an `announce` callback may hand back: one announcement, or several for one change. */
+export type OutboxAnnouncements<TEventName extends DomainEventName> =
+    | OutboxAnnouncement<TEventName>
+    | readonly OutboxAnnouncement<TEventName>[];
+
+/**
+ * Enqueue what `announce` builds, one row per announcement and in order, inside `session`.
+ *
+ * @param session - the transaction the rows join
+ * @param announcements - one announcement or several; several keep their order per aggregate
+ */
+const enqueueAll = async <TEventName extends DomainEventName>(
+    session: ClientSession,
+    announcements: OutboxAnnouncements<TEventName>
+): Promise<void> => {
+    const list = 'name' in announcements ? [announcements] : announcements;
+    // One after another: a transaction's session does not take parallel operations, and the rows
+    // must land in the order they were announced.
+    for (const { name, payload, aggregateId } of list)
+        await enqueueOutboxEvent(name, payload, aggregateId, session);
+};
+
+/**
+ * The same write-then-announce step as {@link announceInTransaction}, inside a transaction the
+ * CALLER already owns — for an act that changes several records and must commit them with the
+ * event, like a shipment (`delivery`). Opens no transaction and does not wake the relay: the
+ * relay is nudged after the commit, which only the owner of the transaction knows, so the owner
+ * calls {@link nudgeOutbox} then.
+ *
+ * @param session - the caller's open transaction
+ * @param write - the state change; pass `session` to every write that belongs to it
+ * @param announce - builds the event(s) from what `write` returned
+ * @returns what `write` returned
+ */
+export const announceWithin = <TWritten, TEventName extends DomainEventName>(
+    session: ClientSession,
+    write: (session: ClientSession) => Promise<TWritten>,
+    announce: (written: NonNullable<TWritten>) => OutboxAnnouncements<TEventName>
+): Promise<TWritten> =>
+    write(session).then((written) => {
+        if (written === null || written === undefined) return written;
+        return enqueueAll(session, announce(written)).then(() => written);
+    });
+
 /**
  * One state change and the event announcing it, committed together or not at all.
  *
@@ -363,20 +408,14 @@ export interface OutboxAnnouncement<TEventName extends DomainEventName> {
  * exactly when the change it describes does. The relay is nudged after the commit, never inside.
  *
  * @param write - the state change; pass `session` to every write that belongs to it
- * @param announce - builds the event from what `write` returned
+ * @param announce - builds the event(s) from what `write` returned
  * @returns what `write` returned
  */
 export const announceInTransaction = <TWritten, TEventName extends DomainEventName>(
     write: (session: ClientSession) => Promise<TWritten>,
-    announce: (written: NonNullable<TWritten>) => OutboxAnnouncement<TEventName>
+    announce: (written: NonNullable<TWritten>) => OutboxAnnouncements<TEventName>
 ): Promise<TWritten> =>
-    withTransaction((session) =>
-        write(session).then((written) => {
-            if (written === null || written === undefined) return written;
-            const { name, payload, aggregateId } = announce(written);
-            return enqueueOutboxEvent(name, payload, aggregateId, session).then(() => written);
-        })
-    ).then((written) => {
+    withTransaction((session) => announceWithin(session, write, announce)).then((written) => {
         if (written !== null && written !== undefined) nudgeOutbox();
         return written;
     });

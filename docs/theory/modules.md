@@ -358,18 +358,18 @@ The core is what every module has. Each capability below is one manifest entry p
 so it can be added or dropped alone. `example` shows each one; delete the files in the middle
 column, and the manifest entry, to drop it.
 
-| Capability                 | Files (all in `src/modules/example/` unless said)                           | Manifest entry                         | What `example` does with it                         |
-| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------- | --------------------------------------------------- |
-| Events and a subscriber    | `events.ts`, `services/notify.ts`                                           | `subscribe`                            | publishes `example.published`; its own mail listens |
-| Mail                       | `emails.ts`, `templates/`                                                   | the manifest's `templates`             | mails the owner when an example is published        |
-| Rate limits                | `rate-limits.ts`                                                            | `rateLimits`                           | a budget on creating examples                       |
-| A public webhook           | `events.ts`, the catalogue in `src/modules/webhooks/asyncapi.yaml`          | `publicEvents`                         | an `example.published` webhook                      |
-| Translatable fields        | the `locales` port's methods on `repository.ts`                             | `translatables`                        | the title, per language                             |
-| An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path | `imageTargets`                         | a cover image                                       |
-| A typed setting            | `config.ts`                                                                 | `config`                               | the longest body an example may have                |
-| Demo records               | `scenarios/example.ts`, one line in `scenarios/shop-modules.ts`             | (the scenario table)                   | a few seeded examples for the demo profile          |
-| Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                   | (found by name, not declared)          | one counter, one probe, one event                   |
-| Personal data              | `services/personal-data.ts`                                                 | `personalData` (`collect` and `erase`) | exports and erases the person's examples            |
+| Capability                 | Files (all in `src/modules/example/` unless said)                           | Manifest entry                         | What `example` does with it                                       |
+| -------------------------- | --------------------------------------------------------------------------- | -------------------------------------- | ----------------------------------------------------------------- |
+| Events and a subscriber    | `events.ts`, `services/notify.ts`                                           | `subscribe`                            | publishes `example.published` on the outbox; its own mail listens |
+| Mail                       | `emails.ts`, `templates/`                                                   | the manifest's `templates`             | mails the owner when an example is published                      |
+| Rate limits                | `rate-limits.ts`                                                            | `rateLimits`                           | a budget on creating examples                                     |
+| A public webhook           | `events.ts`, the catalogue in `src/modules/webhooks/asyncapi.yaml`          | `publicEvents`                         | an `example.published` webhook                                    |
+| Translatable fields        | the `locales` port's methods on `repository.ts`                             | `translatables`                        | the title, per language                                           |
+| An uploaded image          | `services/cover.ts`, `controllers/put-example-cover.ts`, the route and path | `imageTargets`                         | a cover image                                                     |
+| A typed setting            | `config.ts`                                                                 | `config`                               | the longest body an example may have                              |
+| Demo records               | `scenarios/example.ts`, one line in `scenarios/shop-modules.ts`             | (the scenario table)                   | a few seeded examples for the demo profile                        |
+| Metrics, probes, analytics | `metrics.ts`, `probes.ts`, `analytics.ts`                                   | (found by name, not declared)          | one counter, one probe, one event                                 |
+| Personal data              | `services/personal-data.ts`                                                 | `personalData` (`collect` and `erase`) | exports and erases the person's examples                          |
 
 Left out on purpose, with the module that really needs each: `rawBodyPaths` (`payments`: a signed
 body), `consumers` (`webhooks`: a queue), `forbiddenInProduction` (`webhooks`), a custom boot check
@@ -546,16 +546,19 @@ sequenceDiagram
     participant B as kernel/events
     participant C as cart
     Note over C,P: cart → products is the only IMPORT
-    P->>B: emitDomainEvent('product.deleted')
+    Note over P: row deleted + outbox row, one transaction
+    P->>B: the relay emits 'product.deleted'
     B->>C: handler (awaited)
     C-->>B: cart lines removed
     B-->>P: all handlers settled
-    Note over P: only now is the row deleted
+    Note over P: a handler that threw is retried by the relay
 ```
 
-Handlers are **awaited in registration order**, so the dependent rows are gone before the owning row
-disappears. A handler that throws is logged and does not fail the emitter — a listener must not roll
-back an operation that was already authorised.
+Handlers are **awaited in registration order** within one delivery. `product.deleted` rides the
+[transactional outbox](../tools/outbox.md), so the event is written with the delete and the relay
+delivers it right after the commit; a handler that throws leaves the row pending and the relay
+redelivers, so every handler must be idempotent. On the plain bus a throwing handler is logged and
+does not fail the emitter — a listener must not roll back an operation that was already authorised.
 
 ### The bus is not transactional, and must not be made so
 

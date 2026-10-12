@@ -31,8 +31,8 @@ import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';
 import { decryptSerializedOrder } from './pii';
+import { fulfillmentStatusOf, type FulfillmentSummary } from './domain/fulfillment';
 import {
-    fulfillmentStatusOf,
     paymentStatusOf,
     returnStatusOf,
     STAMPED_PAYMENT_STATUSES,
@@ -41,7 +41,7 @@ import {
     type StampedReturnStatus
 } from './domain/projections';
 import { OrderStatus, PaymentMethodId, RateType } from '@types';
-import type { Order } from '@types';
+import type { Order, OrderTimelineType } from '@types';
 
 /**
  * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate` — same reasoning as
@@ -54,6 +54,12 @@ import type { Order } from '@types';
 export type FrozenOrderLineProduct = Omit<ProductSnapshot, 'taxClass'> & {
     /** The decimal VAT rate this line was actually charged — see the schema field's own comment. */
     taxRate: number;
+    /**
+     * The line was sold before its release date, decided once at checkout from `releaseDate` (kept
+     * on the snapshot as `ProductSnapshot` carries it). Stored rather than derived: the date
+     * passing, or an admin moving it, must not change what this order bought.
+     */
+    preorder?: boolean;
 };
 
 /**
@@ -86,6 +92,13 @@ export interface OrderDocumentItem {
     locale: string;
 }
 
+/** An order as another module's list composes it: which order, and who it is for. */
+export interface OrderReference {
+    id: string;
+    orderNumber: string;
+    email: string;
+}
+
 /** Every effect a cancel can still owe — the schema's `enum`, and the source of {@link OrderPendingEffect}. */
 const ORDER_PENDING_EFFECTS = ['refund'] as const;
 
@@ -103,7 +116,7 @@ export type OrderPendingEffect = (typeof ORDER_PENDING_EFFECTS)[number];
 
 /**
  * Order Document interface: overrides the generated `Order`'s `userId`/`items`/`status`, and
- * redeclares `deletedAt`/`payBy` as `Date` (the contract types both as ISO strings).
+ * redeclares `deletedAt`/`payBy`/`paidAt` as `Date` (the contract types both as ISO strings).
  * `totalItems`, `totalQuantity`, `totalPrice` and `transferInstructions` are omitted rather than
  * inherited — required or present on the wire but never persisted, so declaring them here would
  * claim a stored field that doesn't exist; `applyOrderTransform` derives all four at
@@ -124,6 +137,7 @@ export interface OrderDocument
             | 'updatedAt'
             | 'deletedAt'
             | 'payBy'
+            | 'paidAt'
             | 'transferInstructions'
             | 'paymentStatus'
             | 'fulfillmentStatus'
@@ -167,7 +181,7 @@ export interface OrderDocument
     /**
      * The moment `services/status.ts#markPaid` moved this order to `paid` — written in the SAME
      * conditional write as the status move, by whichever caller wins that transition, never
-     * recomputed afterwards. Internal only: never on the wire (see `applyOrderTransform`'s `omit`).
+     * recomputed afterwards. Published as `Order.paidAt`: the buyer's own fact, and the date the stats count a sale on.
      *
      * The proxy every cross-module read uses instead of asking `invoicing` whether an invoice
      * exists — `services/scope.ts#withActions`' `actions.invoice`, and `services/remove.ts#remove`'s
@@ -197,6 +211,13 @@ export interface OrderDocument
      */
     returnStatus?: StampedReturnStatus;
     /**
+     * Where the goods stand, as `delivery` last reported it — written only through
+     * `services/fulfillment.ts`'s `recordFulfillmentProgress`, inside the transaction of the act
+     * that changed it. Absent until the order's fulfillment orders exist. Internal: the wire's
+     * `fulfillmentStatus` and `actions` are derived from it.
+     */
+    fulfillment?: FulfillmentSummary;
+    /**
      * What the cancel decided but has not yet seen through. Written in the same conditional write
      * that moves the status, so the intent and the decision cannot come apart; emptied once the
      * listener has actually returned. Non-empty means `retryPendingEffects` still owes this order
@@ -217,36 +238,7 @@ export interface OrderDocument
      *          through `transferInstructions.reference`.
      */
     transferReference?: string;
-    /**
-     * The admin-override history — `services/override.ts`'s only writer, never emptied. Absent
-     * (not `[]`) on an order no override has ever touched, the same "owes nothing" vs. "was never
-     * asked" distinction `pendingEffects` already uses. Each entry is one override, forced or
-     * status-only; `PUT`/`POST` normal writes never append here.
-     */
-    statusOverrides?: OrderStatusOverride[];
     deletedAt?: Date;
-}
-
-/** The two doors an override goes through — the schema's `enum` for `mode`. */
-const ORDER_OVERRIDE_MODES = ['forced', 'status'] as const;
-
-/** One admin override event, embedded in order-arrival order — never reordered or deleted. */
-export interface OrderStatusOverride {
-    /** The order's status immediately before this override. */
-    from: OrderStatus;
-    /** The status this override moved the order to. */
-    to: OrderStatus;
-    /** `'forced'` — a delivery door skipped its normal `from` gate; `'status'` — the status-only door. */
-    mode: (typeof ORDER_OVERRIDE_MODES)[number];
-    /** Required on every override — why the normal path didn't apply. */
-    reason: string;
-    /**
-     * The admin who made the call, as `caller.id` gave it. A plain string, not an ObjectId: this
-     * is a historical record, never queried by it, and `Caller.id` carries no guarantee of being
-     * one (an API-key caller, or a test fixture, can hand it a value that is not).
-     */
-    actorUserId: string;
-    at: Date;
 }
 
 /**
@@ -305,6 +297,10 @@ const orderLineProductSchema = new Schema(
         sku: { type: String },
         /** Grams, frozen the same as every other line field — see `Product.weight`. */
         weight: { type: Number, min: 0 },
+        /** The promised "ships from" date, frozen — see `Product.releaseDate`. */
+        releaseDate: { type: Date },
+        /** The line was a preorder when sold, frozen — decided once at checkout, never re-derived. */
+        preorder: { type: Boolean },
         deletedAt: { type: Date },
         /*
          * The decimal rate this line was actually charged, resolved from the product's `taxClass`
@@ -435,6 +431,21 @@ export const orderSchema = new Schema<OrderDocument>(
         withdrawUntil: {
             type: Date
         },
+        // Reported by `delivery`, never written by `orders` on its own — see the interface field.
+        fulfillment: {
+            type: new Schema<FulfillmentSummary>(
+                {
+                    shipped: { type: Boolean, required: true },
+                    remaining: { type: Number, required: true, min: 0 },
+                    onHold: { type: Number, required: true, min: 0 },
+                    awaitingStock: { type: Number, required: true, min: 0 },
+                    undelivered: { type: Number, required: true, min: 0 },
+                    lastDeliveredAt: { type: Date }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
         // Stamped by the owning module, never by `orders` itself — see the interface fields.
         paymentStatus: {
             type: String,
@@ -498,26 +509,6 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         transferReference: {
             type: String
-        },
-        /*
-         * `default: undefined`, same reasoning as `pendingEffects` above: an order no override has
-         * ever touched carries no key at all. Only `services/override.ts`'s `$push` creates it.
-         */
-        statusOverrides: {
-            type: [
-                new Schema<OrderStatusOverride>(
-                    {
-                        from: { type: String, enum: Object.values(OrderStatus), required: true },
-                        to: { type: String, enum: Object.values(OrderStatus), required: true },
-                        mode: { type: String, enum: [...ORDER_OVERRIDE_MODES], required: true },
-                        reason: { type: String, required: true },
-                        actorUserId: { type: String, required: true },
-                        at: { type: Date, required: true }
-                    },
-                    { _id: false }
-                )
-            ],
-            default: undefined
         }
     },
     {
@@ -557,6 +548,17 @@ orderSchema.index(
     { pendingEffects: 1, updatedAt: 1 },
     { name: 'orders_pendingEffects', sparse: true }
 );
+/*
+ * The Awaiting-transfer tab: pending orders, nearest `payBy` first.
+ */
+orderSchema.index({ status: 1, payBy: 1 }, { name: 'orders_status_payBy' });
+/*
+ * The staff list's date ranges and the stats' `paidAt` window. `paidAt` is sparse: an unpaid order
+ * (most abandoned carts) never carries it.
+ */
+orderSchema.index({ createdAt: 1 }, { name: 'orders_createdAt' });
+orderSchema.index({ status: 1, createdAt: -1 }, { name: 'orders_status_createdAt' });
+orderSchema.index({ paidAt: 1 }, { name: 'orders_paidAt', sparse: true });
 /*
  * `GET /payments/order-by-reference`'s lookup. Unique — two orders minting the same reference
  * would make the code ambiguous about which one a transfer paid — and sparse for the same reason
@@ -654,9 +656,10 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * The three statuses beside `status`, resolved from what is stored — and `paidAt` stripped, since
- * this is its last reader. It is not in `omit` for that reason: `omit` runs before `after`, and the
- * `paid`/`unpaid` half of `paymentStatus` is derived from it.
+ * The three statuses beside `status`, resolved from what is stored — and `fulfillment` stripped,
+ * since this is its last reader. It is not in `omit` for that reason: `omit` runs before `after`.
+ * `paidAt` stays on the wire: the `paid`/`unpaid` half of `paymentStatus` is derived from it, and it
+ * is the buyer's own fact.
  * @param serialized - the order as it is being serialized
  */
 const applyOrderProjections = (serialized: Record<string, unknown>) => {
@@ -665,11 +668,15 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
         serialized.paymentStatus as StampedPaymentStatus | undefined,
         serialized.paidAt as Date | undefined
     );
-    serialized.fulfillmentStatus = fulfillmentStatusOf(serialized.status as OrderStatus);
+    // A projection that never selected `status` reads as `pending`: no goods have moved.
+    serialized.fulfillmentStatus = fulfillmentStatusOf(
+        (serialized.status as OrderStatus | undefined) ?? OrderStatus.pending,
+        serialized.fulfillment as FulfillmentSummary | undefined
+    );
+    delete serialized.fulfillment;
     serialized.returnStatus = returnStatusOf(
         serialized.returnStatus as StampedReturnStatus | undefined
     );
-    delete serialized.paidAt;
 };
 
 /**
@@ -681,13 +688,10 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
-    // `inactivityWarnedAt`. `statusOverrides` is staff-only history (who overrode the status, and
-    // why) — never the owning customer's to read off their own order. `paidAt` is internal
-    // bookkeeping too — see the schema field's own comment — and is stripped in
-    // `applyOrderProjections`, not here. `transferReference` is NOT
+    // `inactivityWarnedAt`. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'withdrawUntil'],
+    omit: ['anonymizeAfter', 'pendingEffects', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the
@@ -730,4 +734,63 @@ const orderNumberCounterSchema = new Schema<OrderNumberCounterDocument, OrderNum
 export const orderNumberCounterModel = model<OrderNumberCounterDocument, OrderNumberCounterModel>(
     'OrderNumberCounter',
     orderNumberCounterSchema
+);
+
+/**
+ * One row of an order's timeline. Append-only by design — see `./repository`'s
+ * `orderEventRepository` for the two sanctioned scrubs (an erased staff account, aged free text).
+ */
+export interface OrderEventDocument extends Document {
+    /** The order it belongs to. */
+    orderId: Types.ObjectId;
+    /** When it happened. */
+    at: Date;
+    /** What happened; the audience of each type is `./domain/timeline`'s table. */
+    type: OrderTimelineType;
+    /**
+     * The account that made the change, as `caller.id` gave it: a plain string, like the audit
+     * log's, since an API-key caller or a fixture carries no ObjectId. Unset for the system, and
+     * unset again when that account is erased.
+     */
+    actor?: string;
+    /** Free text `orders` owns (an override's reason); unset on its own retention clock. */
+    text?: string;
+    /** Ids, codes and numbers the type needs to say; never another module's free text. */
+    data: Record<string, unknown>;
+}
+
+/** Mongoose model type for {@link OrderEventDocument}. */
+export type OrderEventModel = Model<OrderEventDocument>;
+
+/** Timeline schema. No timestamps: `at` is the fact's own instant, and a row is never edited. */
+const orderEventSchema = new Schema<OrderEventDocument, OrderEventModel>(
+    {
+        orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
+        at: { type: Date, required: true },
+        type: { type: String, required: true },
+        actor: { type: String },
+        text: { type: String },
+        // `minimize: false` below keeps an empty `data` stored as `{}`, so a reader never meets a hole.
+        data: { type: Schema.Types.Mixed, required: true, default: {} }
+    },
+    { minimize: false }
+);
+
+/* The one read: "what happened to THIS order, oldest first". */
+orderEventSchema.index({ orderId: 1, at: 1 }, { name: 'orderevents_orderId_at' });
+/* The free-text reap's query: only rows still holding text, so the index stays as small as the text. */
+orderEventSchema.index(
+    { at: 1 },
+    { name: 'orderevents_text_at', partialFilterExpression: { text: { $exists: true } } }
+);
+/* An erased staff account's rows. Sparse: most rows are the system's and carry no actor. */
+orderEventSchema.index({ actor: 1 }, { name: 'orderevents_actor', sparse: true });
+
+/** Normalizes a serialized row: `_id` → `id`, `__v` dropped. Owed to the repository factory's lean reads. */
+export const applyOrderEventTransform = applySerialization(orderEventSchema);
+
+/** Mongoose model for the timeline. Collection `orderevents`, Mongoose's default pluralization. */
+export const orderEventModel = model<OrderEventDocument, OrderEventModel>(
+    'OrderEvent',
+    orderEventSchema
 );

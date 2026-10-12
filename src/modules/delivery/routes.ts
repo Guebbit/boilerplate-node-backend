@@ -1,8 +1,8 @@
 /**
  * @module
  * Route table for delivery. Guards are chosen per route: the methods list is pre-purchase
- * information and stays public, the shipment read needs a caller to scope ownership to, and the
- * two write doors are staff's — the same key that reads a shipment, for the write. See:
+ * information and stays public, the fulfilment read needs a caller to scope ownership to, and every
+ * write door is staff's — the same key that updates a shipment, for the write. See:
  * docs/modules/delivery.md
  */
 
@@ -15,11 +15,21 @@ import {
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
 import { getShippingMethods } from './controllers/get-shipping-methods';
-import { getShipmentByOrder } from './controllers/get-shipment-by-order';
+import { getOrderFulfillment } from './controllers/get-order-fulfillment';
 import { postStartOrder } from './controllers/post-start-order';
-import { postShipOrder } from './controllers/post-ship-order';
-import { postDeliverOrder } from './controllers/post-deliver-order';
-import { postFulfillOrder } from './controllers/post-fulfill-order';
+import { postShipFulfillmentOrder } from './controllers/post-ship-fulfillment-order';
+import { postDeliverShipment } from './controllers/post-deliver-shipment';
+import { postFulfillFulfillmentOrder } from './controllers/post-fulfill-fulfillment-order';
+import {
+    postHoldFulfillmentOrder,
+    postReleaseFulfillmentOrder
+} from './controllers/post-hold-fulfillment-order';
+import { patchShipment } from './controllers/patch-shipment';
+import { postConfirmWait } from './controllers/post-confirm-wait';
+import {
+    getPreorderFulfillmentOrders,
+    getPreorderSummary
+} from './controllers/get-preorder-fulfillment-orders';
 
 /**
  * Whether this request is asking to skip the normal gate — the same flag `service.ts`'s
@@ -30,14 +40,32 @@ import { postFulfillOrder } from './controllers/post-fulfill-order';
 const isForcedRequest = (request: Request): boolean =>
     (request.body as { forced?: boolean } | undefined)?.forced === true;
 
-/** Express router for delivery operations (methods, shipments, recording a parcel's progress). */
+/** Express router for delivery operations (methods, fulfilment reads, cutting and delivering shipments, holds). */
 export const router = Router();
 
 // GET /delivery/methods — public: what shipping costs is pre-purchase information
 router.get('/methods', getShippingMethods);
 
-// GET /delivery/order/:orderId — the parcel behind one of the caller's orders
-router.get('/order/:orderId', getAuth, isAuth, getShipmentByOrder);
+// GET /delivery/order/:orderId — the fulfillment orders and shipments behind one of the caller's orders
+router.get('/order/:orderId', getAuth, isAuth, getOrderFulfillment);
+
+// GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `orders.any.read`, the
+// key of the orders they are about (decided A5.2); it collapses onto a buyer's own `self` key in a
+// guard, so the service narrows the rows to the caller's own orders unless they read every order.
+router.get(
+    '/fulfillment-orders',
+    getAuth,
+    isAuth,
+    requirePermission('orders.any.read'),
+    getPreorderFulfillmentOrders
+);
+router.get(
+    '/fulfillment-orders/summary',
+    getAuth,
+    isAuth,
+    requirePermission('orders.any.read'),
+    getPreorderSummary
+);
 
 // POST /delivery/order/:orderId/start — begins fulfilment; moves the order paid -> processing.
 // No `forced` variant, so no step-up guard: the admin override is the other reachable path here.
@@ -49,37 +77,68 @@ router.post(
     postStartOrder
 );
 
-// POST /delivery/order/:orderId/ship — records a handover; moves the order processing -> shipped.
-// `requireFreshAuthWhen` at `orders.any.override`'s own declared tier: a `forced` write reaches
-// past the ordinary `processing`-only gate, and `service.ts`'s own permission check has no way to
-// demand a step-up on its own — only a route-mounted guard can challenge before the controller runs.
+// POST /delivery/fulfillment-orders/:id/shipments — cuts a shipment; the order moves processing ->
+// shipped only when nothing remains anywhere. `requireFreshAuthWhen` at `orders.any.override`'s own
+// declared tier: a `forced` write reaches past the ordinary `processing`-only gate, and the
+// service's own permission check has no way to demand a step-up on its own — only a route-mounted
+// guard can challenge before the controller runs.
 router.post(
-    '/order/:orderId/ship',
+    '/fulfillment-orders/:id/shipments',
     getAuth,
     isAuth,
     requirePermission('delivery.any.update'),
     requireFreshAuthWhen(isForcedRequest, 'critical'),
-    postShipOrder
+    postShipFulfillmentOrder
 );
 
-// POST /delivery/order/:orderId/deliver — records an arrival; moves the order shipped -> delivered.
-// Same `forced` step-up as the ship door above.
+// POST /delivery/fulfillment-orders/:id/fulfill — the digital door: a shipment with no parcel,
+// born delivered. No `forced` variant: there is no gate here for an override to skip past — a
+// physical fulfillment order simply cannot use this door at all.
 router.post(
-    '/order/:orderId/deliver',
+    '/fulfillment-orders/:id/fulfill',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.update'),
+    postFulfillFulfillmentOrder
+);
+
+// POST /delivery/fulfillment-orders/:id/hold and /release — staff holding a fulfillment order back.
+router.post(
+    '/fulfillment-orders/:id/hold',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.update'),
+    postHoldFulfillmentOrder
+);
+router.post(
+    '/fulfillment-orders/:id/release',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.update'),
+    postReleaseFulfillmentOrder
+);
+
+// POST /delivery/fulfillment-orders/:id/confirm-wait — the BUYER's "keep waiting" for a late
+// preorder. Only authentication here: it is the order's own buyer's answer, not a staff key's, and
+// the service refuses anyone else.
+router.post('/fulfillment-orders/:id/confirm-wait', getAuth, isAuth, postConfirmWait);
+
+// PATCH /delivery/shipments/:id — correct a tracking code (RFC 7396).
+router.patch(
+    '/shipments/:id',
+    getAuth,
+    isAuth,
+    requirePermission('delivery.any.update'),
+    patchShipment
+);
+
+// POST /delivery/shipments/:id/deliver — records an arrival; on the last one the order moves
+// shipped -> delivered. Same `forced` step-up as the shipping door above.
+router.post(
+    '/shipments/:id/deliver',
     getAuth,
     isAuth,
     requirePermission('delivery.any.update'),
     requireFreshAuthWhen(isForcedRequest, 'critical'),
-    postDeliverOrder
-);
-
-// POST /delivery/order/:orderId/fulfill — the digital-only door; moves the order
-// processing -> delivered with no parcel. No `forced` variant: there is no gate here for an
-// override to skip past — a physical order simply cannot use this door at all.
-router.post(
-    '/order/:orderId/fulfill',
-    getAuth,
-    isAuth,
-    requirePermission('delivery.any.update'),
-    postFulfillOrder
+    postDeliverShipment
 );

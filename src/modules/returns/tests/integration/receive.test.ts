@@ -9,17 +9,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import {
-    createOrder,
-    forceOrderStatus,
-    readOrder,
-    toOrderItem
-} from '@modules/orders/tests/factories';
+import { createOrder, readOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
+import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import { orderService } from '@modules/orders';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
@@ -29,7 +24,7 @@ import returnsModule from '../../module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { asReject } from '@tests/response';
-import { approveReturn, createReturn, receiveReturn } from '../../services';
+import { approveReturn, createReturn, declineReturn, receiveReturn } from '../../services';
 import { RETURN_CLOSED, RETURN_RECEIVED } from '../../events';
 import { returnRepository } from '../../repository';
 import { findCreditNotesForOrder, type CreditNoteDocument } from '@modules/invoicing';
@@ -94,9 +89,8 @@ const paidAndDelivered = async (
     const intent = await createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
     await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
-    await forceOrderStatus(orderId, OrderStatus.delivered);
-    // The forced status skips the parcel's own move, so the units leave the shelf here.
-    await inventoryService.shipForOrder(orderId);
+    // Through the real doors: each shipment takes its own units off the shelf.
+    await carryOrderTo(orderId, 'delivered');
     return { user, shirt, mug, orderId };
 };
 
@@ -339,7 +333,7 @@ describe('what the customer gets back', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        await forceOrderStatus(orderId, OrderStatus.delivered);
+        await carryOrderTo(orderId, 'delivered');
         const outcome = await createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
@@ -533,5 +527,82 @@ describe('what receiving answers and announces', () => {
             409,
             'This return is not awaiting its goods.'
         ]);
+    });
+});
+
+describe('the order timeline of a return', () => {
+    it('follows the return from request to close, naming the staff and never the buyer`s note', async () => {
+        const fixture = await paidAndDelivered();
+        const outcome = await createReturn(
+            { orderId: fixture.orderId, reason: 'defective', note: 'the zip broke, call 555-0100' },
+            asCustomer(fixture.user.id),
+            testCallerContext
+        );
+        if (outcome.kind !== 'created') throw new Error('expected a return');
+        const id = String(outcome.created._id);
+        await approveReturn(id, callerContextAs('admin', 'admin-1'));
+
+        await receiveReturn(id, {}, callerContextAs('admin', 'admin-2'));
+
+        const rows = await timelineOf(fixture.orderId, 'return_');
+        expect(rows.map(({ type, actor }) => [type, actor])).toEqual([
+            ['return_requested', undefined],
+            ['return_approved', 'admin-1'],
+            ['return_received', 'admin-2'],
+            ['return_closed', undefined]
+        ]);
+        expect(rows[0].data).toEqual({ returnId: id, reason: 'defective' });
+        expect(rows[3].data).toMatchObject({ returnId: id, refundAmount: 70, currency: 'EUR' });
+        expect(JSON.stringify(rows)).not.toContain('555-0100');
+    });
+
+    it('writes a withdrawal as requested and approved at once, and a decline without its reason', async () => {
+        const withdrawn = await paidAndDelivered();
+        await createReturn(
+            { orderId: withdrawn.orderId, reason: 'withdrawal' },
+            asCustomer(withdrawn.user.id),
+            testCallerContext
+        );
+        const declined = await paidAndDelivered();
+        const outcome = await createReturn(
+            { orderId: declined.orderId, reason: 'other' },
+            asCustomer(declined.user.id),
+            testCallerContext
+        );
+        if (outcome.kind !== 'created') throw new Error('expected a return');
+
+        await declineReturn(
+            String(outcome.created._id),
+            'private opinion of the customer',
+            callerContextAs('admin', 'admin-1')
+        );
+
+        const opened = await timelineOf(withdrawn.orderId, 'return_');
+        expect(opened.map(({ type }) => type)).toEqual(['return_requested', 'return_approved']);
+        const rows = await timelineOf(declined.orderId);
+        expect(rows.find(({ type }) => type === 'return_declined')).toMatchObject({
+            actor: 'admin-1'
+        });
+        expect(JSON.stringify(rows)).not.toContain('private opinion');
+    });
+
+    it('writes the invoice and, once the refund settles, the credit note', async () => {
+        const fixture = await paidAndDelivered();
+        const id = await approvedReturn(fixture, 'defective');
+
+        await receiveReturn(id, {}, callerContextAs('admin'));
+        await waitFor(() =>
+            timelineOf(fixture.orderId).then((rows) =>
+                rows.some(({ type }) => type === 'credit_note_issued')
+            )
+        );
+
+        const rows = await timelineOf(fixture.orderId);
+        expect(rows.filter(({ type }) => type === 'invoice_issued')).toHaveLength(1);
+        const [note] = await findCreditNotesForOrder(fixture.orderId);
+        expect(rows.find(({ type }) => type === 'credit_note_issued')?.data).toMatchObject({
+            creditNoteId: String(note._id),
+            number: note.number
+        });
     });
 });

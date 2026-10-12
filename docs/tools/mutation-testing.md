@@ -185,7 +185,7 @@ strictly more informative about the same code, and its only real cost is speed.
 
 That cost was the entire reason the split existed, and it was worse than "slower": the unit-only
 ruler read **126 of its 214 files at 0%** — no unit test touches a service or repository at all, so
-every mutant in them scored `NoCoverage` by construction. Measured on `delivery/service.ts`: **0%**
+every mutant in them scored `NoCoverage` by construction. Measured on the delivery module's one service file at the time: **0%**
 under the unit ruler, **64.8%** under the one that also runs `tests/integration/`. Same tests, same
 code, only the ruler changed.
 
@@ -1448,7 +1448,7 @@ far more product code than this — but that code is written once, by whoever fo
 fork inherits _unchanged_ is the core: the cache adapter, the queue adapter, the upload pipeline,
 the auth service, the error interpreter. A bug there ships to every project that ever started here.
 
-So the order is by **blast radius**, not by percentage. `src/modules/account/services/authentication.ts` at 53% mattered more
+So the order is by **blast radius**, not by percentage. the account login service (`src/modules/account/services/login.ts` since the split) at 53% mattered more
 than a lower-scoring model of an order line, because every application has logins and only this one
 has orders.
 

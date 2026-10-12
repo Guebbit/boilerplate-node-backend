@@ -1,18 +1,21 @@
 /**
  * @module
- * Stock leaves the shelf when the goods do. Every move that dispatches an order — a parcel
- * handed over, a digital order fulfilled, an admin override past either — takes the order's units
- * off `onHand` in the status write's own transaction; nothing else does. Real Mongo throughout.
+ * Stock leaves the shelf when the goods do. A shipment takes ITS units off `onHand` in its own
+ * transaction (`shipStock`), so a partly shipped order has partly left the shelf; the status moves
+ * that follow report the fact and take nothing. The one status move that dispatches by itself is
+ * the admin override past dispatch, which takes whatever has not left yet. Real Mongo throughout.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
+import { seedOrder, seedDigitalOrder } from '@modules/orders/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { OrderStatus, StockMovementReason } from '@types';
-import { markShipped, markDelivered, markFulfilled } from '../../services/status';
-import { overrideStatus, forceMove } from '../../services/override';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { markShipped, markDelivered } from '../../services/status';
+import { refreshShelf, shipStock } from '../../services/fulfillment';
+import { overrideStatus } from '../../services/override';
 
 setupTestDb();
 
@@ -73,69 +76,49 @@ describe('paying and processing', () => {
     });
 });
 
-describe('markShipped', () => {
-    it('takes the units off the shelf with the status, and leaves availability alone', async () => {
+describe('shipStock', () => {
+    it('takes a shipment’s units off the shelf and leaves the rest of the hold', async () => {
         const { orderId, productId } = await paidOrderHolding(OrderStatus.processing);
 
-        const moved = await markShipped(orderId);
+        await withTransaction((session) =>
+            shipStock(orderId, [{ productId, quantity: 1 }], session)
+        );
+        // The catalogue's cache cannot roll back, so it is refreshed once the commit has landed.
+        await refreshShelf([productId]);
 
-        expect(moved?.status).toBe(OrderStatus.shipped);
-        expect(await countersOf(productId)).toEqual({ onHand: 7, reserved: 0, available: 7 });
-        expect(await stillClaimed(orderId)).toBe(false);
+        expect(await countersOf(productId)).toEqual({ onHand: 9, reserved: 2, available: 7 });
+        expect(await stillClaimed(orderId)).toBe(true);
         expect(await shipRows(productId)).toBe(1);
     });
 
-    it('moves no stock when the status write loses the race', async () => {
-        const { orderId, productId } = await paidOrderHolding(OrderStatus.paid);
-
-        // `paid` is not a legal `from`: the conditional write matches nothing.
-        expect(await markShipped(orderId)).toBeNull();
-
-        expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 3, available: 7 });
-        expect(await stillClaimed(orderId)).toBe(true);
-    });
-
-    it('rolls the status back when anything in the same transaction throws', async () => {
+    it('ends the hold with the last unit, and the status moves take nothing more', async () => {
         const { orderId, productId } = await paidOrderHolding(OrderStatus.processing);
-        const ship = inventoryService.shipForOrder;
-        // The real shipment runs to completion, THEN throws: the counters already moved inside
-        // the transaction, so only a rollback puts them back.
-        jest.spyOn(inventoryService, 'shipForOrder').mockImplementationOnce(async (id, session) => {
-            await ship(id, session);
-            throw new Error('connection reset');
-        });
 
-        await expect(markShipped(orderId)).rejects.toThrow('connection reset');
-
-        const stored = await readOrder(orderId);
-        expect(stored?.status).toBe(OrderStatus.processing);
-        expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 3, available: 7 });
-        expect(await stillClaimed(orderId)).toBe(true);
-    });
-});
-
-describe('markDelivered', () => {
-    it('does not take the units a second time', async () => {
-        const { orderId, productId } = await paidOrderHolding(OrderStatus.processing);
+        await withTransaction((session) =>
+            shipStock(orderId, [{ productId, quantity: 3 }], session)
+        );
+        await refreshShelf([productId]);
         await markShipped(orderId);
+        await markDelivered(orderId, new Date());
 
-        const moved = await markDelivered(orderId, new Date());
-
-        expect(moved?.status).toBe(OrderStatus.delivered);
-        expect(await countersOf(productId)).toEqual({ onHand: 7, reserved: 0, available: 7 });
-        expect(await shipRows(productId)).toBe(1);
-    });
-});
-
-describe('markFulfilled', () => {
-    it('is a digital order’s dispatch: the units leave when it is delivered', async () => {
-        const { orderId, productId } = await paidOrderHolding(OrderStatus.processing, true);
-
-        const moved = await markFulfilled(orderId);
-
-        expect(moved?.status).toBe(OrderStatus.delivered);
         expect(await countersOf(productId)).toEqual({ onHand: 7, reserved: 0, available: 7 });
         expect(await stillClaimed(orderId)).toBe(false);
+        expect(await shipRows(productId)).toBe(1);
+    });
+
+    it('moves no stock when the caller’s transaction rolls back', async () => {
+        const { orderId, productId } = await paidOrderHolding(OrderStatus.processing);
+
+        await expect(
+            withTransaction((session) =>
+                shipStock(orderId, [{ productId, quantity: 3 }], session).then(() => {
+                    throw new Error('connection reset');
+                })
+            )
+        ).rejects.toThrow('connection reset');
+
+        expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+        expect(await stillClaimed(orderId)).toBe(true);
     });
 });
 
@@ -173,17 +156,20 @@ describe('the admin override', () => {
         expect(await shipRows(productId)).toBe(1);
     });
 
-    it('is the same dispatch when delivery forces the move', async () => {
-        const { orderId, productId } = await paidOrderHolding(OrderStatus.paid);
+    it('takes only what has not shipped yet when some already left in a shipment', async () => {
+        const { orderId, productId } = await paidOrderHolding(OrderStatus.processing);
+        await withTransaction((session) =>
+            shipStock(orderId, [{ productId, quantity: 1 }], session)
+        );
 
-        const moved = await forceMove(
+        await overrideStatus(
             orderId,
-            'shipped',
-            'skipping the processing step',
+            OrderStatus.shipped,
+            'the rest left too',
             callerContextAs('admin', 'admin-1')
         );
 
-        expect(moved).toMatchObject({ status: OrderStatus.shipped });
         expect(await countersOf(productId)).toEqual({ onHand: 7, reserved: 0, available: 7 });
+        expect(await shipRows(productId)).toBe(2);
     });
 });

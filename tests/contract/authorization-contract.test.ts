@@ -26,7 +26,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { everyMountedRoute, type MountedRoute } from '@tests/contract-routes';
-import { holdsKey } from '@kernel/ability';
+import { heldKeys, holdsKey } from '@kernel/ability';
 import { callerAs } from '@tests/callers';
 
 setupTestDb();
@@ -128,7 +128,12 @@ describe('every guarded route agrees with the role file, for every non-admin rol
                 // The same question `requirePermissionGuard` asks of the caller it resolves — a
                 // tenant-scope role never holds a `platform.` key, so a platform route's answer is
                 // "false" for every one of these, and the loop asserts 403 across the board.
-                const allowed = holdsKey(callerAs(role), route.permissionKey);
+                const caller = callerAs(role);
+                // An exact guard (a wide read whose narrow sibling shares its action and subject)
+                // asks for the literal key, as `heldKeys` does.
+                const allowed =
+                    holdsKey(caller, route.permissionKey) &&
+                    (route.exactPermission !== true || heldKeys(caller).has(route.permissionKey));
                 const { bearer } = await authenticateAsRole(role);
                 const response = await request(
                     route.method as HttpMethod,

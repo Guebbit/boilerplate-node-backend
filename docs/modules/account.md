@@ -106,6 +106,12 @@ flowchart LR
     class V,G,SU,CH done;
 ```
 
+**A signup writes the account and its starting role in one transaction.** Self-service signup grants
+`unverified` and an OAuth signup `customer` (the provider vouches for the address). The row and the
+membership commit together or not at all, so a failed grant leaves no row holding the email, and
+there is no compensating delete that could itself fail. Same shape as an admin create, see
+[`users`](./users.md#creating-and-updating-with-a-role).
+
 ::: tip Both entries owe the second factor
 The OAuth callback checks `twoFactorEnabledAt` like the password login does and issues the same
 challenge — see [OAuth](./account-oauth.md#two-consequences-worth-naming).
@@ -155,7 +161,29 @@ flowchart TB
     class O,W,V,V2,S,X done;
 ```
 
-Three things in that diagram are decisions rather than mechanics:
+The flow has four states, read from `pendingEmail` and `previousEmail`, never stored. Which event
+applies in which state is one table, `domain/email-change.ts`; an event that does not apply is a
+no-op, not an error.
+
+```mermaid
+stateDiagram-v2
+    [*] --> idle
+    idle --> pending: request
+    pending --> pending: request, resend
+    pending --> changed: confirm
+    pending --> idle: cancel, undo
+    changed --> changedPending: request
+    changed --> idle: undo, lapse
+    changedPending --> changedPending: request, resend
+    changedPending --> changed: confirm, cancel, undo
+    changedPending --> pending: lapse
+```
+
+`lapse` is the end of the undo window: the nightly `reap:expired-tokens` job clears `previousEmail`
+on an account with no live undo link. See
+[the retention page](../theory/data-retention.md#the-previous-email-after-a-change).
+
+Three things in the flow above are decisions rather than mechanics:
 
 - **The notice goes to the old address when the change is _requested_, not when it completes.** A
   warning that arrives before a takeover is a warning; one that arrives after is a receipt. It

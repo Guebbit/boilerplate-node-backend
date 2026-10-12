@@ -29,10 +29,12 @@ describe('order routes — what is mounted', () => {
         expect(routeSignatures(router)).toEqual([
             'POST /search',
             'GET /',
+            'GET /export',
             'POST /',
             'DELETE /',
             'POST /:id/cancel',
             'POST /:id/status-override',
+            'GET /:id/timeline',
             'GET /:id',
             'PUT /:id',
             'PATCH /:id',
@@ -48,16 +50,24 @@ describe('order routes — what is mounted', () => {
         // `/search` genuinely shadows: one segment, same verb family.
         expect(paths.indexOf('/search')).toBeLessThan(paths.indexOf('/:id'));
     });
+
+    it('declares /export before /:id, or `requireId` answers 404 for the word `export`', () => {
+        const paths = routeTable(router).map(({ path }) => path);
+
+        expect(paths.indexOf('/export')).toBeLessThan(paths.indexOf('/:id'));
+    });
 });
 
 describe('order routes — authorization', () => {
     it.each([
         'POST /search',
         'GET /',
+        'GET /export',
         'POST /',
         'DELETE /',
         'POST /:id/cancel',
         'POST /:id/status-override',
+        'GET /:id/timeline',
         'GET /:id',
         'PUT /:id',
         'PATCH /:id',
@@ -69,12 +79,17 @@ describe('order routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it.each(['POST /', 'DELETE /', 'PUT /:id', 'PATCH /:id', 'DELETE /:id', 'DELETE /:id/hard'])(
-        '%s is admin-only',
-        (signature) => {
-            expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
-        }
-    );
+    it.each([
+        'GET /export',
+        'POST /',
+        'DELETE /',
+        'PUT /:id',
+        'PATCH /:id',
+        'DELETE /:id',
+        'DELETE /:id/hard'
+    ])('%s is admin-only', (signature) => {
+        expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
+    });
 
     it('gates the override door behind its own permission, not the ordinary write one', () => {
         // A distinct key (`orders.any.override`), so `orders.any.update` alone never reaches this

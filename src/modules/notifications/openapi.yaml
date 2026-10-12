@@ -178,6 +178,80 @@ components:
                             titles:
                                 $ref: '#/components/schemas/ProductTitles'
 
+        PreorderDelayedParams:
+            type: object
+            additionalProperties: false
+            required: [orderId, fulfillmentOrderId, titles, agreedAt]
+            description: >-
+                What the buyer needs to read a late-preorder notice: which order and fulfillment order,
+                what is waiting, the date they were promised, the date now expected (absent when there
+                is none) and, for `notifications.preorder-confirm-wait`, by when silence cancels.
+            properties:
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                fulfillmentOrderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                titles:
+                    type: array
+                    description: The waiting products' titles, as the order froze them.
+                    items:
+                        type: string
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+                answerBy:
+                    type: string
+                    format: date-time
+
+        NotificationPreorderDelayed:
+            type: object
+            additionalProperties: false
+            description: A preorder the caller paid for will arrive later than promised; cancelling is open and silence keeps waiting.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.preorder-delayed]
+                params:
+                    $ref: '#/components/schemas/PreorderDelayedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
+        NotificationPreorderConfirmWait:
+            type: object
+            additionalProperties: false
+            description: A preorder the caller paid for is late and the shop needs an answer — keep waiting, or cancel; silence until `answerBy` cancels and refunds.
+            required: [id, code, params, severity, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                code:
+                    type: string
+                    enum: [notifications.preorder-confirm-wait]
+                params:
+                    $ref: '#/components/schemas/PreorderDelayedParams'
+                severity:
+                    $ref: '#/components/schemas/NotificationSeverity'
+                readAt:
+                    type: string
+                    format: date-time
+                    description: When the owner opened the bell past it; absent while unread. The badge counts the ones without it.
+                createdAt:
+                    type: string
+                    format: date-time
+
         NotificationCartLineRemoved:
             type: object
             additionalProperties: false
@@ -252,12 +326,16 @@ components:
                 - $ref: '#/components/schemas/NotificationCartLineRemoved'
                 - $ref: '#/components/schemas/NotificationWishlistItemRemoved'
                 - $ref: '#/components/schemas/NotificationCartMergeRefused'
+                - $ref: '#/components/schemas/NotificationPreorderDelayed'
+                - $ref: '#/components/schemas/NotificationPreorderConfirmWait'
             discriminator:
                 propertyName: code
                 mapping:
                     notifications.cart-line-removed: '#/components/schemas/NotificationCartLineRemoved'
                     notifications.wishlist-item-removed: '#/components/schemas/NotificationWishlistItemRemoved'
                     notifications.cart-merge-refused: '#/components/schemas/NotificationCartMergeRefused'
+                    notifications.preorder-delayed: '#/components/schemas/NotificationPreorderDelayed'
+                    notifications.preorder-confirm-wait: '#/components/schemas/NotificationPreorderConfirmWait'
 
         NotificationsResponse:
             type: object

@@ -19,8 +19,9 @@ import { usersAuditActions } from '@modules/users/audit';
 import * as auditPort from '@infrastructure/observability/audit';
 import * as analyticsPort from '@infrastructure/observability/analytics';
 import { usersAnalyticsEvents } from '../../analytics';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { assignRole, membershipsOf, rolesOf } from '@modules/access';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
+import { assignRole, eraseMemberships, membershipsOf, rolesOf } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { presentUser } from '../../presenter';
@@ -391,10 +392,9 @@ describe('userService.create', () => {
         expect(roles.tenant).toBe('customer');
     });
 
-    it('deletes the orphan row when the requested role is an escalation the caller cannot grant', async () => {
-        // `moderator` can create accounts but cannot grant `admin` — before the fix this wrote
-        // the user row, THEN refused the grant, leaving a document with no membership at all and
-        // the email permanently unusable for a retry.
+    it('creates no row when the requested role is an escalation the caller cannot grant', async () => {
+        // `moderator` can create accounts but cannot grant `admin`: the grant is refused before the
+        // user row is written, so no row holds the email without a membership.
         await expect(
             userService.create(
                 {
@@ -407,6 +407,7 @@ describe('userService.create', () => {
         ).rejects.toThrow();
 
         expect(await userRepository.findOne({ email: 'never-created@example.com' })).toBeNull();
+        expect(await outboxEventModel.countDocuments({ name: USER_SETUP_REQUESTED })).toBe(0);
     });
 
     describe('the owner chooses the password', () => {
@@ -444,18 +445,54 @@ describe('userService.create', () => {
             expect(one?.password).not.toBe(two?.password);
         });
 
-        it('emits USER_SETUP_REQUESTED for this user, always', async () => {
+        it('commits USER_SETUP_REQUESTED with the user, keyed on the new account', async () => {
+            const user = await expectCreated(
+                { email: 'setup-me@example.com', username: 'setupmeuser' },
+                callerContextAs('admin')
+            );
+
+            const rows = await outboxEventModel.find({ name: USER_SETUP_REQUESTED }).lean().exec();
+            expect(rows).toHaveLength(1);
+            expect(rows[0]).toMatchObject({
+                aggregateId: String(user._id),
+                payload: { userId: String(user._id) }
+            });
+        });
+
+        it('delivers USER_SETUP_REQUESTED to its listener after the commit', async () => {
+            // The relay only dispatches in a process where modules have subscribed.
+            markDomainEventsWired();
             const seen: string[] = [];
             onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
                 seen.push(userId);
             });
 
             const user = await expectCreated(
-                { email: 'setup-me@example.com', username: 'setupmeuser' },
+                { email: 'deliver-me@example.com', username: 'delivermeuser' },
                 callerContextAs('admin')
             );
+            await settleOutboxNudges();
 
             expect(seen).toEqual([String(user._id)]);
+        });
+
+        it('keeps the row pending when the listener throws, and the relay retry delivers it', async () => {
+            markDomainEventsWired();
+            const listener = jest.fn().mockRejectedValueOnce(new Error('mailer blip'));
+            onDomainEvent(USER_SETUP_REQUESTED, listener);
+
+            await expectCreated(
+                { email: 'retry-me@example.com', username: 'retrymeuser' },
+                callerContextAs('admin')
+            );
+            await settleOutboxNudges();
+            expect(await outboxEventModel.find({}).lean().exec()).toMatchObject([
+                { status: 'pending', attempts: 1 }
+            ]);
+
+            await outboxEventModel.updateMany({}, { $set: { nextAttemptAt: new Date(0) } }).exec();
+            expect(await relayOutbox()).toMatchObject({ published: 1 });
+            expect(listener).toHaveBeenCalledTimes(2);
         });
     });
 });
@@ -851,20 +888,31 @@ describe('userService.removeById', () => {
         expect(await userRepository.findById(id)).toBeNull();
     });
 
-    it('erases a platform membership too, not only the tenant one', async () => {
-        const user = await createUser();
-        const id = user._id.toString();
-        // A second platform operator, so the platform row below is not itself the last one
-        // administering the installation — this test is about the erasure gap, not that invariant.
-        await assignRole('another-operator', null, 'platform', 'operator');
-        // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
-        // behind if the platform row is not swept too, surviving the user it points at.
-        await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
-        await assignRole(id, null, 'platform', 'operator');
+    describe('erasing roles', () => {
+        const bootErasers = personalDataErasers();
 
-        await userService.removeById(id, true);
+        afterEach(() => {
+            setPersonalDataErasers(bootErasers);
+        });
 
-        expect(await membershipsOf(id)).toEqual([]);
+        it('erases a platform membership too, not only the tenant one', async () => {
+            const user = await createUser();
+            const id = user._id.toString();
+            // A second platform operator, so the platform row below is not itself the last one
+            // administering the installation — this test is about the erasure gap, not that invariant.
+            await assignRole('another-operator', null, 'platform', 'operator');
+            // A tenant seat AND a platform seat — the erasure gap a single tenant-scoped revoke leaves
+            // behind if the platform row is not swept too, surviving the user it points at.
+            await assignRole(id, DEPLOYMENT_TENANT_ID, 'tenant', 'customer');
+            await assignRole(id, null, 'platform', 'operator');
+            // This suite builds no app, so the erase hooks a deployment registers are not there:
+            // install `access`'s own, the one under test.
+            setPersonalDataErasers([eraseMemberships]);
+
+            await userService.removeById(id, true);
+
+            expect(await membershipsOf(id)).toEqual([]);
+        });
     });
 
     it('returns a 404 rejection when the user does not exist', async () => {

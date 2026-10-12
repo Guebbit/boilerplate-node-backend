@@ -32,10 +32,11 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
-import { statusesLeadingTo } from '../domain';
+import { ORDER_EVENTS, statusesLeadingTo, type OrderActor } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './read';
+import { withTimeline } from './timeline';
 import { mailBuyer } from './notify';
 import { cancelScope, actorOf, outrankedOrderRefusal } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
@@ -70,6 +71,8 @@ const giveBackStock = async (orderId: string, session: ClientSession): Promise<v
  * @param scope - the caller's ownership scope, riding in the same filter as the write
  * @param effects - the consequences to write down with the status
  * @param refund - whether the cancel owes the customer their money, carried on the announcement
+ * @param by - who cancelled, for the timeline row: the lifecycle's own actor kind
+ * @param actorId - the account that cancelled, when a person did
  * @returns the cancelled order, or `null` when the conditional move matched nothing
  */
 const moveToCancelled = (
@@ -77,18 +80,24 @@ const moveToCancelled = (
     from: readonly string[],
     scope: Record<string, unknown> | undefined,
     effects: readonly OrderPendingEffect[] | undefined,
-    refund: boolean
+    refund: boolean,
+    by: OrderActor,
+    actorId: string | undefined
 ): Promise<OrderDocument | null> =>
     announceInTransaction(
         async (session) => {
-            const order = await orderRepository.updateStatusIfIn(
-                id,
-                from,
-                OrderStatus.cancelled,
-                scope,
-                effects,
-                session
-            );
+            const order = await withTimeline(
+                (active) =>
+                    orderRepository.updateStatusIfIn(
+                        id,
+                        from,
+                        OrderStatus.cancelled,
+                        scope,
+                        effects,
+                        active
+                    ),
+                () => [{ type: 'cancelled', actor: actorId, data: { by } }]
+            )(session);
             if (order) await giveBackStock(id, session);
             return order;
         },
@@ -240,7 +249,10 @@ export const cancelById = (
             moveToCancelled(
                 id,
                 statusesLeadingTo(OrderStatus.cancelled, actor),
-                scope,
+                // Part of the WRITE's filter, not a preceding read: a shipment racing this cancel
+                // writes `fulfillment.shipped` in its own transaction, and exactly one of the two
+                // matches. Goods that left cannot be cancelled whole.
+                { ...scope, 'fulfillment.shipped': { $ne: true } },
                 /*
                  * The intent to refund is written WITH the cancel, in one document write, because
                  * the announcement below is not durable — `@kernel/events` has no retry, so a
@@ -248,7 +260,10 @@ export const cancelById = (
                  * finds afterwards.
                  */
                 refund ? PENDING_REFUND : undefined,
-                refund
+                refund,
+                actor,
+                // A system cancel (the reservation sweep) has no account behind it.
+                actor === 'system' ? undefined : authContext?.id
             ).then((order) =>
                 order
                     ? afterCancel(
@@ -341,3 +356,29 @@ export const retryPendingEffects = async (): Promise<number> => {
 
     return settled;
 };
+
+/**
+ * Cancel an order whose preorder buyer was asked to keep waiting and never answered: silence is a
+ * cancel, and a cancel refunds in full (FTC 16 CFR 435.2 (b)(1)(iii), CRD Art. 18). Called by
+ * `returns`, which reacts to `delivery`'s record of the silence, and only for an order with nothing
+ * shipped — goods that left are cancelled one fulfillment order at a time instead.
+ *
+ * Its own door rather than `cancelById` as the system: that one is the reservation sweep's, and must
+ * never reach a paid order. The `from` set is the named event's own. The buyer is told, since a
+ * refund is the one thing they cannot see for themselves.
+ *
+ * @param orderId - the order to cancel
+ * @returns whether this call cancelled it; `false` when it moved on (paid out, shipped, cancelled)
+ */
+export const cancelUnanswered = (orderId: string): Promise<boolean> =>
+    moveToCancelled(
+        orderId,
+        ORDER_EVENTS.cancelUnanswered.from,
+        { 'fulfillment.shipped': { $ne: true } },
+        PENDING_REFUND,
+        true,
+        'fulfilment',
+        undefined
+    ).then((order) =>
+        order ? afterCancel(order, true, undefined, false, true).then(() => true) : false
+    );

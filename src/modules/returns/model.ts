@@ -15,7 +15,7 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
 import type { ReturnPostagePayer } from '@modules/orders';
-import { ReturnReason, ReturnStatus } from '@types';
+import { ReturnKind, ReturnReason, ReturnStatus } from '@types';
 
 /** One line of a return — a snapshot of what is coming back, so it reads the same later. */
 export interface ReturnLine {
@@ -38,6 +38,10 @@ export interface ReturnDocument extends Document {
     currency: string;
     status: ReturnStatus;
     reason: ReturnReason;
+    /** `return` — goods that left coming back; `cancellation` — an unshipped remainder, cancelled. */
+    kind: ReturnKind;
+    /** The fulfillment order whose remainder a `cancellation` cancelled. Absent on a `return`. */
+    fulfillmentOrderId?: Types.ObjectId;
     /** What the customer wrote. Free text — never trusted, never rendered as HTML. */
     note?: string;
     lines: ReturnLine[];
@@ -56,6 +60,12 @@ export interface ReturnDocument extends Document {
     handlingDeduction?: number;
     /** What the customer is owed for this return, decided when the goods were received. */
     refundAmount?: number;
+    /**
+     * The delivery inside {@link refundAmount}: non-zero on the one return or cancellation that took
+     * the last unit of the order. Internal — what keeps shipping from being refunded twice. Never on
+     * the wire (see `applyReturnTransform`).
+     */
+    shippingRefund?: number;
     /** When the money went back and the return was finished. */
     closedAt?: Date;
     createdAt?: Date;
@@ -92,6 +102,13 @@ export const returnSchema = new Schema<ReturnDocument>(
             enum: Object.values(ReturnReason),
             required: true
         },
+        kind: {
+            type: String,
+            enum: Object.values(ReturnKind),
+            required: true,
+            default: ReturnKind.return
+        },
+        fulfillmentOrderId: { type: Schema.Types.ObjectId },
         note: { type: String, maxlength: 1000 },
         lines: { type: [returnLineSchema], required: true },
         returnPostage: { type: String, enum: [...RETURN_POSTAGE_PAYERS], required: true },
@@ -100,6 +117,7 @@ export const returnSchema = new Schema<ReturnDocument>(
         receivedAt: { type: Date },
         handlingDeduction: { type: Number, min: 0 },
         refundAmount: { type: Number, min: 0 },
+        shippingRefund: { type: Number, min: 0 },
         closedAt: { type: Date }
     },
     { timestamps: true }
@@ -112,11 +130,17 @@ returnSchema.index({ orderId: 1, createdAt: 1 }, { name: 'returns_orderId_create
 // Backs the staff queue: a status filter, oldest waiting first.
 returnSchema.index({ status: 1, createdAt: 1 }, { name: 'returns_status_createdAt' });
 
+// The stats count returned units by the day the goods were received.
+returnSchema.index({ status: 1, receivedAt: 1 }, { name: 'returns_status_receivedAt' });
+
 /**
  * Normalizes a serialized return: `_id` → `id`, drops `__v`. Owed to the repository factory's lean
  * reads.
  */
-export const applyReturnTransform = applySerialization(returnSchema);
+export const applyReturnTransform = applySerialization(returnSchema, {
+    // Bookkeeping that keeps delivery from being refunded twice — not part of the `Return` contract.
+    omit: ['shippingRefund']
+});
 
 /** The compiled return model, registered as `Return`. */
 export const returnModel = model<ReturnDocument, ReturnModel>('Return', returnSchema);

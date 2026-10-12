@@ -43,6 +43,179 @@ paths:
                                 $ref: '#/components/schemas/PaymentMethodsResponseEnvelope'
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /payments:
+        get:
+            tags: [Payments]
+            summary: List payments (staff)
+            description: >-
+                Every payment in the shop, newest first, for the staff Payments page. Needs
+                `payments.any.read`; the payer reads their own through `GET /payments/order/{orderId}`.
+                `displayStatus` filters by the label the page shows, and the server maps each label to
+                the stored fields behind it. Each row carries its order's `orderNumber` and `email`,
+                composed from `orders`. The provider references (`providerRef`, each refund's
+                `providerRefundRef`) and a failed refund's `failureReason` are sent here and nowhere
+                a payer reads.
+            operationId: listPayments
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: sort
+                  in: query
+                  required: false
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/PaymentSort'
+                - name: displayStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/PaymentDisplayStatus'
+                - name: method
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/PaymentMethodKind'
+                - name: provider
+                  in: query
+                  schema:
+                      type: string
+                      maxLength: 64
+                - name: createdFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: createdTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: receivedFrom
+                  in: query
+                  description: Offline payments only — when the money arrived.
+                  schema: { type: string, format: date-time }
+                - name: receivedTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: amountMin
+                  in: query
+                  schema: { type: number, format: double, minimum: 0 }
+                - name: amountMax
+                  in: query
+                  schema: { type: number, format: double, minimum: 0 }
+                - name: orderId
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - name: reference
+                  in: query
+                  schema: { type: string, maxLength: 120 }
+            responses:
+                '200':
+                    description: Payments page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/search:
+        post:
+            tags: [Payments]
+            summary: Search payments (staff, DTO-friendly)
+            description: Same as `GET /payments`, with the filters in a JSON body.
+            operationId: searchPayments
+            x-alias-of: listPayments
+            security:
+                - bearerAuth: []
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/SearchPaymentsRequest'
+            responses:
+                '200':
+                    description: Payments search results
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/refunds:
+        get:
+            tags: [Payments]
+            summary: List refunds (staff)
+            description: >-
+                One row per refund across every payment, newest first, for the Refunds tab. Read
+                only: a refund is opened and settled through `POST /payments/order/{orderId}/refund`
+                and the cancel path. Needs `payments.any.read`.
+            operationId: listRefunds
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: status
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/RefundStatus'
+                - name: reason
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/RefundReason'
+                - name: orderId
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - name: createdFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: createdTo
+                  in: query
+                  schema: { type: string, format: date-time }
+            responses:
+                '200':
+                    description: Refunds page
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/RefundsResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /payments/attention:
+        get:
+            tags: [Payments]
+            summary: Payments that need a person (staff)
+            description: >-
+                Only problems still recorded on a document, so a fixed one disappears: refunds
+                open past `NODE_PAYMENT_ATTENTION_MINUTES`, refunds owed by hand on a `manual`
+                payment (the sweep never finishes those, so they show at any age), payments
+                whose stock commit is still owed, and orders whose refund is still owed after a
+                cancel. Oldest first, each source capped at 100 rows. An amount mismatch is not
+                here: it is an audit row (`payment.amount_mismatch`), not stored state. Needs
+                `payments.any.read`.
+            operationId: listPaymentAttention
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The rows
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentAttentionResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /payments/intent:
         post:
             tags: [Payments]
@@ -438,7 +611,7 @@ components:
         Payment:
             type: object
             additionalProperties: false
-            required: [id, orderId, amount, currency, status, provider, method, amountRefunded, refunds]
+            required: [id, orderId, amount, currency, status, displayStatus, provider, method, amountRefunded, refunds]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -485,6 +658,22 @@ components:
                         webhook. `declined` is retryable: the confirm endpoint accepts the same
                         payment again with another method. Full transition
                         table: docs/modules/payments.md#status-transitions
+                displayStatus:
+                    $ref: '#/components/schemas/PaymentDisplayStatus'
+                # Staff only (`payments.any.read`): the handle that finds the payment at the provider.
+                providerRef:
+                    type: string
+                    description: >-
+                        The provider's own id for the payment intent (Stripe's `pi_…`). Sent only to
+                        a caller holding `payments.any.read`, so support can look the payment up at
+                        the provider; never to the payer. Absent on a `manual` payment.
+                # Only on the staff lists, composed from `orders`.
+                orderNumber:
+                    type: string
+                    description: The order's number. Present on `GET /payments` rows only.
+                email:
+                    type: string
+                    description: The order's customer email. Present on `GET /payments` rows only.
                 provider:
                     type: string
                     description: >-
@@ -546,8 +735,9 @@ components:
             required: [id, amount, currency, status, reason, createdAt]
             description: >-
                 One attempt to give money back — a record per attempt, not a field on the payment.
-                The provider's own refund id, the idempotency key and the provider's error wording
-                are stored but never published.
+                The idempotency key is stored but never published. The provider's refund id and a
+                failed refund's `failureReason` go to staff only (`payments.any.read`); the
+                provider's own error wording stays in the logs.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -560,8 +750,8 @@ components:
                     type: string
                     description: ISO-4217 currency code, copied from the payment.
                 status:
-                    type: string
-                    enum: [pending, succeeded, failed]
+                    allOf:
+                        - $ref: '#/components/schemas/RefundStatus'
                     description: >-
                         `pending` while the provider is being asked; `failed` when it refused — a
                         sweep retries the same refund with the same idempotency key; `succeeded`
@@ -569,22 +759,224 @@ components:
                         back by the operator).
                 reason:
                     $ref: '#/components/schemas/RefundReason'
-                # The return this refund pays for — present when `reason` is `return`.
+                # The return this refund pays for — present when `reason` is `return`, or `cancellation` of a remainder.
                 returnId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 settledAt:
                     type: string
                     format: date-time
                     description: When the refund succeeded. Absent while it has not.
+                providerRefundRef:
+                    type: string
+                    description: The provider's id for the refund (Stripe's `re_…`). Staff only.
+                failureReason:
+                    $ref: '#/components/schemas/RefundFailureReason'
                 createdAt:
                     type: string
                     format: date-time
+
+        # Stripe's `failure_reason` shape: a closed list, so the page can translate it.
+        RefundFailureReason:
+            type: string
+            enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_unavailable, unknown]
+            description: >-
+                Why the provider last refused a refund, as a closed code. Staff only
+                (`payments.any.read`). `unknown` is anything the provider's adapter did not
+                classify; the raw wording stays in the logs.
+
+        RefundStatus:
+            type: string
+            enum: [pending, succeeded, failed]
+
+        PaymentMethodKind:
+            type: string
+            enum: [card, bank_transfer, cash, other]
+
+        PaymentDisplayStatus:
+            type: string
+            enum: [incomplete, pending, succeeded, refund_pending, partially_refunded, refunded, failed]
+            description: >-
+                The label a payment shows, derived from the stored status and its refund records
+                (Shopify's `displayFinancialStatus`). `incomplete` — awaiting confirmation or
+                action; `pending` — processing; `succeeded` — paid, no refund record;
+                `refund_pending` — any refund still pending or failed (wins over the next two);
+                `partially_refunded` — paid with at least one settled refund; `refunded` — fully
+                returned; `failed` — declined.
+
+        PaymentSort:
+            type: array
+            minItems: 1
+            maxItems: 2
+            items:
+                type: string
+                enum: [createdAt, -createdAt, amount, -amount]
+
+        SearchPaymentsRequest:
+            type: object
+            additionalProperties: false
+            properties:
+                page:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Page'
+                pageSize:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PageSize'
+                sort:
+                    $ref: '#/components/schemas/PaymentSort'
+                displayStatus:
+                    $ref: '#/components/schemas/PaymentDisplayStatus'
+                method:
+                    $ref: '#/components/schemas/PaymentMethodKind'
+                provider:
+                    type: string
+                    maxLength: 64
+                createdFrom: { type: string, format: date-time }
+                createdTo: { type: string, format: date-time }
+                receivedFrom: { type: string, format: date-time }
+                receivedTo: { type: string, format: date-time }
+                amountMin: { type: number, format: double, minimum: 0 }
+                amountMax: { type: number, format: double, minimum: 0 }
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                reference: { type: string, maxLength: 120 }
+
+        PaymentsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Payment'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        PaymentsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PaymentsResponse'
+
+        # One row per refund, with the payment it belongs to.
+        RefundListItem:
+            type: object
+            additionalProperties: false
+            required: [id, paymentId, orderId, amount, currency, status, reason, createdAt]
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                paymentId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount: { type: number, format: double, minimum: 0 }
+                currency: { type: string }
+                status:
+                    $ref: '#/components/schemas/RefundStatus'
+                reason:
+                    $ref: '#/components/schemas/RefundReason'
+                returnId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                providerRefundRef: { type: string }
+                failureReason:
+                    $ref: '#/components/schemas/RefundFailureReason'
+                settledAt: { type: string, format: date-time }
+                createdAt: { type: string, format: date-time }
+
+        RefundsResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/RefundListItem'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        RefundsResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/RefundsResponse'
+
+        PaymentAttentionKind:
+            type: string
+            enum: [stale_refund, manual_refund_owed, payment_effect_pending, order_refund_owed]
+            description: >-
+                `stale_refund` — a provider refund open past the threshold;
+                `manual_refund_owed` — money to hand back outside the system on a `manual` payment;
+                `payment_effect_pending` — the stock commit of a succeeded payment is still owed;
+                `order_refund_owed` — an order cancelled after payment whose refund has not happened.
+
+        PaymentAttentionItem:
+            type: object
+            additionalProperties: false
+            required: [kind, orderId, since]
+            properties:
+                kind:
+                    $ref: '#/components/schemas/PaymentAttentionKind'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                paymentId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                refundId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                amount: { type: number, format: double, minimum: 0 }
+                currency: { type: string }
+                failureReason:
+                    $ref: '#/components/schemas/RefundFailureReason'
+                since:
+                    type: string
+                    format: date-time
+                    description: When the problem was recorded, so the page can sort by age.
+
+        PaymentAttentionResponse:
+            type: object
+            additionalProperties: false
+            required: [items]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PaymentAttentionItem'
+
+        PaymentAttentionResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PaymentAttentionResponse'
 
         RefundReason:
             type: string
             enum: [cancellation, goodwill, return]
             description: >-
-                Why the money went back. `cancellation` — the order was cancelled after payment;
+                Why the money went back. `cancellation` — the order was cancelled after payment, or the
+                unshipped remainder of one fulfillment order was (then `returnId` names that cancellation);
                 `return` — goods came back and were received; `goodwill` — an operator chose to.
 
         RefundPaymentRequest:

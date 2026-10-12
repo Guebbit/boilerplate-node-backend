@@ -226,8 +226,8 @@ paths:
             description: |
                 Replaces the product identified by `{id}` in the path (RFC 9110 §9.3.4) — every
                 writable scalar field is required, since none of them but `taxClass`/`rateType`/
-                `sku`/`weight` has a legal "cleared" state, and an omitted one of those four is
-                cleared, not left alone. The image is outside the representation: it is set by an
+                `sku`/`weight`/`releaseDate` has a legal "cleared" state, and an omitted one of
+                those five is cleared, not left alone. The image is outside the representation: it is set by an
                 upload, cleared by an explicit `imageUrl: null`, and kept when a PUT never mentions
                 it — a client cannot send the current path back. `translations` is the whole set as well: it must
                 name the fallback locale, and every stored locale it leaves out is deleted. To
@@ -623,6 +623,16 @@ components:
                 # product, checkout refused. Ignored while `active` is false (hidden wins).
                 purchasable:
                     type: boolean
+                releaseDate:
+                    $ref: '#/components/schemas/ReleaseDate'
+                # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
+                # itself when the date passes, so nothing has to run on the release day.
+                preorder:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        The product is on sale before its release date: buyers can order it now and it
+                        ships from `releaseDate`.
                 requiresShipping:
                     type: boolean
                     default: true
@@ -860,6 +870,8 @@ components:
                 purchasable:
                     type: boolean
                     default: true
+                releaseDate:
+                    $ref: '#/components/schemas/ReleaseDate'
                 # Default true: most products are physical. false is a digital good — checkout
                 # never needs a shipping method for a cart made entirely of these.
                 requiresShipping:
@@ -936,6 +948,10 @@ components:
                 purchasable:
                     type: boolean
                     default: true
+                releaseDate:
+                    type: string
+                    allOf:
+                        - $ref: '#/components/schemas/ReleaseDate'
                 requiresShipping:
                     type: boolean
                     default: true
@@ -967,8 +983,8 @@ components:
                         minLength: 1
 
         # PUT /products/{id} — RFC 9110 §9.3.4: every scalar field the resource has is required,
-        # since none of them but taxClass/rateType/sku/weight has a legal "cleared" state; those
-        # four stay optional-nullable, same as PATCH. `imageUrl` is outside the representation: an
+        # since none of them but taxClass/rateType/sku/weight/releaseDate has a legal "cleared" state;
+        # those five stay optional-nullable, same as PATCH. `imageUrl` is outside the representation: an
         # omission keeps the image. `translations` is the whole set: a
         # stored locale it leaves out is deleted, and the fallback locale is required.
         ReplaceProductRequest:
@@ -1003,6 +1019,11 @@ components:
                     type: boolean
                 purchasable:
                     type: boolean
+                # `null` clears the date, and so does omitting it — a PUT states the whole product.
+                releaseDate:
+                    oneOf:
+                        - $ref: '#/components/schemas/ReleaseDate'
+                        - type: 'null'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1059,6 +1080,10 @@ components:
                     type: boolean
                 purchasable:
                     type: boolean
+                releaseDate:
+                    type: string
+                    allOf:
+                        - $ref: '#/components/schemas/ReleaseDate'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1120,6 +1145,12 @@ components:
                     type: boolean
                 purchasable:
                     type: boolean
+                # `null` clears the date: the product is no longer a preorder. Omitted leaves the
+                # stored value alone.
+                releaseDate:
+                    oneOf:
+                        - $ref: '#/components/schemas/ReleaseDate'
+                        - type: 'null'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1181,6 +1212,10 @@ components:
                     type: boolean
                 purchasable:
                     type: boolean
+                releaseDate:
+                    type: string
+                    allOf:
+                        - $ref: '#/components/schemas/ReleaseDate'
                 requiresShipping:
                     type: boolean
                 # Art. 16(c)-(d) CRD: goods made to order or clearly personalised, and perishable ones, carry no
@@ -1259,6 +1294,15 @@ components:
             description: >-
                 WHY a product's resolved VAT rate is 0%, when it is — `TaxClass: zero` alone
                 cannot say. Meaningless when the resolved rate isn't 0%.
+
+        ReleaseDate:
+            type: string
+            format: date-time
+            description: >-
+                When a product ships from, as an ISO 8601 date-time with a zone. A product with a
+                future date that is active and purchasable is a preorder. At most one year ahead
+                (Google's `availability_date` rule); a date in the past is accepted and simply means
+                "released". Moving it later notifies the buyers who already paid (`delivery`).
 
         # SH4: a stock-keeping unit, deliberately just a string — this deployment's own numbering
         # scheme, unvalidated beyond "not empty". Product VARIANTS (one SKU per size/colour) are
@@ -1361,6 +1405,16 @@ components:
                 purchasable:
                     type: boolean
                     default: true
+                releaseDate:
+                    $ref: '#/components/schemas/ReleaseDate'
+                # Derived, never stored: `active && purchasable && releaseDate > now`. Turns false by
+                # itself when the date passes, so nothing has to run on the release day.
+                preorder:
+                    type: boolean
+                    readOnly: true
+                    description: >-
+                        The product is on sale before its release date: buyers can order it now and it
+                        ships from `releaseDate`.
                 # Default true: most products are physical. false is a digital good — checkout
                 # never needs a shipping method for a cart made entirely of these.
                 requiresShipping:

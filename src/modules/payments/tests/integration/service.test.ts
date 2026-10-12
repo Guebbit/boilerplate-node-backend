@@ -420,6 +420,8 @@ describe('refund on cancel', () => {
         const cancelSpy = jest.spyOn(fakePaymentProvider, 'cancel');
 
         await userService.remove(user, true);
+        // The cancel's listeners run off the outbox relay, after the erasure returns.
+        await settleOutboxNudges();
 
         expect(cancelSpy).toHaveBeenCalledWith(providerRef, expect.anything());
         expect(await countersOf(line.product._id)).toMatchObject({ reserved: 0 });
@@ -475,6 +477,9 @@ describe('refund on cancel', () => {
                 .spyOn(fakePaymentProvider, 'confirm')
                 .mockImplementationOnce(async (providerRef, methodRef) => {
                     await orderService.cancelById(String(order._id), auth(user));
+                    // The cancel's own listeners finish before the charge lands: the other order
+                    // (charge first, then the listener) is the cancel path's reconciliation.
+                    await settleOutboxNudges();
                     return originalConfirm(providerRef, methodRef);
                 });
 

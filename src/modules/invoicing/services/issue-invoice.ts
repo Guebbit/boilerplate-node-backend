@@ -13,7 +13,13 @@
 import { Types } from 'mongoose';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { orderTaxBreakdown, orderTotal, shopIdentity, billingAddressOf } from '@modules/orders';
+import {
+    orderService,
+    orderTaxBreakdown,
+    orderTotal,
+    shopIdentity,
+    billingAddressOf
+} from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 import { encryptInvoiceParty } from '../pii';
@@ -87,45 +93,67 @@ export const issueInvoice = (order: OrderDocument): Promise<InvoiceDocument | un
 
     // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
     const _id = new Types.ObjectId();
+    // One instant for the number's year and the stored date; fixed here so a retry keeps it.
+    const issuedAt = new Date();
     // The order stores its address under ITS id; the invoice re-encrypts it under its own.
     const billingAddress = billingAddressOf(order);
 
     return withTransaction((session) =>
-        allocateInvoiceNumber(session).then((number) =>
-            invoicingRepository.insertInvoice(
-                {
-                    _id,
-                    orderId: order._id,
-                    number,
-                    issuedAt: new Date(),
-                    currency,
-                    locale: order.items[0].locale,
-                    orderNumber: order.orderNumber,
-                    ...(billingAddress
-                        ? { billingAddress: encryptInvoiceParty(billingAddress, 'invoice', _id) }
-                        : {}),
-                    seller: frozenSeller(),
-                    lines: frozenLines(order),
-                    ...(order.shippingCost === undefined
-                        ? {}
-                        : { shippingCost: order.shippingCost }),
-                    netTotal: breakdown.netTotal,
-                    taxTotal: breakdown.taxTotal,
-                    shippingNetAmount: breakdown.shippingNetAmount,
-                    shippingTaxAmount: breakdown.shippingTaxAmount,
-                    taxSummary: breakdown.taxSummary,
-                    shippingByRate: breakdown.shippingByRate,
-                    // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
-                    // both quote — never a hand-composed sum, so this can never drift from what the order
-                    // itself says it charged.
-                    grandTotal: orderTotal({
-                        items: order.items,
-                        shippingCost: order.shippingCost,
-                        currency
-                    })
-                },
-                session
-            )
+        allocateInvoiceNumber(issuedAt, session).then((number) =>
+            invoicingRepository
+                .insertInvoice(
+                    {
+                        _id,
+                        orderId: order._id,
+                        number,
+                        issuedAt,
+                        currency,
+                        locale: order.items[0].locale,
+                        orderNumber: order.orderNumber,
+                        ...(billingAddress
+                            ? {
+                                  billingAddress: encryptInvoiceParty(
+                                      billingAddress,
+                                      'invoice',
+                                      _id
+                                  )
+                              }
+                            : {}),
+                        seller: frozenSeller(),
+                        lines: frozenLines(order),
+                        ...(order.shippingCost === undefined
+                            ? {}
+                            : { shippingCost: order.shippingCost }),
+                        netTotal: breakdown.netTotal,
+                        taxTotal: breakdown.taxTotal,
+                        shippingNetAmount: breakdown.shippingNetAmount,
+                        shippingTaxAmount: breakdown.shippingTaxAmount,
+                        taxSummary: breakdown.taxSummary,
+                        shippingByRate: breakdown.shippingByRate,
+                        // The exact function `orders/model.ts#applyOrderTotals` and the placed-order email
+                        // both quote — never a hand-composed sum, so this can never drift from what the order
+                        // itself says it charged.
+                        grandTotal: orderTotal({
+                            items: order.items,
+                            shippingCost: order.shippingCost,
+                            currency
+                        })
+                    },
+                    session
+                )
+                // The order's timeline row commits with the invoice; the race's loser aborts both.
+                .then((invoice) =>
+                    orderService
+                        .appendTimeline(
+                            String(order._id),
+                            {
+                                type: 'invoice_issued',
+                                data: { invoiceId: String(_id), number: invoice.number }
+                            },
+                            session
+                        )
+                        .then(() => invoice)
+                )
         )
     ).catch(readWinner(String(order._id)));
 };

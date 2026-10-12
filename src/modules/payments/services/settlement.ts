@@ -229,11 +229,14 @@ const settleMismatch = (
  * @param state - what the provider reported
  * @param newAttempt - `true` when the caller is itself a fresh attempt at paying (a confirm), so
  *   a decline of an already-declined payment is a new decline and not a repeat report of one
+ * @param actor - the staff member who recorded the money by hand, for the order's timeline; absent
+ *   when a provider reported it
  */
 export const settlePayment = (
     payment: PaymentDocument,
     state: ProviderPaymentState,
-    newAttempt = false
+    newAttempt = false,
+    actor?: string | null
 ): Promise<Settlement> => {
     const orderId = String(payment.orderId);
     const extra = state.cardLast4 ? { cardLast4: state.cardLast4 } : {};
@@ -294,81 +297,83 @@ export const settlePayment = (
     // A card settling the order is how it was paid, whatever checkout chose: the order page shows
     // its payment method beside "Paid, card ending …", and the two must agree.
     const paidBy = payment.method === 'card' ? 'card' : undefined;
-    return orderService.markPaid(orderId, paidBy).then(async () => {
-        // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
-        // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
-        // find if this call dies before either branch below clears it.
-        const succeeded = await paymentRepository.updateStatusIfIn(
-            orderId,
-            SETTLEABLE_PAYMENT_STATUSES,
-            'succeeded',
-            { ...extra, pendingEffects: ['commit'] }
-        );
-
-        // Neither write moved anything: an earlier call already settled this payment (both
-        // writes are terminal-once-applied), or this delivery lost every race there was —
-        // either way, whoever won already did (or is doing) the rest, or there is nothing to
-        // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
-        // The answer is the payment as the winner left it, never the pre-read this call holds:
-        // that copy still says `requires_confirmation`.
-        if (!succeeded)
-            return paymentRepository.findByOrderId(orderId).then((current) => ({
-                payment: current ?? payment,
-                orderLost: false,
-                transitioned: false
-            }));
-
-        // The order's CURRENT status, read after the payment write — never what `markPaid`
-        // answered, which is a copy from before it. Between the two writes the customer may
-        // cancel the order from `paid`, and that cancel's refund found nothing `succeeded` to
-        // return yet: trusting the copy would keep the money for a cancelled order. The read
-        // also covers `markPaid` answering null — another settlement raced this order to `paid`
-        // (nothing lost), or it was already cancelled.
-        const orderNow = await orderService.getById(orderId);
-        const orderIsPaid = orderNow?.status === OrderStatus.paid;
-
-        if (!orderIsPaid) {
-            // The money moved but the order was gone (cancelled, or a racing tab won). Put it
-            // straight back — the invariant is the module docblock's rule 2.
-            const refunded = await refundLostPayment(orderId);
-            return { payment: refunded ?? succeeded, orderLost: true, transitioned: true };
-        }
-
-        /*
-         * The units finally leave — held since checkout, recoverable until now.
-         *
-         * Reached at most once per order: `succeeded` above is itself an at-most-once write
-         * (terminal once applied), and this is the only call whose `succeeded` write can ever
-         * be truthy — `markPaid`'s own race does not gate this: a redelivered event
-         * can legitimately lose it while still being the one true settlement. The result is not
-         * checked: `false` covers both a harmless replay (the hold is already `committed`) and
-         * a hold an expiry sweep beat the payment to — the customer has a paid order either
-         * way, and `inventory` tells the two apart and alarms only the second.
-         */
-        await inventoryService.commitForOrder(orderId);
-
-        // The commit landed (or was already a harmless replay) — the effect this marker tracked
-        // is done, so the marker goes and `payment.succeeded` is written to the outbox in the
-        // same transaction. If this call dies before it, the marker stays and the sweep
-        // (`./effects.ts`) finishes both; if it dies after, the relay publishes the row. The
-        // `webhooks` fan-out and every other listener run from the relay, never from here.
-        await announcePaymentSucceeded(String(succeeded._id), orderId);
-
-        // The customer's answer to "did my card go through" — `orderConfirmEmail` at checkout
-        // only ever said the order was received, never that it was paid. Fire-and-forget, same
-        // reasoning as the domain event just above: a slow mail send must not hold up this
-        // settlement's own caller.
-        void mailBuyer(orderNow, (locale, name) => {
-            const mail = paymentSucceededEmail(locale, name, orderNow, orderId);
-            void enqueueEmail(
-                { to: orderNow.email, subject: mail.subject },
-                mail.template,
-                mail.data
+    return orderService
+        .markPaid(orderId, paidBy, { actor, method: payment.method })
+        .then(async () => {
+            // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
+            // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
+            // find if this call dies before either branch below clears it.
+            const succeeded = await paymentRepository.updateStatusIfIn(
+                orderId,
+                SETTLEABLE_PAYMENT_STATUSES,
+                'succeeded',
+                { ...extra, pendingEffects: ['commit'] }
             );
-        });
 
-        return { payment: succeeded, orderLost: false, transitioned: true };
-    });
+            // Neither write moved anything: an earlier call already settled this payment (both
+            // writes are terminal-once-applied), or this delivery lost every race there was —
+            // either way, whoever won already did (or is doing) the rest, or there is nothing to
+            // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
+            // The answer is the payment as the winner left it, never the pre-read this call holds:
+            // that copy still says `requires_confirmation`.
+            if (!succeeded)
+                return paymentRepository.findByOrderId(orderId).then((current) => ({
+                    payment: current ?? payment,
+                    orderLost: false,
+                    transitioned: false
+                }));
+
+            // The order's CURRENT status, read after the payment write — never what `markPaid`
+            // answered, which is a copy from before it. Between the two writes the customer may
+            // cancel the order from `paid`, and that cancel's refund found nothing `succeeded` to
+            // return yet: trusting the copy would keep the money for a cancelled order. The read
+            // also covers `markPaid` answering null — another settlement raced this order to `paid`
+            // (nothing lost), or it was already cancelled.
+            const orderNow = await orderService.getById(orderId);
+            const orderIsPaid = orderNow?.status === OrderStatus.paid;
+
+            if (!orderIsPaid) {
+                // The money moved but the order was gone (cancelled, or a racing tab won). Put it
+                // straight back — the invariant is the module docblock's rule 2.
+                const refunded = await refundLostPayment(orderId);
+                return { payment: refunded ?? succeeded, orderLost: true, transitioned: true };
+            }
+
+            /*
+             * The units finally leave — held since checkout, recoverable until now.
+             *
+             * Reached at most once per order: `succeeded` above is itself an at-most-once write
+             * (terminal once applied), and this is the only call whose `succeeded` write can ever
+             * be truthy — `markPaid`'s own race does not gate this: a redelivered event
+             * can legitimately lose it while still being the one true settlement. The result is not
+             * checked: `false` covers both a harmless replay (the hold is already `committed`) and
+             * a hold an expiry sweep beat the payment to — the customer has a paid order either
+             * way, and `inventory` tells the two apart and alarms only the second.
+             */
+            await inventoryService.commitForOrder(orderId);
+
+            // The commit landed (or was already a harmless replay) — the effect this marker tracked
+            // is done, so the marker goes and `payment.succeeded` is written to the outbox in the
+            // same transaction. If this call dies before it, the marker stays and the sweep
+            // (`./effects.ts`) finishes both; if it dies after, the relay publishes the row. The
+            // `webhooks` fan-out and every other listener run from the relay, never from here.
+            await announcePaymentSucceeded(String(succeeded._id), orderId);
+
+            // The customer's answer to "did my card go through" — `orderConfirmEmail` at checkout
+            // only ever said the order was received, never that it was paid. Fire-and-forget, same
+            // reasoning as the domain event just above: a slow mail send must not hold up this
+            // settlement's own caller.
+            void mailBuyer(orderNow, (locale, name) => {
+                const mail = paymentSucceededEmail(locale, name, orderNow, orderId);
+                void enqueueEmail(
+                    { to: orderNow.email, subject: mail.subject },
+                    mail.template,
+                    mail.data
+                );
+            });
+
+            return { payment: succeeded, orderLost: false, transitioned: true };
+        });
 };
 
 /**
@@ -678,15 +683,32 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
     });
 
 /**
+ * Ask the provider what became of a payment and settle the answer — the step the webhook, the
+ * reconciliation sweep and the cancel path's catch all share, so they cannot drift apart.
+ *
+ * A payment already past `SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
+ * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
+ *
+ * @param payment - the payment to reconcile; it must hold a `providerRef`
+ * @returns what the settlement did, or `null` when the payment was already settled and the
+ *   provider was not asked
+ */
+export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement | null> => {
+    if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status) || !payment.providerRef)
+        return Promise.resolve(null);
+
+    return providerNamed(payment.provider)
+        .retrieve(payment.providerRef)
+        .then((state) => settlePayment(payment, state));
+};
+
+/**
  * Settle one payment from what the PROVIDER says about it now: find the payment the intent names,
  * ask the provider that payment was made with (`retrieve`), settle the answer.
  *
  * Separate from {@link applyWebhookDelivery} because the tests that pin the SETTLEMENT should not
- * have to mint an event id to reach it, and because the reconciliation job that will eventually
- * sweep unsettled intents has no delivery.
- *
- * A payment already past `SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
- * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
+ * have to mint an event id to reach it, and because the reconciliation sweep
+ * (`./effects.ts#reconcileStalePayments`) has no delivery either.
  *
  * Unattended, so outcomes are logged rather than audited — the same rule the cancel listener and
  * the token-cleanup job follow.
@@ -705,19 +727,15 @@ export const applyWebhookSettlement = (providerRef: string): Promise<void> =>
             return;
         }
 
-        if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status)) return;
-
-        return providerNamed(payment.provider)
-            .retrieve(providerRef)
-            .then((state) => settlePayment(payment, state))
-            .then(({ payment: settled, orderLost }) => {
-                // Stryker disable all
-                logger.info({
-                    message: 'Payment webhook applied.',
-                    providerRef,
-                    status: settled.status,
-                    orderLost
-                });
-                // Stryker restore all
+        return settleFromProvider(payment).then((settlement) => {
+            if (!settlement) return;
+            // Stryker disable all
+            logger.info({
+                message: 'Payment webhook applied.',
+                providerRef,
+                status: settlement.payment.status,
+                orderLost: settlement.orderLost
             });
+            // Stryker restore all
+        });
     });

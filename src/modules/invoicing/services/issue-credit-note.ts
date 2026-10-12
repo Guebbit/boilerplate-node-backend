@@ -11,7 +11,7 @@
 import { Types } from 'mongoose';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { orderTotal } from '@modules/orders';
+import { orderService, orderTotal } from '@modules/orders';
 import { translator } from '@infrastructure/i18n';
 import { invoicingRepository } from '../repository';
 import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
@@ -124,40 +124,60 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
 
         // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
         const _id = new Types.ObjectId();
+        // One instant for the number's year and the stored date; fixed here so a retry keeps it.
+        const issuedAt = new Date();
 
         return withTransaction((session) =>
-            allocateCreditNoteNumber(session).then((number) =>
-                invoicingRepository.insertCreditNote(
-                    {
-                        _id,
-                        orderId: invoice.orderId,
-                        invoiceId: invoice._id,
-                        invoiceNumber: invoice.number,
-                        refundId: input.refundId,
-                        number,
-                        issuedAt: new Date(),
-                        currency: invoice.currency,
-                        locale: invoice.locale,
-                        orderNumber: invoice.orderNumber,
-                        // Decrypted under the invoice's id, re-encrypted under the note's own.
-                        ...(invoice.billingAddress
-                            ? {
-                                  billingAddress: encryptInvoiceParty(
-                                      decryptInvoiceParty(
-                                          invoice.billingAddress,
-                                          'invoice',
-                                          invoice._id
-                                      ),
-                                      'credit-note',
-                                      _id
-                                  )
-                              }
-                            : {}),
-                        seller: invoice.seller,
-                        ...reversedFigures(invoice, input)
-                    },
-                    session
-                )
+            allocateCreditNoteNumber(issuedAt, session).then((number) =>
+                invoicingRepository
+                    .insertCreditNote(
+                        {
+                            _id,
+                            orderId: invoice.orderId,
+                            invoiceId: invoice._id,
+                            invoiceNumber: invoice.number,
+                            refundId: input.refundId,
+                            number,
+                            issuedAt,
+                            currency: invoice.currency,
+                            locale: invoice.locale,
+                            orderNumber: invoice.orderNumber,
+                            // Decrypted under the invoice's id, re-encrypted under the note's own.
+                            ...(invoice.billingAddress
+                                ? {
+                                      billingAddress: encryptInvoiceParty(
+                                          decryptInvoiceParty(
+                                              invoice.billingAddress,
+                                              'invoice',
+                                              invoice._id
+                                          ),
+                                          'credit-note',
+                                          _id
+                                      )
+                                  }
+                                : {}),
+                            seller: invoice.seller,
+                            ...reversedFigures(invoice, input)
+                        },
+                        session
+                    )
+                    // The order's timeline row commits with the credit note; the race's loser aborts both.
+                    .then((note) =>
+                        orderService
+                            .appendTimeline(
+                                String(invoice.orderId),
+                                {
+                                    type: 'credit_note_issued',
+                                    data: {
+                                        creditNoteId: String(_id),
+                                        number: note.number,
+                                        refundId: input.refundId
+                                    }
+                                },
+                                session
+                            )
+                            .then(() => note)
+                    )
             )
         ).catch(readWinner(input.refundId));
     });

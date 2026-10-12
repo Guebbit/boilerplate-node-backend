@@ -226,3 +226,94 @@ describe('POST /inventory/reservations/sweep', () => {
         expect(response.body.data).toEqual({ expired: 0 });
     });
 });
+
+describe('GET /inventory/preorders', () => {
+    it('matches the contract for a product with an allowance', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({
+            onHand: 0,
+            releaseDate: new Date(Date.now() + 86_400_000).toISOString()
+        });
+        await api()
+            .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+            .set('Authorization', bearer)
+            .send({ preorderLimit: 6 });
+
+        const response = await api().get('/inventory/preorders').set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toMatchObject([
+            {
+                productId: String(product._id),
+                preorderLimit: 6,
+                preordered: 0,
+                held: 0,
+                paid: 0,
+                left: 6,
+                ordered: 0
+            }
+        ]);
+        expect(response.body.data.meta).toMatchObject({ totalItems: 1 });
+    });
+
+    it("is a stock reader's, not a shopper's", async () => {
+        const { bearer } = await authenticateAs('user');
+
+        const response = await api().get('/inventory/preorders').set('Authorization', bearer);
+
+        expect(response.status).toBe(403);
+    });
+});
+
+describe('PUT /inventory/levels/:productId/preorder-limit', () => {
+    it('matches the contract and answers the level with its new allowance', async () => {
+        const { bearer } = await authenticateAs('admin');
+        const product = await createProduct({ onHand: 3 });
+
+        const response = await api()
+            .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+            .set('Authorization', bearer)
+            .send({ preorderLimit: 8 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({ onHand: 3, preorderLimit: 8, preordered: 0 });
+    });
+
+    it('matches the error contract for an unknown product', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .put(`/inventory/levels/${MISSING_ID}/preorder-limit`)
+            .set('Authorization', bearer)
+            .send({ preorderLimit: 8 });
+
+        expect(response.status).toBe(404);
+    });
+
+    it.each([{ preorderLimit: -1 }, { preorderLimit: 1.5 }, {}])(
+        'matches the error contract for the body %j',
+        async (body) => {
+            const { bearer } = await authenticateAs('admin');
+            const product = await createProduct();
+
+            const response = await api()
+                .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+                .set('Authorization', bearer)
+                .send(body);
+
+            expect(response.status).toBe(422);
+        }
+    );
+
+    it('is refused to a caller without the warehouse key', async () => {
+        const { bearer } = await authenticateAs('user');
+        const product = await createProduct();
+
+        const response = await api()
+            .put(`/inventory/levels/${String(product._id)}/preorder-limit`)
+            .set('Authorization', bearer)
+            .send({ preorderLimit: 8 });
+
+        expect(response.status).toBe(403);
+    });
+});
