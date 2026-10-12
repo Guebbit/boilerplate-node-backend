@@ -532,14 +532,29 @@ with no revocation — a real limit, chosen rather than stumbled into, and asser
 
 ## Libraries
 
-`jsonwebtoken` and `bowser` are `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md)
-for where it sits among everything else this repo depends on.
+`jose` and `bowser` are `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md)
+for where they sit among everything else this repo depends on.
 
-| Library                  | Maintained    | What it costs you                                                                       |
-| ------------------------ | ------------- | --------------------------------------------------------------------------------------- |
-| `jsonwebtoken` (chosen)  | active, typed | the one signing algorithm this app actually uses (`HS256`), a small, well-worn surface  |
-| `bowser` (device label)  | active, typed | one small dependency-free parser; `ua-parser-js` 2.x is AGPL, `detect-browser` is stale |
-| hand-rolled HMAC signing | —             | exactly the kind of crypto `CLAUDE.md` rules out writing by hand                        |
+| Library                  | Maintained    | What it costs you                                                                                |
+| ------------------------ | ------------- | ------------------------------------------------------------------------------------------------ |
+| `jose` (chosen)          | active, typed | ESM-only, which Jest has to be told to transform; no `oct` key set, so the `kid` ring stays ours |
+| `jsonwebtoken`           | maintained    | callback API, hand-checked `typ`, and a header read before verify just to find the key           |
+| `bowser` (device label)  | active, typed | one small dependency-free parser; `ua-parser-js` 2.x is AGPL, `detect-browser` is stale          |
+| hand-rolled HMAC signing | —             | exactly the kind of crypto `CLAUDE.md` rules out writing by hand                                 |
+
+### What `jose` replaced, and what is still ours
+
+| Concern                                             | Who owns it                                                                      |
+| --------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Compact encoding, HMAC, constant-time compare       | `jose`                                                                           |
+| Algorithm allow-list (`HS256` only)                 | `jose`, through `algorithms`                                                     |
+| `typ` header check, after the signature             | `jose`, through `typ` (was hand-written)                                         |
+| Reading the `kid` before verifying                  | `jose`, which hands it to the key lookup (was a separate `decode`)               |
+| Expiry, and refusing a token with none              | `jose`, through `requiredClaims: ['exp']`                                        |
+| Which ring member a `kid` names, and key rotation   | ours, `key-ring.ts`: a JWKS holds no shared secrets, so there is nothing to load |
+| The shape of our own claims (`id`, `auth_time`)     | ours, `carriesTokenClaims`: a signature proves the author, not the shape         |
+| The session row, rotation, reuse and the grace      | ours: a JWT is stateless, and the revocation rules are the point                 |
+| The epoch, the mint guard and the step-up freshness | ours: policy, not cryptography                                                   |
 
 ## Related pages
 

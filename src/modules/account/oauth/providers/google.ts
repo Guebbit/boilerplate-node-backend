@@ -4,7 +4,7 @@
  * the identity, so this reads that instead of a second `userinfo` round trip.
  */
 
-import { decode } from 'jsonwebtoken';
+import { decodeJwt } from 'jose';
 import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
 import type { OAuthIdentity, OAuthProvider } from './port';
 import { readCappedJson, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
@@ -106,10 +106,10 @@ export const googleOAuthProvider: OAuthProvider = {
             .then(({ id_token: idToken }): OAuthIdentity => {
                 if (!idToken) throw new Error('Google token exchange: no id_token in response');
 
-                // `jsonwebtoken`: decode-only, no `verify()` — see `assertValidClaims`'s doc for why.
-                // https://github.com/auth0/node-jsonwebtoken#jwtdecodetoken--options
-                const claims = decode(idToken, { json: true }) as GoogleIdTokenClaims | null;
-                if (!claims) throw new Error('Google token exchange: malformed id_token');
+                // jose: decode-only, no `jwtVerify()` — see `assertValidClaims`'s doc for why.
+                // https://github.com/panva/jose/blob/main/docs/util/functions/decodeJwt.md
+                // `decodeJwt` throws on anything that is not a JWT with a JSON payload.
+                const claims = decodeJwt(idToken) as GoogleIdTokenClaims;
                 assertValidClaims(claims);
 
                 return {

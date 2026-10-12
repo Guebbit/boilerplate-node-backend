@@ -70,7 +70,7 @@ describe('getExpiryTime', () => {
 
     it('falls back for an empty variable rather than returning NaN', () => {
         // `Number.parseInt('')` is NaN, which would flow into `expiresIn` and produce a token
-        // jsonwebtoken rejects. An unusable value resolves to the tier default, same as an absent one.
+        // jose rejects. An unusable value resolves to the tier default, same as an absent one.
         setEnvironment({ NODE_SESSION_TIME_SHORT: '' });
 
         expect(getExpiryTime()).toBe(604_800);

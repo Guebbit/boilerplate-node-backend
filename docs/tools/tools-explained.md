@@ -27,7 +27,7 @@ flowchart TD
         HELMET["helmet"]
         CORS["cors"]
         RATE["express-rate-limit"]
-        JWT["jsonwebtoken · argon2id"]
+        JWT["jose · argon2id"]
         ZOD["Zod"]
         MULTER["multer"]
     end
@@ -130,7 +130,7 @@ prevent.
 
 ---
 
-### JWT (jsonwebtoken) and password hashing (argon2id)
+### JWT (jose) and password hashing (argon2id)
 
 **What it is.** JSON Web Tokens (JWT) are signed, compact tokens that carry claims (user ID, role, expiry) without a server-side session store. argon2id (from `node:crypto`) is a password hashing algorithm designed to be slow and memory-hungry — which makes brute-force attacks expensive.
 

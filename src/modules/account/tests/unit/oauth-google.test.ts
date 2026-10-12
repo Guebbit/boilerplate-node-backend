@@ -6,7 +6,6 @@
  */
 
 import { isOAuthProviderConfigured } from '../../oauth/config';
-import { sign } from 'jsonwebtoken';
 import { googleOAuthProvider } from '../../oauth/providers/google';
 import { setEnvironment } from '@tests/environment';
 
@@ -18,7 +17,13 @@ const REDIRECT_URI = 'https://api.test/account/oauth/google/callback';
 
 /** A decodable-but-unverified ID token, shaped like Google's — `exchangeCode` never checks the signature. */
 const idToken = (claims: Record<string, unknown>): string =>
-    sign(claims, 'irrelevant-signing-key', { algorithm: 'HS256', noTimestamp: true });
+    [{ alg: 'HS256', typ: 'JWT' }, claims, 'unchecked-signature']
+        .map((part) =>
+            typeof part === 'string'
+                ? part
+                : Buffer.from(JSON.stringify(part)).toString('base64url')
+        )
+        .join('.');
 
 beforeEach(() => {
     setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_ID: CLIENT_ID });

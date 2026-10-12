@@ -7,7 +7,7 @@
 | [Helmet](https://helmetjs.github.io/)                                                                | safe default HTTP headers                    |
 | [cors](https://github.com/expressjs/cors#readme)                                                     | origin allowlist and browser access control  |
 | [express-rate-limit](https://express-rate-limit.mintlify.app/)                                       | basic abuse protection at the edge           |
-| [jsonwebtoken](https://github.com/auth0/node-jsonwebtoken#readme)                                    | access and refresh token flows               |
+| [jose](https://github.com/panva/jose#readme)                                                         | access and refresh token flows               |
 | [cookie-parser](https://github.com/expressjs/cookie-parser#readme)                                   | cookie access in Express                     |
 | [node:crypto argon2id](https://nodejs.org/api/crypto.html#cryptoargon2algorithm-parameters-callback) | password hashing (Node 24.7+, no dependency) |
 

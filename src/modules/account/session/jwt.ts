@@ -1,6 +1,6 @@
 /**
  * @module
- * JWT creation and verification. Secrets and TTLs come from `./config`, which owns the policy.
+ * JWT creation and verification, on `jose`. Secrets and TTLs come from `./config`, which owns the policy.
  * This was app-level middleware until the domains became modules — issuing and verifying this
  * application's tokens is what `account` IS, and it reaches `users` for the stored refresh
  * tokens, exactly the dependency the manifest already declares. See
@@ -9,11 +9,13 @@
 
 import { randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
-import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
+import { SignJWT, jwtVerify, errors as joseErrors } from 'jose';
+import type { JWTHeaderParameters, JWTPayload } from 'jose';
 import type { ResolveMissReason } from '@kernel/authentication';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
 import { sessionRepository } from '../repository';
+import type { SessionRow } from '../repository';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
@@ -105,63 +107,86 @@ export class TokenRejection extends Error {
 }
 
 /**
- * Classify what jsonwebtoken refused a token for. Only a bad signature is `invalid_signature`;
- * every other structural failure reads as `malformed`.
+ * Classify what jose refused a token for. A bad signature is `invalid_signature`, a lapsed `exp`
+ * is `expired`, a `typ` of the wrong kind or any other structural failure is `malformed`. A
+ * rejection the key lookup already raised passes through, and anything that is not a jose error
+ * (an outage, a bug) stays a plain rejection.
+ * https://github.com/panva/jose/blob/main/docs/jwt/verify/functions/jwtVerify.md
+ *
+ * @param error - what `jwtVerify` or the key lookup rejected with
+ * @throws {TokenRejection} for every refusal the caller can act on
  */
-const reasonOf = (error: Error): ResolveMissReason => {
-    if (error instanceof TokenExpiredError) return 'expired';
-    return error.message === 'invalid signature' ? 'invalid_signature' : 'malformed';
+const rejectionOf = (error: unknown): never => {
+    if (error instanceof TokenRejection) throw error;
+    if (error instanceof joseErrors.JWTExpired) throw new TokenRejection('expired', error.message);
+    if (error instanceof joseErrors.JWSSignatureVerificationFailed)
+        throw new TokenRejection('invalid_signature', error.message);
+    if (error instanceof joseErrors.JWTClaimValidationFailed && error.claim === 'typ')
+        throw new TokenRejection('malformed', 'Wrong token type');
+    if (error instanceof joseErrors.JOSEError) throw new TokenRejection('malformed', error.message);
+    throw error;
 };
 
 /**
- * Verify a token against whichever ring member its `kid` header names, HS256 pinned throughout,
- * and its `typ` header pinned to `kind`.
- * A `kid` naming no current ring member — a key this deployment has already retired, or a token
- * that never carried one — rejects before jsonwebtoken ever sees it: that is exactly "log in
- * again", not a signature-mismatch error to report differently.
+ * Whether a verified payload carries the claims this app signs into every token. A signature
+ * proves who wrote it, not its shape, so the shape is checked before anything reads it.
+ *
+ * @param payload - what jose verified, typed only as the open `JWTPayload`
+ */
+const carriesTokenClaims = (
+    payload: JWTPayload
+): payload is JWTPayload & TokenData & { exp: number } =>
+    typeof payload.id === 'string' &&
+    typeof payload.auth_time === 'number' &&
+    Array.isArray(payload.amr) &&
+    typeof payload.exp === 'number';
+
+/**
+ * The key lookup `jwtVerify` calls once it has parsed the header: the ring member the `kid` names.
+ * A `kid` naming no current member (a retired key, a forged one, or none at all) is refused here,
+ * which is "log in again", not a signature mismatch to report differently. A string that is not a
+ * JWT never reaches this: jose has already refused it as malformed.
+ *
+ * @param ring - the ordered signing ring, newest first
+ * @returns the lookup, resolving to the HMAC key bytes
+ */
+const ringKeyLookup =
+    (ring: readonly string[]) =>
+    ({ kid }: JWTHeaderParameters): Uint8Array => {
+        const secret = keyForId(ring, kid);
+        if (secret === undefined)
+            throw new TokenRejection('invalid_signature', 'Unknown signing key');
+        return new TextEncoder().encode(secret);
+    };
+
+/**
+ * Verify a token against whichever ring member its `kid` header names, HS256 pinned and the
+ * `typ` header pinned to `kind`, with an `exp` required.
+ *
+ * jose: `algorithms` is the allow-list that closes algorithm confusion (`none`, an asymmetric
+ * algorithm under a symmetric key); `typ` is checked after the signature, as RFC 8725 §3.11 asks;
+ * `requiredClaims` refuses a token that never expires.
+ * https://github.com/panva/jose/blob/main/docs/jwt/verify/interfaces/JWTVerifyOptions.md
  *
  * @param token - signed JWT string
  * @param ring - the ordered signing ring, newest first
  * @param kind - which kind of token this verifier accepts
  * @returns decoded payload
+ * @throws {TokenRejection} when the token is expired, forged, of the wrong kind or not a JWT
  */
 const verifyAgainstRing = (
     token: string,
     ring: readonly string[],
     kind: TokenKind
 ): Promise<TokenData & { exp: number }> =>
-    new Promise((resolve, reject) => {
-        // jsonwebtoken: `decode` reads the header without checking the signature, which is all a
-        // `kid` lookup needs. It returns `null` for a string that isn't shaped like a JWT at all,
-        // rather than throwing.
-        const decoded = decode(token, { complete: true });
-        const secret = keyForId(ring, decoded?.header.kid);
-        if (secret === undefined) {
-            // Not a JWT at all is `malformed`; a JWT naming no live ring member is a forged or retired key.
-            reject(
-                new TokenRejection(
-                    decoded ? 'invalid_signature' : 'malformed',
-                    'Unknown signing key'
-                )
-            );
-            return;
-        }
-        // `algorithms: ['HS256']` pins the accepted algorithm: without it a token whose header
-        // claims `alg: none` or an asymmetric algorithm can pass verification under some library
-        // configurations (the classic JWT "algorithm confusion" attack). `complete: true` returns
-        // the header beside the payload, so `typ` can be checked after the signature is.
-        verify(token, secret, { algorithms: ['HS256'], complete: true }, (error, data) => {
-            if (error) {
-                reject(new TokenRejection(reasonOf(error), error.message));
-                return;
-            }
-            if (data?.header.typ !== TOKEN_TYPE_HEADER[kind]) {
-                reject(new TokenRejection('malformed', 'Wrong token type'));
-                return;
-            }
-            resolve(data.payload as TokenData & { exp: number });
-        });
-    });
+    jwtVerify(token, ringKeyLookup(ring), {
+        algorithms: ['HS256'],
+        typ: TOKEN_TYPE_HEADER[kind],
+        requiredClaims: ['exp']
+    }).then(({ payload }) => {
+        if (!carriesTokenClaims(payload)) throw new TokenRejection('malformed', 'Wrong claims');
+        return payload;
+    }, rejectionOf);
 
 /**
  * Verify an access token (stateless JWT check only).
@@ -197,33 +222,48 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
         })
     );
 
-/** Sign an access-token payload with the ring's current key, stamping `kid` so a verifier can find it again. */
-const signAccessToken = (claims: TokenData): string => {
-    const key = getAccessTokenRing()[0];
-    return sign(claims, key, {
-        expiresIn: getAccessExpiryTime(),
-        algorithm: 'HS256',
-        keyid: keyId(key),
-        header: { alg: 'HS256', typ: TOKEN_TYPE_HEADER.access }
-    });
+/**
+ * Sign a payload with a ring's current key, stamping `kid` so a verifier can find it again.
+ *
+ * jose: `SignJWT` builds and HMACs the compact token; `setExpirationTime` takes an absolute epoch
+ * second (a bare number is never relative); `setJti` is the random id that makes two tokens
+ * minted in the same second different.
+ * https://github.com/panva/jose/blob/main/docs/jwt/sign/classes/SignJWT.md
+ *
+ * @param claims - the payload
+ * @param ring - the signing ring, newest first; its first member signs
+ * @param kind - which kind of token this is, which picks the `typ` header
+ * @param lifetimeSeconds - how long the token lives
+ * @param jti - a token id, when the kind needs one
+ */
+const signToken = (
+    claims: TokenData,
+    ring: readonly string[],
+    kind: TokenKind,
+    lifetimeSeconds: number,
+    jti?: string
+): Promise<string> => {
+    const [secret] = ring;
+    const now = Math.floor(Date.now() / 1000);
+    const token = new SignJWT({ ...claims } satisfies JWTPayload)
+        .setProtectedHeader({ alg: 'HS256', typ: TOKEN_TYPE_HEADER[kind], kid: keyId(secret) })
+        .setIssuedAt(now)
+        .setExpirationTime(now + lifetimeSeconds);
+    return (jti ? token.setJti(jti) : token).sign(new TextEncoder().encode(secret));
 };
 
+/** Sign an access-token payload with the access ring's current key. */
+const signAccessToken = (claims: TokenData): Promise<string> =>
+    signToken(claims, getAccessTokenRing(), 'access', getAccessExpiryTime());
+
 /**
- * Sign a refresh-token payload with the ring's current key.
+ * Sign a refresh-token payload with the refresh ring's current key.
  *
- * `jwtid` is what makes two refresh tokens minted in the same second different — see
+ * The random `jti` is what makes two refresh tokens minted in the same second different — see
  * `createRefreshToken`'s note on why that matters.
  */
-const signRefreshToken = (claims: TokenData, expiresInSeconds: number): string => {
-    const key = getRefreshTokenRing()[0];
-    return sign(claims, key, {
-        expiresIn: expiresInSeconds,
-        algorithm: 'HS256',
-        keyid: keyId(key),
-        header: { alg: 'HS256', typ: TOKEN_TYPE_HEADER.refresh },
-        jwtid: randomUUID()
-    });
-};
+const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<string> =>
+    signToken(claims, getRefreshTokenRing(), 'refresh', expiresInSeconds, randomUUID());
 
 /**
  * Create a refresh token, sign it, and store its session row.
@@ -251,17 +291,17 @@ export const createRefreshToken = (
         if (!user) throw new Error('User not found');
         assertSecondFactor(user, amr, mint);
         /*
-         * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
+         * Signed through `signRefreshToken`, whose `jti` is what makes two refresh tokens
          * minted in the same second different. The payload is `{ id }` plus JWT's own
          * `iat`/`exp`, both at one-second resolution — so signing twice within a second for
          * one user produced byte-identical tokens. Two devices signing in together then
          * shared one credential stored as two identical rows, and revoking either revoked
          * both: logging out a phone silently logged out the laptop signed in alongside it. A
          * random `jti` gives every token its own identity — the digest is looked up as
-         * though it addressed one session, because it does; `verify` carries `jti` through
-         * without checking it.
+         * though it addressed one session, because it does; verification carries `jti`
+         * through without checking it.
          */
-        const token = signRefreshToken(
+        return signRefreshToken(
             {
                 id,
                 // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
@@ -270,20 +310,21 @@ export const createRefreshToken = (
                 ...(remember && { remember })
             },
             getExpiryTime(remember)
-        );
-        const now = new Date();
-        return sessionRepository
-            .insert({
-                userId: new Types.ObjectId(id),
-                // A first row starts a session family; a rotation's successor copies it.
-                familyId: new Types.ObjectId(),
-                mode: 'jwt',
-                tokenHash: hashToken(token),
-                startedAt: now,
-                expiresAt: new Date(now.getTime() + getExpiryTimeMilliseconds(remember))
-            })
-            .then(() => recordActivity(id))
-            .then(() => token);
+        ).then((token) => {
+            const now = new Date();
+            return sessionRepository
+                .insert({
+                    userId: new Types.ObjectId(id),
+                    // A first row starts a session family; a rotation's successor copies it.
+                    familyId: new Types.ObjectId(),
+                    mode: 'jwt',
+                    tokenHash: hashToken(token),
+                    startedAt: now,
+                    expiresAt: new Date(now.getTime() + getExpiryTimeMilliseconds(remember))
+                })
+                .then(() => recordActivity(id))
+                .then(() => token);
+        });
     });
 
 /**
@@ -327,6 +368,43 @@ const revokeAllRefreshTokens = (userId: string): Promise<void> =>
         .then(() => undefined);
 
 /**
+ * Store a rotation's successor row and answer the new pair. The successor continues the session:
+ * same family id, so the id the owner sees (and revokes by) does not change with the token, and
+ * the same sign-in time, so "signed in on" names the session and not the token.
+ *
+ * @param previous - the row being rotated away
+ * @param newRefreshToken - the signed successor
+ * @param claims - the claims carried forward
+ * @param remainingMs - what is left of the session's absolute lifetime
+ */
+const storeSuccessor = (
+    previous: SessionRow,
+    newRefreshToken: string,
+    claims: TokenData,
+    remainingMs: number
+): Promise<RotatedSession> => {
+    const now = new Date();
+    return sessionRepository
+        .insert({
+            userId: previous.userId,
+            familyId: previous.familyId,
+            startedAt: previous.startedAt,
+            mode: 'jwt',
+            tokenHash: hashToken(newRefreshToken),
+            lastUsedAt: now,
+            expiresAt: new Date(now.getTime() + remainingMs)
+        })
+        .then(() => recordActivity(claims.id))
+        .then(() => signAccessToken(claims))
+        .then((accessToken) => ({
+            accessToken,
+            refreshToken: newRefreshToken,
+            // Only a persistent login keeps a persistent cookie.
+            refreshMaxAgeMs: claims.remember ? remainingMs : undefined
+        }));
+};
+
+/**
  * Sign and store the winning half of a rotation: a new refresh token carrying the SAME absolute
  * expiry as the one it replaces (`remainingMs`), plus a fresh access token. `lastUsedAt` is
  * stamped immediately rather than left absent, the way a brand-new login's token is: from the
@@ -352,28 +430,9 @@ const reissueRotated = (
         return sessionRepository.findByHash(hashToken(oldToken)).then((previous) => {
             if (!previous) throw new Error('Forbidden');
 
-            const newRefreshToken = signRefreshToken(claims, Math.ceil(remainingMs / 1000));
-            const now = new Date();
-            return sessionRepository
-                .insert({
-                    userId: previous.userId,
-                    // The successor continues the session: same family id, so the id the owner
-                    // sees (and revokes by) does not change with the token, and the same
-                    // sign-in time, so "signed in on" names the session and not the token.
-                    familyId: previous.familyId,
-                    startedAt: previous.startedAt,
-                    mode: 'jwt',
-                    tokenHash: hashToken(newRefreshToken),
-                    lastUsedAt: now,
-                    expiresAt: new Date(now.getTime() + remainingMs)
-                })
-                .then(() => recordActivity(user.id))
-                .then(() => ({
-                    accessToken: signAccessToken(claims),
-                    refreshToken: newRefreshToken,
-                    // Only a persistent login keeps a persistent cookie.
-                    refreshMaxAgeMs: claims.remember ? remainingMs : undefined
-                }));
+            return signRefreshToken(claims, Math.ceil(remainingMs / 1000)).then((newRefreshToken) =>
+                storeSuccessor(previous, newRefreshToken, claims, remainingMs)
+            );
         });
     });
 
@@ -440,8 +499,7 @@ export const rotateRefreshToken = (oldToken: string): Promise<RotatedSession> =>
     verifyAgainstRing(oldToken, getRefreshTokenRing(), 'refresh').then(({ exp, ...oldClaims }) => {
         const claims = carriedClaims(oldClaims);
         // `exp` is seconds since epoch (the JWT convention); clamp to at least 1s so a token that
-        // verified with almost no time left still signs rather than producing `expiresIn: 0`,
-        // which `jsonwebtoken` treats as "no expiry" — the opposite of what's intended here.
+        // verified with almost no time left still gets a successor that lives a moment.
         const remainingMs = Math.max(exp * 1000 - Date.now(), 1000);
 
         return sessionRepository

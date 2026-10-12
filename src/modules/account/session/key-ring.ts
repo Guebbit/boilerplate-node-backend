@@ -1,7 +1,7 @@
 /**
  * @module
  * The signing-key ring's `kid`: how a secret gets a stable identifier, and how `./jwt` finds the
- * ring member a token's header names. Pure — no `jsonwebtoken` calls — so the ring math is testable
+ * ring member a token's header names. Pure — no signing calls — so the ring math is testable
  * without signing anything. See docs/modules/account-sessions.md.
  */
 

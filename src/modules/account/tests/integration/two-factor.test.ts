@@ -8,7 +8,7 @@
  * authenticate a request on its own, nothing else here is worth anything.
  */
 
-import { decode } from 'jsonwebtoken';
+import { decodeJwt } from 'jose';
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
@@ -690,7 +690,7 @@ describe('logging in with a device factor', () => {
             .send({ challenge: login.body.data.challenge, code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
-        const claims = decode(response.body.data.token as string) as { amr?: string[] };
+        const claims = decodeJwt(response.body.data.token as string) as { amr?: string[] };
         expect(claims.amr).toEqual(['pwd', 'otp']);
     });
 
@@ -899,7 +899,7 @@ describe('logging in with the email factor', () => {
             .send({ challenge, code: mailedCode() });
 
         expect(response.status).toBe(200);
-        const claims = decode(response.body.data.token as string) as { amr?: string[] };
+        const claims = decodeJwt(response.body.data.token as string) as { amr?: string[] };
         expect(claims.amr).toEqual(['pwd', 'otp']);
     });
 

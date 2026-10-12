@@ -8,7 +8,7 @@
  */
 
 import '@tests/contract';
-import { decode } from 'jsonwebtoken';
+import { decodeJwt } from 'jose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
@@ -319,7 +319,7 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(finished.status).toBe(200);
-        const claims = decode(finished.body.data.token as string) as { amr?: string[] };
+        const claims = decodeJwt(finished.body.data.token as string) as { amr?: string[] };
         expect(claims.amr).toEqual(['fake', 'otp']);
     });
 

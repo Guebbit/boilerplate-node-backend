@@ -16,7 +16,7 @@ import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
 import { userService } from '@modules/users';
-import { decode } from 'jsonwebtoken';
+import { decodeJwt } from 'jose';
 import { logger } from '@infrastructure/adapters/logger';
 import * as mailerPort from '@infrastructure/adapters/mailer';
 import itUsers from '@modules/users/locales/it.json';
@@ -127,7 +127,7 @@ describe('POST /account/login — remember me', () => {
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD });
 
-        const { iat, exp } = decode(response.body.data.token) as { iat: number; exp: number };
+        const { iat, exp } = decodeJwt(response.body.data.token) as { iat: number; exp: number };
         expect(exp - iat).toBe(getAccessExpiryTime());
         expect(getAccessExpiryTime()).toBeLessThan(getExpiryTime());
     });
@@ -249,7 +249,7 @@ describe('the "remember me" choice survives every re-mint', () => {
 
         const rotated = await api().post('/account/refresh').set('Cookie', jwtCookie);
 
-        const { iat, exp } = decode(rotated.body.data.token as string) as {
+        const { iat, exp } = decodeJwt(rotated.body.data.token as string) as {
             iat: number;
             exp: number;
         };
@@ -260,7 +260,7 @@ describe('the "remember me" choice survives every re-mint', () => {
         const { jwtCookie } = await loginRemembering();
 
         const value = /__Host-session=([^;]+)/.exec(jwtCookie)![1];
-        const { iat, exp } = decode(value) as { iat: number; exp: number };
+        const { iat, exp } = decodeJwt(value) as { iat: number; exp: number };
         expect(exp - iat).toBe(getExpiryTime(RefreshTokenExpiryTime.SHORT));
     });
 

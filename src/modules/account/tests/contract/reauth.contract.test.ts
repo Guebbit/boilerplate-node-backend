@@ -6,7 +6,7 @@
  */
 
 import '@tests/contract';
-import { decode } from 'jsonwebtoken';
+import { decodeJwt } from 'jose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import { api } from '@tests/http';
@@ -48,7 +48,7 @@ const mailedCode = (): string =>
     String(mockOutbox.findLast(({ template }) => template === 'account.reauth-code')?.data.code);
 
 /** The `amr` claim of an access token. */
-const amrOf = (token: string): string[] => (decode(token) as { amr: string[] }).amr;
+const amrOf = (token: string): string[] => (decodeJwt(token) as { amr: string[] }).amr;
 
 /**
  * A session whose login proved `amr`, for an account that has (or has not) a password — the shape

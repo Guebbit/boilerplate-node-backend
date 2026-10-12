@@ -5,7 +5,7 @@ authorization throws a 403 someone notices; a fixed IV, a fast password hash or 
 compare all work perfectly, pass every test, and cost you everything on the day of a dump.
 
 The rule this codebase follows, and the reason most rows below are one line: **never implement a
-primitive.** `node:crypto`, `jsonwebtoken` — and where a choice exists, the boring one.
+primitive.** `node:crypto`, `jose` — and where a choice exists, the boring one.
 
 ## Transport
 
