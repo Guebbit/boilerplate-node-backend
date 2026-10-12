@@ -19,7 +19,6 @@ import {
     bankTransferHoldHours,
     bankTransferIban,
     bankTransferIbanFriendly,
-    maxOpenUnpaidOrdersPerAccount,
     maxAdminOrderLines,
     maxAdminOrderLineQuantity,
     ADMIN_ORDER_LINES_CEILING,
@@ -69,7 +68,6 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_IBAN',
     'NODE_BANK_TRANSFER_BIC',
     'NODE_BANK_TRANSFER_HOLD_HOURS',
-    'NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT',
     'NODE_ADMIN_ORDER_MAX_LINES',
     'NODE_ADMIN_ORDER_MAX_LINE_QUANTITY',
     'NODE_FRONTEND_LINK_ORDER',
@@ -247,23 +245,6 @@ describe('the admin order limits', () => {
     it('refuse a limit below 1', () => {
         setEnvironment({ NODE_ADMIN_ORDER_MAX_LINES: '0' });
         expect(() => maxAdminOrderLines()).toThrow();
-    });
-});
-
-describe('maxOpenUnpaidOrdersPerAccount', () => {
-    it('defaults to 2, so a failed card can be retried while its hold runs out', () => {
-        expect(maxOpenUnpaidOrdersPerAccount()).toBe(2);
-    });
-
-    it('reads NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT when set', () => {
-        setEnvironment({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '5' });
-        expect(maxOpenUnpaidOrdersPerAccount()).toBe(5);
-    });
-
-    // 0 would refuse every checkout: an account must be able to hold at least the order it places.
-    it('refuses a ceiling below 1', () => {
-        setEnvironment({ NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: '0' });
-        expect(() => maxOpenUnpaidOrdersPerAccount()).toThrow();
     });
 });
 

@@ -414,7 +414,7 @@ stateDiagram-v2
   releases a 15-minute card hold releases this one too, since it only ever reads each hold's own
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
 - **A week-long hold is free to take, so an account is capped, for every method.**
-  `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
+  `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
   orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
   naming the open orders, before anything is written.
 - **`transferInstructions` is computed at read time, never frozen onto the order — except its own
@@ -425,8 +425,8 @@ stateDiagram-v2
   never recomputed. Present only while `paymentMethod` is `bank_transfer` and `status` is
   `pending`. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
 - **`orders` owns the bank-transfer business rules outright**, `transferInstructions` and the
-  open-transfer cap alike — the reference-minting and open-transfer-cap config
-  live in `orders/config.ts`, since `orders` is the entity both rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
+  reference minting — that config lives in `orders/config.ts`, since `orders` is the entity both
+  rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
   keeps the `ibantools` validation, the one thing that stays genuinely its own. See
   [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
 - **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
@@ -596,7 +596,6 @@ The `actor` is the operator who asked or recorded the money; an automatic refund
 | `NODE_BANK_TRANSFER_IBAN`                   | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
 | `NODE_BANK_TRANSFER_BIC`                    | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
 | `NODE_BANK_TRANSFER_HOLD_HOURS`             | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`   | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
 | `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
 | `NODE_PAYMENT_ATTENTION_MINUTES`            | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                      |
 | `NODE_PAYMENT_RECONCILE_MINUTES`            | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
