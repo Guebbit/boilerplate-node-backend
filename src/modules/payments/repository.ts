@@ -220,7 +220,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         refund: Pick<
             RefundRecord,
             '_id' | 'amount' | 'currency' | 'reason' | 'idempotencyKey' | 'status'
-        >
+        >,
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     settleRefund: (
         paymentId: string,
@@ -231,7 +232,8 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     failRefund: (
         paymentId: string,
         refundId: string,
-        failureReason: RefundFailureReason
+        failureReason: RefundFailureReason,
+        session?: ClientSession
     ) => Promise<PaymentDocument | null>;
     searchStaff: (
         filters: object,
@@ -464,9 +466,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param expectedRefunded - `amountRefunded` as the caller read it
      * @param newRefunded - `amountRefunded` once this refund is counted
      * @param refund - the record to append
+     * @param session - the caller's transaction, when the timeline row must commit with it
      * @returns the payment as it now stands, or `null` if the guard no longer held
      */
-    addRefund: (paymentId, expectedRefunded, newRefunded, refund) =>
+    addRefund: (paymentId, expectedRefunded, newRefunded, refund, session) =>
         paymentModel
             .findOneAndUpdate(
                 {
@@ -475,7 +478,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                     amountRefunded: expectedRefunded
                 },
                 { $set: { amountRefunded: newRefunded }, $push: { refunds: refund } },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 
@@ -525,9 +528,10 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param paymentId - the payment
      * @param refundId - the refund record inside it
      * @param failureReason - the closed code for what the provider said
+     * @param session - the caller's transaction, when the timeline row must commit with it
      * @returns the payment as it now stands, or `null` if that refund was not open
      */
-    failRefund: (paymentId, refundId, failureReason) =>
+    failRefund: (paymentId, refundId, failureReason, session) =>
         paymentModel
             .findOneAndUpdate(
                 {
@@ -542,7 +546,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 {
                     $set: { 'refunds.$.status': 'failed', 'refunds.$.failureReason': failureReason }
                 },
-                { returnDocument: 'after' }
+                { returnDocument: 'after', ...(session ? { session } : {}) }
             )
             .exec(),
 

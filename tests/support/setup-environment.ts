@@ -115,6 +115,9 @@ process.env.NODE_PAYMENT_INTENT_RATE_LIMIT_MAX ??= '1000';
  */
 process.env.NODE_INVOICING_RATE_LIMIT_MAX ??= '1000';
 
+/** `ordersExportLimiter` is keyed on the account too, and the suites export the same seeded shop repeatedly. */
+process.env.NODE_ORDER_EXPORT_RATE_LIMIT_MAX ??= '1000';
+
 /**
  * The per-mailbox mail budget is keyed on the RECIPIENT, and the suites mail the same few seeded
  * addresses (signup, resend, reset) across many cases; ten a day is a production number.

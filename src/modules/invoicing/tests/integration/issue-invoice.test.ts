@@ -18,7 +18,7 @@ import invoicingModule from '@modules/invoicing/module';
 import { markPaid, shopTimezone, yearInZone } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, timelineOf, toOrderItem } from '@modules/orders/tests/factories';
 import { invoiceNumberCounterModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
 import { invoicingRepository } from '../../repository';
@@ -201,6 +201,23 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         expect(stored?.number).toBe(first?.number);
         const counter = await invoiceNumberCounterModel.findById(year).lean().exec();
         expect(counter?.seq).toBe(1);
+    });
+
+    it('writes one `invoice_issued` row on the order timeline, whoever wins the race', async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+
+        const [first] = await Promise.all([issueInvoice(order), issueInvoice(order)]);
+
+        const rows = await timelineOf(String(order._id));
+        expect(rows).toHaveLength(1);
+        expect(rows[0]).toMatchObject({
+            type: 'invoice_issued',
+            data: { invoiceId: String(first?._id), number: first?.number }
+        });
     });
 
     it('answers the existing invoice when the order is invoiced again later', async () => {

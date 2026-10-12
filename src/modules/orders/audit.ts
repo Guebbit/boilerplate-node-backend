@@ -11,6 +11,8 @@
 export const ordersAuditActions = {
     /** Staff opened someone else's order — `admin.` because only the wide read produces it. */
     ADMIN_ORDER_VIEWED: 'admin.order.viewed',
+    /* Every customer's orders left the application as a file. `metadata` carries the filter and the row count, never a row. */
+    ADMIN_ORDERS_EXPORTED: 'admin.orders.exported',
     ORDER_CREATED: 'order.created',
     ORDER_UPDATED: 'order.updated',
     ORDER_DELETED: 'order.deleted',

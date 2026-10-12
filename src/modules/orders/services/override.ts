@@ -23,11 +23,12 @@ import {
 } from '@infrastructure/http/response';
 import type { ClientSession } from 'mongoose';
 import { recordAudit } from '@infrastructure/observability/audit';
-import type { OrderDocument, OrderStatusOverride } from '../model';
+import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { announceInTransaction } from '@kernel/outbox';
 import { statusChangedEvent, statusOverriddenEvent } from './announce';
 import { announceMoveShippingStock } from './ship-stock';
+import { withTimeline } from './timeline';
 import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
 import {
@@ -41,14 +42,14 @@ import { withdrawalPeriodDays } from '../config';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
- * Write one override — the conditional write, the history entry, the stock leaving the shelf, the
+ * Write one override — the conditional write, the timeline row, the stock leaving the shelf, the
  * events and the audit trail all happen once, here, so no status move can exist without its
  * history row or the reverse.
  * @param order - the order to move, as a fresh read found it immediately before this call; its
- *   status is the history entry's `from`, recorded as-is; the conditional write below still guards against every
+ *   status is the timeline row's `from`, recorded as-is; the conditional write below still guards against every
  *   legal `from`, not only this one, so a benign race (the order moved between that read and this
  *   write, but stayed within the allowed set) still lands, just possibly against a `from` one step
- *   more recent than what the history entry claims — no admin action here is hot-path enough to pay
+ *   more recent than what the row claims — no admin action here is hot-path enough to pay
  *   for a strict read-your-write transaction over that edge case
  * @param to - the status being written; caller has already confirmed `canOverrideTo(order.status, to)`
  * @param reason - required on every override, never empty
@@ -78,14 +79,6 @@ const applyOverride = (
     const observedFrom = order.status;
     const allowedFrom = statusesOverridableInto(to);
     const at = new Date();
-    const entry: OrderStatusOverride = {
-        from: observedFrom,
-        to,
-        mode: 'status',
-        reason,
-        actorUserId,
-        at
-    };
 
     // An override into `delivered` never passes through `markDelivered`, so no delivery timestamp
     // exists: the deadline is counted from the override itself, which is when the shop says the
@@ -95,15 +88,20 @@ const applyOverride = (
             ? withdrawUntilFrom(withdrawalStartFor(order, at), withdrawalPeriodDays())
             : undefined;
 
-    const write = (session: ClientSession): Promise<OrderDocument | null> =>
-        orderRepository.applyStatusOverride(
-            orderId,
-            allowedFrom,
-            to,
-            entry,
-            withdrawUntil,
-            session
-        );
+    // The row commits with the move: no override exists without its history, or the reverse.
+    const write = withTimeline(
+        (session: ClientSession) =>
+            orderRepository.applyStatusOverride(orderId, allowedFrom, to, withdrawUntil, session),
+        () => [
+            {
+                type: 'status_overridden',
+                actor: actorUserId,
+                text: reason,
+                data: { mode: 'status', from: observedFrom, to },
+                at
+            }
+        ]
+    );
 
     const announce = () => [
         statusChangedEvent(orderId, observedFrom, to),

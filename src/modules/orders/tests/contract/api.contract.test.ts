@@ -13,6 +13,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
+import { orderService } from '../../services';
 import { OrderStatus } from '@types';
 
 setupTestDb();
@@ -550,5 +551,56 @@ describe('GET /orders — sort', () => {
             'pending'
         ]);
         expect(refused.status).toBe(422);
+    });
+});
+
+describe('GET /orders/{id}/timeline', () => {
+    it('shows staff every row with its actor, and the buyer only theirs, never an actor', async () => {
+        const staff = await authenticateAs('admin');
+        const buyer = await authenticateAs('user');
+        const order = await seedOrderFor(buyer.user);
+        const id = String(order._id);
+        await orderService.markPaid(id, 'card');
+        await api()
+            .post(`/orders/${id}/status-override`)
+            .set('Authorization', staff.bearer)
+            .send({ to: 'processing', reason: 'a staff-only reason' });
+
+        const asStaff = await api()
+            .get(`/orders/${id}/timeline`)
+            .set('Authorization', staff.bearer);
+        const asBuyer = await api()
+            .get(`/orders/${id}/timeline`)
+            .set('Authorization', buyer.bearer);
+
+        expect(asStaff.status).toBe(200);
+        expect(asStaff.body.data).toMatchObject([
+            { type: 'paid', data: { method: 'card' } },
+            {
+                type: 'status_overridden',
+                text: 'a staff-only reason',
+                actor: String(staff.user._id)
+            }
+        ]);
+        expect(asBuyer.status).toBe(200);
+        expect(asBuyer.body.data).toHaveLength(1);
+        expect(asBuyer.body.data[0]).toMatchObject({ type: 'paid' });
+        expect(asBuyer.body.data[0]).not.toHaveProperty('actor');
+    });
+
+    it('answers another buyer with the same 404 as an order that does not exist', async () => {
+        const owner = await authenticateAs('user');
+        const order = await seedOrderFor(owner.user);
+        const stranger = await authenticateAsRole('customer');
+
+        const other = await api()
+            .get(`/orders/${String(order._id)}/timeline`)
+            .set('Authorization', stranger.bearer);
+        const missing = await api()
+            .get('/orders/65dcdec2b18ad5e4bd597f01/timeline')
+            .set('Authorization', stranger.bearer);
+
+        expect(other.status).toBe(404);
+        expect(missing.status).toBe(404);
     });
 });

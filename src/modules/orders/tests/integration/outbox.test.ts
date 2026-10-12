@@ -16,7 +16,8 @@ import {
     seedDigitalOrder,
     readOrder,
     countOrders,
-    toOrderItem
+    toOrderItem,
+    timelineOf
 } from '@modules/orders/tests/factories';
 import { callerContextAs, asCustomer } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
@@ -147,7 +148,7 @@ describe('an admin override', () => {
 
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.paid);
-        expect(stored?.statusOverrides ?? []).toHaveLength(0);
+        expect(await timelineOf(String(order._id))).toHaveLength(0);
     });
 });
 

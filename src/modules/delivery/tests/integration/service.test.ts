@@ -15,7 +15,12 @@ import { logger } from '@infrastructure/adapters/logger';
 import { createUser } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { countersOf, createProduct } from '@modules/products/tests/factories';
-import { createOrder, seedDigitalOrder, toOrderItem } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    seedDigitalOrder,
+    toOrderItem,
+    lastOverrideOf
+} from '@modules/orders/tests/factories';
 import { orderService, withdrawUntilFrom } from '@modules/orders';
 import { OrderStatus } from '@types';
 import { findShippingMethod, priceShipping, SHIPPING_METHODS } from '@modules/delivery/domain';
@@ -456,8 +461,10 @@ describe('delivering', () => {
 
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
-        const entry = stored!.statusOverrides?.at(-1);
-        expect(entry).toMatchObject({ mode: 'forced', reason: 'carrier confirmed by phone' });
+        expect(await lastOverrideOf(String(order._id))).toMatchObject({
+            text: 'carrier confirmed by phone',
+            data: { mode: 'forced' }
+        });
         expect(stored!.status).toBe(OrderStatus.delivered);
     });
 
@@ -519,11 +526,9 @@ describe('forced shipments', () => {
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe(OrderStatus.shipped);
-        expect(stored!.statusOverrides?.at(-1)).toMatchObject({
-            mode: 'forced',
-            from: OrderStatus.paid,
-            to: OrderStatus.shipped,
-            reason: 'no time to start'
+        expect(await lastOverrideOf(String(order._id))).toMatchObject({
+            text: 'no time to start',
+            data: { mode: 'forced', from: OrderStatus.paid, to: OrderStatus.shipped }
         });
         expect(await shipmentsOf(String(order._id)).then(([first]) => first.forced)).toBe(true);
     });
@@ -540,9 +545,8 @@ describe('forced shipments', () => {
         expect(result.success).toBe(true);
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe(OrderStatus.processing);
-        expect(stored!.statusOverrides?.at(-1)).toMatchObject({
-            from: OrderStatus.paid,
-            to: OrderStatus.processing
+        expect(await lastOverrideOf(String(order._id))).toMatchObject({
+            data: { from: OrderStatus.paid, to: OrderStatus.processing }
         });
     });
 });

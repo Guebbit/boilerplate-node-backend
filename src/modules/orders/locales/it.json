@@ -12,6 +12,9 @@
             "not-allowed": "Questa forzatura non può spostare l'ordine a quello stato dalla posizione in cui si trova.",
             "awaiting-stock": "Questo ordine ha ancora unità in attesa di scorte, quindi non può essere spostato oltre la spedizione a mano."
         },
+        "export": {
+            "too-large": "Questa esportazione conterrebbe più di {{max}} ordini. Restringi i filtri e riprova."
+        },
         "invoiced": "Questo ordine ha una fattura emessa e non può più essere eliminato definitivamente.",
         "not-cancelled": "Annulla questo ordine prima di eliminarlo definitivamente.",
         "email-confirm": {

@@ -18,6 +18,9 @@ import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
+import { getOrdersExport } from './controllers/get-orders-export';
+import { ordersExportLimiter } from './rate-limits';
+import { getOrderTimeline } from './controllers/get-order-timeline';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
 import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
@@ -48,6 +51,12 @@ router.post('/search', noStore, getOrders);
 // own copy, revalidated every time.
 router.get('/', privateNoCache, getOrders);
 
+// GET /orders/export — every order the filters match, as CSV. Mounted before `/:id`, or `requireId`
+// answers 404 for the word `export`. `orders.any.export` carries its own step-up, so the guard
+// asks for a fresh session before the budget or the controller run; the budget is per account
+// (`rate-limits.ts`). No cache header here: the controller sets `private, no-store` on the file.
+router.get('/export', requirePermission('orders.any.export'), ordersExportLimiter, getOrdersExport);
+
 // POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
 // replay the SAME order rather than mint a second one. `products`, not `orders` — no route on
 // this router still tags a cache entry `orders`.
@@ -72,6 +81,10 @@ router.post(
     requirePermission('orders.any.override'),
     postOrderStatusOverride
 );
+
+// GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
+// caller sees of it is decided per row (the audience table in the domain layer). Never Redis-cached.
+router.get('/:id/timeline', privateNoCache, getOrderTimeline);
 
 // GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
 // caller's OWN order.

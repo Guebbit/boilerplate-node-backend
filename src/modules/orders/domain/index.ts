@@ -81,3 +81,11 @@ export type { OrderStatusTraits } from './status-traits';
 
 /** The shop-calendar year of an instant: the year every numbered series is cut at. */
 export { yearInZone, zonedStartOfDay } from './shop-time';
+
+/** What an order's timeline may say, and which audience each type is for. */
+export { TIMELINE_AUDIENCE, isBuyerVisible } from './timeline';
+export type { TimelineAudience, TimelineEntryInput } from './timeline';
+
+/** The orders CSV: its columns, and one order as one row. */
+export { ORDER_CSV_COLUMNS, toOrderCsvRow } from './export';
+export type { OrderCsvColumn, OrderCsvSource } from './export';

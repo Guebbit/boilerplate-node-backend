@@ -183,6 +183,22 @@ const alreadyReturned = (orderId: string, session: ClientSession): Promise<Produ
         );
 
 /**
+ * The order's timeline rows for a return that was just opened: `return_requested`, and for a
+ * withdrawal — opened already approved, since nobody grants a right — `return_approved` too. Only
+ * the reason code rides along; the buyer's own note stays on the return.
+ *
+ * @param created - the return just written
+ * @param session - the opening's transaction
+ */
+const appendOpened = async (created: ReturnDocument, session: ClientSession): Promise<void> => {
+    const orderId = String(created.orderId);
+    const data = { returnId: String(created._id), reason: created.reason };
+    await orderService.appendTimeline(orderId, { type: 'return_requested', data }, session);
+    if (created.status === 'approved')
+        await orderService.appendTimeline(orderId, { type: 'return_approved', data }, session);
+};
+
+/**
  * Write the return once its lines are decided: freeze what is coming back, and write
  * `return.requested` with it. Waking the relay is the caller's job, after the commit.
  *
@@ -224,7 +240,8 @@ const writeReturn = (
             },
             session
         )
-        .then((created) => enqueueRequested(created, session).then(() => created));
+        .then((created) => enqueueRequested(created, session).then(() => created))
+        .then((created) => appendOpened(created, session).then(() => created));
 };
 
 /**

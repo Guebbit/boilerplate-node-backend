@@ -567,6 +567,22 @@ cancelled after payment whose refund is still owed. An amount mismatch is not a 
 audit row `payment.amount_mismatch`, a counter, a log), so the page links to the audit log instead.
 Each source is capped at 100 rows.
 
+## The order timeline
+
+Payments feeds the order's [timeline](./orders.md#the-timeline) through `orderService.appendTimeline`,
+in the transaction of the fact each row describes, so a write that lost its race leaves no row.
+
+| Row                | Written when                                                 | Carries                                    |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------ |
+| `paid`             | the payment settles (`orders` writes it; payments names how) | `method`: `card`, or what staff recorded   |
+| `payment_declined` | the provider declines an attempt                             | `paymentId`                                |
+| `refund_issued`    | a refund record is opened, before the provider is asked      | `refundId`, `amount`, `currency`, `reason` |
+| `refund_settled`   | the record settles                                           | the same                                   |
+| `refund_failed`    | the provider refuses (staff only)                            | the same, and the closed `failureReason`   |
+
+The provider's wording is never copied: it can carry anything, and only the closed code is stored.
+The `actor` is the operator who asked or recorded the money; an automatic refund has none.
+
 ## Configuration
 
 | Variable                                    | Default | Meaning                                                                                                                                                                                                                                                                                                        |

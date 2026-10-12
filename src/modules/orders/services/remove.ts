@@ -18,6 +18,7 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { ordersAuditActions } from '../audit';
 import { orderRepository } from '../repository';
 import { outrankedOrderRefusal } from './scope';
+import { deleteTimelineOf } from './timeline';
 import { ERROR_CODES } from '@api/error-codes';
 
 /** The 409 a hard delete answers with once the order is paid: its invoice must survive it. */
@@ -53,7 +54,8 @@ const hardDeleteRefusal = (order: OrderDocument): ResponseReject | undefined => 
  */
 const hardDeleteCancelled = (order: OrderDocument): Promise<ResponseReject | undefined> =>
     orderRepository.deleteCancelledUnpaid(order).then((deleted) => {
-        if (deleted) return undefined;
+        // Its timeline goes with it: a history of an order that no longer exists narrates nothing.
+        if (deleted) return deleteTimelineOf(String(order._id)).then(() => undefined);
         // Moved on since the read (paid, reopened) or already gone: the current row says which.
         return orderRepository
             .findById(String(order._id))

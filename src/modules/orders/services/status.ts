@@ -15,16 +15,21 @@ import type { ClientSession } from 'mongoose';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { statusChangedEvent } from './announce';
+import { withTimeline } from './timeline';
 import {
     ORDER_EVENTS,
     isDigitalOnlyOrder,
     type OrderEventName,
+    type TimelineEntryInput,
     withdrawalStartFor,
     withdrawUntilFrom,
     type StampedPaymentStatus,
     type StampedReturnStatus
 } from '../domain';
 import { withdrawalPeriodDays } from '../config';
+
+/** The timeline row each system move leaves. */
+const MOVE_ROW = { start: 'processing', ship: 'shipped' } as const;
 
 /**
  * Write a move and announce it: inside the caller's transaction when it has one (the caller wakes
@@ -53,18 +58,30 @@ const announceMove = (
  * @param event - the lifecycle event making the move; a single-`from` one, since the announcement
  *   names the status the order left
  * @param session - the caller's transaction, when the move belongs to one; absent, it opens its own
+ * @param actor - the person whose act caused the move, for the timeline; absent for the system
  * @returns the order as it now stands, or `null` if this call did not move it
  */
 const markSystemMove = (
     orderId: string,
     event: 'start' | 'ship',
-    session?: ClientSession
+    session?: ClientSession,
+    actor?: string | null
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS[event];
     return announceMove(
         session,
-        (active) =>
-            orderRepository.updateStatusIfIn(orderId, [...from], to, undefined, undefined, active),
+        withTimeline(
+            (active) =>
+                orderRepository.updateStatusIfIn(
+                    orderId,
+                    [...from],
+                    to,
+                    undefined,
+                    undefined,
+                    active
+                ),
+            () => [{ type: MOVE_ROW[event], actor }]
+        ),
         () => statusChangedEvent(orderId, from[0], to)
     );
 };
@@ -82,15 +99,27 @@ const markSystemMove = (
  * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
  *   checkout chose bank transfer (a customer who changed their mind). Offline money leaves the
  *   checkout choice alone — the payment row carries the recorded method
+ * @param by - for the timeline: the `actor` who recorded offline money (absent for the provider
+ *   and the system) and the `method` the payment row carries, which says how it was really paid
  * @returns the order as it now stands, or `null` if it could no longer be paid
  */
 export const markPaid = (
     orderId: string,
-    paymentMethod?: 'card'
+    paymentMethod?: 'card',
+    by: { actor?: string | null | undefined; method?: string | undefined } = {}
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS.pay;
     return announceInTransaction(
-        (session) => orderRepository.markPaid(orderId, from[0], paymentMethod, session),
+        withTimeline(
+            (session) => orderRepository.markPaid(orderId, from[0], paymentMethod, session),
+            (order) => [
+                {
+                    type: 'paid',
+                    actor: by.actor,
+                    data: { method: by.method ?? paymentMethod ?? order.paymentMethod ?? null }
+                }
+            ]
+        ),
         () => statusChangedEvent(orderId, from[0], to)
     );
 };
@@ -103,12 +132,14 @@ export const markPaid = (
  * @param orderId - the order fulfilment started on
  * @param session - the caller's transaction, when this move belongs to one (a forced first
  *   shipment makes it implicitly); absent, the move opens its own
+ * @param actor - the staff member who started it, for the timeline
  * @returns the order as it now stands, or `null` if it was not awaiting fulfilment
  */
 export const markProcessing = (
     orderId: string,
-    session?: ClientSession
-): Promise<OrderDocument | null> => markSystemMove(orderId, 'start', session);
+    session?: ClientSession,
+    actor?: string | null
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'start', session, actor);
 
 /**
  * Report that the last unit left: nothing remains to ship anywhere. `delivery`'s shipping act
@@ -117,12 +148,29 @@ export const markProcessing = (
  * the order stays `processing`, and `fulfillmentStatus` says `partially_fulfilled`.
  * @param orderId - the order the shipment belongs to
  * @param session - the act's transaction; this move commits with the shipment or not at all
+ * @param actor - the staff member who shipped, for the timeline
  * @returns the order as it now stands, or `null` if it was not awaiting shipment
  */
 export const markShipped = (
     orderId: string,
-    session?: ClientSession
-): Promise<OrderDocument | null> => markSystemMove(orderId, 'ship', session);
+    session?: ClientSession,
+    actor?: string | null
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'ship', session, actor);
+
+/**
+ * The timeline row a move into `delivered` leaves: when the withdrawal window closes rides on it,
+ * since the buyer's own screen quotes that date.
+ * @param withdrawUntil - the frozen deadline
+ * @param actor - the person whose act delivered the order, if any
+ */
+const deliveredRow = (
+    withdrawUntil: Date,
+    actor: string | null | undefined
+): TimelineEntryInput => ({
+    type: 'delivered',
+    actor,
+    data: { withdrawUntil: withdrawUntil.toISOString() }
+});
 
 /**
  * Report that the last undelivered shipment arrived, with nothing left to ship. `delivery`'s
@@ -135,18 +183,23 @@ export const markShipped = (
  * @param orderId - the order the shipments belong to
  * @param deliveredAt - when the last shipment arrived, as `delivery` recorded it
  * @param session - the act's transaction
+ * @param actor - the staff member who recorded the arrival, for the timeline
  * @returns the order as it now stands, or `null` if it was not awaiting arrival
  */
 export const markDelivered = (
     orderId: string,
     deliveredAt: Date,
-    session?: ClientSession
+    session?: ClientSession,
+    actor?: string | null
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS.deliver;
     const withdrawUntil = withdrawUntilFrom(deliveredAt, withdrawalPeriodDays());
     return announceMove(
         session,
-        (active) => orderRepository.markDelivered(orderId, from[0], withdrawUntil, active),
+        withTimeline(
+            (active) => orderRepository.markDelivered(orderId, from[0], withdrawUntil, active),
+            () => [deliveredRow(withdrawUntil, actor)]
+        ),
         () => statusChangedEvent(orderId, from[0], to)
     );
 };
@@ -163,12 +216,14 @@ export const markDelivered = (
  * @param orderId - the order that became complete
  * @param at - the instant the order became complete
  * @param session - the act's transaction
+ * @param actor - the staff member whose act completed it, for the timeline
  * @returns the order as it now stands, or `null` if it was not `processing`
  */
 export const markFulfilmentComplete = (
     orderId: string,
     at: Date,
-    session: ClientSession
+    session: ClientSession,
+    actor?: string | null
 ): Promise<OrderDocument | null> =>
     orderRepository.findInSession(orderId, session).then((order) => {
         const { from } = ORDER_EVENTS.fulfilmentComplete;
@@ -184,7 +239,14 @@ export const markFulfilmentComplete = (
             : ['ship', 'deliver'];
         return announceWithin(
             session,
-            (active) => orderRepository.markDelivered(orderId, order.status, withdrawUntil, active),
+            withTimeline(
+                (active) =>
+                    orderRepository.markDelivered(orderId, order.status, withdrawUntil, active),
+                () => [
+                    ...(events.includes('ship') ? [{ type: 'shipped' as const, actor }] : []),
+                    deliveredRow(withdrawUntil, actor)
+                ]
+            ),
             () =>
                 events.map((name) =>
                     statusChangedEvent(orderId, ORDER_EVENTS[name].from[0], ORDER_EVENTS[name].to)

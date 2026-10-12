@@ -44,3 +44,12 @@ keys:
       # recently its holder typed their password, and this key's damage (a wrong parcel/status
       # written on the record) is not undone by another ordinary request.
       stepUp: critical
+    - key: orders.any.export
+      module: orders
+      subject: Order
+      action: export
+      scope: tenant
+      description: Take every order out of the shop as a CSV file, customer emails included. An API key cannot use it, since its step-up needs a person.
+      # Exporting everyone's orders cannot need less proof than exporting your own data does
+      # (`POST /account/export`, also `sensitive`): the file leaves the application whole.
+      stepUp: sensitive

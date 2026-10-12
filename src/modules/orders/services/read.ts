@@ -30,7 +30,7 @@ import { toObjectId } from '@infrastructure/persistence/create-repository';
  * @param scope - the caller's own scope
  * @returns the arguments for `orderRepository.search`
  */
-const withFulfillmentFilter = (
+export const withFulfillmentFilter = (
     request: SearchOrdersRequest,
     scope: Record<string, unknown> | undefined
 ): [SearchOrdersRequest, Record<string, unknown> | undefined] => {

@@ -22,12 +22,19 @@ import { SYSTEM_ACTOR } from '@kernel/permissions';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
 import { RESERVATION_EXPIRED } from '@modules/inventory';
 import { router } from './routes';
-import { cancelById, eraseUserOrders, findOwnOrders, startOrderPiiClock } from './services';
+import {
+    cancelById,
+    collectTimelineOf,
+    eraseUserOrders,
+    findOwnOrders,
+    startOrderPiiClock
+} from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
 // ORDER_STATUS_CHANGED) into the kernel's `DomainEventMap`. Reached directly, never through this
 // module's own barrel — see CLAUDE.md's module-barrel rule.
 import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
+import { ordersRateLimits } from './rate-limits';
 
 /**
  * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -67,6 +74,7 @@ export default {
     publicEvents,
     // Jurisdiction, currency, bank transfer and the order link: see `./config`.
     config: [ordersConfig.slice],
+    rateLimits: ordersRateLimits,
     personalData: [
         {
             section: 'orders',
@@ -77,6 +85,13 @@ export default {
             erase: eraseUserOrders,
             // An inactive account keeps its orders and its link to them; only the PII clock starts.
             minimise: startOrderPiiClock
+        },
+        {
+            // The timeline of the same orders, in full: staff text and actors included, since
+            // the export is the buyer's data and not the buyer's screen. Erased with the orders'
+            // own detach (`eraseUserOrders` clears the actor), never separately.
+            section: 'orderTimeline',
+            collect: (subject) => collectTimelineOf(subject.userId)
         }
     ],
     /*

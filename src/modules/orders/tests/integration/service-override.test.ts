@@ -7,7 +7,12 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
-import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
+import {
+    seedOrder,
+    seedDigitalOrder,
+    readOrder,
+    timelineOf
+} from '@modules/orders/tests/factories';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { overrideStatus } from '../../services/override';
 import { recordForcedFulfilment } from '../../services/fulfillment';
@@ -86,13 +91,13 @@ describe('overrideStatus', () => {
             }
         ]);
 
-        const stored = await readOrder(String(order._id));
-        expect(stored?.statusOverrides).toHaveLength(1);
-        expect(stored?.statusOverrides?.[0]).toMatchObject({
-            from: OrderStatus.paid,
-            to: OrderStatus.processing,
-            mode: 'status',
-            reason: 'shelf pick error, correcting by hand'
+        const timeline = await timelineOf(String(order._id));
+        expect(timeline).toHaveLength(1);
+        expect(timeline[0]).toMatchObject({
+            type: 'status_overridden',
+            actor: 'admin-1',
+            text: 'shelf pick error, correcting by hand',
+            data: { from: OrderStatus.paid, to: OrderStatus.processing, mode: 'status' }
         });
     });
 
@@ -163,13 +168,13 @@ describe('the override event', () => {
         );
         await settleOutboxNudges();
 
-        const stored = await readOrder(String(order._id));
+        const [row] = await timelineOf(String(order._id));
         expect(overridden).toEqual([
             {
                 orderId: String(order._id),
                 from: OrderStatus.processing,
                 to: OrderStatus.delivered,
-                at: stored?.statusOverrides?.[0].at.toISOString(),
+                at: row.at,
                 mode: 'status'
             }
         ]);
@@ -203,7 +208,7 @@ describe('the override event', () => {
         expect(toShipped.errors?.[0].code).toBe('ORDER_OVERRIDE_AWAITING_STOCK');
         const stored = await readOrder(String(order._id));
         expect(stored?.status).toBe(OrderStatus.processing);
-        expect(stored?.statusOverrides ?? []).toHaveLength(0);
+        expect(await timelineOf(String(order._id))).toHaveLength(0);
     });
 
     it('still lets an order that awaits stock be moved to `processing`, which ships nothing', async () => {
@@ -248,14 +253,14 @@ describe('recordForcedFulfilment', () => {
         );
 
         const stored = await readOrder(String(order._id));
-        expect(stored?.statusOverrides).toHaveLength(1);
-        expect(stored?.statusOverrides?.[0]).toMatchObject({
-            from: OrderStatus.paid,
-            to: OrderStatus.processing,
-            mode: 'forced',
-            reason: 'carrier confirmed',
-            actorUserId: 'admin-1',
-            at
+        const timeline = await timelineOf(String(order._id));
+        expect(timeline).toHaveLength(1);
+        expect(timeline[0]).toMatchObject({
+            type: 'status_overridden',
+            text: 'carrier confirmed',
+            actor: 'admin-1',
+            at: at.toISOString(),
+            data: { from: OrderStatus.paid, to: OrderStatus.processing, mode: 'forced' }
         });
         // A history row is not a move: the order stays where the act left it.
         expect(stored?.status).toBe(OrderStatus.processing);

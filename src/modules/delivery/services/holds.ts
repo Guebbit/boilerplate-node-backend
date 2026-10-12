@@ -79,11 +79,13 @@ const isWorked = (order: OrderDocument): boolean =>
  * @param fulfillmentOrderId - the fulfillment order to hold
  * @param input - the reason and note
  * @param session - the act's transaction
+ * @param actor - the staff member holding it, for the order's timeline
  */
 const holdAct = async (
     fulfillmentOrderId: string,
     input: HoldInput,
-    session: ClientSession
+    session: ClientSession,
+    actor: string | null | undefined
 ): Promise<Changed> => {
     const { fulfillmentOrder, order } = await readForHold(fulfillmentOrderId, session);
     if (!isWorked(order) || !isHoldable(fulfillmentOrder))
@@ -102,7 +104,7 @@ const holdAct = async (
     if (!held) return refuse(409, ERROR_CODES.DELIVERY_NOT_HOLDABLE, 'delivery.not-holdable');
 
     await reportProgress(String(held.orderId), session);
-    await announceHeld(held, session);
+    await announceHeld(held, session, actor);
     return { fulfillmentOrder: held, order };
 };
 
@@ -110,8 +112,13 @@ const holdAct = async (
  * The release act, in its transaction.
  * @param fulfillmentOrderId - the fulfillment order to release
  * @param session - the act's transaction
+ * @param actor - the staff member releasing it, for the order's timeline
  */
-const releaseAct = async (fulfillmentOrderId: string, session: ClientSession): Promise<Changed> => {
+const releaseAct = async (
+    fulfillmentOrderId: string,
+    session: ClientSession,
+    actor: string | null | undefined
+): Promise<Changed> => {
     const { fulfillmentOrder, order } = await readForHold(fulfillmentOrderId, session);
     if (!isWorked(order) || !isReleasable(fulfillmentOrder))
         refuse(409, ERROR_CODES.DELIVERY_NOT_RELEASABLE, 'delivery.not-releasable');
@@ -129,7 +136,7 @@ const releaseAct = async (fulfillmentOrderId: string, session: ClientSession): P
         return refuse(409, ERROR_CODES.DELIVERY_NOT_RELEASABLE, 'delivery.not-releasable');
 
     await reportProgress(String(released.orderId), session);
-    await announceReleased(released, session);
+    await announceReleased(released, session, actor);
     return { fulfillmentOrder: released, order };
 };
 
@@ -197,7 +204,7 @@ export const holdFulfillmentOrder = (
 ): Promise<ResponseSuccess<FulfillmentOrder> | ResponseReject> =>
     guarded(
         fulfillmentOrderId,
-        (session) => holdAct(fulfillmentOrderId, input, session),
+        (session) => holdAct(fulfillmentOrderId, input, session, context.caller.id),
         deliveryAuditActions.ADMIN_FULFILLMENT_ORDER_HELD,
         authContext,
         context
@@ -217,7 +224,7 @@ export const releaseFulfillmentOrder = (
 ): Promise<ResponseSuccess<FulfillmentOrder> | ResponseReject> =>
     guarded(
         fulfillmentOrderId,
-        (session) => releaseAct(fulfillmentOrderId, session),
+        (session) => releaseAct(fulfillmentOrderId, session, context.caller.id),
         deliveryAuditActions.ADMIN_FULFILLMENT_ORDER_RELEASED,
         authContext,
         context

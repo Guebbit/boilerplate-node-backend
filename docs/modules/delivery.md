@@ -376,8 +376,8 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 `forced` lets staff skip a step, never a rule: ship from `paid` without `start` (the order then moves
 `paid → processing → …` by itself), or record a delivery without a carrier confirmation. It needs
 `orders.any.override` (itself step-up gated, and the route asks for the fresh session before the
-controller runs) and a `reason`. It leaves a history row on the order — `orderService.recordForcedFulfilment`
-appends to `statusOverrides` without a move of its own — and the shipment is stored with `forced: true`.
+controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
+`orderService.recordForcedFulfilment` appends it without a move of its own — and the shipment is stored with `forced: true`.
 
 ## Delivering
 
@@ -425,6 +425,23 @@ only module that already reaches all of them. This module only marks the lines:
 transaction, and stores who cancelled (`cancelReason`: `buyer`, `staff`, `no_answer` or `order`). The
 result says whether the fulfillment order was held for stock (`waitingForStock`), because then what
 is given back is the preorder allowance and not shelf units.
+
+## The order timeline
+
+Each act writes its rows to the order's [timeline](./orders.md#the-timeline) in its own transaction
+(`services/announce.ts`), beside the outbox event it already wrote.
+
+| Row                    | Written when                                              | Carries                                                      |
+| ---------------------- | --------------------------------------------------------- | ------------------------------------------------------------ |
+| `shipment_shipped`     | a shipment is cut (also a digital fulfilment)             | shipment and fulfillment order ids, `number`, `trackingCode` |
+| `shipment_delivered`   | a shipment arrives                                        | the same ids                                                 |
+| `fulfillment_held`     | staff hold a fulfillment order (staff only)               | `reason` code; never the note                                |
+| `fulfillment_released` | staff, or an allocation of stock, release it (staff only) | fulfillment order id                                         |
+| `remainder_cancelled`  | `returns` cancels what had not shipped                    | fulfillment order id                                         |
+
+A whole-order cancel writes no `remainder_cancelled`: the order's own `cancelled` row says it. The
+shipment row comes first, then the order's own move that it caused (`shipped`, `delivered`). Holds
+born with a fulfillment order (`awaiting_stock`) write no row yet.
 
 ## Routes and events
 

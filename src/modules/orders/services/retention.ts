@@ -12,6 +12,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { orderRepository } from '../repository';
 import { orderPiiRetentionDays } from '../config';
 import { cancelById } from './cancel';
+import { clearTimelineActor } from './timeline';
 
 /**
  * The `personalData.erase` hook. Unsets `userId` on every order this account placed and
@@ -121,10 +122,10 @@ export const eraseUserOrders = (
     userId: string,
     session: ClientSession
 ): Promise<AfterErase | undefined> =>
-    orderRepository
-        .findOpenUnpaidIdsOf(userId, session)
-        .then((orderIds) =>
-            detachUserId(userId, session).then(() =>
-                orderIds.length > 0 ? () => cancelUnpaidOrders(orderIds) : undefined
-            )
-        );
+    orderRepository.findOpenUnpaidIdsOf(userId, session).then((orderIds) =>
+        detachUserId(userId, session)
+            // Whatever the erased account did to ANY order (a staff member's changes, a
+            // buyer's own cancel) loses its name; the rows stay.
+            .then(() => clearTimelineActor(userId, session))
+            .then(() => (orderIds.length > 0 ? () => cancelUnpaidOrders(orderIds) : undefined))
+    );

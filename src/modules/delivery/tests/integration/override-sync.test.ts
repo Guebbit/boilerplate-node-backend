@@ -11,7 +11,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { createOrder, toOrderItem, lastOverrideOf } from '@modules/orders/tests/factories';
 import { orderService, withdrawUntilFrom } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import { OrderStatus } from '@types';
@@ -67,6 +67,10 @@ const override = async (orderId: string, to: OrderStatus) => {
     return result;
 };
 
+/** The instant the override was written, as its timeline row records it. */
+const overriddenAt = (orderId: string): Promise<Date> =>
+    lastOverrideOf(orderId).then((row) => new Date(row!.at));
+
 describe('an override forward to shipped', () => {
     it('ships every remainder as one forced shipment at the override’s own instant, with no mail and no webhook event', async () => {
         const { orderId } = await processingOrder();
@@ -81,7 +85,8 @@ describe('an override forward to shipped', () => {
         expect(stored?.status).toBe(OrderStatus.shipped);
         expect(shipment).toMatchObject({ forced: true, status: 'shipped' });
         expect(shipment.lines[0].quantity).toBe(3);
-        expect(shipment.shippedAt).toEqual(stored?.statusOverrides?.[0].at);
+        const overridden = await overriddenAt(orderId);
+        expect(shipment.shippedAt).toEqual(overridden);
         expect(stored?.fulfillment).toMatchObject({ shipped: true, remaining: 0, undelivered: 1 });
         const [fulfillmentOrder] = await fulfillmentOrdersOf(orderId);
         expect(fulfillmentOrder.status).toBe('closed');
@@ -118,9 +123,9 @@ describe('an override forward to shipped', () => {
     it('does nothing the second time the event is delivered', async () => {
         const { orderId } = await processingOrder();
         await override(orderId, OrderStatus.shipped);
-        const stored = await orderService.getById(orderId);
+        const at = await overriddenAt(orderId);
 
-        await syncWithOverride(orderId, OrderStatus.shipped, stored!.statusOverrides![0].at);
+        await syncWithOverride(orderId, OrderStatus.shipped, at);
 
         expect(await shipmentsOf(orderId)).toHaveLength(1);
     });
@@ -141,7 +146,7 @@ describe('an override forward to delivered', () => {
         await override(orderId, OrderStatus.delivered);
 
         const stored = await orderService.getById(orderId);
-        const [{ at }] = stored!.statusOverrides!;
+        const at = await overriddenAt(orderId);
         const shipments = await shipmentsOf(orderId);
         expect(stored?.status).toBe(OrderStatus.delivered);
         expect(shipments.map(({ status }) => status)).toEqual(['delivered', 'delivered']);

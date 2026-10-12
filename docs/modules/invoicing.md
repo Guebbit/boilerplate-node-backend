@@ -181,6 +181,13 @@ delivery outcome, a shape genuinely different from "hand back some bytes", so a 
 `issue` would also need to report that outcome onto the document. Left for whoever builds the
 first one.
 
+## The order timeline
+
+Issuing an invoice writes `invoice_issued` (`invoiceId`, `number`) and a credit note
+`credit_note_issued` (`creditNoteId`, `number`, `refundId`) on the order's
+[timeline](./orders.md#the-timeline), in the same transaction as the document. The race's loser
+aborts both, so each document leaves exactly one row.
+
 ## Configuration
 
 | Variable                          | Default                 | Meaning                                                                                          |

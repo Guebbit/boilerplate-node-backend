@@ -82,7 +82,8 @@ const deliverAct = async (
         progress.order.status,
         progress.summary,
         progress.summary.lastDeliveredAt ?? at,
-        session
+        session,
+        context.caller.id
     );
     if (input.forced)
         await orderService.recordForcedFulfilment(
@@ -95,7 +96,7 @@ const deliverAct = async (
             },
             session
         );
-    await announceDelivered(shipment, session);
+    await announceDelivered(shipment, session, context.caller.id);
 
     return { shipment, order };
 };

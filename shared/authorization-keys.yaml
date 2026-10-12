@@ -36,8 +36,8 @@ version: 1
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep`, `override`, `start`, `receive` and `ban` are the six additions beyond CASL's
-# own CRUD vocabulary, and all six follow the same rule: a verb is added only when CRUD cannot say the
+# `checkout`, `sweep`, `override`, `start`, `receive`, `ban` and `export` are the seven additions beyond
+# CASL's own CRUD vocabulary, and all seven follow the same rule: a verb is added only when CRUD cannot say the
 # thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
 #   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
 #     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
@@ -56,6 +56,10 @@ version: 1
 #   - `ban` is `users.any.ban`'s action, and nowhere else. Deactivating an account locks a person
 #     out, which is a wider hand than correcting their profile — `update` on `User` would give a
 #     support agent the first by granting the second.
+#   - `export` is `orders.any.export`'s action, and nowhere else. It takes every customer's order
+#     out of the application as a file, which is a wider hand than reading them one at a time —
+#     `read` on `Order` would give the warehouse and the support desk the first by granting the
+#     second. Shopify keeps a separate Export permission for the same reason.
 #
 # THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
 # `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
@@ -70,6 +74,7 @@ actions:
     - start
     - receive
     - ban
+    - export
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
@@ -247,6 +252,15 @@ keys:
       # recently its holder typed their password, and this key's damage (a wrong parcel/status
       # written on the record) is not undone by another ordinary request.
       stepUp: critical
+    - key: orders.any.export
+      module: orders
+      subject: Order
+      action: export
+      scope: tenant
+      description: Take every order out of the shop as a CSV file, customer emails included. An API key cannot use it, since its step-up needs a person.
+      # Exporting everyone's orders cannot need less proof than exporting your own data does
+      # (`POST /account/export`, also `sensitive`): the file leaves the application whole.
+      stepUp: sensitive
 
     # -- payments ------------------------------------------------------------------------------
     - key: payments.self.read
