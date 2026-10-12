@@ -178,6 +178,45 @@ const search = async (
 };
 
 /**
+ * How many orders a filter and a scope match — the count an export is refused on before it reads a
+ * row. The same `$match` {@link search} builds, so the two can never disagree about "these orders".
+ *
+ * @param filters - the validated filter bag
+ * @param scope - what the caller may read
+ */
+const countMatching = (
+    filters: object = {},
+    scope: Record<string, unknown> = {}
+): Promise<number> =>
+    aggregate<{ totalItems?: number }>([
+        { $match: withScope(withProjectionFilters(filters), scope) },
+        { $count: 'totalItems' }
+    ]).then((counted) => counted.at(0)?.totalItems ?? 0);
+
+/**
+ * Every order a filter and a scope match, in the list's own order, read through a cursor so a large
+ * export holds one batch in memory rather than the lot. Each row is normalized exactly like a list
+ * row, so the file and the page can never disagree about a figure.
+ *
+ * @param filters - the validated filter bag, `sort` included
+ * @param scope - what the caller may read
+ */
+async function* streamMatching(
+    filters: object = {},
+    scope: Record<string, unknown> = {}
+): AsyncGenerator<Order> {
+    const chosen = sortOf(filters, ORDER_SORTABLE);
+    const run = orderModel.aggregate<OrderDocument>([
+        { $match: withScope(withProjectionFilters(filters), scope) },
+        { $sort: chosen ?? DEFAULT_SORT }
+    ]);
+    // Aggregate#cursor: a server-side cursor; `batchSize` is how many documents each round trip
+    // brings. https://mongoosejs.com/docs/api/aggregate.html#Aggregate.prototype.cursor()
+    const cursor = (chosen ? run.collation(SORT_COLLATION) : run).cursor({ batchSize: 500 });
+    for await (const document of cursor) yield* base.normalize([document]);
+}
+
+/**
  * Fetch one order, restricted to a caller's own rows when `scope` narrows it — one query,
  * `findOne({ _id, ...scope })`, whether or not there's anything in `scope` to add: an empty
  * object is a no-op filter addition, so the unscoped (admin) and scoped (owner) calls run the
@@ -697,6 +736,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         filters?: object,
         scope?: Record<string, unknown>
     ) => Promise<{ items: Order[]; meta: PaginatedMeta }>;
+    countMatching: (filters?: object, scope?: Record<string, unknown>) => Promise<number>;
+    streamMatching: (filters?: object, scope?: Record<string, unknown>) => AsyncGenerator<Order>;
     findByIdScoped: (
         id: string,
         scope?: Record<string, unknown>
@@ -763,6 +804,8 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     create,
     aggregate,
     search,
+    countMatching,
+    streamMatching,
     findByIdScoped,
     deleteCancelledUnpaid,
     ownerScope,

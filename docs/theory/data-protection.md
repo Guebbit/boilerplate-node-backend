@@ -94,6 +94,10 @@ here.
 | Rectification          | 16      | `PUT /account`                                                                              | the subject only                      | —                                                                                                                                                                                                                                                                                                                                                            |
 | Objection to profiling | 21      | `analyticsConsent: false` via `PUT /account`, or the `X-Analytics-Consent` header pre-login | the subject, or anonymous per-request | does not retroactively delete events already sent to the provider — that is the provider's own deletion tooling                                                                                                                                                                                                                                              |
 
+Separately from the subject's own export, staff holding `orders.any.export` (manager, admin;
+step-up gated, audited, rate-limited and row-capped) can take the order list out as a CSV carrying
+each customer's email — [why that is acceptable, and how it is guarded](../modules/orders.md#the-csv-export).
+
 The export is a background job that mails a link ([account: data export](../modules/account.md#data-export)),
 built one section at a time. Each paged collection it walks (api keys, orders, delivery, feedback)
 goes through the shared `readAll(fetchPage, pageSize)` helper until a short page signals done, so

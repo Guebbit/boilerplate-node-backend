@@ -397,6 +397,43 @@ Not built: `note_added` (no staff-note door exists), `email_sent`, and the preor
 (`release_date_moved`, `delay_notice_sent`, `wait_confirmed`, `wait_expired`), which arrive with the
 preorder lane as new rows in the table above.
 
+## The CSV export
+
+`GET /orders/export` answers the list's filters as one `text/csv` file, for reconciliation and the
+accountant. A staff-only door, and a sharp one: the file holds every matching customer's email.
+
+```mermaid
+flowchart LR
+    R[GET /orders/export] --> K{orders.any.export<br/>and a fresh session?}
+    K -- no --> X[403 / step-up challenge]
+    K -- yes --> L{within the<br/>per-account budget?}
+    L -- no --> T[429]
+    L -- yes --> C[count the matches]
+    C -- over NODE_ORDER_EXPORT_MAX_ROWS --> U[422 ORDER_EXPORT_TOO_LARGE<br/>before any byte]
+    C -- within --> A[audit row: filter and row count]
+    A --> S[cursor, in the list's order]
+    S --> W[csv-stringify, escape_formulas]
+    W --> P[response, private no-store]
+```
+
+| Question              | Answer                                                                                                                                                                                                                                   |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Who                   | `orders.any.export`: manager and admin, `stepUp: sensitive` (the same tier as exporting your own data). A support desk that can read every order cannot export them (Shopify's separate Export permission)                               |
+| API keys              | Cannot: the step-up needs a session, which a key never has (`requireFreshAuth` refuses without an `authContext`)                                                                                                                         |
+| Synchronous, streamed | No file on disk, no reaper, no mailed link: a file that exists can be forgotten and a link forwarded (Art. 5(1)(e)). The account export is a job because it walks every module, not because exports must be                              |
+| Route order           | Mounted before `/:id`, or `requireId` answers 404 for the word `export`                                                                                                                                                                  |
+| Columns               | The list's, in file order: `createdAt`, `orderNumber`, `status`, `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `lines`, `units`, `total`, `currency`, `paymentMethod`, `paidAt`. No address: both are encrypted at rest |
+| Email                 | Kept: support and reconciliation need it, and the guards above are what make that acceptable                                                                                                                                             |
+| Audit                 | `admin.orders.exported`, with the filter and the row count, never a row. An email filter is recorded only as "an email was given"                                                                                                        |
+| Limits                | Own per-account budget (`NODE_ORDER_EXPORT_RATE_LIMIT_MAX`, default 10 a window) and a row cap (`NODE_ORDER_EXPORT_MAX_ROWS`, default 20000)                                                                                             |
+| Headers               | `Cache-Control: private, no-store` (ASVS 14.3.2)                                                                                                                                                                                         |
+
+**CSV injection.** `zod.email()` accepts `+cmd@example.com`, so the email column can start a
+formula in a spreadsheet. The writer's `escape_formulas` prefixes any cell starting with `=`, `+`,
+`-` (except a number), `@`, tab or carriage return with `'`. It does not cover `\0` or the
+full-width `＝＋－＠` variants: that gap is known and not handled. See
+[injection](../theory/defences/injection.md).
+
 ## Reads other modules compose
 
 - `orderService.findManyByIds(ids)` answers each order's number and email, nothing more (no lines,
@@ -571,6 +608,8 @@ when the shop offers a longer withdrawal period.
 | `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30                                      |
 | `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                                                             |
 | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                             | `1095`              | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                                                           |
+| `NODE_ORDER_EXPORT_MAX_ROWS`                                       | `20000`             | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                                                                |
+| `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`                                 | `10`                | Exports allowed per window, per ACCOUNT                                                                                                                                                                                             |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                                                                  |
 | `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                                                          |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                                                              |
@@ -580,6 +619,17 @@ The VAT RATES charged against an order line are a different thing with a differe
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`
 hands it at checkout. Every getter asks its slice (`config.ts`) per call, and the slice parses once per process, so a
 correction takes effect on restart.
+
+## Libraries
+
+`csv-stringify` is this module's alone, used by the [CSV export](#the-csv-export). See
+[Package Dependencies](../tools/package-dependencies.md) for where it sits among everything else.
+
+| Library                  | Maintained                            | What it costs you                                                                                      |
+| ------------------------ | ------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `csv-stringify` (chosen) | active, typed, MIT, zero dependencies | A Transform stream (so the file is never whole in memory) with `escape_formulas` built in              |
+| a hand-rolled writer     | —                                     | quoting, delimiters and formula escaping are exactly the parsing `CLAUDE.md` rules out writing by hand |
+| a spreadsheet library    | varies                                | binary formats, a larger tree and no stream: the file would be built in memory                         |
 
 ## Related pages
 

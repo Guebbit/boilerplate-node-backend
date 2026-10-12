@@ -199,6 +199,7 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `locales`        | `ADMIN_LOCALE_UPDATED`                       | `admin.locale.updated`                       | `locale`               |
 | `locales`        | `ADMIN_TRANSLATION_UPDATED`                  | `admin.translation.updated`                  | —                      |
 | `orders`         | `ADMIN_ORDER_VIEWED`                         | `admin.order.viewed`                         | `order`                |
+| `orders`         | `ADMIN_ORDERS_EXPORTED`                      | `admin.orders.exported`                      | `order`                |
 | `orders`         | `ORDER_CANCELLED`                            | `order.cancelled`                            | `order`                |
 | `orders`         | `ORDER_CREATED`                              | `order.created`                              | `order`                |
 | `orders`         | `ORDER_DELETED`                              | `order.deleted`                              | `order`                |

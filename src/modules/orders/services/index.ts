@@ -59,6 +59,7 @@ import {
     refreshShelf
 } from './fulfillment';
 import { overrideStatus } from './override';
+import { openOrderExport } from './export';
 import {
     appendTimeline,
     readTimeline,
@@ -126,6 +127,7 @@ export {
     type ForcedFulfilment
 } from './fulfillment';
 export { overrideStatus } from './override';
+export { openOrderExport, type OrderExport } from './export';
 export {
     appendTimeline,
     readTimeline,
@@ -234,6 +236,7 @@ export const orderService = {
     shipStock,
     refreshShelf,
     overrideStatus,
+    openOrderExport,
     appendTimeline,
     readTimeline,
     collectTimelineOf,

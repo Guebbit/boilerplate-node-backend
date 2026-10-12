@@ -10,6 +10,7 @@ tags:
 
 x-error-codes:
     ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`inventory.any.read`).' }
+    ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
@@ -204,6 +205,102 @@ paths:
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     # Same as GET /orders, but with JSON body, more suitable for DTOs and multi-language codegen
+    /orders/export:
+        get:
+            tags: [Orders]
+            summary: Export orders as CSV
+            description: |
+                The list's filters, answered as one `text/csv` file: every matching order in the list's own
+                order, one line each, streamed. Columns: `createdAt`, `orderNumber`, `status`,
+                `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `lines`, `units`, `total`,
+                `currency`, `paymentMethod`, `paidAt`. No address: both are encrypted at rest and an export is
+                no reason to read them.
+
+                Requires `orders.any.export` (manager and admin), which is step-up gated (`sensitive`): the file
+                carries every customer's email, so the caller must have proved themselves recently. An API key
+                holds no session and cannot export. Over `NODE_ORDER_EXPORT_MAX_ROWS` rows the answer is `422`
+                `ORDER_EXPORT_TOO_LARGE`, before any byte of the file; narrow the filters. A cell that would
+                start a formula in a spreadsheet (`=`, `+`, `-`, `@`, tab, carriage return) is prefixed with
+                `'`. Every export is audited (`admin.orders.exported`: the filter and the row count, never a
+                row) and has its own per-account rate budget.
+
+                The response is never cached: `Cache-Control: private, no-store`.
+            operationId: exportOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: sort
+                  in: query
+                  required: false
+                  style: form
+                  explode: false
+                  schema:
+                      $ref: '#/components/schemas/OrderSort'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/IdParam'
+                - $ref: '#/components/parameters/UserIdParam'
+                - $ref: '#/components/parameters/ProductIdParam'
+                - name: email
+                  in: query
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
+                - name: status
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderStatus'
+                - name: fulfillmentStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderFulfillmentStatus'
+                - name: paymentMethod
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/PaymentMethodId'
+                - name: deleted
+                  in: query
+                  schema:
+                      type: boolean
+                - name: createdFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: createdTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paidFrom
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paidTo
+                  in: query
+                  schema: { type: string, format: date-time }
+                - name: paymentStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderPaymentStatus'
+                - name: returnStatus
+                  in: query
+                  schema:
+                      $ref: '#/components/schemas/OrderReturnStatus'
+            responses:
+                '200':
+                    description: The orders, as CSV
+                    headers:
+                        Content-Disposition:
+                            description: '`attachment; filename="orders.csv"`'
+                            schema: { type: string }
+                        Cache-Control:
+                            description: '`private, no-store`'
+                            schema: { type: string }
+                    content:
+                        text/csv:
+                            schema:
+                                type: string
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # The result is larger than the cap. `errors[].code` is `ORDER_EXPORT_TOO_LARGE`.
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                # `ordersExportLimiter` sits in front of this route — see routes.ts.
+                '429': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/TooManyRequests' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /orders/search:
         post:
             tags: [Orders]

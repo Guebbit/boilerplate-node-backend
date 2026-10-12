@@ -109,6 +109,8 @@ roles:
           - orders.any.create
           - orders.any.update
           - orders.any.delete
+          # The order list as a spreadsheet, for reconciliation and the accountant.
+          - orders.any.export
           - locales.any.read
           - locales.any.create
           - locales.any.update
@@ -287,6 +289,7 @@ roles:
           - orders.any.update
           - orders.any.delete
           - orders.any.override
+          - orders.any.export
           - payments.self.read
           - payments.any.read
           - payments.any.create

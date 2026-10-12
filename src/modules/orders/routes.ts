@@ -18,6 +18,8 @@ import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
+import { getOrdersExport } from './controllers/get-orders-export';
+import { ordersExportLimiter } from './rate-limits';
 import { getOrderTimeline } from './controllers/get-order-timeline';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
@@ -48,6 +50,12 @@ router.post('/search', noStore, getOrders);
 // GET /orders — list (`orders.self.read` alone sees own orders only). `privateNoCache`: the browser may keep its
 // own copy, revalidated every time.
 router.get('/', privateNoCache, getOrders);
+
+// GET /orders/export — every order the filters match, as CSV. Mounted before `/:id`, or `requireId`
+// answers 404 for the word `export`. `orders.any.export` carries its own step-up, so the guard
+// asks for a fresh session before the budget or the controller run; the budget is per account
+// (`rate-limits.ts`). No cache header here: the controller sets `private, no-store` on the file.
+router.get('/export', requirePermission('orders.any.export'), ordersExportLimiter, getOrdersExport);
 
 // POST /orders — admin creates order directly. idempotencyKey first: a retried creation must
 // replay the SAME order rather than mint a second one. `products`, not `orders` — no route on

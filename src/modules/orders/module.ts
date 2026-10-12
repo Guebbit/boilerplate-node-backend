@@ -34,6 +34,7 @@ import {
 // module's own barrel — see CLAUDE.md's module-barrel rule.
 import { ORDER_CANCELLED, ORDER_CREATED, ORDER_STATUS_CHANGED } from './events';
 import { ordersConfig } from './config';
+import { ordersRateLimits } from './rate-limits';
 
 /**
  * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -73,6 +74,7 @@ export default {
     publicEvents,
     // Jurisdiction, currency, bank transfer and the order link: see `./config`.
     config: [ordersConfig.slice],
+    rateLimits: ordersRateLimits,
     personalData: [
         {
             section: 'orders',
