@@ -17,6 +17,7 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
 import {
     fulfillmentOrdersOf,
+    paidPreorderOrder,
     shipEverything,
     shipmentsOf
 } from '@modules/delivery/tests/factories';
@@ -603,5 +604,153 @@ describe('forced ship/deliver demands the same step-up POST /orders/{id}/status-
             .set('Authorization', bearer);
 
         expect(response.status).toBe(200);
+    });
+});
+
+describe('GET /delivery/fulfillment-orders — the preorder board', () => {
+    const DAY = 86_400_000;
+
+    /** An admin's own paid preorder of 2 units, promised for next month. */
+    const adminWithPreorder = async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const placed = await paidPreorderOrder(
+            [{ quantity: 2, releaseDate: new Date(Date.now() + 30 * DAY) }],
+            user
+        );
+        await fulfillmentOrdersOf(placed.orderId);
+        return { bearer, ...placed };
+    };
+
+    it('matches the contract: a row per fulfillment order, with the buyer and its state', async () => {
+        const { bearer, orderId, user } = await adminWithPreorder();
+
+        const response = await api()
+            .get('/delivery/fulfillment-orders?preorder=true')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0]).toMatchObject({
+            orderId,
+            number: 1,
+            status: 'on_hold',
+            state: 'waiting',
+            late: false,
+            delivered: false,
+            slippedDays: 0,
+            buyer: { email: user.email, userId: String(user._id) }
+        });
+        expect(response.body.data.meta).toMatchObject({ totalItems: 1 });
+    });
+
+    it('filters by state, product, late and dueWithin', async () => {
+        const { bearer, productIds } = await adminWithPreorder();
+        const ask = (query: string) =>
+            api().get(`/delivery/fulfillment-orders?${query}`).set('Authorization', bearer);
+
+        const waiting = await ask('state=waiting');
+        const allocated = await ask('state=allocated');
+        const byProduct = await ask(`productId=${productIds[0]}`);
+        const late = await ask('late=true');
+        const soon = await ask('dueWithin=7');
+        const within60 = await ask('dueWithin=60');
+
+        expect(waiting.body.data.items).toHaveLength(1);
+        expect(allocated.body.data.items).toHaveLength(0);
+        expect(byProduct.body.data.items).toHaveLength(1);
+        expect(late.body.data.items).toHaveLength(0);
+        expect(soon.body.data.items).toHaveLength(0);
+        expect(within60.body.data.items).toHaveLength(1);
+    });
+
+    it('rejects a state it does not know and a dueWithin it cannot count', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const state = await api()
+            .get('/delivery/fulfillment-orders?state=nope')
+            .set('Authorization', bearer);
+        const due = await api()
+            .get('/delivery/fulfillment-orders?dueWithin=0')
+            .set('Authorization', bearer);
+
+        expect([state.status, due.status]).toEqual([422, 422]);
+    });
+
+    it("shows a buyer only their own preorders, and an admin everyone's", async () => {
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        const { user, bearer } = await authenticateAs('user');
+        const date = new Date(Date.now() + 30 * DAY);
+        const mineOrder = await paidPreorderOrder([{ quantity: 1, releaseDate: date }], user);
+        const theirs = await paidPreorderOrder(
+            [{ quantity: 1, releaseDate: date }],
+            'someone-else@example.com'
+        );
+        await fulfillmentOrdersOf(mineOrder.orderId);
+        await fulfillmentOrdersOf(theirs.orderId);
+
+        const mine = await api().get('/delivery/fulfillment-orders').set('Authorization', bearer);
+        const all = await api()
+            .get('/delivery/fulfillment-orders')
+            .set('Authorization', adminBearer);
+
+        expect(mine.body.data.items).toHaveLength(1);
+        expect(all.body.data.items).toHaveLength(2);
+    });
+
+    it('requires a session', async () => {
+        const response = await api().get('/delivery/fulfillment-orders');
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('GET /delivery/fulfillment-orders/summary', () => {
+    it('matches the contract: units per product, adding up', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const releaseDate = new Date(Date.now() + 30 * 86_400_000);
+        const { orderId, productIds } = await paidPreorderOrder(
+            [{ quantity: 3, releaseDate }],
+            user
+        );
+        await fulfillmentOrdersOf(orderId);
+
+        const response = await api()
+            .get('/delivery/fulfillment-orders/summary')
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([
+            {
+                productId: productIds[0],
+                title: expect.any(String),
+                firstAgreedAt: releaseDate.toISOString(),
+                paid: 3,
+                waiting: 3,
+                awaitingYes: 0,
+                allocated: 0,
+                shipped: 0,
+                cancelled: 0,
+                late: 0
+            }
+        ]);
+    });
+
+    it('narrows to one product', async () => {
+        const { user, bearer } = await authenticateAs('admin');
+        const date = new Date(Date.now() + 30 * 86_400_000);
+        const { orderId, productIds } = await paidPreorderOrder(
+            [
+                { quantity: 1, releaseDate: date },
+                { quantity: 2, releaseDate: date }
+            ],
+            user
+        );
+        await fulfillmentOrdersOf(orderId);
+
+        const response = await api()
+            .get(`/delivery/fulfillment-orders/summary?productId=${productIds[1]}`)
+            .set('Authorization', bearer);
+
+        expect(response.body.data.items).toMatchObject([{ productId: productIds[1], paid: 2 }]);
     });
 });

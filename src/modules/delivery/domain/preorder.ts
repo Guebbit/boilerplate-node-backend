@@ -17,7 +17,13 @@
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
-import { FulfillmentConsent } from '@types';
+import {
+    FulfillmentConsent,
+    FulfillmentHoldReason,
+    FulfillmentOrderStatus,
+    PreorderFulfillmentState
+} from '@types';
+import { remainingOf, type FulfillmentLine } from './fulfillment';
 
 /** Milliseconds in a day; every date rule here counts whole UTC days. */
 const DAY_MS = 86_400_000;
@@ -112,3 +118,53 @@ export const hasWaitExpired = (facts: SweepFacts, now: Date): boolean =>
  */
 export const slippedDays = (agreedAt: Date, expectedAt: Date): number =>
     Math.max(0, Math.round((expectedAt.getTime() - agreedAt.getTime()) / DAY_MS));
+
+/** What the board's state and lateness read off a fulfillment order. */
+export interface BoardFacts extends SweepFacts {
+    status: FulfillmentOrderStatus;
+    holdReason?: FulfillmentHoldReason | undefined;
+    lines: readonly FulfillmentLine[];
+}
+
+/**
+ * Whether the buyer has been asked and the answer is outstanding or the window already closed.
+ * @param facts - the fulfillment order's consent state
+ */
+const isBeingAsked = (facts: Pick<SweepFacts, 'consent'>): boolean =>
+    facts.consent === FulfillmentConsent.awaiting || facts.consent === FulfillmentConsent.expired;
+
+/**
+ * Where a preorder's fulfillment order stands, as the board names it. A staff hold on goods already
+ * allocated is still `allocated`: the stock is set aside, someone is just holding it back.
+ *
+ * @param facts - the fulfillment order
+ */
+export const boardStateOf = (facts: BoardFacts): PreorderFulfillmentState => {
+    if (facts.status === FulfillmentOrderStatus.cancelled)
+        return PreorderFulfillmentState.cancelled;
+    if (facts.status === FulfillmentOrderStatus.closed) return PreorderFulfillmentState.shipped;
+
+    const awaitingStock =
+        facts.status === FulfillmentOrderStatus.on_hold &&
+        facts.holdReason === FulfillmentHoldReason.awaiting_stock;
+    if (!awaitingStock) return PreorderFulfillmentState.allocated;
+    return isBeingAsked(facts)
+        ? PreorderFulfillmentState.awaiting_yes
+        : PreorderFulfillmentState.waiting;
+};
+
+/**
+ * Whether a fulfillment order is late: units remain and the date expected has passed, whether it
+ * still waits for stock, has stock set aside and unshipped, or shipped in part. The Late view
+ * (ADMIN_SALES A5): it is where goods already on the shelf show, which the sweep deliberately leaves
+ * alone.
+ *
+ * @param facts - the fulfillment order
+ * @param now - the instant to judge at
+ */
+export const isLate = (facts: BoardFacts, now: Date): boolean =>
+    facts.expectedAt !== undefined &&
+    facts.expectedAt.getTime() < now.getTime() &&
+    facts.status !== FulfillmentOrderStatus.closed &&
+    facts.status !== FulfillmentOrderStatus.cancelled &&
+    remainingOf(facts.lines) > 0;

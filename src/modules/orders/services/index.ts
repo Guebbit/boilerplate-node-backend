@@ -66,7 +66,9 @@ export {
     openUnpaidOrderIds,
     getByTransferReference,
     ownOrderIds,
-    findOwnOrders
+    findOwnOrders,
+    orderBriefsByIds,
+    type OrderBrief
 } from './read';
 export { create, recordCreated, update, updateById } from './crud';
 export { remove, removeById, restoreById } from './remove';

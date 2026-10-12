@@ -165,6 +165,16 @@ fulfillmentOrderSchema.index(
     { name: 'fulfillmentorders_consent_consentDeadline' }
 );
 
+// The preorder board's order (earliest expected first) and its product filter.
+fulfillmentOrderSchema.index(
+    { expectedAt: 1, _id: 1 },
+    { name: 'fulfillmentorders_expectedAt__id' }
+);
+fulfillmentOrderSchema.index(
+    { 'lines.productId': 1 },
+    { name: 'fulfillmentorders_linesProductId' }
+);
+
 /**
  * Normalizes a serialized fulfillment order: `_id` → `id`, drops `__v`. Owed to the repository
  * factory's lean reads (see `normalize` in @infrastructure/persistence/create-repository).

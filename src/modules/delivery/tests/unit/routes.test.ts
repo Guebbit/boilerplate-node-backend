@@ -24,6 +24,8 @@ describe('delivery routes', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /methods',
             'GET /order/:orderId',
+            'GET /fulfillment-orders',
+            'GET /fulfillment-orders/summary',
             'POST /order/:orderId/start',
             'POST /fulfillment-orders/:id/shipments',
             'POST /fulfillment-orders/:id/fulfill',

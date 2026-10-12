@@ -6,6 +6,8 @@
  */
 
 import type {
+    PreorderFulfillmentOrder,
+    PreorderProductSummary,
     FulfillmentOrder,
     FulfillmentOrderActions,
     Shipment,
@@ -13,7 +15,9 @@ import type {
     ExportShipment,
     ExportFulfillmentOrder
 } from '@types';
-import { remainingOfLine } from './domain';
+import { boardStateOf, isLate, remainingOfLine, slippedDays } from './domain';
+import type { ProductSummaryRow } from './repository';
+import type { OrderBrief } from '@modules/orders';
 import type { FulfillmentOrderDocument, ShipmentDocument } from './model';
 
 /**
@@ -112,4 +116,70 @@ export const presentFulfillmentOrder = (
     ...(showNote && fulfillmentOrder.holdNote ? { holdNote: fulfillmentOrder.holdNote } : {}),
     createdAt: (fulfillmentOrder.createdAt ?? new Date(0)).toISOString(),
     ...(fulfillmentOrder.updatedAt ? { updatedAt: fulfillmentOrder.updatedAt.toISOString() } : {})
+});
+
+/**
+ * One fulfillment order of a preorder as the board carries it: the record, its buyer and when the
+ * order was paid, and the two judgements the board filters by.
+ *
+ * @param fulfillmentOrder - the stored fulfillment order
+ * @param brief - its order's buyer and payment, as `orders` gives them out
+ * @param delivered - whether every shipment cut from it has arrived
+ * @param now - the instant `late` is judged at
+ */
+export const presentPreorderFulfillmentOrder = (
+    fulfillmentOrder: FulfillmentOrderDocument,
+    brief: OrderBrief | undefined,
+    delivered: boolean,
+    now: Date
+): PreorderFulfillmentOrder => ({
+    id: String(fulfillmentOrder._id),
+    orderId: String(fulfillmentOrder.orderId),
+    orderNumber: brief?.orderNumber ?? '',
+    number: fulfillmentOrder.number,
+    status: fulfillmentOrder.status,
+    state: boardStateOf(fulfillmentOrder),
+    lines: presentLines(fulfillmentOrder.lines),
+    buyer: {
+        email: brief?.email ?? '',
+        ...(brief?.userId ? { userId: brief.userId } : {})
+    },
+    ...(brief?.paidAt ? { paidAt: brief.paidAt.toISOString() } : {}),
+    ...(fulfillmentOrder.agreedAt ? { agreedAt: fulfillmentOrder.agreedAt.toISOString() } : {}),
+    ...(fulfillmentOrder.expectedAt
+        ? { expectedAt: fulfillmentOrder.expectedAt.toISOString() }
+        : {}),
+    slippedDays:
+        fulfillmentOrder.agreedAt && fulfillmentOrder.expectedAt
+            ? slippedDays(fulfillmentOrder.agreedAt, fulfillmentOrder.expectedAt)
+            : 0,
+    late: isLate(fulfillmentOrder, now),
+    delivered,
+    ...(fulfillmentOrder.holdReason ? { holdReason: fulfillmentOrder.holdReason } : {}),
+    ...(fulfillmentOrder.consent ? { consent: fulfillmentOrder.consent } : {}),
+    ...(fulfillmentOrder.consentDeadline
+        ? { consentDeadline: fulfillmentOrder.consentDeadline.toISOString() }
+        : {}),
+    ...(fulfillmentOrder.lastNoticeAt
+        ? { lastNoticeAt: fulfillmentOrder.lastNoticeAt.toISOString() }
+        : {}),
+    ...(fulfillmentOrder.cancelReason ? { cancelReason: fulfillmentOrder.cancelReason } : {}),
+    createdAt: (fulfillmentOrder.createdAt ?? new Date(0)).toISOString()
+});
+
+/**
+ * A product's preorder units as the board's Products tab carries them.
+ * @param row - the aggregation's row
+ */
+export const presentProductSummary = (row: ProductSummaryRow): PreorderProductSummary => ({
+    productId: row.productId,
+    title: row.title,
+    firstAgreedAt: row.firstAgreedAt.toISOString(),
+    paid: row.paid,
+    waiting: row.waiting,
+    awaitingYes: row.awaitingYes,
+    allocated: row.allocated,
+    shipped: row.shipped,
+    cancelled: row.cancelled,
+    late: row.late
 });

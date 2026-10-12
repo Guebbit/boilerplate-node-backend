@@ -111,6 +111,104 @@ paths:
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /delivery/fulfillment-orders:
+        get:
+            tags: [Delivery]
+            summary: List fulfillment orders (the preorder board)
+            description: |
+                One row per fulfillment order, with the buyer and when the order was paid, for the admin's preorder
+                board: the fulfillment orders of preorders, where they stand with their buyer, and which are late.
+                `preorder=true` keeps those made from a preorder line (the ones that carry an agreed date).
+
+                `late=true` is the Late view: the expected date has passed and units remain, whether still waiting
+                for stock, allocated and not yet shipped, or part shipped. `dueWithin=N` is its warning: still
+                waiting for stock, and expected within the next N days — see it coming, since a slip moved before
+                the date passes is a notice, and one moved after is a question.
+
+                Same audience as the orders it belongs to: staff holding `orders.any.read` see every row, anyone
+                else only their own orders'. `delivered` is true once nothing remains and every shipment arrived.
+            operationId: listPreorderFulfillmentOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: preorder
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                  description: '`true` keeps fulfillment orders made from a preorder line, `false` the others; absent keeps both.'
+                - name: state
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '#/components/schemas/PreorderFulfillmentState'
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Only fulfillment orders carrying this product.
+                - name: late
+                  in: query
+                  required: false
+                  schema:
+                      type: boolean
+                  description: '`true` keeps those whose expected date has passed with units remaining.'
+                - name: dueWithin
+                  in: query
+                  required: false
+                  schema:
+                      type: integer
+                      minimum: 1
+                      maximum: 365
+                  description: Only those still waiting for stock whose expected date falls within this many days.
+            responses:
+                '200':
+                    description: A page of fulfillment orders, the earliest expected first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PreorderFulfillmentOrdersResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /delivery/fulfillment-orders/summary:
+        get:
+            tags: [Delivery]
+            summary: Preorder units by product and state
+            description: |
+                For each product sold as a preorder, how its units stand across every fulfillment order made from it:
+                paid, waiting for stock, waiting for the buyer's answer, allocated, shipped, cancelled, and late. Units,
+                not fulfillment orders. `firstAgreedAt` is the earliest date any buyer was promised. For the Products
+                tab of the preorder board; same audience and scope as the list.
+            operationId: summarizePreorderFulfillmentOrders
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageParam'
+                - $ref: '../../../shared/contracts/openapi.root.yaml#/components/parameters/PageSizeParam'
+                - name: productId
+                  in: query
+                  required: false
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                  description: Only this product.
+            responses:
+                '200':
+                    description: A page of product summaries, the earliest promise first
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PreorderProductSummariesResponseEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /delivery/fulfillment-orders/{id}/shipments:
         post:
             tags: [Delivery]
@@ -863,3 +961,177 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
                 data:
                     $ref: '#/components/schemas/Shipment'
+
+        PreorderFulfillmentState:
+            type: string
+            enum: [waiting, awaiting_yes, allocated, shipped, cancelled]
+            description: >-
+                Where a preorder's fulfillment order stands, as the board reads it. `waiting`: paid, held for
+                stock. `awaiting_yes`: held for stock, and the buyer was asked to keep waiting (or let the
+                window close and the cancel is on its way). `allocated`: stock is set aside for it, not all
+                shipped. `shipped`: nothing remains and something shipped. `cancelled`: nothing remains and
+                nothing shipped; `cancelReason` says who.
+
+        PreorderBuyer:
+            type: object
+            additionalProperties: false
+            required: [email]
+            description: Who the order belongs to, as the order itself carries it.
+            properties:
+                userId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                email:
+                    type: string
+
+        PreorderFulfillmentOrder:
+            type: object
+            additionalProperties: false
+            required: [id, orderId, orderNumber, number, status, state, lines, buyer, delivered, late, slippedDays, createdAt]
+            description: One fulfillment order of a preorder, with its buyer and what the board needs to judge it.
+            properties:
+                id:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                orderNumber:
+                    type: string
+                number:
+                    type: integer
+                    minimum: 1
+                status:
+                    $ref: '#/components/schemas/FulfillmentOrderStatus'
+                state:
+                    $ref: '#/components/schemas/PreorderFulfillmentState'
+                lines:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/FulfillmentOrderLine'
+                buyer:
+                    $ref: '#/components/schemas/PreorderBuyer'
+                paidAt:
+                    type: string
+                    format: date-time
+                    description: When the order was paid. The payment's instant, which is also the queue key stock is allocated by (`inventory` stamps the hold in the same transaction).
+                agreedAt:
+                    type: string
+                    format: date-time
+                expectedAt:
+                    type: string
+                    format: date-time
+                slippedDays:
+                    type: integer
+                    minimum: 0
+                    description: Whole days between the date promised and the date expected; `0` when it has not slipped.
+                late:
+                    type: boolean
+                    description: The expected date has passed and units remain.
+                delivered:
+                    type: boolean
+                    description: Nothing remains, something shipped, and every shipment arrived.
+                holdReason:
+                    $ref: '#/components/schemas/FulfillmentHoldReason'
+                consent:
+                    $ref: '#/components/schemas/FulfillmentConsent'
+                consentDeadline:
+                    type: string
+                    format: date-time
+                lastNoticeAt:
+                    type: string
+                    format: date-time
+                cancelReason:
+                    $ref: '#/components/schemas/FulfillmentCancelReason'
+                createdAt:
+                    type: string
+                    format: date-time
+
+        PreorderFulfillmentOrdersResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PreorderFulfillmentOrder'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        PreorderFulfillmentOrdersResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PreorderFulfillmentOrdersResponse'
+
+        PreorderProductSummary:
+            type: object
+            additionalProperties: false
+            required: [productId, title, firstAgreedAt, paid, waiting, awaitingYes, allocated, shipped, cancelled, late]
+            description: >-
+                One product's preorder units across every fulfillment order made from it. `paid` is every
+                unit paid for, so `waiting + awaitingYes + allocated + shipped + cancelled` equals it.
+                `late` is a subset: units remaining on fulfillment orders whose expected date has passed.
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                    description: As the earliest order froze it.
+                firstAgreedAt:
+                    type: string
+                    format: date-time
+                    description: The earliest date any buyer was promised.
+                paid:
+                    type: integer
+                    minimum: 0
+                waiting:
+                    type: integer
+                    minimum: 0
+                awaitingYes:
+                    type: integer
+                    minimum: 0
+                allocated:
+                    type: integer
+                    minimum: 0
+                shipped:
+                    type: integer
+                    minimum: 0
+                cancelled:
+                    type: integer
+                    minimum: 0
+                late:
+                    type: integer
+                    minimum: 0
+
+        PreorderProductSummariesResponse:
+            type: object
+            additionalProperties: false
+            required: [items, meta]
+            properties:
+                items:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PreorderProductSummary'
+                meta:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/PaginationMeta'
+
+        PreorderProductSummariesResponseEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PreorderProductSummariesResponse'

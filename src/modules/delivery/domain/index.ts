@@ -47,6 +47,8 @@ export {
     answerBy,
     needsDatePassedNotice,
     hasWaitExpired,
-    slippedDays
+    slippedDays,
+    boardStateOf,
+    isLate
 } from './preorder';
-export type { SlipFacts, SlipVerdict, SweepFacts } from './preorder';
+export type { BoardFacts, SlipFacts, SlipVerdict, SweepFacts } from './preorder';

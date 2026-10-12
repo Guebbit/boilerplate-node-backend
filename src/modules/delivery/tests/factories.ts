@@ -7,6 +7,7 @@
 
 import { asAdmin, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
+import type { UserDocument } from '@modules/users';
 import { createProduct } from '@modules/products/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
@@ -138,13 +139,14 @@ export interface WantedPreorder {
  * Nothing is shipped and no fulfillment order exists until something reads them (`fulfillmentOrdersOf`).
  *
  * @param wanted - the lines, one product each
- * @param email - the buyer's address; distinct per order in a test that makes two
+ * @param buyer - the buyer's address (a new account is made; distinct per order in a test that makes
+ *   two), or an account that already exists, such as the one a test is logged in as
  */
 export const paidPreorderOrder = async (
     wanted: readonly WantedPreorder[],
-    email = 'buyer@example.com'
+    buyer: string | UserDocument = 'buyer@example.com'
 ) => {
-    const user = await createUser({ email });
+    const user = typeof buyer === 'string' ? await createUser({ email: buyer }) : buyer;
     const products = await Promise.all(
         wanted.map(({ releaseDate }) =>
             createProduct({ onHand: 0, price: 10, releaseDate: releaseDate.toISOString() })

@@ -1171,6 +1171,10 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
     /delivery/order/{orderId}/start:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1start'
+    /delivery/fulfillment-orders:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders'
+    /delivery/fulfillment-orders/summary:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1summary'
     /delivery/fulfillment-orders/{id}/shipments:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1shipments'
     /delivery/fulfillment-orders/{id}/fulfill:

@@ -43,6 +43,7 @@ export { releaseAllocated } from './release-allocated';
 export { onReleaseDateChanged } from './slip';
 export { runPreorderSweep, type PreorderSweepResult } from './preorder-sweep';
 export { confirmWait } from './confirm-wait';
+export { listPreorderFulfillmentOrders, summarizePreorders, type BoardQuery } from './board';
 export { scrubHoldNotes } from './retention';
 
 /** The module's one service handle — every controller in this module goes through it. */

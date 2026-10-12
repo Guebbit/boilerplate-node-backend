@@ -271,6 +271,41 @@ Units already allocated but not shipped (`open`) are left alone: goods on the sh
 delay (FTC (b)(1)(ii)), not an indefinite one, and the buyer can already cancel any time before dispatch.
 The admin's Late view is where they show.
 
+### The preorder board
+
+The admin's preorder board (ADMIN_SALES 3) reads two things from here. The grain is the fulfillment
+order, not the order line: the agreed and expected date, the hold, the consent state and the cancel
+reason all live on it, and `orders → delivery` is forbidden, so `orders` could not serve those columns.
+
+| Route                                      | Answers                                                                                              |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `GET /delivery/fulfillment-orders`         | one row per fulfillment order, with its buyer, `paidAt`, `state`, `late`, `delivered`, `slippedDays` |
+| `GET /delivery/fulfillment-orders/summary` | per product, in units: paid, waiting, awaiting a yes, allocated, shipped, cancelled, late            |
+
+Filters on the list: `preorder` (made from a preorder line, the ones that carry an agreed date),
+`state`, `productId`, `late` and `dueWithin`.
+
+| `state`        | The fulfillment order is...                                                                          |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| `waiting`      | paid and held for stock, the buyer not being asked anything                                          |
+| `awaiting_yes` | held for stock, and the buyer was asked to keep waiting (or the window closed, the cancel pending)   |
+| `allocated`    | stock is set aside for it and not all shipped; a staff hold on such goods is still `allocated`       |
+| `shipped`      | nothing remains and something shipped; `delivered` says whether every shipment also arrived          |
+| `cancelled`    | nothing remains and nothing shipped; `cancelReason` says who: `buyer`, `staff`, `no_answer`, `order` |
+
+`late` is the Late view: the expected date has passed and units remain, whether still waiting, allocated
+and not shipped, or part shipped. It is where goods on the shelf show, which the daily sweep deliberately
+does not ask the buyer about. `dueWithin=N` is its early warning, for fulfillment orders still waiting
+and expected within N days: a slip moved before the date passes is a notice, and one moved after is a
+question. The queue key stock is allocated by is the hold's `committedAt`, stamped in the payment's own
+transaction, so `paidAt` here orders the buyers the way `inventory` does.
+
+**Who reads it** is the audience of the orders themselves: the key is `orders.any.read` (decided A5.2,
+because there is one audience and one permission for it). A route guard cannot tell that key from a
+buyer's own `orders.self.read`, which collapses onto it, so the scope is in the query: staff who read
+every order see every row; anyone else sees only their own orders' fulfillment orders. The buyer and
+`paidAt` come from `orders`, one batched read a page (`orderBriefsByIds`).
+
 ### When they are made
 
 | Path       | What                                                                                                                                                                                                          |
@@ -396,6 +431,7 @@ is given back is the preorder allowance and not shelf units.
 | Route                                                      | Key                   | Answers                                                             |
 | ---------------------------------------------------------- | --------------------- | ------------------------------------------------------------------- |
 | `POST /delivery/fulfillment-orders/{id}/confirm-wait`      | the order's buyer     | the fulfillment order, `consent: confirmed`                         |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `orders.any.read`     | [the preorder board](#the-preorder-board)'s two reads               |
 | `GET /delivery/order/{orderId}`                            | the owner, or staff   | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
 | `POST /delivery/order/{orderId}/start`                     | `delivery.any.start`  | the order, `processing`                                             |
 | `POST /delivery/fulfillment-orders/{id}/shipments`         | `delivery.any.update` | `201` + the shipment                                                |

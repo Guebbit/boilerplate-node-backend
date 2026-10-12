@@ -18,6 +18,7 @@ import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { callerScope, ownerScope } from './scope';
 import { fulfillmentStatusFilter } from '../domain';
+import { toObjectId } from '@infrastructure/persistence/create-repository';
 
 /**
  * Turn `fulfillmentStatus` — a value derived on read, not a stored column — into the conditions
@@ -80,6 +81,49 @@ export const ownOrderIds = (userId: string): Promise<string[]> =>
                 .then((result) => result.items),
         MAX_CONFIGURED_PAGE_SIZE
     ).then((orders) => orders.map((order) => order.id));
+
+/** What a board needs to name an order's buyer and when it was paid — nothing more. */
+export interface OrderBrief {
+    id: string;
+    orderNumber: string;
+    /** Absent once the account was erased. */
+    userId?: string;
+    email: string;
+    /** When the payment settled; absent for an order never paid. */
+    paidAt?: Date;
+}
+
+/**
+ * The narrow read an admin board makes about a page of orders: who bought and when it was paid, by
+ * id, in one query however many orders the page holds. Not a view of the order — no lines, no
+ * addresses — so a board never needs the rest of it.
+ *
+ * @param orderIds - the orders on the page
+ * @returns a brief per order found, by id; an id that matches nothing is simply absent
+ */
+export const orderBriefsByIds = (orderIds: readonly string[]): Promise<Map<string, OrderBrief>> =>
+    orderIds.length === 0
+        ? Promise.resolve(new Map<string, OrderBrief>())
+        : orderRepository
+              .findAll(
+                  { _id: { $in: orderIds.map((id) => toObjectId(id)) } },
+                  { limit: orderIds.length }
+              )
+              .then(
+                  (orders) =>
+                      new Map(
+                          orders.map((order): [string, OrderBrief] => [
+                              String(order._id),
+                              {
+                                  id: String(order._id),
+                                  orderNumber: order.orderNumber,
+                                  email: order.email,
+                                  ...(order.userId ? { userId: String(order.userId) } : {}),
+                                  ...(order.paidAt ? { paidAt: order.paidAt } : {})
+                              }
+                          ])
+                      )
+              );
 
 /**
  * Every order this account placed, in wire shape — for the account's own data export. Goes
