@@ -146,21 +146,19 @@ export const persistReauthCode = (user: UserDocument): Promise<UserDocument> => 
 };
 
 /**
- * Wrong codes an account may have reserved against its armed 2FA before it locks. NIST SP 800-63B
- * allows at most 100; ten is what a person mistyping can plausibly reach.
- */
-export const MFA_MAX_FAILURES = 10;
-
-/** How long the lock lasts once {@link MFA_MAX_FAILURES} is reached. */
-export const MFA_LOCK_MS = 15 * 60_000;
-
-/**
  * Reserve one wrong-code attempt against the account's armed 2FA, before any code is compared.
  * `reserved: false` means locked: the caller must refuse without comparing. `lockedNow` is true
- * for exactly the reservation that tripped the lock.
+ * for exactly the reservation that tripped the lock. The policy is `account`'s, passed in.
+ *
+ * @param id - the account
+ * @param maxFailures - reservations a window may hand out before it locks
+ * @param lockMs - how long the lock lasts
  */
-export const reserveMfaAttempt = (id: string): Promise<MfaReservation> =>
-    userRepository.reserveMfaAttempt(id, MFA_MAX_FAILURES, MFA_LOCK_MS);
+export const reserveMfaAttempt = (
+    id: string,
+    maxFailures: number,
+    lockMs: number
+): Promise<MfaReservation> => userRepository.reserveMfaAttempt(id, maxFailures, lockMs);
 
 /** Clear the 2FA attempt counter and lock — after a right code, or a completed password reset. */
 export const resetMfaAttempts = (id: string): Promise<void> => userRepository.resetMfaAttempts(id);

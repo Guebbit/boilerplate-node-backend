@@ -29,6 +29,7 @@ export {
     generateDeliveredCode,
     hashDeliveredCode
 } from './delivered-codes';
+export { MFA_LOCK_MS, MFA_MAX_FAILURES } from './lockout';
 export {
     buildOtpauthUri,
     decryptTotpSecret,

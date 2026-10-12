@@ -15,7 +15,13 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { CallerContext } from '@types';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
-import { hashBackupCode, orderedEntries, type TwoFactorMethodHandler } from '../two-factor';
+import {
+    MFA_LOCK_MS,
+    MFA_MAX_FAILURES,
+    hashBackupCode,
+    orderedEntries,
+    type TwoFactorMethodHandler
+} from '../two-factor';
 import { rejectWrongCode, rejectLocked, notifyLocked } from './two-factor-outcomes';
 
 /** The account's armed factors, in the registry's own order rather than enrollment order. */
@@ -94,16 +100,18 @@ export const verifyArmedFactor = (
     code: string,
     context: CallerContext
 ): Promise<FactorVerdict> =>
-    userService.reserveMfaAttempt(user.id).then(({ reserved, lockedNow }) => {
-        if (!reserved) return 'locked' as const;
-        if (lockedNow) notifyLocked(user, context);
+    userService
+        .reserveMfaAttempt(user.id, MFA_MAX_FAILURES, MFA_LOCK_MS)
+        .then(({ reserved, lockedNow }) => {
+            if (!reserved) return 'locked' as const;
+            if (lockedNow) notifyLocked(user, context);
 
-        return verifyAnyFactor(user, code).then((matched) =>
-            matched
-                ? userService.resetMfaAttempts(user.id).then(() => 'matched' as const)
-                : ('wrong' as const)
-        );
-    });
+            return verifyAnyFactor(user, code).then((matched) =>
+                matched
+                    ? userService.resetMfaAttempts(user.id).then(() => 'matched' as const)
+                    : ('wrong' as const)
+            );
+        });
 
 /**
  * Turn a {@link FactorVerdict} into the response: run `onMatch` for a right code, refuse a locked
