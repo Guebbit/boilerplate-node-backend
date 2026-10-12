@@ -12,7 +12,7 @@
  *   P5 — a customer cancelling while the payment settles: the order and the money always agree.
  *
  * What "once" means is counted in the ledger and the event bus, not inferred from status codes:
- * a second commit moves no counter, so only the `commit` movement rows and `PAYMENT_SUCCEEDED`
+ * a second commit moves no counter and writes no ledger row, so only the `PAYMENT_SUCCEEDED`
  * emissions count every time it happened.
  *
  * Hit rate: P1-P4 contend on every run. P5's window (between `markPaid` and the payment write) was
@@ -30,11 +30,9 @@ import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import { signWebhookPayload, WEBHOOK_SIGNATURE_HEADER } from '@modules/payments/providers';
 import { PAYMENT_SUCCEEDED } from '@modules/payments/events';
 import { paymentModel } from '@modules/payments/model';
-import { stockMovementModel } from '@modules/inventory/model';
 import { orderModel } from '@modules/orders/model';
 import { onDomainEvent } from '@kernel/events';
 import { relayOutbox, settleOutboxNudges } from '@kernel/outbox';
-import { StockMovementReason } from '@types';
 import { RACE_SIZE, countStatus, expectNoServerErrors, raceN } from '@tests/race';
 
 // No real Chromium here: the placed-order email renders an invoice, and the stub would log a
@@ -131,14 +129,6 @@ const deliver = (event: Record<string, unknown>) => {
 };
 
 /**
- * How many `commit` movements the ledger holds for an order — one per line per commit.
- *
- * @param orderId - the order the commit references
- */
-const commitsFor = (orderId: string) =>
-    stockMovementModel.countDocuments({ reference: orderId, reason: StockMovementReason.commit });
-
-/**
  * Counts `PAYMENT_SUCCEEDED` per order for the rest of the test. The listener is added on top of
  * the modules' own, so it observes without changing what they do.
  *
@@ -180,8 +170,6 @@ describe('P1 — the same intent confirmed many times at once', () => {
         // Every loser is told the payment is past confirming, not handed a second success.
         expect(countStatus(results, 200) + countStatus(results, 409)).toBe(RACE_SIZE);
         expect(countStatus(results, 200)).toBeGreaterThanOrEqual(1);
-
-        expect(await commitsFor(orderId)).toBe(1);
         expect(succeededFor(orderId)).toBe(1);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 2, available: 8 });
         await expect(orderModel.findById(orderId).then((order) => order?.status)).resolves.toBe(
@@ -207,8 +195,6 @@ describe('P2 — one webhook event redelivered in parallel', () => {
         expectNoServerErrors(results);
         // A provider reads anything but 2xx as "retry harder" — a duplicate is not a failure.
         expect(countStatus(results, 200)).toBe(RACE_SIZE);
-
-        expect(await commitsFor(orderId)).toBe(1);
         expect(succeededFor(orderId)).toBe(1);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         await expect(
@@ -238,7 +224,6 @@ describe('P3 — the webhook racing the browser confirm', () => {
         await settleEvents();
 
         expectNoServerErrors(results);
-        expect(await commitsFor(orderId)).toBe(1);
         expect(succeededFor(orderId)).toBe(1);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 1, available: 9 });
     });
@@ -320,7 +305,6 @@ describe('P5 — a customer cancelling while the payment settles', () => {
             else {
                 expect(order?.status).toBe('paid');
                 expect(payment?.status).toBe('succeeded');
-                expect(await commitsFor(orderId)).toBe(1);
             }
         }
     });

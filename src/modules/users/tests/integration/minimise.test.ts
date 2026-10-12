@@ -90,6 +90,17 @@ describe('inactivity minimisation', () => {
         expect(await isMinimised(user.id)).toBe(true);
     });
 
+    it('minimises a banned account too: it drops data and deletes nothing', async () => {
+        const { user } = await inactiveCustomerWithOrder('banned');
+        await makeInactive(user.id, { active: false });
+
+        const result = await userService.minimiseInactiveBefore(daysAgo(30));
+
+        expect(result).toEqual({ minimised: 1, failed: 0 });
+        expect(await addressesOf(user.id)).toEqual([]);
+        expect(await isMinimised(user.id)).toBe(true);
+    });
+
     it('is a no-op on a rerun', async () => {
         const { orderId } = await inactiveCustomerWithOrder('rerun');
         await userService.minimiseInactiveBefore(daysAgo(30));

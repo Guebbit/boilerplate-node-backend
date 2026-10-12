@@ -99,15 +99,15 @@ language is kept per context rather than shared.
 
 ## `inventory`
 
-| Term               | What it means here                                                                                                                                                                                                         |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.                                                                              |
-| **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                                                                                                   |
-| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                                                                                           |
-| **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                                                                                                         |
-| **Transition**     | One of the seven ways a counter may move (`reserve`, `commit`, `release`, `expire`, `receive`, `adjust`, `restock`). Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row. |
-| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.                                                                           |
-| **Sweep**          | The expiry tick. An operator is the cron — the application ships no scheduler of its own.                                                                                                                                  |
+| Term               | What it means here                                                                                                                                                                                                                              |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **On hand**        | Units physically present, whether or not anyone has claimed them. Stored on this module's own `stocklevels` collection — the source of truth.                                                                                                   |
+| **Reserved**       | Units an open order has claimed. Still on the shelf, no longer for sale.                                                                                                                                                                        |
+| **Available**      | On hand minus reserved, clamped at zero — what a customer may buy. Stored and kept in step by `applyTransition`, the one writer.                                                                                                                |
+| **Reservation**    | One order’s hold on its units, with a deadline. Ends as a commit, a release or an expiry — never by being deleted.                                                                                                                              |
+| **Transition**     | One of the nine ways a counter may move (`reserve`, `ship`, `release`, `expire`, `receive`, `adjust`, `restock`, `preorder`, `allocate`). Each implies a fixed pair of deltas (`domain/transitions.ts`) and each writes exactly one ledger row. |
+| **Stock movement** | A ledger row: which product, which transition, and both signed deltas. Written by the same call that moved the counter, so it cannot be missing.                                                                                                |
+| **Sweep**          | The expiry tick. An operator is the cron — the application ships no scheduler of its own.                                                                                                                                                       |
 
 ## `invoicing`
 

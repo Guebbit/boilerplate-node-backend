@@ -612,6 +612,31 @@ describe('digital fulfilment', () => {
     });
 });
 
+describe('the account export', () => {
+    it('carries staff’s hold note and no staff id', async () => {
+        const { user, order } = await processingOrderOf();
+        const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+        await holdFulfillmentOrder(
+            String(fulfillmentOrder._id),
+            { reason: 'high_risk', note: 'rang twice' },
+            asAdmin('staff-42'),
+            callerContextAs('admin', 'staff-42')
+        );
+
+        const section = deliveryModule.personalData.find(
+            ({ section: name }) => name === 'fulfillmentOrders'
+        );
+        const exported = await section!.collect({
+            userId: String(user._id),
+            email: user.email,
+            emailVerified: true
+        });
+
+        expect(exported).toMatchObject([{ holdReason: 'high_risk', holdNote: 'rang twice' }]);
+        expect(JSON.stringify(exported)).not.toContain('staff-42');
+    });
+});
+
 describe('holds', () => {
     it('stops a fulfillment order shipping, and a release lets it go again', async () => {
         const { order } = await processingOrderOf();

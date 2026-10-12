@@ -29,7 +29,6 @@ describe('counterDeltaFor', () => {
     // pair of numbers, so this pins the actual value each reason produces.
     it.each([
         [StockMovementReason.reserve, { onHandDelta: 0, reservedDelta: 3, preorderedDelta: 0 }],
-        [StockMovementReason.commit, { onHandDelta: 0, reservedDelta: 0, preorderedDelta: 0 }],
         [StockMovementReason.ship, { onHandDelta: -3, reservedDelta: -3, preorderedDelta: 0 }],
         [StockMovementReason.release, { onHandDelta: 0, reservedDelta: -3, preorderedDelta: 0 }],
         [StockMovementReason.expire, { onHandDelta: 0, reservedDelta: -3, preorderedDelta: 0 }],
@@ -47,7 +46,7 @@ describe('counterDeltaFor', () => {
             (reason) => counterDeltaFor(reason, 5).onHandDelta !== 0
         );
 
-        // `ship` is here, and `commit` is not: paying moves nothing, the units leave at dispatch.
+        // `ship` is here: paying moves nothing, the units leave at dispatch.
         // Nothing a CUSTOMER does before the parcel leaves appears in this list.
         expect(changesOnHand.toSorted()).toEqual(
             [
@@ -57,14 +56,6 @@ describe('counterDeltaFor', () => {
                 StockMovementReason.restock
             ].toSorted()
         );
-    });
-
-    it('commits without moving a counter', () => {
-        expect(counterDeltaFor(StockMovementReason.commit, 7)).toEqual({
-            onHandDelta: 0,
-            reservedDelta: 0,
-            preorderedDelta: 0
-        });
     });
 
     it('ships without changing availability', () => {

@@ -326,18 +326,14 @@ describe('commitForOrder', () => {
         });
     });
 
-    it('dates the payment in the ledger with a row that moves nothing', async () => {
+    it('writes no ledger row — nothing moved, and the date lives on the hold', async () => {
         const product = await createProduct({ onHand: 10 });
         const orderId = anOrderId();
         await reserveForOrder(orderId, [{ productId: String(product._id), quantity: 3 }]);
         await commitForOrder(orderId);
 
-        const ledger = await listMovements({
-            productId: String(product._id),
-            reason: StockMovementReason.commit
-        });
-        expect(ledger.items).toHaveLength(1);
-        expect(ledger.items[0]).toMatchObject({ onHandDelta: 0, reservedDelta: 0 });
+        const ledger = await listMovements({ productId: String(product._id) });
+        expect(ledger.items.map(({ reason }) => reason)).toEqual([StockMovementReason.reserve]);
     });
 
     it('is at most once — a second confirm commits nothing, and raises no alarm', async () => {

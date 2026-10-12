@@ -90,10 +90,11 @@ const raiseOrphanAlarm = (
 
 /**
  * Settle an order's hold at payment: `held → committed`. No counter moves — the units stay on
- * the shelf, still spoken for, until {@link shipForOrder}; the ledger row (`commit`, every delta
- * zero) dates the payment, and the hold's `committedAt` is the preorder queue key.
+ * the shelf, still spoken for, until {@link shipForOrder}. No ledger row: the ledger has one row
+ * per counter change, and the payment's date is the hold's `committedAt`, also the preorder
+ * queue key.
  *
- * Claiming first is what makes it at-most-once.
+ * The claim is one conditional write, which is what makes it at-most-once.
  *
  * A missed claim is not automatically a no-op: a redelivered settlement finding the hold already
  * `committed` (or, if the parcel got ahead of a crashed settlement, `shipped`) is a benign
@@ -105,7 +106,7 @@ const raiseOrphanAlarm = (
  * @returns whether this call was the one that committed
  */
 export const commitForOrder = async (orderId: string): Promise<boolean> => {
-    if (await claimAndApply(orderId, 'held', 'committed', StockMovementReason.commit)) {
+    if (await reservationRepository.claimStatus(orderId, 'held', 'committed')) {
         // Paid preorder units wait for stock; stock that already arrived serves them now.
         await allocateForOrder(orderId);
         return true;

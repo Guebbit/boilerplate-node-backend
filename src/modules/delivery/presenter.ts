@@ -72,13 +72,10 @@ export const presentExportShipment = (shipment: ShipmentDocument): ExportShipmen
 });
 
 /**
- * The fulfillment order as an account export carries it. Staff's hold note is not the buyer's data
- * and is left out.
+ * The fulfillment order's record without staff's hold note: what any reader of it may see.
  * @param fulfillmentOrder - the stored fulfillment order
  */
-export const presentExportFulfillmentOrder = (
-    fulfillmentOrder: FulfillmentOrderDocument
-): ExportFulfillmentOrder => ({
+const presentRecord = (fulfillmentOrder: FulfillmentOrderDocument): ExportFulfillmentOrder => ({
     id: String(fulfillmentOrder._id),
     orderId: String(fulfillmentOrder.orderId),
     number: fulfillmentOrder.number,
@@ -101,6 +98,18 @@ export const presentExportFulfillmentOrder = (
 });
 
 /**
+ * The fulfillment order as an account export carries it. Staff's hold note is in: their
+ * assessment of the buyer is the buyer's data. The record holds no staff id, so none is out.
+ * @param fulfillmentOrder - the stored fulfillment order
+ */
+export const presentExportFulfillmentOrder = (
+    fulfillmentOrder: FulfillmentOrderDocument
+): ExportFulfillmentOrder => ({
+    ...presentRecord(fulfillmentOrder),
+    ...(fulfillmentOrder.holdNote ? { holdNote: fulfillmentOrder.holdNote } : {})
+});
+
+/**
  * The fulfillment order as `openapi.yaml` declares it, with the caller's `actions`.
  * @param fulfillmentOrder - the stored fulfillment order
  * @param actions - what this caller may do to it
@@ -111,7 +120,7 @@ export const presentFulfillmentOrder = (
     actions: FulfillmentOrderActions,
     showNote: boolean
 ): FulfillmentOrder => ({
-    ...presentExportFulfillmentOrder(fulfillmentOrder),
+    ...presentRecord(fulfillmentOrder),
     actions,
     ...(showNote && fulfillmentOrder.holdNote ? { holdNote: fulfillmentOrder.holdNote } : {}),
     createdAt: (fulfillmentOrder.createdAt ?? new Date(0)).toISOString(),

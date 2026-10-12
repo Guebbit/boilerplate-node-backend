@@ -626,7 +626,7 @@ const payFor = async (orderId: string, user: { id: string }) => {
  * than fixtures, so there is a real hold for the commit to claim.
  */
 describe('the confirm commits the order’s held units', () => {
-    it('moves no counter when the money lands, and dates the payment in the ledger', async () => {
+    it('moves no counter when the money lands, and writes no ledger row', async () => {
         const { user, product, order } = await placedOrder(10, 3);
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
 
@@ -636,7 +636,7 @@ describe('the confirm commits the order’s held units', () => {
         // The units stay on the shelf, still spoken for, until the parcel leaves.
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const movements = await inventoryService.listMovements({ productId: String(product._id) });
-        expect(movements.items.filter((row) => row.reason === 'commit')).toHaveLength(1);
+        expect(movements.items.map((row) => row.reason)).toEqual(['reserve']);
     });
 
     it('leaves the hold alone when the card is declined', async () => {
@@ -664,11 +664,11 @@ describe('the confirm commits the order’s held units', () => {
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
         await confirmPayment(paymentId, GOOD_METHOD, auth(user), testCallerContext);
 
-        // One commit row, not two. Two guards refuse the replay independently — the order's
+        // No ledger row for a payment, replayed or not. Two guards refuse the replay independently — the order's
         // conditional `pending → paid` and the reservation's own `held → committed` claim.
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
         const movements = await inventoryService.listMovements({ productId: String(product._id) });
-        expect(movements.items.filter((row) => row.reason === 'commit')).toHaveLength(1);
+        expect(movements.items.map((row) => row.reason)).toEqual(['reserve']);
     });
 
     it('commits once when the webhook and the browser settle the same payment', async () => {

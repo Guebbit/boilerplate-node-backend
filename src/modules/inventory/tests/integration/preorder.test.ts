@@ -278,7 +278,6 @@ describe('a receipt serving the queue', () => {
         expect(items.map(({ reason }) => reason).toSorted()).toEqual(
             [
                 StockMovementReason.preorder,
-                StockMovementReason.commit,
                 StockMovementReason.receive,
                 StockMovementReason.allocate
             ].toSorted()

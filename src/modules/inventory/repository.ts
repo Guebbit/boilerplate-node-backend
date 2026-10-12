@@ -83,8 +83,6 @@ const conditionFor = (
         case StockMovementReason.allocate: {
             return { preordered: { $gte: quantity }, available: { $gte: quantity } };
         }
-        // `commit` moves nothing, so it guards nothing: it only has to leave its ledger row.
-        case StockMovementReason.commit:
         case StockMovementReason.receive:
         case StockMovementReason.restock: {
             return {};
@@ -363,9 +361,7 @@ export const stockLevelRepository: Repository<StockLevelDocument, Wire<StockLeve
                 { timestamps: false, session }
             )
             .exec()
-            // `matchedCount`, not `modifiedCount`: a `commit` increments by zero, which Mongo
-            // reports as nothing modified although the condition matched and the move is valid.
-            .then(({ matchedCount }) => matchedCount > 0),
+            .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
      * A page of the stock board, scarcest first — THIS module's rows alone, no join. Sorted on

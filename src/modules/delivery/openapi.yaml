@@ -812,7 +812,7 @@ components:
             type: object
             additionalProperties: false
             required: [id, orderId, number, kind, status, lines]
-            description: A fulfillment order as an account export carries it. Staff's hold note is not the buyer's data and is left out.
+            description: A fulfillment order as an account export carries it, with staff's hold note (their assessment of the buyer is the buyer's data) and without who wrote it.
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
@@ -831,6 +831,10 @@ components:
                         $ref: '#/components/schemas/FulfillmentOrderLine'
                 holdReason:
                     $ref: '#/components/schemas/FulfillmentHoldReason'
+                holdNote:
+                    type: string
+                    maxLength: 1000
+                    description: Staff's free text about the hold. Present until the retention sweep unsets it.
                 agreedAt:
                     type: string
                     format: date-time
