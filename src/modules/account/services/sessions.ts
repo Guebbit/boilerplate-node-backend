@@ -37,8 +37,10 @@ export const exportSessions = (userId: string): Promise<ExportSession[]> =>
         newestPerFamily(rows).map(
             (row): ExportSession => ({
                 id: String(row.familyId),
+                createdAt: row.startedAt.toISOString(),
                 expiration: row.expiresAt.toISOString(),
-                ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {})
+                ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
+                ...(row.device ? { device: row.device } : {})
             })
         )
     );

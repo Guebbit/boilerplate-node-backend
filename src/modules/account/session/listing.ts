@@ -36,10 +36,12 @@ export const newestPerFamily = (rows: readonly SessionRow[]): SessionRow[] => {
  */
 const toSession = (row: SessionRow, currentFamilies: ReadonlySet<string>): Session => ({
     id: String(row.familyId),
+    createdAt: row.startedAt.toISOString(),
     expiration: row.expiresAt.toISOString(),
     // Absent until this session has been used at least once — an unused session reads as unused
     // rather than as one that happens to share the moment it was issued.
     ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
+    ...(row.device ? { device: row.device } : {}),
     current: currentFamilies.has(String(row.familyId))
 });
 

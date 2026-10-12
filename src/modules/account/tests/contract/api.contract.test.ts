@@ -833,12 +833,12 @@ describe('POST /account/export', () => {
         expect(status).toBe(200);
         const { profile, sessions } = data as {
             profile: { email: string };
-            sessions: { id: string; expiration: string }[];
+            sessions: { id: string; createdAt: string; expiration: string }[];
         };
         expect(profile.email).toBe(user.email);
         // The caller's own login, as metadata only: its handle and when it ends, never a credential.
         expect(sessions).toHaveLength(1);
-        expect(Object.keys(sessions[0]).toSorted()).toEqual(['expiration', 'id']);
+        expect(Object.keys(sessions[0]).toSorted()).toEqual(['createdAt', 'expiration', 'id']);
     });
 });
 

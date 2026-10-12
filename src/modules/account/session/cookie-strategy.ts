@@ -27,6 +27,7 @@ import { recordActivity } from './activity';
 import { resolveProof } from './auth-context';
 import { createSessionCookie, createLoggedCookie } from './cookies';
 import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
+import { describeDevice } from './device-label';
 import { listSessions } from './listing';
 import { assertSecondFactor } from './mint-guard';
 import { looksLikeSessionId, newSessionId } from './session-id';
@@ -47,7 +48,7 @@ const rememberOf = (row: Pick<SessionRow, 'remember'>): RefreshTokenExpiryTime |
     Object.values(RefreshTokenExpiryTime).find((tier) => tier === row.remember);
 
 /** What the session being started inherits from the one it replaces. */
-type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt'>;
+type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt' | 'device'>;
 
 /**
  * Store a new session row and return its id.
@@ -55,7 +56,7 @@ type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt'>;
  * @param userId - whose session this is
  * @param proof - how and when the account proved itself
  * @param remember - the ticked tier, absent for a browser-session login
- * @param inherited - when this REPLACES a session, the identity and expiry it keeps
+ * @param inherited - when this REPLACES a session, the identity, device and expiry it keeps
  * @returns the plaintext id (the only moment it exists here) and the row's expiry
  */
 const startSession = (
@@ -79,7 +80,8 @@ const startSession = (
             amr: [...proof.amr],
             ...(remember && { remember }),
             startedAt: inherited.startedAt ?? now,
-            expiresAt
+            expiresAt,
+            ...(inherited.device && { device: inherited.device })
         })
         .then(() => recordActivity(userId))
         .then(() => ({ id, expiresAt }));
@@ -201,12 +203,14 @@ export const cookieStrategy: SessionStrategy = {
     // Every route a session reaches takes the cookie: the page holds no token to send.
     cookieAuthenticates: true,
 
-    issue: (_request, response, userId, options: IssueOptions = {}) => {
+    issue: (request, response, userId, options: IssueOptions = {}) => {
         const { remember, amr = ['pwd'], mint = 'first', transport = 'cookie' } = options;
         return userService.findAuthenticatableById(userId).then((user) => {
             if (!user) throw new Error('User not found');
             assertSecondFactor(user, amr, mint);
-            return startSession(userId, { amr }, remember).then((started) =>
+            // The label is read once, at the sign-in, from the client that made it.
+            const device = describeDevice(request.get('user-agent'));
+            return startSession(userId, { amr }, remember, { device }).then((started) =>
                 deliver(response, started, remember, transport)
             );
         });

@@ -508,7 +508,14 @@ paths:
         get:
             tags: [Account]
             summary: List active sessions
-            description: Lists the authenticated user's live refresh tokens as sessions — issue-agnostic handles with an expiry and a `current` marker, never the token values themselves. The one carried by the caller's own refresh cookie is flagged `current`.
+            description: >-
+                Lists the authenticated user's live sessions, one per sign-in, newest first. Each
+                carries an id that stays the same for as long as the sign-in lasts (a `jwt` refresh
+                or a `cookie` re-proof does not change it), when the sign-in happened, when it ends,
+                and a `current` marker; never a credential. The session the caller's own cookie (or
+                `ses_…` bearer) belongs to is flagged `current`.
+                In `cookie` mode each also carries a coarse `device` label such as "Firefox on
+                Linux", read from the User-Agent at the sign-in.
             operationId: listSessions
             security:
                 - bearerAuth: []
@@ -526,7 +533,12 @@ paths:
         delete:
             tags: [Account]
             summary: Revoke one session
-            description: Revokes a single refresh token by its session id — "log out that device". Revoking the current session is allowed and equivalent to `POST /account/logout`, except that the cookies of OTHER clients cannot be cleared from here; their next refresh simply fails.
+            description: >-
+                Ends one sign-in by its session id — "log out that device". In `jwt` mode that is the
+                whole family of refresh tokens the sign-in rotated through, so a revoke after a
+                refresh still ends the device; in `cookie` mode it is the one session. Revoking the
+                current session is allowed and equivalent to `POST /account/logout`, except that the
+                cookies of OTHER clients cannot be cleared from here; their next request simply fails.
             operationId: revokeSession
             security:
                 - bearerAuth: []
@@ -1990,48 +2002,66 @@ components:
                     minLength: 1
                     description: One-time email verification token (NOT a JWT).
 
-        # One live refresh token, presented as a session. The token VALUE is never exposed —
-        # a live refresh token is as good as a password — so the subdocument id is the handle
-        # revocation takes.
+        # One live sign-in, presented as a session. The credential is never exposed — a live
+        # refresh token or session id is as good as a password — so `id` is the handle revocation
+        # takes: a family id, minted at login and kept across every refresh and re-proof.
         Session:
             type: object
             additionalProperties: false
-            required: [id, current]
+            required: [id, createdAt, expiration, current]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                createdAt:
+                    type: string
+                    format: date-time
+                    description: >-
+                        When this sign-in happened. It is the session's, not the current token's:
+                        refreshing or re-proving the password does not move it.
                 expiration:
                     type: string
                     format: date-time
-                    description: Absent on a token issued without an expiry tier.
+                    description: When the session ends, whatever its "remember me" tier.
                 lastUsedAt:
                     type: string
                     format: date-time
                     description: >-
                         When this session last made a request. Absent until it makes one, which is
                         what makes an idle session visible as idle in the list.
+                device:
+                    type: string
+                    description: >-
+                        A coarse label for the browser and system that signed in, such as "Firefox
+                        on Linux", read from the User-Agent at the sign-in. Present in `cookie`
+                        mode only, and absent for a client that names neither (a script, `curl`).
                 current:
                     type: boolean
                     description: >-
-                        Whether this session is the one making the request, matched through the
-                        refresh cookie. Always `false` for a caller authenticating by bearer
-                        token alone — an access token does not identify a session.
+                        Whether this session is the one making the request, matched through its own
+                        cookie or `ses_…` bearer. Always `false` for a caller authenticating by an
+                        access token alone — a `jwt`-mode access token does not identify a session.
 
         # A live session, metadata only — never the credential, which is as good as a password.
         # Used by `POST /account/export`.
         ExportSession:
             type: object
             additionalProperties: false
-            required: [id]
+            required: [id, createdAt, expiration]
             properties:
                 id:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                createdAt:
+                    type: string
+                    format: date-time
                 expiration:
                     type: string
                     format: date-time
                 lastUsedAt:
                     type: string
                     format: date-time
+                device:
+                    type: string
+                    description: The coarse device label stored at sign-in (`cookie` mode only).
 
         SessionsResponse:
             type: object

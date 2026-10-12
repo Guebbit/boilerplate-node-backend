@@ -367,6 +367,7 @@ erDiagram
         string mode "jwt | cookie"
         string tokenHash "sha256, never the value"
         Date startedAt "when this sign-in began"
+        string device "cookie mode: Firefox on Linux"
         Date lastUsedAt
         Date supersededAt "jwt: rotated away"
         Date expiresAt "when it stops working"
@@ -384,7 +385,7 @@ erDiagram
 
 | Collection           | One row is                         | Deleted by                                                      |
 | -------------------- | ---------------------------------- | --------------------------------------------------------------- |
-| `sessions`           | one refresh token (`jwt` mode)     | its own `purgeAt` (TTL index), a logout, a revoke, an erasure   |
+| `sessions`           | one refresh token, or one sign-in  | its own `purgeAt` (TTL index), a logout, a revoke, an erasure   |
 | `verificationtokens` | one mailed link or login challenge | its own `expiresAt` (TTL index), being spent, a password change |
 
 - **A date on the row, not a lifetime on the index.** Both TTL indexes are `expireAfterSeconds: 0`
@@ -403,6 +404,18 @@ erDiagram
 - **Deactivating or soft-deleting an account** moves the epoch in the same save, which refuses every
   session at once; the rows then age out by their own date. Nothing here reaches into `sessions`
   from `users`.
+
+### What the session list shows
+
+Each entry carries the time the sign-in began (`createdAt`, which a re-proof does not move) and
+when it was last used. A `jwt` row per rotation would repeat one sign-in, so the list keeps only the
+newest row of each family.
+
+`cookie` mode adds a coarse `device` label such as "Firefox on Linux". `device-label.ts` parses
+the `User-Agent` once, at login, with `bowser`, and keeps the browser and the system only (never a
+version, an address or the raw header). The label lives on the row, so it is exported with the
+session and erased with it. A client naming neither (curl, a script) gets no label, and `jwt` mode
+keeps none.
 
 ## Logout everywhere
 
@@ -519,14 +532,14 @@ with no revocation — a real limit, chosen rather than stumbled into, and asser
 
 ## Libraries
 
-`jsonwebtoken` is `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md)
+`jsonwebtoken` and `bowser` are `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md)
 for where it sits among everything else this repo depends on.
 
-| Library                  | Maintained    | What it costs you                                                                      |
-| ------------------------ | ------------- | -------------------------------------------------------------------------------------- |
-| `jsonwebtoken` (chosen)  | active, typed | the one signing algorithm this app actually uses (`HS256`), a small, well-worn surface |
-| `jose`                   | active, typed | a broader JOSE/JWK toolkit — more than a same-secret access/refresh pair needs         |
-| hand-rolled HMAC signing | —             | exactly the kind of crypto `CLAUDE.md` rules out writing by hand                       |
+| Library                  | Maintained    | What it costs you                                                                       |
+| ------------------------ | ------------- | --------------------------------------------------------------------------------------- |
+| `jsonwebtoken` (chosen)  | active, typed | the one signing algorithm this app actually uses (`HS256`), a small, well-worn surface  |
+| `bowser` (device label)  | active, typed | one small dependency-free parser; `ua-parser-js` 2.x is AGPL, `detect-browser` is stale |
+| hand-rolled HMAC signing | —             | exactly the kind of crypto `CLAUDE.md` rules out writing by hand                        |
 
 ## Related pages
 

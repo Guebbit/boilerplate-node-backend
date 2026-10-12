@@ -138,7 +138,7 @@ back: the shop is not asking "would you like to pay again", it already has the m
 
 ## Their account
 
-Sign up, verify by email, log in, forget the password and reset it, change it, and see every device
+Sign up, verify by email, log in, forget the password and reset it, change it, and see every device (in the cookie set-up with its name, such as "Firefox on Linux")
 currently logged in — with a "log me out everywhere" button that ends all of them at once. Money,
 deleting the account and ending other devices ask for the password again when the customer last
 proved it a while ago, however the shop keeps people signed in

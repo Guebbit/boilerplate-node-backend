@@ -6,6 +6,8 @@
  */
 
 import { Types } from 'mongoose';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { sessionModel } from '../../model';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { hashToken } from '@infrastructure/security/hash-token';
@@ -21,7 +23,7 @@ import {
     tokenRowsOf,
     tokenTypesOf
 } from '../factories';
-import { sessionsList } from '../../services/sessions';
+import { eraseSessionsAndTokens, exportSessions, sessionsList } from '../../services/sessions';
 import type { SessionRequest } from '../../session/strategy';
 import { asStub } from '@tests/stub';
 
@@ -331,5 +333,72 @@ describe('verificationTokenRepository.lastSentAt / removeOfTypes', () => {
 
         await verificationTokenRepository.removeOfTypes(user.id, ['verify']);
         expect(await tokenTypesOf(user.id)).toEqual(['password']);
+    });
+});
+
+describe('what leaves with the account', () => {
+    it('exports a session as metadata: its handle, when it began and ends, never the credential', async () => {
+        const user = await createUser();
+        const startedAt = new Date(Date.now() - 3_600_000);
+        await plantSession(user.id, 'exported-credential', {
+            startedAt,
+            lastUsedAt: new Date()
+        });
+
+        const exported = await exportSessions(user.id);
+
+        expect(exported).toHaveLength(1);
+        expect(exported[0]).toMatchObject({ createdAt: startedAt.toISOString() });
+        expect(Object.keys(exported[0] ?? {}).toSorted()).toEqual([
+            'createdAt',
+            'expiration',
+            'id',
+            'lastUsedAt'
+        ]);
+        expect(JSON.stringify(exported)).not.toContain('exported-credential');
+    });
+
+    it('exports one entry per session, and only the active mode’s', async () => {
+        const user = await createUser();
+        const family = new Types.ObjectId().toString();
+        await plantSession(user.id, 'dup-a', { familyId: family });
+        await plantSession(user.id, 'dup-b', { familyId: family });
+        await plantSession(user.id, 'other-mode', { mode: 'cookie' });
+
+        expect(await exportSessions(user.id)).toHaveLength(1);
+    });
+
+    it('erases every session and one-time token of the account, and no one else’s', async () => {
+        const gone = await createUser({ email: 'gone@example.com' });
+        const kept = await createUser({ email: 'kept@example.com' });
+        await plantSession(gone.id, 'gone-session');
+        await plantToken(gone.id, 'password', 'gone-link');
+        await plantSession(kept.id, 'kept-session');
+        await plantToken(kept.id, 'password', 'kept-link');
+
+        await withTransaction((session) => eraseSessionsAndTokens(gone.id, session));
+
+        expect(await sessionRowsOf(gone.id)).toEqual([]);
+        expect(await tokenRowsOf(gone.id)).toEqual([]);
+        expect(await sessionRowsOf(kept.id)).toHaveLength(1);
+        expect(await tokenRowsOf(kept.id)).toHaveLength(1);
+    });
+
+    it('erases the device label with its row, since it lives on the row', async () => {
+        const user = await createUser();
+        await sessionModel.create({
+            userId: new Types.ObjectId(user.id),
+            familyId: new Types.ObjectId(),
+            mode: 'cookie',
+            tokenHash: hashToken('labelled'),
+            startedAt: new Date(),
+            expiresAt: new Date(Date.now() + 60_000),
+            purgeAt: new Date(Date.now() + 60_000),
+            device: 'Firefox on Linux'
+        });
+
+        await withTransaction((session) => eraseSessionsAndTokens(user.id, session));
+
+        expect(await sessionRowsOf(user.id)).toEqual([]);
     });
 });

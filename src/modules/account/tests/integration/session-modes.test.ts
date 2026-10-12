@@ -118,7 +118,7 @@ const eventually = async <T>(read: () => Promise<T | undefined>): Promise<T> => 
 const sessionsOf = async (headers: Record<string, string>) => {
     const response = await api().get('/account/sessions').set(headers);
     expect(response.status).toBe(200);
-    return response.body.data.sessions as { id: string; current: boolean }[];
+    return response.body.data.sessions as { id: string; current: boolean; createdAt: string }[];
 };
 
 /** Use the session the way each mode keeps one alive; answers the headers to use after. */
@@ -169,6 +169,14 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
 
         expect(sessions).toHaveLength(1);
         expect(sessions[0]?.current).toBe(true);
+    });
+
+    it('says when the sign-in happened', async () => {
+        const { user, session } = await account(mode);
+        const [listed] = await sessionsOf(session.headers);
+        const [row] = await sessionRowsOf(user.id);
+
+        expect(listed).toHaveProperty('createdAt', row?.startedAt.toISOString());
     });
 
     it('never puts the credential in the list, or in the database', async () => {
@@ -421,6 +429,57 @@ describe('cookie mode only', () => {
         ).toEqual([true]);
     });
 
+    it('names the device from the User-Agent at sign-in, and keeps it through a re-proof', async () => {
+        const user = await createUser({ email: 'device@example.com', verifiedAt: new Date() });
+        const login = await logIn(user.email).set(
+            'User-Agent',
+            'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0'
+        );
+        const headers = { Cookie: cookieHeader(login, '__Host-session') };
+
+        const [listed] = await sessionsOf(headers);
+        const reauth = await api()
+            .post('/account/reauth')
+            .set(headers)
+            .set('Origin', FRONTEND)
+            .send({ method: 'password', password: PLAIN_PASSWORD });
+        const [after] = await sessionsOf({ Cookie: cookieHeader(reauth, '__Host-session') });
+
+        expect(listed).toHaveProperty('device', 'Firefox on Linux');
+        expect(after).toHaveProperty('device', 'Firefox on Linux');
+    });
+
+    it('keeps the sign-in moment and the public id through a re-proof', async () => {
+        const user = await createUser({ email: 'moment@example.com', verifiedAt: new Date() });
+        const login = await logIn(user.email);
+        const headers = { Cookie: cookieHeader(login, '__Host-session') };
+        const [listed] = await sessionsOf(headers);
+
+        const reauth = await api()
+            .post('/account/reauth')
+            .set(headers)
+            .set('Origin', FRONTEND)
+            .send({ method: 'password', password: PLAIN_PASSWORD });
+        const [after] = await sessionsOf({ Cookie: cookieHeader(reauth, '__Host-session') });
+
+        expect(after).toHaveProperty('createdAt', listed?.createdAt);
+        expect(after?.id).toBe(listed?.id);
+    });
+
+    it('leaves the device off for a client that names neither a browser nor a system', async () => {
+        const user = await createUser({ email: 'script-device@example.com' });
+        const login = await logIn(user.email, { transport: 'bearer' }).set(
+            'User-Agent',
+            'curl/8.5.0'
+        );
+
+        const [listed] = await sessionsOf({
+            Authorization: `Bearer ${login.body.data.sessionToken as string}`
+        });
+
+        expect(listed).not.toHaveProperty('device');
+    });
+
     it('stores a `cookie` row for the sign-in, with its proof', async () => {
         const user = await createUser({ email: 'proof@example.com' });
         const before = Math.floor(Date.now() / 1000);
@@ -560,6 +619,21 @@ describe('jwt mode only', () => {
 
         expect(response.body.data.token).toEqual(expect.any(String));
         expect(setCookie(response, '__Host-session')).toBeDefined();
+    });
+
+    it('keeps no device label: that is `cookie` mode’s, and the list carries none', async () => {
+        const user = await createUser({ email: 'nodevice@example.com' });
+        const login = await logIn(user.email).set(
+            'User-Agent',
+            'Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0'
+        );
+
+        const [listed] = await sessionsOf({
+            Authorization: `Bearer ${login.body.data.token as string}`,
+            Cookie: cookieHeader(login, '__Host-session')
+        });
+
+        expect(listed).not.toHaveProperty('device');
     });
 
     it('does not authenticate an ordinary route by cookie alone', async () => {

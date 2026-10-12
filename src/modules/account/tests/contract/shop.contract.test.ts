@@ -39,7 +39,7 @@ describe('POST /account/export', () => {
             payments: { id: string; orderId: string }[];
             cart: unknown[];
             wishlist: unknown[];
-            sessions: { id: string; expiration: string }[];
+            sessions: { id: string; createdAt: string; expiration: string }[];
         };
         expect(data.profile.email).toBe(user.email);
         expect(data.orders.map((each) => each.id)).toContain(String(order._id));
@@ -54,6 +54,7 @@ describe('POST /account/export', () => {
         expect(data.sessions).toHaveLength(1);
         expect(data.sessions[0]).toEqual({
             id: expect.any(String),
+            createdAt: expect.any(String),
             expiration: expect.any(String)
         });
     });
