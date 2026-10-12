@@ -45,9 +45,9 @@ sequenceDiagram
 | Poison handling       | After the last attempt the row is `dead`: metric, alert, log — and it stops blocking      |
 | Cleanup               | Published rows expire by TTL (`NODE_OUTBOX_RETENTION_DAYS`). Dead rows stay for a human   |
 
-**Exactly-once is not promised.** A consumer that must not act twice dedupes on `meta.eventId`.
-`webhooks` does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out into a
-no-op — see [Consumers](#writing-a-consumer).
+**Exactly-once is not promised.** A consumer where a duplicate does harm (stock, money, webhook
+fan-out) dedupes on `meta.eventId`; a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks`
+does: a unique `(subscriptionId, eventId)` index turns a redelivered fan-out into a no-op — see [Consumers](#writing-a-consumer).
 
 ## Where the code is
 
@@ -124,8 +124,9 @@ A handler on the bus receives `(payload, meta)`. Rules:
 
 - **Throw (or reject) to ask for a retry.** The bus logs it and answers `false`; the relay
   reschedules. Do not swallow errors you want retried.
-- **Be idempotent on `meta.eventId`.** `webhooks/services/publish.ts` is the reference: a unique
-  index plus "duplicate key means already done".
+- **Be idempotent on `meta.eventId` where a duplicate does harm** (stock, money, webhook fan-out);
+  a mail may repeat, see [rabbitmq.md](rabbitmq.md). `webhooks/services/publish.ts` is the
+  reference: a unique index plus "duplicate key means already done".
 - **Attempt every target, then fail.** `fanOut` uses `Promise.allSettled` so one bad subscription
   does not starve the rest, then throws so the relay retries; already-created rows are skipped.
 

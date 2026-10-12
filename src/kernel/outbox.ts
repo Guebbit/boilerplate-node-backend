@@ -5,7 +5,8 @@
  * no durability; this is the durable path for an event that must not be lost.
  *
  * Guarantee:  at-least-once. The relay marks a row published only after every consumer returned.
- *             A crash in between re-dispatches it, so a consumer dedupes on `meta.eventId`.
+ *             A crash in between re-dispatches it, so a consumer where a duplicate does harm
+ *             (stock, money, webhook fan-out) dedupes on `meta.eventId`; a mail may repeat.
  * Ordering:   per aggregate. An aggregate's oldest unpublished row blocks its later ones.
  * Failure:    retried with exponential backoff, parked as `dead` after the last attempt.
  *             A dead row never blocks its aggregate.
