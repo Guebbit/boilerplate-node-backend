@@ -9,8 +9,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { emitDomainEvent } from '@kernel/events';
-import { withTransaction } from '@infrastructure/runtime/database';
+import { announceInTransaction } from '@kernel/outbox';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { CallerContext, CreateUserRequest, WithServerImage } from '@types';
@@ -35,7 +34,8 @@ import { enqueueIfPending } from './image';
  * - `verifiedAt`: hardcoded `now` — an operator typing the address in IS the vouching
  *   (`shared/authorization-roles.yaml`'s role grants are the same act).
  * - Password: never supplied. A credential is its owner's alone, so the account starts with a
- *   random value nobody is told, and `USER_SETUP_REQUESTED` mails the owner a link to choose
+ *   random value nobody is told, and `USER_SETUP_REQUESTED` (on the outbox, in the same
+ *   transaction as the account) mails the owner a link to choose
  *   their own (`POST /account/reset-confirm`).
  * - Typed off `CreateUserRequest`, not a hand-picked `Pick`: a hand-copied list is what silently
  *   dropped `active` from `update()` below.
@@ -64,33 +64,40 @@ export const create = (
             assertCanGrantAudited('tenant', role, context.caller.permissions, context)
         )
         .then(() =>
-            // The account and its membership commit together or not at all: a failure between the
-            // two leaves nothing behind to undo, so no compensating delete (which could itself
-            // fail) is needed. https://www.mongodb.com/docs/manual/core/transactions/
-            withTransaction((session) =>
-                userRepository
-                    .create(
-                        {
-                            verifiedAt: new Date(),
-                            ...data,
-                            // `null` on a create means no image: the schema default applies to `undefined` only.
-                            imageUrl: data.imageUrl ?? undefined,
-                            password
-                        },
-                        session
-                    )
-                    // The membership is the ONLY grant — there is no column beside it.
-                    .then((user) =>
-                        assignRole(
-                            String(user._id),
-                            DEPLOYMENT_TENANT_ID,
-                            'tenant',
-                            role,
-                            context.caller.permissions,
-                            context,
+            // The account, its membership and the setup-mail event commit together or not at
+            // all: a failure between them leaves nothing behind to undo, so no compensating
+            // delete (which could itself fail) is needed, and a refused grant leaves no event.
+            // https://www.mongodb.com/docs/manual/core/transactions/
+            announceInTransaction(
+                (session) =>
+                    userRepository
+                        .create(
+                            {
+                                verifiedAt: new Date(),
+                                ...data,
+                                // `null` on a create means no image: the schema default applies to `undefined` only.
+                                imageUrl: data.imageUrl ?? undefined,
+                                password
+                            },
                             session
-                        ).then(() => user)
-                    )
+                        )
+                        // The membership is the ONLY grant — there is no column beside it.
+                        .then((user) =>
+                            assignRole(
+                                String(user._id),
+                                DEPLOYMENT_TENANT_ID,
+                                'tenant',
+                                role,
+                                context.caller.permissions,
+                                context,
+                                session
+                            ).then(() => user)
+                        ),
+                (user) => ({
+                    name: USER_SETUP_REQUESTED,
+                    payload: { userId: String(user._id) },
+                    aggregateId: String(user._id)
+                })
             )
         )
         .then((user) => {
@@ -114,11 +121,7 @@ export const create = (
                 properties: { admin_created: true }
             });
 
-            return enqueueIfPending(user).then((pending) =>
-                emitDomainEvent(USER_SETUP_REQUESTED, {
-                    userId: String(pending._id)
-                }).then(() => pending)
-            );
+            return enqueueIfPending(user);
         })
         .then((user) => generateSuccess(user, 201));
 };
