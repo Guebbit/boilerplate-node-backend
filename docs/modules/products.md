@@ -84,6 +84,7 @@ Three independent questions, three fields. Stock is the third axis and is unchan
 | --------------------- | ------------------------------ | ------------------------------------------ |
 | `active`              | Can a shopper see it?          | hidden: 404 for shoppers, visible to staff |
 | `purchasable`         | Can it be bought, stock aside? | listed, "Not available right now"          |
+| `releaseDate`         | When does it ship from?        | a future date makes it a preorder          |
 | `available` (derived) | Is there stock?                | `0`: sold out                              |
 | `deletedAt`           | Was it removed?                | gone; carts and wishlists drop it          |
 
@@ -123,6 +124,40 @@ What each state does to the rest of the shop:
 Who sees a hidden product is settled by `products.any.read` (`manager`, `warehouse`, `editor`,
 `admin`); an off-sale product is public, so `GET /products?purchasable=` is open to everyone. The
 line values and their precedence live in [cart](./cart.md#line-availability).
+
+### Preorder
+
+A preorder is a product sold before it is released. It is derived, never stored:
+
+```
+preorder = active && purchasable && releaseDate > now
+```
+
+The day the date passes the product stops being one, with no job to run (BigCommerce and
+WooCommerce auto-revert the same way). `releaseDate` is "ships from", an ISO 8601 date-time at most
+one year ahead (Google's `availability_date` rule); a date in the past is accepted and means
+"released". `null` clears it; a `PUT` that omits it clears it too.
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    [*] --> ComingSoon: releaseDate set,<br/>purchasable = false
+    ComingSoon --> Preorder: purchasable = true
+    Preorder --> ComingSoon: purchasable = false
+    Preorder --> Preorder: releaseDate moved<br/>(product.release_date_changed)
+    Preorder --> OnSale: releaseDate passes<br/>(derived, no job)
+```
+
+| Piece                             | Owner       | What it does                                                         |
+| --------------------------------- | ----------- | -------------------------------------------------------------------- |
+| `releaseDate`, derived `preorder` | `products`  | the catalogue fact; a preorder is never "running low"                |
+| allowance and allocation          | `inventory` | `preorderLimit` caps how many can be ordered; receipts allocate them |
+| the "ships from" promise          | `delivery`  | one fulfillment order per release day, on hold until stock arrives   |
+
+Moving the date announces `product.release_date_changed` through the outbox, in the edit's own
+transaction and only when the instant actually changed. `delivery` listens: buyers who already paid
+were promised the old date, and consumer law decides what they must be told (see
+[delivery](./delivery.md)).
 
 ### Industry mapping
 

@@ -8,12 +8,13 @@
 import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { availableStock, stockFlags } from './domain/stock';
+import { isPreorder } from './domain/preorder';
 import { lowStockThreshold, productCurrency } from './config';
 import type { ProductDocument } from './model';
 
 /**
  * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
- * and the `inStock`/`lowStock` flags derived from the two stock counters (never stored), `currency` read live from
+ * and the `inStock`/`lowStock`/`preorder` flags derived from the two stock counters (never stored), `currency` read live from
  * `NODE_DEFAULT_CURRENCY`, the three dates ISO-stringified. The row's version is not part of the
  * contract, so it rides beside the result (`carryVersion`) for the `ETag`.
  */
@@ -21,13 +22,18 @@ export const presentProduct = (document: ProductDocument): Product => {
     const onHand = document.onHand ?? 0;
     const reserved = document.reserved ?? 0;
     const available = availableStock(onHand, reserved);
+    const preorder = isPreorder(document, new Date());
+    const flags = stockFlags(available, lowStockThreshold());
 
     return carryVersion(document, {
         id: document.id,
         title: document.title,
         price: document.price,
         available,
-        ...stockFlags(available, lowStockThreshold()),
+        ...flags,
+        // A preorder waits for stock that does not exist yet: it is not "running low".
+        ...(preorder ? { lowStock: false } : {}),
+        preorder,
         currency: productCurrency(),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.rateType === undefined ? {} : { rateType: document.rateType }),
@@ -37,6 +43,9 @@ export const presentProduct = (document: ProductDocument): Product => {
         ...(document.description === undefined ? {} : { description: document.description }),
         ...(document.active === undefined ? {} : { active: document.active }),
         ...(document.purchasable === undefined ? {} : { purchasable: document.purchasable }),
+        ...(document.releaseDate === undefined
+            ? {}
+            : { releaseDate: document.releaseDate.toISOString() }),
         ...(document.requiresShipping === undefined
             ? {}
             : { requiresShipping: document.requiresShipping }),

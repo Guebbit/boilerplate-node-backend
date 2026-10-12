@@ -86,6 +86,7 @@ const toSnapshot = ({
     createdAt,
     updatedAt,
     deletedAt,
+    releaseDate,
     ...fields
 }: OrderSnapshotInput): FrozenOrderLineProduct => ({
     _id: new Types.ObjectId(id),
@@ -95,7 +96,8 @@ const toSnapshot = ({
         ...fields,
         createdAt: toDate(createdAt),
         updatedAt: toDate(updatedAt),
-        deletedAt: toDate(deletedAt)
+        deletedAt: toDate(deletedAt),
+        releaseDate: toDate(releaseDate)
     })
 });
 
