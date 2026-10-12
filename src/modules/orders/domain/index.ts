@@ -28,9 +28,10 @@ export type { Money } from './money';
 export { checkOrderLines, isShippedItem, isDigitalOnlyOrder } from './rules';
 export type { ShippableLineCandidate } from './rules';
 
-// `ORDER_LIFECYCLE` is deliberately absent: a caller reading the table directly re-derives an
-// answer that already has a name.
+// `ORDER_EVENTS` is the one place a service reads a move's `from` and `to`; the edge questions
+// (`canTransition`, `statusesLeadingTo`, ...) are derived from it and already have names.
 export {
+    ORDER_EVENTS,
     canTransition,
     isPayable,
     paymentSettled,
@@ -41,7 +42,7 @@ export {
     statusesOverridableInto,
     overridableTargetsFrom
 } from './lifecycle';
-export type { OrderActor } from './lifecycle';
+export type { OrderActor, OrderEvent, OrderEventName } from './lifecycle';
 
 /** The VAT breakdown an order's response and invoice both derive from its frozen lines. */
 export { orderTaxBreakdown, lineTaxFromRateTotals } from './tax';

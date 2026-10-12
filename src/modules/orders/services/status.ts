@@ -16,8 +16,9 @@ import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import { statusChangedEvent } from './announce';
 import {
+    ORDER_EVENTS,
     isDigitalOnlyOrder,
-    statusesLeadingTo,
+    type OrderEventName,
     withdrawalStartFor,
     withdrawUntilFrom,
     type StampedPaymentStatus,
@@ -40,35 +41,31 @@ const announceMove = (
     session ? announceWithin(session, write, announce) : announceInTransaction(write, announce);
 
 /**
- * Move an order to `to`, from whichever status `ORDER_LIFECYCLE` says a `system` report may
- * follow it from, and announce the move once it lands — the shape every move in this file shares,
- * since each is `system` reporting a fact another module already recorded, never a request a
- * human made.
+ * Make the move a named lifecycle event describes, and announce it once it lands — the shape every
+ * move in this file shares, since each is `system` reporting a fact another module already
+ * recorded, never a request a human made.
  *
- * `from`:      read off the table itself via `statusesLeadingTo`, rather than a literal restated
- *              here, so this can never fall out of sync with the table the way a hand-copied
- *              `from` could. `ORDER_LIFECYCLE` permits exactly one `system` edge into each status
- *              this file moves to (see the table's own comments on `paid`/`shipped`/`delivered`),
- *              which is what makes `[0]` below sound rather than a guess.
+ * `from`:      the event's own `from` set, so the table is the only place it is declared.
  * Conditional: two callers racing the same fact (a redelivered webhook, a retried delivery scan)
  *              land, and announce, it exactly once.
  *
  * @param orderId - the order to move
- * @param to - the status being written
+ * @param event - the lifecycle event making the move; a single-`from` one, since the announcement
+ *   names the status the order left
  * @param session - the caller's transaction, when the move belongs to one; absent, it opens its own
  * @returns the order as it now stands, or `null` if this call did not move it
  */
 const markSystemMove = (
     orderId: string,
-    to: OrderStatus,
+    event: 'start' | 'ship',
     session?: ClientSession
 ): Promise<OrderDocument | null> => {
-    const [from] = statusesLeadingTo(to, 'system');
+    const { from, to } = ORDER_EVENTS[event];
     return announceMove(
         session,
         (active) =>
-            orderRepository.updateStatusIfIn(orderId, [from], to, undefined, undefined, active),
-        () => statusChangedEvent(orderId, from, to)
+            orderRepository.updateStatusIfIn(orderId, [...from], to, undefined, undefined, active),
+        () => statusChangedEvent(orderId, from[0], to)
     );
 };
 
@@ -91,10 +88,10 @@ export const markPaid = (
     orderId: string,
     paymentMethod?: 'card'
 ): Promise<OrderDocument | null> => {
-    const [from] = statusesLeadingTo(OrderStatus.paid, 'system');
+    const { from, to } = ORDER_EVENTS.pay;
     return announceInTransaction(
-        (session) => orderRepository.markPaid(orderId, from, paymentMethod, session),
-        () => statusChangedEvent(orderId, from, OrderStatus.paid)
+        (session) => orderRepository.markPaid(orderId, from[0], paymentMethod, session),
+        () => statusChangedEvent(orderId, from[0], to)
     );
 };
 
@@ -111,7 +108,7 @@ export const markPaid = (
 export const markProcessing = (
     orderId: string,
     session?: ClientSession
-): Promise<OrderDocument | null> => markSystemMove(orderId, OrderStatus.processing, session);
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'start', session);
 
 /**
  * Report that the last unit left: nothing remains to ship anywhere. `delivery`'s shipping act
@@ -125,7 +122,7 @@ export const markProcessing = (
 export const markShipped = (
     orderId: string,
     session?: ClientSession
-): Promise<OrderDocument | null> => markSystemMove(orderId, OrderStatus.shipped, session);
+): Promise<OrderDocument | null> => markSystemMove(orderId, 'ship', session);
 
 /**
  * Report that the last undelivered shipment arrived, with nothing left to ship. `delivery`'s
@@ -145,12 +142,12 @@ export const markDelivered = (
     deliveredAt: Date,
     session?: ClientSession
 ): Promise<OrderDocument | null> => {
-    const [from] = statusesLeadingTo(OrderStatus.delivered, 'system');
+    const { from, to } = ORDER_EVENTS.deliver;
     const withdrawUntil = withdrawUntilFrom(deliveredAt, withdrawalPeriodDays());
     return announceMove(
         session,
-        (active) => orderRepository.markDelivered(orderId, from, withdrawUntil, active),
-        () => statusChangedEvent(orderId, from, OrderStatus.delivered)
+        (active) => orderRepository.markDelivered(orderId, from[0], withdrawUntil, active),
+        () => statusChangedEvent(orderId, from[0], to)
     );
 };
 
@@ -158,8 +155,8 @@ export const markDelivered = (
  * Report that the order became complete in one act: every unit is accounted for and every
  * shipment has arrived. Two acts do that — a digital fulfilment, and a remainder cancel that
  * lands after every shipment was delivered — and each makes both moves at once, in one write:
- * `processing → shipped → delivered` (a digital-only order has no `shipped` step, so it announces
- * the one move). The one named exception to `markSystemMove`'s single-edge rule.
+ * `processing -> shipped -> delivered` (a digital-only order has no `shipped` step, so it announces
+ * the one `fulfilmentComplete` move).
  *
  * The clock starts at `at` for goods — the later of the last delivery and the cancellation, since
  * the order only became complete then — and at payment for digital content (Art. 9(2)(c)).
@@ -174,30 +171,24 @@ export const markFulfilmentComplete = (
     session: ClientSession
 ): Promise<OrderDocument | null> =>
     orderRepository.findInSession(orderId, session).then((order) => {
-        if (order?.status !== OrderStatus.processing) return null;
+        const { from } = ORDER_EVENTS.fulfilmentComplete;
+        // The table's tuples are literal types; widened so `includes` accepts any status.
+        if (!order || !(from as readonly OrderStatus[]).includes(order.status)) return null;
 
         const withdrawUntil = withdrawUntilFrom(
             withdrawalStartFor(order, at),
             withdrawalPeriodDays()
         );
-        const moves: readonly (readonly [OrderStatus, OrderStatus])[] = isDigitalOnlyOrder(
-            order.items
-        )
-            ? [[OrderStatus.processing, OrderStatus.delivered]]
-            : [
-                  [OrderStatus.processing, OrderStatus.shipped],
-                  [OrderStatus.shipped, OrderStatus.delivered]
-              ];
+        const events: readonly OrderEventName[] = isDigitalOnlyOrder(order.items)
+            ? ['fulfilmentComplete']
+            : ['ship', 'deliver'];
         return announceWithin(
             session,
-            (active) =>
-                orderRepository.markDelivered(
-                    orderId,
-                    OrderStatus.processing,
-                    withdrawUntil,
-                    active
-                ),
-            () => moves.map(([from, to]) => statusChangedEvent(orderId, from, to))
+            (active) => orderRepository.markDelivered(orderId, order.status, withdrawUntil, active),
+            () =>
+                events.map((name) =>
+                    statusChangedEvent(orderId, ORDER_EVENTS[name].from[0], ORDER_EVENTS[name].to)
+                )
         );
     });
 

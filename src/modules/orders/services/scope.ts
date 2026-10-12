@@ -16,7 +16,7 @@ import { orderRepository } from '../repository';
 import { OrderStatus } from '@types';
 import {
     orderActionsFor,
-    statusesLeadingTo,
+    ORDER_EVENTS,
     overridableTargetsFrom,
     isDigitalOnlyOrder,
     isPayable,
@@ -200,11 +200,10 @@ const startAndOverrideActions = (
     if (!authContext) return { start: false, override: [] };
 
     const caller = callerForSubject(authContext, 'Order');
-    // `statusesLeadingTo`, not a raw `canTransition(status, target, 'system')`: the latter
-    // answers `true` for an ECHO write (status already equals target, legal for every status but
-    // `paid`), which would read e.g. `start` as true for an order already `processing`.
-    // `statusesLeadingTo` excludes `from === to` by construction.
-    const reachesProcessing = statusesLeadingTo(OrderStatus.processing, 'system').includes(status);
+    // The `start` event's own `from` set, not a raw `canTransition(status, target, 'system')`:
+    // the latter answers `true` for an ECHO write (status already equals target), which would
+    // read `start` as true for an order already `processing`.
+    const reachesProcessing = (ORDER_EVENTS.start.from as readonly OrderStatus[]).includes(status);
     return {
         start: holdsKey(caller, 'delivery.any.start') && reachesProcessing,
         override: holdsKey(caller, 'orders.any.override')
