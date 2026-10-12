@@ -37,7 +37,7 @@ describe('stockMovementSchema — the ledger', () => {
         expect(enumOf(stockMovementSchema, 'reason')).toEqual(Object.values(StockMovementReason));
     });
 
-    it('carries the eight reasons the contract states, in order', () => {
+    it('carries the ten reasons the contract states, in order', () => {
         /*
          * The literal list from `StockMovementReason` in `src/modules/inventory/openapi.yaml`.
          * `MOVEMENT_REASONS` is defined as `Object.values(StockMovementReason)`, so comparing the
@@ -52,7 +52,9 @@ describe('stockMovementSchema — the ledger', () => {
             'expire',
             'receive',
             'adjust',
-            'restock'
+            'restock',
+            'preorder',
+            'allocate'
         ]);
     });
 
@@ -122,12 +124,14 @@ describe('reservationSchema — the hold', () => {
         expect(optionsOf(item)._id).toBe(false);
     });
 
-    it('indexes the sweep query and nothing more', () => {
+    it('indexes the sweep query and the preorder queue, and nothing more', () => {
         // The sweep asks for holds still held, oldest deadline first — `status` then `expiresAt`,
-        // both ascending. The unique `orderId` index is the exactly-once gate above.
+        // both ascending. The allocation asks for paid holds of one product, oldest payment first.
+        // The unique `orderId` index is the exactly-once gate above.
         expect(indexSpecs(reservationSchema)).toEqual([
             'orderId_1: orderId+1',
-            'reservations_status_expiresAt: status+1, expiresAt+1'
+            'reservations_status_expiresAt: status+1, expiresAt+1',
+            'reservations_status_itemsProductId_committedAt: status+1, items.productId+1, committedAt+1'
         ]);
     });
 

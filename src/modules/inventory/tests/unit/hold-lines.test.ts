@@ -69,3 +69,39 @@ describe('takeFromHold', () => {
         expect(hold).toEqual(before);
     });
 });
+
+describe('takeFromHold, with preorder claims', () => {
+    // The same product held under both kinds, as it is once part of a preorder is allocated.
+    const mixed = [
+        { productId: 'a', quantity: 2 },
+        { productId: 'a', quantity: 3, kind: 'preorder' as const }
+    ];
+
+    it('takes from the kind it is asked for and leaves the other alone', () => {
+        expect(takeFromHold(mixed, [{ productId: 'a', quantity: 2, kind: 'preorder' }])).toEqual({
+            remaining: [
+                { productId: 'a', quantity: 2 },
+                { productId: 'a', quantity: 1, kind: 'preorder' }
+            ],
+            taken: [{ productId: 'a', quantity: 2, kind: 'preorder' }]
+        });
+    });
+
+    it('reads a line without a kind as shelf units, never as a claim', () => {
+        const { remaining, taken } = takeFromHold(mixed, [{ productId: 'a', quantity: 9 }]);
+
+        expect(taken).toEqual([{ productId: 'a', quantity: 2 }]);
+        expect(remaining).toEqual([{ productId: 'a', quantity: 3, kind: 'preorder' }]);
+    });
+
+    it('takes nothing of a kind the hold does not carry', () => {
+        const stockOnly = [{ productId: 'a', quantity: 2 }];
+
+        expect(
+            takeFromHold(stockOnly, [{ productId: 'a', quantity: 1, kind: 'preorder' }])
+        ).toEqual({
+            remaining: stockOnly,
+            taken: []
+        });
+    });
+});

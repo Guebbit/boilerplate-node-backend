@@ -2,8 +2,9 @@
  * @module
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
- * claimed). Eight transitions move those counters, and this file is the one place that says what
- * each does — a ninth is one entry here plus one enum value in `openapi.yaml`. What a customer
+ * claimed), and a third, `preordered`, for units that do not exist yet and are only promised.
+ * Ten transitions move those counters, and this file is the one place that says what each does — an
+ * eleventh is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
@@ -13,59 +14,86 @@
 import { StockMovementReason } from '@types';
 
 /**
- * What one transition does to the two counters. Both signed, either possibly zero.
+ * What a hold's units are: `stock` units exist and sit on the shelf; `preorder` units do not exist
+ * yet and are only a claim on the product's preorder allowance (`preorderLimit`).
+ */
+export type HoldKind = 'stock' | 'preorder';
+
+/**
+ * What one transition does to the counters. All signed, any possibly zero.
  *
- * Recording the pair on every ledger row is what makes the ledger replayable;
+ * Recording every column on every ledger row is what makes the ledger replayable;
  * `src/modules/inventory/tests/integration/ledger.property.test.ts` asserts that over arbitrary
  * transition sequences.
  */
 export interface CounterDelta {
     onHandDelta: number;
     reservedDelta: number;
+    /** Units claimed against the preorder allowance and not yet allocated. */
+    preorderedDelta: number;
 }
 
 /**
- * The eight transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
+ * The ten transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
  * and `restock` change how many units are on the shelf; `ship` moves both columns together so a
  * dispatch doesn't change availability; `commit` moves neither (payment settles the claim, the
  * units stay on the shelf until dispatch); `release` and `expire` are the same arithmetic under
  * two names, kept separate because the ledger records which story it was.
  * @param reason - which transition
  * @param quantity - how many units; signed only for `adjust`, positive for everything else
- * @returns the pair of counter deltas the transition implies
+ * @param kind - what the units are; only `release`/`expire` read it, since a preorder claim
+ *   gives back the allowance rather than `reserved`
+ * @returns the counter deltas the transition implies
  */
-export const counterDeltaFor = (reason: StockMovementReason, quantity: number): CounterDelta => {
+export const counterDeltaFor = (
+    reason: StockMovementReason,
+    quantity: number,
+    kind: HoldKind = 'stock'
+): CounterDelta => {
     switch (reason) {
         // A hold. The units stay where they are and stop being sellable.
         case StockMovementReason.reserve: {
-            return { onHandDelta: 0, reservedDelta: quantity };
+            return { onHandDelta: 0, reservedDelta: quantity, preorderedDelta: 0 };
         }
 
         // The order was paid: the claim is settled, the units stay on the shelf and stay spoken for.
         case StockMovementReason.commit: {
-            return { onHandDelta: 0, reservedDelta: 0 };
+            return { onHandDelta: 0, reservedDelta: 0, preorderedDelta: 0 };
         }
 
         // The parcel leaves: the units are off the shelf and no longer spoken for.
         case StockMovementReason.ship: {
-            return { onHandDelta: -quantity, reservedDelta: -quantity };
+            return { onHandDelta: -quantity, reservedDelta: -quantity, preorderedDelta: 0 };
         }
 
         // The hold is given up — cancelled, or timed out. The units become sellable again.
         case StockMovementReason.release:
         case StockMovementReason.expire: {
-            return { onHandDelta: 0, reservedDelta: -quantity };
+            // A preorder claim never touched `reserved`, so giving it up gives back the allowance.
+            return kind === 'preorder'
+                ? { onHandDelta: 0, reservedDelta: 0, preorderedDelta: -quantity }
+                : { onHandDelta: 0, reservedDelta: -quantity, preorderedDelta: 0 };
+        }
+
+        // A preorder: the units do not exist yet, so only the allowance moves.
+        case StockMovementReason.preorder: {
+            return { onHandDelta: 0, reservedDelta: 0, preorderedDelta: quantity };
+        }
+
+        // Stock arrived for a paid preorder: the claim becomes a real hold on a real unit.
+        case StockMovementReason.allocate: {
+            return { onHandDelta: 0, reservedDelta: quantity, preorderedDelta: -quantity };
         }
 
         // A delivery. The only transition that can create units.
         case StockMovementReason.receive: {
-            return { onHandDelta: quantity, reservedDelta: 0 };
+            return { onHandDelta: quantity, reservedDelta: 0, preorderedDelta: 0 };
         }
 
         // Returned goods are received back on the shelf. `reserved` is untouched: `ship` already
         // took it down, and nothing reserved these units again in the meantime.
         case StockMovementReason.restock: {
-            return { onHandDelta: quantity, reservedDelta: 0 };
+            return { onHandDelta: quantity, reservedDelta: 0, preorderedDelta: 0 };
         }
 
         /*
@@ -74,7 +102,7 @@ export const counterDeltaFor = (reason: StockMovementReason, quantity: number): 
          * directions instead of a second `write-off` reason saying the same thing.
          */
         case StockMovementReason.adjust: {
-            return { onHandDelta: quantity, reservedDelta: 0 };
+            return { onHandDelta: quantity, reservedDelta: 0, preorderedDelta: 0 };
         }
     }
 };

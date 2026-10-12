@@ -57,14 +57,15 @@ A new product's opening stock arrives as `product.created` through the outbox, w
 least once. `openLevel` inserts the row and books the opening units in one transaction, and books
 them only when that call inserted the row, so a redelivery finds it and books nothing.
 
-| Transition                 | Fired by                                                                     | What it does                                                                                                                               |
-| -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `reserveForOrder`          | checkout, admin order create                                                 | units held, not sold                                                                                                                       |
-| `commitForOrder`           | payment confirmed                                                            | the claim is settled; nothing moves, the units stay on the shelf                                                                           |
-| `shipForOrder`             | the parcel leaves, or a digital order is fulfilled ([`orders`](./orders.md)) | units leave the shelf: `onHand` and `reserved` fall together, `available` stays                                                            |
-| `releaseForOrder`          | order cancelled, or the sweep (a stale hold timed out)                       | units come back                                                                                                                            |
-| `releaseCommittedForOrder` | a PAID order cancelled before dispatch                                       | the claim is given up; the units never left the shelf                                                                                      |
-| `restockReturnedLines`     | goods a customer sent back are received ([`returns`](./returns.md))          | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
+| Transition                  | Fired by                                                                     | What it does                                                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `reserveForOrder`           | checkout, admin order create                                                 | units held, not sold                                                                                                                       |
+| `commitForOrder`            | payment confirmed                                                            | the claim is settled; nothing moves, the units stay on the shelf                                                                           |
+| `shipForOrder`              | the parcel leaves, or a digital order is fulfilled ([`orders`](./orders.md)) | units leave the shelf: `onHand` and `reserved` fall together, `available` stays                                                            |
+| `releaseForOrder`           | order cancelled, or the sweep (a stale hold timed out)                       | units come back                                                                                                                            |
+| `releaseCommittedForOrder`  | a PAID order cancelled before dispatch                                       | the claim is given up; the units never left the shelf                                                                                      |
+| `receive` (with allocation) | a delivery lands, `POST /inventory/receipts`                                 | the units arrive, then go to the paid [preorders](./inventory-reservations.md#preorders) waiting, oldest payment first, in one transaction |
+| `restockReturnedLines`      | goods a customer sent back are received ([`returns`](./returns.md))          | the returned lines go back on `onHand`, one `restock` movement each — no reservation claimed; the return's own once-only move is the guard |
 
 ::: warning Exactly-once, by construction
 Each transition claims the reservation's status **conditionally**, so a cancel racing the sweep — or
@@ -83,7 +84,9 @@ event: with one, every mover would have to remember to announce on every path, r
 included. A counter change nobody recorded is a corrupt audit trail, not a smaller feature.
 
 Reads go through `availableFor`: one batched ledger read that [`cart`](./cart.md) uses for its
-stock flags and its checkout, so a line never reads as fitting and then fails at the hold.
+stock flags and its checkout, so a line never reads as fitting and then fails at the hold. For a
+product that is a preorder the caller says so, and the read answers with what is left of its
+allowance instead of the shelf.
 
 Deleting this module leaves a shop that cannot sell. That is the honest consequence of owning
 something.

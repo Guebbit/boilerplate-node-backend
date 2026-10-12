@@ -5,7 +5,12 @@
 
 import { productService } from '@modules/products';
 import { withTransaction } from '@infrastructure/runtime/database';
-import { StockMovementReason, type InventoryLevel, type StockMovement } from '@types';
+import {
+    StockMovementReason,
+    type InventoryLevel,
+    type PreorderLevel,
+    type StockMovement
+} from '@types';
 import {
     normalizePagination,
     buildPaginatedMeta,
@@ -13,6 +18,7 @@ import {
 } from '@infrastructure/persistence/search';
 import { lowStockThreshold } from '../config';
 import { stockLevelRepository, stockMovementRepository } from '../repository';
+import type { PaginationInput } from '@infrastructure/persistence/search';
 import type { LevelFilters, MovementFilters } from './types';
 import { applyTransition, syncStockCache } from './transition';
 
@@ -63,15 +69,65 @@ export const removeLevel = (productId: string): Promise<void> =>
  * low (a missed sync) would refuse a sale the shelf covers, and nothing would ever heal it, since
  * a refused checkout moves no stock. A level that never existed reads as nothing available.
  *
+ * A product the caller names in `preorderIds` is sold against its allowance, not the shelf: what
+ * is left of `preorderLimit`, because its units do not exist yet.
+ *
  * @param productIds - the products to look up
- * @returns available units by product id; absent for a product with no level row
+ * @param preorderIds - the ones that are preorders right now (the catalogue decides, not this module)
+ * @returns units for sale by product id; absent for a product with no level row
  */
-export const availableFor = (productIds: readonly string[]): Promise<Map<string, number>> =>
+export const availableFor = (
+    productIds: readonly string[],
+    preorderIds: ReadonlySet<string> = new Set()
+): Promise<Map<string, number>> =>
     stockLevelRepository
         .findManyByProductIds(productIds)
         .then(
-            (levels) => new Map(levels.map((level) => [String(level.productId), level.available]))
+            (levels) =>
+                new Map(
+                    levels.map((level) => [
+                        String(level.productId),
+                        preorderIds.has(String(level.productId))
+                            ? Math.max(0, level.preorderLimit - level.preordered)
+                            : level.available
+                    ])
+                )
         );
+
+/**
+ * A page of the preorder board: every product with an allowance or something outstanding, the most
+ * outstanding first. The counters and their paid / unpaid split are this module's; the title and the
+ * release date are asked of `productService` AFTER the page is settled, the same API composition
+ * the stock board uses.
+ *
+ * @param filters - the shared `page`/`pageSize`
+ * @returns the page and its pagination meta
+ */
+export const listPreorders = async (
+    filters: PaginationInput = {}
+): Promise<{ items: PreorderLevel[]; meta: PaginatedMeta }> => {
+    const pagination = normalizePagination(filters);
+    const { items, totalItems } = await stockLevelRepository.preorderBoard({
+        skip: pagination.skip,
+        limit: pagination.pageSize
+    });
+
+    const products = await productService.findManyByIds(items.map((item) => item.productId));
+    const byId = new Map(products.map((product) => [String(product._id), product]));
+
+    return {
+        items: items.map((item) => {
+            const product = byId.get(item.productId);
+            return {
+                ...item,
+                title: product?.title ?? item.productId,
+                ...(product?.releaseDate ? { releaseDate: product.releaseDate.toISOString() } : {}),
+                left: Math.max(0, item.preorderLimit - item.preordered)
+            };
+        }),
+        meta: buildPaginatedMeta(pagination, totalItems)
+    };
+};
 
 /**
  * A page of the stock board — every product's counters, scarcest first, sorted by what's left
@@ -117,7 +173,8 @@ export const listLevels = async (
 export const lowStockCount = (): Promise<number> =>
     stockLevelRepository
         .lowAvailabilityProductIds(lowStockThreshold())
-        .then((ids) => productService.countPublic(ids));
+        // A preorder waits for stock that does not exist yet: it is not "running low".
+        .then((ids) => productService.countPublic(ids, { excludePreorders: true }));
 
 /**
  * A page of the ledger, newest first. Reports `totalItems` since this is the record an auditor
