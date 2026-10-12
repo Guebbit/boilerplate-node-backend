@@ -66,6 +66,8 @@ const paidOrder = async () => {
     const intent = await createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
     await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
+    // Delivery is after the response: let the relay publish the settlement's rows first.
+    await settleOutboxNudges();
     return { user, orderId };
 };
 

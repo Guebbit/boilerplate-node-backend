@@ -12,15 +12,13 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
-import { withTransaction } from '@infrastructure/runtime/database';
+import { enqueueOutboxEvent } from '@kernel/outbox';
 import { StockMovementReason } from '@types';
 import { reservationRepository, stockLevelRepository } from '../repository';
 import type { ReservationDocument } from '../model';
 import { PREORDER_ALLOCATED } from '../events';
 import type { StockLine } from './types';
 import { applyTransition } from './transition';
-import { refreshStockCacheForProducts } from './returns';
 
 /** One order's share of an allocation, and what it still waits for. */
 interface Allocation {
@@ -134,31 +132,3 @@ export const allocateWithin = async (
         );
     return all;
 };
-
-/**
- * Allocate in a transaction of its own, then do what only a committed write allows: wake the
- * outbox relay and bring the catalogue's stock cache into step.
- *
- * @param productIds - the products to serve
- */
-const allocateProducts = (productIds: readonly string[]): Promise<void> =>
-    withTransaction((session) => allocateWithin(productIds, session)).then((all) => {
-        if (all.length === 0) return undefined;
-        nudgeOutbox();
-        return refreshStockCacheForProducts(all.map(({ productId }) => productId));
-    });
-
-/**
- * Serve whatever preorders an order's payment just made eligible: stock that arrived while the
- * order was still unpaid was skipped by the receipt, so the payment is the other moment to look.
- * Oldest payment first still holds — free units exist only when every earlier payer is served.
- *
- * @param orderId - the order whose hold was just committed
- */
-export const allocateForOrder = (orderId: string): Promise<void> =>
-    reservationRepository.findByOrderId(orderId).then((hold) => {
-        const productIds = (hold?.items ?? [])
-            .filter((item) => item.kind === 'preorder')
-            .map((item) => String(item.productId));
-        return productIds.length > 0 ? allocateProducts(productIds) : undefined;
-    });

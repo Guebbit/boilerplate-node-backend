@@ -137,12 +137,12 @@ Two different questions, asked at two different moments, both owned by `orders`:
   independent of the pre-check: a race that slips past the pre-check still cannot double-move the
   order, because `markPaid` only writes from `pending`.
 
-**After the final write, the order is read again.** `markPaid` and the payment's own
-`succeeded` write are two writes, and a customer may cancel from `paid` in between — that cancel's
-refund then finds nothing `succeeded` to return. So `settlePayment` decides "keep the money, or
-put it straight back" on the order's status as read _after_ its own payment write, never on the
-copy `markPaid` answered. Either the cancel's refund sees `succeeded`, or this re-read sees
-`cancelled`; the conditional `succeeded → refunded` write makes sure only one of them refunds.
+**The final write and the payment's own `succeeded` write are one transaction.** A customer may
+cancel at any moment, and a cancel racing the settlement serialises on the order document: either
+the cancel lands first and `markPaid` finds the order gone (the money is put straight back, see
+[One settlement transaction](#one-settlement-transaction)), or the settlement lands first and the
+cancel's refund sees a `succeeded` payment. The conditional `succeeded → refunded` write makes sure
+only one of them refunds.
 
 **Before the final write, the money is compared with what was asked.** A provider's `succeeded`
 carries `amountReceived`, `currency` and `paymentId`, and `settlePayment` checks all three against
@@ -154,7 +154,7 @@ payment is written `succeeded` with what ARRIVED, and then:
 flowchart TD
     S["provider reports succeeded"] --> C{"amount, currency and<br/>paymentId match?"}
     C -->|yes| P["markPaid, commit the hold,<br/>payment.succeeded"]
-    C -->|no| W["record what arrived<br/>(no pendingEffects)"]
+    C -->|no| W["record what arrived"]
     W --> A["audit payment.amount_mismatch,<br/>count it, log an error"]
     A --> X["cancel the order (system actor)"]
     X --> R["ORDER_REFUND_OWED: the existing<br/>refund path returns the money"]
@@ -168,34 +168,35 @@ hand-recorded payment (`manual`) is exempt: its amount is the order's own, with 
 reporting a different one. The audit action stays out of `security.*`, whose whole prefix the
 incident view takes: this is a reconciliation, not an attack signal.
 
-## Pending effects
+## One settlement transaction
 
-The `succeeded` write, the stock commit and clearing the marker that says which is still owed are
-three separate steps, and only the first is durable on its own. `settlePayment` sets
-`pendingEffects: ['commit']` in the SAME write that moves the payment to `succeeded`, then commits
-the order's held stock (`inventoryService.commitForOrder`) and clears the marker — on both the
-happy path and the "order lost" refund path.
+A success settles in ONE Mongo transaction with an explicit session. `markPaid` takes the session and
+commits the order's hold itself (paid means stock committed, as cancelled means stock released).
 
-A crash between the status write and the clear (a dead process, a database hiccup on the order
-read, the commit itself, or the order-lost branch's own refund) leaves a payment reading
-`succeeded` with nothing set aside for its order. Unlike a webhook, nothing redelivers a settlement
-that already answered its caller — so `npm run sweep:payment-effects`
-(`payments/services/effects.ts#retryPendingEffects`, every 5 minutes, see
-`docs/reference/ops.md#scheduled-jobs`) is the only thing that ever retries it. For any order still
-expecting one, it repeats the commit — safe, since claiming a hold is exactly-once; for one that
-has moved on instead (cancelled before the crash could even decide that), it marks the refund owed
-— `orders`' own `NODE_ORDER_EFFECT_RETRY_MINUTES` sweep is what actually returns the money — and
-either way clears this marker once its own decision is made. It leaves the marker standing on
-anything younger than `NODE_PAYMENT_EFFECT_RETRY_MINUTES` (default 1 minute), so it never races a
-settlement still mid-flight.
+```mermaid
+flowchart TD
+    S["settlePayment: provider says succeeded"] --> T["withTransaction (database only)"]
+    T --> G["payment -> succeeded<br/>(the gate: one caller wins)"]
+    G -->|lost the race| R["replay: nothing to do"]
+    G --> M["orderService.markPaid(session)<br/>+ hold commit + timeline"]
+    M -->|order paid| O["enqueue payment.succeeded"]
+    M -->|order gone| F["open refund record (same transaction)"]
+    O --> C["after commit: nudge relay, mail, stock cache"]
+    F --> P["after commit: provider refund"]
+    P -->|fails| Q["record stays open;<br/>retryOpenRefunds finishes it"]
+```
 
-The marker also owes the announcement. `payment.succeeded` is written to the
-[transactional outbox](../tools/outbox.md) in the same transaction that clears the marker
-(`src/modules/payments/services/announce.ts`), so a settlement that died after charging still announces: the sweep
-commits the stock, writes the row, and the relay publishes it. Nothing is announced for an order
-that was lost — the refund path owns that.
-
-`pendingEffects` is internal bookkeeping, omitted from the wire the same way `providerRef` is.
+- **Database only.** The driver re-runs the callback on a transient error, so no provider call, mail
+  or cache write happens inside it.
+- **No marker.** A crash before the commit leaves nothing; after it, the outbox row is durable and the
+  relay publishes it. Nothing redelivers a settlement that already answered its caller, and nothing
+  has to.
+- **A lost order owes a refund record, not a marker.** The record is opened in the same transaction
+  as the `succeeded` write, so money is never durable without its way back. The provider is asked
+  after the commit; `npm run sweep:payment-effects` (`retryOpenRefunds`) finishes a refund that
+  failed.
+- **A hold expiring on a paid order is no longer possible.** The commit lands with the `paid` move,
+  so the reservation sweep (which only releases `held` holds) never sees a paid order's hold.
 
 ## Lost webhooks
 
@@ -597,7 +598,7 @@ The `actor` is the operator who asked or recorded the money; an automatic refund
 | `NODE_BANK_TRANSFER_BIC`                    | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
 | `NODE_BANK_TRANSFER_HOLD_HOURS`             | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`   | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
-| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How long an open refund sits untouched before `sweep:payment-effects` retries it. See [One settlement transaction](#one-settlement-transaction)                                                                                                                                                                |
 | `NODE_PAYMENT_ATTENTION_MINUTES`            | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                      |
 | `NODE_PAYMENT_RECONCILE_MINUTES`            | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
 | `NODE_STRIPE_SECRET_KEY`                    | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |

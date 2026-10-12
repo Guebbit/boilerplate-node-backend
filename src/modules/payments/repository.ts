@@ -36,10 +36,10 @@ import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { setAndUnset } from '@infrastructure/persistence/changes';
 
 /**
- * `providerRef` and `pendingEffects` are what `applyPaymentTransform` omits — internal bookkeeping
- * never part of the wire contract — so the search wire type drops both too.
+ * `providerRef` is what `applyPaymentTransform` omits — internal bookkeeping never part of the
+ * wire contract — so the search wire type drops it too.
  */
-export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef' | 'pendingEffects'>;
+export type PaymentWire = Omit<Wire<PaymentDocument>, 'providerRef'>;
 
 /** What the staff list may order by: wire field → column. */
 const PAYMENT_SORTABLE = { createdAt: 'createdAt', amount: 'amount' };
@@ -210,9 +210,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         extra?: Partial<PaymentDocument>,
         session?: ClientSession
     ) => Promise<PaymentDocument | null>;
-    clearPendingEffects: (orderId: string) => Promise<void>;
-    clearPendingEffectsOnce: (orderId: string, session: ClientSession) => Promise<boolean>;
-    findWithPendingEffects: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
     addRefund: (
         paymentId: string,
         expectedRefunded: number,
@@ -247,7 +244,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         openBefore?: Date;
         limit: number;
     }) => Promise<RefundRow[]>;
-    findPendingEffectsSince: (cutoff: Date, limit: number) => Promise<PaymentDocument[]>;
     findWithOpenRefunds: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
     findStaleInFlight: (updatedBefore: Date, limit: number) => Promise<PaymentDocument[]>;
 } = {
@@ -395,62 +391,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             })
             .exec()
             .then(({ deletedCount }) => deletedCount),
-
-    /**
-     * Drop the "an effect is still owed" marker — the effect ran (safe to repeat if it didn't
-     * fully land), or the order it was for no longer needs it (lost to a cancel). Unconditional:
-     * whichever of those it is, nothing is still relying on the marker once this is called.
-     *
-     * @param orderId - the order whose payment's marker is being cleared
-     */
-    clearPendingEffects: (orderId: string) =>
-        paymentModel
-            .updateOne(
-                { orderId: toObjectId(orderId) },
-                { $unset: { pendingEffects: 1 } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(() => undefined),
-
-    /**
-     * Drop the marker inside the caller's transaction, and say whether THIS call was the one that
-     * dropped it. Conditional on the marker still being there, so of two racers (a settlement and
-     * the sweep finishing the same payment) exactly one sees `true` — the one that owes the
-     * announcement, written to the outbox in that same transaction.
-     *
-     * @param orderId - the order whose payment's marker is being cleared
-     * @param session - the transaction this write joins
-     */
-    clearPendingEffectsOnce: (orderId: string, session: ClientSession) =>
-        paymentModel
-            .updateOne(
-                { orderId: toObjectId(orderId), pendingEffects: { $exists: true, $ne: [] } },
-                { $unset: { pendingEffects: 1 } },
-                { timestamps: false, session }
-            )
-            .exec()
-            .then(({ modifiedCount }) => modifiedCount > 0),
-
-    /**
-     * Payments still owing an effect from a settlement that never finished it, oldest first —
-     * `effects.ts#retryPendingEffects`'s own scan. `updatedBefore` excludes a payment whose
-     * `succeeded` write is from this same sweep tick, so a settlement still mid-flight (between
-     * setting the marker and clearing it) is never raced by the sweep that exists for the crash
-     * case, not the normal one.
-     *
-     * @param updatedBefore - only markers at least this old
-     * @param limit - how many to return at most, so one sweep can't try every stale payment at once
-     */
-    findWithPendingEffects: (updatedBefore: Date, limit: number) =>
-        paymentModel
-            .find({
-                pendingEffects: { $exists: true, $ne: [] },
-                updatedAt: { $lte: updatedBefore }
-            })
-            .sort({ updatedAt: 1 })
-            .limit(limit)
-            .exec(),
 
     /**
      * Open a refund: append its record and raise `amountRefunded` in ONE write, conditional on the
@@ -656,20 +596,6 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             { $limit: limit },
             REFUND_ROW_PROJECTION
         ]),
-
-    /**
-     * Payments still owing an effect, as the needs-attention read sees them: the same marker
-     * {@link findWithPendingEffects} scans, over a longer grace window.
-     *
-     * @param cutoff - only markers at least this old
-     * @param limit - the cap
-     */
-    findPendingEffectsSince: (cutoff, limit) =>
-        paymentModel
-            .find({ pendingEffects: { $exists: true, $ne: [] }, updatedAt: { $lte: cutoff } })
-            .sort({ updatedAt: 1 })
-            .limit(limit)
-            .exec(),
 
     /**
      * Payments with a refund still open, oldest first — the refund sweep's own scan.

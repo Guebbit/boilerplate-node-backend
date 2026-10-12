@@ -9,6 +9,7 @@
  */
 
 import { announceInTransaction, announceWithin, type OutboxAnnouncements } from '@kernel/outbox';
+import { inventoryService } from '@modules/inventory';
 import { ORDER_STATUS_CHANGED } from '../events';
 import { OrderStatus } from '@types';
 import type { ClientSession } from 'mongoose';
@@ -95,32 +96,49 @@ const markSystemMove = (
  * `markSystemMove`'s shared `$set` has no slot for. `invoicing` subscribes to the
  * `ORDER_STATUS_CHANGED` event emitted below to issue the order's invoice — see
  * `docs/modules/invoicing.md`.
+ *
+ * Paid means stock committed: the order's own rule, as cancelled means stock released. The hold's
+ * `held → committed` claim therefore lands in the same transaction as the status move.
  * @param orderId - the order the payment was for
  * @param paymentMethod - `card` when the provider took the money: the order then says so, even if
  *   checkout chose bank transfer (a customer who changed their mind). Offline money leaves the
  *   checkout choice alone — the payment row carries the recorded method
  * @param by - for the timeline: the `actor` who recorded offline money (absent for the provider
  *   and the system) and the `method` the payment row carries, which says how it was really paid
+ * @param session - the settlement's transaction, when the move belongs to one; absent, the move
+ *   opens its own. Inside one, the caller wakes the outbox relay and refreshes the stock cache
+ *   (`inventoryService.refreshStockCacheForOrder`) once it has committed
  * @returns the order as it now stands, or `null` if it could no longer be paid
  */
 export const markPaid = (
     orderId: string,
     paymentMethod?: 'card',
-    by: { actor?: string | null | undefined; method?: string | undefined } = {}
+    by: { actor?: string | null | undefined; method?: string | undefined } = {},
+    session?: ClientSession
 ): Promise<OrderDocument | null> => {
     const { from, to } = ORDER_EVENTS.pay;
-    return announceInTransaction(
-        withTimeline(
-            (session) => orderRepository.markPaid(orderId, from[0], paymentMethod, session),
-            (order) => [
-                {
-                    type: 'paid',
-                    actor: by.actor,
-                    data: { method: by.method ?? paymentMethod ?? order.paymentMethod ?? null }
-                }
-            ]
-        ),
+    const movePaid = withTimeline(
+        (active) => orderRepository.markPaid(orderId, from[0], paymentMethod, active),
+        (order) => [
+            {
+                type: 'paid',
+                actor: by.actor,
+                data: { method: by.method ?? paymentMethod ?? order.paymentMethod ?? null }
+            }
+        ]
+    );
+    return announceMove(
+        session,
+        (active) =>
+            movePaid(active).then((order) =>
+                order ? inventoryService.commitForOrder(orderId, active).then(() => order) : order
+            ),
         () => statusChangedEvent(orderId, from[0], to)
+    ).then((order) =>
+        // Opened its own transaction: the cache write cannot roll back, so it waits for the commit.
+        order && !session
+            ? inventoryService.refreshStockCacheForOrder(orderId).then(() => order)
+            : order
     );
 };
 

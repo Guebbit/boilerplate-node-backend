@@ -127,24 +127,9 @@ export interface PaymentDocument extends Document {
     amountRefunded: number;
     /** One record per refund attempt, oldest first. */
     refunds: RefundRecord[];
-    /**
-     * Effects still owed for this payment's current `succeeded` write — hidden from the API, like
-     * `providerRef`. Set in the SAME write that moves the payment to `succeeded`, so a crash
-     * before the effect actually runs (today, only `commit`: taking the held stock) leaves a
-     * durable note that it is still owed. `payments/services/effects.ts#retryPendingEffects`
-     * finds these on a schedule and finishes or drops them; `settlement.ts` clears the field once
-     * the effect has run or the order it was for is no longer payable.
-     */
-    pendingEffects?: PaymentEffect[];
     createdAt?: Date;
     updatedAt?: Date;
 }
-
-/** Every effect a payment can still owe — the schema's `enum`, and the source of {@link PaymentEffect}. */
-const PAYMENT_EFFECTS = ['commit'] as const;
-
-/** The one effect a `succeeded` write can still owe once it returns — see {@link PaymentDocument.pendingEffects}. */
-export type PaymentEffect = (typeof PAYMENT_EFFECTS)[number];
 
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
@@ -250,10 +235,6 @@ export const paymentSchema = new Schema<PaymentDocument>(
         refunds: {
             type: [refundSchema],
             default: []
-        },
-        pendingEffects: {
-            type: [String],
-            enum: [...PAYMENT_EFFECTS]
         }
     },
     {
@@ -268,14 +249,6 @@ paymentSchema.index({ status: 1, createdAt: -1 }, { name: 'payments_status_creat
 paymentSchema.index(
     { 'refunds.status': 1, 'refunds.createdAt': -1 },
     { name: 'payments_refunds_status_createdAt' }
-);
-
-// Backs `effects.ts#retryPendingEffects`'s own scan: which payments still owe an effect, oldest
-// first. `updatedAt` in the key (not just a query filter) is what lets the sweep skip a payment
-// this same second's settlement is still in the middle of, without a second index for that alone.
-paymentSchema.index(
-    { pendingEffects: 1, updatedAt: 1 },
-    { name: 'payments_pendingEffects_updatedAt' }
 );
 
 /**
@@ -312,13 +285,13 @@ const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> =>
  * repository factory for its lean reads (see `normalize` in
  * @infrastructure/persistence/create-repository).
  *
- * `providerRef` and `pendingEffects` are omitted here rather than left to each caller: both are
- * internal bookkeeping (a provider handle, a retry marker) no client operation reads, and the
- * contract declares `additionalProperties: false`, so a serializer that let either through would
- * fail the spec as well as publish it.
+ * `providerRef` is omitted here rather than left to each caller: it is internal bookkeeping (a
+ * provider handle) no client operation reads, and the contract declares
+ * `additionalProperties: false`, so a serializer that let it through would fail the spec as well
+ * as publish it.
  */
 export const applyPaymentTransform = applySerialization(paymentSchema, {
-    omit: ['providerRef', 'pendingEffects'],
+    omit: ['providerRef'],
     after: (serialized) => {
         // The embedded refunds get the same treatment a top-level document does, by hand: the lean
         // path never runs the subschema's own transform, and the `toJSON` path runs it on

@@ -11,6 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironment } from '@tests/environment';
 import { resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import {
     callerAs,
     testCallerContext,
@@ -53,6 +54,9 @@ const paidOrder = async () => {
         asCustomer(user.id),
         testCallerContext
     );
+    // Delivery is after the response: let the relay publish the settlement's rows before the
+    // test cancels, as a real cancel arrives a request later.
+    await settleOutboxNudges();
     return { user, order };
 };
 

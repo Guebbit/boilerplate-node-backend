@@ -1,56 +1,18 @@
 /**
  * @module
- * Announcing a settled payment. `PAYMENT_SUCCEEDED` goes through the transactional outbox, so it
- * is durable from the moment the settlement's last owed effect is discharged — a crash after the
- * money moved cannot leave subscribers never hearing about it. `PAYMENT_FAILED` rides the
- * same outbox, written with the `declined` status move itself.
- *
- * Reached from two places that must agree: `./settlement.ts` (the normal path) and `./effects.ts`
- * (the sweep that finishes a settlement which died after charging).
+ * Announcing a declined payment. `PAYMENT_FAILED` goes through the transactional outbox, written
+ * with the `declined` status move itself. `PAYMENT_SUCCEEDED` is written by `./settlement.ts`
+ * inside the settlement's own transaction.
  *
  * See: docs/tools/outbox.md
  */
 
-import { withTransaction } from '@infrastructure/runtime/database';
-import { announceInTransaction, enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
+import { announceInTransaction } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
-import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '../events';
+import { PAYMENT_FAILED } from '../events';
 import { SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import type { PaymentDocument } from '../model';
 import { paymentRepository } from '../repository';
-
-/**
- * Discharge the payment's owed-effects marker and announce `payment.succeeded`, atomically.
- *
- * The marker is the durable "this settlement is not finished" note. Clearing it and writing the
- * outbox row are one transaction, so the announcement exists exactly when the marker is gone: a
- * crash before leaves the marker for the sweep, a crash after leaves the row for the relay.
- * Only the caller whose clear actually removed the marker enqueues, so a settlement racing the
- * sweep announces once, not twice.
- *
- * @param paymentId - the settled payment
- * @param orderId - its order, which is also the outbox aggregate (per-order ordering)
- * @returns whether this call wrote the announcement
- */
-export const announcePaymentSucceeded = (paymentId: string, orderId: string): Promise<boolean> =>
-    withTransaction((session) =>
-        paymentRepository
-            .clearPendingEffectsOnce(orderId, session)
-            .then((cleared) =>
-                cleared
-                    ? enqueueOutboxEvent(
-                          PAYMENT_SUCCEEDED,
-                          { paymentId, orderId },
-                          orderId,
-                          session
-                      ).then(() => true)
-                    : false
-            )
-    ).then((announced) => {
-        // After commit, never before: the relay must not see a row the transaction may still drop.
-        if (announced) nudgeOutbox();
-        return announced;
-    });
 
 /**
  * Move a payment to `declined` and announce `payment.failed`, atomically.

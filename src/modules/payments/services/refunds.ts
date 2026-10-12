@@ -72,10 +72,10 @@ export interface RefundRequest {
 }
 
 /** The request the automatic callers make: everything left, for a cancellation. */
-const CANCELLATION_REQUEST: RefundRequest = Object.freeze({ reason: 'cancellation' });
+export const CANCELLATION_REQUEST: RefundRequest = Object.freeze({ reason: 'cancellation' });
 
 /** A refund that was just opened, with the payment as it stood right after. */
-interface OpenedRefund {
+export interface OpenedRefund {
     payment: PaymentDocument;
     refund: RefundRecord;
 }
@@ -165,13 +165,16 @@ const refundRow = (
  * @param payment - the payment as the caller read it
  * @param request - the amount (absent = everything left) and the reason
  * @param actor - the operator who asked, when one did; absent for the automatic listener
+ * @param session - the caller's transaction, when the record belongs to one (a settlement that
+ *   found its order gone); absent, the record opens in a transaction of its own
  * @returns the opened record and the payment after it, or `null` when nothing (or not that much)
  *   is left to refund
  */
-const openRefund = (
+export const openRefund = (
     payment: PaymentDocument,
     request: RefundRequest,
-    actor?: string | null
+    actor?: string | null,
+    session?: ClientSession
 ): Promise<OpenedRefund | null> => {
     const { currency, _id: paymentId, orderId, amountRefunded } = payment;
     const remaining = remainingOf(payment);
@@ -194,14 +197,14 @@ const openRefund = (
     };
     const newTotal = addMoney(toMinorUnits(amountRefunded, currency), amount);
 
-    return withTransaction((session) =>
+    const write = (active: ClientSession): Promise<PaymentDocument | null> =>
         paymentRepository
             .addRefund(
                 String(paymentId),
                 amountRefunded,
                 toDecimalAmount(newTotal, currency),
                 refund,
-                session
+                active
             )
             .then((updated) =>
                 updated
@@ -213,15 +216,19 @@ const openRefund = (
                                   actor,
                                   data: refundRow(refund)
                               },
-                              session
+                              active
                           )
                           .then(() => updated)
                     : updated
-            )
-    ).then((updated) => {
+            );
+
+    return (session ? write(session) : withTransaction(write)).then((updated) => {
         // `createdAt` is stamped by mongoose on insert; the record this write appended is
         // otherwise exactly `refund` — one cast for the one field the compiler cannot see.
         if (updated) return { payment: updated, refund: refund as RefundRecord };
+        // Inside a caller's transaction the payment is the one that caller just wrote: a miss is
+        // final, and a re-read outside the transaction would see something older.
+        if (session) return null;
         return paymentRepository
             .findByOrderId(String(orderId))
             .then((fresh) =>
