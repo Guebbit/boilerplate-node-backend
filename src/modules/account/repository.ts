@@ -14,10 +14,10 @@ import {
     type AccountExportDocument,
     type ExportStatus,
     type SessionDocument,
-    type SessionMode,
     type VerificationTokenDocument
 } from './model';
 import { ONE_LIVE_TOKEN_TYPES, type VerificationTokenType } from './token-types';
+import type { SessionMode } from './session-mode';
 
 /** One export row as the services read it. */
 export type AccountExportRow = Lean<AccountExportDocument>;
@@ -211,14 +211,15 @@ const supersedeSession = (tokenHash: string, at: Date, retentionMs: number): Pro
         .then((claimed) => claimed !== null);
 
 /**
- * Stamp a row as used. A positional-free single update, so two devices refreshing at once cannot
+ * Stamp a row as used. A single update on the row itself, so two devices refreshing at once cannot
  * overwrite each other. Throttled when `minIntervalMs` is given: a busy tab does not write per request.
  *
  * @param tokenHash - the credential's digest
  * @param now - the moment of use
  * @param minIntervalMs - skip the write when the row was stamped more recently than this; 0 always writes
+ * @returns whether a write happened
  */
-const touchSession = (tokenHash: string, now: Date, minIntervalMs = 0): Promise<void> =>
+const touchSession = (tokenHash: string, now: Date, minIntervalMs = 0): Promise<boolean> =>
     sessionModel
         .updateOne(
             {
@@ -233,31 +234,7 @@ const touchSession = (tokenHash: string, now: Date, minIntervalMs = 0): Promise<
             { $set: { lastUsedAt: now } }
         )
         .exec()
-        .then(() => undefined);
-
-/**
- * Replace a `cookie` row's credential in place — the id is renewed at login's twin events (a
- * step-up) while the session, its `familyId` and its `startedAt` stay. The old digest stops working
- * the moment this lands.
- *
- * @param oldHash - the digest being replaced
- * @param newHash - the renewed credential's digest
- * @param proof - the renewed proof of identity the session now carries
- * @returns the updated row, or `null` when the old digest names no cookie row
- */
-const renewSessionCredential = (
-    oldHash: string,
-    newHash: string,
-    proof: Pick<SessionRow, 'authTime' | 'amr'>
-): Promise<SessionRow | null> =>
-    sessionModel
-        .findOneAndUpdate(
-            { tokenHash: oldHash, mode: 'cookie' },
-            { $set: { tokenHash: newHash, authTime: proof.authTime, amr: proof.amr } },
-            { new: true }
-        )
-        .lean<SessionRow | null>()
-        .exec();
+        .then(({ modifiedCount }) => modifiedCount > 0);
 
 /**
  * The account's live sessions of one mode, newest sign-in first. Live means not rotated away and
@@ -326,7 +303,6 @@ export const sessionRepository: {
     findByHash: typeof findSessionByHash;
     supersede: typeof supersedeSession;
     touch: typeof touchSession;
-    renewCredential: typeof renewSessionCredential;
     listLive: typeof listLiveSessions;
     removeByHash: typeof removeSessionByHash;
     removeFamily: typeof removeSessionFamily;
@@ -336,7 +312,6 @@ export const sessionRepository: {
     findByHash: findSessionByHash,
     supersede: supersedeSession,
     touch: touchSession,
-    renewCredential: renewSessionCredential,
     listLive: listLiveSessions,
     removeByHash: removeSessionByHash,
     removeFamily: removeSessionFamily,

@@ -9,6 +9,7 @@ import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { accountService, twoFactorService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
+import { SESSION_TRANSPORTS } from '../session/strategy';
 import { issueSession } from '../session/session';
 import { rememberDevice } from '../session/device-cookie';
 import { recordLoginFailure, recordLoginSuccess } from '../session/login-observability';
@@ -19,7 +20,10 @@ import type { LoginRequest, LoginOutcome } from '@types';
 import { isUnrestrictedCaller } from '../roles';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
-const rememberSchema = z.object({ remember: z.enum(RefreshTokenExpiryTime).optional() });
+const rememberSchema = z.object({
+    remember: z.enum(RefreshTokenExpiryTime).optional(),
+    transport: z.enum(SESSION_TRANSPORTS).optional()
+});
 
 /**
  * POST /account/login
@@ -58,12 +62,15 @@ export const postLogin = (
      * about the credentials — while an unknown tier must not slip through to become a cookie with
      * no lifetime at all.
      */
-    const tier = rememberSchema.safeParse({ remember: request.body?.remember });
+    const tier = rememberSchema.safeParse({
+        remember: request.body?.remember,
+        transport: request.body?.transport
+    });
     if (!tier.success) {
         rejectValidation(response, tier.error);
         return;
     }
-    const { remember } = tier.data;
+    const { remember, transport } = tier.data;
 
     return accountService
         .login(email, password)
@@ -92,7 +99,7 @@ export const postLogin = (
                 });
             }
 
-            return issueSession(response, userId, remember).then((accessToken) =>
+            return issueSession(request, response, userId, { remember, transport }).then((issued) =>
                 // Read fresh from the membership — the document carries no role of its own.
                 isUnrestrictedCaller(userId).then((unrestricted) => {
                     recordLoginSuccess(request, userId, unrestricted);
@@ -101,7 +108,7 @@ export const postLogin = (
                     rememberDevice(request, response, data.email);
                     successResponse<LoginOutcome>(
                         response,
-                        { token: accessToken },
+                        issued,
                         200,
                         'Authentication successful'
                     );

@@ -22,7 +22,7 @@ export const loginWithCookie = async (overrides: Parameters<typeof createUser>[0
             `login setup failed: ${response.status} — ${JSON.stringify(response.body)}`
         );
 
-    const jwtCookie = setCookie(response, '__Host-jwt');
+    const jwtCookie = setCookie(response, '__Host-session');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
 
     return {

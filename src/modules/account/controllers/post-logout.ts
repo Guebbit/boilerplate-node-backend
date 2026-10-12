@@ -6,11 +6,11 @@
 import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { successResponse } from '@infrastructure/http/response';
-import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
+import { destroyLoggedCookie, destroySessionCookie } from '../session/cookies';
 import { accountService } from '../services';
+import { sessionCredentialOf } from '../session/session';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-import { readRefreshCookie } from '@kernel/cookies';
 
 /**
  * POST /account/logout — logs out the CURRENT session only.
@@ -19,12 +19,12 @@ import { readRefreshCookie } from '@kernel/cookies';
  * Always 200 — a missing or already-revoked cookie just means "not logged in here", not an error.
  */
 export const postLogout = (request: Request, response: Response) => {
-    const refreshToken = readRefreshCookie(request);
+    const credential = sessionCredentialOf(request);
 
     return accountService
-        .logoutCurrentSession(refreshToken, callerContextOf(request))
+        .logoutCurrentSession(credential, callerContextOf(request))
         .then(() => {
-            destroyRefreshCookie(response);
+            destroySessionCookie(response);
             destroyLoggedCookie(response);
 
             successResponse(response, undefined, 200, t('account.logout.success'));

@@ -70,7 +70,7 @@ const sessionFor = async (amr: string[], withPassword: boolean) => {
     return {
         user,
         bearer: `Bearer ${token}` as const,
-        jwtCookie: `__Host-jwt=${refreshToken}`
+        jwtCookie: `__Host-session=${refreshToken}`
     };
 };
 

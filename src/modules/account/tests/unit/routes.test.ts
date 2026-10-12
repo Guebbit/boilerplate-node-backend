@@ -98,6 +98,7 @@ describe('account routes — what is mounted', () => {
             'GET /reauth',
             'POST /reauth',
             'POST /reauth/methods/:method/send',
+            'GET /session-config',
             'GET /abilities',
             'POST /refresh',
             'POST /logout',

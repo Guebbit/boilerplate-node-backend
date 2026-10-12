@@ -29,6 +29,13 @@ declare module 'express-serve-static-core' {
          * credential rather than the caller's address.
          */
         credentialId?: string;
+        /**
+         * Which credential carried the human session `getAuth` resolved: the `Authorization` header
+         * or, in a deployment whose sessions live in a cookie, the cookie. Absent on an anonymous
+         * request, an API-key request, and one `requirePermissionViaCookie` resolved for an SSE
+         * stream — which is what keeps that cookie from counting as a session elsewhere.
+         */
+        sessionVia?: 'bearer' | 'cookie';
         requestId?: string;
         /** The caller's own well-formed `x-request-id`, kept for correlation; never the request id. */
         clientRequestId?: string;

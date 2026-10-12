@@ -188,6 +188,40 @@ describe('assertConfigIn', () => {
         ).toThrow(/NODE_SAMPLE_RING/);
     });
 
+    describe('a presence rule that applies only to one setting of another variable', () => {
+        const switched = defineConfig({
+            name: 'switched',
+            shape: {
+                NODE_SAMPLE_MODE: text({ default: 'signed' }),
+                NODE_SAMPLE_SIGNING_KEY: secret({
+                    minLength: 8,
+                    placeholder: 'your-key-here',
+                    skipWhen: (environment) => environment.NODE_SAMPLE_MODE === 'opaque'
+                })
+            }
+        });
+        const env = { NODE_ENV: 'production' };
+
+        it('is enforced while the other variable does not skip it', () => {
+            expect(() => assertConfigIn([switched.slice], env)).toThrow(/NODE_SAMPLE_SIGNING_KEY/);
+            expect(() =>
+                assertConfigIn([switched.slice], { ...env, NODE_SAMPLE_MODE: 'signed' })
+            ).toThrow(/NODE_SAMPLE_SIGNING_KEY/);
+        });
+
+        it('is not asked of a deployment that skips it, even with the placeholder set', () => {
+            const opaque = { ...env, NODE_SAMPLE_MODE: 'opaque' };
+
+            expect(() => assertConfigIn([switched.slice], opaque)).not.toThrow();
+            expect(() =>
+                assertConfigIn([switched.slice], {
+                    ...opaque,
+                    NODE_SAMPLE_SIGNING_KEY: 'your-key-here'
+                })
+            ).not.toThrow();
+        });
+    });
+
     describe('a key that must decode to enough bytes', () => {
         const keyed = defineConfig({
             name: 'keyed',

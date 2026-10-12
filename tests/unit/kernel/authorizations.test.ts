@@ -82,9 +82,12 @@ const ADMIN_ONLY_KEY = 'apikeys.any.delete';
 
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
+/** Whether the session cookie authenticates ordinary routes — `cookie` mode's switch. */
+let cookieAuthenticates = false;
 registerAuthResolver({
-    fromAccessToken: (token) => fromAccessToken(token) as never,
-    fromRefreshToken: (token) => fromRefreshToken(token) as never
+    fromBearer: (token) => fromAccessToken(token) as never,
+    fromCookie: (token) => fromRefreshToken(token) as never,
+    cookieAuthenticates: () => cookieAuthenticates
 });
 
 /** Fakes `@modules/api-keys`' own resolver, for `getAuth`'s `sk_...` branch. */
@@ -105,6 +108,8 @@ const makeRequest = (options: { authorization?: string; authContext?: AuthContex
             name === 'Authorization' ? options.authorization : undefined
         ),
         authContext: options.authContext,
+        // `getAuth` says how the session was carried; here, only a bearer header ever does.
+        sessionVia: options.authContext && options.authorization ? 'bearer' : undefined,
         // Both, because `getAuth` sets both: a stub carrying only the session would let a guard
         // pass a test while attributing every denial in the trail to nobody.
         caller: options.authContext && callerInScope(options.authContext, 'tenant'),
@@ -116,7 +121,7 @@ const makeRequest = (options: { authorization?: string; authContext?: AuthContex
 /** Request stub carrying a refresh cookie, for the cookie-authenticated middleware. */
 const makeCookieRequest = (jwt?: string) =>
     asStub<Request>({
-        cookies: jwt === undefined ? {} : { '__Host-jwt': jwt },
+        cookies: jwt === undefined ? {} : { '__Host-session': jwt },
         header: jest.fn(),
         path: '/orders/1/invoice',
         method: 'GET',
@@ -302,7 +307,7 @@ describe('getAuth', () => {
                 action,
                 outcome: 'failure',
                 actorUserId: 'anonymous',
-                metadata: expect.objectContaining({ kind: 'jwt', route: '/protected' })
+                metadata: expect.objectContaining({ kind: 'session', route: '/protected' })
             })
         );
         const counted = await securityEventsTotal.get();
@@ -326,7 +331,7 @@ describe('getAuth', () => {
             expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
             const counted = await staleCredentialsTotal.get();
             expect(counted.values).toEqual([
-                expect.objectContaining({ labels: { kind: 'jwt', reason }, value: 1 })
+                expect.objectContaining({ labels: { kind: 'session', reason }, value: 1 })
             ]);
         }
     );
@@ -406,6 +411,152 @@ describe('getAuth', () => {
         expect(next).toHaveBeenCalledTimes(1);
         expect(next).toHaveBeenCalledWith(outage);
         expect(request.caller).toBeUndefined();
+    });
+});
+
+/** A cookie-carrying request; `origin` is what an `Origin` header would say. */
+const makeCookieModeRequest = (
+    options: { method?: string; origin?: string; authorization?: string } = {}
+) =>
+    asStub<Request>({
+        cookies: { '__Host-session': 'ses_the-cookie' },
+        header: jest.fn((name: string) =>
+            name === 'Authorization' ? options.authorization : undefined
+        ),
+        get: jest.fn((name: string) => (name === 'Origin' ? options.origin : undefined)),
+        path: '/orders',
+        method: options.method ?? 'GET',
+        headers: {}
+    });
+
+/**
+ * `cookie` session mode: the session cookie authenticates ordinary routes, so `getAuth` reads it
+ * when no `Authorization` header is sent — and, since a cookie rides along on requests the user
+ * never meant to make, refuses an UNSAFE one from a foreign origin before resolving anything.
+ */
+describe('getAuth in cookie mode', () => {
+    beforeEach(() => {
+        cookieAuthenticates = true;
+        fromRefreshToken.mockReset();
+    });
+
+    afterEach(() => {
+        cookieAuthenticates = false;
+    });
+
+    it('resolves the caller from the cookie, and says the session came by cookie', async () => {
+        const resolved = asCustomer('user-1');
+        fromRefreshToken.mockResolvedValue({ ok: resolved });
+
+        const request = makeCookieModeRequest();
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(fromRefreshToken).toHaveBeenCalledWith('ses_the-cookie');
+        expect(request.authContext).toEqual(resolved);
+        expect(request.sessionVia).toBe('cookie');
+    });
+
+    it('prefers a bearer header to the cookie, and says so', async () => {
+        fromAccessToken.mockResolvedValue({ ok: asCustomer('user-1') });
+
+        const request = makeCookieModeRequest({ authorization: 'Bearer ses_the-header' });
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(fromAccessToken).toHaveBeenCalledWith('ses_the-header');
+        expect(fromRefreshToken).not.toHaveBeenCalled();
+        expect(request.sessionVia).toBe('bearer');
+    });
+
+    it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
+        'refuses a %s naming a foreign origin with 403, resolving nothing',
+        (method) => {
+            const response = makeResponseStub();
+            const next = jest.fn();
+
+            getAuth(
+                makeCookieModeRequest({ method, origin: 'https://evil.example' }),
+                response,
+                next
+            );
+
+            expect(response.status).toHaveBeenCalledWith(403);
+            expect(next).not.toHaveBeenCalled();
+            expect(fromRefreshToken).not.toHaveBeenCalled();
+        }
+    );
+
+    it.each(['POST', 'DELETE'])('lets a %s from an allowed origin through', async (method) => {
+        fromRefreshToken.mockResolvedValue({ ok: asCustomer('user-1') });
+
+        const request = makeCookieModeRequest({ method, origin: 'http://localhost:8080' });
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(request.sessionVia).toBe('cookie');
+    });
+
+    it.each(['GET', 'HEAD', 'OPTIONS'])(
+        'does not ask a safe %s for an origin — it changes nothing',
+        async (method) => {
+            fromRefreshToken.mockResolvedValue({ ok: asCustomer('user-1') });
+
+            const request = makeCookieModeRequest({ method, origin: 'https://evil.example' });
+            await runUntilNext(getAuth, request, makeResponseStub());
+
+            expect(request.sessionVia).toBe('cookie');
+        }
+    );
+
+    it('lets an unsafe request with no Origin through, as a non-browser client sends it', async () => {
+        fromRefreshToken.mockResolvedValue({ ok: asCustomer('user-1') });
+
+        const request = makeCookieModeRequest({ method: 'POST' });
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(request.sessionVia).toBe('cookie');
+    });
+
+    it('does not ask a bearer-authenticated unsafe request for an origin: no ambient credential', async () => {
+        fromAccessToken.mockResolvedValue({ ok: asCustomer('user-1') });
+
+        const request = makeCookieModeRequest({
+            method: 'POST',
+            origin: 'https://evil.example',
+            authorization: 'Bearer ses_the-header'
+        });
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(request.sessionVia).toBe('bearer');
+    });
+
+    it('goes anonymous for a refused cookie', async () => {
+        fromRefreshToken.mockResolvedValue({ miss: 'revoked' });
+
+        const request = makeCookieModeRequest();
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(request.authContext).toBeUndefined();
+        expect(request.sessionVia).toBeUndefined();
+    });
+
+    it('lets isAuth accept a cookie-authenticated session', async () => {
+        fromRefreshToken.mockResolvedValue({ ok: asCustomer('user-1') });
+        const request = makeCookieModeRequest();
+        await runUntilNext(getAuth, request, makeResponseStub());
+        const next = jest.fn();
+
+        isAuth(request, makeResponseStub(), next);
+
+        expect(next).toHaveBeenCalledTimes(1);
+    });
+
+    it('ignores the cookie in jwt mode, where it opens only the SSE streams', async () => {
+        cookieAuthenticates = false;
+
+        const request = makeCookieModeRequest();
+        await runUntilNext(getAuth, request, makeResponseStub());
+
+        expect(fromRefreshToken).not.toHaveBeenCalled();
+        expect(request.authContext).toBeUndefined();
     });
 });
 

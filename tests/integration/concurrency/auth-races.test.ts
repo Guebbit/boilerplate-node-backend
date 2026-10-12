@@ -198,7 +198,7 @@ const issueSession = async () => {
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
     const jwtCookie = (login.get('Set-Cookie') ?? []).find((cookie) =>
-        cookie.startsWith('__Host-jwt=')
+        cookie.startsWith('__Host-session=')
     )!;
     return { user, jwtCookie };
 };
@@ -227,7 +227,7 @@ describe('R5 — concurrent refresh-token rotation, same cookie', () => {
         const rotatedCookies = results
             .map((result) => (result.status === 'fulfilled' ? result.value : undefined))
             .flatMap((response) => response?.get('Set-Cookie') ?? [])
-            .filter((cookie) => cookie.startsWith('__Host-jwt='));
+            .filter((cookie) => cookie.startsWith('__Host-session='));
 
         expect(rotatedCookies).toHaveLength(RACE_SIZE);
         expect(new Set(rotatedCookies).size).toBe(RACE_SIZE);

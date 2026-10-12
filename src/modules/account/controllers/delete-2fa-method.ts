@@ -12,7 +12,7 @@ import { rejectValidation, refused, catchAs } from '@infrastructure/http/control
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
-import { remintRefreshCookie } from '../session/session';
+import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
 
 /**
@@ -36,23 +36,27 @@ export const delete2faMethod = (
     }
     const { method } = pathParameters.data;
 
-    return twoFactorService
-        .removeTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) {
-                authTwoFactorDisableTotal.inc({ method, status: 'failure' });
-                return;
-            }
-            authTwoFactorDisableTotal.inc({ method, status: 'success' });
-            // Removing a factor revoked every session, this one included: keep the caller in.
-            return remintRefreshCookie(request, response, id, amr).then(() => {
-                successResponse<undefined>(
-                    response,
-                    undefined,
-                    200,
-                    t('account.two-factor.method-removed')
-                );
-            });
-        })
+    // Taken first: the change below deletes the session this request is signed in on.
+    return sessionSnapshotOf(request, id)
+        .then((snapshot) =>
+            twoFactorService
+                .removeTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
+                .then((result) => {
+                    if (refused(response, result)) {
+                        authTwoFactorDisableTotal.inc({ method, status: 'failure' });
+                        return;
+                    }
+                    authTwoFactorDisableTotal.inc({ method, status: 'success' });
+                    // Removing a factor revoked every session, this one included: keep the caller in.
+                    return remintSession(request, response, id, amr, snapshot).then(() => {
+                        successResponse<undefined>(
+                            response,
+                            undefined,
+                            200,
+                            t('account.two-factor.method-removed')
+                        );
+                    });
+                })
+        )
         .catch(catchAs(response, 'delete2faMethod'));
 };

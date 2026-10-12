@@ -9,7 +9,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { sessionRowsOf } from '../factories';
-import { createRefreshToken, SecondFactorRequiredError } from '../../session/jwt';
+import { createRefreshToken } from '../../session/jwt';
+import { SecondFactorRequiredError } from '../../session/mint-guard';
 
 setupTestDb();
 

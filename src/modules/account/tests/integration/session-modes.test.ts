@@ -1,0 +1,605 @@
+/**
+ * @module
+ * The two ways to stay signed in, driven through the real routes. Every case in the first block
+ * runs under BOTH `NODE_SESSION_MODE` values and says the same thing in each: that is the promise
+ * of the strategy port — login, logout, logout everywhere, revoking one, a password change and a
+ * step-up behave alike, whichever mode is on. The second block holds what only `cookie` mode has
+ * (the origin check, `ses_…` bearers, id renewal), the third what only `jwt` mode has, and the
+ * last the switch itself.
+ *
+ * See: docs/theory/sessions.md
+ */
+
+import { api } from '@tests/http';
+import { setupTestDb } from '@tests/setup-test-db';
+import { setEnvironment } from '@tests/environment';
+import { advanceDate, freezeDate } from '@tests/clock';
+import { cookieHeader, setCookie } from '@tests/cookies';
+import { asStub } from '@tests/stub';
+import {
+    createUser,
+    userRepository,
+    PLAIN_PASSWORD,
+    REPLACEMENT_PASSWORD
+} from '@modules/users/tests/factories';
+import { hashToken } from '@infrastructure/security/hash-token';
+import type { Response } from 'express';
+import { sessionRowsOf } from '../factories';
+import { activeStrategy, type SessionRequest } from '../../session/strategy';
+import { SecondFactorRequiredError } from '../../session/mint-guard';
+
+setupTestDb();
+
+/** The one allowed frontend origin of this file. */
+const FRONTEND = 'https://shop.example';
+
+beforeEach(() => {
+    setEnvironment({ NODE_CORS_ORIGIN: FRONTEND, NODE_MAIL_TRANSPORT: 'outbox' });
+});
+
+/** The two session modes a deployment may run. */
+const MODES = ['jwt', 'cookie'] as const;
+
+/** What a login hands back, and the headers that carry the session on the next request. */
+interface SignedIn {
+    response: Awaited<ReturnType<typeof logIn>>;
+    /** The credential(s) a client presents, in the shape the mode gives them. */
+    headers: Record<string, string>;
+    /** The session cookie as a `Cookie` header — `jwt` mode's refresh cookie, `cookie` mode's id. */
+    cookie: string;
+}
+
+/** `POST /account/login` as a browser sends it — no transport, so `cookie` mode answers with a cookie. */
+const logIn = (email: string, body: Record<string, unknown> = {}) =>
+    api()
+        .post('/account/login')
+        .set('Origin', FRONTEND)
+        .send({ email, password: PLAIN_PASSWORD, ...body });
+
+/**
+ * Sign an account in and collect what its client would keep: in `jwt` mode the access token as a
+ * bearer AND the refresh cookie (the pair the browser holds), in `cookie` mode the cookie alone.
+ */
+const signIn = async (email: string, mode: (typeof MODES)[number]): Promise<SignedIn> => {
+    const response = await logIn(email);
+    expect(response.status).toBe(200);
+    const cookie = cookieHeader(response, '__Host-session');
+    const headers: Record<string, string> =
+        mode === 'jwt'
+            ? { Authorization: `Bearer ${response.body.data.token as string}`, Cookie: cookie }
+            : { Cookie: cookie };
+    return { response, headers, cookie };
+};
+
+/** A fresh account and its sign-in. */
+const account = async (mode: (typeof MODES)[number], email = 'person@example.com') => {
+    const user = await createUser({ email, verifiedAt: new Date() }, 'customer');
+    return { user, session: await signIn(email, mode) };
+};
+
+/**
+ * What a session answers to its own credential, in the way each mode keeps one alive: a `GET
+ * /account` in `cookie` mode, a refresh in `jwt` mode. Not the access token: it is stateless, so
+ * for up to ten minutes (and, within the second a revocation lands in, past the epoch) it outlives
+ * the session it came from — what a revocation ends is the way to get a NEXT one.
+ */
+const statusOfSession = async (session: SignedIn, mode: (typeof MODES)[number]): Promise<number> =>
+    (mode === 'cookie'
+        ? await api().get('/account').set('Cookie', session.cookie)
+        : await api().post('/account/refresh').set('Origin', FRONTEND).set('Cookie', session.cookie)
+    ).status;
+
+/** The id of the session `headers` belong to — the one `GET /account/sessions` marks `current`. */
+const ownSessionId = (headers: Record<string, string>): Promise<string> =>
+    sessionsOf(headers).then((sessions) => {
+        const own = sessions.find((entry) => entry.current);
+        if (!own) throw new Error('the caller has no current session');
+        return own.id;
+    });
+
+/** The status `GET /account` answers a bare cookie with. */
+const statusOfCookie = (cookie: string): Promise<number> =>
+    api()
+        .get('/account')
+        .set('Cookie', cookie)
+        .then((response) => response.status);
+
+/** Poll `read` until it answers something, for a write that lands after the response. */
+const eventually = async <T>(read: () => Promise<T | undefined>): Promise<T> => {
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+        const value = await read();
+        if (value !== undefined) return value;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('the write never landed');
+};
+
+/** `GET /account/sessions` as the caller, resolving the list. */
+const sessionsOf = async (headers: Record<string, string>) => {
+    const response = await api().get('/account/sessions').set(headers);
+    expect(response.status).toBe(200);
+    return response.body.data.sessions as { id: string; current: boolean }[];
+};
+
+/** Use the session the way each mode keeps one alive; answers the headers to use after. */
+const keepAlive = async (
+    session: SignedIn,
+    mode: (typeof MODES)[number]
+): Promise<Record<string, string>> => {
+    if (mode === 'cookie') {
+        await api().get('/account').set(session.headers);
+        return session.headers;
+    }
+    // jwt: the access token has expired by now — the client refreshes, copying auth_time.
+    const refreshed = await api()
+        .post('/account/refresh')
+        .set('Origin', FRONTEND)
+        .set('Cookie', session.cookie);
+    expect(refreshed.status).toBe(200);
+    return {
+        Authorization: `Bearer ${refreshed.body.data.token as string}`,
+        Cookie: cookieHeader(refreshed, '__Host-session')
+    };
+};
+
+describe.each(MODES)('sessions in %s mode', (mode) => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: mode });
+    });
+
+    it('answers what mode it is, with no credential at all', async () => {
+        const response = await api().get('/account/session-config');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({ mode });
+    });
+
+    it('starts a session the next request is authenticated by', async () => {
+        const { session } = await account(mode);
+
+        const response = await api().get('/account').set(session.headers);
+
+        expect(response.status).toBe(200);
+    });
+
+    it('lists the session, once, marked as the caller’s own', async () => {
+        const { session } = await account(mode);
+
+        const sessions = await sessionsOf(session.headers);
+
+        expect(sessions).toHaveLength(1);
+        expect(sessions[0]?.current).toBe(true);
+    });
+
+    it('never puts the credential in the list, or in the database', async () => {
+        const { user, session } = await account(mode);
+        const credential = decodeURIComponent(session.cookie.split('=', 2)[1] ?? '');
+
+        const listed = await api().get('/account/sessions').set(session.headers);
+        const body = JSON.stringify(listed.body);
+        const rows = await sessionRowsOf(user.id);
+
+        expect(body).not.toContain(credential);
+        expect(JSON.stringify(rows)).not.toContain(credential);
+        expect(rows.map((row) => row.tokenHash)).toContain(hashToken(credential));
+    });
+
+    it('logs out THIS session only, leaving the other device signed in', async () => {
+        const { user, session } = await account(mode);
+        const other = await signIn(user.email, mode);
+
+        const out = await api()
+            .post('/account/logout')
+            .set('Origin', FRONTEND)
+            .set('Cookie', session.cookie);
+
+        expect(out.status).toBe(200);
+        expect(await sessionsOf(other.headers)).toHaveLength(1);
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+        expect(await statusOfSession(session, mode)).toBe(401);
+        expect(await statusOfSession(other, mode)).toBe(200);
+    });
+
+    it('logs out everywhere, the caller included', async () => {
+        const { user, session } = await account(mode);
+        const other = await signIn(user.email, mode);
+
+        const out = await api().post('/account/logout-all').set(session.headers);
+
+        expect(out.status).toBe(200);
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+        expect(await statusOfSession(session, mode)).toBe(401);
+        expect(await statusOfSession(other, mode)).toBe(401);
+    });
+
+    it('revokes one session by its id, and that session stops working', async () => {
+        const { user, session } = await account(mode);
+        const other = await signIn(user.email, mode);
+        const otherId = await ownSessionId(other.headers);
+
+        const revoked = await api().delete(`/account/sessions/${otherId}`).set(session.headers);
+
+        expect(revoked.status).toBe(200);
+        const remaining = await sessionsOf(session.headers);
+        expect(remaining.map((entry) => entry.id)).not.toContain(otherId);
+        expect(remaining).toHaveLength(1);
+        expect(await statusOfSession(other, mode)).toBe(401);
+        expect(await statusOfSession(session, mode)).toBe(200);
+    });
+
+    it('answers 404 for an id that is not one of the caller’s sessions', async () => {
+        const { session } = await account(mode);
+        const stranger = await createUser({ email: 'stranger@example.com' });
+        const strangerSession = await signIn(stranger.email, mode);
+        const strangerId = await ownSessionId(strangerSession.headers);
+
+        const response = await api().delete(`/account/sessions/${strangerId}`).set(session.headers);
+
+        expect(response.status).toBe(404);
+        expect(await sessionsOf(strangerSession.headers)).toHaveLength(1);
+    });
+
+    it('keeps the caller signed in through a password change, and ends every other session', async () => {
+        const { user, session } = await account(mode);
+        await signIn(user.email, mode);
+
+        const changed = await api()
+            .post('/account/password')
+            .set(session.headers)
+            .set('Origin', FRONTEND)
+            .send({
+                currentPassword: PLAIN_PASSWORD,
+                password: REPLACEMENT_PASSWORD,
+                passwordConfirm: REPLACEMENT_PASSWORD
+            });
+
+        expect(changed.status).toBe(200);
+        const renewed = cookieHeader(changed, '__Host-session');
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+        // jwt mode: a bearer-only `GET /account` needs the new access token the body carries.
+        const stillIn =
+            mode === 'jwt'
+                ? await api()
+                      .get('/account')
+                      .set('Authorization', `Bearer ${changed.body.data.token as string}`)
+                : await api().get('/account').set('Cookie', renewed);
+        expect(stillIn.status).toBe(200);
+        expect(await statusOfSession(session, mode)).toBe(401);
+    });
+
+    it('keeps the "remember me" choice through a password change', async () => {
+        const user = await createUser(
+            { email: 'remembered@example.com', verifiedAt: new Date() },
+            'customer'
+        );
+        const login = await logIn(user.email, { remember: 'medium' });
+        const cookie = cookieHeader(login, '__Host-session');
+        const headers =
+            mode === 'jwt'
+                ? { Authorization: `Bearer ${login.body.data.token as string}`, Cookie: cookie }
+                : { Cookie: cookie };
+
+        const changed = await api()
+            .post('/account/password')
+            .set(headers)
+            .set('Origin', FRONTEND)
+            .send({
+                currentPassword: PLAIN_PASSWORD,
+                password: REPLACEMENT_PASSWORD,
+                passwordConfirm: REPLACEMENT_PASSWORD
+            });
+
+        expect(setCookie(changed, '__Host-session')).toMatch(/max-age=\d+/i);
+    });
+
+    it('sets a browser-session cookie when the box is unticked, and a persistent one when ticked', async () => {
+        const user = await createUser({ email: 'tiers@example.com', verifiedAt: new Date() });
+
+        const unticked = await logIn(user.email);
+        const ticked = await logIn(user.email, { remember: 'long' });
+
+        expect(setCookie(unticked, '__Host-session')).not.toMatch(/max-age|expires/i);
+        expect(setCookie(ticked, '__Host-session')).toMatch(/max-age=\d+/i);
+    });
+
+    describe('step-up: a session kept alive is not a fresh login', () => {
+        afterEach(() => jest.useRealTimers());
+
+        it('asks for the password again past the window, whatever it did in between', async () => {
+            const { session } = await account(mode);
+            freezeDate();
+            advanceDate(16 * 60 * 1000);
+
+            const headers = await keepAlive(session, mode);
+            const sensitive = await api().post('/account/logout-all').set(headers);
+
+            expect(sensitive.status).toBe(401);
+            expect(sensitive.body.errors[0].code).toBe('REAUTH_REQUIRED');
+        });
+
+        it('is satisfied by POST /account/reauth, which renews the proof', async () => {
+            const { session } = await account(mode);
+            freezeDate();
+            advanceDate(16 * 60 * 1000);
+            const headers = await keepAlive(session, mode);
+
+            const reauth = await api()
+                .post('/account/reauth')
+                .set(headers)
+                .set('Origin', FRONTEND)
+                .send({ method: 'password', password: PLAIN_PASSWORD });
+            expect(reauth.status).toBe(200);
+            const renewed =
+                mode === 'jwt'
+                    ? { Authorization: `Bearer ${reauth.body.data.token as string}` }
+                    : { Cookie: cookieHeader(reauth, '__Host-session') };
+            const sensitive = await api().post('/account/logout-all').set(renewed);
+
+            expect(sensitive.status).toBe(200);
+        });
+    });
+
+    it('refuses a first session for an account with a second factor armed, and stores nothing', async () => {
+        const user = await createUser({
+            twoFactorEnabledAt: new Date().toISOString(),
+            twoFactorMethods: [{ method: 'totp', enrolledAt: new Date(), secret: 'ciphertext' }]
+        });
+        const request = asStub<SessionRequest & { get: () => undefined }>({
+            cookies: {},
+            headers: {},
+            get: () => undefined
+        });
+        const response = asStub<Response>({ cookie: jest.fn(), clearCookie: jest.fn() });
+
+        await expect(activeStrategy().issue(request, response, user.id)).rejects.toBeInstanceOf(
+            SecondFactorRequiredError
+        );
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+
+        await expect(
+            activeStrategy().issue(request, response, user.id, { amr: ['pwd', 'otp'] })
+        ).resolves.toBeDefined();
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+    });
+
+    it('opens the SSE streams by cookie: a signed-in non-admin is refused 403, a stranger 401', async () => {
+        const { session } = await account(mode);
+
+        const signedIn = await api().get('/observability/events').set('Cookie', session.cookie);
+        const stranger = await api()
+            .get('/observability/events')
+            .set('Cookie', '__Host-session=not-a-real-credential');
+
+        expect(signedIn.status).toBe(403);
+        expect(stranger.status).toBe(401);
+    });
+
+    it('stops a deactivated account’s session on its very next request', async () => {
+        const { user, session } = await account(mode);
+
+        await userRepository.updateMany({ _id: user.id }, { $set: { active: false } });
+        const response = await api().get('/account').set(session.headers);
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('cookie mode only', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: 'cookie' });
+    });
+
+    it('sets one cookie and puts no credential in the body', async () => {
+        await createUser({ email: 'browser@example.com' });
+
+        const response = await logIn('browser@example.com');
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({});
+        const header = setCookie(response, '__Host-session') ?? '';
+        expect(header).toMatch(/;\s*HttpOnly/i);
+        expect(header).toMatch(/;\s*Secure/i);
+        expect(header).toMatch(/;\s*SameSite=Lax/i);
+        expect(header).toMatch(/;\s*Path=\//i);
+        expect(header).not.toMatch(/;\s*Domain=/i);
+        expect(header.split(';', 1)[0]).toMatch(/^__Host-session=ses_[\w-]{43}$/);
+    });
+
+    it('hands a client with no cookie jar a `ses_` id instead, and sets no cookie', async () => {
+        await createUser({ email: 'script@example.com' });
+
+        const response = await logIn('script@example.com', { transport: 'bearer' });
+
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+        expect(response.body.data.sessionToken).toMatch(/^ses_[\w-]{43}$/);
+        const authed = await api()
+            .get('/account/sessions')
+            .set('Authorization', `Bearer ${response.body.data.sessionToken as string}`);
+        expect(authed.status).toBe(200);
+        expect(
+            authed.body.data.sessions.map((entry: { current: boolean }) => entry.current)
+        ).toEqual([true]);
+    });
+
+    it('stores a `cookie` row for the sign-in, with its proof', async () => {
+        const user = await createUser({ email: 'proof@example.com' });
+        const before = Math.floor(Date.now() / 1000);
+
+        await logIn(user.email);
+
+        const [row] = await sessionRowsOf(user.id);
+        expect(row).toMatchObject({ mode: 'cookie', amr: ['pwd'] });
+        expect(row?.authTime).toBeGreaterThanOrEqual(before);
+    });
+
+    it('refuses a state-changing request from a foreign origin, valid cookie or not', async () => {
+        const { user, session } = await account('cookie');
+
+        const response = await api()
+            .post('/account/logout-all')
+            .set('Cookie', session.cookie)
+            .set('Origin', 'https://evil.example');
+
+        expect(response.status).toBe(403);
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+    });
+
+    it('lets the same request through from the frontend, and from no Origin at all', async () => {
+        const { session } = await account('cookie');
+        const second = await signIn('person@example.com', 'cookie');
+
+        const fromFrontend = await api()
+            .post('/account/logout-all')
+            .set('Cookie', session.cookie)
+            .set('Origin', FRONTEND);
+        const noOrigin = await api().post('/account/logout-all').set('Cookie', second.cookie);
+
+        expect(fromFrontend.status).toBe(200);
+        // The first call ended every session, the second signed-in one included.
+        expect(noOrigin.status).toBe(401);
+    });
+
+    it('does not ask a bearer-authenticated write for an origin: nothing rides along ambiently', async () => {
+        const user = await createUser({ email: 'header@example.com', verifiedAt: new Date() });
+        const login = await logIn(user.email, { transport: 'bearer' });
+
+        const response = await api()
+            .post('/account/logout-all')
+            .set('Authorization', `Bearer ${login.body.data.sessionToken as string}`)
+            .set('Origin', 'https://evil.example');
+
+        expect(response.status).toBe(200);
+    });
+
+    it('answers 404 to POST /account/refresh: there is no refresh token to rotate', async () => {
+        const { session } = await account('cookie');
+
+        const response = await api()
+            .post('/account/refresh')
+            .set('Origin', FRONTEND)
+            .set('Cookie', session.cookie);
+
+        expect(response.status).toBe(404);
+    });
+
+    it('renews the id on a re-proof, keeping the session’s public id and expiry', async () => {
+        const { user, session } = await account('cookie');
+        const [before] = await sessionRowsOf(user.id);
+        const publicId = await ownSessionId(session.headers);
+
+        const reauth = await api()
+            .post('/account/reauth')
+            .set('Cookie', session.cookie)
+            .set('Origin', FRONTEND)
+            .send({ method: 'password', password: PLAIN_PASSWORD });
+
+        const renewed = cookieHeader(reauth, '__Host-session');
+        expect(renewed).not.toBe(session.cookie);
+        // The old id is dead; the new one is the same session, and one row remains.
+        expect(await statusOfCookie(session.cookie)).toBe(401);
+        expect(await statusOfCookie(renewed)).toBe(200);
+        const rows = await sessionRowsOf(user.id);
+        expect(rows).toHaveLength(1);
+        expect(String(rows[0]?.familyId)).toBe(publicId);
+        expect(rows[0]?.startedAt).toEqual(before?.startedAt);
+        expect(rows[0]?.expiresAt).toEqual(before?.expiresAt);
+        expect(rows[0]?.authTime).toBeGreaterThanOrEqual(
+            before?.authTime ?? Number.MAX_SAFE_INTEGER
+        );
+    });
+
+    it('treats an id that expired as gone, even before the database has deleted the row', async () => {
+        const { user, session } = await account('cookie');
+        freezeDate();
+        advanceDate(8 * 24 * 60 * 60 * 1000);
+
+        const response = await api().get('/account').set(session.headers);
+        jest.useRealTimers();
+
+        expect(response.status).toBe(401);
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+    });
+
+    it('stamps the use of a session at most once a minute', async () => {
+        const { user, session } = await account('cookie');
+
+        await api().get('/account').set(session.headers);
+        // The stamp is written off the request's path, so wait for it rather than for the response.
+        const first = await eventually(async () => {
+            const [row] = await sessionRowsOf(user.id);
+            return row?.lastUsedAt ? row : undefined;
+        });
+        await api().get('/account').set(session.headers);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        const [second] = await sessionRowsOf(user.id);
+
+        expect(first?.lastUsedAt).toBeInstanceOf(Date);
+        expect(second?.lastUsedAt).toEqual(first?.lastUsedAt);
+    });
+});
+
+describe('jwt mode only', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+    });
+
+    it('returns an access token and a refresh cookie, with no session id in the body', async () => {
+        await createUser({ email: 'classic@example.com' });
+
+        const response = await logIn('classic@example.com');
+
+        expect(response.body.data.token).toEqual(expect.any(String));
+        expect(response.body.data.sessionToken).toBeUndefined();
+        expect(setCookie(response, '__Host-session')).toBeDefined();
+    });
+
+    it('ignores the bearer transport: it always sets its cookie and returns its access token', async () => {
+        await createUser({ email: 'ignore@example.com' });
+
+        const response = await logIn('ignore@example.com', { transport: 'bearer' });
+
+        expect(response.body.data.token).toEqual(expect.any(String));
+        expect(setCookie(response, '__Host-session')).toBeDefined();
+    });
+
+    it('does not authenticate an ordinary route by cookie alone', async () => {
+        const { session } = await account('jwt');
+
+        const response = await api().get('/account').set('Cookie', session.cookie);
+
+        expect(response.status).toBe(401);
+    });
+
+    it('does not accept a `ses_` bearer', async () => {
+        const response = await api().get('/account').set('Authorization', 'Bearer ses_nothing');
+
+        expect(response.status).toBe(401);
+    });
+});
+
+describe('switching mode', () => {
+    it('signs everyone out: a jwt login is nothing in cookie mode, and the reverse', async () => {
+        const user = await createUser({ email: 'switch@example.com', verifiedAt: new Date() });
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+        const asJwt = await signIn(user.email, 'jwt');
+        setEnvironment({ NODE_SESSION_MODE: 'cookie' });
+        const asCookie = await signIn(user.email, 'cookie');
+
+        const jwtInCookieMode = await api().get('/account').set(asJwt.headers);
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+        const cookieInJwtMode = await api().get('/account').set(asCookie.headers);
+
+        expect(jwtInCookieMode.status).toBe(401);
+        expect(cookieInJwtMode.status).toBe(401);
+    });
+
+    it('lists only the active mode’s sessions', async () => {
+        const user = await createUser({ email: 'listing@example.com', verifiedAt: new Date() });
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+        await signIn(user.email, 'jwt');
+        setEnvironment({ NODE_SESSION_MODE: 'cookie' });
+        const asCookie = await signIn(user.email, 'cookie');
+
+        expect(await sessionsOf(asCookie.headers)).toHaveLength(1);
+    });
+});

@@ -115,7 +115,7 @@ export const postSignup = (
              * signup issues a session at all. Rung 2 is off by default, and the 409 for an
              * address in use already leaks existence.
              */
-            return issueSession(response, data.id).then(() => {
+            return issueSession(request, response, data.id).then(() => {
                 // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
                 // ever grant this one role, so it's what the membership just written holds, by
                 // construction — see `signup.ts#signup`.

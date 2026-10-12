@@ -11,7 +11,6 @@ import { randomUUID } from 'node:crypto';
 import { Types } from 'mongoose';
 import { sign, verify, decode, TokenExpiredError } from 'jsonwebtoken';
 import type { ResolveMissReason } from '@kernel/authentication';
-import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
 import { sessionRepository } from '../repository';
@@ -27,6 +26,8 @@ import {
 import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
 import { predatesSessionEpoch } from './epoch';
+import { recordActivity } from './activity';
+import { assertSecondFactor, type SessionMint } from './mint-guard';
 
 /**
  * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
@@ -225,41 +226,6 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): string =
 };
 
 /**
- * Stamp the account's `lastActiveAt` — the clock the inactivity reaper measures. Never rejects: a
- * lost stamp costs a stale reading, nothing more, and a valid session must not fail on it. The
- * once-a-day throttle lives in the users repository.
- * @param userId - the account a session was just minted or refreshed for
- */
-const recordActivity = (userId: string): Promise<void> =>
-    userService.touchLastActive(userId).catch((error: unknown) => {
-        // Stryker disable next-line all
-        logger.warn({ message: 'Could not stamp the account as active.', userId, error });
-    });
-
-/**
- * A first session was about to be minted for an account whose second factor is armed, on a proof
- * that carries none. No login path should reach the mint like this: each branches to the
- * challenge first, so this is the refusal that catches the path that forgot to.
- */
-export class SecondFactorRequiredError extends Error {
-    /** @param userId - the account a session was refused for. */
-    constructor(public readonly userId: string) {
-        super('A second factor is armed for this account and the proof carries none');
-        this.name = 'SecondFactorRequiredError';
-    }
-}
-
-/**
- * Whether a session being minted is the account's first for this proof, or replaces one the caller
- * already holds. Only a first session is checked for a second factor: a re-mint continues a
- * session that passed it.
- */
-export type SessionMint = 'first' | 'remint';
-
-/** The `amr` value a completed second factor adds — see `postLoginTwoFactor`. */
-const SECOND_FACTOR_AMR = 'otp';
-
-/**
  * Create a refresh token, sign it, and store its session row.
  *
  * This is the choke point of every login path: a FIRST session for an account with a second
@@ -273,18 +239,17 @@ const SECOND_FACTOR_AMR = 'otp';
  * @param mint - `'first'` (the default) for a login or signup, `'remint'` for a re-mint that
  *   replaces a session the caller already holds
  * @returns the signed refresh token
- * @throws {SecondFactorRequiredError} for a first session on a 2FA account without the factor in `amr`
+ * @throws {SecondFactorRequiredError} for a first session on a 2FA account without the factor in `amr` (see `./mint-guard`)
  */
 export const createRefreshToken = (
     id: string,
     remember?: RefreshTokenExpiryTime,
-    amr: string[] = ['pwd'],
+    amr: readonly string[] = ['pwd'],
     mint: SessionMint = 'first'
 ): Promise<string> =>
     userService.findAuthenticatableById(id).then((user) => {
         if (!user) throw new Error('User not found');
-        if (mint === 'first' && user.twoFactorEnabledAt && !amr.includes(SECOND_FACTOR_AMR))
-            throw new SecondFactorRequiredError(id);
+        assertSecondFactor(user, amr, mint);
         /*
          * Signed through `signRefreshToken`, whose `jwtid` is what makes two refresh tokens
          * minted in the same second different. The payload is `{ id }` plus JWT's own
@@ -301,7 +266,7 @@ export const createRefreshToken = (
                 id,
                 // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
                 auth_time: Math.floor(Date.now() / 1000),
-                amr,
+                amr: [...amr],
                 ...(remember && { remember })
             },
             getExpiryTime(remember)

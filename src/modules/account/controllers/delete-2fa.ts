@@ -9,7 +9,7 @@ import type { TwoFactorCodeRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { twoFactorService } from '../services';
-import { remintRefreshCookie } from '../session/session';
+import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
 import { t } from '@infrastructure/i18n';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -31,23 +31,27 @@ export const delete2fa = (
         return rejectValidation(response, parseResult.error);
     }
 
-    return twoFactorService
-        .disableTwoFactor(id, parseResult.data.code, callerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) {
-                authTwoFactorDisableTotal.inc({ method: 'all', status: 'failure' });
-                return;
-            }
-            authTwoFactorDisableTotal.inc({ method: 'all', status: 'success' });
-            // Disabling revoked every session, this one included: keep the caller in.
-            return remintRefreshCookie(request, response, id, amr).then(() => {
-                successResponse<undefined>(
-                    response,
-                    undefined,
-                    200,
-                    t('account.two-factor.disabled')
-                );
-            });
-        })
+    // Taken first: the change below deletes the session this request is signed in on.
+    return sessionSnapshotOf(request, id)
+        .then((snapshot) =>
+            twoFactorService
+                .disableTwoFactor(id, parseResult.data.code, callerContextOf(request))
+                .then((result) => {
+                    if (refused(response, result)) {
+                        authTwoFactorDisableTotal.inc({ method: 'all', status: 'failure' });
+                        return;
+                    }
+                    authTwoFactorDisableTotal.inc({ method: 'all', status: 'success' });
+                    // Disabling revoked every session, this one included: keep the caller in.
+                    return remintSession(request, response, id, amr, snapshot).then(() => {
+                        successResponse<undefined>(
+                            response,
+                            undefined,
+                            200,
+                            t('account.two-factor.disabled')
+                        );
+                    });
+                })
+        )
         .catch(catchAs(response, 'delete2fa'));
 };

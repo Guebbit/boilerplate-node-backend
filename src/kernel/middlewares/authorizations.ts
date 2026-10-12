@@ -3,8 +3,8 @@
  * Express guards built on `kernel/authentication.ts`'s resolver: `getAuth` populates
  * `request.authContext` when a token is present, `isAuth` rejects when it is missing,
  * `requirePermission` rejects when the caller's role does not hold a given key,
- * `requirePermissionViaCookie` is the SSE-only variant that authenticates by refresh cookie
- * instead of an `Authorization` header, and `requireFreshAuth`/`requireFreshAuthWhen` gate an
+ * `requirePermissionViaCookie` is the SSE-only variant that authenticates by session cookie
+ * instead of an `Authorization` header (in `cookie` session mode `getAuth` takes the cookie too), and `requireFreshAuth`/`requireFreshAuthWhen` gate an
  * already-authenticated caller on HOW RECENTLY they proved it. Every rejection from the
  * identity guards is audited before the response is sent, so a denied request always leaves a
  * trail.
@@ -18,14 +18,15 @@
 
 import type { Request, Response, NextFunction } from 'express';
 import {
-    resolveAccessToken,
-    resolveRefreshToken,
+    resolveBearer,
+    resolveCookie,
     resolveCredential,
+    cookieAuthenticatesRequests,
     API_KEY_TOKEN_PREFIX,
     type ResolveMissReason
 } from '@kernel/authentication';
 import { heldKeys, holdsKey } from '@kernel/ability';
-import { readRefreshCookie } from '@kernel/cookies';
+import { readSessionCookie } from '@kernel/cookies';
 import {
     assertDeclared,
     callerFor,
@@ -40,6 +41,7 @@ import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/res
 import { ERROR_CODES, type ErrorCode } from '@api/error-codes';
 import { callerContextOf } from '@infrastructure/http/request';
 import { apiKeyLimiter } from '@infrastructure/http/middlewares/rate-limit';
+import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import {
     recordAudit,
     coreAuditActions,
@@ -79,7 +81,7 @@ const auditRefusal = (
     });
 
 /** Which credential family a refused token belonged to — a metric label, and audit metadata. */
-type CredentialKind = 'jwt' | 'api_key';
+type CredentialKind = 'session' | 'api_key';
 
 /**
  * The attack a refusal names, or `undefined` when a customer plausibly holds the credential.
@@ -149,9 +151,98 @@ export const getTokenBearer = (request: Request) =>
     BEARER_HEADER.exec(request.header('Authorization') ?? '')?.[1];
 
 /**
- * Resolve `request.authContext` from a bearer token when one is present, then continue. This sits
- * in front of routes that work for both anonymous and authenticated callers.
+ * Put a resolved caller on the request, and say how it was authenticated.
  *
+ * @param request - populated with `authContext`, `caller` and `sessionVia`
+ * @param user - what the resolver answered
+ * @param via - which credential carried the session: the header, or the cookie
+ */
+const applySession = (
+    request: Request,
+    user: NonNullable<Request['authContext']>,
+    via: 'bearer' | 'cookie'
+): void => {
+    request.authContext = {
+        id: user.id,
+        email: user.email,
+        username: user.username,
+        roles: user.roles,
+        tenantId: user.tenantId,
+        imageUrl: user.imageUrl,
+        authTime: user.authTime,
+        amr: user.amr,
+        twoFactorArmed: user.twoFactorArmed,
+        analyticsConsent: user.analyticsConsent
+    };
+    request.sessionVia = via;
+    // Resolved once, here, so nothing below turns two role names into keys again.
+    request.caller = callerInScope(request.authContext, 'tenant');
+};
+
+/**
+ * Resolve a session credential, then continue. The miss, the "nobody" and the outage are told
+ * apart exactly as the port documents.
+ *
+ * @param request - populated on success
+ * @param next - called once, with the error only for an infrastructure failure
+ * @param resolution - the resolver's promise for the presented credential
+ * @param via - which credential carried it
+ */
+const continueWithSession = (
+    request: Request,
+    next: NextFunction,
+    resolution: ReturnType<typeof resolveBearer>,
+    via: 'bearer' | 'cookie'
+): void => {
+    resolution
+        .then((resolved) => {
+            if ('miss' in resolved) noteMiss(request, 'session', resolved.miss);
+            const user = 'ok' in resolved ? resolved.ok : undefined;
+            if (user) applySession(request, user, via);
+            next();
+        })
+        .catch((error: unknown) => {
+            continueOrFailInfra(next, error);
+        });
+};
+
+/**
+ * The cookie path of {@link getAuth}: with no `Authorization` header, a deployment whose session
+ * lives in a cookie resolves the caller from it, on every route.
+ *
+ * A cookie rides along on a request the user never meant to make, so an UNSAFE method that a
+ * cookie would authenticate must name an allowed `Origin` first (the CSRF check, on top of
+ * `SameSite=Lax`). The check sits here, in the one place any route's caller is resolved, so no
+ * route can be added that a cookie reaches and the check does not.
+ *
+ * @param request - populated when the cookie names a live session
+ * @param response - answered 403 when an unsafe request names a foreign origin
+ * @param next - called once, with the error only for an infrastructure failure
+ */
+const continueWithCookie = (request: Request, response: Response, next: NextFunction): void => {
+    const cookieToken = cookieAuthenticatesRequests() ? readSessionCookie(request) : undefined;
+    if (!cookieToken) {
+        next();
+        return;
+    }
+
+    const resolveFromCookie = (): void => {
+        continueWithSession(request, next, resolveCookie(cookieToken), 'cookie');
+    };
+
+    if (SAFE_METHODS.has(request.method)) resolveFromCookie();
+    else requireAllowedOrigin(request, response, resolveFromCookie);
+};
+
+/** Methods that change nothing, so a cookie riding along on one needs no origin check. */
+const SAFE_METHODS: ReadonlySet<string> = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/**
+ * Resolve `request.authContext` from a session credential when one is present, then continue. This
+ * sits in front of routes that work for both anonymous and authenticated callers.
+ *
+ * Credential: `Authorization: Bearer` first — an access token or a `ses_…` session id. With no
+ *             header, the session cookie, in a deployment whose sessions live in one.
  * No caller:  an absent, invalid or expired token, or one naming a user who no longer exists,
  *             leaves `authContext` unset — `isAuth`/`requirePermission` are what gate a route.
  * Outage:     a resolver failure meaning Mongo/Redis was unreachable goes to `next(error)`, so the
@@ -161,17 +252,18 @@ export const getTokenBearer = (request: Request) =>
  *             plus `apiKeyLimiter`'s 429 for one over its own request budget — refused here, not
  *             at the route.
  *
- * @param request - populated with `authContext` (JWT) or `caller`/`credentialId` (credential) on success
- * @param response - unused on the JWT path; answers 429 on the credential path's own rate limit
- * @param next - called once on every path but a rate-limited credential's 429 — with the error
- *   for an infrastructure failure, otherwise with none
+ * @param request - populated with `authContext` (a session) or `caller`/`credentialId` (credential) on success
+ * @param response - answers 429 on the credential path's own rate limit, 403 on a cookie-authenticated
+ *   unsafe request from a foreign origin
+ * @param next - called once on every path but a refused request — with the error for an
+ *   infrastructure failure, otherwise with none
  */
 export const getAuth = (request: Request, response: Response, next: NextFunction) => {
     // Two modules can share a URL prefix (e.g. `account` and `addresses` both under `/account`),
     // each mounting this guard on its own router. An unmatched request in the first router falls
-    // through Express to the second, which would otherwise redo the JWT verify / user read /
+    // through Express to the second, which would otherwise redo the verify / user read /
     // membership read — and spend a second unit of an `sk_` caller's request budget — for work
-    // already done. A caller already resolved (JWT or API key) is left exactly as-is.
+    // already done. A caller already resolved (session or API key) is left exactly as-is.
     if (request.authContext ?? request.caller) {
         next();
         return;
@@ -180,13 +272,13 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
     const token = getTokenBearer(request);
 
     if (!token) {
-        next();
+        continueWithCookie(request, response, next);
         return;
     }
 
-    // Checked before any JWT verification is attempted: a JWT is always base64url of `{"alg"`
-    // (`eyJ...`), so the two prefixes can never collide, and this skips a wasted parse attempt on
-    // an opaque token. See `API_KEY_TOKEN_PREFIX`'s own doc comment.
+    // Checked before any session resolution is attempted: a JWT is always base64url of `{"alg"`
+    // (`eyJ...`), so the prefixes can never collide, and this skips a wasted parse attempt on an
+    // opaque token. See `API_KEY_TOKEN_PREFIX`'s own doc comment.
     if (token.startsWith(API_KEY_TOKEN_PREFIX)) {
         resolveCredential(token)
             .then((resolution) => {
@@ -205,31 +297,7 @@ export const getAuth = (request: Request, response: Response, next: NextFunction
         return;
     }
 
-    resolveAccessToken(token)
-        .then((resolution) => {
-            if ('miss' in resolution) noteMiss(request, 'jwt', resolution.miss);
-            const user = 'ok' in resolution ? resolution.ok : undefined;
-            if (user) {
-                request.authContext = {
-                    id: user.id,
-                    email: user.email,
-                    username: user.username,
-                    roles: user.roles,
-                    tenantId: user.tenantId,
-                    imageUrl: user.imageUrl,
-                    authTime: user.authTime,
-                    amr: user.amr,
-                    twoFactorArmed: user.twoFactorArmed,
-                    analyticsConsent: user.analyticsConsent
-                };
-                // Resolved once, here, so nothing below turns two role names into keys again.
-                request.caller = callerInScope(request.authContext, 'tenant');
-            }
-            next();
-        })
-        .catch((error: unknown) => {
-            continueOrFailInfra(next, error);
-        });
+    continueWithSession(request, next, resolveBearer(token), 'bearer');
 };
 
 /**
@@ -255,20 +323,20 @@ const cookieUnauthorizedErrors = (): ResponseErrorItem[] => [
 ];
 
 /**
- * Whether `getAuth` (or, for the one SSE route, {@link requirePermissionViaCookie}) resolved a
- * human session with a BEARER token — never true for a cookie alone.
+ * Whether `getAuth` resolved a human SESSION — by bearer header, or by cookie in a deployment whose
+ * sessions live in one.
  *
- * Both fields are required, and neither implies the other: {@link requirePermissionViaCookie}
- * writes `authContext` from the refresh COOKIE, for the one route a browser cannot send a header
- * on, with no bearer token on the request at all. A caller carrying only that cookie must read as
- * having no bearer session — or the cookie becomes a second way to hold a session on every route
- * that checks for one, including ones never built to accept it.
+ * `sessionVia` is what says so, and `authContext` alone does not: {@link requirePermissionViaCookie}
+ * writes `authContext` from the session cookie for the one route a browser cannot send a header
+ * on. In `jwt` mode that cookie must not become a second way to hold a session on every route that
+ * checks for one, including ones never built to accept it — so the flag is set only by `getAuth`,
+ * and only for a credential the deployment accepts on ordinary routes.
  *
  * @param request - read, never mutated
- * @returns whether this request carries a bearer-authenticated session
+ * @returns whether this request carries a session `getAuth` accepted
  */
-const hasBearerSession = (request: Request): boolean =>
-    request.authContext !== undefined && getTokenBearer(request) !== undefined;
+const hasSession = (request: Request): boolean =>
+    request.authContext !== undefined && request.sessionVia !== undefined;
 
 /**
  * Whether `caller` was resolved from an `sk_...` API-key credential rather than a human session.
@@ -303,7 +371,7 @@ const isCredentialCaller = (request: Request): boolean =>
  * @param next - called only once a session is confirmed present
  */
 export const isAuth = (request: Request, response: Response, next: NextFunction) => {
-    if (!hasBearerSession(request)) {
+    if (!hasSession(request)) {
         refuseUnauthenticated(request, response);
         return;
     }
@@ -324,7 +392,7 @@ export const isAuth = (request: Request, response: Response, next: NextFunction)
  * @param next - called once either is confirmed present
  */
 export const isAuthOrCredential = (request: Request, response: Response, next: NextFunction) => {
-    if (!hasBearerSession(request) && !isCredentialCaller(request)) {
+    if (!hasSession(request) && !isCredentialCaller(request)) {
         refuseUnauthenticated(request, response);
         return;
     }
@@ -497,7 +565,7 @@ export const requirePermission = (key: string, options: { exact?: boolean } = {}
 };
 
 /**
- * Resolves the refresh cookie's caller and checks `key`, auditing a refusal exactly as
+ * Resolves the session cookie's caller and checks `key`, auditing a refusal exactly as
  * {@link requirePermissionViaCookie} answers one — shared by that connect-time guard and by
  * {@link stillHoldsKeyViaCookie}'s periodic recheck of an already-open stream, so the two can never
  * disagree about who holds `key`.
@@ -508,15 +576,15 @@ export const requirePermission = (key: string, options: { exact?: boolean } = {}
  * to an already-open stream that cannot be told apart from a revoked one), so only they may decide.
  *
  * @param request - only for the audit trail; never re-authenticated from it
- * @param refreshToken - the `__Host-jwt` cookie value
+ * @param sessionToken - the session cookie's value
  * @param key - the permission key to check
  * @returns the resolved user when they hold `key`, otherwise `undefined`
  */
-const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: string) =>
-    resolveRefreshToken(refreshToken).then((resolution) => {
+const resolveKeyHolderViaCookie = (request: Request, sessionToken: string, key: string) =>
+    resolveCookie(sessionToken).then((resolution) => {
         if ('miss' in resolution) {
-            noteMiss(request, 'jwt', resolution.miss);
-            throw new Error(`Refresh cookie refused: ${resolution.miss}`);
+            noteMiss(request, 'session', resolution.miss);
+            throw new Error(`Session cookie refused: ${resolution.miss}`);
         }
         const user = resolution.ok;
         const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
@@ -534,9 +602,9 @@ const resolveKeyHolderViaCookie = (request: Request, refreshToken: string, key: 
 
 /**
  * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
- * SSE, via `EventSource`, which cannot send `Authorization`. The refresh cookie is the credential,
- * verified as `POST /account/refresh` verifies it: signature *and* presence on the user document,
- * so a revoked token is rejected rather than merely an expired one.
+ * SSE, via `EventSource`, which cannot send `Authorization`. The session cookie is the credential,
+ * verified as the deployment verifies a session anywhere else: a revoked one is rejected rather
+ * than merely an expired one.
  *
  * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
  *
@@ -552,15 +620,15 @@ export const requirePermissionViaCookie = (key: string) => {
         response: Response,
         next: NextFunction
     ) {
-        const refreshToken = readRefreshCookie(request);
+        const sessionToken = readSessionCookie(request);
 
         // No cookie is 401 (who are you); a valid cookie without the key is 403 (not you).
-        if (!refreshToken) {
+        if (!sessionToken) {
             refuseUnauthenticated(request, response, cookieUnauthorizedErrors());
             return;
         }
 
-        resolveKeyHolderViaCookie(request, refreshToken, key)
+        resolveKeyHolderViaCookie(request, sessionToken, key)
             .then((user) => {
                 if (!user) {
                     rejectResponse(response, 403, [
@@ -590,16 +658,16 @@ export const requirePermissionViaCookie = (key: string) => {
  * stops.
  *
  * @param request - the request that opened the stream, kept only for the audit trail
- * @param refreshToken - the `__Host-jwt` cookie value captured when the stream connected
+ * @param sessionToken - the session cookie's value captured when the stream connected
  * @param key - the permission key to re-check
  * @returns whether the caller still holds `key`
  */
 export const stillHoldsKeyViaCookie = (
     request: Request,
-    refreshToken: string,
+    sessionToken: string,
     key: string
 ): Promise<boolean> =>
-    resolveKeyHolderViaCookie(request, refreshToken, key)
+    resolveKeyHolderViaCookie(request, sessionToken, key)
         .then((user) => user !== undefined)
         .catch(() => false);
 

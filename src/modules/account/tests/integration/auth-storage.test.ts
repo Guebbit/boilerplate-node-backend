@@ -22,8 +22,17 @@ import {
     tokenTypesOf
 } from '../factories';
 import { sessionsList } from '../../services/sessions';
+import type { SessionRequest } from '../../session/strategy';
+import { asStub } from '@tests/stub';
 
 setupTestDb();
+
+/** A request carrying the session cookie `credential`, or none. */
+const requestWithCookie = (credential?: string) =>
+    asStub<SessionRequest>({
+        cookies: credential === undefined ? {} : { '__Host-session': credential },
+        headers: {}
+    });
 
 describe('sessionRepository.supersede', () => {
     it('lets exactly one of many concurrent callers claim a token', async () => {
@@ -168,7 +177,7 @@ describe('sessionsList', () => {
         await plantSession(user.id, 'duplicate-b', { familyId: family });
         await plantSession(user.id, 'another-device');
 
-        const sessions = await sessionsList(user.id, 'duplicate-a');
+        const sessions = await sessionsList(user.id, requestWithCookie('duplicate-a'));
 
         expect(sessions).toHaveLength(2);
         expect(sessions.filter((session) => session.current)).toEqual([
@@ -182,7 +191,7 @@ describe('sessionsList', () => {
         const user = await createUser();
         await plantSession(user.id, 'device');
 
-        const sessions = await sessionsList(user.id);
+        const sessions = await sessionsList(user.id, requestWithCookie());
 
         expect(sessions.map((session) => session.current)).toEqual([false]);
     });

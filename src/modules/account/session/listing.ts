@@ -1,0 +1,65 @@
+/**
+ * @module
+ * The account's live sessions as the wire's `Session` list — shared by both session modes, which
+ * differ only in which rows are theirs and how a request names its own.
+ */
+
+import type { Session } from '@types';
+import { hashToken } from '@infrastructure/security/hash-token';
+import { sessionRepository, type SessionRow } from '../repository';
+import type { SessionMode } from '../session-mode';
+
+/**
+ * One row per session. A `jwt` family can hold two live rows at once — two refreshes of one token
+ * inside the grace window each mint a successor — and listing both would show one sign-in twice
+ * under one id. The newest row speaks for the family.
+ *
+ * @param rows - live rows, newest sign-in first
+ * @returns the rows, one per `familyId`, in the same order
+ */
+export const newestPerFamily = (rows: readonly SessionRow[]): SessionRow[] => {
+    const newest = new Map<string, SessionRow>();
+    for (const row of rows) {
+        const key = String(row.familyId);
+        const kept = newest.get(key);
+        // `_id` is time-ordered, so the larger one was written later.
+        if (!kept || String(row._id) > String(kept._id)) newest.set(key, row);
+    }
+    return rows.filter((row) => newest.get(String(row.familyId)) === row);
+};
+
+/**
+ * Maps one session row to the wire's `Session`.
+ *
+ * @param row - the family's newest live row
+ * @param currentFamilies - the families the caller's own credential belongs to, to mark `current`
+ */
+const toSession = (row: SessionRow, currentFamilies: ReadonlySet<string>): Session => ({
+    id: String(row.familyId),
+    expiration: row.expiresAt.toISOString(),
+    // Absent until this session has been used at least once — an unused session reads as unused
+    // rather than as one that happens to share the moment it was issued.
+    ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt.toISOString() } : {}),
+    current: currentFamilies.has(String(row.familyId))
+});
+
+/**
+ * The account's live sessions of one mode, newest sign-in first.
+ *
+ * @param mode - whose rows to list; the other mode's are never shown
+ * @param userId - the authenticated caller's own id; this endpoint reads no one else's sessions
+ * @param credential - the caller's own credential, when the request carried one, to mark `current`.
+ *   A caller with none (a key, a bare access token) has every row honestly `current: false`.
+ */
+export const listSessions = (
+    mode: SessionMode,
+    userId: string,
+    credential: string | undefined
+): Promise<Session[]> =>
+    sessionRepository.listLive(userId, mode, new Date()).then((rows) => {
+        const digest = credential === undefined ? undefined : hashToken(credential);
+        const current = new Set(
+            rows.filter((row) => row.tokenHash === digest).map((row) => String(row.familyId))
+        );
+        return newestPerFamily(rows).map((row) => toSession(row, current));
+    });

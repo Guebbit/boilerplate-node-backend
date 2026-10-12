@@ -43,7 +43,7 @@ describe('a refused bearer JWT', () => {
         expect(audited(auditSpy)).toContainEqual(
             expect.objectContaining({
                 action: coreAuditActions.SECURITY_TOKEN_MALFORMED,
-                metadata: expect.objectContaining({ kind: 'jwt', route: '/' })
+                metadata: expect.objectContaining({ kind: 'session', route: '/' })
             })
         );
     });
@@ -75,7 +75,7 @@ describe('a refused bearer JWT', () => {
         );
         const counted = await staleCredentialsTotal.get();
         expect(counted.values).toContainEqual(
-            expect.objectContaining({ labels: { kind: 'jwt', reason: 'expired' }, value: 1 })
+            expect.objectContaining({ labels: { kind: 'session', reason: 'expired' }, value: 1 })
         );
     });
 });

@@ -26,7 +26,7 @@ const loginAs = async (email: string) => {
     const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
     return {
         bearer: `Bearer ${response.body.data.token as string}`,
-        cookie: cookieHeader(response, '__Host-jwt')
+        cookie: cookieHeader(response, '__Host-session')
     };
 };
 
@@ -78,7 +78,7 @@ describe('a session id across a refresh rotation', () => {
             .set('Cookie', device.cookie);
 
         expect(revoked.status).toBe(200);
-        const next = await refresh(cookieHeader(rotated, '__Host-jwt'));
+        const next = await refresh(cookieHeader(rotated, '__Host-session'));
         expect(next.status).toBe(401);
         const untouched = await refresh(device.cookie);
         expect(untouched.status).toBe(200);

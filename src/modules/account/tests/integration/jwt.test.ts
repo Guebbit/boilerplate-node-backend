@@ -60,7 +60,7 @@ beforeEach(() => {
     setEnvironment({ NODE_TOKEN_ACCESS: ACCESS_SECRET });
     setEnvironment({ NODE_TOKEN_REFRESH: REFRESH_SECRET });
     setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
-    setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+    setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
 });
 
 describe('verifyAccessToken', () => {

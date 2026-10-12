@@ -8,7 +8,7 @@
 
 import type { Request, Response } from 'express';
 import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
-import { readRefreshCookie } from '@kernel/cookies';
+import { readSessionCookie } from '@kernel/cookies';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { streamNotifications } from '../services';
@@ -30,7 +30,7 @@ export const getNotificationsStream = (request: Request, response: Response) => 
     // `!` because this route is deliberately not behind `isAuth` (that guard wants a bearer
     // token), so the "controllers behind isAuth" check forbids asserting them; absent means fail
     // closed.
-    const refreshToken = readRefreshCookie(request);
+    const refreshToken = readSessionCookie(request);
     const user = request.authContext;
     if (!refreshToken || !user) {
         rejectResponse(response, 401, [

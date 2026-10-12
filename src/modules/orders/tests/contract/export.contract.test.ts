@@ -68,7 +68,7 @@ describe('GET /orders/export', () => {
         const login = await api()
             .post('/account/login')
             .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
-        const jwtCookie = setCookie(login, '__Host-jwt');
+        const jwtCookie = setCookie(login, '__Host-session');
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
         const refreshed = await api()
             .post('/account/refresh')

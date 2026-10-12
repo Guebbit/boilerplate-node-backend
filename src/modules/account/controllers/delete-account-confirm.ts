@@ -8,7 +8,7 @@ import type { Request, Response } from 'express';
 import { t } from '@infrastructure/i18n';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
 import { accountService, ACCOUNT_DELETE_TOKEN_TYPE } from '../services';
-import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
+import { destroySessionCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse, rejectResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AccountDeleteConfirmRequest } from '@types';
@@ -46,7 +46,7 @@ export const deleteAccountConfirm = (
              * document left to take one from.
              */
             return accountService.removeOwnAccount(user, callerContextOf(request)).then(() => {
-                destroyRefreshCookie(response);
+                destroySessionCookie(response);
                 destroyLoggedCookie(response);
                 successResponse<undefined>(response, undefined, 200, t('account.delete.success'));
             });

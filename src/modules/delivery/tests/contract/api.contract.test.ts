@@ -540,7 +540,7 @@ const loginAdminRemembered = async () => {
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
-    const jwtCookie = setCookie(response, '__Host-jwt');
+    const jwtCookie = setCookie(response, '__Host-session');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
     return jwtCookie;
 };

@@ -1,14 +1,16 @@
 /**
  * @module
- * Token configuration — parses and exposes token expiry settings from env. Named `config.ts`
- * rather than `tokens.ts` (its name at the module root) because it holds no token and issues
- * none: it just reads how long each tier lives, which `./jwt` signs against and `./cookies` sets
- * `maxAge` from. See docs/modules/account-sessions.md.
+ * Session configuration — which mode keeps people signed in, and how long each tier lives. Named
+ * `config.ts` rather than `tokens.ts` because it holds no token and issues none: it reads policy,
+ * which `./jwt` signs against, `./cookie-strategy` stores against and `./cookies` sets `maxAge`
+ * from. See docs/modules/account-sessions.md and docs/theory/sessions.md.
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { int, keyRing, secret, versionedKeyRing } from '@infrastructure/config/fields';
+import { choice, int, keyRing, secret, versionedKeyRing } from '@infrastructure/config/fields';
+import type { Environment } from '@infrastructure/config/store';
 import type { VersionedKey } from '@infrastructure/security/versioned-secret';
+import { SESSION_MODES, type SessionMode } from '../session-mode';
 
 /** The "remember me" tiers a refresh token may be issued under — see the table in the doc above. */
 export enum RefreshTokenExpiryTime {
@@ -30,8 +32,23 @@ export const toRememberTier = (
     Object.values(RefreshTokenExpiryTime).find((tier) => tier === wire);
 
 /**
- * Session configuration: how long each token lives, the signing rings, and the windows around
- * refresh-token rotation.
+ * Whether the environment selects `cookie` mode — what a `jwt`-only variable's presence rule asks
+ * before it applies. Reads the raw selector the way its own `choice` field does: trimmed and
+ * lower-cased.
+ *
+ * @param environment - the environment being judged at boot
+ */
+const selectsCookieMode = (environment: Environment): boolean =>
+    environment.NODE_SESSION_MODE?.trim().toLowerCase() === 'cookie';
+
+/**
+ * Session configuration: which mode, how long each session lives, the signing rings, and the
+ * windows around refresh-token rotation.
+ *
+ * Shared by both modes: `NODE_SESSION_MODE` and the three `NODE_SESSION_TIME_*` tiers (a
+ * refresh token's life in `jwt` mode, the session row's in `cookie` mode). `jwt` only: the two
+ * signing rings, the access lifetime, and the rotation windows — a `cookie` deployment signs
+ * nothing, so its rings are not required at boot.
  *
  * The TTL fallbacks exist so an unset variable cannot mean a TTL of zero, which would expire every
  * token the instant it is signed — a deployment that never sets them still issues usable ones.
@@ -45,18 +62,25 @@ export const toRememberTier = (
 export const sessionConfig = defineConfig({
     name: 'account-sessions',
     shape: {
-        NODE_TOKEN_REFRESH_TIME_SHORT: int({ default: 604_800, min: 1 }),
-        NODE_TOKEN_REFRESH_TIME_MEDIUM: int({ default: 2_592_000, min: 1 }),
-        NODE_TOKEN_REFRESH_TIME_LONG: int({ default: 31_536_000, min: 1 }),
+        NODE_SESSION_MODE: choice(SESSION_MODES, { default: 'jwt' }),
+        NODE_SESSION_TIME_SHORT: int({ default: 604_800, min: 1 }),
+        NODE_SESSION_TIME_MEDIUM: int({ default: 2_592_000, min: 1 }),
+        NODE_SESSION_TIME_LONG: int({ default: 31_536_000, min: 1 }),
         NODE_TOKEN_ACCESS_TIME: int({ default: 600, min: 1 }),
         NODE_TOKEN_ACCESS: keyRing({
-            required: { minLength: 16, minBytes: 32, placeholder: 'your-access-token-secret-here' }
+            required: {
+                minLength: 16,
+                minBytes: 32,
+                placeholder: 'your-access-token-secret-here',
+                skipWhen: selectsCookieMode
+            }
         }),
         NODE_TOKEN_REFRESH: keyRing({
             required: {
                 minLength: 16,
                 minBytes: 32,
-                placeholder: 'your-refresh-token-secret-here'
+                placeholder: 'your-refresh-token-secret-here',
+                skipWhen: selectsCookieMode
             }
         }),
         // A TOTP secret encrypted under the shipped placeholder is recoverable by anyone who has
@@ -78,8 +102,10 @@ export const sessionConfig = defineConfig({
     // The one relationship between the two windows that must hold: a token has to outlive the
     // grace window by some margin, or there is no interval in which reuse is detectable at all.
     // Checked at BOOT because the failure is silent by nature: everything keeps working, every
-    // replay just answers a clean 401, and the defence is simply gone.
+    // replay just answers a clean 401, and the defence is simply gone. Moot in `cookie` mode,
+    // which has no rotation to detect reuse of.
     check: (config) =>
+        config.NODE_SESSION_MODE === 'cookie' ||
         config.NODE_TOKEN_REUSE_WINDOW_MS > config.NODE_TOKEN_ROTATION_GRACE_MS
             ? []
             : [
@@ -90,13 +116,21 @@ export const sessionConfig = defineConfig({
 
 /** Each tier's variable. */
 const TOKEN_EXPIRY = {
-    [RefreshTokenExpiryTime.SHORT]: 'NODE_TOKEN_REFRESH_TIME_SHORT',
-    [RefreshTokenExpiryTime.MEDIUM]: 'NODE_TOKEN_REFRESH_TIME_MEDIUM',
-    [RefreshTokenExpiryTime.LONG]: 'NODE_TOKEN_REFRESH_TIME_LONG'
+    [RefreshTokenExpiryTime.SHORT]: 'NODE_SESSION_TIME_SHORT',
+    [RefreshTokenExpiryTime.MEDIUM]: 'NODE_SESSION_TIME_MEDIUM',
+    [RefreshTokenExpiryTime.LONG]: 'NODE_SESSION_TIME_LONG'
 } as const satisfies Record<RefreshTokenExpiryTime, string>;
 
 /**
- * Server-side lifetime in seconds of a REFRESH token.
+ * Which session mode this deployment runs — `jwt` unless `NODE_SESSION_MODE` says `cookie`.
+ *
+ * @returns the mode, read per call so a test or a restart that changes it is honoured
+ */
+export const getSessionMode = (): SessionMode => sessionConfig().NODE_SESSION_MODE;
+
+/**
+ * Server-side lifetime in seconds of a session — a refresh token in `jwt` mode, a session row in
+ * `cookie` mode.
  *
  * No tier means the "remember me" box was left unticked (or there was none): the cookie is a
  * browser-session one, but the token still needs a real limit — browsers restore session cookies,
@@ -127,7 +161,7 @@ export const getExpiryTimeMilliseconds = (remember?: RefreshTokenExpiryTime) =>
 export const getAccessExpiryTime = () => sessionConfig().NODE_TOKEN_ACCESS_TIME;
 
 /**
- * The refresh cookie's `maxAge` for a login, or `undefined` for a browser-session cookie.
+ * The session cookie's `maxAge` for a login, or `undefined` for a browser-session cookie.
  *
  * @param remember - the ticked tier, absent when the box was unticked
  * @returns milliseconds when the cookie must persist, otherwise `undefined` (no `Max-Age`)

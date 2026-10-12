@@ -141,31 +141,33 @@ export const getOAuthCallback = (request: Request, response: Response) => {
              * docs/theory/defences/authentication.md#federated-login.
              */
             if (!user.twoFactorEnabledAt) {
-                return issueSession(response, user.id, undefined, [provider.name]).then(() => {
-                    /*
-                     * Only a genuine LOGIN owes this: `link`/`signup` already audited themselves
-                     * in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN here too
-                     * would double-count the event under a second action name. The role is read
-                     * fresh from the membership, never assumed, the same reasoning `postLogin`
-                     * gives for its own tail.
-                     */
-                    return (
-                        outcome === 'login'
-                            ? isUnrestrictedCaller(user.id).then((unrestricted) =>
-                                  recordLoginSuccess(request, user.id, unrestricted, {
-                                      via: provider.name
-                                  })
-                              )
-                            : Promise.resolve()
-                    ).then(() => {
-                        authOauthTotal.inc({ provider: providerName, status: 'success' });
-                        clearOAuthCookies(response);
-                        response.redirect(
-                            302,
-                            oauthFrontendCallbackUrl(undefined, continueTo, savedLocale())
-                        );
-                    });
-                });
+                return issueSession(request, response, user.id, { amr: [provider.name] }).then(
+                    () => {
+                        /*
+                         * Only a genuine LOGIN owes this: `link`/`signup` already audited themselves
+                         * in full inside `loginOrCreateFromOAuth` — recording AUTH_LOGIN here too
+                         * would double-count the event under a second action name. The role is read
+                         * fresh from the membership, never assumed, the same reasoning `postLogin`
+                         * gives for its own tail.
+                         */
+                        return (
+                            outcome === 'login'
+                                ? isUnrestrictedCaller(user.id).then((unrestricted) =>
+                                      recordLoginSuccess(request, user.id, unrestricted, {
+                                          via: provider.name
+                                      })
+                                  )
+                                : Promise.resolve()
+                        ).then(() => {
+                            authOauthTotal.inc({ provider: providerName, status: 'success' });
+                            clearOAuthCookies(response);
+                            response.redirect(
+                                302,
+                                oauthFrontendCallbackUrl(undefined, continueTo, savedLocale())
+                            );
+                        });
+                    }
+                );
             }
 
             return twoFactorService.buildLoginChallenge(user, [provider.name]).then((challenge) => {

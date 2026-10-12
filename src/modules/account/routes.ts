@@ -67,6 +67,7 @@ import { getAccountExport } from './controllers/get-account-export';
 import { deleteAccountRequest } from './controllers/delete-account-request';
 import { deleteAccountConfirm } from './controllers/delete-account-confirm';
 import { getOAuthProviders } from './controllers/get-oauth-providers';
+import { getSessionConfig } from './controllers/get-session-config';
 import { getOAuthLinks } from './controllers/get-oauth-links';
 import { deleteOAuthLink } from './controllers/delete-oauth-link';
 import { getOAuthStart } from './controllers/get-oauth-start';
@@ -250,6 +251,10 @@ router.post('/reauth', isAuth, credentialLimiters, postReauth);
 // password. No fresh-auth guard (it is what earns one); the delivery budget is the 2FA send's,
 // since both spend the same mailbox.
 router.post('/reauth/methods/:method/send', isAuth, accountCodeSendLimiter, postReauthMethodSend);
+
+// GET /account/session-config — how this deployment keeps people signed in (`jwt` or `cookie`).
+// Public, like `GET /antibot/config`: a client reads it before it has a session.
+router.get('/session-config', getSessionConfig);
 
 /*
  * GET /account/abilities — the rules the server enforces, for a client to render from.

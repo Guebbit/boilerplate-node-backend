@@ -13,12 +13,15 @@
 
 ## Auth architecture (current backend pattern)
 
-This backend uses a **split-token model**:
+A deployment runs one of two session modes, picked by `NODE_SESSION_MODE` and explained in
+[Two ways to stay signed in](../theory/sessions.md). The default, `jwt`, is a **split-token model**:
 
 - **Access token**: short-lived JWT returned by `POST /account/login` and sent on API calls in the `Authorization` header with the Bearer scheme.
-- **Refresh token**: longer-lived JWT stored in the HTTP-only `__Host-jwt` cookie and used only to mint a new access token (`POST /account/refresh`).
+- **Refresh token**: longer-lived JWT stored in the HTTP-only `__Host-session` cookie and used only to mint a new access token (`POST /account/refresh`).
 
 This keeps normal authenticated requests explicit (client-attached Bearer token), while keeping the refresh token out of JavaScript access (HTTP-only cookie).
+
+In `cookie` mode there is one credential, a random session id kept hashed in the database: an HttpOnly `__Host-session` cookie for a browser, or a `ses_…` Bearer for a client without a cookie jar. Because a cookie rides along on requests the user never meant to make, every state-changing request it authenticates must name an allowed `Origin` (`getAuth`).
 
 ## Where token verification happens
 
@@ -49,8 +52,10 @@ a `kid` naming no current member rejects as an ordinary bad token (401), not a 5
 session signed by a key this deployment has since retired, which is exactly "log in again". A ring
 of one — no comma — behaves precisely as an unrotated deployment always has.
 
+**`jwt` mode only** — a `cookie` deployment signs nothing and has no ring to rotate.
+
 **To rotate:** prepend the new secret (`new-secret,old-secret`), deploy, wait out the longest
-refresh window in play (`NODE_TOKEN_REFRESH_TIME_LONG` — a year by default — or force
+refresh window in play (`NODE_SESSION_TIME_LONG` — a year by default — or force
 `logout-all` for every account instead of waiting), then drop the old secret and deploy again.
 Skipping the wait window logs out every session still signed with the entry you remove.
 
@@ -238,22 +243,24 @@ resolve, fire-and-forget, so a partner integration that stopped calling can be f
 
 ## Login → auth → refresh request flow
 
+The `jwt` mode flow. `cookie` mode has no refresh step: the cookie authenticates every request, and the diagram is on [its own page](../theory/sessions.md#cookie-mode-one-random-id).
+
 1. User logs in (`POST /account/login`).
-2. Server returns a short-lived access token and sets the `__Host-jwt` refresh cookie.
+2. Server returns a short-lived access token and sets the `__Host-session` refresh cookie.
 3. Client calls protected APIs with the Bearer token in `Authorization`.
 4. If access token is expired/invalid, API responds `401 Unauthorized`.
-5. Client calls `POST /account/refresh`; browser sends the `__Host-jwt` cookie automatically.
+5. Client calls `POST /account/refresh`; browser sends the `__Host-session` cookie automatically.
 6. Server validates refresh token signature **and** DB presence, then returns a new access token.
 7. Client retries protected request with the new access token.
 
 ```mermaid
 flowchart LR
     A[Login\nPOST /account/login] --> B[Access token in response]
-    A --> C[Refresh token in\nHttpOnly __Host-jwt cookie]
+    A --> C[Refresh token in\nHttpOnly __Host-session cookie]
     B --> D[Protected API call\nAuthorization Bearer]
     D --> E{Access token valid?}
     E -- Yes --> F[Controller executes]
-    E -- No (401) --> G[POST /account/refresh\nwith __Host-jwt cookie]
+    E -- No (401) --> G[POST /account/refresh\nwith __Host-session cookie]
     G --> H{Refresh JWT valid\nand stored in DB?}
     H -- Yes --> I[New access token]
     I --> D

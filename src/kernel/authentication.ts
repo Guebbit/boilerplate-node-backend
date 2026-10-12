@@ -24,14 +24,32 @@ export type ResolveMissReason = 'invalid_signature' | 'malformed' | 'revoked' | 
 /** What a resolver answers: the resolved value, or the reason the credential was refused. */
 export type Resolution<T> = { ok: T } | { miss: ResolveMissReason };
 
-/** Turns a signed token into the user it names. Implemented by `account`. */
+/**
+ * Turns a session credential into the user it names. Implemented by `account`, which knows what
+ * the credential is (a signed access token, or an opaque `ses_…` id) — the kernel only knows where
+ * on the request it travels.
+ */
 export interface AuthResolver {
-    fromAccessToken: (token: string) => Promise<Resolution<AuthContext | undefined>>;
-    fromRefreshToken: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    /** The value of `Authorization: Bearer …`, when it is not an `sk_…` key. */
+    fromBearer: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    /** The value of the session cookie. */
+    fromCookie: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    /**
+     * Whether the session cookie authenticates EVERY route, or only the two SSE streams that cannot
+     * send a header. Answered per call: it follows the deployment's session mode.
+     */
+    cookieAuthenticates: () => boolean;
 }
 
 /** The currently registered resolver, or `undefined` before `account` boots and installs one. */
 let resolver: AuthResolver | undefined;
+
+/**
+ * The prefix every opaque session id carries — `ses_<random>`. Like {@link API_KEY_TOKEN_PREFIX} it
+ * is a plain string the dispatch can test, and it can collide with neither a JWT (`eyJ…`) nor a
+ * machine key.
+ */
+export const SESSION_TOKEN_PREFIX = 'ses_';
 
 /**
  * The prefix every machine credential carries — `sk_<prefix>_<secret>`. A JWT is base64url of
@@ -91,18 +109,24 @@ const requireResolver = (): AuthResolver => {
     return resolver;
 };
 
-/** Resolve an access token, for the `Authorization: Bearer` path. */
-export const resolveAccessToken = (token: string): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.resolve().then(() => requireResolver().fromAccessToken(token));
+/** Resolve a bearer credential — an access token, or a `ses_…` session id. */
+export const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefined>> =>
+    Promise.resolve().then(() => requireResolver().fromBearer(token));
 
-/** Resolve a refresh token, for the cookie path. */
-export const resolveRefreshToken = (token: string): Promise<Resolution<AuthContext | undefined>> =>
-    Promise.resolve().then(() => requireResolver().fromRefreshToken(token));
+/** Resolve the session cookie's value. */
+export const resolveCookie = (token: string): Promise<Resolution<AuthContext | undefined>> =>
+    Promise.resolve().then(() => requireResolver().fromCookie(token));
+
+/**
+ * Whether the session cookie authenticates ordinary routes. `false` when no resolver is
+ * registered: a build with no `account` has no sessions at all.
+ */
+export const cookieAuthenticatesRequests = (): boolean => resolver?.cookieAuthenticates() ?? false;
 
 /**
  * Resolve an `sk_...` credential, for the machine-to-machine path.
  *
- * Unlike {@link resolveAccessToken}, an unregistered resolver is NOT an error: `account` is
+ * Unlike {@link resolveBearer}, an unregistered resolver is NOT an error: `account` is
  * load-bearing for every build, but `api-keys` is deletable like any other module. A build without
  * it simply has nothing that can ever mint an `sk_...` token, so one arriving anyway is a
  * `malformed` miss — the same "no caller" outcome — rather than a throw.

@@ -13,7 +13,7 @@ import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ChangePasswordRequest, AuthTokens } from '@types';
 import { accountService } from '../services';
-import { reissueSession } from '../session/session';
+import { reissueSession, sessionSnapshotOf } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -56,15 +56,21 @@ export const postPasswordChange = (
 
     const { currentPassword, password, passwordConfirm } = parseResult.data;
 
-    return accountService
-        .passwordChangeWithCurrent(
-            id,
-            currentPassword,
-            password,
-            passwordConfirm,
-            callerContextOf(request)
+    // Taken first: the change purges every session, this request's included, and the re-mint below
+    // has to continue the one it replaces.
+    return sessionSnapshotOf(request, id)
+        .then((snapshot) =>
+            accountService
+                .passwordChangeWithCurrent(
+                    id,
+                    currentPassword,
+                    password,
+                    passwordConfirm,
+                    callerContextOf(request)
+                )
+                .then((result) => ({ result, snapshot }))
         )
-        .then((result) => {
+        .then(({ result, snapshot }) => {
             if (refused(response, result)) {
                 authPasswordChangeTotal.inc({ status: 'failure' });
                 return;
@@ -77,12 +83,12 @@ export const postPasswordChange = (
              * A 500 here would tell them the opposite of what happened, so a failed re-mint
              * degrades to "no new token" rather than "the change failed".
              */
-            return reissueSession(request, response, id)
-                .then((token) => {
+            return reissueSession(request, response, id, { snapshot })
+                .then((issued) => {
                     authPasswordChangeTotal.inc({ status: 'success' });
                     successResponse<AuthTokens>(
                         response,
-                        { token },
+                        issued,
                         200,
                         t('account.password-change.success')
                     );

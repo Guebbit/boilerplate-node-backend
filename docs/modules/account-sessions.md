@@ -3,10 +3,40 @@
 How this application decides who is making a request — and why none of it is published.
 
 ::: tip At a glance
-**Nine files** — `config.ts` reads the lifetimes, `key-ring.ts` gives a secret its `kid`, `jwt.ts` signs and verifies, `cookies.ts` sets and clears, `session.ts` mints the three of them together, `resolver.ts` turns claims into an `AuthContext`, `epoch.ts` holds the session-epoch rule, `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
+**Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
+**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor, `activity.ts` stamps `lastActiveAt`, `epoch.ts` holds the session-epoch rule, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
+
+## Choosing the session mode {#choosing-the-session-mode}
+
+One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented in
+`.env-example` § A4, as its first block.
+
+|                           | `jwt` (default)                                              | `cookie`                              |
+| ------------------------- | ------------------------------------------------------------ | ------------------------------------- |
+| What a browser holds      | a 10-minute access token in memory, and the refresh cookie   | one HttpOnly cookie, `__Host-session` |
+| Keys the deployment needs | `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH`, each a ring    | none                                  |
+| Lifetimes                 | `NODE_TOKEN_ACCESS_TIME`, `NODE_SESSION_TIME_*`              | `NODE_SESSION_TIME_*`                 |
+| Rotation windows          | `NODE_TOKEN_ROTATION_GRACE_MS`, `NODE_TOKEN_REUSE_WINDOW_MS` | not used                              |
+| `POST /account/refresh`   | exists                                                       | answers 404                           |
+
+- **Shared by both modes:** `NODE_SESSION_TIME_{SHORT,MEDIUM,LONG}` (the "remember me" tiers) and the
+  step-up windows `NODE_REAUTH_TIME_CRITICAL` / `NODE_REAUTH_TIME_SENSITIVE`.
+- **`jwt` only:** the rest of the `NODE_TOKEN_*` keys. In `cookie` mode they are ignored, and boot no
+  longer refuses their placeholders (`skipWhen` on the presence rule), so a cookie deployment does
+  not invent two secrets it never uses.
+- **Switching signs everyone out.** A row belongs to the mode that issued it: a `jwt` refresh token
+  is no `ses_…` id and the reverse, and `GET /account/sessions` lists only the active mode's rows.
+  The old rows age out by their own date.
+- **The frontend follows on its own.** It reads `GET /account/session-config` at boot and picks its
+  transport: the access-token interceptor in `jwt` mode, `credentials: 'include'` and no interceptor
+  in `cookie` mode.
+- **No idle timeout in either mode**, as before. A possible later knob, not built.
+
+A client with no cookie jar logs in with `transport: "bearer"` in the body (`cookie` mode only;
+`jwt` mode ignores it): no cookie is set, and the response carries the id as `sessionToken`.
 
 ## The resolver, installed by `onRegistered`
 
@@ -42,26 +72,27 @@ that distinction into `401` versus `403`, and collapsing the two would tell an a
 account exists.
 :::
 
-## Two tokens, two lifetimes, two homes
+## `jwt` mode: two tokens, two lifetimes, two homes
 
-|                | Access token               | Refresh token             |
-| -------------- | -------------------------- | ------------------------- |
-| Travels in     | the `Authorization` header | the `__Host-jwt` cookie   |
-| Lifetime from  | `NODE_TOKEN_ACCESS_TIME`   | one of three tiers, below |
-| Readable by JS | yes — the client holds it  | no — `httpOnly`           |
+|                | Access token               | Refresh token               |
+| -------------- | -------------------------- | --------------------------- |
+| Travels in     | the `Authorization` header | the `__Host-session` cookie |
+| Lifetime from  | `NODE_TOKEN_ACCESS_TIME`   | one of three tiers, below   |
+| Readable by JS | yes — the client holds it  | no — `httpOnly`             |
 
 The refresh tier is the "remember me" choice, and it is a tier rather than a boolean so the copy on
 the login form and the lifetime in the environment stay one decision:
 
-| Tier     | Environment variable             |
-| -------- | -------------------------------- |
-| `short`  | `NODE_TOKEN_REFRESH_TIME_SHORT`  |
-| `medium` | `NODE_TOKEN_REFRESH_TIME_MEDIUM` |
-| `long`   | `NODE_TOKEN_REFRESH_TIME_LONG`   |
+| Tier     | Environment variable       |
+| -------- | -------------------------- |
+| `short`  | `NODE_SESSION_TIME_SHORT`  |
+| `medium` | `NODE_SESSION_TIME_MEDIUM` |
+| `long`   | `NODE_SESSION_TIME_LONG`   |
 
 `config.ts` is the single place a deployment's answer to _how long is a session_ is parsed —
-`jwt.ts` signs against it and `cookies.ts` sets `maxAge` from it. Its name is deliberate: it holds
-no token and issues none.
+`jwt.ts` signs against it, `cookie-strategy.ts` stores its row against it and `cookies.ts` sets
+`maxAge` from it. Its name is deliberate: it holds no token and issues none. The three tiers are the
+same in both modes: a refresh token's life in `jwt` mode, the session row's in `cookie` mode.
 
 ### The box left unticked {#remember-me-unticked}
 
@@ -99,10 +130,11 @@ flowchart LR
   again: `POST /account/login/2fa` takes the same optional `remember` (`LoginTwoFactorRequest`).
   ASP.NET Core Identity carries it the same way. An OAuth-originated challenge has no earlier
   password step, so the 2FA request is the only place it can be said.
-- **Reauth and password change.** Both replace the session, so `reissueSession` reads the tier off
-  the request's own `__Host-jwt` cookie (signature only — a password change has already revoked the row)
-  and keeps it. No cookie, a stranger's cookie or an expired one all read as "no tier": a session
-  cookie, never a persistent one granted by accident.
+- **Reauth and password change.** Both replace the session, so `reissueSession` keeps the tier: in
+  `jwt` mode read off the request's own `__Host-session` cookie (signature only — a password change has
+  already deleted the row), in `cookie` mode off a snapshot of the caller's row taken before the
+  change. No cookie, a stranger's cookie or an expired one all read as "no tier": a session cookie,
+  never a persistent one granted by accident.
 
 ## The signing key is a ring, not a single secret
 
@@ -196,21 +228,62 @@ management and the data export stay password-only (ASVS 5.0 §7.5.1).
   outside `development` and `test`: those accounts would be locked out of checkout, payment and
   self-deletion. The demo registers its fake provider in code, not through these variables.
 
+## `cookie` mode: one random id {#cookie-mode}
+
+A login makes `ses_` plus 32 random bytes (base64url). Only its sha256 is stored, in a `sessions` row
+with `mode: 'cookie'`: the account, a `familyId` (the id the owner sees), `authTime` and `amr` (the
+step-up proof), the "remember me" tier, `startedAt` and the expiry. `lastUsedAt` is written at most once
+a minute, so a busy tab does not write on every request.
+
+```mermaid
+flowchart TD
+    R["a request"] --> H{"Authorization: Bearer?"}
+    H -->|"sk_…"| K["API key"]
+    H -->|"ses_… or a JWT"| B["resolveBearer"]
+    H -->|"no header"| C{"cookie authenticates<br/>in this mode?"}
+    C -->|"no (jwt)"| N["anonymous"]
+    C -->|"yes"| O{"unsafe method?"}
+    O -->|"no"| X["resolveCookie"]
+    O -->|"yes"| M{"Origin allowed<br/>(or absent)?"}
+    M -->|"no"| F["403, nothing runs"]
+    M -->|"yes"| X
+    B --> P["findByHash → row live? → account may sign in?<br/>epoch not past the proof? → roles"]
+    X --> P
+    P --> A["AuthContext"]
+```
+
+- **Step-up.** `authTime` is stored at login and written again only by `POST /account/reauth`.
+  Plain use never touches it, so a session kept alive for a month still asks for the password before
+  money or deletion.
+- **A re-proof replaces the id**, keeping the row's `familyId`, `startedAt` and expiry: the
+  successor is stored first, the old row deleted second, so a failure between leaves two sessions,
+  not none. A password change and a factor change delete every session first, so the controller
+  reads the caller's session BEFORE the change (`sessionSnapshotOf`) and the re-mint continues it.
+- **Logging out** is `deleteOne` on the digest; "log out that device" deletes by `familyId`;
+  logout-everywhere moves the epoch and deletes every row. The epoch refuses what a failed delete
+  would leave behind: a row whose `authTime` predates it never resolves.
+- **A `ses_…` Bearer** is resolved exactly like the cookie, and is how every non-browser client logs
+  in (`transport: "bearer"`). Because a header is not ambient, it is not origin-checked.
+- **The origin check** is in `getAuth`, the one place a caller is resolved; see
+  [Two ways to stay signed in](../theory/sessions.md#the-cookie-asks-for-a-check-on-every-write).
+  `POST /account/refresh` answers 404 here.
+
 ## The cookie, flag by flag
 
-The name is `__Host-jwt`: the prefix makes a browser refuse the cookie unless it is `Secure`, `Path=/`
-and Domain-less. Refresh is a `POST`, and refresh, logout and the SSE streams answer 403 to a request
-naming an `Origin` that is not an allowed frontend origin (the same list CORS uses), so a request from
-someone else's page cannot act on the cookie.
+The name is `__Host-session` in both modes: the prefix makes a browser refuse the cookie unless it is
+`Secure`, `Path=/` and Domain-less. In `jwt` mode refresh is a `POST`, and refresh, logout and the SSE
+streams answer 403 to a request naming an `Origin` that is not an allowed frontend origin (the same
+list CORS uses), so a request from someone else's page cannot act on the cookie. In `cookie` mode the
+same check covers every state-changing request the cookie authenticates.
 
-| Flag       | Value           | Why                                                                                      |
-| ---------- | --------------- | ---------------------------------------------------------------------------------------- |
-| `httpOnly` | `true`          | The refresh token is the long-lived credential; script must not be able to read it.      |
-| `secure`   | `true`, always  | The `__Host-` name requires it; browsers accept `Secure` cookies from `localhost`.       |
-| `sameSite` | `lax`           | Survives a top-level navigation back into the app; refuses cross-site form posts.        |
-| `path`     | `/`             | The refresh endpoint and the logout endpoint are on different paths; `__Host-` needs it. |
-| `domain`   | none            | Host-locked: a sibling subdomain cannot set or overwrite the cookie.                     |
-| `maxAge`   | the chosen tier | The cookie expires when the token does, rather than outliving it.                        |
+| Flag       | Value           | Why                                                                                  |
+| ---------- | --------------- | ------------------------------------------------------------------------------------ |
+| `httpOnly` | `true`          | The credential (refresh token or session id) is long-lived; script must not read it. |
+| `secure`   | `true`, always  | The `__Host-` name requires it; browsers accept `Secure` cookies from `localhost`.   |
+| `sameSite` | `lax`           | Survives a top-level navigation back into the app; refuses cross-site form posts.    |
+| `path`     | `/`             | The endpoints that read it are on different paths; `__Host-` needs it.               |
+| `domain`   | none            | Host-locked: a sibling subdomain cannot set or overwrite the cookie.                 |
+| `maxAge`   | the chosen tier | The cookie expires when the token does, rather than outliving it.                    |
 
 There is a second, deliberately **non-secure** cookie carrying nothing but a logged-in hint, so the
 client shell can render the right chrome before its first request answers. It holds no credential
@@ -242,10 +315,10 @@ entirely internal. The address book, and what checkout reads from it, belongs to
 Three flows mint a session and two record one, so both halves are extracted rather than copied.
 Neither is a layer — they are the repeated ends of controllers.
 
-| File                     | Is                                                                        | Reused by                                             |
-| ------------------------ | ------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `session.ts`             | `issueSession` — refresh token, its cookies, the access token handed back | `postLogin`, `postPasswordChange`, the OAuth callback |
-| `login-observability.ts` | the metrics / audit / analytics emit meaning "a login happened"           | `post-login.ts`, `post-login-2fa.ts`                  |
+| File                     | Is                                                                                                             | Reused by                                                                   |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `session.ts`             | `issueSession`, `reissueSession`, `remintSession`: a session's credential, put on the response, whichever mode | login, signup, 2FA, the OAuth callback, reauth, password and factor changes |
+| `login-observability.ts` | the metrics / audit / analytics emit meaning "a login happened"                                                | `post-login.ts`, `post-login-2fa.ts`                                        |
 
 ::: tip Why the observability tail is not in the service
 `services/login.ts` checks credentials; it cannot know whether a session exists. The
@@ -257,14 +330,14 @@ it.
 ### The mint guard {#the-mint-guard}
 
 "No session without the second factor" is enforced where a session is minted, not only where a
-login branches. `createRefreshToken` refuses a **first** session for an account whose
+login branches. Both modes call `assertSecondFactor` (`mint-guard.ts`) from their `issue`, which refuses a **first** session for an account whose
 `twoFactorEnabledAt` is set unless `amr` carries `otp`, with `SecondFactorRequiredError`:
 
 ```mermaid
 flowchart LR
     P["password login"] --> Q{"2FA armed?"}
     O["OAuth callback"] --> Q
-    Q -->|no| M["createRefreshToken<br/><i>first session</i>"]
+    Q -->|no| M["strategy.issue<br/><i>first session</i>"]
     Q -->|yes| C["challenge, then code<br/><i>amr gains 'otp'</i>"]
     C --> M
     X["a login path added later<br/><i>forgot the branch</i>"] --> M
@@ -274,7 +347,7 @@ flowchart LR
 
 The controllers still branch to the challenge first, so the guard is the backstop for the path that
 forgot to: it fails loudly (a `500`, never a session) instead of handing out a session the factor
-never guarded. A **re-mint** (`reissueSession`, `remintRefreshCookie`) continues a session the
+never guarded. A **re-mint** (`reissueSession`, `remintSession`) continues a session the
 caller already holds and is not checked; that door, and `amr` becoming required, are a separate
 decision.
 
@@ -315,7 +388,7 @@ erDiagram
 | `verificationtokens` | one mailed link or login challenge | its own `expiresAt` (TTL index), being spent, a password change |
 
 - **A date on the row, not a lifetime on the index.** Both TTL indexes are `expireAfterSeconds: 0`
-  on a per-row date, so changing `NODE_TOKEN_REFRESH_TIME_*` never rebuilds an index, and a
+  on a per-row date, so changing `NODE_SESSION_TIME_*` never rebuilds an index, and a
   rotated-away row can be given an earlier date than its original expiry. The database's monitor
   runs about once a minute, so every read also checks `expiresAt`: a row past it is dead whether or
   not it has been deleted yet.

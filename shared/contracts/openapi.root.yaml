@@ -192,7 +192,13 @@ components:
         bearerAuth:
             type: http
             scheme: bearer
-            bearerFormat: JWT
+            # No `bearerFormat`: the credential's shape depends on the deployment's session mode and
+            # on the client, so `JWT` would be a claim that is sometimes false.
+            description: >-
+                A session credential: an access JWT (`jwt` mode), an opaque `ses_…` session id
+                (`cookie` mode, for a client that asked for `transport: bearer`), or an `sk_…` API
+                key (see `apiKeyAuth`). In `cookie` mode the `__Host-session` cookie authenticates
+                the same routes without a header (see `cookieAuth`).
         apiKeyAuth:
             type: http
             scheme: bearer
@@ -204,8 +210,13 @@ components:
         cookieAuth:
             type: apiKey
             in: cookie
-            name: jwt
-            description: The HttpOnly refresh cookie. Only the two Server-Sent Events streams take it, because a browser `EventSource` cannot set an `Authorization` header.
+            name: __Host-session
+            description: >-
+                The HttpOnly session cookie — the refresh token in `jwt` mode, the session id in
+                `cookie` mode. In `jwt` mode only the two Server-Sent Events streams take it,
+                because a browser `EventSource` cannot set an `Authorization` header. In `cookie`
+                mode it authenticates every route a bearer does, and a state-changing request it
+                authenticates is refused with 403 unless its `Origin` is an allowed frontend origin.
         metricsBearer:
             type: http
             scheme: bearer

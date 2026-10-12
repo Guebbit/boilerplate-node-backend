@@ -1,127 +1,101 @@
 /**
  * @module
- * `issueSession` — the three-step tail every flow that mints or re-mints a live session runs: a
- * refresh token, its cookies, and the access token handed back to the caller. Extracted from
- * `postLogin` so `postPasswordChange` reuses it instead of
- * re-implementing cookie minting a second time. See docs/modules/account-sessions.md.
+ * The calls every flow that mints or re-mints a live session makes, in one place: the controllers
+ * (login, signup, 2FA, the OAuth callback, reauth, a password change, a factor change) call these
+ * and never learn which session mode is on — that is {@link activeStrategy}'s business.
+ * See docs/modules/account-sessions.md and docs/theory/sessions.md.
  */
 
 import type { Request, Response } from 'express';
-import { readRefreshCookie } from '@kernel/cookies';
-import { logger } from '@infrastructure/adapters/logger';
-import { hashToken } from '@infrastructure/security/hash-token';
-import { sessionRepository } from '../repository';
-import {
-    createRefreshToken,
-    createAccessToken,
-    rememberOfRefreshToken,
-    type SessionMint
-} from './jwt';
-import { createRefreshCookie, createLoggedCookie } from './cookies';
-import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './config';
+import { activeStrategy } from './strategy';
+import type {
+    IssuedSession,
+    IssueOptions,
+    ReissueOptions,
+    SessionRequest,
+    SessionSnapshot
+} from './strategy';
+
+/** The slice of a request every function here needs. */
+type SessionCaller = SessionRequest & Pick<Request, 'get'>;
 
 /**
- * Mint a refresh token, set its cookies on `response`, and exchange it for an access token.
- * @param response - the live response to set the refresh/logged cookies on
+ * Mint a session for an account and put its credential on `response`.
+ *
+ * @param request - the request that logged in, for the transport and the device
+ * @param response - the live response to set the cookies on
  * @param userId - whose session this is
- * @param remember - the ticked "remember me" tier; absent means a browser-session cookie, with a
- *   server-side TTL of the `short` tier
- * @param amr - how `auth_time` was proved; absent matches `createRefreshToken`'s own `['pwd']` default
- * @param mint - `'first'` for a login or signup (the default), checked for a second factor;
- *   `'remint'` only from {@link reissueSession}
- * @returns the signed access token to hand back in the response body
- * @throws when the refresh token cannot be persisted or signed, or `SecondFactorRequiredError`
- *   for a first session on an account whose second factor `amr` does not carry
+ * @param options - the "remember me" tier, how `auth_time` was proved, the mint kind and transport
+ * @returns the credential fields the response body carries (`AuthTokens` on the wire)
+ * @throws when the session cannot be persisted or signed, or `SecondFactorRequiredError` for a
+ *   first session on an account whose second factor `amr` does not carry
  */
 export const issueSession = (
+    request: SessionCaller,
     response: Response,
     userId: string,
-    remember?: RefreshTokenExpiryTime,
-    amr?: string[],
-    mint: SessionMint = 'first'
-): Promise<string> =>
-    createRefreshToken(userId, remember, amr, mint).then((refreshToken) => {
-        const maxAgeMs = getCookieMaxAgeMilliseconds(remember);
-        createRefreshCookie(response, refreshToken, maxAgeMs);
-        createLoggedCookie(response, maxAgeMs);
-        return createAccessToken(refreshToken);
-    });
+    options?: IssueOptions
+): Promise<IssuedSession> => activeStrategy().issue(request, response, userId, options);
+
+/**
+ * What the caller's own session carries — read BEFORE a change that deletes it (a password change,
+ * a factor change), so the re-mint that follows can keep its persistence and, in `cookie` mode,
+ * the identity the owner sees in their list.
+ *
+ * @param request - the authenticated request
+ * @param userId - the authenticated caller
+ */
+export const sessionSnapshotOf = (
+    request: SessionRequest,
+    userId: string
+): Promise<SessionSnapshot> => activeStrategy().snapshot(request, userId);
 
 /**
  * Re-mint the caller's live session KEEPING its persistence: reauth and a password change replace
- * the session (the refresh token it was given is retired), and must neither strand a remembered login on a session cookie nor make a
- * browser-session one persistent. The tier is read off the request's own refresh cookie.
+ * the session, and must neither strand a remembered login on a session cookie nor make a
+ * browser-session one persistent.
  *
- * @param request - the authenticated request, carrying the current refresh cookie if any
- * @param response - the live response to set the refresh/logged cookies on
+ * @param request - the authenticated request, carrying the current credential
+ * @param response - the live response to set the cookies on
  * @param userId - whose session this is
- * @param amr - how the re-minted session's `auth_time` was proved; absent keeps `issueSession`'s
- *   own `['pwd']`, right for a password change and wrong for a re-authentication, which passes
- *   the session's earlier proofs plus the new one
- * @returns the signed access token to hand back in the response body
+ * @param options - `amr`: what THIS re-proof showed (absent keeps `['pwd']`, right for a password
+ *   change and wrong for a re-authentication, which passes the proofs it just made);
+ *   `snapshot`: from {@link sessionSnapshotOf}, when the change deleted the session first
+ * @returns the credential fields the response body carries
  */
 export const reissueSession = (
-    request: Pick<Request, 'cookies'>,
+    request: SessionCaller,
     response: Response,
     userId: string,
-    amr?: string[]
-): Promise<string> => {
-    const previous = readRefreshCookie(request);
-    return rememberOfRefreshToken(previous, userId)
-        .then((remember) => issueSession(response, userId, remember, amr, 'remint'))
-        .then((token) => retireRefreshToken(previous).then(() => token));
-};
+    options?: ReissueOptions
+): Promise<IssuedSession> => activeStrategy().reissue(request, response, userId, options);
 
 /**
- * Remove the refresh token a re-mint just replaced, so a re-authentication leaves one live session
- * behind rather than two. A no-op when nothing was presented or a password change already
- * removed it. Its failure is logged, not raised: the new session exists, and a leftover old one
- * only expires on its own schedule.
- *
- * @param refreshToken - the refresh cookie the request carried, if any
- */
-const retireRefreshToken = (refreshToken: string | undefined): Promise<void> =>
-    refreshToken
-        ? sessionRepository
-              .removeByHash(hashToken(refreshToken))
-              .then(() => undefined)
-              .catch((error: unknown) => {
-                  logger.warn({ message: 'Could not retire the replaced refresh token.', error });
-              })
-        : Promise.resolve();
-
-/**
- * Re-mint ONLY the caller's refresh cookie, after a change that revoked every session including
- * theirs (a 2FA factor change). No access token is returned: the one the caller holds died with
- * the session epoch, and the client's ordinary refresh turns this cookie into the next one — the
- * way GitHub and Google keep the acting device signed in.
+ * Re-mint ONLY the caller's session cookie, after a change that revoked every session including
+ * theirs (a 2FA factor change). The way GitHub and Google keep the acting device signed in.
  *
  * Never fails the response: the change already happened, so a failed re-mint degrades to "sign in
  * again", logged, rather than reporting the change as failed.
  *
- * @param request - the authenticated request, carrying the refresh cookie whose tier is kept
- * @param response - the live response to set the refresh/logged cookies on
+ * @param request - the authenticated request
+ * @param response - the live response to set the cookies on
  * @param userId - whose session this is
  * @param amr - the caller's own proofs, carried onto the re-minted session unchanged
+ * @param snapshot - from {@link sessionSnapshotOf}, taken before the change
  */
-export const remintRefreshCookie = (
-    request: Pick<Request, 'cookies'>,
+export const remintSession = (
+    request: SessionCaller,
     response: Response,
     userId: string,
-    amr: readonly string[]
-): Promise<void> =>
-    rememberOfRefreshToken(readRefreshCookie(request), userId)
-        .then((remember) =>
-            createRefreshToken(userId, remember, [...amr], 'remint').then((refreshToken) => {
-                const maxAgeMs = getCookieMaxAgeMilliseconds(remember);
-                createRefreshCookie(response, refreshToken, maxAgeMs);
-                createLoggedCookie(response, maxAgeMs);
-            })
-        )
-        .catch((error: unknown) => {
-            logger.warn({
-                message: 'The session change succeeded, but the re-mint failed.',
-                userId,
-                error
-            });
-        });
+    amr: readonly string[],
+    snapshot?: SessionSnapshot
+): Promise<void> => activeStrategy().remint(request, response, userId, { amr, snapshot });
+
+/**
+ * The credential naming the caller's own session on this request — what `current` is matched
+ * against and what a logout deletes. A caller authenticated some other way has none.
+ *
+ * @param request - the incoming request
+ */
+export const sessionCredentialOf = (request: SessionRequest): string | undefined =>
+    activeStrategy().credentialOf(request);

@@ -64,6 +64,7 @@ export default withMermaid(
                             { text: 'Request Input', link: '/theory/request-input' },
                             { text: 'Clustering & Shutdown', link: '/theory/clustering' },
                             { text: 'Authorization', link: '/theory/authorization' },
+                            { text: 'Sessions', link: '/theory/sessions' },
                             { text: 'Tenancy', link: '/theory/tenancy' },
                             { text: 'Data Protection', link: '/theory/data-protection' },
                             { text: 'Data Retention', link: '/theory/data-retention' },

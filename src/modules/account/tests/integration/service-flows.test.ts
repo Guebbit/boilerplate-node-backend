@@ -311,7 +311,7 @@ describe('accountService.refreshAccessToken', () => {
         setEnvironment({ NODE_TOKEN_ACCESS: 'test-access-secret' });
         setEnvironment({ NODE_TOKEN_REFRESH: 'test-refresh-secret' });
         setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
     });
 
     afterEach(() => {

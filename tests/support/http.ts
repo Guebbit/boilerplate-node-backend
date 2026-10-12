@@ -78,9 +78,11 @@ const authenticateUser = async (
     user: UserDocument,
     role: string
 ): Promise<AuthenticatedTestUser> => {
+    // `transport: 'bearer'` is ignored in `jwt` mode and, in `cookie` mode, is what makes the login
+    // hand back an id to send as a bearer instead of a cookie a test would have to carry.
     const response = await api()
         .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
+        .send({ email: user.email, password: PLAIN_PASSWORD, transport: 'bearer' });
 
     if (response.status !== 200)
         throw new Error(
@@ -88,7 +90,7 @@ const authenticateUser = async (
                 `— ${JSON.stringify(response.body)}`
         );
 
-    const token = response.body?.data?.token;
+    const token = response.body?.data?.token ?? response.body?.data?.sessionToken;
     if (!token)
         throw new Error(
             `authenticateAs('${role}'): no token in login response — ${JSON.stringify(response.body)}`

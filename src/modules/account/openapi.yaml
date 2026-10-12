@@ -496,7 +496,7 @@ paths:
         post:
             tags: [Auth]
             summary: Logout this session
-            description: Logs out the CURRENT session only — revokes the refresh token carried by the `__Host-jwt` cookie and clears the authentication cookies. Refused with 403 when the request names an `Origin` that is not an allowed frontend origin. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
+            description: Logs out the CURRENT session only — deletes the session the `__Host-session` cookie (or, in `cookie` mode, a `ses_…` bearer) names, and clears the authentication cookies. Refused with 403 when the request names an `Origin` that is not an allowed frontend origin. Other devices stay signed in; `POST /account/logout-all` is the one that revokes everything. Answers 200 whether or not a live session was found, because the caller's goal — not being logged in here — is met either way.
             operationId: logout
             security: []
             responses:
@@ -647,11 +647,41 @@ paths:
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
+    /account/session-config:
+        get:
+            tags: [Auth]
+            summary: How this deployment keeps people signed in
+            description: >-
+                Public, like `GET /antibot/config`: a client reads it once at boot and adapts, so it
+                needs no switch of its own. `jwt` — a short access token in memory plus a rotating
+                refresh cookie (`POST /account/refresh` exists). `cookie` — one HttpOnly
+                `__Host-session` cookie, nothing to refresh, and every state-changing request that
+                a cookie authenticates must come from an allowed `Origin`.
+            operationId: getSessionConfig
+            security: []
+            responses:
+                '200':
+                    description: The active session mode
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionConfigEnvelope'
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
     /account/login:
         post:
             tags: [Auth]
             summary: Login
-            description: Authenticates a user with email and password credentials. On success, returns a JWT access token that must be passed as a Bearer token on subsequent authenticated requests — OR, when the account has two-factor authentication enabled, a short-lived challenge that must be submitted to `POST /account/login/2fa` instead.
+            description: >-
+                Authenticates a user with email and password credentials. On success, the session
+                is started in whichever mode the deployment runs (`GET /account/session-config`):
+                in `jwt` mode the body carries a short-lived access token (`token`) to pass as a
+                Bearer token, and a refresh cookie is set; in `cookie` mode the session is an
+                HttpOnly `__Host-session` cookie and the body carries no credential — unless the
+                request asked for `transport: bearer`, which sets no cookie and returns the
+                `ses_…` id as `sessionToken` instead. When the account has two-factor
+                authentication enabled the response is a short-lived challenge to submit to
+                `POST /account/login/2fa` instead.
             operationId: login
             security: []
             requestBody:
@@ -677,7 +707,7 @@ paths:
         post:
             tags: [Auth]
             summary: Complete a two-factor login
-            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, returns the same auth tokens `POST /account/login` returns for an account with no second factor.
+            description: The second step of a login for an account with two-factor authentication enabled — submits the challenge from `POST /account/login` and a 6-digit code (or an unused backup code). On success, starts the session exactly as `POST /account/login` does for an account with no second factor, `transport` included.
             operationId: loginTwoFactor
             security: []
             requestBody:
@@ -954,7 +984,15 @@ paths:
         post:
             tags: [Auth]
             summary: Refresh access token
-            description: Creates a new short-lived access token from the refresh token in the `__Host-jwt` cookie, and rotates that token. A POST because it changes state, and refused with 403 when the request names an `Origin` that is not an allowed frontend origin — the cookie alone authenticates it. The cookie is `HttpOnly`, `Secure` in every environment and host-locked (no `Domain`, `Path=/`), so the token is never readable by page scripts, never appears in a URL, a proxy log or a `Referer` header, and a sibling subdomain cannot overwrite it.
+            description: >-
+                `jwt` mode only — answers 404 in `cookie` mode, whose one session id never rotates.
+                Creates a new short-lived access token from the refresh token in the
+                `__Host-session` cookie, and rotates that token. A POST because it changes state,
+                and refused with 403 when the request names an `Origin` that is not an allowed
+                frontend origin — the cookie alone authenticates it. The cookie is `HttpOnly`,
+                `Secure` in every environment and host-locked (no `Domain`, `Path=/`), so the token
+                is never readable by page scripts, never appears in a URL, a proxy log or a
+                `Referer` header, and a sibling subdomain cannot overwrite it.
             operationId: refreshToken
             security: []
             responses:
@@ -966,13 +1004,15 @@ paths:
                                 $ref: '#/components/schemas/RefreshTokenEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                # `cookie` mode: there is no refresh token to rotate.
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
 
     /account/logout-all:
         post:
             tags: [Auth]
             summary: Logout from all devices
-            description: Logs out the authenticated user from ALL devices by removing all refresh tokens from the database and clearing authentication cookies.
+            description: Logs out the authenticated user from ALL devices by deleting every session the account holds and clearing authentication cookies.
             operationId: logoutAll
             security:
                 - bearerAuth: []
@@ -1206,17 +1246,18 @@ components:
         AuthTokens:
             type: object
             additionalProperties: false
-            required: [token]
             properties:
                 token:
                     type: string
-                    description: Access JWT
-                refreshToken:
+                    description: >-
+                        The access JWT — `jwt` mode only. Absent in `cookie` mode, where a browser
+                        holds no credential it can read.
+                sessionToken:
                     type: string
-                    description: Refresh token if returned by backend
-                expiresIn:
-                    type: integer
-                    description: Access token expiry in seconds
+                    description: >-
+                        The `ses_…` session id, to send back as `Authorization: Bearer ses_…`.
+                        Present only for a `cookie`-mode login that asked for `transport: bearer`
+                        (or a re-proof by such a client); that login sets no cookie.
 
         RefreshTokenResponse:
             type: object
@@ -1226,12 +1267,6 @@ components:
                 token:
                     type: string
                     description: New access JWT
-                refreshToken:
-                    type: string
-                    description: New refresh token if returned by backend
-                expiresIn:
-                    type: integer
-                    description: New access token expiry in seconds
 
         MfaChallenge:
             type: object
@@ -1295,6 +1330,8 @@ components:
                     description: A code from any armed method, or an unused backup code. Which method it came from is the server's problem, not the client's.
                 remember:
                     $ref: '#/components/schemas/RememberTier'
+                transport:
+                    $ref: '#/components/schemas/SessionTransport'
 
         TwoFactorSendRequest:
             type: object
@@ -1575,6 +1612,42 @@ components:
                     $ref: '#/components/schemas/Password'
                 remember:
                     $ref: '#/components/schemas/RememberTier'
+                transport:
+                    $ref: '#/components/schemas/SessionTransport'
+
+        SessionConfigEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/SessionConfig'
+
+        SessionConfig:
+            type: object
+            additionalProperties: false
+            required: [mode]
+            properties:
+                mode:
+                    type: string
+                    enum: [jwt, cookie]
+                    description: The deployment's `NODE_SESSION_MODE`.
+
+        SessionTransport:
+            type: string
+            enum: [cookie, bearer]
+            description: >-
+                How a `cookie`-mode login hands its credential back. `cookie` (the default): the
+                HttpOnly `__Host-session` cookie, nothing in the body — what a browser wants.
+                `bearer`: no cookie is set and the body returns the `ses_…` id as `sessionToken`,
+                for a client with no cookie jar (a script, a mobile app). Ignored in `jwt` mode,
+                which always sets its refresh cookie and returns an access token.
 
         RememberTier:
             type: string

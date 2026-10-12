@@ -5,7 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { destroyLoggedCookie, destroyRefreshCookie } from '../session/cookies';
+import { destroyLoggedCookie, destroySessionCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -20,7 +20,7 @@ export const postLogoutEverywhere = (request: Request, response: Response) => {
     return accountService
         .logoutEverywhere(request.authContext!.id, callerContextOf(request))
         .then(() => {
-            destroyRefreshCookie(response);
+            destroySessionCookie(response);
             destroyLoggedCookie(response);
 
             successResponse(response, undefined, 200, 'Logged out from all devices');

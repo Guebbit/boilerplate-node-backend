@@ -44,7 +44,7 @@ it selects `clients/acme/.env` below. Unset, the stack refuses to start rather t
 run a second client on the same host, repeat with a different name and a different `NODE_PORT` —
 nothing is shared between them.
 
-Then edit `clients/acme/.env` and set real values. The credentials and keys are **not** in this file
+Then edit `clients/acme/.env` and set real values. One early choice: `NODE_SESSION_MODE`, how people stay signed in (`jwt`, the default, or `cookie`), which decides whether the two signing secrets are needed at all — see [Choosing the session mode](modules/account-sessions.md#choosing-the-session-mode). Changing it later signs everyone out. The credentials and keys are **not** in this file
 (see [Secrets](#secrets)); delete their lines from your copy. Rather than a hand-copied list here —
 which goes stale the moment a new setting is added — boot itself tells you what it needs: start the
 stack with the shipped placeholders still in place and it refuses, naming the first one it hit.

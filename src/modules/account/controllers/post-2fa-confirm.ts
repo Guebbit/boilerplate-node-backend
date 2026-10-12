@@ -12,7 +12,7 @@ import { rejectValidation, refused, catchAs } from '@infrastructure/http/control
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
-import { remintRefreshCookie } from '../session/session';
+import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorEnrollTotal } from '../metrics';
 
 /**
@@ -35,24 +35,28 @@ export const post2faConfirm = (
     }
     const { method } = pathParameters.data;
 
-    return twoFactorService
-        .confirmTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
-        .then((result) => {
-            if (refused(response, result)) {
-                authTwoFactorEnrollTotal.inc({ method, status: 'failure' });
-                return;
-            }
+    // Taken first: the change below deletes the session this request is signed in on.
+    return sessionSnapshotOf(request, id)
+        .then((snapshot) =>
+            twoFactorService
+                .confirmTwoFactorMethod(id, method, body.data.code, callerContextOf(request))
+                .then((result) => {
+                    if (refused(response, result)) {
+                        authTwoFactorEnrollTotal.inc({ method, status: 'failure' });
+                        return;
+                    }
 
-            authTwoFactorEnrollTotal.inc({ method, status: 'success' });
-            // Arming a factor revoked every session, this one included: keep the caller in.
-            return remintRefreshCookie(request, response, id, amr).then(() => {
-                successResponse<TwoFactorConfirmed>(
-                    response,
-                    result.data,
-                    200,
-                    t('account.two-factor.method-added')
-                );
-            });
-        })
+                    authTwoFactorEnrollTotal.inc({ method, status: 'success' });
+                    // Arming a factor revoked every session, this one included: keep the caller in.
+                    return remintSession(request, response, id, amr, snapshot).then(() => {
+                        successResponse<TwoFactorConfirmed>(
+                            response,
+                            result.data,
+                            200,
+                            t('account.two-factor.method-added')
+                        );
+                    });
+                })
+        )
         .catch(catchAs(response, 'post2faConfirm'));
 };

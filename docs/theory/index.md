@@ -145,6 +145,7 @@ surely as no barrel would, since there is nothing in it to reach for.
 | Know how one shop becomes many, and what is deliberately not built | [Tenancy](./tenancy.md)                                                     |
 | Look up what a domain term means in one module                     | [Glossary](./glossary.md)                                                   |
 | Know who may do what, and which rows they see                      | [Authorization](./authorization.md)                                         |
+| Know how people stay signed in, and which of two ways to pick      | [Two ways to stay signed in](./sessions.md)                                 |
 | Know every attack a site can receive, and what stops each one      | [Web Attacks & Defences](./defences/)                                       |
 | Know what personal data is processed, and under what basis         | [Data Protection](./data-protection.md)                                     |
 | Know why each piece of personal data is kept as long as it is      | [Data Retention](./data-retention.md)                                       |

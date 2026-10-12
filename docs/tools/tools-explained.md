@@ -134,9 +134,9 @@ prevent.
 
 **What it is.** JSON Web Tokens (JWT) are signed, compact tokens that carry claims (user ID, role, expiry) without a server-side session store. argon2id (from `node:crypto`) is a password hashing algorithm designed to be slow and memory-hungry — which makes brute-force attacks expensive.
 
-**Problem it solves.** Sessions stored in a database require a lookup on every request and create shared state that complicates horizontal scaling. JWTs are stateless: the server verifies the signature without a database round-trip. argon2id prevents a leaked password hash from being reversed quickly.
+**Problem it solves.** A signed token lets another service check a login without calling this one, and a short-lived one limits what a leak is worth. It does **not** save a database read here: every request still looks the account and its roles up, so the token's "no lookup" benefit is not one this repo collects. argon2id prevents a leaked password hash from being reversed quickly.
 
-**In this repo.** Short-lived access token (Bearer header) + long-lived refresh token (HttpOnly cookie). Refresh tokens are also stored server-side so they can be revoked. argon2id hashes passwords at user creation and verifies them at login.
+**In this repo.** One of two session modes, picked by `NODE_SESSION_MODE` ([Two ways to stay signed in](../theory/sessions.md)). `jwt` (default): a short-lived access token (Bearer header) plus a long-lived refresh token (HttpOnly cookie), the refresh token also stored server-side so it can be revoked. `cookie`: one random session id kept hashed in the database, no JWT at all. argon2id hashes passwords at user creation and verifies them at login.
 
 → [Security](./security.md)
 

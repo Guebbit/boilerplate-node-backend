@@ -102,7 +102,7 @@ describe('POST /account/login — remember me', () => {
         // Read through the same accessor the app signs with, not the raw variable: the tiers carry
         // code-side defaults, so an environment that never sets them still has a right answer.
         const expected = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
-        expect(cookieMaxAge(response, '__Host-jwt')).toBe(expected);
+        expect(cookieMaxAge(response, '__Host-session')).toBe(expected);
         // The UI hint expires in step with the credential it describes.
         expect(cookieMaxAge(response, 'isAuth')).toBe(expected);
     });
@@ -114,7 +114,7 @@ describe('POST /account/login — remember me', () => {
             .send({ email: user.email, password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        for (const name of ['__Host-jwt', 'isAuth']) {
+        for (const name of ['__Host-session', 'isAuth']) {
             expect(setCookie(response, name)).toBeDefined();
             expect(cookieMaxAge(response, name)).toBeUndefined();
             expect(setCookie(response, name)).not.toMatch(/expires=/i);
@@ -152,7 +152,7 @@ const loginRemembering = async (remember?: 'short' | 'medium' | 'long', email?: 
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD, ...(remember && { remember }) });
-    const jwtCookie = setCookie(response, '__Host-jwt');
+    const jwtCookie = setCookie(response, '__Host-session');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
     return {
         user,
@@ -163,7 +163,7 @@ const loginRemembering = async (remember?: 'short' | 'medium' | 'long', email?: 
 
 /** Asserts the response sets BOTH session cookies with no `Max-Age` and no `Expires`. */
 const expectSessionCookies = (response: { headers: Record<string, unknown> }) => {
-    for (const name of ['__Host-jwt', 'isAuth']) {
+    for (const name of ['__Host-session', 'isAuth']) {
         expect(setCookie(response, name)).toBeDefined();
         expect(cookieMaxAge(response, name)).toBeUndefined();
         expect(setCookie(response, name)).not.toMatch(/expires=/i);
@@ -227,7 +227,7 @@ describe('the "remember me" choice survives every re-mint', () => {
         // A second rotation, off the rotated cookie: the flag must survive being copied twice.
         const again = await api()
             .post('/account/refresh')
-            .set('Cookie', setCookie(rotated, '__Host-jwt')!);
+            .set('Cookie', setCookie(rotated, '__Host-session')!);
         expect(again.status).toBe(200);
         expectSessionCookies(again);
     });
@@ -239,9 +239,9 @@ describe('the "remember me" choice survives every re-mint', () => {
 
         expect(rotated.status).toBe(200);
         // Rotation carries the REMAINING lifetime, so a whole second may have elapsed.
-        expect(cookieMaxAge(rotated, '__Host-jwt')).toBeGreaterThan(MEDIUM - 5);
-        expect(cookieMaxAge(rotated, '__Host-jwt')).toBeLessThanOrEqual(MEDIUM);
-        expect(cookieMaxAge(rotated, 'isAuth')).toBe(cookieMaxAge(rotated, '__Host-jwt'));
+        expect(cookieMaxAge(rotated, '__Host-session')).toBeGreaterThan(MEDIUM - 5);
+        expect(cookieMaxAge(rotated, '__Host-session')).toBeLessThanOrEqual(MEDIUM);
+        expect(cookieMaxAge(rotated, 'isAuth')).toBe(cookieMaxAge(rotated, '__Host-session'));
     });
 
     it('refresh rotation keeps the access token on its own short window', async () => {
@@ -259,7 +259,7 @@ describe('the "remember me" choice survives every re-mint', () => {
     it('gives a browser-session login a server-side limit of the short tier', async () => {
         const { jwtCookie } = await loginRemembering();
 
-        const value = /__Host-jwt=([^;]+)/.exec(jwtCookie)![1];
+        const value = /__Host-session=([^;]+)/.exec(jwtCookie)![1];
         const { iat, exp } = decode(value) as { iat: number; exp: number };
         expect(exp - iat).toBe(getExpiryTime(RefreshTokenExpiryTime.SHORT));
     });
@@ -274,7 +274,7 @@ describe('the "remember me" choice survives every re-mint', () => {
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        expect(cookieMaxAge(response, '__Host-jwt')).toBe(MEDIUM);
+        expect(cookieMaxAge(response, '__Host-session')).toBe(MEDIUM);
         expect(cookieMaxAge(response, 'isAuth')).toBe(MEDIUM);
     });
 
@@ -305,7 +305,7 @@ describe('the "remember me" choice survives every re-mint', () => {
             });
 
         expect(response.status).toBe(200);
-        expect(cookieMaxAge(response, '__Host-jwt')).toBe(MEDIUM);
+        expect(cookieMaxAge(response, '__Host-session')).toBe(MEDIUM);
     });
 
     it('a password change keeps a browser-session login a session cookie', async () => {
@@ -389,7 +389,7 @@ const loginRemembered = async () => {
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
-    const jwtCookie = setCookie(response, '__Host-jwt');
+    const jwtCookie = setCookie(response, '__Host-session');
     if (!jwtCookie) throw new Error('login set no jwt cookie');
     return { user, jwtCookie };
 };
@@ -799,7 +799,7 @@ describe('POST /account/reauth', () => {
             .set('Authorization', bearer)
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
-        expect(setCookie(response, '__Host-jwt')).toBeDefined();
+        expect(setCookie(response, '__Host-session')).toBeDefined();
     });
 
     /*
@@ -818,7 +818,7 @@ describe('POST /account/reauth', () => {
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(500);
-        expect(setCookie(response, '__Host-jwt')).toBeUndefined();
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
         jest.restoreAllMocks();
     });
 });
@@ -1103,12 +1103,12 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
         expect(response.status).toBe(201);
         expect(response.body.data.token).toBeUndefined();
 
-        expect(setCookie(response, '__Host-jwt')).toBeDefined();
+        expect(setCookie(response, '__Host-session')).toBeDefined();
 
         // The access token comes from the bootstrap the frontend already runs after OAuth.
         const refresh = await api()
             .post('/account/refresh')
-            .set('Cookie', cookieHeader(response, '__Host-jwt'));
+            .set('Cookie', cookieHeader(response, '__Host-session'));
         expect(refresh.status).toBe(200);
         expect(refresh.body.data.token).toEqual(expect.any(String));
     });

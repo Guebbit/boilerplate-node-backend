@@ -220,6 +220,7 @@ const presenceProblems = (
                 ({ presence, name }) =>
                     presence !== undefined &&
                     (!presence.productionOnly || !relaxed) &&
+                    presence.skipWhen?.(environment) !== true &&
                     presenceBroken(presence, environment[name])
             )
             .map(({ name }) => name)

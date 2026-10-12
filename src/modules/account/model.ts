@@ -19,6 +19,7 @@ import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import { VERIFICATION_TOKEN_TYPES, ONE_LIVE_TOKEN_TYPES } from './token-types';
 import type { VerificationTokenType } from './token-types';
+import { SESSION_MODES, type SessionMode } from './session-mode';
 
 /** How far an export got. `building` until the worker settles it, then one of the other two. */
 export const EXPORT_STATUSES = ['building', 'ready', 'failed'] as const;
@@ -65,12 +66,6 @@ export const accountExportModel = model<AccountExportDocument, AccountExportMode
     'AccountExport',
     accountExportSchema
 );
-
-/** How a deployment keeps people signed in — `NODE_SESSION_MODE`. A row belongs to the mode that issued it. */
-export const SESSION_MODES = ['jwt', 'cookie'] as const;
-
-/** One of {@link SESSION_MODES}. */
-export type SessionMode = (typeof SESSION_MODES)[number];
 
 /**
  * One row of `sessions`. The row's meaning depends on the mode that issued it:

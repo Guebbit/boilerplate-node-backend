@@ -73,7 +73,7 @@ export const SENSITIVE_FIELDS = new Set([
     'x-antibot-challenge-token',
     'otp',
     'jwt',
-    '__Host-jwt',
+    '__Host-session',
     'secret',
     'new_secret',
     'api_key',

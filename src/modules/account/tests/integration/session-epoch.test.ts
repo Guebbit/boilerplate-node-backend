@@ -40,7 +40,7 @@ const loginAs = async (email: string) => {
     const response = await api().post('/account/login').send({ email, password: PLAIN_PASSWORD });
     return {
         bearer: `Bearer ${response.body.data.token as string}`,
-        cookie: cookieHeader(response, '__Host-jwt')
+        cookie: cookieHeader(response, '__Host-session')
     };
 };
 
@@ -108,7 +108,7 @@ describe('the events that move the epoch', () => {
         expect(await statusWith(`Bearer ${change.body.data.token as string}`)).toBe(200);
         const refresh = await api()
             .post('/account/refresh')
-            .set('Cookie', cookieHeader(change, '__Host-jwt'));
+            .set('Cookie', cookieHeader(change, '__Host-session'));
         expect(refresh.status).toBe(200);
     });
 
@@ -125,7 +125,7 @@ describe('the events that move the epoch', () => {
         expect(response.status).toBe(200);
         expect(await statusWith(caller.bearer)).toBe(401);
         expect(response.headers['set-cookie']).toEqual(
-            expect.arrayContaining([expect.stringMatching(/^__Host-jwt=;/)])
+            expect.arrayContaining([expect.stringMatching(/^__Host-session=;/)])
         );
     });
 
@@ -164,7 +164,7 @@ describe('the events that move the epoch', () => {
         expect(await statusWith(other.bearer)).toBe(401);
         const refresh = await api()
             .post('/account/refresh')
-            .set('Cookie', cookieHeader(confirm, '__Host-jwt'));
+            .set('Cookie', cookieHeader(confirm, '__Host-session'));
         expect(refresh.status).toBe(200);
         // The other device's refresh token is gone, not just its access token.
         const stale = await api().post('/account/refresh').set('Cookie', other.cookie);

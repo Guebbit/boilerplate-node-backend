@@ -200,7 +200,7 @@ const sessionCookie = async (identity: { email: string; username: string }) => {
         .send({ email: user.email, password: PLAIN_PASSWORD });
     return {
         user,
-        cookie: `__Host-jwt=${/^__Host-jwt=([^;]+)/.exec(setCookie(login, '__Host-jwt') ?? '')?.[1] ?? ''}`
+        cookie: `__Host-session=${/^__Host-session=([^;]+)/.exec(setCookie(login, '__Host-session') ?? '')?.[1] ?? ''}`
     };
 };
 

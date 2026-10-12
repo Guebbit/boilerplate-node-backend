@@ -51,7 +51,7 @@ const linkedAccount = async () => {
     return {
         user,
         bearer: `Bearer ${login.body.data.token as string}`,
-        cookie: cookieHeader(login, '__Host-jwt')
+        cookie: cookieHeader(login, '__Host-session')
     };
 };
 

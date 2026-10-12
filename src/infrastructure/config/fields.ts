@@ -17,6 +17,7 @@
 import { z } from 'zod';
 import { FALSY_WORDS, TRUTHY_WORDS } from '../runtime/environment';
 import { parseVersionedKeyRing, type VersionedKey } from '../security/versioned-secret';
+import type { Environment } from './store';
 
 /**
  * A rule about a value being THERE, checked at boot outside `NODE_ENV=test`. Unlike a shape rule
@@ -37,6 +38,12 @@ export interface Presence {
     minBytes?: number;
     /** Check only outside development/test — the code-side default is right for a developer. */
     productionOnly?: boolean;
+    /**
+     * Skip the rule while this answers `true`, for a key only one setting of another variable
+     * needs (a signing secret a deployment that never signs has no use for). Asked of the raw
+     * environment, so it must read the selector the same way that selector's own field does.
+     */
+    skipWhen?: (environment: Environment) => boolean;
 }
 
 /**
@@ -356,7 +363,7 @@ export function timeZone(
  * @param options - the presence rule
  */
 export const secret = (options: CommonOptions & Presence): Field<string | undefined> => {
-    const { minLength, placeholder, productionOnly, minBytes, ...rest } = options;
+    const { minLength, placeholder, productionOnly, minBytes, skipWhen, ...rest } = options;
     return text({
         ...rest,
         sensitive: true,
@@ -364,7 +371,8 @@ export const secret = (options: CommonOptions & Presence): Field<string | undefi
             minLength,
             ...(placeholder !== undefined && { placeholder }),
             ...(productionOnly !== undefined && { productionOnly }),
-            ...(minBytes !== undefined && { minBytes })
+            ...(minBytes !== undefined && { minBytes }),
+            ...(skipWhen !== undefined && { skipWhen })
         }
     });
 };

@@ -17,8 +17,10 @@ import {
     toRememberTier,
     getAccessTokenRing,
     getRefreshTokenRing,
+    getSessionMode,
     sessionConfig
 } from '@modules/account/session/config';
+import { assertConfigIn } from '@infrastructure/config/define';
 import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment';
 
 /**
@@ -26,9 +28,10 @@ import { setEnvironment, withoutEnvironmentInThisFile } from '@tests/environment
  * ambient environment (or from `tests/support/setup-environment.ts`) can never make an assertion pass.
  */
 const TOKEN_ENV_KEYS = [
-    'NODE_TOKEN_REFRESH_TIME_SHORT',
-    'NODE_TOKEN_REFRESH_TIME_MEDIUM',
-    'NODE_TOKEN_REFRESH_TIME_LONG',
+    'NODE_SESSION_MODE',
+    'NODE_SESSION_TIME_SHORT',
+    'NODE_SESSION_TIME_MEDIUM',
+    'NODE_SESSION_TIME_LONG',
     'NODE_TOKEN_ACCESS_TIME',
     'NODE_TOKEN_ACCESS',
     'NODE_TOKEN_REFRESH',
@@ -42,9 +45,9 @@ describe('getExpiryTime', () => {
     it('reads a distinct env var per tier', () => {
         // Distinct values on purpose: if two tiers were wired to the same variable, or two
         // entries of the map were swapped, identical values would hide it.
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '86400' });
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_LONG: '2592000' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
+        setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
+        setEnvironment({ NODE_SESSION_TIME_LONG: '2592000' });
 
         expect(getExpiryTime(RefreshTokenExpiryTime.SHORT)).toBe(3600);
         expect(getExpiryTime(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400);
@@ -52,7 +55,7 @@ describe('getExpiryTime', () => {
     });
 
     it('uses the short tier when no tier is given (a browser-session login)', () => {
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
         // The access-token variable must be ignored entirely: a session cookie still needs a
         // real server-side limit, and 10 minutes is not it.
         setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
@@ -68,13 +71,13 @@ describe('getExpiryTime', () => {
     it('falls back for an empty variable rather than returning NaN', () => {
         // `Number.parseInt('')` is NaN, which would flow into `expiresIn` and produce a token
         // jsonwebtoken rejects. An unusable value resolves to the tier default, same as an absent one.
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '' });
 
         expect(getExpiryTime()).toBe(604_800);
     });
 
     it('parses in base 10, so a zero-padded value is not read as octal', () => {
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '0900' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '0900' });
 
         expect(getExpiryTime()).toBe(900);
     });
@@ -82,14 +85,14 @@ describe('getExpiryTime', () => {
 
 describe('getExpiryTimeMilliseconds', () => {
     it('is the seconds value scaled by exactly 1000', () => {
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '86400' });
+        setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
 
         expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
     });
 
     it('honours the same tier routing as getExpiryTime', () => {
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '60' });
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '120' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '60' });
+        setEnvironment({ NODE_SESSION_TIME_MEDIUM: '120' });
 
         expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.SHORT)).toBe(60_000);
         expect(getExpiryTimeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(120_000);
@@ -148,8 +151,8 @@ describe('the access-token TTL', () => {
     it('does not read any refresh tier variable', () => {
         // Guards the access/refresh split: an access token inheriting a 7-day refresh TTL is
         // exactly the mistake the browser-session fallback invites.
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_LONG: '2592000' });
+        setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
+        setEnvironment({ NODE_SESSION_TIME_LONG: '2592000' });
 
         expect(getAccessExpiryTime()).toBe(600);
     });
@@ -157,7 +160,7 @@ describe('the access-token TTL', () => {
 
 describe('getCookieMaxAgeMilliseconds', () => {
     it('is the tier in milliseconds when a tier was ticked', () => {
-        setEnvironment({ NODE_TOKEN_REFRESH_TIME_MEDIUM: '86400' });
+        setEnvironment({ NODE_SESSION_TIME_MEDIUM: '86400' });
 
         expect(getCookieMaxAgeMilliseconds(RefreshTokenExpiryTime.MEDIUM)).toBe(86_400_000);
     });
@@ -215,5 +218,98 @@ describe('the token windows check', () => {
         expect(windowProblems('86400000', '10000')).toEqual([
             'NODE_TOKEN_REUSE_WINDOW_MS (10000ms) must exceed NODE_TOKEN_ROTATION_GRACE_MS (86400000ms), or refresh-token reuse can never be detected'
         ]);
+    });
+});
+
+describe('getSessionMode', () => {
+    it('is jwt unless the deployment says otherwise', () => {
+        expect(getSessionMode()).toBe('jwt');
+    });
+
+    it.each([
+        ['cookie', 'cookie'],
+        ['  Cookie ', 'cookie'],
+        ['JWT', 'jwt']
+    ])('reads %j as %s', (value, expected) => {
+        setEnvironment({ NODE_SESSION_MODE: value });
+
+        expect(getSessionMode()).toBe(expected);
+    });
+
+    it('refuses a mode it does not know, rather than falling back to one', () => {
+        setEnvironment({ NODE_SESSION_MODE: 'sessions' });
+
+        expect(() => getSessionMode()).toThrow(/NODE_SESSION_MODE/);
+    });
+});
+
+/**
+ * The signing rings are what `jwt` mode signs with and `cookie` mode never touches, so a
+ * `cookie` deployment must not be made to invent two secrets it will never use — and a `jwt` one
+ * must still be refused its placeholders.
+ */
+describe('the boot gate for the signing rings', () => {
+    /** Production-shaped, the slice's other required keys good, the two rings still the placeholders. */
+    const placeholders = {
+        NODE_ENV: 'production',
+        NODE_TOTP_ENCRYPTION_KEY: 'c'.repeat(64),
+        NODE_DEVICE_COOKIE_SECRET: 'd'.repeat(64),
+        NODE_TOKEN_ACCESS: 'your-access-token-secret-here',
+        NODE_TOKEN_REFRESH: 'your-refresh-token-secret-here'
+    };
+
+    it('refuses the placeholders in jwt mode, with the mode named or not', () => {
+        expect(() => assertConfigIn([sessionConfig.slice], placeholders)).toThrow(
+            /NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH/
+        );
+        expect(() =>
+            assertConfigIn([sessionConfig.slice], { ...placeholders, NODE_SESSION_MODE: 'jwt' })
+        ).toThrow(/NODE_TOKEN_ACCESS/);
+    });
+
+    it('does not ask a cookie deployment for them', () => {
+        expect(() =>
+            assertConfigIn([sessionConfig.slice], { ...placeholders, NODE_SESSION_MODE: 'cookie' })
+        ).not.toThrow();
+        expect(() =>
+            assertConfigIn([sessionConfig.slice], {
+                ...placeholders,
+                NODE_TOKEN_ACCESS: undefined,
+                NODE_TOKEN_REFRESH: undefined,
+                NODE_SESSION_MODE: 'cookie'
+            })
+        ).not.toThrow();
+    });
+
+    it('reads the selector the way its own field does: trimmed, any case', () => {
+        expect(() =>
+            assertConfigIn([sessionConfig.slice], {
+                ...placeholders,
+                NODE_SESSION_MODE: ' COOKIE '
+            })
+        ).not.toThrow();
+    });
+
+    it('does not apply the reuse-window check to a mode with no rotation', () => {
+        const backwards = {
+            NODE_TOKEN_ROTATION_GRACE_MS: '5000',
+            NODE_TOKEN_REUSE_WINDOW_MS: '1000'
+        };
+
+        expect(() =>
+            assertConfigIn([sessionConfig.slice], {
+                ...placeholders,
+                NODE_TOKEN_ACCESS: 'a'.repeat(64),
+                NODE_TOKEN_REFRESH: 'b'.repeat(64),
+                ...backwards
+            })
+        ).toThrow(/reuse can never be detected/);
+        expect(() =>
+            assertConfigIn([sessionConfig.slice], {
+                ...placeholders,
+                NODE_SESSION_MODE: 'cookie',
+                ...backwards
+            })
+        ).not.toThrow();
     });
 });

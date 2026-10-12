@@ -52,10 +52,12 @@ export const postReauth = (
              * must propagate to the outer `.catch` and answer 500 — a 200 with no token would
              * claim the challenge was cleared when it was not.
              */
-            return reissueSession(request, response, id, result.data.amr).then((token) => {
-                authReauthTotal.inc({ status: 'success' });
-                successResponse<AuthTokens>(response, { token }, 200, t('account.reauth.success'));
-            });
+            return reissueSession(request, response, id, { amr: result.data.amr }).then(
+                (issued) => {
+                    authReauthTotal.inc({ status: 'success' });
+                    successResponse<AuthTokens>(response, issued, 200, t('account.reauth.success'));
+                }
+            );
         })
         .catch((error: unknown) => {
             authReauthTotal.inc({ status: 'failure' });

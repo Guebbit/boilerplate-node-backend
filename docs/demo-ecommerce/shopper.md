@@ -139,7 +139,10 @@ back: the shop is not asking "would you like to pay again", it already has the m
 ## Their account
 
 Sign up, verify by email, log in, forget the password and reset it, change it, and see every device
-currently logged in — with a "log me out everywhere" button that ends all of them at once.
+currently logged in — with a "log me out everywhere" button that ends all of them at once. Money,
+deleting the account and ending other devices ask for the password again when the customer last
+proved it a while ago, however the shop keeps people signed in
+([the two set-ups](../theory/sessions.md)).
 
 An address book holds the places they have shipped to, with one marked as the usual.
 

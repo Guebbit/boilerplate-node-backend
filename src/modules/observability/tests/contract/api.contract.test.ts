@@ -291,7 +291,7 @@ const sessionCookie = async (role: 'admin' | 'customer') => {
     const login = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
-    return `__Host-jwt=${/^__Host-jwt=([^;]+)/.exec(setCookie(login, '__Host-jwt') ?? '')?.[1] ?? ''}`;
+    return `__Host-session=${/^__Host-session=([^;]+)/.exec(setCookie(login, '__Host-session') ?? '')?.[1] ?? ''}`;
 };
 
 describe('GET /observability/events', () => {

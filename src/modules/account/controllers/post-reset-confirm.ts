@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { ConfirmPasswordResetBody } from '@api/schemas.zod';
 import { accountService } from '../services';
-import { destroyRefreshCookie, destroyLoggedCookie } from '../session/cookies';
+import { destroySessionCookie, destroyLoggedCookie } from '../session/cookies';
 import { successResponse } from '@infrastructure/http/response';
 import type { PasswordResetConfirmRequest } from '@types';
 import { parseBody, refused, catchAs } from '@infrastructure/http/controller';
@@ -52,7 +52,7 @@ export const postResetConfirm = (
             }
 
             authPasswordResetConfirmTotal.inc({ status: 'success' });
-            destroyRefreshCookie(response);
+            destroySessionCookie(response);
             destroyLoggedCookie(response);
             successResponse(response, undefined, 200, t('account.reset.success'));
         })

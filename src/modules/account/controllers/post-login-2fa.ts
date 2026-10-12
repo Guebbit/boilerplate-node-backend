@@ -39,7 +39,7 @@ export const postLoginTwoFactor = (
         authTwoFactorChallengeTotal.inc({ status: 'failure' });
         return rejectValidation(response, parseResult.error);
     }
-    const { code, remember } = parseResult.data;
+    const { code, remember, transport } = parseResult.data;
     // Omitted from the body: an OAuth-originated challenge was never sent to the client at all —
     // see `oauth/mfa-redirect.ts`. A password-originated one always has it in the body.
     const challenge = parseResult.data.challenge ?? readMfaChallengeCookie(request);
@@ -59,22 +59,20 @@ export const postLoginTwoFactor = (
             const { user, amr } = result.data;
             const userId = user._id.toString();
 
-            return issueSession(response, userId, toRememberTier(remember), [...amr, 'otp']).then(
-                (accessToken) =>
-                    // Read fresh from the membership — the document carries no role of its own.
-                    isUnrestrictedCaller(userId).then((unrestricted) => {
-                        authTwoFactorChallengeTotal.inc({ status: 'success' });
-                        recordLoginSuccess(request, userId, unrestricted);
-                        destroyMfaChallengeCookie(response);
-                        // The login is only complete here, so the browser becomes familiar here.
-                        rememberDevice(request, response, user.email);
-                        successResponse<AuthTokens>(
-                            response,
-                            { token: accessToken },
-                            200,
-                            'Authentication successful'
-                        );
-                    })
+            return issueSession(request, response, userId, {
+                remember: toRememberTier(remember),
+                amr: [...amr, 'otp'],
+                transport
+            }).then((issued) =>
+                // Read fresh from the membership — the document carries no role of its own.
+                isUnrestrictedCaller(userId).then((unrestricted) => {
+                    authTwoFactorChallengeTotal.inc({ status: 'success' });
+                    recordLoginSuccess(request, userId, unrestricted);
+                    destroyMfaChallengeCookie(response);
+                    // The login is only complete here, so the browser becomes familiar here.
+                    rememberDevice(request, response, user.email);
+                    successResponse<AuthTokens>(response, issued, 200, 'Authentication successful');
+                })
             );
         })
         .catch((error: unknown) => {

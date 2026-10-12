@@ -10,8 +10,8 @@
 import { asStub } from '@tests/stub';
 import type { Response } from 'express';
 import {
-    createRefreshCookie,
-    destroyRefreshCookie,
+    createSessionCookie,
+    destroySessionCookie,
     createLoggedCookie,
     destroyLoggedCookie
 } from '@modules/account/session/cookies';
@@ -32,18 +32,18 @@ const makeResponse = () =>
 beforeEach(() => {
     // Real values, so the maxAge assertions exercise the actual token-config wiring rather than
     // a mock that would agree with anything.
-    setEnvironment({ NODE_TOKEN_REFRESH_TIME_SHORT: '3600' });
+    setEnvironment({ NODE_SESSION_TIME_SHORT: '3600' });
     setEnvironment({ NODE_TOKEN_ACCESS_TIME: '900' });
 });
 
-describe('createRefreshCookie', () => {
-    it('sets the __Host-jwt cookie httpOnly, lax, site-wide and Domain-less', () => {
+describe('createSessionCookie', () => {
+    it('sets the __Host-session cookie httpOnly, lax, site-wide and Domain-less', () => {
         const response = makeResponse();
 
-        createRefreshCookie(response, 'signed.jwt.value');
+        createSessionCookie(response, 'signed.jwt.value');
 
         const [name, value, options] = response.cookie.mock.calls[0];
-        expect(name).toBe('__Host-jwt');
+        expect(name).toBe('__Host-session');
         expect(value).toBe('signed.jwt.value');
         // httpOnly is the load-bearing flag: this cookie is the credential.
         expect(options.httpOnly).toBe(true);
@@ -58,7 +58,7 @@ describe('createRefreshCookie', () => {
         setEnvironment({ NODE_ENV: 'production' });
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token');
+        createSessionCookie(response, 'token');
 
         expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
@@ -67,7 +67,7 @@ describe('createRefreshCookie', () => {
         setEnvironment({ NODE_ENV: undefined });
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token');
+        createSessionCookie(response, 'token');
 
         expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
@@ -76,7 +76,7 @@ describe('createRefreshCookie', () => {
         setEnvironment({ NODE_ENV: 'development' });
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token');
+        createSessionCookie(response, 'token');
 
         expect(response.cookie.mock.calls[0][2].secure).toBe(true);
     });
@@ -84,7 +84,7 @@ describe('createRefreshCookie', () => {
     it('persists for the maxAge it is given', () => {
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token', 3_600_000);
+        createSessionCookie(response, 'token', 3_600_000);
 
         expect(response.cookie.mock.calls[0][2].maxAge).toBe(3_600_000);
     });
@@ -92,7 +92,7 @@ describe('createRefreshCookie', () => {
     it('is a browser-session cookie when no maxAge is given', () => {
         const response = makeResponse();
 
-        createRefreshCookie(response, 'token');
+        createSessionCookie(response, 'token');
 
         // No Max-Age and no Expires: the browser drops it on close. `maxAge` undefined is what
         // makes Express emit neither.
@@ -102,14 +102,14 @@ describe('createRefreshCookie', () => {
     });
 });
 
-describe('destroyRefreshCookie', () => {
-    it('clears __Host-jwt with the same flags it was set with', () => {
+describe('destroySessionCookie', () => {
+    it('clears __Host-session with the same flags it was set with', () => {
         const response = makeResponse();
 
-        destroyRefreshCookie(response);
+        destroySessionCookie(response);
 
         const [name, options] = response.clearCookie.mock.calls[0];
-        expect(name).toBe('__Host-jwt');
+        expect(name).toBe('__Host-session');
         // A browser drops a cookie only on a matching name/path/flags triple. Any drift here is
         // a logout that appears to succeed and leaves the session alive.
         expect(options).toEqual(
@@ -121,7 +121,7 @@ describe('destroyRefreshCookie', () => {
         setEnvironment({ NODE_ENV: 'production' });
         const response = makeResponse();
 
-        destroyRefreshCookie(response);
+        destroySessionCookie(response);
 
         expect(response.clearCookie.mock.calls[0][1].secure).toBe(true);
     });

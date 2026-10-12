@@ -26,14 +26,14 @@ const login = async () => {
     const response = await api()
         .post('/account/login')
         .send({ email: user.email, password: PLAIN_PASSWORD });
-    return { user, response, cookie: cookieHeader(response, '__Host-jwt') };
+    return { user, response, cookie: cookieHeader(response, '__Host-session') };
 };
 
 describe('the refresh cookie', () => {
     it('is __Host- prefixed, Secure, HttpOnly, Path=/ and carries no Domain', async () => {
         const { response } = await login();
 
-        const header = setCookie(response, '__Host-jwt') ?? '';
+        const header = setCookie(response, '__Host-session') ?? '';
         expect(header).toMatch(/;\s*Secure/i);
         expect(header).toMatch(/;\s*HttpOnly/i);
         expect(header).toMatch(/;\s*Path=\//i);
