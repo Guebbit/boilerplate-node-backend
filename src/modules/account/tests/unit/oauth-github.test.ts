@@ -19,6 +19,18 @@ const jsonResponse = (body: unknown, ok = true): Response =>
     // A real `Response`: the provider reads the body through a stream with a byte cap.
     Response.json(body, { status: ok ? 200 : 400 });
 
+/** What GitHub's redirect back carried. */
+const CALLBACK = { code: 'a-code', state: 'the-state' };
+
+/** What the attempt kept at the start. */
+const EXPECTED = { redirectUri: REDIRECT_URI, state: 'the-state', codeVerifier: 'the-verifier' };
+
+/** A successful token-endpoint answer, shaped the way GitHub sends it. */
+const TOKEN = { access_token: 'gh-token', token_type: 'bearer', scope: 'read:user,user:email' };
+
+/** One redemption of the callback every case starts from. */
+const exchange = () => githubOAuthProvider.exchangeCode(CALLBACK, EXPECTED);
+
 beforeEach(() => {
     setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_ID: CLIENT_ID });
     setEnvironment({ NODE_OAUTH_GITHUB_CLIENT_SECRET: 'test-github-client-secret' });
@@ -69,15 +81,11 @@ describe('githubOAuthProvider.exchangeCode', () => {
 
     it('resolves the identity from the profile and the PRIMARY email', async () => {
         jest.spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse(user))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        const identity = await githubOAuthProvider.exchangeCode(
-            'a-code',
-            REDIRECT_URI,
-            'the-verifier'
-        );
+        const identity = await exchange();
 
         expect(identity).toEqual({
             providerId: '42',
@@ -88,51 +96,75 @@ describe('githubOAuthProvider.exchangeCode', () => {
         });
     });
 
+    it('sends the code, the PKCE verifier and the redirect to the token endpoint, with the secret in the body', async () => {
+        const spy = jest
+            .spyOn(globalThis, 'fetch')
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
+            .mockResolvedValueOnce(jsonResponse(user))
+            .mockResolvedValueOnce(jsonResponse(emails));
+
+        await exchange();
+
+        const [url, init] = spy.mock.calls[0] ?? [];
+        // The library sends a form body: a string or a `URLSearchParams`, both read the same way.
+        const body = new URLSearchParams(init?.body as string | URLSearchParams);
+        expect(url).toBe('https://github.com/login/oauth/access_token');
+        expect(new Headers(init?.headers).get('accept')).toBe('application/json');
+        expect(body.get('code')).toBe('a-code');
+        expect(body.get('code_verifier')).toBe('the-verifier');
+        expect(body.get('redirect_uri')).toBe(REDIRECT_URI);
+        expect(body.get('client_id')).toBe(CLIENT_ID);
+        expect(body.get('client_secret')).toBe('test-github-client-secret');
+    });
+
+    it('refuses a callback whose state is not the one this attempt made, before any request', async () => {
+        const spy = jest.spyOn(globalThis, 'fetch');
+
+        await expect(
+            githubOAuthProvider.exchangeCode({ ...CALLBACK, state: 'forged' }, EXPECTED)
+        ).rejects.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+    });
+
     it('falls back to the login when the profile carries no display name', async () => {
         jest.spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse({ ...user, name: null }))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).resolves.toMatchObject({ name: 'ada' });
+        await expect(exchange()).resolves.toMatchObject({ name: 'ada' });
     });
 
     it('surfaces an unverified primary email rather than hiding it', async () => {
         jest.spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse(user))
             .mockResolvedValueOnce(
                 jsonResponse([{ email: 'ada@example.com', primary: true, verified: false }])
             );
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).resolves.toMatchObject({ emailVerified: false });
+        await expect(exchange()).resolves.toMatchObject({ emailVerified: false });
     });
 
     it('rejects when no email is marked primary', async () => {
         jest.spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse(user))
             .mockResolvedValueOnce(
                 jsonResponse([{ email: 'ada@example.com', primary: false, verified: true }])
             );
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/primary/);
+        await expect(exchange()).rejects.toThrow(/primary/);
     });
 
     it('never follows a redirect, on any of the three calls', async () => {
         const fetchSpy = jest
             .spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse(user))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        await githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
+        await exchange();
 
         for (const [, options] of fetchSpy.mock.calls)
             expect(options).toMatchObject({ redirect: 'error' });
@@ -143,9 +175,11 @@ describe('githubOAuthProvider.exchangeCode', () => {
         const oversized = new Response('x'.repeat(1_048_577));
         jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(oversized);
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/longer than/);
+        // The library wraps what its `fetch` threw; the cap's own message rides in `cause`.
+        await expect(exchange()).rejects.toHaveProperty(
+            'cause.message',
+            expect.stringMatching(/longer than/)
+        );
     });
 
     it('rejects when the token exchange carries an error instead of a token', async () => {
@@ -153,22 +187,18 @@ describe('githubOAuthProvider.exchangeCode', () => {
             jsonResponse({ error: 'bad_verification_code' })
         );
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow();
+        await expect(exchange()).rejects.toThrow();
     });
 
     it('rejects when the profile call answers with a non-2xx status', async () => {
         // `/user` and `/user/emails` fire together (`Promise.all`), so both need a queued
         // response even though only the first's failure is what this case is testing.
         jest.spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse({}, false))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow();
+        await expect(exchange()).rejects.toThrow();
     });
 
     /*
@@ -178,13 +208,11 @@ describe('githubOAuthProvider.exchangeCode', () => {
      */
     it('rejects a profile response with no id, rather than minting providerId "undefined"', async () => {
         jest.spyOn(globalThis, 'fetch')
-            .mockResolvedValueOnce(jsonResponse({ access_token: 'gh-token' }))
+            .mockResolvedValueOnce(jsonResponse(TOKEN))
             .mockResolvedValueOnce(jsonResponse({ ...user, id: undefined }))
             .mockResolvedValueOnce(jsonResponse(emails));
 
-        await expect(
-            githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/id/);
+        await expect(exchange()).rejects.toThrow(/id/);
     });
 
     /*
@@ -204,8 +232,8 @@ describe('githubOAuthProvider.exchangeCode', () => {
                 })
         );
 
-        const exchange = githubOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
-        const assertion = expect(exchange).rejects.toThrow();
+        const attempt = exchange();
+        const assertion = expect(attempt).rejects.toThrow();
         jest.runAllTimers();
         await assertion;
 

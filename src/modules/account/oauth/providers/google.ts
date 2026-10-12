@@ -1,125 +1,75 @@
 /**
  * @module
- * Google OAuth/OIDC — the code exchange returns an ID token (a signed JWT) that already carries
- * the identity, so this reads that instead of a second `userinfo` round trip.
+ * Google OAuth/OIDC on `openid-client`. The code exchange returns an ID token, and the library
+ * checks its issuer, audience, expiry and issue time before this file reads the identity off it,
+ * so there is no second `userinfo` round trip.
+ *
+ * The signature is NOT checked, deliberately: the token came straight from Google's token endpoint
+ * over TLS, which OpenID Connect Core 3.1.3.7 step 6 accepts in place of a signature check. The
+ * same trust boundary already protects the `code` and the access token in that exchange.
  */
 
-import { decodeJwt } from 'jose';
-import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
+import type * as client from 'openid-client';
 import type { OAuthIdentity, OAuthProvider } from './port';
-import { readCappedJson, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
+import { authorizationUrlFor, configurationFor, redeemCode } from './client';
 
 /** This registry's key — also the value Google's docs use, and what lands on `OAuthAccount.provider`. */
 const PROVIDER_NAME = 'google';
 
-/** Google's own OIDC issuer values — the ID token's `iss` claim carries one or the other. */
-const VALID_ISSUERS = new Set(['accounts.google.com', 'https://accounts.google.com']);
-
-/** The claims this app reads off Google's ID token. Everything else in it is ignored. */
-interface GoogleIdTokenClaims {
-    iss: string;
-    aud: string;
-    exp: number;
-    sub: string;
-    email: string;
-    email_verified?: boolean | string;
-    name?: string;
-    picture?: string;
-}
-
 /**
- * Verify the claims this app actually depends on. Signature verification is deliberately skipped:
- * this token was fetched directly from `https://oauth2.googleapis.com/token` over a
- * server-to-server HTTPS call this app made itself, never handed to it by the browser — the same
- * trust boundary that already protects `code` and `access_token` in this exchange. `aud`/`iss`/
- * `exp` are still checked, since decoding without verifying is only as safe as the channel it came
- * over, never a substitute for checking the token actually names THIS app and hasn't expired.
- * https://developers.google.com/identity/openid-connect/openid-connect#validatinganidtoken
- * @throws {Error} when the issuer, the audience or the expiry does not check out
+ * Google's endpoints, written down rather than discovered. `issuer` is the value the ID token's
+ * `iss` must equal exactly: the library refuses the legacy bare `accounts.google.com` form Google
+ * documents as also possible, which Google's current tokens do not use.
+ * https://accounts.google.com/.well-known/openid-configuration
  */
-const assertValidClaims = (claims: GoogleIdTokenClaims): void => {
-    const { clientId } = getOAuthCredentials(PROVIDER_NAME);
-    if (!VALID_ISSUERS.has(claims.iss)) throw new Error('Google ID token: unexpected issuer');
-    if (claims.aud !== clientId) throw new Error('Google ID token: unexpected audience');
-    if (claims.exp * 1000 < Date.now()) throw new Error('Google ID token: expired');
-    // `decode(idToken, { json: true })` returns `unknown`, cast to `GoogleIdTokenClaims` — a
-    // check the compiler cannot make good on. Without this, a token missing `sub` would carry
-    // `providerId: undefined` through as the identity key, the same collision GitHub's own
-    // missing-`id` case has — every such token would share one bogus identity row.
-    if (typeof claims.sub !== 'string' || claims.sub.length === 0)
-        throw new Error('Google ID token: missing subject');
+const SERVER: client.ServerMetadata = {
+    issuer: 'https://accounts.google.com',
+    authorization_endpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+    token_endpoint: 'https://oauth2.googleapis.com/token'
 };
 
 /**
- * Google behind the OAuth port. Identity comes from the ID token's claims, verified locally
- * against issuer, audience and expiry — no second round trip for a profile.
+ * What a verified ID token's claims must carry for this app to use them: a subject to key the
+ * identity on (a token without one would give every account one shared identity row) and an
+ * address.
+ *
+ * @param claims - the verified claims, as the library types them
+ * @throws {Error} when the subject or the email is missing
+ */
+const identityOf = (claims: client.IDToken | undefined): OAuthIdentity => {
+    if (!claims) throw new Error('Google token exchange: no id_token in response');
+    const { sub, email, email_verified: verified, name, picture } = claims;
+    if (typeof sub !== 'string' || sub.length === 0)
+        throw new Error('Google ID token: missing subject');
+    if (typeof email !== 'string') throw new Error('Google ID token: missing email');
+    return {
+        providerId: sub,
+        email,
+        emailVerified: verified === true || verified === 'true',
+        name: typeof name === 'string' ? name : undefined,
+        imageUrl: typeof picture === 'string' ? picture : undefined
+    };
+};
+
+/**
+ * Google behind the OAuth port. Identity comes from the ID token's claims, checked by the library
+ * against the issuer, audience and expiry.
  */
 export const googleOAuthProvider: OAuthProvider = {
     name: PROVIDER_NAME,
 
-    authorizeUrl: (state, redirectUri, codeChallenge) => {
-        const { clientId } = getOAuthCredentials(PROVIDER_NAME);
-        // https://developers.google.com/identity/protocols/oauth2/web-server#httprest
-        // PKCE (RFC 7636): S256 is the only method offered — Google supports it, and the plain
-        // fallback exists only for clients too limited to hash, which this server is not.
-        // https://developers.google.com/identity/protocols/oauth2/native-app#step1-code-verifier
-        const query = new URLSearchParams({
-            client_id: clientId ?? '',
-            redirect_uri: redirectUri,
-            response_type: 'code',
+    // https://developers.google.com/identity/protocols/oauth2/web-server#httprest
+    // Scope `openid email profile` is what makes Google return an ID token with these claims.
+    authorizeUrl: (state, redirectUri, codeChallenge) =>
+        authorizationUrlFor(configurationFor(PROVIDER_NAME, SERVER), {
+            redirectUri,
             scope: 'openid email profile',
             state,
-            code_challenge: codeChallenge,
-            code_challenge_method: 'S256'
-        });
-        return `https://accounts.google.com/o/oauth2/v2/auth?${query.toString()}`;
-    },
+            codeChallenge
+        }),
 
-    exchangeCode: (code, redirectUri, codeVerifier) => {
-        const { clientId, clientSecret } = getOAuthCredentials(PROVIDER_NAME);
-        // https://developers.google.com/identity/protocols/oauth2/web-server#exchange-authorization-code
-        // `code_verifier`: the PKCE secret behind the challenge `authorizeUrl` sent; Google
-        // hashes it and refuses the exchange unless it matches.
-        return fetch('https://oauth2.googleapis.com/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                code,
-                client_id: clientId ?? '',
-                client_secret: clientSecret ?? '',
-                redirect_uri: redirectUri,
-                grant_type: 'authorization_code',
-                code_verifier: codeVerifier
-            }),
-            // Node: abort rather than hold an OAuth callback open on a slow/hung Google.
-            signal: AbortSignal.timeout(OAUTH_FETCH_TIMEOUT_MS),
-            // fetch: a redirect is an error, not something to follow to a host nobody chose.
-            redirect: 'error'
-        })
-            .then((response) => {
-                if (!response.ok)
-                    throw new Error(`Google token exchange failed: ${response.status}`);
-                return readCappedJson(response, DEFAULT_BODY_CAP_BYTES) as Promise<{
-                    id_token?: string;
-                }>;
-            })
-            .then(({ id_token: idToken }): OAuthIdentity => {
-                if (!idToken) throw new Error('Google token exchange: no id_token in response');
-
-                // jose: decode-only, no `jwtVerify()` — see `assertValidClaims`'s doc for why.
-                // https://github.com/panva/jose/blob/main/docs/util/functions/decodeJwt.md
-                // `decodeJwt` throws on anything that is not a JWT with a JSON payload.
-                const claims = decodeJwt(idToken) as GoogleIdTokenClaims;
-                assertValidClaims(claims);
-
-                return {
-                    providerId: claims.sub,
-                    email: claims.email,
-                    emailVerified:
-                        claims.email_verified === true || claims.email_verified === 'true',
-                    name: claims.name,
-                    imageUrl: claims.picture
-                };
-            });
-    }
+    exchangeCode: (callback, expected) =>
+        redeemCode(configurationFor(PROVIDER_NAME, SERVER), callback, expected).then((tokens) =>
+            identityOf(tokens.claims())
+        )
 };

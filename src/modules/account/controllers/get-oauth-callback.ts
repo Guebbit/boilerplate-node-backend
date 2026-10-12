@@ -131,7 +131,14 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     }
 
     return provider
-        .exchangeCode(query.code, oauthRedirectUri(provider.name), verifier)
+        .exchangeCode(
+            { code: query.code, state: String(query.state) },
+            {
+                redirectUri: oauthRedirectUri(provider.name),
+                state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
+                codeVerifier: verifier
+            }
+        )
         .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
         .then(({ user, outcome }) => {
             /*

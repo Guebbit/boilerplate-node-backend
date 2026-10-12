@@ -26,6 +26,27 @@ export interface OAuthIdentity {
     imageUrl?: string;
 }
 
+/** What the provider's redirect back to `/account/oauth/:provider/callback` carried. */
+export interface OAuthCallback {
+    /** The authorization `code`. */
+    code: string;
+    /** The `state` the provider echoed back. */
+    state: string;
+}
+
+/** What this login attempt kept at the start, and the callback must answer to. */
+export interface OAuthExpectation {
+    /** The SAME redirect URI the consent URL carried — some providers validate the two match. */
+    redirectUri: string;
+    /** The CSRF `state` minted for this attempt; the exchange refuses a callback with another. */
+    state: string;
+    /**
+     * The PKCE secret behind the challenge `authorizeUrl` sent; the provider hashes it and refuses
+     * the exchange unless it matches.
+     */
+    codeVerifier: string;
+}
+
 /** One OAuth/OIDC identity provider this app can start a login against. */
 export interface OAuthProvider {
     /** Persisted on `OAuthAccount.provider` and returned by `enabledProviders()`. */
@@ -46,12 +67,9 @@ export interface OAuthProvider {
     /**
      * Exchange an authorization code for the identity it names.
      *
-     * @param code - the `code` query param the provider's callback redirect carried
-     * @param redirectUri - the SAME value passed to {@link authorizeUrl} — some providers
-     *   validate the two match
-     * @param codeVerifier - the PKCE secret behind the challenge {@link authorizeUrl} sent; the
-     *   provider hashes it and refuses the exchange unless it matches
-     * @throws when the exchange fails or the provider's answer cannot be parsed
+     * @param callback - what the provider's redirect carried
+     * @param expected - what this attempt kept, for the exchange to check the callback against
+     * @throws when `state` differs, the exchange fails or the provider's answer cannot be parsed
      */
-    exchangeCode(code: string, redirectUri: string, codeVerifier: string): Promise<OAuthIdentity>;
+    exchangeCode(callback: OAuthCallback, expected: OAuthExpectation): Promise<OAuthIdentity>;
 }

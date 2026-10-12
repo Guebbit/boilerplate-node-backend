@@ -77,7 +77,29 @@ only when the two agree. No new server secret, unlike a signed token would need.
 A second cookie, `oauth_verifier`, rides beside it: the **PKCE** verifier (RFC 7636, `S256` only).
 `state` defeats a forged callback; the verifier defeats a stolen authorization code, since the
 code is redeemable only by whoever holds it. Same lifetime, flags and clearing points. The port's
-`authorizeUrl` takes the challenge and `exchangeCode` the verifier.
+`authorizeUrl` takes the challenge and `exchangeCode` the verifier, together with the `state` the
+provider echoed back and the one the cookie held: the library compares them again, so a callback
+with another attempt's `state` is refused before any request leaves.
+
+## The protocol is `openid-client`'s
+
+The authorization URL, the code exchange, the `state` and PKCE checks and the ID-token claim checks
+(issuer, audience, expiry, issue time) are the library's, in `providers/client.ts`. What stays ours
+is small, and every provider call goes through it:
+
+| Ours                               | Why                                                                                      |
+| ---------------------------------- | ---------------------------------------------------------------------------------------- |
+| Each provider's endpoints, written | no discovery request at login: nothing to fail, nothing to spoof                         |
+| One `fetch` for every call         | a 5 s deadline, a 1 MiB body cap, a redirect is an error (`providerFetch`)               |
+| GitHub's `/user`, `/user/emails`   | not OAuth: GitHub's own REST API, and a private address only shows on the second         |
+| The identity mapping               | `sub` or `id` as the key, never the email; an unverified address stays marked unverified |
+
+Google's ID token comes straight from its token endpoint over TLS, so its **signature is not
+checked**: OpenID Connect Core 3.1.3.7 step 6 accepts the channel in its place, and it is the same
+trust the `code` and the access token already rest on. Google's issuer is pinned to
+`https://accounts.google.com`; the bare `accounts.google.com` spelling its documentation also
+mentions is refused. GitHub answers a failed exchange with HTTP 200 and an `error` body, which the
+library reads as the failure it is.
 
 ## What else rides the round trip: `continue` and `locale`
 
@@ -194,6 +216,16 @@ they were told about.
   [`POST /account/login/2fa`](./account-two-factor.md). A provider is one way to prove the first
   factor, never a replacement for the second (the attack row:
   [Federated login](../theory/defences/authentication.md#federated-login)).
+
+## Libraries
+
+`openid-client` is `account`'s alone — see [Package Dependencies](../tools/package-dependencies.md).
+
+| Library                     | Maintained    | What it costs you                                                                                            |
+| --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
+| `openid-client` (chosen)    | active, typed | ESM-only, which Jest has to transform; brings `oauth4webapi`, its one dependency                             |
+| `passport` + strategies     | active        | a session-and-middleware model this app does not use, and two strategies to keep patched                     |
+| hand-written token exchange | —             | what this file replaced: PKCE, state and claim checks are exactly what `CLAUDE.md` rules out writing by hand |
 
 ## Related pages
 

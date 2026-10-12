@@ -1,13 +1,15 @@
 /**
  * @module
- * `oauth/providers/google.ts` — the authorize URL it builds, and the ID-token claims it trusts (or
- * refuses) after a token exchange. `fetch` is mocked throughout: this is the boundary the provider
- * owns, not a live call to Google.
+ * `oauth/providers/google.ts` — the authorize URL it builds, and what it trusts (or refuses) after a
+ * token exchange. `fetch` is mocked throughout, answering the token endpoint with an RS256-shaped
+ * ID token, so the library's own checks (issuer, audience, expiry, state) are what these cases
+ * exercise. The signature is not one of them: see the module's own doc for why.
  */
 
 import { isOAuthProviderConfigured } from '../../oauth/config';
 import { googleOAuthProvider } from '../../oauth/providers/google';
 import { setEnvironment } from '@tests/environment';
+import { SignJWT, generateKeyPair } from 'jose';
 
 /** The client id, which doubles as the `aud` claim every accepted ID token must carry. */
 const CLIENT_ID = 'test-google-client-id';
@@ -15,15 +17,18 @@ const CLIENT_ID = 'test-google-client-id';
 /** Where Google is told to send the user back — asserted verbatim, not parsed. */
 const REDIRECT_URI = 'https://api.test/account/oauth/google/callback';
 
-/** A decodable-but-unverified ID token, shaped like Google's — `exchangeCode` never checks the signature. */
-const idToken = (claims: Record<string, unknown>): string =>
-    [{ alg: 'HS256', typ: 'JWT' }, claims, 'unchecked-signature']
-        .map((part) =>
-            typeof part === 'string'
-                ? part
-                : Buffer.from(JSON.stringify(part)).toString('base64url')
-        )
-        .join('.');
+/** What Google's redirect back carried. */
+const CALLBACK = { code: 'a-code', state: 'the-state' };
+
+/** What the attempt kept at the start. */
+const EXPECTED = { redirectUri: REDIRECT_URI, state: 'the-state', codeVerifier: 'the-verifier' };
+
+/** A key pair to give the test ID tokens a well-formed RS256 signature. */
+let signing: Awaited<ReturnType<typeof generateKeyPair>>;
+
+beforeAll(async () => {
+    signing = await generateKeyPair('RS256');
+});
 
 beforeEach(() => {
     setEnvironment({ NODE_OAUTH_GOOGLE_CLIENT_ID: CLIENT_ID });
@@ -33,6 +38,47 @@ beforeEach(() => {
 afterEach(() => {
     jest.restoreAllMocks();
 });
+
+/** The claims of a valid Google ID token, to override one at a time. */
+const validClaims = () => ({
+    iss: 'https://accounts.google.com',
+    aud: CLIENT_ID,
+    sub: 'google-subject-1',
+    email: 'ada@example.com',
+    email_verified: true,
+    name: 'Ada Lovelace',
+    picture: 'https://example.com/ada.png'
+});
+
+/** An RS256 ID token over `claims`; `expiresIn` is relative seconds, negative for an expired one. */
+const idToken = (claims: Record<string, unknown>, { expiresIn = 3600 } = {}): Promise<string> =>
+    new SignJWT(claims)
+        .setProtectedHeader({ alg: 'RS256' })
+        .setIssuedAt()
+        .setExpirationTime(Math.floor(Date.now() / 1000) + expiresIn)
+        .sign(signing.privateKey);
+
+/**
+ * Stubs Google's token endpoint to answer `tokenBody`. The spy sees every call, so a case can
+ * assert what was sent.
+ */
+const mockGoogle = (tokenBody: unknown, tokenStatus = 200) =>
+    jest
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(() =>
+            Promise.resolve(Response.json(tokenBody, { status: tokenStatus }))
+        );
+
+/** A token endpoint body carrying `id_token` the way Google answers. */
+const tokenResponse = (idTokenValue: string | undefined) => ({
+    access_token: 'google-access-token',
+    token_type: 'Bearer',
+    expires_in: 3600,
+    ...(idTokenValue && { id_token: idTokenValue })
+});
+
+/** One redemption of the callback every case starts from. */
+const exchange = () => googleOAuthProvider.exchangeCode(CALLBACK, EXPECTED);
 
 describe('google provider configuration', () => {
     it('is true once both env vars are set', () => {
@@ -56,41 +102,17 @@ describe('googleOAuthProvider.authorizeUrl', () => {
         expect(url.searchParams.get('redirect_uri')).toBe(REDIRECT_URI);
         expect(url.searchParams.get('response_type')).toBe('code');
         expect(url.searchParams.get('state')).toBe('the-state');
-        expect(url.searchParams.get('scope')).toContain('email');
+        expect(url.searchParams.get('scope')).toBe('openid email profile');
         expect(url.searchParams.get('code_challenge')).toBe('the-challenge');
         expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     });
 });
 
-/** Stubs the token endpoint to answer with the given `id_token` (or none at all). */
-const mockTokenResponse = (idTokenValue: string | undefined) =>
-    // A real `Response`: the provider reads the body through a stream with a byte cap.
-    jest
-        .spyOn(globalThis, 'fetch')
-        .mockImplementation(() => Promise.resolve(Response.json({ id_token: idTokenValue })));
-
 describe('googleOAuthProvider.exchangeCode', () => {
-    const validClaims = {
-        iss: 'https://accounts.google.com',
-        aud: CLIENT_ID,
-        exp: Math.floor(Date.now() / 1000) + 3600,
-        sub: 'google-subject-1',
-        email: 'ada@example.com',
-        email_verified: true,
-        name: 'Ada Lovelace',
-        picture: 'https://example.com/ada.png'
-    };
+    it('resolves the identity from the verified ID token claims', async () => {
+        mockGoogle(tokenResponse(await idToken(validClaims())));
 
-    it('resolves the identity from the ID token claims', async () => {
-        mockTokenResponse(idToken(validClaims));
-
-        const identity = await googleOAuthProvider.exchangeCode(
-            'a-code',
-            REDIRECT_URI,
-            'the-verifier'
-        );
-
-        expect(identity).toEqual({
+        await expect(exchange()).resolves.toEqual({
             providerId: 'google-subject-1',
             email: 'ada@example.com',
             emailVerified: true,
@@ -99,98 +121,105 @@ describe('googleOAuthProvider.exchangeCode', () => {
         });
     });
 
-    it('accepts the other documented issuer spelling', async () => {
-        mockTokenResponse(idToken({ ...validClaims, iss: 'accounts.google.com' }));
+    it('sends the code, the PKCE verifier, the redirect and the client secret to the token endpoint', async () => {
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
+
+        await exchange();
+
+        const [url, init] = spy.mock.calls[0] ?? [];
+        // The library sends a form body: a string or a `URLSearchParams`, both read the same way.
+        const body = new URLSearchParams(init?.body as string | URLSearchParams);
+        expect(url).toBe('https://oauth2.googleapis.com/token');
+        expect(body.get('grant_type')).toBe('authorization_code');
+        expect(body.get('code')).toBe('a-code');
+        expect(body.get('code_verifier')).toBe('the-verifier');
+        expect(body.get('redirect_uri')).toBe(REDIRECT_URI);
+        expect(body.get('client_id')).toBe(CLIENT_ID);
+        expect(body.get('client_secret')).toBe('test-google-client-secret');
+    });
+
+    it('refuses a callback whose state is not the one this attempt made, before any request', async () => {
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
 
         await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).resolves.toMatchObject({ providerId: 'google-subject-1' });
+            googleOAuthProvider.exchangeCode({ ...CALLBACK, state: 'forged' }, EXPECTED)
+        ).rejects.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('refuses the bare `accounts.google.com` issuer spelling: only the https form is pinned', async () => {
+        mockGoogle(tokenResponse(await idToken({ ...validClaims(), iss: 'accounts.google.com' })));
+
+        await expect(exchange()).rejects.toThrow();
     });
 
     it('rejects a token naming a different audience', async () => {
-        mockTokenResponse(idToken({ ...validClaims, aud: 'someone-elses-client-id' }));
+        mockGoogle(tokenResponse(await idToken({ ...validClaims(), aud: 'someone-elses-client' })));
 
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/audience/);
+        await expect(exchange()).rejects.toThrow();
     });
 
     it('rejects an unrecognised issuer', async () => {
-        mockTokenResponse(idToken({ ...validClaims, iss: 'https://evil.example.com' }));
+        mockGoogle(tokenResponse(await idToken({ ...validClaims(), iss: 'https://evil.example' })));
 
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/issuer/);
+        await expect(exchange()).rejects.toThrow();
+    });
+
+    it('rejects an expired token', async () => {
+        mockGoogle(tokenResponse(await idToken(validClaims(), { expiresIn: -60 })));
+
+        await expect(exchange()).rejects.toThrow();
+    });
+
+    it('rejects a response with no id_token at all', async () => {
+        mockGoogle(tokenResponse(undefined));
+
+        await expect(exchange()).rejects.toThrow();
+    });
+
+    it('rejects when Google answers with a non-2xx status', async () => {
+        mockGoogle({ error: 'invalid_grant' }, 400);
+
+        await expect(exchange()).rejects.toThrow();
+    });
+
+    it('treats an unverified email as unverified, not merely absent', async () => {
+        mockGoogle(tokenResponse(await idToken({ ...validClaims(), email_verified: false })));
+
+        await expect(exchange()).resolves.toMatchObject({ emailVerified: false });
+    });
+
+    it('rejects a token with no subject, rather than minting an undefined providerId', async () => {
+        const { sub: _sub, ...withoutSub } = validClaims();
+        mockGoogle(tokenResponse(await idToken(withoutSub)));
+
+        await expect(exchange()).rejects.toThrow();
     });
 
     it('never follows a redirect from the token endpoint', async () => {
-        const fetchSpy = mockTokenResponse(idToken(validClaims));
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
 
-        await googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
+        await exchange();
 
-        expect(fetchSpy.mock.calls[0][1]).toMatchObject({ redirect: 'error' });
+        expect(spy).toHaveBeenCalledTimes(1);
+        for (const [, options] of spy.mock.calls)
+            expect(options).toMatchObject({ redirect: 'error' });
     });
 
     it('refuses an answer longer than the byte cap instead of buffering it', async () => {
         jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('x'.repeat(1_048_577)));
 
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/longer than/);
-    });
-
-    it('rejects an expired token', async () => {
-        mockTokenResponse(idToken({ ...validClaims, exp: Math.floor(Date.now() / 1000) - 60 }));
-
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/expired/);
-    });
-
-    it('rejects a response with no id_token at all', async () => {
-        mockTokenResponse(undefined);
-
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow();
-    });
-
-    it('rejects when Google answers with a non-2xx status', async () => {
-        jest.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: false, status: 400 } as Response);
-
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow();
-    });
-
-    it('treats an unverified email as unverified, not merely absent', async () => {
-        mockTokenResponse(idToken({ ...validClaims, email_verified: false }));
-
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).resolves.toMatchObject({ emailVerified: false });
+        // The library wraps what its `fetch` threw; the cap's own message rides in `cause`.
+        await expect(exchange()).rejects.toHaveProperty(
+            'cause.message',
+            expect.stringMatching(/longer than/)
+        );
     });
 
     /*
-     * `decode(idToken, { json: true })` returns `unknown`, cast to `GoogleIdTokenClaims` — a
-     * check the compiler cannot make good on. A token missing `sub` must not carry
-     * `providerId: undefined` through: that is the same collision GitHub's own missing-`id` case
-     * has, every such token sharing one bogus identity row.
-     */
-    it('rejects a token with no subject, rather than minting an undefined providerId', async () => {
-        const { sub: _sub, ...withoutSub } = validClaims;
-        mockTokenResponse(idToken(withoutSub));
-
-        await expect(
-            googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier')
-        ).rejects.toThrow(/subject/);
-    });
-
-    /*
-     * The token-exchange fetch carried no timeout — a hung oauth2.googleapis.com held the
-     * whole OAuth callback open indefinitely. `fetch` is stubbed to only ever settle when the
-     * request's OWN `AbortSignal` fires, the way a real aborted fetch behaves, so this proves the
-     * signal reaches the request rather than merely proving a timer exists somewhere.
+     * `fetch` is stubbed to only ever settle when the request's OWN `AbortSignal` fires, the way a
+     * real aborted fetch behaves, so this proves the deadline reaches the request rather than
+     * merely proving a timer exists somewhere.
      */
     it('aborts and rejects rather than waiting forever on a hung Google', async () => {
         jest.useFakeTimers();
@@ -203,8 +232,8 @@ describe('googleOAuthProvider.exchangeCode', () => {
                 })
         );
 
-        const exchange = googleOAuthProvider.exchangeCode('a-code', REDIRECT_URI, 'the-verifier');
-        const assertion = expect(exchange).rejects.toThrow();
+        const attempt = exchange();
+        const assertion = expect(attempt).rejects.toThrow();
         jest.runAllTimers();
         await assertion;
 

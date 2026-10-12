@@ -89,9 +89,8 @@ describe('fakeOAuthProvider', () => {
         const code = new URL(url).searchParams.get('code')!;
 
         const identity = await fakeOAuthProvider.exchangeCode(
-            code,
-            'https://api.test/callback',
-            verifier
+            { code, state: 'the-state' },
+            { redirectUri: 'https://api.test/callback', state: 'the-state', codeVerifier: verifier }
         );
 
         expect(identity.emailVerified).toBe(true);
@@ -102,9 +101,12 @@ describe('fakeOAuthProvider', () => {
     it('refuses any other code — no network call ever makes one up', async () => {
         await expect(
             fakeOAuthProvider.exchangeCode(
-                'not-the-fixed-code.some-challenge',
-                'https://api.test/callback',
-                'irrelevant'
+                { code: 'not-the-fixed-code.some-challenge', state: 'the-state' },
+                {
+                    redirectUri: 'https://api.test/callback',
+                    state: 'the-state',
+                    codeVerifier: 'irrelevant'
+                }
             )
         ).rejects.toThrow(/unrecognised code/);
     });
@@ -119,9 +121,13 @@ describe('fakeOAuthProvider', () => {
 
         await expect(
             fakeOAuthProvider.exchangeCode(
-                code,
-                'https://api.test/callback',
-                generateCodeVerifier() // a DIFFERENT verifier than the one behind the challenge
+                { code, state: 'the-state' },
+                {
+                    redirectUri: 'https://api.test/callback',
+                    state: 'the-state',
+                    // A DIFFERENT verifier than the one behind the challenge.
+                    codeVerifier: generateCodeVerifier()
+                }
             )
         ).rejects.toThrow(/PKCE verifier/);
     });
