@@ -371,6 +371,7 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /examples': { request: adminQuery('/examples') },
     'GET /orders': { request: adminQuery('/orders') },
     'GET /returns': { request: adminQuery('/returns') },
+    'GET /returns/options': { request: adminQuery('/returns/options') },
     'GET /inventory/movements': { request: adminQuery('/inventory/movements') },
     'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
     'GET /payments': { request: adminQuery('/payments') },
@@ -564,7 +565,11 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     createPaymentIntent: { orderId: (world) => world.orderId },
     createReturn: {
         orderId: (world) => world.orderId,
-        lines: (world) => [{ productId: world.productId, quantity: 1 }]
+        lines: (world) => [{ productId: world.productId, quantity: 1 }],
+        // A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
+        // the legal body is the goods return the generated `lines` belong to.
+        kind: () => 'return',
+        fulfillmentOrderId: () => undefined
     },
     receiveStock: { productId: (world) => world.productId },
     adjustStock: { productId: (world) => world.productId },

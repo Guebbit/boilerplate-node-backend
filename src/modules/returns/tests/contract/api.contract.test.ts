@@ -11,6 +11,9 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { carryOrderTo, fulfillmentOrdersOf } from '@modules/delivery/tests/factories';
+import { shipFulfillmentOrder } from '@modules/delivery';
+import { asAdmin, callerContextAs } from '@tests/callers';
 import { OrderStatus } from '@types';
 
 setupTestDb();
@@ -19,7 +22,12 @@ setupTestDb();
 const customerWithOrder = async (status: OrderStatus) => {
     const { user, bearer } = await authenticateAs('user');
     const product = await createProduct({ price: 20 });
-    const order = await createOrder(user, [toOrderItem(product, 2)], { status });
+    const carried = status === OrderStatus.shipped || status === OrderStatus.delivered;
+    const order = await createOrder(user, [toOrderItem(product, 2)], {
+        status: carried ? OrderStatus.processing : status
+    });
+    // Goods that left or arrived got there through the real doors, so the shipments exist.
+    if (carried) await carryOrderTo(String(order._id), status);
     return { bearer, orderId: String(order._id), productId: String(product._id) };
 };
 
@@ -322,5 +330,139 @@ describe('POST /returns/{id}/receive', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+/**
+ * A customer logged in, with a `processing` order of two products of which only the first has
+ * shipped — so the second is a remainder waiting to be cancelled.
+ */
+const customerWithPartlyShippedOrder = async () => {
+    const { user, bearer } = await authenticateAs('user');
+    const shipped = await createProduct({ price: 20 });
+    const waiting = await createProduct({ price: 5 });
+    const order = await createOrder(user, [toOrderItem(shipped, 1), toOrderItem(waiting, 2)], {
+        status: OrderStatus.processing
+    });
+    const [fulfillmentOrder] = await fulfillmentOrdersOf(String(order._id));
+    await shipFulfillmentOrder(
+        String(fulfillmentOrder._id),
+        { lines: [{ productId: String(shipped._id), quantity: 1 }] },
+        asAdmin(),
+        callerContextAs('admin')
+    );
+    return {
+        bearer,
+        orderId: String(order._id),
+        fulfillmentOrderId: String(fulfillmentOrder._id),
+        waitingId: String(waiting._id)
+    };
+};
+
+describe('GET /returns/options', () => {
+    it('matches the contract: what can be returned, and what a cancel would refund', async () => {
+        const { bearer, orderId, fulfillmentOrderId, waitingId } =
+            await customerWithPartlyShippedOrder();
+
+        const response = await api()
+            .get('/returns/options')
+            .query({ orderId })
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toMatchObject({
+            orderId,
+            currency: 'EUR',
+            returnable: [{ quantity: 1 }],
+            cancellable: [
+                {
+                    fulfillmentOrderId,
+                    number: 1,
+                    lines: [{ productId: waitingId, quantity: 2 }],
+                    refundAmount: 10,
+                    shippingRefund: 0
+                }
+            ]
+        });
+    });
+
+    it('answers 404 for an order that is not the caller’s, and 422 without an orderId', async () => {
+        const { orderId } = await customerWithPartlyShippedOrder();
+        const { bearer } = await authenticateAsRole('customer');
+
+        const stranger = await api()
+            .get('/returns/options')
+            .query({ orderId })
+            .set('Authorization', bearer);
+        const missing = await api().get('/returns/options').set('Authorization', bearer);
+
+        expect(stranger.status).toBe(404);
+        expect(missing.status).toBe(422);
+    });
+});
+
+describe('POST /returns — kind: cancellation', () => {
+    it('matches the contract: 201, Location, and a return born closed with the remainder as its lines', async () => {
+        const { bearer, orderId, fulfillmentOrderId, waitingId } =
+            await customerWithPartlyShippedOrder();
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
+
+        expect(response.status).toBe(201);
+        expect(response.headers.location).toBe(`/returns/${String(response.body.data.id)}`);
+        expect(response.body.data).toMatchObject({
+            kind: 'cancellation',
+            status: 'closed',
+            fulfillmentOrderId,
+            lines: [{ productId: waitingId, quantity: 2 }],
+            refundAmount: 10
+        });
+        // The order moved on with it: nothing remains, one shipment is still out.
+        const order = await api().get(`/orders/${orderId}`).set('Authorization', bearer);
+        expect(order.body.data).toMatchObject({ status: 'shipped', fulfillmentStatus: 'shipped' });
+    });
+
+    it('refuses a cancellation that names no fulfillment order with 422 RETURN_CANCELLATION_INVALID', async () => {
+        const { bearer, orderId } = await customerWithPartlyShippedOrder();
+
+        const response = await api()
+            .post('/returns')
+            .set('Authorization', bearer)
+            .send({ orderId, reason: 'withdrawal', kind: 'cancellation' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].code).toBe('RETURN_CANCELLATION_INVALID');
+    });
+
+    it('refuses a second cancel of the same remainder with 409 RETURN_NOTHING_TO_CANCEL', async () => {
+        const { bearer, orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const cancel = () =>
+            api()
+                .post('/returns')
+                .set('Authorization', bearer)
+                .send({ orderId, reason: 'withdrawal', kind: 'cancellation', fulfillmentOrderId });
+        await cancel();
+
+        const again = await cancel();
+
+        expect(again.status).toBe(409);
+        expect(again.body.errors[0].code).toBe('RETURN_NOTHING_TO_CANCEL');
+    });
+
+    it('lets staff holding the refund key cancel a customer’s remainder, and refuses the warehouse', async () => {
+        const { orderId, fulfillmentOrderId } = await customerWithPartlyShippedOrder();
+        const { bearer: warehouse } = await authenticateAsRole('warehouse');
+        const { bearer: moderator } = await authenticateAsRole('moderator');
+        const body = { orderId, reason: 'other', kind: 'cancellation', fulfillmentOrderId };
+
+        const refused = await api().post('/returns').set('Authorization', warehouse).send(body);
+        const allowed = await api().post('/returns').set('Authorization', moderator).send(body);
+
+        expect(refused.status).toBe(403);
+        expect(allowed.status).toBe(201);
+        expect(allowed.body.data).toMatchObject({ kind: 'cancellation', reason: 'other' });
     });
 });

@@ -55,7 +55,7 @@ from a module's service (not a controller):
 
 Callers include `account/services/mail.ts` (reset, verification, deletion links),
 `orders/services/notify.ts`, `payments/services/settlement.ts` and `refunds.ts`,
-`delivery/service.ts` and `feedback/service.ts`. `grep -rn enqueueEmail src` is the live list.
+`delivery/services/notify.ts` and `feedback/service.ts`. `grep -rn enqueueEmail src` is the live list.
 
 ### Invoice PDF rendering — NOT a queue
 

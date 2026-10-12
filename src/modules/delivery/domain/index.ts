@@ -12,3 +12,29 @@ export {
     cheapestStandardShipping
 } from './rates';
 export type { StaticShippingMethod } from './rates';
+
+export {
+    groupOrderLines,
+    remainingOf,
+    remainingOfLine,
+    remainderLines,
+    statusOfLines,
+    checkShipLines,
+    withShipped,
+    withRemainderCancelled,
+    summarize,
+    isShippable,
+    isFulfillable,
+    isHoldable,
+    isReleasable
+} from './fulfillment';
+export type {
+    FulfillmentLine,
+    FulfillmentOrderDraft,
+    FulfillmentReport,
+    GroupableLine,
+    ProductQuantity,
+    ShipLinesVerdict,
+    SummaryInputs,
+    ActionCandidate
+} from './fulfillment';

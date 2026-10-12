@@ -10,3 +10,6 @@
 
 export { counterDeltaFor } from './transitions';
 export type { CounterDelta } from './transitions';
+
+export { takeFromHold } from './hold-lines';
+export type { HoldLine, HoldTake } from './hold-lines';

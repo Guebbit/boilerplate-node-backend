@@ -12,10 +12,11 @@ jest.mock('@infrastructure/http/middlewares/rate-limit', () =>
 import { router } from '@modules/returns/routes';
 
 describe('returns routes — what is mounted', () => {
-    it('mounts the list, the open, one read, the two decisions and the receipt', () => {
+    it('mounts the list, the open, the options, one read, the two decisions and the receipt', () => {
         expect(routeSignatures(router)).toEqual([
             'GET /',
             'POST /',
+            'GET /options',
             'GET /:id',
             'POST /:id/approve',
             'POST /:id/decline',
@@ -28,6 +29,7 @@ describe('returns routes — authorization', () => {
     it.each([
         'GET /',
         'POST /',
+        'GET /options',
         'GET /:id',
         'POST /:id/approve',
         'POST /:id/decline',
@@ -36,7 +38,7 @@ describe('returns routes — authorization', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it.each(['GET /', 'POST /', 'GET /:id'])(
+    it.each(['GET /', 'POST /', 'GET /options', 'GET /:id'])(
         '%s is open to any signed-in caller — the service scopes it to their own orders',
         (signature) => {
             expect(guardsOn(router, signature)).not.toContain('requirePermissionGuard');
@@ -49,6 +51,14 @@ describe('returns routes — authorization', () => {
             expect(guardsOn(router, signature)).toContain('requirePermissionGuard');
         }
     );
+});
+
+describe('returns routes — the options read', () => {
+    it('is mounted before `/:id`, which would otherwise read "options" as an id', () => {
+        const signatures = routeSignatures(router);
+
+        expect(signatures.indexOf('GET /options')).toBeLessThan(signatures.indexOf('GET /:id'));
+    });
 });
 
 describe('returns routes — rate limiting and idempotency', () => {

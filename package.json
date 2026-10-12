@@ -84,6 +84,7 @@
         "reap:expired-tokens": "tsx scripts/ops/reap-expired-tokens.ts",
         "reap:invoice-pdfs": "tsx scripts/ops/reap-invoice-pdfs.ts",
         "reap:orders": "tsx scripts/ops/reap-orders.ts",
+        "reap:delivery": "tsx scripts/ops/reap-delivery.ts",
         "reap:returns": "tsx scripts/ops/reap-returns.ts",
         "reencrypt": "tsx scripts/ops/reencrypt.ts",
         "reap:payments": "tsx scripts/ops/reap-payments.ts",

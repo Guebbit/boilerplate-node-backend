@@ -57,6 +57,24 @@ declare module '@kernel/events' {
          * the transactional outbox with the order itself, so a placed order is always announced.
          */
         'order.created': { orderId: string };
+
+        /**
+         * An admin override moved the status forward by hand (`services/override.ts`), written to the
+         * outbox in the override's own transaction beside its `order.status_changed`. `delivery`
+         * listens so its fulfillment orders and shipments agree with the status: forward to `shipped`
+         * ships every remainder, forward to `delivered` delivers them, both at `at`. A forced
+         * shipment recorded through `delivery` is NOT this event: it never moves the order by override.
+         *
+         * Internal only — no AsyncAPI channel carries it.
+         */
+        'order.status_overridden': {
+            orderId: string;
+            from: OrderStatus;
+            to: OrderStatus;
+            /** ISO instant of the override — the instant `withdrawUntil` was counted from. */
+            at: string;
+            mode: 'status';
+        };
     }
 }
 
@@ -71,3 +89,6 @@ export const ORDER_STATUS_CHANGED = 'order.status_changed';
 
 /** See `DomainEventMap['order.created']` above. */
 export const ORDER_CREATED = 'order.created';
+
+/** See `DomainEventMap['order.status_overridden']` above. */
+export const ORDER_STATUS_OVERRIDDEN = 'order.status_overridden';

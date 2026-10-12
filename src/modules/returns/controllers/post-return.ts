@@ -35,8 +35,15 @@ export const postReturn = (request: Request, response: Response) => {
                     response,
                     created,
                     `/returns/${created.id}`,
-                    // Closed at birth means the withdrawal already cancelled and refunded the order.
-                    t(created.status === 'closed' ? 'returns.withdrawn' : 'returns.requested')
+                    // Closed at birth: either the withdrawal already cancelled and refunded the order,
+                    // or a remainder cancel gave back what had not shipped.
+                    t(
+                        created.kind === 'cancellation'
+                            ? 'returns.remainder-cancelled'
+                            : created.status === 'closed'
+                              ? 'returns.withdrawn'
+                              : 'returns.requested'
+                    )
                 );
             });
         })

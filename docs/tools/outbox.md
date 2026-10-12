@@ -58,6 +58,7 @@ no-op — see [Consumers](#writing-a-consumer).
 | Backstop relay, every minute              | `scripts/ops/sweep-outbox.ts` (`npm run sweep:outbox`)   |
 | Counters                                  | `src/infrastructure/observability/metrics-outbox.ts`     |
 | One write + its event, atomically         | `announceInTransaction` in `src/kernel/outbox.ts`        |
+| …inside a transaction the caller owns     | `announceWithin` in `src/kernel/outbox.ts`               |
 | `payment.succeeded`, `payment.failed`     | `src/modules/payments/services/announce.ts`              |
 | `payment.refunded`                        | `src/modules/payments/services/refunds.ts`               |
 | `order.created`, `order.status_changed`   | `src/modules/orders/services/{place,status,override}.ts` |
@@ -69,6 +70,8 @@ no-op — see [Consumers](#writing-a-consumer).
 | `return.requested`                        | `src/modules/returns/services/create.ts`                 |
 | `return.received`                         | `src/modules/returns/services/receive.ts`                |
 | `return.closed`                           | `src/modules/returns/services/{close,create}.ts`         |
+| `shipment.*`, `fulfillment_order.*`       | `src/modules/delivery/services/announce.ts`              |
+| `order.status_overridden`                 | `src/modules/orders/services/override.ts`                |
 
 No new queue, no new dependency. The relay hands rows to the same in-process bus every module
 already subscribes to, so no AsyncAPI channel is involved: nothing here crosses a process boundary
@@ -94,6 +97,14 @@ announceInTransaction(
     (thing) => ({ name: 'thing.happened', payload: { id }, aggregateId: id })
 );
 ```
+
+`announce` may hand back one announcement or a list: one change that must say two things (an
+override says `order.status_changed` and `order.status_overridden`) writes both rows, in order.
+
+When a change spans several records and belongs to a transaction the CALLER already owns — a shipment
+writes the shipment, the units leaving the shelf, the order's summary and its events together —
+`announceWithin(session, write, announce)` is the same step without opening a transaction or waking
+the relay. The owner of the transaction calls `nudgeOutbox()` after its own commit.
 
 Rules of thumb:
 

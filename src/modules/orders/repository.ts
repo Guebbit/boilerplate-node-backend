@@ -19,7 +19,7 @@ import type {
     OrderStatusOverride
 } from './model';
 import { paymentStatusFilter, returnStatusFilter } from './domain';
-import type { StampedPaymentStatus, StampedReturnStatus } from './domain';
+import type { FulfillmentSummary, StampedPaymentStatus, StampedReturnStatus } from './domain';
 import { Types } from 'mongoose';
 import type { PipelineStage, QueryFilter, ClientSession } from 'mongoose';
 import { encryptOrderPii } from './pii';
@@ -362,6 +362,69 @@ const applyStatusOverride = (
         .exec();
 
 /**
+ * One order read inside the caller's transaction — the act that reads an order and then writes
+ * beside it must see the same snapshot its own writes land in.
+ * @param id - the order
+ * @param session - the caller's transaction
+ */
+const findInSession = (id: string, session: ClientSession): Promise<OrderDocument | null> =>
+    orderModel.findById(toObjectId(id)).session(session).exec();
+
+/**
+ * Write the fulfilment summary `delivery` computed, but only while the order can still be
+ * fulfilled: not `pending`, not `cancelled`. `delivered` is allowed: an admin override forward to
+ * `delivered` is brought in step by `delivery` AFTER the status landed. The condition rides in the filter, so a shipment
+ * racing a cancel cannot both win — whichever write commits second matches nothing (or conflicts
+ * and is retried against the other's result).
+ * @param id - the order
+ * @param summary - where the goods stand, recomputed in the caller's transaction
+ * @param session - the act's transaction
+ * @returns the order as it now stands, or `null` when it can no longer be fulfilled
+ */
+const writeFulfillment = (
+    id: string,
+    summary: FulfillmentSummary,
+    session: ClientSession
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            {
+                _id: toObjectId(id),
+                status: {
+                    $in: [
+                        OrderStatus.paid,
+                        OrderStatus.processing,
+                        OrderStatus.shipped,
+                        OrderStatus.delivered
+                    ]
+                }
+            } as QueryFilter<OrderDocument>,
+            { $set: { fulfillment: summary } },
+            { returnDocument: 'after', session }
+        )
+        .exec();
+
+/**
+ * Append one override-history entry without a status move — a forced fulfilment act that did not
+ * itself change the status still leaves its row.
+ * @param id - the order
+ * @param entry - the history entry
+ * @param session - the act's transaction
+ */
+const pushOverrideEntry = (
+    id: string,
+    entry: OrderStatusOverride,
+    session: ClientSession
+): Promise<OrderDocument | null> =>
+    orderModel
+        .findOneAndUpdate(
+            { _id: toObjectId(id) },
+            { $push: { statusOverrides: entry } },
+            { returnDocument: 'after', session }
+        )
+        .exec();
+
+/**
  * Orders whose consequences are still owed, oldest first — `retryPendingEffects`'s only query.
  *
  * `pendingEffects.0` rather than `$exists`, so a drained order (empty array) is settled without a
@@ -692,6 +755,17 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         withdrawUntil?: Date,
         session?: ClientSession
     ) => Promise<OrderDocument | null>;
+    findInSession: (id: string, session: ClientSession) => Promise<OrderDocument | null>;
+    writeFulfillment: (
+        id: string,
+        summary: FulfillmentSummary,
+        session: ClientSession
+    ) => Promise<OrderDocument | null>;
+    pushOverrideEntry: (
+        id: string,
+        entry: OrderStatusOverride,
+        session: ClientSession
+    ) => Promise<OrderDocument | null>;
     findWithPendingEffects: (cutoff: Date, limit: number) => Promise<OrderDocument[]>;
     findManyReferences: (ids: readonly string[]) => Promise<OrderReference[]>;
     clearPendingEffect: (orderId: string, effect: OrderPendingEffect) => Promise<boolean>;
@@ -719,6 +793,9 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     markDelivered,
     setProjection,
     applyStatusOverride,
+    findInSession,
+    writeFulfillment,
+    pushOverrideEntry,
     findWithPendingEffects,
     findManyReferences,
     clearPendingEffect,

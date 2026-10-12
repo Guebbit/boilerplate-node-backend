@@ -173,6 +173,27 @@ against contact details; the box stays optional for every reason.
 **What never leaves the database.** The `return.requested` webhook carries the `reason` code, never
 the `note` (`returns/module.ts`).
 
+## Free text on holds
+
+Staff can put a fulfillment order on hold, with a reason from a closed set and an optional **note**
+(`holdNote`, up to 1000 characters). The reason is a vocabulary; the note is a person typing about a
+person: "customer rang twice, sounded drunk", "address looks like a reseller". That is the same shape
+of risk as a return's `declineReason`, so it gets the same treatment: an end date of its own.
+
+**What happens to it.** `npm run reap:delivery` unsets `holdNote` once the fulfillment order has not
+changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (one year by default). Lines, status, reason and dates stay:
+they are the record of what was promised and what left. The wipe does not move `updatedAt`, so the
+clock it reads does not reset, and a rerun matches nothing.
+
+**Why one year, not three.** A hold is operational, not evidence in a consumer-rights claim: the
+return's note has to outlive the two-year legal guarantee, a hold's has only to outlive the chargeback
+window. **Why its own clock.** The order's clock starts only when an account is erased; tied to it, a
+live customer's note would never go. **Why "since the last change", not "since closing".** A
+fulfillment order held for ever never closes.
+
+The note is also left out of `POST /account/export`: it is staff's assessment, written for the shop's
+own use, and not the buyer's own data.
+
 ## Backups and erasure
 
 A backup is a copy of everything, kept for as long as the keep knobs say (24 hourly, 7 daily, 4 weekly,

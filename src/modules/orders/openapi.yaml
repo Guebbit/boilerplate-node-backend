@@ -14,6 +14,7 @@ x-error-codes:
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
+    ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
 
 # This module's section of the account data export (`POST /account/export`): the bundler
 # adds it to `AccountExportResponse`. Removing the module removes the section.
@@ -57,6 +58,14 @@ paths:
                   in: query
                   schema:
                       $ref: '#/components/schemas/OrderStatus'
+                - name: fulfillmentStatus
+                  in: query
+                  description: >-
+                      Filter to orders whose goods stand here — the same derived value
+                      `Order.fulfillmentStatus` carries, so `on_hold` and `partially_fulfilled`
+                      can be listed.
+                  schema:
+                      $ref: '#/components/schemas/OrderFulfillmentStatus'
                 - name: paymentMethod
                   in: query
                   description: >-
@@ -431,10 +440,13 @@ paths:
             tags: [Orders]
             summary: Force-correct an order's status by hand
             description: >-
-                Moves the order identified by `{id}` forward to `to` with no parcel record and no
-                shipped email — for a manual correction, never for the ordinary shipping flow
-                (`POST /delivery/order/{orderId}/ship` and `.../deliver` are that door, with their
-                own `forced` option). Only `processing`, `shipped` and `delivered` are legal
+                Moves the order identified by `{id}` forward to `to` with no shipped email — for a
+                manual correction, never for the ordinary shipping flow
+                (`POST /delivery/fulfillment-orders/{id}/shipments` and
+                `POST /delivery/shipments/{id}/deliver` are that door, with their own `forced`
+                option). Delivery then keeps its own records in step: forward to `shipped` ships every
+                remainder, forward to `delivered` delivers them, all stamped with the same instant.
+                Refused while any unit still awaits stock (`ORDER_OVERRIDE_AWAITING_STOCK`). Only `processing`, `shipped` and `delivered` are legal
                 destinations, and only moving forward from wherever the order currently stands,
                 which is `paid` or later: an order still `pending` is refused, since leaving
                 `pending` goes only through the offline-payment door, which records the money and
@@ -566,6 +578,9 @@ components:
                 # status is filtering their own orders, and staff see the same shape.
                 status:
                     $ref: '#/components/schemas/OrderStatus'
+                # Filters on the derived value `Order.fulfillmentStatus` carries, so the two always agree.
+                fulfillmentStatus:
+                    $ref: '#/components/schemas/OrderFulfillmentStatus'
                 paymentMethod:
                     $ref: '#/components/schemas/PaymentMethodId'
                 # `true`: only soft-deleted rows; `false`: only live ones; absent: both.
@@ -863,12 +878,14 @@ components:
 
         OrderFulfillmentStatus:
             type: string
-            enum: [unfulfilled, in_progress, shipped, fulfilled]
+            enum: [unfulfilled, in_progress, on_hold, partially_fulfilled, shipped, fulfilled]
             description: >-
                 Where the goods stand, beside `status` — Shopify's `fulfillment_status`. Derived
-                from `status` alone: `unfulfilled` before work starts (and for a cancelled order),
-                `in_progress` while being prepared, `shipped` once handed to the carrier,
-                `fulfilled` on arrival. Read-only.
+                from the status and the fulfilment summary delivery reports. First match wins:
+                `fulfilled` once everything arrived; `shipped` once everything has left;
+                `partially_fulfilled` once something left and more remains; `on_hold` while every
+                remaining unit is held back; `in_progress` while being prepared; `unfulfilled` before
+                work starts, and for a pending or cancelled order. Read-only.
 
         OrderReturnStatus:
             type: string
@@ -890,9 +907,6 @@ components:
                     pay,
                     recordPayment,
                     start,
-                    ship,
-                    deliver,
-                    fulfill,
                     override,
                     invoice,
                     withdraw
@@ -919,7 +933,9 @@ components:
                     type: boolean
                     description: >-
                         Whether `POST /orders/{id}/cancel` would be accepted for this caller. A
-                        customer may cancel while unpaid or paid; an operator one step further.
+                        customer may cancel while unpaid or paid; an operator one step further — and
+                        only while nothing has shipped: once any shipment left, what remains is
+                        cancelled one fulfillment order at a time (`POST /returns`, `kind: cancellation`).
                 pay:
                     type: boolean
                     description: >-
@@ -942,25 +958,6 @@ components:
                         Whether `POST /delivery/order/{id}/start` would be accepted for this
                         caller. Not in `transitions`: `paid → processing` is `system`-only there,
                         reached only by reporting the fact through `delivery`'s own door.
-                ship:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/order/{id}/ship` would be accepted for this
-                        caller. Not in `transitions`, for the same reason `start` is not. `false`
-                        for a digital-only order — nothing on it would ever ride in a parcel;
-                        `fulfill` is that order's door instead.
-                deliver:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/order/{id}/deliver` would be accepted for this
-                        caller. Not in `transitions`, for the same reason `start` is not.
-                fulfill:
-                    type: boolean
-                    description: >-
-                        Whether `POST /delivery/order/{id}/fulfill` would be accepted for this
-                        caller — the digital-only alternative to `ship`/`deliver`: `true` only for
-                        an order with no physical lines, once it is `processing`. Not in
-                        `transitions`, for the same reason `start` is not.
                 override:
                     type: array
                     items:

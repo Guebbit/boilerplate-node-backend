@@ -10,6 +10,7 @@ import { auditLogger } from '@infrastructure/adapters/logger';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { OrderStatus } from '@types';
+import { carryOrderTo } from '@modules/delivery/tests/factories';
 
 setupTestDb();
 
@@ -43,8 +44,10 @@ const shopWithOrder = async () => {
     const admin = await authenticateAs('admin');
     const product = await createProduct({ price: 20 });
     const order = await createOrder(customer.user, [toOrderItem(product, 1)], {
-        status: OrderStatus.shipped
+        status: OrderStatus.processing
     });
+    // Shipped through the real doors, so there is a shipment for a return to name.
+    await carryOrderTo(String(order._id), 'shipped');
     return { customer, admin, orderId: String(order._id) };
 };
 

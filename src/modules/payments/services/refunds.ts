@@ -59,7 +59,10 @@ export interface RefundRequest {
     amount?: number;
     /** Why the money goes back — recorded on the refund. */
     reason: RefundReason;
-    /** The return this pays for, when `reason` is `return` — recorded so it can be closed later. */
+    /**
+     * The return this pays for, when `reason` is `return` — recorded so it can be closed later — or
+     * the cancellation of a fulfillment order's remainder, when `reason` is `cancellation`.
+     */
     returnId?: string;
     /** The goods this pays back, when it pays for specific ones — see `RefundRecord.lines`. */
     lines?: RefundLine[];
@@ -195,15 +198,16 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
 /**
  * Tell the buyer their money went back, when it went back outside a return — a refund that
  * followed a cancel, or an operator's goodwill one. A return's refund is announced by `returns`'
- * own closing notice, so one carrying a `returnId` is skipped here, as is a refund that moved no
- * money. Fire-and-forget, same reasoning as the `orderPaid` mail in `./settlement.ts`: a mail that
+ * own closing notice, so a `return` refund carrying a `returnId` is skipped here, as is a refund
+ * that moved no money. A remainder cancel's refund carries a `returnId` too but has no closing
+ * notice (its Return is closed at birth), so it is announced here like any cancellation's. Fire-and-forget, same reasoning as the `orderPaid` mail in `./settlement.ts`: a mail that
  * cannot be sent must never undo a refund that already went back.
  *
  * @param payment - the payment after the refund settled
  * @param refund - the record that settled
  */
 const mailRefundIssued = (payment: PaymentDocument, refund: RefundRecord): void => {
-    if (refund.returnId) return;
+    if (refund.returnId && refund.reason !== 'cancellation') return;
 
     const orderId = String(payment.orderId);
     // Started inside a promise so a synchronous throw (a malformed id) is reported, not raised.
@@ -637,16 +641,18 @@ export const refundForOrder = (orderId: string): Promise<void> =>
     performRefund(orderId).then(() => undefined);
 
 /**
- * Give back the money for goods a customer returned — `returns`' one door into the refund. The
- * amount is clamped to what the payment still has left, so a goodwill refund made earlier can
- * never make a return over-refund; the refund is recorded as `return` and carries `returnId`, so
- * `returns` can close the return when the money lands — now, or later when the sweep finishes it.
+ * Give back the money for goods a customer returned, or for a remainder cancelled before it
+ * shipped — `returns`' one door into the refund. The amount is clamped to what the payment still
+ * has left, so a goodwill refund made earlier can never make a return over-refund; the refund is
+ * recorded as `return` (or `cancellation`) and carries `returnId`, so `returns` can close the
+ * return when the money lands — now, or later when the sweep finishes it.
  *
  * A provider refusal throws after the refund is recorded as `failed`: the sweep will retry it and
  * `returns` will hear of it then.
  *
  * @param orderId - the returned order
- * @param input - which return this pays for, how much (a decimal in the payment's currency), and
+ * @param input - which return this pays for, and whether it is a `return` (the default) or a
+ *   remainder `cancellation`, how much (a decimal in the payment's currency), and
  *   which goods and delivery that amount covers — what the credit note credits at their own rates
  * @param context - the staff member who received the goods, audited on the refund
  * @returns the payment as it now stands, or `null` when there is nothing to return — no succeeded
@@ -654,7 +660,13 @@ export const refundForOrder = (orderId: string): Promise<void> =>
  */
 export const refundForReturn = (
     orderId: string,
-    input: { returnId: string; amount: number; lines: RefundLine[]; shipping: number },
+    input: {
+        returnId: string;
+        amount: number;
+        lines: RefundLine[];
+        shipping: number;
+        reason?: Extract<RefundReason, 'return' | 'cancellation'>;
+    },
     context: CallerContext
 ): Promise<PaymentDocument | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
@@ -667,7 +679,7 @@ export const refundForReturn = (
 
         return performRefund(orderId, context, {
             amount: toDecimalAmount(amount, payment.currency),
-            reason: 'return',
+            reason: input.reason ?? 'return',
             returnId: input.returnId,
             lines: input.lines,
             shipping: input.shipping

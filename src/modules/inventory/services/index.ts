@@ -12,6 +12,8 @@ import { reserveForOrder } from './reserve';
 import {
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,
@@ -47,6 +49,8 @@ export { reserveForOrder } from './reserve';
 export {
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,
@@ -69,6 +73,8 @@ export const inventoryService = {
     reserveForOrder,
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     refreshStockCacheForOrder,

@@ -759,7 +759,7 @@ components:
                         back by the operator).
                 reason:
                     $ref: '#/components/schemas/RefundReason'
-                # The return this refund pays for — present when `reason` is `return`.
+                # The return this refund pays for — present when `reason` is `return`, or `cancellation` of a remainder.
                 returnId:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
                 settledAt:
@@ -975,7 +975,8 @@ components:
             type: string
             enum: [cancellation, goodwill, return]
             description: >-
-                Why the money went back. `cancellation` — the order was cancelled after payment;
+                Why the money went back. `cancellation` — the order was cancelled after payment, or the
+                unshipped remainder of one fulfillment order was (then `returnId` names that cancellation);
                 `return` — goods came back and were received; `goodwill` — an operator chose to.
 
         RefundPaymentRequest:

@@ -213,7 +213,7 @@ Ships with every deployment, whatever the project becomes.
 The pet-supply e-commerce domain this boilerplate demos itself with. Nothing in the foundation may depend on it, and `npm run demo:remove` deletes it.
 
 - [`cart`](./cart.md) — One document per user, and checkout, the transaction the whole shop turns on. Deeper: [Checkout](./cart-checkout.md).
-- [`delivery`](./delivery.md) — Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival.
+- [`delivery`](./delivery.md) — Shipping rates as pure rules, fulfillment orders, and the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order.
 - [`inventory`](./inventory.md) — The only writer of stock in the application. Deeper: [Reservations](./inventory-reservations.md).
 - [`invoicing`](./invoicing.md) — Frozen invoice and credit-note documents, issued from payment and refund events.
 - [`notifications`](./notifications.md) — A per-user inbox: messages that stay until the owner deletes them, fed by domain events and pushed live over SSE.

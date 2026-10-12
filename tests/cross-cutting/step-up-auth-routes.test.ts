@@ -35,13 +35,15 @@ import { router as accountRouter } from '@modules/account/routes';
 import { router as cartRouter } from '@modules/cart/routes';
 import { router as paymentsRouter } from '@modules/payments/routes';
 import { router as deliveryRouter } from '@modules/delivery/routes';
+import { router as returnsRouter } from '@modules/returns/routes';
 
-/** The four routers with money or identity routes, keyed the same way `STEP_UP_ROUTES` is. */
+/** The five routers with money or identity routes, keyed the same way `STEP_UP_ROUTES` is. */
 const ROUTERS: Record<string, Router> = {
     account: accountRouter,
     cart: cartRouter,
     payments: paymentsRouter,
-    delivery: deliveryRouter
+    delivery: deliveryRouter,
+    returns: returnsRouter
 };
 
 /**
@@ -85,9 +87,12 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // Freshness here is a property of the REQUEST, not the route: a plain ship/deliver never
     // needs it, a `forced: true` one does — the same `orders.any.override` tier the direct
     // status-override route inherits automatically through `requirePermission`, restated here
-    // because `service.ts`'s own permission check has no way to demand a step-up on its own.
-    'delivery POST /order/:orderId/ship': `requireFreshAuthWhen(critical)`,
-    'delivery POST /order/:orderId/deliver': `requireFreshAuthWhen(critical)`
+    // because the service's own permission check has no way to demand a step-up on its own.
+    'delivery POST /fulfillment-orders/:id/shipments': `requireFreshAuthWhen(critical)`,
+    'delivery POST /shipments/:id/deliver': `requireFreshAuthWhen(critical)`,
+    // A remainder cancel by a caller holding the refund key is staff's money-out door, at that
+    // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
+    'returns POST /': `requireFreshAuthWhen(critical)`
 };
 
 /** Every step-up label actually mounted on a router, keyed the same way as {@link STEP_UP_ROUTES}. */

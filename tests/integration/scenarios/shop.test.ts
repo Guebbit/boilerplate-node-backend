@@ -34,7 +34,7 @@ import { orderModel } from '@modules/orders/model';
 import { orderService } from '@modules/orders';
 import { asCustomer } from '@tests/callers';
 import { paymentModel } from '@modules/payments/model';
-import { shipmentModel } from '@modules/delivery/model';
+import { fulfillmentOrderModel, shipmentModel } from '@modules/delivery/model';
 import { returnModel } from '@modules/returns/model';
 import { userModel } from '@modules/users/model';
 import { auditLogModel } from '@modules/audit-logs/model';
@@ -304,6 +304,44 @@ describe('each subject names a row that really has the property', () => {
             .findOne({ orderId: subjects['order.paidExpress'] })
             .exec();
         expect(shipment).toBeNull();
+    });
+
+    it('order.partiallyFulfilled has shipped one unit of three, so it is still processing', async () => {
+        const order = await orderModel.findById(subjects['order.partiallyFulfilled']).exec();
+        expect(order?.status).toBe('processing');
+        expect(order?.fulfillment).toMatchObject({ shipped: true, remaining: 2, undelivered: 1 });
+
+        const [shipment] = await shipmentModel
+            .find({ orderId: subjects['order.partiallyFulfilled'] })
+            .exec();
+        expect(shipment.lines.map(({ quantity }) => quantity)).toEqual([1]);
+    });
+
+    it('order.onHold was held before anything left, with its reason', async () => {
+        const order = await orderModel.findById(subjects['order.onHold']).exec();
+        expect(order?.status).toBe('processing');
+        expect(order?.fulfillment).toMatchObject({ shipped: false, remaining: 1, onHold: 1 });
+
+        const held = await fulfillmentOrderModel
+            .findOne({ orderId: subjects['order.onHold'] })
+            .exec();
+        expect(held).toMatchObject({ status: 'on_hold', holdReason: 'high_risk' });
+    });
+
+    it('order.remainderCancelled shipped one product and had the other cancelled and refunded', async () => {
+        const order = await orderModel.findById(subjects['order.remainderCancelled']).exec();
+        expect(order?.status).toBe('shipped');
+        expect(order?.fulfillment).toMatchObject({ shipped: true, remaining: 0 });
+
+        const [cancellation] = await returnModel
+            .find({ orderId: subjects['order.remainderCancelled'] })
+            .exec();
+        expect(cancellation).toMatchObject({ kind: 'cancellation', status: 'closed' });
+        expect(cancellation.lines).toHaveLength(1);
+        const payment = await paymentModel
+            .findOne({ orderId: subjects['order.remainderCancelled'] })
+            .exec();
+        expect(payment?.refunds[0]).toMatchObject({ reason: 'cancellation' });
     });
 
     it('order.deliveredRecent is delivered today, inside its withdrawal window, and paid for by card', async () => {

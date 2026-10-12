@@ -29,9 +29,10 @@ export type { Money } from './money';
 export { checkOrderLines, isShippedItem, isDigitalOnlyOrder } from './rules';
 export type { ShippableLineCandidate } from './rules';
 
-// `ORDER_LIFECYCLE` is deliberately absent: a caller reading the table directly re-derives an
-// answer that already has a name.
+// `ORDER_EVENTS` is the one place a service reads a move's `from` and `to`; the edge questions
+// (`canTransition`, `statusesLeadingTo`, ...) are derived from it and already have names.
 export {
+    ORDER_EVENTS,
     canTransition,
     isPayable,
     paymentSettled,
@@ -42,7 +43,7 @@ export {
     statusesOverridableInto,
     overridableTargetsFrom
 } from './lifecycle';
-export type { OrderActor } from './lifecycle';
+export type { OrderActor, OrderEvent, OrderEventName } from './lifecycle';
 
 /** The VAT breakdown an order's response and invoice both derive from its frozen lines. */
 export { orderTaxBreakdown, lineTaxFromRateTotals } from './tax';
@@ -61,15 +62,18 @@ export {
 } from './withdrawal';
 export type { WithdrawalCandidate, WithdrawableLine, WithdrawalClockCandidate } from './withdrawal';
 
-/** The three statuses beside `status`: the money, the goods, any return. */
+/** The money and the return stamped beside `status`, and the filters that are their inverse. */
 export {
-    fulfillmentStatusOf,
     paymentStatusOf,
     returnStatusOf,
     paymentStatusFilter,
     returnStatusFilter
 } from './projections';
 export type { StampedPaymentStatus, StampedReturnStatus } from './projections';
+
+/** What `delivery` reports about the goods, and what `orders` reads off it. */
+export { NO_FULFILLMENT, fulfillmentStatusOf, fulfillmentStatusFilter } from './fulfillment';
+export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
 
 /** The shop-calendar year of an instant: the year every numbered series is cut at. */
 export { yearInZone, zonedStartOfDay } from './shop-time';

@@ -100,6 +100,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run reap:invoice-pdfs`      | 02:08 nightly  | No     | Deletes stored invoice and credit-note PDFs past their retention window; the next download renders again.                                                                       |
 | `npm run reap:account-exports`   | 02:09 nightly  | No     | Deletes built data exports (file and row) past `NODE_ACCOUNT_EXPORT_TTL_DAYS`; the account can ask again.                                                                       |
 | `npm run reap:orders`            | 02:10 nightly  | No     | Anonymizes an order's remaining PII once its retention window has passed.                                                                                                       |
+| `npm run reap:delivery`          | 02:11 nightly  | No     | Unsets a fulfillment order's hold note once it has not changed for its retention window.                                                                                        |
 | `npm run reap:returns`           | 02:12 nightly  | No     | Unsets a return's free text (`note`, `declineReason`) once the return has not changed for its retention window.                                                                 |
 | `npm run reap:payments`          | 02:15 nightly  | No     | Deletes abandoned (never-settled) payment attempts past their retention window.                                                                                                 |
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                                |
@@ -209,6 +210,12 @@ See the script's own header for the stages.
 (default 1095). `updatedAt`, not the closing date, because an approved return whose goods never
 arrive never closes. Safe to repeat: the filter only matches returns still holding text, and the
 wipe does not move `updatedAt`. Why three years: [Data Retention](../theory/data-retention.md#free-text-on-returns).
+
+`delivery` has no TTL either: a fulfillment order is the record of what was promised and what left.
+`npm run reap:delivery` unsets only staff's hold note (`holdNote`) once the fulfillment order's `updatedAt`
+is older than `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), on the same terms as `reap:returns`: the filter
+only matches one still holding a note, and the wipe does not move `updatedAt`. Why a year:
+[Data Retention](../theory/data-retention.md#free-text-on-holds).
 
 `npm run sweep:order-effects` is a different kind of periodic job: not retention, but the retry
 behind a cancel's consequences. A cancel announces `ORDER_REFUND_OWED` — a separate event from the

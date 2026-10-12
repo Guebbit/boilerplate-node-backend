@@ -41,11 +41,18 @@ import {
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled,
+    markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus
 } from './status';
-import { overrideStatus, forceMove } from './override';
+import {
+    readOrder,
+    recordFulfillmentProgress,
+    recordForcedFulfilment,
+    shipStock,
+    refreshShelf
+} from './fulfillment';
+import { overrideStatus } from './override';
 import {
     paidBuckets,
     productTotals,
@@ -84,11 +91,19 @@ export {
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled,
+    markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus
 } from './status';
-export { overrideStatus, forceMove, isForceMoveRefusal } from './override';
+export {
+    readOrder,
+    recordFulfillmentProgress,
+    recordForcedFulfilment,
+    shipStock,
+    refreshShelf,
+    type ForcedFulfilment
+} from './fulfillment';
+export { overrideStatus } from './override';
 export { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 export {
     callerScope,
@@ -179,11 +194,15 @@ export const orderService = {
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled,
+    markFulfilmentComplete,
     markPaymentStatus,
     markReturnStatus,
+    readOrder,
+    recordFulfillmentProgress,
+    recordForcedFulfilment,
+    shipStock,
+    refreshShelf,
     overrideStatus,
-    forceMove,
     detachUserId,
     eraseUserOrders,
     startOrderPiiClock,

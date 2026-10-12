@@ -156,7 +156,7 @@ the full sweep is sharded and monthly rather than an unsharded nightly (below, a
 **The exclusion was a memory-leak workaround, not an oversight**, and understanding why it existed
 still matters — the leak it worked around had to be fixed BEFORE the ruler could be merged. Loading
 the integration suites into a mutation run used to trigger an unbounded memory leak. Measured on
-`delivery/service.ts` (54 mutants), 2026-08-29:
+the delivery module's one service file at the time (54 mutants), 2026-08-29:
 
 | Configuration                            | Score     | Time | OOM restarts |
 | ---------------------------------------- | --------- | ---- | ------------ |
