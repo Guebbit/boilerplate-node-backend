@@ -341,6 +341,17 @@ const adminQuery =
         return api().get(`${path}?${query}`).set('Authorization', bearer);
     };
 
+/**
+ * {@link adminQuery} for an operation that refuses a request without its required parameters:
+ * `base` rides along, and the case's own invalid parameter is appended to it.
+ */
+const adminQueryWith =
+    (path: string, base: string) =>
+    async (query: string): Promise<Response> => {
+        const { bearer } = await authenticateAs('admin');
+        return api().get(`${path}?${base}&${query}`).set('Authorization', bearer);
+    };
+
 /** A locale row real enough for `/locales/{locale}/...` to reach its own query validation, rather than 404ing on an unknown tag first. */
 const withRealLocale = async (): Promise<string> => {
     const tag = 'qp';
@@ -362,6 +373,17 @@ const QUERY_FIXTURES: Partial<Record<string, QueryFixture>> = {
     'GET /returns': { request: adminQuery('/returns') },
     'GET /inventory/movements': { request: adminQuery('/inventory/movements') },
     'GET /webhooks/deliveries': { request: adminQuery('/webhooks/deliveries') },
+    'GET /payments': { request: adminQuery('/payments') },
+    'GET /payments/refunds': { request: adminQuery('/payments/refunds') },
+    'GET /stats/sales': {
+        request: adminQueryWith('/stats/sales', 'from=2026-03-01&to=2026-03-31')
+    },
+    'GET /stats/products/{productId}': {
+        request: adminQueryWith(
+            '/stats/products/ffffffffffffffffffffffff',
+            'from=2026-03-01&to=2026-03-31'
+        )
+    },
     'GET /locales/{locale}/messages': {
         // Public: no `security` on this operation at all.
         request: async (query) => {

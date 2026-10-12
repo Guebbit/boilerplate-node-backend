@@ -490,7 +490,10 @@ export const requirePermission = (key: string, options: { exact?: boolean } = {}
     // The key this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
     // reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
     // rather than only whether a guard is present at all.
-    return Object.assign(requirePermissionGuard, { permissionKey: key });
+    return Object.assign(requirePermissionGuard, {
+        permissionKey: key,
+        exactPermission: options.exact === true
+    });
 };
 
 /**
