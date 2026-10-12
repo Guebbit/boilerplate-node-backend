@@ -1,7 +1,7 @@
 /**
  * @module
  * The field builders a configuration slice is written with: `int`, `decimal`, `flag`, `choice`,
- * `text`, `email`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
+ * `text`, `email`, `timeZone`, `secret`, `csv`, `keyRing`, `versionedKeyRing`.
  *
  * One rule for all of them: a value is trimmed, and a blank one counts as unset (the same
  * "empty string is not a value" rule t3-env calls `emptyStringAsUndefined`). A value that is set
@@ -302,6 +302,51 @@ export function email(
 ): Field<string | undefined> {
     // Zod: `z.email` is the library's own address rule, no hand-written pattern. https://zod.dev/api#emails
     return build(z.email('email address'), options);
+}
+
+/** A fixed UTC offset (`+01:00`, `-0500`): it ignores summer time, so it is not a shop's zone. */
+const FIXED_OFFSET = /^[+-]\d/;
+
+/**
+ * The canonical IANA name behind a time-zone value, or `undefined` when it names no zone.
+ *
+ * @param value - the raw name, e.g. `europe/rome`
+ * @returns the canonical name, e.g. `Europe/Rome`
+ */
+const canonicalZone = (value: string): string | undefined => {
+    if (FIXED_OFFSET.test(value)) return undefined;
+    // eslint-disable-next-line no-restricted-syntax -- Intl has no non-throwing zone check; the RangeError is contained here and read as "not a zone"
+    try {
+        // Intl: the constructor throws a RangeError on a name it does not know; `resolvedOptions`
+        // hands back the canonical spelling. https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat/resolvedOptions
+        return new Intl.DateTimeFormat('en', { timeZone: value }).resolvedOptions().timeZone;
+    } catch {
+        // The throw IS the answer: an unknown zone is a refusal, not an error to surface.
+        return undefined;
+    }
+};
+
+/**
+ * An IANA time-zone name (`Europe/Rome`), stored in its canonical spelling. A fixed offset is
+ * refused: it ignores summer time. Checked through `Intl`, not `Intl.supportedValuesOf`, which
+ * lacks `UTC` on Node 24.
+ *
+ * @param options - `default` for an unset value; `required` for a boot-time presence rule
+ */
+export function timeZone(options: CommonOptions & { default: string }): Field<string>;
+export function timeZone(options?: CommonOptions): Field<string | undefined>;
+export function timeZone(
+    options: CommonOptions & { default?: string } = {}
+): Field<string | undefined> {
+    return build(
+        z.string().transform((value, context) => {
+            const zone = canonicalZone(value);
+            if (zone) return zone;
+            context.addIssue({ code: 'custom', message: 'IANA time zone name, e.g. Europe/Rome' });
+            return z.NEVER;
+        }),
+        options
+    );
 }
 
 /**

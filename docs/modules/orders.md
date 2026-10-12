@@ -25,6 +25,7 @@ flowchart LR
     payments["payments"]
     products["products"]
     returns["returns"]
+    stats["stats"]
     users["users"]
 
     cart --> orders
@@ -32,6 +33,7 @@ flowchart LR
     invoicing --> orders
     payments --> orders
     returns --> orders
+    stats --> orders
     orders --> access
     orders --> inventory
     orders --> products
@@ -49,7 +51,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments,returns supporting;
+    class delivery,inventory,invoicing,payments,returns,stats supporting;
     class access,users generic;
     class orders centre;
 ```
@@ -325,10 +327,29 @@ shelf (`inventory.shipForOrder`), in the same transaction as the status write �
 normal shipment triggers for its own units. An override into `processing` moves no stock. A hold
 already `shipped` makes the second call silent.
 
+## Reads other modules compose
+
+- `orderService.findManyByIds(ids)` answers each order's number and email, nothing more (no lines,
+  no addresses). The staff payments list uses it to name its rows.
+- `orderService.findOwedRefunds(cutoff, limit)` lists orders cancelled after payment whose refund
+  is still owed: the payments page's needs-attention read.
+- `orderService.paidBuckets`, `productTotals`, `categoryTotals`, `productSeries`, `customerCounts`,
+  `cancellationCohort` and `pipeline` are the grouped reads [`stats`](./stats.md) composes: each
+  answers a few hundred rows at most, counts live orders only, and dates a sale by `paidAt`.
+- `GET /orders` and `POST /orders/search` filter by `createdFrom`/`createdTo` and `paidFrom`/`paidTo`
+  (inclusive instants; an unpaid order has no `paidAt`, so no paid bound matches it), by
+  `paymentStatus` and `returnStatus`, and sort by `paidAt`. The two statuses are derived on read,
+  so each filter value is mapped back to the stored fields behind it (`domain/projections.ts`); the
+  integration suite checks every value both ways. `paidAt` is on the wire: the buyer's own fact.
+  Scope stays the permission key: `orders.self.read` alone sees its own orders.
+- `GET /orders` sorts by `payBy` (index `{status, payBy}`), which is how the Awaiting-transfer tab
+  reads: `?paymentMethod=bank_transfer&status=pending&sort=payBy`.
+
 ## The invoice
 
 `orderNumber` is Shopify's `#1001`, not a fiscal sequence: gaps are fine, and it names this
-order alone. The actual tax invoice — a frozen document, its own numbering series, credit notes on
+order alone. Its year is the shop calendar's (`NODE_SHOP_TIMEZONE`), the same cut the invoice series
+uses, so order `2026-x` never gets invoice `2027-y`. The actual tax invoice — a frozen document, its own numbering series, credit notes on
 refund — is [`invoicing`](./invoicing.md), a module this one has no import of and no wiring for:
 `invoicing` depends on `orders`, never the reverse, and reaches its own `GET /orders/{id}/invoice`
 and `GET /orders/{id}/credit-notes` by sharing this module's `/orders` basePath (the same pattern
@@ -465,23 +486,24 @@ when the shop offers a longer withdrawal period.
 
 ## Configuration
 
-| Variable                                                           | Default             | Meaning                                                                                                                                                                                          |
-| ------------------------------------------------------------------ | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                  |
-| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                |
-| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                              |
-| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                              |
-| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                            |
-| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                         |
-| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                              |
-| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                            |
-| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone |
-| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30   |
-| `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                          |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                               |
-| `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                       |
-| `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                           |
-| `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                             |
+| Variable                                                           | Default             | Meaning                                                                                                                                                                                                                             |
+| ------------------------------------------------------------------ | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_SHOP_COUNTRY`                                                | —                   | The shop's own jurisdiction — the only one VAT is ever charged at, no destination lookup. Required at boot; its slice (`config.ts`) refuses to start without it                                                                     |
+| `NODE_SHOP_TIMEZONE`                                               | —                   | The shop's IANA time zone (`Europe/Rome`); a fixed offset is refused. Required. The year of order, invoice and credit-note numbers and a document's printed date follow it, so a sale at 00:30 on 1 January lands in the new series |
+| `NODE_SHOP_LEGAL_NAME`                                             | —                   | The shop's legal name. Required. Printed on invoices and in the withdrawal notice                                                                                                                                                   |
+| `NODE_SHOP_STREET`, `_CITY`, `_ZIP`                                | —                   | The shop's postal address. Required                                                                                                                                                                                                 |
+| `NODE_SHOP_EMAIL`                                                  | —                   | Where a customer writes to (checked as an email). Required. Not the no-reply sender                                                                                                                                                 |
+| `NODE_SHOP_PHONE`                                                  | —                   | The shop's telephone number. Required                                                                                                                                                                                               |
+| `NODE_SHOP_VAT_NUMBER`                                             | —                   | VAT identification number. Optional: a shop below the registration threshold prints none                                                                                                                                            |
+| `NODE_RETURN_ADDRESS_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY` | —                   | Where returned goods go. Optional; street, city, zip and country must all be set, or the shop's own address is used                                                                                                                 |
+| `NODE_RETURN_POSTAGE_PAYER`                                        | `consumer`          | Who pays to send the goods back: `consumer` or `shop`. Said in the order email, frozen on each return                                                                                                                               |
+| `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone                                    |
+| `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30                                      |
+| `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                                                             |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                                                                  |
+| `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                                                          |
+| `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                                                              |
+| `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                                                                |
 
 The VAT RATES charged against an order line are a different thing with a different owner — see
 [products](./products.md#configuration); this module only freezes onto the order the rate `products`

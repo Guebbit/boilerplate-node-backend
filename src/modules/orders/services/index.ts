@@ -8,7 +8,15 @@
  * `retention.ts` answers an erased account, `scope.ts` decides who may see what,
  */
 
-import { search, getById, getForCaller, openUnpaidOrderIds, getByTransferReference } from './read';
+import {
+    search,
+    getById,
+    getForCaller,
+    openUnpaidOrderIds,
+    getByTransferReference,
+    findManyByIds,
+    findOwedRefunds
+} from './read';
 import { create, recordCreated, update, updateById } from './crud';
 import { remove, removeById, restoreById } from './remove';
 import { placeOrder } from './place';
@@ -51,6 +59,15 @@ import {
     refreshShelf
 } from './fulfillment';
 import { overrideStatus } from './override';
+import {
+    paidBuckets,
+    productTotals,
+    categoryTotals,
+    productSeries,
+    customerCounts,
+    cancellationCohort,
+    pipeline
+} from './stats';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
@@ -65,6 +82,8 @@ export {
     billingAddressOf,
     openUnpaidOrderIds,
     getByTransferReference,
+    findManyByIds,
+    findOwedRefunds,
     ownOrderIds,
     findOwnOrders,
     orderBriefsByIds,
@@ -118,6 +137,14 @@ export {
 export { freezeOrderLines } from './snapshot';
 export { reencryptOrders } from './reencrypt';
 export { allocateOrderNumber } from './order-numbering';
+export type {
+    PaidBucket,
+    ProductTotal,
+    CategoryTotal,
+    ProductSeriesRead,
+    AwaitingTransfers,
+    PipelineRead
+} from './stats';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
 // The shop's identity and return address are read by `invoicing`, `delivery` and `returns` from here.
@@ -133,6 +160,7 @@ export {
     shopCurrency,
     shopCountry,
     shopIdentity,
+    shopTimezone,
     withdrawalPeriodDays,
     shipToCountries,
     returnAddress,
@@ -162,6 +190,15 @@ export const orderService = {
     mailBuyer,
     openUnpaidOrderIds,
     getByTransferReference,
+    findManyByIds,
+    findOwedRefunds,
+    paidBuckets,
+    productTotals,
+    categoryTotals,
+    productSeries,
+    customerCounts,
+    cancellationCohort,
+    pipeline,
     recordCreated,
     update,
     updateById,

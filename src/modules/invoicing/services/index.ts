@@ -13,6 +13,7 @@ import {
     findCreditNoteForOrderById
 } from './issue-credit-note';
 import { renderInvoicePdf, renderCreditNotePdf } from './render';
+import { moneyBuckets } from './stats';
 
 export { issueInvoice, findInvoiceForOrder } from './issue-invoice';
 export {
@@ -22,6 +23,7 @@ export {
     type RefundedInput
 } from './issue-credit-note';
 export { renderInvoicePdf, renderCreditNotePdf } from './render';
+export type { DocumentTotals, MoneyBucket } from './stats';
 export { reencryptInvoices } from './reencrypt';
 export { allocateInvoiceNumber, allocateCreditNoteNumber } from './numbering';
 
@@ -33,5 +35,6 @@ export const invoicingService = {
     findCreditNotesForOrder,
     findCreditNoteForOrderById,
     renderInvoicePdf,
-    renderCreditNotePdf
+    renderCreditNotePdf,
+    moneyBuckets
 };

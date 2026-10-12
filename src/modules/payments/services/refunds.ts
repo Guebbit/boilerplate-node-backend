@@ -29,7 +29,7 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { AuthContext } from '@types';
-import type { CallerContext, RefundReason } from '@types';
+import { RefundFailureReason, type CallerContext, type RefundReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import type { DomainEventMap } from '@kernel/events';
 import { announceInTransaction } from '@kernel/outbox';
@@ -45,7 +45,7 @@ import {
     type Money
 } from '@modules/orders';
 import { paymentsAuditActions } from '../audit';
-import { providerNamed } from '../providers';
+import { PaymentProviderError, providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
 import { PAYMENT_REFUNDED } from '../events';
 import type { PaymentDocument, RefundLine, RefundRecord } from '../model';
@@ -79,8 +79,25 @@ interface OpenedRefund {
     refund: RefundRecord;
 }
 
-/** How long a provider error is kept on the record — enough to diagnose, not a log dump. */
+/** How much of a provider's own wording one log line carries. */
 const MAX_ERROR_LENGTH = 500;
+
+/**
+ * The closed reason a refund failed, for the record. An adapter that classified its error threw a
+ * {@link PaymentProviderError}; anything else is `unknown`. The wording itself is logged here and
+ * never stored: it is the provider's, and can carry anything.
+ *
+ * @param error - what the provider call rejected with
+ * @param refund - the record that failed, for the log line
+ */
+const failureReasonOf = (error: unknown, refund: RefundRecord): RefundFailureReason => {
+    logger.warn({
+        message: 'The provider refused a refund.',
+        refundId: String(refund._id),
+        error: extractErrorMessage(error, String(error)).slice(0, MAX_ERROR_LENGTH)
+    });
+    return error instanceof PaymentProviderError ? error.code : RefundFailureReason.unknown;
+};
 
 /**
  * What is still refundable on a payment, in minor units: what was paid minus what has been asked
@@ -400,7 +417,7 @@ const sendToProvider = (
                     .failRefund(
                         String(payment._id),
                         String(refund._id),
-                        extractErrorMessage(error, String(error)).slice(0, MAX_ERROR_LENGTH)
+                        failureReasonOf(error, refund)
                     )
                     .then(() => {
                         throw error;

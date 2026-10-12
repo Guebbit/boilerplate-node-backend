@@ -19,7 +19,7 @@ import { paymentProviderRegistry } from './registry';
 export { registerPaymentProvider } from './registry';
 
 /** Re-exported from `./errors` — see there for why it isn't declared in this file. */
-export { PaymentInFlightError } from './errors';
+export { PaymentInFlightError, PaymentProviderError } from './errors';
 
 export {
     signWebhookPayload,

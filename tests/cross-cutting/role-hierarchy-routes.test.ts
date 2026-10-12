@@ -67,9 +67,9 @@ describe('the rank rule covers every write on something a person owns', () => {
     });
 
     // The canary: exact counts, so an emptied table cannot pass.
-    it('counts exactly 31 rows and 13 exemptions', () => {
+    it('counts exactly 31 rows and 14 exemptions', () => {
         expect(HIERARCHY_ROWS).toHaveLength(31);
-        expect(Object.keys(UNOWNED_WRITES)).toHaveLength(13);
-        expect(mountedWrites()).toHaveLength(44);
+        expect(Object.keys(UNOWNED_WRITES)).toHaveLength(14);
+        expect(mountedWrites()).toHaveLength(45);
     });
 });

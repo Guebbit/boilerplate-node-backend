@@ -130,6 +130,9 @@ returnSchema.index({ orderId: 1, createdAt: 1 }, { name: 'returns_orderId_create
 // Backs the staff queue: a status filter, oldest waiting first.
 returnSchema.index({ status: 1, createdAt: 1 }, { name: 'returns_status_createdAt' });
 
+// The stats count returned units by the day the goods were received.
+returnSchema.index({ status: 1, receivedAt: 1 }, { name: 'returns_status_receivedAt' });
+
 /**
  * Normalizes a serialized return: `_id` → `id`, drops `__v`. Owed to the repository factory's lean
  * reads.

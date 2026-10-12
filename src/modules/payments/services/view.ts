@@ -20,7 +20,7 @@ import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { CONFIRMABLE_PAYMENT_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { presentPayment } from '../presenter';
-import { callerScope } from './scope';
+import { callerScope, readsAllPayments } from './scope';
 
 /**
  * The payment behind an order, for the order page's payment panel.
@@ -70,7 +70,7 @@ export const withActions = (
 ): Promise<Payment> =>
     (order ? orderService.handlesMoneyOf(order, authContext) : Promise.resolve(true)).then(
         (handlesMoney) => ({
-            ...presentPayment(payment),
+            ...presentPayment(payment, readsAllPayments(authContext)),
             actions: {
                 // Confirmable, and the order can still get to `paid`. Both halves, because a
                 // retryable decline on an order that has since been cancelled is not a payment

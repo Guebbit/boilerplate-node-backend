@@ -20,6 +20,7 @@ export {
     addMoney,
     subtractMoney,
     scaleMoney,
+    averageMoney,
     apportion,
     NO_MONEY
 } from './money';
@@ -61,10 +62,18 @@ export {
 } from './withdrawal';
 export type { WithdrawalCandidate, WithdrawableLine, WithdrawalClockCandidate } from './withdrawal';
 
-/** The money and the return stamped beside `status`. */
-export { paymentStatusOf, returnStatusOf } from './projections';
+/** The money and the return stamped beside `status`, and the filters that are their inverse. */
+export {
+    paymentStatusOf,
+    returnStatusOf,
+    paymentStatusFilter,
+    returnStatusFilter
+} from './projections';
 export type { StampedPaymentStatus, StampedReturnStatus } from './projections';
 
 /** What `delivery` reports about the goods, and what `orders` reads off it. */
 export { NO_FULFILLMENT, fulfillmentStatusOf, fulfillmentStatusFilter } from './fulfillment';
 export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
+
+/** The shop-calendar year of an instant: the year every numbered series is cut at. */
+export { yearInZone, zonedStartOfDay } from './shop-time';

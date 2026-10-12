@@ -9,6 +9,7 @@
  */
 
 import type { ClientSession } from 'mongoose';
+import { shopTimezone, yearInZone } from '@modules/orders';
 import { invoicingRepository } from '../repository';
 
 /** How wide the sequence portion of a number is padded, e.g. `000041` — matches `orders`' own. */
@@ -19,27 +20,34 @@ const formatNumber = (year: number, sequence: number): string =>
     `${year}-${String(sequence).padStart(SEQUENCE_WIDTH, '0')}`;
 
 /**
- * Allocates and formats the next invoice number for the current UTC year. Called once per order,
- * from the `ORDER_STATUS_CHANGED` listener that issues its invoice — never again for the same
- * order, so a re-downloaded PDF always shows the same number.
+ * Allocates and formats the next invoice number for the shop-calendar year of `issuedAt`
+ * (`NODE_SHOP_TIMEZONE`). Called once per order, from the `ORDER_STATUS_CHANGED` listener that
+ * issues its invoice — never again for the same order, so a re-downloaded PDF always shows the
+ * same number. The year comes from the very instant stored as `issuedAt`, so number and date
+ * cannot disagree.
+ * @param issuedAt - the instant the document will carry as its issue date
  * @param session - the transaction that inserts the invoice
  * @returns the formatted invoice number for a new invoice
  */
-export const allocateInvoiceNumber = (session?: ClientSession): Promise<string> => {
-    const year = new Date().getUTCFullYear();
+export const allocateInvoiceNumber = (issuedAt: Date, session?: ClientSession): Promise<string> => {
+    const year = yearInZone(issuedAt, shopTimezone());
     return invoicingRepository
         .incrementInvoiceNumberCounter(year, session)
         .then((sequence) => formatNumber(year, sequence));
 };
 
 /**
- * Allocates and formats the next credit-note number for the current UTC year — its own series,
- * independent from {@link allocateInvoiceNumber}'s.
+ * Allocates and formats the next credit-note number for the shop-calendar year of `issuedAt` —
+ * its own series, independent from {@link allocateInvoiceNumber}'s.
+ * @param issuedAt - the instant the document will carry as its issue date
  * @param session - the transaction that inserts the credit note
  * @returns the formatted credit-note number for a new credit note
  */
-export const allocateCreditNoteNumber = (session?: ClientSession): Promise<string> => {
-    const year = new Date().getUTCFullYear();
+export const allocateCreditNoteNumber = (
+    issuedAt: Date,
+    session?: ClientSession
+): Promise<string> => {
+    const year = yearInZone(issuedAt, shopTimezone());
     return invoicingRepository
         .incrementCreditNoteNumberCounter(year, session)
         .then((sequence) => formatNumber(year, sequence));

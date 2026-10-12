@@ -47,6 +47,8 @@ interface LabelledMiddleware {
     name?: string;
     /** The key a `requirePermission(key)` guard closed over — real code, not a test label. */
     permissionKey?: string;
+    /** Whether that guard asks for the exact key, not just its action and subject. */
+    exactPermission?: boolean;
 }
 
 /** One mounted endpoint. Internal: the walker's return type, not referenced outside this file. */
@@ -62,6 +64,8 @@ interface RouteRow {
      * `undefined` for a route with no such guard.
      */
     permissionKey?: string;
+    /** Whether that guard is `{ exact: true }`. */
+    exactPermission?: boolean;
 }
 
 /**
@@ -340,6 +344,12 @@ const walk = (
         const inheritedKey = appliesHandles
             .map((handle) => handle.permissionKey)
             .find((key): key is string => key !== undefined);
+        const exactPermission = [
+            ...layer.route.stack.map(({ handle }) => handle),
+            ...appliesHandles
+        ]
+            .filter((handle) => handle.permissionKey !== undefined)
+            .some((handle) => handle.exactPermission === true);
 
         for (const method of Object.keys(layer.route.methods).filter(
             (each) => layer.route!.methods[each]
@@ -349,6 +359,7 @@ const walk = (
                 path: layer.route.path,
                 chain: layer.route.stack.map(({ handle }) => handlerName(handle)),
                 permissionKey: ownKey ?? inheritedKey,
+                exactPermission,
                 // Copied, not shared: later `use` layers must not appear to guard earlier routes.
                 applies: [...applies]
             });

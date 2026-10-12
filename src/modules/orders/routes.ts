@@ -1,7 +1,7 @@
 /**
  * @module
- * Express router for order management — authenticated throughout; non-admin callers see only
- * their own orders. Route order matters where a static segment (`/search`) or a longer path
+ * Express router for order management — authenticated throughout; a caller holding only
+ * `orders.self.read` sees their own orders. Route order matters where a static segment (`/search`) or a longer path
  * (`/:id/hard`) would otherwise be swallowed by `/:id`.
  *
  * `GET /orders/{id}/invoice` and `/credit-note` are NOT here: `invoicing` mounts its own router at
@@ -24,7 +24,7 @@ import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/m
 import { routeFlag } from '@infrastructure/http/middlewares/route-flag';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 
-/** Express router for order management (authenticated; non-admin users see only their own orders). */
+/** Express router for order management (authenticated; `orders.self.read` alone sees only the caller's own orders). */
 export const router = Router();
 
 /*
@@ -40,11 +40,11 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 // POST /orders/search — must come before /:id. Never Redis-cached: the answer depends on who is
-// asking (non-admin sees only their own orders), so a shared cache must never hold it — RFC 9111
+// asking (`orders.self.read` alone sees only their own orders), so a shared cache must never hold it — RFC 9111
 // §3.5. `noStore`, like every POST answer.
 router.post('/search', noStore, getOrders);
 
-// GET /orders — list (non-admin sees own orders only). `privateNoCache`: the browser may keep its
+// GET /orders — list (`orders.self.read` alone sees own orders only). `privateNoCache`: the browser may keep its
 // own copy, revalidated every time.
 router.get('/', privateNoCache, getOrders);
 

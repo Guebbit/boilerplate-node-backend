@@ -209,6 +209,32 @@ describe('buildWhere — ranges', () => {
     });
 });
 
+describe('buildWhere — dateRanges', () => {
+    const buildWhere = buildWhereFor({
+        dateRanges: { createdAt: { min: 'createdFrom', max: 'createdTo' } }
+    });
+
+    it('turns both ISO bounds into instants', () => {
+        expect(
+            buildWhere({
+                createdFrom: '2026-01-01T00:00:00.000Z',
+                createdTo: '2026-02-01T00:00:00Z'
+            })
+        ).toEqual({
+            createdAt: {
+                $gte: new Date('2026-01-01T00:00:00.000Z'),
+                $lte: new Date('2026-02-01T00:00:00.000Z')
+            }
+        });
+    });
+
+    it('applies a one-sided bound and drops an unparseable one', () => {
+        expect(buildWhere({ createdTo: '2026-02-01T00:00:00Z', createdFrom: 'nope' })).toEqual({
+            createdAt: { $lte: new Date('2026-02-01T00:00:00.000Z') }
+        });
+    });
+});
+
 describe('buildWhere — composing multiple kinds at once', () => {
     it('sets every matching path independently, none clobbering another', () => {
         const buildWhere = buildWhereFor({

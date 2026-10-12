@@ -200,6 +200,7 @@ process.env.NODE_BANK_TRANSFER_IBAN ??= 'IT60X0542811101000000123456';
  * test's expectation and the fallback happened to agree by coincidence).
  */
 process.env.NODE_SHOP_COUNTRY ??= 'IT';
+process.env.NODE_SHOP_TIMEZONE ??= 'Europe/Rome';
 process.env.NODE_SHOP_LEGAL_NAME ??= 'Guebbit Demo Shop Srl';
 process.env.NODE_SHOP_STREET ??= 'Via Roma 1';
 process.env.NODE_SHOP_CITY ??= 'Milano';

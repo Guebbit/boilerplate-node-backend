@@ -9,7 +9,7 @@
 
 import type { TFunction } from 'i18next';
 import { translator } from '@infrastructure/i18n';
-import { lineTaxFromRateTotals } from '@modules/orders';
+import { lineTaxFromRateTotals, shopTimezone } from '@modules/orders';
 import type { EInvoicingDocument } from './providers';
 import type { InvoiceLine } from './model';
 
@@ -95,7 +95,10 @@ export interface DocumentVatBlock {
 const buildMeta = (locale: string, t: TFunction, document: EInvoicingDocument) => ({
     numberLabel: t('invoicing.document.number', { number: document.number }),
     dateLabel: t('invoicing.document.date', {
-        date: new Intl.DateTimeFormat(locale, { dateStyle: 'long' }).format(document.issuedAt)
+        date: new Intl.DateTimeFormat(locale, {
+            dateStyle: 'long',
+            timeZone: shopTimezone()
+        }).format(document.issuedAt)
     })
 });
 

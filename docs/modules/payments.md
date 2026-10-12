@@ -22,10 +22,12 @@ flowchart LR
     invoicing["invoicing"]
     orders["orders"]
     returns["returns"]
+    stats["stats"]
 
     cart --> payments
     invoicing --> payments
     returns --> payments
+    stats --> payments
     payments --> inventory
     payments --> orders
     orders -. "order.cancelled" .-> payments
@@ -38,7 +40,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,invoicing,returns supporting;
+    class inventory,invoicing,returns,stats supporting;
     class payments centre;
 ```
 
@@ -336,7 +338,7 @@ sequenceDiagram
         P->>D: order.paymentStatus stamped (same transaction)
         P-->>C: payment.refunded (once per refund)
     else provider refuses
-        P->>D: record failed + lastError, still counted
+        P->>D: record failed + failureReason, still counted
         P-->>C: error — the sweep retries the same record
     end
 ```
@@ -351,8 +353,8 @@ sequenceDiagram
 - **The order's status commits with the settlement.** `order.paymentStatus` (`partially_refunded`
   or `refunded`) is stamped in the settlement's own transaction. No later refund exists to repair a
   missed stamp after the last one, so a failing stamp settles nothing and the sweep retries.
-- **A refusal stays open.** The record is `failed` (its `lastError` is stored, never published) and
-  keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
+- **A refusal stays open.** The record is `failed`, with a closed `failureReason` (staff only; see
+  [the staff Payments page](#the-staff-payments-page)), and keeps its share of `amountRefunded`, so nothing is opened beside it. `retryOpenRefunds` (run by
   `npm run sweep:payment-effects`) and the next cancel or operator call both finish it.
 - **The default is everything left.** `POST /payments/order/{orderId}/refund` with no body returns
   all that is still refundable; with an `amount` it returns that part. More than what is left is a
@@ -513,6 +515,58 @@ flowchart LR
     class E bad;
 ```
 
+## The staff Payments page
+
+Four reads behind one admin page, all `payments.any.read` (support, manager, admin) and never
+shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
+
+| Read                                     | Answers                                                                                                                                                         |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /payments`, `POST /payments/search` | one page of payments, newest first; each row carries its order's `orderNumber` and `email`, composed from `orders` in one batch (`findManyByIds`)               |
+| `GET /payments/refunds`                  | one row per refund across every payment (`$unwind`); refunds stay embedded, because opening one is a single conditional write that also raises `amountRefunded` |
+| `GET /payments/attention`                | problems still recorded on a document, oldest first; a fixed problem clears its marker and disappears                                                           |
+| Awaiting transfer                        | not here: `GET /orders?paymentMethod=bank_transfer&status=pending&sort=payBy`, since no payment exists until the money is recorded                              |
+
+```mermaid
+flowchart LR
+    S[stored status + refund records] --> D[displayStatusOf]
+    D --> L[label on every Payment]
+    F[displayStatus filter] --> Q[displayStatusFilter]
+    Q --> M[Mongo query on the stored fields]
+```
+
+`displayStatus` is derived, never stored (Shopify's `displayFinancialStatus`). An open refund wins
+over the status, and the label is read from the refund records, not `amountRefunded`, which counts
+a requested refund as done. The filter is the label's inverse, and the integration suite checks
+every label both ways.
+
+| Label                | Stored                                              |
+| -------------------- | --------------------------------------------------- |
+| `incomplete`         | `requires_confirmation`, `requires_action`          |
+| `pending`            | `processing`                                        |
+| `succeeded`          | `succeeded`, no refund record                       |
+| `refund_pending`     | any refund record `pending` or `failed`             |
+| `partially_refunded` | `succeeded`, at least one settled refund, none open |
+| `refunded`           | `refunded`                                          |
+| `failed`             | `declined`                                          |
+
+**What staff see that a payer does not.** `providerRef`, each refund's `providerRefundRef` and a
+failed refund's `failureReason`. The reason is a closed code (`declined`, `insufficient_funds`,
+`expired_or_canceled_card`, `lost_or_stolen_card`, `provider_unavailable`, `unknown`), Stripe's
+`failure_reason` shape. A provider adapter throws `PaymentProviderError(code, message)`; anything
+else is `unknown`. The provider's own wording goes to the log and is never stored. The fake
+provider's `setFakeRefundFailure` simulates each code.
+
+`paymentService.methodMix` groups the payments that took money (`succeeded`, or `refunded` since) by
+method, provider and currency, for [`stats`](./stats.md).
+
+**Needs attention** lists four sources: a provider refund open longer than
+`NODE_PAYMENT_ATTENTION_MINUTES`; a refund owed by hand on a `manual` payment (nothing but the
+operator finishes it, so it shows at any age); a payment whose stock commit is still owed; an order
+cancelled after payment whose refund is still owed. An amount mismatch is not a stored state (an
+audit row `payment.amount_mismatch`, a counter, a log), so the page links to the audit log instead.
+Each source is capped at 100 rows.
+
 ## Configuration
 
 | Variable                                    | Default | Meaning                                                                                                                                                                                                                                                                                                        |
@@ -528,6 +582,7 @@ flowchart LR
 | `NODE_BANK_TRANSFER_HOLD_HOURS`             | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`   | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
 | `NODE_PAYMENT_EFFECT_RETRY_MINUTES`         | `1`     | How old a `pendingEffects` marker must be before `sweep:payment-effects` retries it. See [Pending effects](#pending-effects)                                                                                                                                                                                   |
+| `NODE_PAYMENT_ATTENTION_MINUTES`            | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                      |
 | `NODE_PAYMENT_RECONCILE_MINUTES`            | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
 | `NODE_STRIPE_SECRET_KEY`                    | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |
 

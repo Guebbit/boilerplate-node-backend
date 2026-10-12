@@ -19,6 +19,8 @@ export interface MountedRoute {
     guards: string[];
     /** The `requirePermission` key guarding this route, `undefined` for one with no such guard. */
     permissionKey?: string;
+    /** Whether that guard asks for the exact key, not just its action and subject. */
+    exactPermission?: boolean;
 }
 
 /**
@@ -35,11 +37,12 @@ export const everyMountedRoute = (): MountedRoute[] =>
         )
         .flatMap((appModule) =>
             effectiveRouteTable(appModule.routes).map(
-                ({ method, path, applies, chain, permissionKey }) => ({
+                ({ method, path, applies, chain, permissionKey, exactPermission }) => ({
                     method,
                     path: `${appModule.basePath}${path}`,
                     guards: [...applies, ...chain],
-                    permissionKey
+                    permissionKey,
+                    exactPermission
                 })
             )
         );

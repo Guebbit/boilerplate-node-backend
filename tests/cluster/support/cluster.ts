@@ -191,6 +191,7 @@ const startCluster = ({
                          * values `.env-example` ships, so the child boots the way a fresh checkout does.
                          */
                         NODE_SHOP_COUNTRY: 'IT',
+                        NODE_SHOP_TIMEZONE: 'Europe/Rome',
                         NODE_SHOP_LEGAL_NAME: 'Guebbit Demo Shop Srl',
                         NODE_SHOP_STREET: 'Via Roma 1',
                         NODE_SHOP_CITY: 'Milano',

@@ -20,6 +20,14 @@
         "webhook-unverified": "Non è stato possibile verificare questa notifica.",
         "refund-exceeds-remaining": "L'importo supera quanto resta da rimborsare su questo pagamento.",
         "refund-currency-mismatch": "La valuta del rimborso non è quella del pagamento.",
-        "refund-invalid-amount": "Non è un importo valido nella valuta del pagamento."
+        "refund-invalid-amount": "Non è un importo valido nella valuta del pagamento.",
+        "failure-reason": {
+            "declined": "Il provider l'ha rifiutato.",
+            "insufficient_funds": "Fondi insufficienti.",
+            "expired_or_canceled_card": "La carta è scaduta o annullata.",
+            "lost_or_stolen_card": "La carta risulta smarrita o rubata.",
+            "provider_unavailable": "Il provider non è raggiungibile.",
+            "unknown": "Il provider non ha indicato un motivo utilizzabile."
+        }
     }
 }

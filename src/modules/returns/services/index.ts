@@ -11,6 +11,7 @@ import { receiveReturn } from './receive';
 import { listReturns, getReturn, withActions } from './read';
 import { getReturnOptions } from './options';
 import { scrubReturnText } from './retention';
+import { returnedBuckets, returnedByProduct, returnedSeries } from './stats';
 
 export { createReturn, type CreateReturnInput, type CreateReturnOutcome } from './create';
 export { approveReturn, declineReturn } from './decide';
@@ -21,6 +22,7 @@ export { listReturns, getReturn, withActions, type ReturnFilters } from './read'
 export { getReturnOptions } from './options';
 export { collectPersonalData } from './personal-data';
 export { scrubReturnText } from './retention';
+export type { ReturnedBucket } from './stats';
 
 /** The service's one handle. Named for the record it serves. */
 export const returnService = {
@@ -32,5 +34,8 @@ export const returnService = {
     getReturn,
     getReturnOptions,
     withActions,
-    scrubReturnText
+    scrubReturnText,
+    returnedBuckets,
+    returnedByProduct,
+    returnedSeries
 };

@@ -31,7 +31,8 @@ import {
     withdrawalPeriodDays,
     shopCountry,
     shopCurrency,
-    shopIdentity
+    shopIdentity,
+    shopTimezone
 } from '../../config';
 import ordersModule from '../../module';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
@@ -54,6 +55,7 @@ const TOUCHED = [
     'NODE_ENV',
     'NODE_URL',
     'NODE_SHOP_COUNTRY',
+    'NODE_SHOP_TIMEZONE',
     ...IDENTITY_VARIABLES,
     'NODE_SHOP_VAT_NUMBER',
     'NODE_RETURN_ADDRESS_NAME',
@@ -83,6 +85,7 @@ const configure = (): void => {
     setEnvironment({ NODE_ENV: 'development' });
     setEnvironment({ NODE_URL: 'https://api.example.com/' });
     setEnvironment({ NODE_SHOP_COUNTRY: 'IT' });
+    setEnvironment({ NODE_SHOP_TIMEZONE: 'Europe/Rome' });
     setEnvironment(IDENTITY);
 };
 
@@ -101,6 +104,35 @@ describe('reading the jurisdiction', () => {
         setEnvironment({ NODE_SHOP_COUNTRY: 'FR' });
 
         expect(shopCountry()).toBe('FR');
+    });
+});
+
+describe('the shop time zone', () => {
+    it('refuses to boot with no NODE_SHOP_TIMEZONE', () => {
+        configure();
+        setEnvironment({ NODE_SHOP_TIMEZONE: undefined });
+
+        expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_SHOP_TIMEZONE/);
+    });
+
+    it('refuses a fixed offset, which ignores summer time', () => {
+        configure();
+        setEnvironment({ NODE_SHOP_TIMEZONE: '+01:00' });
+
+        expect(() => assertModuleConfig([ordersModule], [])).toThrow(/NODE_SHOP_TIMEZONE/);
+    });
+
+    it('reads the canonical name per call', () => {
+        configure();
+        setEnvironment({ NODE_SHOP_TIMEZONE: 'europe/rome' });
+
+        expect(shopTimezone()).toBe('Europe/Rome');
+    });
+
+    it('throws a ConfigError when read unset', () => {
+        setEnvironment({ NODE_SHOP_TIMEZONE: undefined });
+
+        expect(() => shopTimezone()).toThrow(/NODE_SHOP_TIMEZONE/);
     });
 });
 

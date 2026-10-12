@@ -6,6 +6,8 @@
  * (`orderRepository.incrementOrderNumberCounter`) — this file only decides the string.
  */
 
+import { shopTimezone } from '../config';
+import { yearInZone } from '../domain/shop-time';
 import { orderRepository } from '../repository';
 
 /**
@@ -16,7 +18,7 @@ import { orderRepository } from '../repository';
 const SEQUENCE_WIDTH = 6;
 
 /**
- * Allocates and formats the next order number for the current UTC year —
+ * Allocates and formats the next order number for the current year of the shop's calendar (`NODE_SHOP_TIMEZONE`) —
  * `{year}-{sequence}`, zero-padded to {@link SEQUENCE_WIDTH} digits (e.g. `2026-000041`).
  *
  * Called once, at order-creation time — the caller stores the result on `Order.orderNumber` —
@@ -27,7 +29,7 @@ const SEQUENCE_WIDTH = 6;
  * @returns the formatted order number for a new order
  */
 export const allocateOrderNumber = (): Promise<string> => {
-    const year = new Date().getUTCFullYear();
+    const year = yearInZone(new Date(), shopTimezone());
 
     return orderRepository
         .incrementOrderNumberCounter(year)

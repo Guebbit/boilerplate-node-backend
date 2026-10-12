@@ -124,9 +124,11 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
 
         // Allocated before the transaction: the driver may re-run it, and a retry must reuse the id.
         const _id = new Types.ObjectId();
+        // One instant for the number's year and the stored date; fixed here so a retry keeps it.
+        const issuedAt = new Date();
 
         return withTransaction((session) =>
-            allocateCreditNoteNumber(session).then((number) =>
+            allocateCreditNoteNumber(issuedAt, session).then((number) =>
                 invoicingRepository.insertCreditNote(
                     {
                         _id,
@@ -135,7 +137,7 @@ export const issueCreditNote = (input: RefundedInput): Promise<CreditNoteDocumen
                         invoiceNumber: invoice.number,
                         refundId: input.refundId,
                         number,
-                        issuedAt: new Date(),
+                        issuedAt,
                         currency: invoice.currency,
                         locale: invoice.locale,
                         orderNumber: invoice.orderNumber,

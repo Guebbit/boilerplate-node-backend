@@ -24,7 +24,7 @@ import {
     API_KEY_TOKEN_PREFIX,
     type ResolveMissReason
 } from '@kernel/authentication';
-import { holdsKey } from '@kernel/ability';
+import { heldKeys, holdsKey } from '@kernel/ability';
 import { readRefreshCookie } from '@kernel/cookies';
 import {
     assertDeclared,
@@ -379,9 +379,12 @@ const challengeForFreshAuth = (
  * problem for as long as nobody tried it.
  *
  * @param key - the permission key this route requires, e.g. `products.any.update`
+ * @param options - `exact`: require this very key, not merely its action and subject. Only a wide
+ *   read needs it: `payments.self.read` and `payments.any.read` are both `read` on `Payment`, so
+ *   the plain guard would let every customer into a staff list.
  * @throws Error at mount time when no module declares the key
  */
-export const requirePermission = (key: string) => {
+export const requirePermission = (key: string, options: { exact?: boolean } = {}) => {
     assertDeclared(key);
     const declared = findKey(key);
     // The one place this guard's own scope is known — everything it audits below states it
@@ -453,7 +456,7 @@ export const requirePermission = (key: string) => {
          * across the two earlier `if`s and their side-effecting calls.
          */
         const caller = request.authContext ? callerFor(request.authContext, key) : request.caller!;
-        const allowed = holdsKey(caller, key);
+        const allowed = holdsKey(caller, key) && (!options.exact || heldKeys(caller).has(key));
 
         /*
          * Step-up is asked AFTER the key check, and the order is the argument: telling somebody
@@ -487,7 +490,10 @@ export const requirePermission = (key: string) => {
     // The key this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
     // reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
     // rather than only whether a guard is present at all.
-    return Object.assign(requirePermissionGuard, { permissionKey: key });
+    return Object.assign(requirePermissionGuard, {
+        permissionKey: key,
+        exactPermission: options.exact === true
+    });
 };
 
 /**

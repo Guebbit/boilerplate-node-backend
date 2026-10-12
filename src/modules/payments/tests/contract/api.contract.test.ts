@@ -20,6 +20,7 @@ import { paymentRepository } from '@modules/payments/repository';
 import { inventoryService } from '@modules/inventory';
 import { setFakeOutcome } from '@scenarios/support/doubles/payments/fake';
 import { onDomainEvent } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { ORDER_STATUS_CHANGED } from '@modules/orders';
 import { MISSING_ID } from '@tests/ids';
 import { setEnvironment } from '@tests/environment';
@@ -472,6 +473,8 @@ describe('POST /payments/webhook', () => {
 
         const first = await deliver(event);
         const replay = await deliver(event);
+        // The status change reaches its listener through the outbox, after the response.
+        await settleOutboxNudges();
 
         // 200 either way — a provider reads anything else as a failed delivery and retries harder.
         expect(first.status).toBe(200);
@@ -748,5 +751,91 @@ describe('GET /payments/order-by-reference', () => {
             .set('Authorization', bearer);
 
         expect(response.status).toBe(422);
+    });
+});
+
+describe('the staff Payments page', () => {
+    it('GET /payments matches the contract for staff, and carries the provider reference', async () => {
+        const { order } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/payments?displayStatus=succeeded&sort=-amount&amountMin=1')
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+        expect(response.body.data.items[0]).toMatchObject({
+            orderId: String(order._id),
+            displayStatus: 'succeeded',
+            providerRef: expect.any(String) as string,
+            orderNumber: order.orderNumber
+        });
+    });
+
+    it('POST /payments/search answers what GET /payments does', async () => {
+        await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .post('/payments/search')
+            .set('Authorization', adminBearer)
+            .send({ displayStatus: 'succeeded', amountMin: 1 });
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toHaveLength(1);
+    });
+
+    it('refuses a customer all four reads', async () => {
+        const { bearer } = await authenticateWithOrder();
+
+        const responses = await Promise.all([
+            api().get('/payments').set('Authorization', bearer),
+            api().post('/payments/search').set('Authorization', bearer).send({}),
+            api().get('/payments/refunds').set('Authorization', bearer),
+            api().get('/payments/attention').set('Authorization', bearer)
+        ]);
+
+        expect(responses.map((response) => response.status)).toEqual([403, 403, 403, 403]);
+    });
+
+    it('answers 422 for a status that is not a label', async () => {
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api()
+            .get('/payments?displayStatus=paid')
+            .set('Authorization', adminBearer);
+
+        expect(response.status).toBe(422);
+    });
+
+    it('GET /payments/refunds lists a refund once an operator has made one', async () => {
+        const { order } = await paidOrder();
+        const { bearer: adminBearer } = await authenticateAs('admin');
+        await api()
+            .post(`/payments/order/${String(order._id)}/refund`)
+            .set('Authorization', adminBearer)
+            .set('Idempotency-Key', freshKey());
+
+        const response = await api().get('/payments/refunds').set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data.items).toEqual([
+            expect.objectContaining({
+                orderId: String(order._id),
+                status: 'succeeded',
+                reason: 'goodwill',
+                providerRefundRef: expect.any(String) as string
+            })
+        ]);
+    });
+
+    it('GET /payments/attention matches the contract, empty when nothing is stuck', async () => {
+        const { bearer: adminBearer } = await authenticateAs('admin');
+
+        const response = await api().get('/payments/attention').set('Authorization', adminBearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual({ items: [] });
     });
 });

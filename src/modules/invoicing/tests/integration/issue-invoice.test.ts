@@ -6,6 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
+import { freezeDate } from '@tests/clock';
 import { registerModules } from '@kernel/registry';
 import { resetDomainEvents } from '@kernel/events';
 import { OrderStatus } from '@types';
@@ -14,7 +15,7 @@ import productsModule from '@modules/products/module';
 import inventoryModule from '@modules/inventory/module';
 import ordersModule from '@modules/orders/module';
 import invoicingModule from '@modules/invoicing/module';
-import { markPaid } from '@modules/orders';
+import { markPaid, shopTimezone, yearInZone } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -188,7 +189,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
-        const year = new Date().getUTCFullYear();
+        const year = yearInZone(new Date(), shopTimezone());
 
         // Two callers racing the same fact — a redelivered event, or two settlements — both call
         // this; the unique index refuses the second insert and its transaction gives the number back.
@@ -208,7 +209,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
-        const year = new Date().getUTCFullYear();
+        const year = yearInZone(new Date(), shopTimezone());
 
         const first = await issueInvoice(order);
         const again = await issueInvoice(order);
@@ -224,7 +225,7 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         const order = await createOrder(user, [toOrderItem(product, 1)], {
             status: OrderStatus.paid
         });
-        const year = new Date().getUTCFullYear();
+        const year = yearInZone(new Date(), shopTimezone());
         const insert = jest
             .spyOn(invoicingRepository, 'insertInvoice')
             .mockRejectedValueOnce(new Error('disk full'));
@@ -235,6 +236,25 @@ describe('issuing an invoice off ORDER_STATUS_CHANGED', () => {
         // The allocation shared the insert's transaction, so nothing was spent.
         expect(await invoiceNumberCounterModel.findById(year).lean().exec()).toBeNull();
         await expect(issueInvoice(order)).resolves.toMatchObject({ number: `${year}-000001` });
+    });
+
+    it("numbers an invoice by the shop's calendar year, not UTC's", async () => {
+        const user = await createUser();
+        const product = await createProduct({ price: 10 });
+        const order = await createOrder(user, [toOrderItem(product, 1)], {
+            status: OrderStatus.paid
+        });
+        // 00:30 on 1 January in Rome is still 31 December in UTC.
+        freezeDate(new Date('2026-12-31T23:30:00Z'));
+
+        try {
+            const invoice = await issueInvoice(order);
+
+            expect(invoice?.number).toBe('2027-000001');
+            expect(invoice?.issuedAt).toEqual(new Date('2026-12-31T23:30:00Z'));
+        } finally {
+            jest.useRealTimers();
+        }
     });
 
     it('issues nothing for an order with no lines', async () => {

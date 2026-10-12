@@ -120,6 +120,8 @@ roles:
           # The manager cancels paid orders, which refunds them, so it reads the money; refunding
           # itself stays `payments.any.update`.
           - payments.any.read
+          # The sales numbers are the manager's job; they can already see every payment.
+          - stats.any.read
           - inventory.any.read
           # A manager may start fulfilment on a paid order — POST /delivery/order/{id}/start.
           - delivery.any.start
@@ -289,6 +291,7 @@ roles:
           - payments.any.read
           - payments.any.create
           - payments.any.update
+          - stats.any.read
           - inventory.any.read
           - inventory.any.create
           - inventory.any.sweep

@@ -15,6 +15,7 @@ import {
     keyRing,
     secret,
     text,
+    timeZone,
     versionedKeyRing
 } from '@infrastructure/config/fields';
 
@@ -181,5 +182,23 @@ describe('csv and key rings', () => {
             { version: 'v2', key: 'new' },
             { version: 'v1', key: 'old' }
         ]);
+    });
+});
+
+describe('timeZone', () => {
+    const field = timeZone({ required: { minLength: 1 } });
+
+    it('stores the canonical spelling of a zone name', () => {
+        expect(field.schema.parse('europe/rome')).toBe('Europe/Rome');
+        expect(field.schema.parse(' UTC ')).toBe('UTC');
+    });
+
+    it.each(['+01:00', '-0500', 'Mars/Olympus', 'Rome'])('refuses %s', (raw) => {
+        expect(field.schema.safeParse(raw).success).toBe(false);
+    });
+
+    it('is unset when blank, and takes a default when it has one', () => {
+        expect(field.schema.parse('  ')).toBeUndefined();
+        expect(timeZone({ default: 'UTC' }).schema.parse(undefined)).toBe('UTC');
     });
 });

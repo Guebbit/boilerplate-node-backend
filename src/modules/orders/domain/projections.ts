@@ -48,3 +48,24 @@ export const paymentStatusOf = (
  */
 export const returnStatusOf = (stamped: StampedReturnStatus | undefined): OrderReturnStatus =>
     stamped ?? 'none';
+
+/**
+ * The stored-field query behind a `paymentStatus` filter: the inverse of {@link paymentStatusOf}.
+ * The stamp (`paymentStatus`) is present only for a refund state; `paid`/`unpaid` read `paidAt`.
+ * @param status - the value the caller filters by
+ * @returns a Mongo filter over orders
+ */
+export const paymentStatusFilter = (status: OrderPaymentStatus): Record<string, unknown> => {
+    if (status === OrderPaymentStatus.paid) return { paymentStatus: null, paidAt: { $ne: null } };
+    if (status === OrderPaymentStatus.unpaid) return { paymentStatus: null, paidAt: null };
+    return { paymentStatus: status };
+};
+
+/**
+ * The stored-field query behind a `returnStatus` filter: the inverse of {@link returnStatusOf}.
+ * `none` is the absence of a stamp.
+ * @param status - the value the caller filters by
+ * @returns a Mongo filter over orders
+ */
+export const returnStatusFilter = (status: OrderReturnStatus): Record<string, unknown> =>
+    status === OrderReturnStatus.none ? { returnStatus: null } : { returnStatus: status };
