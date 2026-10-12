@@ -40,7 +40,6 @@ export {
     statusesLeadingTo,
     orderActionsFor,
     canOverrideTo,
-    statusesOverridableInto,
     overridableTargetsFrom
 } from './lifecycle';
 export type { OrderActor, OrderEvent, OrderEventName } from './lifecycle';

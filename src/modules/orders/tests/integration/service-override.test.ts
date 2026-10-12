@@ -17,6 +17,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { overrideStatus } from '../../services/override';
 import { recordForcedFulfilment } from '../../services/fulfillment';
 import { orderModel } from '../../model';
+import { orderRepository } from '../../repository';
 import { ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '../../events';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
@@ -140,6 +141,55 @@ describe('overrideStatus', () => {
         );
 
         expect(result.success).toBe(false);
+    });
+
+    it('answers 409 and writes no history when another move lands between the read and the write', async () => {
+        const order = await seedOrder(OrderStatus.paid);
+        const context = callerContextAs('admin', 'admin-1');
+
+        // Another writer moves the order to `processing` right after the override reads `paid`.
+        const realRead = orderRepository.findByIdScoped;
+        const read = jest
+            .spyOn(orderRepository, 'findByIdScoped')
+            .mockImplementationOnce((id, ...rest) =>
+                realRead(id, ...rest).then((found) =>
+                    orderModel
+                        .updateOne({ _id: order._id }, { $set: { status: OrderStatus.processing } })
+                        .exec()
+                        .then(() => found)
+                )
+            );
+
+        const result = await overrideStatus(
+            String(order._id),
+            OrderStatus.delivered,
+            'raced by a delivery move',
+            context
+        );
+        read.mockRestore();
+
+        expect(result.success).toBe(false);
+        expect(result.status).toBe(409);
+        const stored = await readOrder(String(order._id));
+        expect(stored?.status).toBe(OrderStatus.processing);
+        expect(await timelineOf(String(order._id))).toHaveLength(0);
+    });
+
+    it('records the stored pre-state as the history `from`', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        await overrideStatus(
+            String(order._id),
+            OrderStatus.delivered,
+            'parcel was handed over by hand',
+            callerContextAs('admin', 'admin-1')
+        );
+
+        const timeline = await timelineOf(String(order._id));
+        expect(timeline[0]?.data).toMatchObject({
+            from: OrderStatus.processing,
+            to: OrderStatus.delivered
+        });
     });
 
     it('creates no parcel-side effect — it is the status-only door', async () => {
