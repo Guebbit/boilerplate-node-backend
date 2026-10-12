@@ -15,6 +15,7 @@
 import path from 'node:path';
 import type { AppModule, PublicEventTarget } from '@kernel/registry';
 import { onDomainEvent, type DomainEventMap } from '@kernel/events';
+import { FULFILLMENT_ORDER_WAIT_EXPIRED } from '@modules/delivery';
 import { PAYMENT_REFUNDED } from '@modules/payments';
 import { router } from './routes';
 import { returnsRateLimits } from './rate-limits';
@@ -24,6 +25,7 @@ import { collectPersonalData } from './services/personal-data';
 // own barrel — see CLAUDE.md's module-barrel rule.
 import { RETURN_REQUESTED, RETURN_RECEIVED, RETURN_CLOSED } from './events';
 import { closeReturn } from './services/close';
+import { cancelUnanswered } from './services/cancel-remainder';
 
 /**
  * This module's public (webhook-visible) events, projected by `webhooks` through
@@ -73,6 +75,11 @@ export default {
     subscribe: () => {
         onDomainEvent(PAYMENT_REFUNDED, ({ returnId }) =>
             returnId ? closeReturn(returnId).then(() => undefined) : undefined
+        );
+        // A preorder's buyer was asked to keep waiting and never answered: silence cancels, and
+        // `delivery` cannot touch money or stock, so it announces and this module acts.
+        onDomainEvent(FULFILLMENT_ORDER_WAIT_EXPIRED, ({ orderId, fulfillmentOrderId }) =>
+            cancelUnanswered(orderId, fulfillmentOrderId)
         );
     },
     personalData: [

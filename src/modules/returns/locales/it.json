@@ -44,6 +44,7 @@
             }
         },
         "received": "Reso ricevuto — la merce è di nuovo in vendita.",
-        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso."
+        "deduction-too-high": "La trattenuta per la gestione supera il valore del rimborso.",
+        "reason-reserved": "Quel motivo è riservato al negozio e non può essere richiesto"
     }
 }

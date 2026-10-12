@@ -88,6 +88,14 @@ export const badCancellation = (): CreateReturnOutcome =>
         ])
     );
 
+/** The 422 for a reason only the shop itself may write (`no_answer`). */
+export const reasonReserved = (): CreateReturnOutcome =>
+    refused(
+        generateReject(422, [
+            { code: ERROR_CODES.VALIDATION_ERROR, message: t('returns.reason-reserved') }
+        ])
+    );
+
 /** The 409 for a remainder with nothing left to cancel, or an order with nothing shipped yet. */
 export const nothingToCancel = (): CreateReturnOutcome =>
     refused(

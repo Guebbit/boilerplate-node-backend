@@ -27,7 +27,13 @@ import {
     reachesBuyerOf,
     withActions
 } from './scope';
-import { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
+import {
+    cancelById,
+    cancelUnanswered,
+    retryPendingEffects,
+    markRefundOwed,
+    clearRefundOwed
+} from './cancel';
 import {
     markPaid,
     markProcessing,
@@ -66,7 +72,13 @@ export { create, recordCreated, update, updateById } from './crud';
 export { remove, removeById, restoreById } from './remove';
 export { placeOrder, type PlaceOrderInput, type PlaceOrderOutcome } from './place';
 export { sendOrderPlacedEmail, mailBuyer } from './notify';
-export { cancelById, retryPendingEffects, markRefundOwed, clearRefundOwed } from './cancel';
+export {
+    cancelById,
+    cancelUnanswered,
+    retryPendingEffects,
+    markRefundOwed,
+    clearRefundOwed
+} from './cancel';
 export {
     markPaid,
     markProcessing,
@@ -172,6 +184,7 @@ export const orderService = {
     startOrderPiiClock,
     anonymizeDueOrders,
     cancelById,
+    cancelUnanswered,
     retryPendingEffects,
     markRefundOwed,
     clearRefundOwed,

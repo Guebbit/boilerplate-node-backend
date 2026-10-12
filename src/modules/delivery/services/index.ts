@@ -24,6 +24,7 @@ export {
     getForOrder,
     shippedQuantities,
     remainderOptions,
+    waitHasExpired,
     findShipmentsForOrders,
     findFulfillmentOrdersForOrders,
     type RemainderOption

@@ -23,13 +23,14 @@ import { logger } from '@infrastructure/adapters/logger';
 import { generateReject } from '@infrastructure/http/response';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
-import { callerForSubject } from '@kernel/permissions';
+import { callerForSubject, systemCallerContext } from '@kernel/permissions';
 import { holdsKey } from '@kernel/ability';
-import { cancelRemainder, remainderOptions, ActRefusal } from '@modules/delivery';
+import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { orderService, isExcludedFromWithdrawal, returnPostagePayer } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import { paymentService } from '@modules/payments';
+import { FulfillmentCancelReason } from '@types';
 import type { AuthContext, CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
@@ -118,19 +119,21 @@ const rowFor = (
  * @param order - the order
  * @param input - the request
  * @param fulfillmentOrderId - the fulfillment order whose remainder is cancelled
+ * @param reason - who cancelled it, stored on the fulfillment order
  * @returns what was cancelled, or why nothing was
  */
 const cancelUnderLock = (
     order: OrderDocument,
     input: CreateReturnInput,
-    fulfillmentOrderId: string
+    fulfillmentOrderId: string,
+    reason: FulfillmentCancelReason
 ): Promise<Cancelled | 'nothing-to-cancel' | 'not-found'> =>
     withTransaction(async (session) => {
         const orderId = String(order._id);
         await returnRepository.lockOrder(orderId, session);
         const earlier = await returnRepository.findByOrderId(orderId, session);
 
-        const cancelled = await cancelRemainder(fulfillmentOrderId, orderId, session);
+        const cancelled = await cancelRemainder(fulfillmentOrderId, orderId, session, reason);
         if (!cancelled.ok)
             return cancelled.reason === 'not-found' ? 'not-found' : 'nothing-to-cancel';
 
@@ -300,18 +303,19 @@ export const createCancellation = (
                     (refusal) => {
                         if (refusal) return refusal;
 
-                        return cancelUnderLock(order, input, fulfillmentOrderId)
+                        const byBuyer = String(order.userId) === authContext.id;
+                        return cancelUnderLock(
+                            order,
+                            input,
+                            fulfillmentOrderId,
+                            byBuyer ? FulfillmentCancelReason.buyer : FulfillmentCancelReason.staff
+                        )
                             .then((done): CreateReturnOutcome | Promise<CreateReturnOutcome> =>
                                 typeof done === 'string'
                                     ? done === 'not-found'
                                         ? badCancellation()
                                         : nothingToCancel()
-                                    : announceCancelled(
-                                          order,
-                                          done,
-                                          String(order.userId) === authContext.id,
-                                          context
-                                      )
+                                    : announceCancelled(order, done, byBuyer, context)
                             )
                             .catch((error: unknown) => {
                                 if (error instanceof ActRefusal) return refused(error.reject);
@@ -323,3 +327,74 @@ export const createCancellation = (
         );
     });
 };
+
+/**
+ * The system's remainder cancel for a wait that ended in silence: what had not shipped of one
+ * fulfillment order, cancelled and refunded as a `no_answer` return. The same transaction and the same
+ * refund as a buyer's own cancel; the differences are who is acting (nobody at a keyboard, so no
+ * rank or key to check) and that the buyer is not told twice — `delivery`'s notice was the warning.
+ *
+ * @param order - the order, with goods already shipped
+ * @param fulfillmentOrderId - the fulfillment order whose buyer never answered
+ */
+const cancelRemainderUnanswered = (
+    order: OrderDocument,
+    fulfillmentOrderId: string
+): Promise<void> => {
+    const context = systemCallerContext('Return');
+    return cancelUnderLock(
+        order,
+        {
+            orderId: String(order._id),
+            reason: 'no_answer',
+            kind: 'cancellation',
+            fulfillmentOrderId
+        },
+        fulfillmentOrderId,
+        FulfillmentCancelReason.no_answer
+    ).then((done) =>
+        typeof done === 'string'
+            ? undefined
+            : announceCancelled(order, done, false, context).then(() => undefined)
+    );
+};
+
+/**
+ * End a preorder's wait that nobody answered: cancel and refund what had not shipped. `delivery`
+ * announces `fulfillment_order.wait_expired` again every day until this lands, so it re-checks that
+ * the wait really is still expired (a "keep waiting" that came in since wins) and that there is
+ * still something to cancel.
+ *
+ * Which cancel depends on what has shipped:
+ *
+ * | The order                                         | What is cancelled                              |
+ * | ------------------------------------------------- | ---------------------------------------------- |
+ * | something already shipped                         | this fulfillment order's remainder, through a `no_answer` return |
+ * | nothing shipped, this is the only live one        | the whole order, refunded in full              |
+ * | nothing shipped, another fulfillment order lives  | nothing yet: the goods that are on the shelf   |
+ * |                                                   | are the buyer's, and ship first; asked again tomorrow |
+ *
+ * @param orderId - the order
+ * @param fulfillmentOrderId - the fulfillment order whose buyer never answered
+ * @param now - the instant to judge the wait at; tests pass their own
+ */
+export const cancelUnanswered = (
+    orderId: string,
+    fulfillmentOrderId: string,
+    now: Date = new Date()
+): Promise<void> =>
+    waitHasExpired(fulfillmentOrderId, now).then((expired) => {
+        if (!expired) return undefined;
+
+        return orderService.getById(orderId).then((order) => {
+            if (!order) return undefined;
+            if (order.fulfillment?.shipped === true)
+                return cancelRemainderUnanswered(order, fulfillmentOrderId);
+
+            return remainderOptions(orderId, true).then((live) =>
+                live.every((option) => option.fulfillmentOrderId === fulfillmentOrderId)
+                    ? orderService.cancelUnanswered(orderId).then(() => undefined)
+                    : undefined
+            );
+        });
+    });

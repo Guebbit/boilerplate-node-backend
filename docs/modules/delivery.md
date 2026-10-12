@@ -36,6 +36,7 @@ flowchart LR
     orders -. "order.status_overridden" .-> delivery
     products -. "product.release_date_changed" .-> delivery
     delivery -. "fulfillment_order.delayed" .-> notifications
+    delivery -. "fulfillment_order.wait_expired" .-> returns
 
     classDef core fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef supporting fill:#fef3c7,stroke:#d97706,color:#111827;
@@ -263,7 +264,7 @@ does two things, and only to fulfillment orders still `on_hold` for stock:
   is long gone and only the expected one can still be missed. `lastNoticeAt` is what stops a daily
   repeat;
 - one asked and not answered for 30 days is marked `consent: expired` and announced as
-  `fulfillment_order.wait_expired`. [`returns`](./returns.md) cancels and refunds
+  `fulfillment_order.wait_expired`. [`returns`](./returns.md#a-wait-nobody-answered) cancels and refunds
   it. It is announced again each day until the cancel lands, so a failed cancel retries by itself.
 
 Units already allocated but not shipped (`open`) are left alone: goods on the shelf are a short, definite

@@ -51,7 +51,9 @@ is the **edges** between them, and the **actor** each edge belongs to.
 
 The table is keyed by **event**, not by status: `pay`, `start`, `ship`, `deliver`,
 `fulfilmentComplete` (the digital `processing -> delivered` edge, also a remainder cancel that
-completes the order), `expire`, `cancel` and `cancelInFulfilment`. Each entry carries its `from`
+completes the order), `expire`, `cancel`, `cancelInFulfilment` and `cancelUnanswered` (a preorder's
+buyer never answered the question a late date asks; its own actor, `fulfilment`, so the expiry sweep
+still stops at `pending`). Each entry carries its `from`
 set, its `to` and its actors, so a service names the event and the conditional write is handed the
 event's own `from` — nothing is derived from a neighbouring column.
 
@@ -66,6 +68,8 @@ stateDiagram-v2
     pending --> cancelled: withdrawal
     paid --> processing: system
     paid --> cancelled: customer, admin, withdrawal
+    paid --> cancelled: fulfilment (preorder unanswered)
+    processing --> cancelled: fulfilment (preorder unanswered)
     processing --> shipped: system
     processing --> cancelled: admin, withdrawal
     shipped --> delivered: system

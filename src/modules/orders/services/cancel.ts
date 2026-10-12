@@ -32,7 +32,7 @@ import { ordersAnalyticsEvents } from '../analytics';
 import { ordersAuditActions } from '../audit';
 import { ORDER_CANCELLED, ORDER_REFUND_OWED } from '../events';
 import { orderRepository } from '../repository';
-import { statusesLeadingTo } from '../domain';
+import { ORDER_EVENTS, statusesLeadingTo } from '../domain';
 import { orderEffectRetryMinutes } from '../config';
 import { bankTransferExpiredEmail, cardHoldExpiredEmail, orderCancelledEmail } from '../emails';
 import { getById } from './read';
@@ -344,3 +344,27 @@ export const retryPendingEffects = async (): Promise<number> => {
 
     return settled;
 };
+
+/**
+ * Cancel an order whose preorder buyer was asked to keep waiting and never answered: silence is a
+ * cancel, and a cancel refunds in full (FTC 16 CFR 435.2 (b)(1)(iii), CRD Art. 18). Called by
+ * `returns`, which reacts to `delivery`'s record of the silence, and only for an order with nothing
+ * shipped — goods that left are cancelled one fulfillment order at a time instead.
+ *
+ * Its own door rather than `cancelById` as the system: that one is the reservation sweep's, and must
+ * never reach a paid order. The `from` set is the named event's own. The buyer is told, since a
+ * refund is the one thing they cannot see for themselves.
+ *
+ * @param orderId - the order to cancel
+ * @returns whether this call cancelled it; `false` when it moved on (paid out, shipped, cancelled)
+ */
+export const cancelUnanswered = (orderId: string): Promise<boolean> =>
+    moveToCancelled(
+        orderId,
+        ORDER_EVENTS.cancelUnanswered.from,
+        { 'fulfillment.shipped': { $ne: true } },
+        PENDING_REFUND,
+        true
+    ).then((order) =>
+        order ? afterCancel(order, true, undefined, false, true).then(() => true) : false
+    );

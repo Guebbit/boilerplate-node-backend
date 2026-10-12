@@ -16,6 +16,7 @@ export { createReturn, type CreateReturnInput, type CreateReturnOutcome } from '
 export { approveReturn, declineReturn } from './decide';
 export { receiveReturn, type ReceiveReturnInput } from './receive';
 export { closeReturn } from './close';
+export { cancelUnanswered } from './cancel-remainder';
 export { listReturns, getReturn, withActions, type ReturnFilters } from './read';
 export { getReturnOptions } from './options';
 export { collectPersonalData } from './personal-data';
