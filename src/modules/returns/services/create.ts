@@ -7,16 +7,17 @@
  *   — which already refunds in full and releases the stock hold — plus a `Return` written closed at
  *   birth: no lines (no goods are expected back), the refund owed, the Art. 11a acknowledgement
  *   mailed. One refund path; the record is the dated proof of the withdrawal.
- * - Once the goods have shipped there is something to send back: a return is written open, with
- *   the lines and quantities coming back, and staff see it.
+ * - Once something has shipped there is something to send back: a return is written open, with
+ *   the lines and quantities coming back (never more than shipped and not already returned), and
+ *   staff see it. What has NOT shipped is cancelled one fulfillment order at a time
+ *   (`./cancel-remainder`, `kind: cancellation`).
  *
  * See: docs/modules/returns.md#the-withdrawal-button
  */
 
 import { Types } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { generateReject, type ResponseReject } from '@infrastructure/http/response';
-import { recordAudit } from '@infrastructure/observability/audit';
+import { generateReject } from '@infrastructure/http/response';
 import type { ClientSession } from 'mongoose';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
@@ -28,19 +29,16 @@ import {
     returnAddress,
     returnPostagePayer
 } from '@modules/orders';
+import { shippedQuantities } from '@modules/delivery';
 import type { OrderDocument } from '@modules/orders';
 import type { AuthContext, CallerContext } from '@types';
-import { ERROR_CODES } from '@api/error-codes';
 import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
-import { returnsAuditActions } from '../audit';
-import { RETURN_CLOSED, RETURN_REQUESTED } from '../events';
+import { RETURN_CLOSED } from '../events';
 import {
-    type ReturnReason,
-    QUANTITY_HOLDING_RETURN_STATUSES,
     checkRequestedLines,
+    holdsReturnedGoods,
     initialStatusFor,
-    returnableLinesOf,
     returnableQuantities,
     wireLines
 } from '../domain';
@@ -48,58 +46,20 @@ import type { ProductQuantity } from '../domain';
 import { mailReturnNotice } from './notify';
 import { ownOrder } from './ownership';
 import { syncReturnStatus } from './projection';
+import { createCancellation } from './cancel-remainder';
+import {
+    badCancellation,
+    badLines,
+    notReturnable,
+    recordOpened,
+    refused,
+    enqueueRequested,
+    windowClosed,
+    type CreateReturnInput,
+    type CreateReturnOutcome
+} from './outcome';
 
-/** What a customer sends to open a return or withdraw. */
-export interface CreateReturnInput {
-    orderId: string;
-    reason: ReturnReason;
-    note?: string;
-    /** Absent means everything on the order that is still left to return. */
-    lines?: ProductQuantity[];
-}
-
-/** What {@link createReturn} answers with: a refusal, or the return that was written. */
-export type CreateReturnOutcome =
-    | { kind: 'refused'; reject: ResponseReject }
-    | { kind: 'created'; created: ReturnDocument };
-
-/** A refusal, wrapped as an outcome. */
-const refused = (reject: ResponseReject): CreateReturnOutcome => ({ kind: 'refused', reject });
-
-/** The 409 for an order a return cannot be opened on, with a stable code the client can act on. */
-const notReturnable = (): CreateReturnOutcome =>
-    refused(
-        generateReject(409, [
-            {
-                code: ERROR_CODES.RETURN_ORDER_NOT_RETURNABLE,
-                message: t('returns.order-not-returnable')
-            }
-        ])
-    );
-
-/** The 409 for a withdrawal after its window closed. */
-const windowClosed = (): CreateReturnOutcome =>
-    refused(
-        generateReject(409, [
-            { code: ERROR_CODES.RETURN_WINDOW_CLOSED, message: t('returns.window-closed') }
-        ])
-    );
-
-/**
- * The 422 for a line that cannot be returned — one shape, with the reason picking the sentence.
- * @param reason - which check failed
- */
-const badLines = (
-    reason: 'nothing-returnable' | 'unknown-product' | 'too-many' | 'excluded'
-): CreateReturnOutcome => {
-    const message = {
-        'nothing-returnable': t('returns.nothing-returnable'),
-        'unknown-product': t('returns.line-unknown-product'),
-        'too-many': t('returns.line-too-many'),
-        excluded: t('returns.line-excluded')
-    }[reason];
-    return refused(generateReject(422, [{ code: ERROR_CODES.RETURN_LINES_INVALID, message }]));
-};
+export type { CreateReturnInput, CreateReturnOutcome } from './outcome';
 
 /**
  * What a withdrawal before dispatch hands back: the whole order, if anything was paid. An order
@@ -114,45 +74,6 @@ const refundOwedOn = (order: OrderDocument): number =>
               currency: order.currency
           })
         : 0;
-
-/**
- * Writes `return.requested` for a return just created — in the creating transaction, so the
- * event exists exactly when the return does. Keyed on the order: its events stay in order.
- * @param created - the return just written
- * @param session - the transaction that wrote it
- */
-const enqueueRequested = (created: ReturnDocument, session: ClientSession): Promise<unknown> =>
-    enqueueOutboxEvent(
-        RETURN_REQUESTED,
-        {
-            returnId: String(created._id),
-            orderId: String(created.orderId),
-            reason: created.reason
-        },
-        String(created.orderId),
-        session
-    );
-
-/**
- * The audit row a new return leaves behind, whatever shape it has. Its events were written with
- * the return itself.
- * @param order - the order the return is about
- * @param created - the return just written
- * @param context - for audit
- */
-const recordOpened = (
-    order: OrderDocument,
-    created: ReturnDocument,
-    context: CallerContext
-): void => {
-    recordAudit(context, {
-        action: returnsAuditActions.RETURN_REQUESTED,
-        outcome: 'success',
-        targetType: 'return',
-        targetId: String(created._id),
-        metadata: { orderId: String(order._id), reason: created.reason }
-    });
-};
 
 /**
  * Write the record of a withdrawal the cancel already settled: closed at birth, no lines (nothing
@@ -216,19 +137,30 @@ const writeWithdrawalRecord = (
  * `order-refunded` mail follows when the money settles. `return-closed` is for a return whose
  * goods came back.
  *
+ * A shipment can land between the read that said "before dispatch" and the cancel; the cancel then
+ * refuses, and the withdrawal is opened again on what the order now is — a return, never a full
+ * refund of goods the buyer already holds.
+ *
  * @param order - the order being withdrawn from
+ * @param input - the customer's request, to open again if the cancel lost a race to a shipment
  * @param authContext - the buyer
  * @param context - for audit
  */
 const withdrawBeforeDispatch = (
     order: OrderDocument,
+    input: CreateReturnInput,
     authContext: AuthContext,
     context: CallerContext
 ): Promise<CreateReturnOutcome> =>
     orderService
         .cancelById(String(order._id), authContext, { withdrawal: true }, context)
         .then((cancelled) => {
-            if (!cancelled.success) return refused(cancelled);
+            if (!cancelled.success)
+                return ownOrder(input.orderId, authContext).then((fresh) =>
+                    fresh && !isBeforeDispatch(fresh)
+                        ? openReturn(input, authContext, context)
+                        : refused(cancelled)
+                );
 
             return writeWithdrawalRecord(order, context).then((created) =>
                 mailReturnNotice('withdrawal-acknowledged', order, {
@@ -239,6 +171,7 @@ const withdrawBeforeDispatch = (
 
 /**
  * The lines already coming back on an order — what a new return's quantities are checked against.
+ * A cancellation holds nothing that comes back (its units never shipped), so it is not counted.
  * @param orderId - the order
  * @param session - the opening's transaction, so the read happens under the order's lock
  */
@@ -246,9 +179,7 @@ const alreadyReturned = (orderId: string, session: ClientSession): Promise<Produ
     returnRepository
         .findByOrderId(orderId, session)
         .then((returns) =>
-            returns
-                .filter(({ status }) => QUANTITY_HOLDING_RETURN_STATUSES.includes(status))
-                .flatMap(({ lines }) => wireLines(lines))
+            returns.filter(holdsReturnedGoods).flatMap(({ lines }) => wireLines(lines))
         );
 
 /**
@@ -297,17 +228,19 @@ const writeReturn = (
 };
 
 /**
- * Check the request against what is already coming back, and write the return — all under the
- * order's lock row, in one transaction. Two parallel openings would otherwise both read "nothing
- * returned yet" (snapshot isolation) and both commit a full return.
+ * Check the request against what shipped and is not already coming back, and write the return — all
+ * under the order's lock row, in one transaction. Two parallel openings would otherwise both read
+ * "nothing returned yet" (snapshot isolation) and both commit a full return.
  *
  * @param order - the order the goods came from
  * @param input - the customer's request
+ * @param shipped - what has shipped from the order, per product, excluded goods already removed
  * @returns the outcome; nothing is announced yet, the transaction has to commit first
  */
 const openUnderLock = (
     order: OrderDocument,
-    input: CreateReturnInput
+    input: CreateReturnInput,
+    shipped: readonly ProductQuantity[]
 ): Promise<CreateReturnOutcome> =>
     withTransaction((session) =>
         returnRepository
@@ -315,10 +248,7 @@ const openUnderLock = (
             .then(() => alreadyReturned(input.orderId, session))
             .then((earlier) => {
                 const verdict = checkRequestedLines(
-                    returnableQuantities(
-                        returnableLinesOf(order.items, isExcludedFromWithdrawal),
-                        earlier
-                    ),
+                    returnableQuantities(shipped, earlier),
                     input.lines
                 );
                 if (!verdict.ok) return badLines(verdict.reason);
@@ -362,15 +292,13 @@ const announceOpened = (
 };
 
 /**
- * Open a return, or withdraw — the one call behind `POST /returns`.
+ * Open a return of goods that shipped — `createReturn`'s `kind: return` branch.
  *
  * @param input - the customer's request
  * @param authContext - the buyer; only they may exercise the right
  * @param context - for audit
- * @returns the outcome: refused, or the return written — open for goods on their way back, closed
- *   at birth for a withdrawal before dispatch
  */
-export const createReturn = (
+const openReturn = (
     input: CreateReturnInput,
     authContext: AuthContext,
     context: CallerContext
@@ -389,25 +317,47 @@ export const createReturn = (
                 .filter((item) => isExcludedFromWithdrawal(item))
                 .map((item) => String(item.product._id))
         );
-        const beforeDispatch = isBeforeDispatch(order.status);
-        if (input.reason === 'withdrawal' && beforeDispatch)
+        if (input.reason === 'withdrawal' && isBeforeDispatch(order))
             return excluded.size > 0
                 ? badLines('excluded')
-                : withdrawBeforeDispatch(order, authContext, context);
+                : withdrawBeforeDispatch(order, input, authContext, context);
 
-        // Past this point goods are on their way or arrived: `shipped` or `delivered`. Anything
-        // else (cancelled, or a non-withdrawal reason before dispatch) has nothing to send back.
-        if (beforeDispatch || (order.status !== 'shipped' && order.status !== 'delivered'))
-            return notReturnable();
+        // Past this point goods are on their way or arrived — or nothing has shipped and the
+        // reason is not a withdrawal, so there is nothing to send back.
+        return shippedQuantities(input.orderId).then((shipped) => {
+            if (shipped.length === 0) return notReturnable();
 
-        if (input.lines?.some(({ productId }) => excluded.has(productId)))
-            return badLines('excluded');
+            if (input.lines?.some(({ productId }) => excluded.has(productId)))
+                return badLines('excluded');
 
-        // The mail, the audit row and the order's return status follow the commit: they must not
-        // describe a return a lost race never wrote.
-        return openUnderLock(order, input).then((outcome) => {
-            if (outcome.kind !== 'created') return outcome;
-            nudgeOutbox();
-            return announceOpened(order, outcome.created, context);
+            const returnable = shipped.filter(({ productId }) => !excluded.has(productId));
+
+            // The mail, the audit row and the order's return status follow the commit: they must
+            // not describe a return a lost race never wrote.
+            return openUnderLock(order, input, returnable).then((outcome) => {
+                if (outcome.kind !== 'created') return outcome;
+                nudgeOutbox();
+                return announceOpened(order, outcome.created, context);
+            });
         });
     });
+
+/**
+ * Open a return, or withdraw — the one call behind `POST /returns`. `kind: cancellation` cancels
+ * what has not shipped instead (`./cancel-remainder`).
+ *
+ * @param input - the customer's request
+ * @param authContext - the buyer; only they may exercise the right (staff only cancel)
+ * @param context - for audit
+ * @returns the outcome: refused, or the return written — open for goods on their way back, closed
+ *   at birth for a withdrawal before dispatch or a remainder cancel
+ */
+export const createReturn = (
+    input: CreateReturnInput,
+    authContext: AuthContext,
+    context: CallerContext
+): Promise<CreateReturnOutcome> => {
+    if (input.kind === 'cancellation') return createCancellation(input, authContext, context);
+    if (input.fulfillmentOrderId !== undefined) return Promise.resolve(badCancellation());
+    return openReturn(input, authContext, context);
+};

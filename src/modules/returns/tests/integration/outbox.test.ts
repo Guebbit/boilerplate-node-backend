@@ -8,12 +8,8 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
-import {
-    createOrder,
-    setWithdrawUntil,
-    toOrderItem,
-    forceOrderStatus
-} from '@modules/orders/tests/factories';
+import { createOrder, setWithdrawUntil, toOrderItem } from '@modules/orders/tests/factories';
+import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { onDomainEvent } from '@kernel/events';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { OrderStatus } from '@types';
@@ -49,9 +45,13 @@ const orderIn = async (status: OrderStatus) => {
     customers += 1;
     const user = await createUser({ email: `outbox-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30 });
-    const order = await createOrder(user, [toOrderItem(shirt, 2)], { status });
+    const carried = status === OrderStatus.shipped || status === OrderStatus.delivered;
+    const order = await createOrder(user, [toOrderItem(shirt, 2)], {
+        status: carried ? OrderStatus.processing : status
+    });
     const orderId = String(order._id);
-    await forceOrderStatus(orderId, status);
+    // Goods that arrived got there through the real doors, so the shipments exist.
+    if (carried) await carryOrderTo(orderId, status);
     await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     return { user, shirt, orderId };
 };

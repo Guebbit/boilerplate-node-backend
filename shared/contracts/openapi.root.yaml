@@ -1171,16 +1171,24 @@ paths:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}'
     /delivery/order/{orderId}/start:
         $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1start'
-    /delivery/order/{orderId}/ship:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1ship'
-    /delivery/order/{orderId}/deliver:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1deliver'
-    /delivery/order/{orderId}/fulfill:
-        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1order~1{orderId}~1fulfill'
+    /delivery/fulfillment-orders/{id}/shipments:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1shipments'
+    /delivery/fulfillment-orders/{id}/fulfill:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1fulfill'
+    /delivery/fulfillment-orders/{id}/hold:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1hold'
+    /delivery/fulfillment-orders/{id}/release:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1fulfillment-orders~1{id}~1release'
+    /delivery/shipments/{id}:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1shipments~1{id}'
+    /delivery/shipments/{id}/deliver:
+        $ref: '../../src/modules/delivery/openapi.yaml#/paths/~1delivery~1shipments~1{id}~1deliver'
 
     # ---------- returns ----------
     /returns:
         $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns'
+    /returns/options:
+        $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1options'
     /returns/{id}:
         $ref: '../../src/modules/returns/openapi.yaml#/paths/~1returns~1{id}'
     /returns/{id}/approve:

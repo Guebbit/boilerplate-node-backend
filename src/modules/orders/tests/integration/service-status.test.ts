@@ -6,29 +6,22 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import {
-    seedOrder,
-    seedDigitalOrder,
-    readOrder,
-    createOrder,
-    toOrderItem
-} from '@modules/orders/tests/factories';
-import { createUser } from '@modules/users/tests/factories';
-import { createProduct } from '@modules/products/tests/factories';
+import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
 import { withEnvironment } from '@tests/environment';
 import {
     markPaid,
     markProcessing,
     markShipped,
     markDelivered,
-    markFulfilled
+    markFulfilmentComplete
 } from '../../services/status';
 import { orderService } from '../../services';
-import { orderModel } from '../../model';
 import { ORDER_STATUS_CHANGED } from '../../events';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { nudgeOutbox, outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { OrderStatus } from '@types';
+import type { ClientSession } from 'mongoose';
+import { withTransaction } from '@infrastructure/runtime/database';
 
 setupTestDb();
 
@@ -172,64 +165,115 @@ describe('markDelivered', () => {
         }));
 });
 
-describe('markFulfilled', () => {
-    it('refuses a physical order, which must pass through shipped', async () => {
+/** Run one status door inside a transaction of its own, as `delivery`'s acts do. */
+const inTransaction = <T>(door: (session: ClientSession) => Promise<T>): Promise<T> =>
+    withTransaction(door);
+
+describe('markFulfilmentComplete', () => {
+    it('moves a physical order through shipped to delivered in one write, announcing both moves', async () => {
         const order = await seedOrder(OrderStatus.processing);
+        const events: unknown[] = [];
+        onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
+        const at = new Date('2026-04-10T15:00:00Z');
 
-        const updated = await markFulfilled(String(order._id));
+        const updated = await inTransaction((session) =>
+            markFulfilmentComplete(String(order._id), at, session)
+        );
+        // The caller of the session variant wakes the relay after its own commit.
+        nudgeOutbox();
+        await settleOutboxNudges();
 
-        expect(updated).toBeNull();
-        const stored = await readOrder(String(order._id));
-        expect(stored?.status).toBe(OrderStatus.processing);
+        expect(updated?.status).toBe(OrderStatus.delivered);
+        // The order only became complete at `at`: the clock counts from there.
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-05-10T23:59:59.999Z');
+        expect(events).toEqual([
+            { orderId: String(order._id), from: OrderStatus.processing, to: OrderStatus.shipped },
+            { orderId: String(order._id), from: OrderStatus.shipped, to: OrderStatus.delivered }
+        ]);
     });
 
-    it('moves a processing order straight to delivered and announces it once', async () => {
-        const order = await seedDigitalOrder(OrderStatus.processing);
+    it('moves a digital-only order straight to delivered, announcing the one move, clock from payment', async () => {
+        const order = await seedDigitalOrder(
+            OrderStatus.processing,
+            new Date('2026-03-01T10:00:00Z')
+        );
         const events: unknown[] = [];
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => events.push(payload));
 
-        const updated = await markFulfilled(String(order._id));
+        const updated = await inTransaction((session) =>
+            markFulfilmentComplete(String(order._id), new Date(), session)
+        );
+        nudgeOutbox();
+        await settleOutboxNudges();
 
         expect(updated?.status).toBe(OrderStatus.delivered);
-        await settleOutboxNudges();
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-31T23:59:59.999Z');
         expect(events).toEqual([
             { orderId: String(order._id), from: OrderStatus.processing, to: OrderStatus.delivered }
         ]);
     });
 
-    it("counts a digital order's withdrawal period from payment, not from fulfilment", async () => {
-        const user = await createUser();
-        const product = await createProduct({ requiresShipping: false });
-        const order = await createOrder(user, [toOrderItem(product, 1)], {
-            status: OrderStatus.processing
-        });
-        await orderModel.updateOne(
-            { _id: order._id },
-            { paidAt: new Date('2026-03-01T10:00:00Z') }
+    it.each([OrderStatus.paid, OrderStatus.shipped, OrderStatus.delivered])(
+        'refuses an order that is %s, and announces nothing',
+        async (status) => {
+            const order = await seedOrder(status);
+
+            const updated = await inTransaction((session) =>
+                markFulfilmentComplete(String(order._id), new Date(), session)
+            );
+
+            expect(updated).toBeNull();
+            expect(await outboxEventModel.countDocuments()).toBe(0);
+        }
+    );
+
+    it('leaves the order where it was when the caller’s transaction rolls back', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        await expect(
+            inTransaction((session) =>
+                markFulfilmentComplete(String(order._id), new Date(), session).then(() => {
+                    throw new Error('a later write of the act failed');
+                })
+            )
+        ).rejects.toThrow('a later write of the act failed');
+
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.processing
+        );
+        expect(await outboxEventModel.countDocuments()).toBe(0);
+    });
+});
+
+describe('the doors that take the caller’s session', () => {
+    it('markShipped commits and announces with the caller’s transaction, and not before it', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+
+        const updated = await inTransaction((session) =>
+            markShipped(String(order._id), session).then(async (moved) => {
+                // Inside the transaction nothing is visible to anyone else yet.
+                expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+                    OrderStatus.processing
+                );
+                return moved;
+            })
         );
 
-        const updated = await markFulfilled(String(order._id));
-
-        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-03-31T23:59:59.999Z');
+        expect(updated?.status).toBe(OrderStatus.shipped);
+        expect(await readOrder(String(order._id)).then((one) => one?.status)).toBe(
+            OrderStatus.shipped
+        );
+        expect(await outboxEventModel.countDocuments({ name: ORDER_STATUS_CHANGED })).toBe(1);
     });
 
-    it('refuses from paid — the digital-only door still needs `start` first', async () => {
-        const order = await seedOrder(OrderStatus.paid);
+    it('markDelivered freezes the deadline from the arrival it is handed', async () => {
+        const order = await seedOrder(OrderStatus.shipped);
 
-        const updated = await markFulfilled(String(order._id));
+        const updated = await inTransaction((session) =>
+            markDelivered(String(order._id), new Date('2026-06-01T08:00:00Z'), session)
+        );
 
-        expect(updated).toBeNull();
-    });
-
-    // `markDelivered`'s own edge into `delivered` is `shipped`, not `processing` — the two must
-    // stay independent, or one door's move would silently also satisfy the other's gate.
-    it("never satisfies markDelivered's own gate — the two edges into `delivered` stay independent", async () => {
-        const order = await seedDigitalOrder(OrderStatus.processing);
-
-        await markFulfilled(String(order._id));
-        const viaShippedDoor = await markDelivered(String(order._id), new Date());
-
-        expect(viaShippedDoor).toBeNull();
+        expect(updated?.withdrawUntil?.toISOString()).toBe('2026-07-01T23:59:59.999Z');
     });
 });
 

@@ -8,8 +8,11 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { callerContextAs } from '@tests/callers';
 import { seedOrder, seedDigitalOrder, readOrder } from '@modules/orders/tests/factories';
-import { overrideStatus, forceMove } from '../../services/override';
-import { ORDER_STATUS_CHANGED } from '../../events';
+import { withTransaction } from '@infrastructure/runtime/database';
+import { overrideStatus } from '../../services/override';
+import { recordForcedFulfilment } from '../../services/fulfillment';
+import { orderModel } from '../../model';
+import { ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '../../events';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { OrderStatus } from '@types';
@@ -72,9 +75,8 @@ describe('overrideStatus', () => {
 
         expect(result.success).toBe(true);
         expect(result.data?.status).toBe(OrderStatus.processing);
-        // No `override` flag — no listener reads it (`webhooks` filters on `to` alone); a
-        // status-only override and a forced delivery-door one are not distinguished in the event,
-        // which never needed to tell them apart.
+        // `order.status_changed` stays the one every listener reads (`webhooks` filters on `to`
+        // alone); the override announces itself separately, below.
         await settleOutboxNudges();
         expect(events).toEqual([
             {
@@ -147,56 +149,127 @@ describe('overrideStatus', () => {
     });
 });
 
-describe('forceMove', () => {
-    it('moves an order past a status the normal lifecycle would refuse', async () => {
-        // `paid`, never `processing` — the normal `markShipped` would refuse this.
-        const order = await seedOrder(OrderStatus.paid);
-        const context = callerContextAs('admin', 'admin-1');
+describe('the override event', () => {
+    it('announces itself beside the status change, with the instant the deadline was counted from', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+        const overridden: unknown[] = [];
+        onDomainEvent(ORDER_STATUS_OVERRIDDEN, (payload) => overridden.push(payload));
 
-        const updated = await forceMove(
+        await overrideStatus(
             String(order._id),
-            'shipped',
-            'skipped processing on purpose',
-            context
+            OrderStatus.delivered,
+            'handed over at the counter',
+            callerContextAs('admin', 'admin-1')
+        );
+        await settleOutboxNudges();
+
+        const stored = await readOrder(String(order._id));
+        expect(overridden).toEqual([
+            {
+                orderId: String(order._id),
+                from: OrderStatus.processing,
+                to: OrderStatus.delivered,
+                at: stored?.statusOverrides?.[0].at.toISOString(),
+                mode: 'status'
+            }
+        ]);
+    });
+
+    it('is refused while units still await stock, and writes nothing', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+        await orderModel
+            .updateOne(
+                { _id: order._id },
+                {
+                    fulfillment: {
+                        shipped: false,
+                        remaining: 2,
+                        onHold: 2,
+                        awaitingStock: 2,
+                        undelivered: 0
+                    }
+                }
+            )
+            .exec();
+
+        const toShipped = await overrideStatus(
+            String(order._id),
+            OrderStatus.shipped,
+            'trying anyway',
+            callerContextAs('admin', 'admin-1')
         );
 
-        expect(updated?.status).toBe(OrderStatus.shipped);
+        expect(toShipped).toMatchObject({ success: false, status: 409 });
+        expect(toShipped.errors?.[0].code).toBe('ORDER_OVERRIDE_AWAITING_STOCK');
         const stored = await readOrder(String(order._id));
-        expect(stored?.statusOverrides?.[0]).toMatchObject({ mode: 'forced', to: 'shipped' });
-    });
-
-    it('refuses a forced move out of pending, which a paid order would accept', async () => {
-        const order = await seedOrder(OrderStatus.pending);
-        const context = callerContextAs('admin', 'admin-1');
-
-        const updated = await forceMove(String(order._id), 'shipped', 'skipping payment', context);
-
-        expect(updated).toBeNull();
-        const stored = await readOrder(String(order._id));
-        expect(stored?.status).toBe(OrderStatus.pending);
-    });
-
-    it('refuses once the order has already moved past the target', async () => {
-        const order = await seedOrder(OrderStatus.delivered);
-        const context = callerContextAs('admin', 'admin-1');
-
-        const updated = await forceMove(String(order._id), 'shipped', 'too late', context);
-
-        expect(updated).toBeNull();
-    });
-
-    it('refuses on its own when the caller lacks orders.any.override, even called directly', async () => {
-        // `warehouse` holds `delivery.any.update` but not `orders.any.override` — exactly the
-        // caller `delivery/service.ts`'s own gate already stops; this proves `forceMove` does not
-        // depend on that gate having run.
-        const order = await seedOrder(OrderStatus.paid);
-        const context = callerContextAs('warehouse', 'warehouse-1');
-
-        const result = await forceMove(String(order._id), 'shipped', 'trying anyway', context);
-
-        expect(result).toMatchObject({ success: false, status: 403 });
-        const stored = await readOrder(String(order._id));
-        expect(stored?.status).toBe(OrderStatus.paid);
+        expect(stored?.status).toBe(OrderStatus.processing);
         expect(stored?.statusOverrides ?? []).toHaveLength(0);
+    });
+
+    it('still lets an order that awaits stock be moved to `processing`, which ships nothing', async () => {
+        const order = await seedOrder(OrderStatus.paid);
+        await orderModel
+            .updateOne(
+                { _id: order._id },
+                {
+                    fulfillment: {
+                        shipped: false,
+                        remaining: 1,
+                        onHold: 1,
+                        awaitingStock: 1,
+                        undelivered: 0
+                    }
+                }
+            )
+            .exec();
+
+        const result = await overrideStatus(
+            String(order._id),
+            OrderStatus.processing,
+            'starting by hand',
+            callerContextAs('admin', 'admin-1')
+        );
+
+        expect(result.success).toBe(true);
+    });
+});
+
+describe('recordForcedFulfilment', () => {
+    it('leaves a history row for a forced act, with the status the act left the order in', async () => {
+        const order = await seedOrder(OrderStatus.processing);
+        const at = new Date('2026-05-01T09:00:00Z');
+
+        await withTransaction((session) =>
+            recordForcedFulfilment(
+                String(order._id),
+                { reason: 'carrier confirmed', actorUserId: 'admin-1', at, from: OrderStatus.paid },
+                session
+            )
+        );
+
+        const stored = await readOrder(String(order._id));
+        expect(stored?.statusOverrides).toHaveLength(1);
+        expect(stored?.statusOverrides?.[0]).toMatchObject({
+            from: OrderStatus.paid,
+            to: OrderStatus.processing,
+            mode: 'forced',
+            reason: 'carrier confirmed',
+            actorUserId: 'admin-1',
+            at
+        });
+        // A history row is not a move: the order stays where the act left it.
+        expect(stored?.status).toBe(OrderStatus.processing);
+    });
+
+    it('answers null for an order that does not exist', async () => {
+        const result = await withTransaction((session) =>
+            recordForcedFulfilment(
+                '65dcdec2b18ad5e4bd597f01',
+                { reason: 'x', actorUserId: 'a', at: new Date(), from: OrderStatus.paid },
+                session
+            )
+        );
+
+        expect(result).toBeNull();
     });
 });

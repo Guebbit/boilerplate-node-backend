@@ -7,14 +7,14 @@
  * See: docs/modules/returns.md#the-lifecycle
  */
 
-import { ReturnStatus, ReturnReason } from '@types';
+import { ReturnKind, ReturnStatus, ReturnReason } from '@types';
 
 /**
  * Where a return stands (`ReturnStatus`) and why the goods come back (`ReturnReason`: `withdrawal`
  * is the EU right, the rest are the shop's own reasons). Both sets are closed and come from the
  * contract; which move may follow which is this file's table.
  */
-export type { ReturnStatus, ReturnReason } from '@types';
+export type { ReturnStatus, ReturnReason, ReturnKind } from '@types';
 
 /** What staff may decide: only a request nobody has answered yet. */
 export const DECIDABLE_RETURN_STATUSES: readonly ReturnStatus[] = [ReturnStatus.requested];
@@ -44,3 +44,23 @@ export const QUANTITY_HOLDING_RETURN_STATUSES: readonly ReturnStatus[] = [
     ReturnStatus.received,
     ReturnStatus.closed
 ];
+
+/**
+ * The statuses a return must have reached for its goods to count as BACK — received, or closed
+ * once the money followed. A return still `requested` or `approved` holds goods that have not come
+ * back, so it neither makes the order whole nor takes the delivery refund.
+ */
+export const BACK_RETURN_STATUSES: readonly ReturnStatus[] = [
+    ReturnStatus.received,
+    ReturnStatus.closed
+];
+
+/**
+ * Whether a return record counts toward the quantities a NEW return may still take: a `return` that
+ * holds goods ({@link QUANTITY_HOLDING_RETURN_STATUSES}). A cancellation never does — its units
+ * never shipped — which is why it has its own accounting.
+ * @param returned - a return's kind and status
+ */
+export const holdsReturnedGoods = (returned: { kind: ReturnKind; status: ReturnStatus }): boolean =>
+    returned.kind === ReturnKind.return &&
+    QUANTITY_HOLDING_RETURN_STATUSES.includes(returned.status);

@@ -18,6 +18,7 @@ import {
 import { orderService } from '@modules/orders/services';
 import { ORDER_CANCELLED } from '../../events';
 import { orderRepository } from '../../repository';
+import { orderModel } from '../../model';
 import { OrderStatus } from '@types';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
@@ -86,12 +87,6 @@ afterEach(() => jest.restoreAllMocks());
 
 const seedOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
     const product = await createProduct();
-    return createOrder(user, [toOrderItem(product, 1)]);
-};
-
-/** A digital-only order — `requiresShipping: false` — for `fulfill`'s own action tests below. */
-const seedDigitalOrder = async (user: Awaited<ReturnType<typeof createUser>>) => {
-    const product = await createProduct({ requiresShipping: false });
     return createOrder(user, [toOrderItem(product, 1)]);
 };
 
@@ -623,9 +618,6 @@ describe('withActions', () => {
             pay: true,
             recordPayment: false,
             start: false,
-            ship: false,
-            deliver: false,
-            fulfill: false,
             override: [],
             invoice: false,
             withdraw: true
@@ -646,9 +638,6 @@ describe('withActions', () => {
             pay: false,
             recordPayment: false,
             start: false,
-            ship: false,
-            deliver: false,
-            fulfill: false,
             override: [],
             invoice: false,
             withdraw: false
@@ -667,7 +656,7 @@ describe('withActions', () => {
 
     it("gives the warehouse `start` on a paid order, without `orders.any.update`'s admin column", async () => {
         // Holds `delivery.any.start` but not `orders.any.update` — `actorOf` alone would read
-        // this caller as a plain customer, which must not decide `start`/`ship`/`deliver`.
+        // this caller as a plain customer, which must not decide `start`.
         const user = await createUser();
         const order = await seedOrder(user);
         const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');
@@ -675,16 +664,13 @@ describe('withActions', () => {
         const body = await orderService.withActions(paid!, asWarehouse());
 
         expect(body.actions!.start).toBe(true);
-        expect(body.actions!.ship).toBe(false);
-        expect(body.actions!.deliver).toBe(false);
-        expect(body.actions!.fulfill).toBe(false);
         expect(body.actions!.override).toEqual([]);
     });
 
     it("never offers `start` once already `processing` — an echo write isn't a fresh offer", async () => {
         // The regression a raw `canTransition(status, target, 'system')` would reintroduce: that
         // check answers true for a write onto the SAME status (legal for everything but `paid`),
-        // which would keep `start` (or `ship`/`deliver` below) true forever once first reached.
+        // which would keep `start` true forever once first reached.
         const user = await createUser();
         const order = await seedOrder(user);
         const processing = await orderRepository.updateStatusIfIn(
@@ -698,79 +684,43 @@ describe('withActions', () => {
         expect(body.actions!.start).toBe(false);
     });
 
-    it('gives the warehouse `ship` once processing, and `deliver` once shipped', async () => {
+    it('withdraws the cancel once anything has shipped, but keeps the withdrawal', async () => {
         const user = await createUser();
         const order = await seedOrder(user);
+        await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'processing');
+        const before = await orderService.getById(String(order._id));
+        expect(
+            await orderService.withActions(before!, asAdmin()).then((one) => one.actions)
+        ).toMatchObject({
+            cancel: true,
+            transitions: ['cancelled']
+        });
 
-        const processing = await orderRepository.updateStatusIfIn(
-            String(order._id),
-            ['pending'],
-            'processing'
-        );
-        const whileProcessing = await orderService.withActions(processing!, asWarehouse());
-        expect(whileProcessing.actions!.ship).toBe(true);
+        // `delivery` reports the first shipment: units remain, so the status stays `processing`.
+        const shippedInPart = await orderModel
+            .findByIdAndUpdate(
+                order._id,
+                {
+                    fulfillment: {
+                        shipped: true,
+                        remaining: 1,
+                        onHold: 0,
+                        awaitingStock: 0,
+                        undelivered: 1
+                    }
+                },
+                { returnDocument: 'after' }
+            )
+            .exec();
+        const admin = await orderService.withActions(shippedInPart!, asAdmin());
+        const buyer = await orderService.withActions(shippedInPart!, asUser(user));
 
-        const shipped = await orderRepository.updateStatusIfIn(
-            String(order._id),
-            ['processing'],
-            'shipped'
-        );
-        const whileShipped = await orderService.withActions(shipped!, asWarehouse());
-        expect(whileShipped.actions!.deliver).toBe(true);
-        // The same echo regression `start`'s own test guards against: `ship` must not still read
-        // true now that the order has actually reached `shipped`.
-        expect(whileShipped.actions!.ship).toBe(false);
-
-        const delivered = await orderRepository.updateStatusIfIn(
-            String(order._id),
-            ['shipped'],
-            'delivered'
-        );
-        const whileDelivered = await orderService.withActions(delivered!, asWarehouse());
-        expect(whileDelivered.actions!.deliver).toBe(false);
-    });
-
-    /*
-     * `fulfill` and `ship` are mutually exclusive doors for the same `processing` status —
-     * which one a client offers depends entirely on whether the order has anything to ship.
-     */
-    it('gives the warehouse `fulfill` instead of `ship` for a digital-only order once processing', async () => {
-        const user = await createUser();
-        const digitalOrder = await seedDigitalOrder(user);
-        const physicalOrder = await seedOrder(user);
-
-        const digitalProcessing = await orderRepository.updateStatusIfIn(
-            String(digitalOrder._id),
-            ['pending'],
-            'processing'
-        );
-        const physicalProcessing = await orderRepository.updateStatusIfIn(
-            String(physicalOrder._id),
-            ['pending'],
-            'processing'
-        );
-
-        const digitalBody = await orderService.withActions(digitalProcessing!, asWarehouse());
-        const physicalBody = await orderService.withActions(physicalProcessing!, asWarehouse());
-
-        expect(digitalBody.actions!.fulfill).toBe(true);
-        expect(digitalBody.actions!.ship).toBe(false);
-        expect(physicalBody.actions!.fulfill).toBe(false);
-        expect(physicalBody.actions!.ship).toBe(true);
-    });
-
-    it('never offers `fulfill` for a digital-only order still `paid` — `start` must run first', async () => {
-        const user = await createUser();
-        const digitalOrder = await seedDigitalOrder(user);
-        const paid = await orderRepository.updateStatusIfIn(
-            String(digitalOrder._id),
-            ['pending'],
-            'paid'
-        );
-
-        const body = await orderService.withActions(paid!, asWarehouse());
-
-        expect(body.actions!.fulfill).toBe(false);
+        expect(admin.status).toBe('processing');
+        expect(admin.fulfillmentStatus).toBe('partially_fulfilled');
+        expect(admin.actions).toMatchObject({ cancel: false });
+        expect(admin.actions!.transitions).not.toContain('cancelled');
+        // The buyer's withdrawal still stands: what has not shipped is cancelled through `returns`.
+        expect(buyer.actions).toMatchObject({ cancel: false, withdraw: true });
     });
 
     it('offers an override holder every forward destination, on a customer-only status too', async () => {

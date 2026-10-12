@@ -1,14 +1,13 @@
 /**
  * @module
- * The admin override — the one door that may skip a `from` gate `domain/lifecycle.ts`'s
- * `ORDER_LIFECYCLE` would otherwise refuse, or correct a status with no parcel/email consequence
- * at all. Two shapes, one write path: {@link overrideStatus} is the status-only door
- * (`POST /orders/{id}/status-override`), {@link forceMove} is what `delivery`'s ship/deliver doors
- * call when their own caller carries `forced: true` — both funnel through {@link applyOverride}, so
- * the history entry and the audit event can never drift between the two.
+ * The admin override — the one door that may correct a status with no shipped email and no
+ * carrier record: {@link overrideStatus} (`POST /orders/{id}/status-override`). It writes the
+ * status, the history entry, the stock leaving the shelf and the events in ONE transaction, and
+ * announces `order.status_overridden` so `delivery` can bring its own records in step — `orders`
+ * never touches a shipment itself.
  *
- * `orders` stays the only status writer even here: `delivery` never touches `order.status`
- * itself, it asks `forceMove` to, the same shape it already asks `markShipped`/`markDelivered`.
+ * `orders` stays the only status writer even here: a forced shipment recorded through `delivery`
+ * writes its own history row through `recordForcedFulfilment`, not through this door.
  *
  * See `docs/theory/tactical-ddd.md` §1 "Who writes the status".
  */
@@ -23,12 +22,11 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import type { ClientSession } from 'mongoose';
-import { announceInTransaction } from '@kernel/outbox';
 import { recordAudit } from '@infrastructure/observability/audit';
-import { holdsKey } from '@kernel/ability';
 import type { OrderDocument, OrderStatusOverride } from '../model';
 import { orderRepository } from '../repository';
-import { statusChangedEvent } from './announce';
+import { announceInTransaction } from '@kernel/outbox';
+import { statusChangedEvent, statusOverriddenEvent } from './announce';
 import { announceMoveShippingStock } from './ship-stock';
 import { outrankedOrderRefusal } from './scope';
 import { ordersAuditActions } from '../audit';
@@ -43,9 +41,9 @@ import { withdrawalPeriodDays } from '../config';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
- * Write one override, whichever door asked for it — the conditional write, the history entry, the
- * event and the audit trail all happen once, here, so neither caller below can produce a status
- * move with no matching history row or vice versa.
+ * Write one override — the conditional write, the history entry, the stock leaving the shelf, the
+ * events and the audit trail all happen once, here, so no status move can exist without its
+ * history row or the reverse.
  * @param order - the order to move, as a fresh read found it immediately before this call; its
  *   status is the history entry's `from`, recorded as-is; the conditional write below still guards against every
  *   legal `from`, not only this one, so a benign race (the order moved between that read and this
@@ -53,20 +51,15 @@ import { ERROR_CODES } from '@api/error-codes';
  *   more recent than what the history entry claims — no admin action here is hot-path enough to pay
  *   for a strict read-your-write transaction over that edge case
  * @param to - the status being written; caller has already confirmed `canOverrideTo(order.status, to)`
- * @param mode - `'status'` for the status-only door, `'forced'` for a delivery door
  * @param reason - required on every override, never empty
  * @param context - the admin making the call
- * @param at - when the move happened; defaults to now. A door that stamps the same instant on its
- *   own record (`delivery`'s parcel) passes it, so the two cannot disagree
  * @returns the order as it now stands, or `null` if it had already moved past every legal `from`
  */
 const applyOverride = (
     order: OrderDocument,
     to: OrderStatus,
-    mode: OrderStatusOverride['mode'],
     reason: string,
-    context: CallerContext,
-    at: Date = new Date()
+    context: CallerContext
 ): Promise<OrderDocument | null> => {
     // `caller.id` is optional on the type only because a stranger genuinely has none — this
     // function is never reached without `orders.any.override`, which no stranger holds. Rejected,
@@ -84,10 +77,11 @@ const applyOverride = (
     const orderId = String(order._id);
     const observedFrom = order.status;
     const allowedFrom = statusesOverridableInto(to);
+    const at = new Date();
     const entry: OrderStatusOverride = {
         from: observedFrom,
         to,
-        mode,
+        mode: 'status',
         reason,
         actorUserId,
         at
@@ -98,7 +92,7 @@ const applyOverride = (
     // order arrived — or from payment, for digital content.
     const withdrawUntil =
         to === OrderStatus.delivered
-            ? withdrawUntilFrom(withdrawalStartFor(order, entry.at), withdrawalPeriodDays())
+            ? withdrawUntilFrom(withdrawalStartFor(order, at), withdrawalPeriodDays())
             : undefined;
 
     const write = (session: ClientSession): Promise<OrderDocument | null> =>
@@ -111,12 +105,17 @@ const applyOverride = (
             session
         );
 
-    // Overriding past dispatch is still a dispatch: the units leave the shelf with the status.
-    // `processing` is not one; a hold already `shipped` makes the stock half a no-op.
+    const announce = () => [
+        statusChangedEvent(orderId, observedFrom, to),
+        statusOverriddenEvent(orderId, observedFrom, to, at)
+    ];
+
+    // Overriding past dispatch is still a dispatch: whatever has not shipped yet leaves the shelf
+    // with the status. `processing` is not one; a hold already `shipped` makes the stock half a no-op.
     const move =
         to === OrderStatus.processing
-            ? announceInTransaction(write, () => statusChangedEvent(orderId, observedFrom, to))
-            : announceMoveShippingStock(orderId, observedFrom, to, write);
+            ? announceInTransaction(write, announce)
+            : announceMoveShippingStock(orderId, write, announce);
 
     return move.then((updated) => {
         if (!updated) return null;
@@ -126,7 +125,7 @@ const applyOverride = (
             outcome: 'success',
             targetType: 'order',
             targetId: orderId,
-            metadata: { mode, from: observedFrom, to, reason }
+            metadata: { mode: 'status', from: observedFrom, to, reason }
         });
 
         return updated;
@@ -143,30 +142,32 @@ const notAllowed = (from: OrderStatus, to: OrderStatus): ResponseReject =>
         }
     ]);
 
-/**
- * The 403 {@link forceMove} answers with on its own, same shape as `delivery/service.ts`'s
- * `refuseUnearnedForce` — the two checks refuse the same missing permission, from two different
- * doors, and must read identically to a client either way.
- */
-const notEarned = (): ResponseReject =>
-    generateReject(403, [{ code: ERROR_CODES.FORBIDDEN, message: t('generic.error-forbidden') }]);
+/** The 409 for an override that would ship units still awaiting stock. */
+const awaitingStock = (): ResponseReject =>
+    generateReject(409, [
+        {
+            code: ERROR_CODES.ORDER_OVERRIDE_AWAITING_STOCK,
+            message: t('orders.override.awaiting-stock')
+        }
+    ]);
 
 /**
- * `true` only for {@link forceMove}'s own 403 — never for `null`, which stays the ordinary
- * "no longer legal" outcome `markShipped`/`markDelivered` already use. Callers must check this
- * FIRST: a `ResponseReject` object is truthy, so an unguarded `if (!moved)` would treat a refused
- * caller as a successful move.
+ * Whether an override to `to` would ship goods whose stock has not arrived: forward to `shipped` or
+ * `delivered` while units still await it. A consistency guard, not a policy — the stock ledger
+ * never counted those units out, so moving the order past dispatch would ship them on paper.
+ * @param order - the order being moved
+ * @param to - the status it is being moved to
  */
-export const isForceMoveRefusal = (value: unknown): value is ResponseReject =>
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { success?: unknown }).success === false;
+const wouldShipAwaitedStock = (order: OrderDocument, to: OrderStatus): boolean =>
+    (to === OrderStatus.shipped || to === OrderStatus.delivered) &&
+    (order.fulfillment?.awaitingStock ?? 0) > 0;
 
 /**
- * `POST /orders/{id}/status-override` — an override holder moves an order forward with no parcel
- * and no shipped email, for the cases those consequences would be wrong (a manual correction, a
- * parcel that was never going to be tracked through the normal doors). Webhooks still fire — a
- * subscriber cares the status moved, not by which door.
+ * `POST /orders/{id}/status-override` — an override holder moves an order forward with no shipped
+ * email, for the cases that consequence would be wrong (a manual correction, a parcel that was
+ * never going to be tracked through the normal doors). `delivery` hears `order.status_overridden`
+ * and keeps its own records in step. Webhooks still fire — a subscriber cares the status moved, not
+ * by which door.
  * @param orderId - the order to move
  * @param to - the status to move it to; refused unless `canOverrideTo` allows it from wherever the
  *   order actually stands
@@ -187,45 +188,12 @@ export const overrideStatus = (
             if (refusal) return refusal;
             if (!canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
                 return notAllowed(order.status, to);
+            if (wouldShipAwaitedStock(order, to)) return awaitingStock();
 
-            return applyOverride(order, to, 'status', reason, context).then((updated) =>
+            return applyOverride(order, to, reason, context).then((updated) =>
                 // Lost a race against another write since the read above — same shape as the
                 // ordinary `update`'s 409, not a 404: the order still exists.
                 updated ? generateSuccess(updated) : notAllowed(order.status, to)
             );
         });
     });
-
-/**
- * What `delivery`'s ship/deliver doors call when their own caller passed `forced: true` — `delivery`
- * already checks `reason` is non-empty and still writes the parcel record around this call, but
- * `orders.any.override` itself is checked HERE too, not only at `delivery`'s own gate
- * (`refuseUnearnedForce`): a second caller reaching this function directly, forgetting that check,
- * must not be able to force a move a stranger could never have earned. Past that gate, this only
- * enforces that `to` is itself a legal override destination from wherever the order happens to
- * stand right now.
- * @param orderId - the order to move
- * @param to - `shipped` or `delivered` — `delivery`'s two doors are the only callers
- * @param reason - required, already validated non-empty by the caller
- * @param context - the caller, checked here for `orders.any.override`
- * @param at - when the move happened, when the caller already stamped that instant elsewhere
- *   (`delivery`'s parcel); defaults to now
- * @returns a 403 {@link ResponseReject} if `context.caller` lacks `orders.any.override`; otherwise
- *   the order as it now stands, or `null` if the move was no longer legal (lost a race, or the
- *   order had already moved past `to`) — see {@link isForceMoveRefusal} for telling the two apart
- */
-export const forceMove = (
-    orderId: string,
-    to: Extract<OrderStatus, 'shipped' | 'delivered'>,
-    reason: string,
-    context: CallerContext,
-    at?: Date
-): Promise<OrderDocument | null | ResponseReject> => {
-    if (!holdsKey(context.caller, 'orders.any.override')) return Promise.resolve(notEarned());
-
-    return orderRepository.findByIdScoped(orderId).then((order) => {
-        if (!order || !canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
-            return null;
-        return applyOverride(order, to, 'forced', reason, context, at);
-    });
-};

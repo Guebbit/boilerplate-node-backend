@@ -17,6 +17,27 @@ import { decryptOrderAddress } from '../pii';
 import { orderRepository } from '../repository';
 import { resolveCurrentImages } from './current';
 import { callerScope, ownerScope } from './scope';
+import { fulfillmentStatusFilter } from '../domain';
+
+/**
+ * Turn `fulfillmentStatus` — a value derived on read, not a stored column — into the conditions
+ * that make `fulfillmentStatusOf` answer it, and AND them into the scope. The rest of the search
+ * goes through unchanged. Not a stored copy of the answer: a filter built from the same table
+ * cannot disagree with the value a row serializes with.
+ *
+ * @param request - the search as it arrived
+ * @param scope - the caller's own scope
+ * @returns the arguments for `orderRepository.search`
+ */
+const withFulfillmentFilter = (
+    request: SearchOrdersRequest,
+    scope: Record<string, unknown> | undefined
+): [SearchOrdersRequest, Record<string, unknown> | undefined] => {
+    const { fulfillmentStatus, ...rest } = request;
+    return fulfillmentStatus
+        ? [rest, { $and: [scope ?? {}, fulfillmentStatusFilter(fulfillmentStatus)] }]
+        : [rest, scope];
+};
 
 /**
  * Search orders (DTO-friendly) — matches POST /orders/search in OpenAPI. `productId` filters
@@ -32,7 +53,7 @@ export const search = (
     items: Order[];
     meta: PaginatedMeta;
 }> =>
-    orderRepository.search(search, scope).then((result) =>
+    orderRepository.search(...withFulfillmentFilter(search, scope)).then((result) =>
         // One batched `$in` for the whole page, however many orders it holds — see `./current`.
         resolveCurrentImages(result.items).then((items) => {
             if (context)

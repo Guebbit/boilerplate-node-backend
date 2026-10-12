@@ -26,7 +26,7 @@ const WEBHOOKS_SECTION = 'webhooks';
 const FRAGMENT_FILE = 'asyncapi.webhooks.yaml';
 
 /** Narrative order for the shop's modules; the rest follow alphabetically (a preference, not a registry). */
-const FRAGMENT_ORDER: readonly string[] = ['orders', 'payments', 'returns'];
+const FRAGMENT_ORDER: readonly string[] = ['orders', 'delivery', 'payments', 'returns'];
 
 /**
  * Every module's webhook-event fragment, discovered from disk.

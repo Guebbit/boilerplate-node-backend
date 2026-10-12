@@ -182,49 +182,55 @@ export const actorOf = (authContext?: AuthContext): OrderActor => {
 };
 
 /**
- * `delivery`'s four action doors, plus `orders`' own override — none of them decided by
- * `actorOf`'s customer/admin split, since a warehouse operator holds `delivery.any.start` without
+ * `delivery`'s start door, plus `orders`' own override — neither decided by `actorOf`'s
+ * customer/admin split, since a warehouse operator holds `delivery.any.start` without
  * `orders.any.update` and would otherwise read as a plain customer. Each is asked of the caller's
- * OWN key, at the same tenant scope `actorOf` already resolves — `delivery.any.start`/`.update`
- * and `orders.any.override` are all tenant-scoped keys, so one `callerForSubject(...,'Order')`
- * caller answers all four regardless of which subject each key is declared under.
- *
- * `ship`/`fulfill` are mutually exclusive by construction: `digitalOnly` picks which of the two
- * doors this order could ever go through, `reachesVia(shipped)` picks whether it may go through
- * either RIGHT NOW.
+ * OWN key, at the same tenant scope `actorOf` already resolves. The ship, deliver and fulfil doors
+ * are not here: they act on a fulfillment order or a shipment, each of which carries its own
+ * `actions` (`delivery`'s presenter).
  * @param status - the order's current status
  * @param digitalOnly - whether every line on this order is digital — see `isDigitalOnlyOrder`
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
-const deliveryAndOverrideActions = (
+const startAndOverrideActions = (
     status: OrderStatus,
     digitalOnly: boolean,
     authContext: AuthContext | undefined
-): Pick<OrderActions, 'start' | 'ship' | 'deliver' | 'fulfill' | 'override'> => {
-    if (!authContext)
-        return { start: false, ship: false, deliver: false, fulfill: false, override: [] };
+): Pick<OrderActions, 'start' | 'override'> => {
+    if (!authContext) return { start: false, override: [] };
 
     const caller = callerForSubject(authContext, 'Order');
     // `statusesLeadingTo`, not a raw `canTransition(status, target, 'system')`: the latter
     // answers `true` for an ECHO write (status already equals target, legal for every status but
     // `paid`), which would read e.g. `start` as true for an order already `processing`.
     // `statusesLeadingTo` excludes `from === to` by construction.
-    const reachesVia = (target: OrderStatus): boolean =>
-        statusesLeadingTo(target, 'system').includes(status);
-    const canRecordFulfilment = holdsKey(caller, 'delivery.any.update');
+    const reachesProcessing = statusesLeadingTo(OrderStatus.processing, 'system').includes(status);
     return {
-        start: holdsKey(caller, 'delivery.any.start') && reachesVia(OrderStatus.processing),
-        ship: canRecordFulfilment && !digitalOnly && reachesVia(OrderStatus.shipped),
-        deliver: canRecordFulfilment && reachesVia(OrderStatus.delivered),
-        // `processing → delivered` for a digital-only order — no lifecycle-table entry to ask
-        // `reachesVia` about, since `delivery/service.ts`'s `fulfillOrder` gates this move
-        // directly rather than through `ORDER_LIFECYCLE` (see `services/status.ts#markFulfilled`).
-        fulfill: canRecordFulfilment && digitalOnly && status === OrderStatus.processing,
+        start: holdsKey(caller, 'delivery.any.start') && reachesProcessing,
         override: holdsKey(caller, 'orders.any.override')
             ? [...overridableTargetsFrom(status, digitalOnly)]
             : []
     };
 };
+
+/**
+ * The status-derived actions with the cancel withdrawn once anything has shipped: a cancel is the
+ * WHOLE order, and goods that left cannot be cancelled. What remains is cancelled one fulfillment
+ * order at a time through `returns`, which `GET /returns/options` answers.
+ * @param actions - what the status and actor alone allow
+ * @param shipped - the order's `fulfillment.shipped`
+ */
+const withoutCancelOnceShipped = <T extends { transitions: OrderStatus[]; cancel: boolean }>(
+    actions: T,
+    shipped: boolean
+): T =>
+    shipped
+        ? {
+              ...actions,
+              transitions: actions.transitions.filter((to) => to !== OrderStatus.cancelled),
+              cancel: false
+          }
+        : actions;
 
 /**
  * The operator's "record a payment by hand" button: offered while the order can still reach
@@ -375,9 +381,7 @@ const withinStanding = (
     standing: { isBuyer: boolean; reaches: boolean }
 ): OrderActions => {
     const mayMove = actor === 'customer' ? standing.isBuyer : standing.reaches;
-    const doors = standing.reaches
-        ? {}
-        : { start: false, ship: false, deliver: false, fulfill: false, override: [] };
+    const doors = standing.reaches ? {} : { start: false, override: [] };
 
     return {
         ...actions,
@@ -401,7 +405,10 @@ const withinStanding = (
 export const withActions = (order: OrderDocument, authContext?: AuthContext): Promise<Order> => {
     const serialized = presentOrder(order);
     const actor = actorOf(authContext);
-    const statusActions = orderActionsFor(order.status, actor);
+    const statusActions = withoutCancelOnceShipped(
+        orderActionsFor(order.status, actor),
+        order.fulfillment?.shipped === true
+    );
 
     return Promise.all([resolveCurrentImages([serialized]), standingOn(order, authContext)]).then(
         ([[resolved], standing]) => ({
@@ -411,7 +418,7 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                     {
                         ...statusActions,
                         pay: statusActions.pay && holdsCheckout(authContext),
-                        ...deliveryAndOverrideActions(
+                        ...startAndOverrideActions(
                             order.status,
                             isDigitalOnlyOrder(order.items),
                             authContext

@@ -83,18 +83,27 @@ describe('canWithdraw', () => {
 
 describe('isBeforeDispatch', () => {
     it.each([OrderStatus.pending, OrderStatus.paid, OrderStatus.processing])(
-        'reads %s as still in the shop’s hands',
+        'reads %s as still in the shop’s hands while nothing has shipped',
         (status) => {
-            expect(isBeforeDispatch(status)).toBe(true);
+            expect(isBeforeDispatch({ status })).toBe(true);
+            expect(isBeforeDispatch({ status, fulfillment: { shipped: false } })).toBe(true);
         }
     );
 
     it.each([OrderStatus.shipped, OrderStatus.delivered, OrderStatus.cancelled])(
         'reads %s as past the shop’s hands',
         (status) => {
-            expect(isBeforeDispatch(status)).toBe(false);
+            expect(isBeforeDispatch({ status })).toBe(false);
         }
     );
+
+    it('reads a processing order that shipped in part as past the shop’s hands', () => {
+        // The shipment is the fact, not the status: refunding this whole would refund goods the
+        // buyer already holds.
+        expect(
+            isBeforeDispatch({ status: OrderStatus.processing, fulfillment: { shipped: true } })
+        ).toBe(false);
+    });
 });
 
 describe('Art. 16 exclusions', () => {

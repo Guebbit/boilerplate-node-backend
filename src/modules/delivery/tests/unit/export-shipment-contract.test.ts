@@ -1,9 +1,9 @@
 /**
  * @module
- * The shipment an account export carries, read through the generated response schema: a parcel
- * of a method that carries no tracking has no `trackingCode`, and the export must still be a
- * valid `DownloadAccountExport200Response`. The schema is the one the paired frontend validates
- * a downloaded export against.
+ * What an account export carries of the goods, read through the generated response schema: a
+ * shipment of a method that carries no tracking has no `trackingCode`, a fulfillment order has no
+ * staff note, and the export must still be a valid `DownloadAccountExport200Response`. The schema is
+ * the one the paired frontend validates a downloaded export against.
  */
 
 import { DownloadAccountExport200Response } from '@api/schemas.zod';
@@ -11,11 +11,18 @@ import { DownloadAccountExport200Response } from '@api/schemas.zod';
 /** The schema of one shipment inside an export. */
 const exportShipment = DownloadAccountExport200Response.shape.shipments.element;
 
-/** A delivered parcel with only what every shipment has. */
+/** The schema of one fulfillment order inside an export. */
+const exportFulfillmentOrder = DownloadAccountExport200Response.shape.fulfillmentOrders.element;
+
+/** A delivered shipment with only what every shipment has. */
 const untracked = {
     id: '65dcdec2b18ad5e4bd597f01',
     orderId: '65dcdec2b18ad5e4bd597f02',
-    status: 'delivered'
+    fulfillmentOrderId: '65dcdec2b18ad5e4bd597f03',
+    number: 1,
+    status: 'delivered',
+    lines: [{ productId: '65dcdec2b18ad5e4bd597f04', title: 'Mug', quantity: 1 }],
+    shippedAt: '2026-05-01T10:00:00.000Z'
 };
 
 describe('an export’s shipment', () => {
@@ -29,7 +36,54 @@ describe('an export’s shipment', () => {
         );
     });
 
-    it('still needs its order and status', () => {
+    it('still needs its order, status and what is in it', () => {
         expect(exportShipment.safeParse({ id: untracked.id }).success).toBe(false);
+        expect(exportShipment.safeParse({ ...untracked, lines: undefined }).success).toBe(false);
+    });
+
+    it('carries no actions: they are the caller’s, not the record', () => {
+        expect(
+            exportShipment.safeParse({
+                ...untracked,
+                actions: { deliver: true, editTracking: true }
+            }).success
+        ).toBe(false);
+    });
+});
+
+describe('an export’s fulfillment order', () => {
+    const closed = {
+        id: '65dcdec2b18ad5e4bd597f05',
+        orderId: untracked.orderId,
+        number: 1,
+        kind: 'physical',
+        status: 'closed',
+        lines: [
+            {
+                productId: '65dcdec2b18ad5e4bd597f04',
+                title: 'Mug',
+                quantity: 1,
+                shippedQuantity: 1,
+                cancelledQuantity: 0,
+                remaining: 0
+            }
+        ]
+    };
+
+    it('is valid with its lines, and with the dates and the hold reason it may carry', () => {
+        expect(exportFulfillmentOrder.safeParse(closed).success).toBe(true);
+        expect(
+            exportFulfillmentOrder.safeParse({
+                ...closed,
+                status: 'on_hold',
+                holdReason: 'awaiting_stock',
+                agreedAt: '2026-12-12T00:00:00.000Z',
+                expectedAt: '2026-12-12T00:00:00.000Z'
+            }).success
+        ).toBe(true);
+    });
+
+    it('leaves staff’s hold note out — it is not the buyer’s data', () => {
+        expect(exportFulfillmentOrder.safeParse({ ...closed, holdNote: 'x' }).success).toBe(false);
     });
 });

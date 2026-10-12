@@ -11,7 +11,7 @@ describe('webhookEventFragments', () => {
     it('finds every module that ships a fragment, the shop modules first', () => {
         const owners = webhookEventFragments().map((file) => file.split('/').at(-2));
 
-        expect(owners).toEqual(['orders', 'payments', 'returns', 'example']);
+        expect(owners).toEqual(['orders', 'delivery', 'payments', 'returns', 'example']);
     });
 });
 
@@ -25,6 +25,7 @@ describe('withWebhookEvents', () => {
         expect(result).toBe(document);
         expect(merge.mock.calls.map((call) => call[1])).toEqual([
             'orders',
+            'delivery',
             'payments',
             'returns',
             'example'

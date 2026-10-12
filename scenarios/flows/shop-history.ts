@@ -29,6 +29,9 @@ import { signIn, type Caller } from './client';
 import {
     startProcessing,
     shipOrder,
+    shipPart,
+    holdOrder,
+    cancelRemainder,
     deliverOrder,
     cancelOrder,
     requestReturn,
@@ -213,11 +216,13 @@ const plannedDemand = (): Map<string, number> => {
     // order (one cart line, so at most `cartLineMax()` units). Overstated rather than counted line
     // by line — a shelf with spare units on it is a shop, and a shelf one unit short is a checkout
     // that fails three hundred requests into a boot.
-    add({ productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 40 });
+    add({ productId: SEED_PRODUCT_IDS.dogFoodStandard, quantity: 50 });
     add({ productId: SEED_PRODUCT_IDS.dogBedPremium, quantity: 15 });
     // The three `current`-image demo rows below, each bought alone once and again inside
     // `order.mixedImageStates` — two units apiece.
     for (const index of [121, 122, 123]) add({ productId: fillerProductId(index), quantity: 2 });
+    // The two products `order.remainderCancelled` buys one of each of.
+    for (const index of [124, 125]) add({ productId: fillerProductId(index), quantity: 2 });
 
     return demand;
 };
@@ -512,6 +517,37 @@ export const driveShopHistory = async (baseUrl: string): Promise<ShopHistory> =>
     await submitCard(customer, await openPayment(customer, subjects['order.shipped']), CARD.visa);
     await startProcessing(owner, subjects['order.shipped']);
     await shipOrder(owner, subjects['order.shipped']);
+
+    /*
+     * The three states splitting an order into shipments adds. Paid by card, so each has a payment
+     * behind it; none is delivered, so each is still the shop's to work.
+     *
+     * Three units, one has left: `processing`, `partially_fulfilled`, the other two still to ship.
+     */
+    subjects['order.partiallyFulfilled'] = dated(await checkoutAndPay(customer, DOG_FOOD(3)));
+    await startProcessing(owner, subjects['order.partiallyFulfilled']);
+    await shipPart(
+        owner,
+        subjects['order.partiallyFulfilled'],
+        SEED_PRODUCT_IDS.dogFoodStandard,
+        1
+    );
+
+    // Held back by staff before anything left: the warehouse's "not yet", with its reason.
+    subjects['order.onHold'] = dated(await checkoutAndPay(customer, DOG_FOOD(1)));
+    await startProcessing(owner, subjects['order.onHold']);
+    await holdOrder(owner, subjects['order.onHold'], 'high_risk');
+
+    // Two products, one shipped, and the buyer cancelled the other: shipped and refunded in part.
+    subjects['order.remainderCancelled'] = dated(
+        await checkoutAndPay(customer, [
+            { productId: fillerProductId(124), quantity: 1 },
+            { productId: fillerProductId(125), quantity: 1 }
+        ])
+    );
+    await startProcessing(owner, subjects['order.remainderCancelled']);
+    await shipPart(owner, subjects['order.remainderCancelled'], fillerProductId(124), 1);
+    await cancelRemainder(customer, subjects['order.remainderCancelled']);
 
     /*
      * An order line resolves its picture LIVE against the catalogue product it still names,

@@ -1,0 +1,132 @@
+# The delivery module's webhook events: `shipment.*`.
+#
+# A FRAGMENT, not a document: it refs `#/servers/subscriberEndpoint` and
+# `#/components/schemas/WebhookHeaders`, which `webhooks/asyncapi.yaml` declares. The bundler
+# merges it into the `webhooks` section only while that module exists
+# (`scripts/contracts/asyncapi-webhook-events.ts`), and `GET /webhooks/events` lists it only while
+# this module is registered. Delete the module and its events leave the contract with it.
+# Each event is the Standard Webhooks envelope `{ type, timestamp, data }`; the module's
+# `publicEvents` (`module.ts`) is what actually fires it.
+channels:
+    shipment.shipped:
+        address: shipment.shipped
+        description: A shipment left — some or all of an order's goods.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ShipmentShippedEvent:
+                $ref: '#/components/messages/ShipmentShippedEvent'
+    shipment.delivered:
+        address: shipment.delivered
+        description: A shipment arrived.
+        servers:
+            - $ref: '#/servers/subscriberEndpoint'
+        messages:
+            ShipmentDeliveredEvent:
+                $ref: '#/components/messages/ShipmentDeliveredEvent'
+operations:
+    webhookShipmentShipped:
+        action: send
+        channel:
+            $ref: '#/channels/shipment.shipped'
+        summary: A shipment was cut from a fulfillment order and left.
+        description: >-
+            One-to-one with the `shipment.shipped` domain event — see `delivery/services/ship.ts`.
+            Fires once per shipment, so an order shipped in two goes fires it twice; the order
+            reaching `shipped` is the last one. A status-only override's forced shipments fire
+            nothing: no parcel left that anyone recorded.
+        messages:
+            - $ref: '#/channels/shipment.shipped/messages/ShipmentShippedEvent'
+    webhookShipmentDelivered:
+        action: send
+        channel:
+            $ref: '#/channels/shipment.delivered'
+        summary: A shipment was marked delivered.
+        description: >-
+            One-to-one with the `shipment.delivered` domain event — see `delivery/services/deliver.ts`.
+            A digital fulfilment fires it too, right after `shipment.shipped`.
+        messages:
+            - $ref: '#/channels/shipment.delivered/messages/ShipmentDeliveredEvent'
+components:
+    messages:
+        ShipmentShippedEvent:
+            name: ShipmentShippedEvent
+            title: Shipment shipped
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ShipmentShippedEnvelope'
+        ShipmentDeliveredEvent:
+            name: ShipmentDeliveredEvent
+            title: Shipment delivered
+            headers:
+                $ref: '#/components/schemas/WebhookHeaders'
+            payload:
+                $ref: '#/components/schemas/ShipmentDeliveredEnvelope'
+    schemas:
+        ShipmentPayload:
+            type: object
+            required:
+                - orderId
+                - shipmentId
+                - fulfillmentOrderId
+                - lines
+            properties:
+                orderId:
+                    type: string
+                shipmentId:
+                    type: string
+                fulfillmentOrderId:
+                    type: string
+                lines:
+                    type: array
+                    description: What the shipment carries, per product.
+                    items:
+                        type: object
+                        required:
+                            - productId
+                            - quantity
+                        properties:
+                            productId:
+                                type: string
+                            quantity:
+                                type: integer
+                        additionalProperties: false
+            additionalProperties: false
+        ShipmentShippedEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    # `title` names the generated model — see `orders/asyncapi.webhooks.yaml`.
+                    title: ShipmentShippedEventType
+                    type: string
+                    enum:
+                        - shipment.shipped
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ShipmentPayload'
+            additionalProperties: false
+        ShipmentDeliveredEnvelope:
+            type: object
+            required:
+                - type
+                - timestamp
+                - data
+            properties:
+                type:
+                    title: ShipmentDeliveredEventType
+                    type: string
+                    enum:
+                        - shipment.delivered
+                timestamp:
+                    type: string
+                    format: date-time
+                data:
+                    $ref: '#/components/schemas/ShipmentPayload'
+            additionalProperties: false

@@ -4,13 +4,17 @@
  * boundary can be walked.
  */
 import {
+    BACK_RETURN_STATUSES,
     DECIDABLE_RETURN_STATUSES,
     QUANTITY_HOLDING_RETURN_STATUSES,
     RECEIVABLE_RETURN_STATUSES,
+    accountsOf,
     checkRequestedLines,
+    holdsReturnedGoods,
     initialStatusFor,
     returnableLinesOf,
     returnableQuantities,
+    takesLastUnit,
     wireLines
 } from '../../domain';
 
@@ -165,5 +169,100 @@ describe('checkRequestedLines', () => {
                 { productId: 'c', quantity: 1 }
             ])
         ).toEqual({ ok: false, reason: 'too-many' });
+    });
+});
+
+/** A product id as the rules see one: anything that stringifies to it. */
+const id = (value: string) => ({ toString: () => value });
+
+describe('holdsReturnedGoods', () => {
+    it('counts a return that holds goods, whichever stage it is at', () => {
+        for (const status of QUANTITY_HOLDING_RETURN_STATUSES)
+            expect(holdsReturnedGoods({ kind: 'return', status })).toBe(true);
+        expect(holdsReturnedGoods({ kind: 'return', status: 'declined' })).toBe(false);
+    });
+
+    it('never counts a cancellation: its units never shipped, so none of them can come back', () => {
+        expect(holdsReturnedGoods({ kind: 'cancellation', status: 'closed' })).toBe(false);
+    });
+});
+
+describe('takesLastUnit', () => {
+    const ordered = [
+        { productId: 'a', quantity: 2 },
+        { productId: 'b', quantity: 1 }
+    ];
+
+    it('is true when every ordered unit is accounted for, by anything', () => {
+        expect(
+            takesLastUnit(ordered, [
+                { productId: 'a', quantity: 1 },
+                { productId: 'a', quantity: 1 },
+                { productId: 'b', quantity: 1 }
+            ])
+        ).toBe(true);
+    });
+
+    it('is false while a single unit of any product is unaccounted for', () => {
+        expect(
+            takesLastUnit(ordered, [
+                { productId: 'a', quantity: 2 },
+                { productId: 'b', quantity: 0 }
+            ])
+        ).toBe(false);
+        expect(takesLastUnit(ordered, [{ productId: 'b', quantity: 1 }])).toBe(false);
+        expect(takesLastUnit(ordered, [])).toBe(false);
+    });
+
+    it('is counted against the ORDERED quantity, so a product never accounted for keeps it false', () => {
+        expect(
+            takesLastUnit(ordered, [
+                { productId: 'a', quantity: 5 },
+                { productId: 'c', quantity: 9 }
+            ])
+        ).toBe(false);
+    });
+});
+
+describe('accountsOf', () => {
+    it('counts a cancellation and a return whose goods are back, and not one still on its way', () => {
+        const accounts = accountsOf([
+            {
+                kind: 'cancellation',
+                status: 'closed',
+                lines: [{ productId: id('a'), quantity: 1 }],
+                shippingRefund: 4
+            },
+            {
+                kind: 'return',
+                status: 'received',
+                lines: [{ productId: id('b'), quantity: 1 }]
+            },
+            { kind: 'return', status: 'approved', lines: [{ productId: id('a'), quantity: 9 }] },
+            { kind: 'return', status: 'declined', lines: [{ productId: id('a'), quantity: 9 }] }
+        ]);
+
+        expect(accounts.accountedFor).toEqual([
+            { productId: 'a', quantity: 1 },
+            { productId: 'b', quantity: 1 }
+        ]);
+    });
+
+    it('sums the delivery already refunded, from the ones that settled', () => {
+        const accounts = accountsOf([
+            { kind: 'cancellation', status: 'closed', lines: [], shippingRefund: 4 },
+            { kind: 'return', status: 'closed', lines: [], shippingRefund: 1.5 },
+            { kind: 'return', status: 'requested', lines: [], shippingRefund: 99 }
+        ]);
+
+        expect(accounts.shippingRefunded).toBe(5.5);
+    });
+
+    it('is empty for an order with no returns', () => {
+        expect(accountsOf([])).toEqual({ accountedFor: [], shippingRefunded: 0 });
+    });
+
+    it('treats the settled statuses as received and closed', () => {
+        expect(BACK_RETURN_STATUSES).toEqual(['received', 'closed']);
     });
 });

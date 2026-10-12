@@ -44,7 +44,7 @@ import {
     refundIssuedEmail
 } from '@modules/orders/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
-import { shipmentShippedEmail } from '@modules/delivery/emails';
+import { shipmentDeliveredEmail, shipmentShippedEmail } from '@modules/delivery/emails';
 import { returnNoticeEmail } from '@modules/returns';
 import { subscriptionDisabledEmail } from '@modules/webhooks';
 import { apiKeyMintedEmail, apiKeysRevokedEmail } from '@modules/api-keys/emails';
@@ -165,7 +165,15 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         { amount: 7, currency: 'EUR' },
         true
     ),
-    'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', 'TRK-0000TEST'),
+    'delivery.shipment-shipped': shipmentShippedEmail(locale, 'Ada', {
+        lines: [{ title: 'Widget', quantity: 1 }],
+        trackingCode: 'TRK-0000TEST',
+        remainingUnits: 1
+    }),
+    'delivery.shipment-delivered': shipmentDeliveredEmail(locale, 'Ada', {
+        lines: [{ title: 'Widget', quantity: 1 }],
+        withdrawUntil: new Date(Date.UTC(2026, 10, 14))
+    }),
     'returns.notice': returnNoticeEmail('withdrawal-acknowledged', locale, 'Ada', {
         orderRef: '2026-000041',
         returnPostage: 'consumer',

@@ -9,7 +9,8 @@
             "not-cancellable": "This order can no longer be cancelled."
         },
         "override": {
-            "not-allowed": "This override cannot move the order to that status from where it is now."
+            "not-allowed": "This override cannot move the order to that status from where it is now.",
+            "awaiting-stock": "This order still has units awaiting stock, so it cannot be moved past dispatch by hand."
         },
         "invoiced": "This order has an issued invoice and can no longer be permanently deleted.",
         "email-confirm": {

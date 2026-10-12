@@ -1,19 +1,19 @@
 /**
  * @module
  * GET /delivery/order/:orderId
- * The parcel behind an order — tracking code and whether it has arrived. The order page's
- * shipping panel reads this once the status shows `shipped`.
+ * Where an order's goods stand: its fulfillment orders and the shipments cut from them. The order
+ * page's shipping panel reads this once the order is paid; before that both lists are empty.
  */
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
 import { requireId } from '@infrastructure/http/ids';
-import { deliveryService } from '../service';
+import { deliveryService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
-import type { Shipment } from '@types';
+import type { OrderFulfillment } from '@types';
 
 /** Handles `GET /delivery/order/:orderId`. */
-export const getShipmentByOrder = (request: Request<{ orderId?: string }>, response: Response) => {
+export const getOrderFulfillment = (request: Request<{ orderId?: string }>, response: Response) => {
     const orderId = requireId(request, response, {
         notFound: 'delivery.order-not-found',
         name: 'orderId'
@@ -24,7 +24,7 @@ export const getShipmentByOrder = (request: Request<{ orderId?: string }>, respo
         .getForOrder(orderId, request.authContext)
         .then((result) => {
             if (refused(response, result)) return;
-            successResponse<Shipment>(response, result.data);
+            successResponse<OrderFulfillment>(response, result.data);
         })
-        .catch(catchAs(response, 'getShipmentByOrder'));
+        .catch(catchAs(response, 'getOrderFulfillment'));
 };
