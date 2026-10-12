@@ -10,6 +10,7 @@
 
 import { OrderStatus } from '@types';
 import type { OrderFulfillmentStatus } from '@types';
+import { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';
 
 /**
  * Where an order's goods stand, as `delivery` last reported it. Recomputed from the fulfillment
@@ -52,13 +53,12 @@ const everyRemainingUnitHeld = (summary: FulfillmentSummary): boolean =>
  *
  * | # | When | Value |
  * | --- | --- | --- |
- * | 1-2 | `pending`, `cancelled` | `unfulfilled` |
- * | 3 | `delivered` | `fulfilled` |
- * | 4 | `shipped` | `shipped` |
- * | 5 | something shipped, units remain | `partially_fulfilled` |
- * | 6 | nothing shipped, every remaining unit held | `on_hold` |
- * | 7 | `processing` | `in_progress` |
- * | 8 | `paid` | `unfulfilled` |
+ * | 1 | status ignores the summary (`pending`, `shipped`, `delivered`, `cancelled`) | its trait's value |
+ * | 2 | something shipped, units remain | `partially_fulfilled` |
+ * | 3 | nothing shipped, every remaining unit held | `on_hold` |
+ * | 4 | otherwise | its trait's value (`processing` is `in_progress`, `paid` is `unfulfilled`) |
+ *
+ * The per-status half is `fulfillment` in `ORDER_STATUS_TRAITS`.
  *
  * @param status - the order's status
  * @param summary - what `delivery` reported; absent before the order's fulfillment orders exist
@@ -67,12 +67,10 @@ export const fulfillmentStatusOf = (
     status: OrderStatus,
     summary: FulfillmentSummary = NO_FULFILLMENT
 ): OrderFulfillmentStatus => {
-    if (status === OrderStatus.pending || status === OrderStatus.cancelled) return 'unfulfilled';
-    if (status === OrderStatus.delivered) return 'fulfilled';
-    if (status === OrderStatus.shipped) return 'shipped';
+    const { value, followsSummary } = ORDER_STATUS_TRAITS[status].fulfillment;
+    if (!followsSummary) return value;
     if (summary.shipped && summary.remaining > 0) return 'partially_fulfilled';
-    if (everyRemainingUnitHeld(summary)) return 'on_hold';
-    return status === OrderStatus.processing ? 'in_progress' : 'unfulfilled';
+    return everyRemainingUnitHeld(summary) ? 'on_hold' : value;
 };
 
 /** A Mongo filter, as plain data: the domain stays free of any driver import. */
@@ -83,13 +81,13 @@ const statusIn = (...statuses: readonly OrderStatus[]): FulfillmentFilter => ({
     status: { $in: [...statuses] }
 });
 
-/** The summary says something shipped and units remain: row 5 of {@link fulfillmentStatusOf}. */
+/** The summary says something shipped and units remain: row 2 of {@link fulfillmentStatusOf}. */
 const PARTIALLY_SHIPPED: FulfillmentFilter = {
     'fulfillment.shipped': true,
     'fulfillment.remaining': { $gt: 0 }
 };
 
-/** The summary says nothing shipped and every remaining unit is held: row 6. */
+/** The summary says nothing shipped and every remaining unit is held: row 3. */
 const EVERY_UNIT_HELD: FulfillmentFilter = {
     'fulfillment.shipped': { $ne: true },
     'fulfillment.remaining': { $gt: 0 },
@@ -104,14 +102,21 @@ const EVERY_UNIT_HELD: FulfillmentFilter = {
  * @returns a filter to AND into the listing's own
  */
 export const fulfillmentStatusFilter = (wanted: OrderFulfillmentStatus): FulfillmentFilter => {
-    const inFlight = statusIn(OrderStatus.paid, OrderStatus.processing);
     const neither = { $nor: [PARTIALLY_SHIPPED, EVERY_UNIT_HELD] };
+    const withValue = (value: OrderFulfillmentStatus, followsSummary: boolean) =>
+        statusIn(
+            ...statusesWhere(
+                (traits) =>
+                    traits.fulfillment.value === value &&
+                    traits.fulfillment.followsSummary === followsSummary
+            )
+        );
+    // Statuses whose summary may refine the answer: only they can be partially fulfilled or on hold.
+    const inFlight = statusIn(...statusesWhere((traits) => traits.fulfillment.followsSummary));
     switch (wanted) {
-        case 'fulfilled': {
-            return statusIn(OrderStatus.delivered);
-        }
+        case 'fulfilled':
         case 'shipped': {
-            return statusIn(OrderStatus.shipped);
+            return withValue(wanted, false);
         }
         case 'partially_fulfilled': {
             return { $and: [inFlight, PARTIALLY_SHIPPED] };
@@ -120,14 +125,11 @@ export const fulfillmentStatusFilter = (wanted: OrderFulfillmentStatus): Fulfill
             return { $and: [inFlight, EVERY_UNIT_HELD] };
         }
         case 'in_progress': {
-            return { $and: [statusIn(OrderStatus.processing), neither] };
+            return { $and: [withValue(wanted, true), neither] };
         }
         case 'unfulfilled': {
             return {
-                $or: [
-                    statusIn(OrderStatus.pending, OrderStatus.cancelled),
-                    { $and: [statusIn(OrderStatus.paid), neither] }
-                ]
+                $or: [withValue(wanted, false), { $and: [withValue(wanted, true), neither] }]
             };
         }
     }

@@ -10,22 +10,11 @@
 
 import { OrderStatus } from '@types';
 import type { FulfillmentSummary } from './fulfillment';
+import { ORDER_STATUS_TRAITS } from './status-traits';
 import { isDigitalOnlyOrder, type ShippableLineCandidate } from './rules';
 
 /** One day, in milliseconds. */
 const DAY_MS = 24 * 60 * 60 * 1000;
-
-/**
- * The statuses a withdrawal may be made from: the contract is concluded and the order has not been
- * cancelled. `pending` counts — the consumer's right does not wait for their own payment.
- */
-const WITHDRAWABLE_STATUSES: ReadonlySet<OrderStatus> = new Set([
-    OrderStatus.pending,
-    OrderStatus.paid,
-    OrderStatus.processing,
-    OrderStatus.shipped,
-    OrderStatus.delivered
-]);
 
 /** What {@link isBeforeDispatch} reads off an order. */
 export interface DispatchCandidate {
@@ -42,10 +31,7 @@ export interface DispatchCandidate {
  * @param order - the order's status and its fulfilment summary
  */
 export const isBeforeDispatch = (order: DispatchCandidate): boolean =>
-    (order.status === OrderStatus.pending ||
-        order.status === OrderStatus.paid ||
-        order.status === OrderStatus.processing) &&
-    order.fulfillment?.shipped !== true;
+    ORDER_STATUS_TRAITS[order.status].beforeDispatch && order.fulfillment?.shipped !== true;
 
 /**
  * When the withdrawal window closes, counted from the moment its clock starts.
@@ -120,6 +106,6 @@ export interface WithdrawalCandidate {
  * @param now - the moment being asked about
  */
 export const canWithdraw = (order: WithdrawalCandidate, now: Date): boolean =>
-    WITHDRAWABLE_STATUSES.has(order.status) &&
+    ORDER_STATUS_TRAITS[order.status].withdrawable &&
     (order.items === undefined || order.items.some((line) => !isExcludedFromWithdrawal(line))) &&
     (order.withdrawUntil === undefined || now.getTime() <= order.withdrawUntil.getTime());

@@ -10,6 +10,7 @@
 
 import { OrderStatus } from '@types';
 import type { OrderActions } from '@types';
+import { ORDER_STATUS_TRAITS } from './status-traits';
 
 /**
  * `system` is not a rank above `admin` — it is narrower: moves nobody may make by hand.
@@ -129,7 +130,7 @@ export const isPayable = (status: OrderStatus): boolean =>
  * @returns whether the order's hold should be (or already is) `committed` or later
  */
 export const paymentSettled = (status: OrderStatus): boolean =>
-    status !== OrderStatus.pending && status !== OrderStatus.cancelled;
+    ORDER_STATUS_TRAITS[status].stockCommitted;
 
 /**
  * The forward sequence an admin override may move an order along — never `paid` (that destination

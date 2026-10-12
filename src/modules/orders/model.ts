@@ -717,8 +717,9 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
         serialized.paymentStatus as StampedPaymentStatus | undefined,
         serialized.paidAt as Date | undefined
     );
+    // A projection that never selected `status` reads as `pending`: no goods have moved.
     serialized.fulfillmentStatus = fulfillmentStatusOf(
-        serialized.status as OrderStatus,
+        (serialized.status as OrderStatus | undefined) ?? OrderStatus.pending,
         serialized.fulfillment as FulfillmentSummary | undefined
     );
     delete serialized.fulfillment;

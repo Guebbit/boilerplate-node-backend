@@ -273,16 +273,14 @@ summary, the status move and the events commit together or not at all.
 
 `fulfillmentStatus` is derived from the status and that summary. First match wins:
 
-| #   | When                                       | Value                               |
-| --- | ------------------------------------------ | ----------------------------------- |
-| 1   | `pending`                                  | `unfulfilled`                       |
-| 2   | `cancelled`                                | `unfulfilled`                       |
-| 3   | `delivered`                                | `fulfilled`                         |
-| 4   | `shipped`                                  | `shipped`                           |
-| 5   | something shipped, units remain            | `partially_fulfilled`               |
-| 6   | nothing shipped, every remaining unit held | `on_hold` (wins over `in_progress`) |
-| 7   | `processing`                               | `in_progress`                       |
-| 8   | `paid`                                     | `unfulfilled`                       |
+| #   | When                                                                            | Value                               |
+| --- | ------------------------------------------------------------------------------- | ----------------------------------- |
+| 1   | the status ignores the summary (`pending`, `shipped`, `delivered`, `cancelled`) | its trait's value                   |
+| 2   | something shipped, units remain                                                 | `partially_fulfilled`               |
+| 3   | nothing shipped, every remaining unit held                                      | `on_hold` (wins over `in_progress`) |
+| 4   | otherwise (`paid`, `processing`)                                                | its trait's value                   |
+
+The per-status half (rows 1 and 4) is the `fulfillment` trait in [the status traits](#status-traits).
 
 `GET /orders?fulfillmentStatus=` lists by that value. The filter is built from the same table
 (`fulfillmentStatusFilter`) and ANDed into the caller's own scope, rather than storing a copy of the
@@ -294,6 +292,24 @@ refuses once any shipment left (`actions.cancel` is `false`, and the write itsel
 `fulfillment.shipped`), and `isBeforeDispatch` reads `fulfillment.shipped`, not `processing` — a
 withdrawal after shipment 1 would otherwise refund goods the buyer already holds. What has not shipped
 is cancelled one fulfillment order at a time, through [`returns`](./returns.md#cancelling-what-has-not-shipped).
+
+### Status traits
+
+Every question the module asks of a status alone reads one record,
+`ORDER_STATUS_TRAITS` (`domain/status-traits.ts`), declared `satisfies Record<OrderStatus, ...>`.
+A status added to the contract fails the build there instead of falling into a default category.
+
+| Trait            | Read by                               | `pending` | `paid`    | `processing` | `shipped` | `delivered` | `cancelled` |
+| ---------------- | ------------------------------------- | --------- | --------- | ------------ | --------- | ----------- | ----------- |
+| `stockCommitted` | `paymentSettled`                      | no        | yes       | yes          | yes       | yes         | no          |
+| `beforeDispatch` | `isBeforeDispatch` (with the summary) | yes       | yes       | yes          | no        | no          | no          |
+| `withdrawable`   | `canWithdraw`                         | yes       | yes       | yes          | yes       | yes         | no          |
+| `fulfillment`    | `fulfillmentStatusOf`, its filter     | see below | see below | see below    | see below | see below   | see below   |
+
+`fulfillment` is a value plus whether the summary may refine it: `unfulfilled` (`pending`,
+`cancelled`, and `paid` which follows the summary), `in_progress` (`processing`, follows the
+summary), `shipped`, `fulfilled`. The edges between statuses are not traits; they live in the
+[event table](../theory/tactical-ddd.md#1-the-order-lifecycle).
 
 ### The admin override
 

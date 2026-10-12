@@ -57,6 +57,11 @@ still stops at `pending`). Each entry carries its `from`
 set, its `to` and its actors, so a service names the event and the conditional write is handed the
 event's own `from` — nothing is derived from a neighbouring column.
 
+What a status **is**, apart from its edges, is a second table: `ORDER_STATUS_TRAITS` in
+`domain/status-traits.ts` (stock committed, before dispatch, withdrawable, fulfilment value). It is
+total over `OrderStatus`, so a new contract status is a compile error there, not a silent default.
+See [the status traits](../modules/orders.md#status-traits).
+
 ```mermaid
 %%{init: {'stateDiagram': {'nodeSpacing': 40}}}%%
 stateDiagram-v2

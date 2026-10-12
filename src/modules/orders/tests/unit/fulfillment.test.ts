@@ -28,42 +28,42 @@ describe('fulfillmentStatusOf', () => {
             { shipped: true, remaining: 1 },
             'unfulfilled'
         ],
-        ['2 · cancelled', OrderStatus.cancelled, {}, 'unfulfilled'],
-        ['3 · delivered', OrderStatus.delivered, { shipped: true }, 'fulfilled'],
-        ['4 · shipped', OrderStatus.shipped, { shipped: true, undelivered: 1 }, 'shipped'],
+        ['1 · cancelled', OrderStatus.cancelled, {}, 'unfulfilled'],
+        ['1 · delivered', OrderStatus.delivered, { shipped: true }, 'fulfilled'],
+        ['1 · shipped', OrderStatus.shipped, { shipped: true, undelivered: 1 }, 'shipped'],
         [
-            '5 · something shipped and units remain',
+            '2 · something shipped and units remain',
             OrderStatus.processing,
             { shipped: true, remaining: 2, undelivered: 1 },
             'partially_fulfilled'
         ],
         [
-            '5 · wins over the hold when part shipped and the rest is held',
+            '2 · wins over the hold when part shipped and the rest is held',
             OrderStatus.processing,
             { shipped: true, remaining: 2, onHold: 2 },
             'partially_fulfilled'
         ],
         [
-            '6 · nothing shipped, every remaining unit held',
+            '3 · nothing shipped, every remaining unit held',
             OrderStatus.processing,
             { remaining: 2, onHold: 2 },
             'on_hold'
         ],
         [
-            '6 · on_hold wins over in_progress, and applies to a paid order',
+            '3 · on_hold wins over in_progress, and applies to a paid order',
             OrderStatus.paid,
             { remaining: 1, onHold: 1, awaitingStock: 1 },
             'on_hold'
         ],
         [
-            '7 · processing with only some units held is in progress',
+            '4 · processing with only some units held is in progress',
             OrderStatus.processing,
             { remaining: 3, onHold: 1 },
             'in_progress'
         ],
-        ['7 · processing with no summary yet', OrderStatus.processing, {}, 'in_progress'],
-        ['8 · paid', OrderStatus.paid, { remaining: 2 }, 'unfulfilled'],
-        ['8 · paid with no summary yet', OrderStatus.paid, {}, 'unfulfilled']
+        ['4 · processing with no summary yet', OrderStatus.processing, {}, 'in_progress'],
+        ['4 · paid', OrderStatus.paid, { remaining: 2 }, 'unfulfilled'],
+        ['4 · paid with no summary yet', OrderStatus.paid, {}, 'unfulfilled']
     ])('%s', (_row, status, fields, expected) => {
         expect(fulfillmentStatusOf(status, summary(fields))).toBe(expected);
     });

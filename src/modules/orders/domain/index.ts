@@ -75,5 +75,9 @@ export type { StampedPaymentStatus, StampedReturnStatus } from './projections';
 export { NO_FULFILLMENT, fulfillmentStatusOf, fulfillmentStatusFilter } from './fulfillment';
 export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
 
+/** What each status means, declared once and total over the contract's statuses. */
+export { ORDER_STATUS_TRAITS, statusesWhere } from './status-traits';
+export type { OrderStatusTraits } from './status-traits';
+
 /** The shop-calendar year of an instant: the year every numbered series is cut at. */
 export { yearInZone, zonedStartOfDay } from './shop-time';
