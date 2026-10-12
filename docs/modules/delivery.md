@@ -479,8 +479,8 @@ the delivery that completes the order, the date until which the buyer may withdr
 
 A shipment and a fulfillment order are the buyer's data by way of their order: `POST /account/export`
 carries a `shipments` section (lines, number, tracking, dates) and a `fulfillmentOrders` section
-(lines, dates, hold reason). **Staff's hold note is not in it**: it is free text a person typed about a
-person, so it is also **reaped** — `npm run reap:delivery` unsets it once the fulfillment order has not
+(lines, dates, hold reason, **staff's hold note**): a note a person typed about a person is that
+person's data, and the record holds no staff id, so none is exported. The note is also **reaped** — `npm run reap:delivery` unsets it once the fulfillment order has not
 changed for `NODE_HOLD_NOTE_RETENTION_DAYS` (default 365), exactly as `reap:returns` does for a return's
 text ([why](../theory/data-retention.md#free-text-on-holds)). Lines, status and dates stay: they are the
 trail.

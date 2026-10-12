@@ -83,7 +83,8 @@ describe('an export’s fulfillment order', () => {
         ).toBe(true);
     });
 
-    it('leaves staff’s hold note out — it is not the buyer’s data', () => {
-        expect(exportFulfillmentOrder.safeParse({ ...closed, holdNote: 'x' }).success).toBe(false);
+    it('carries staff’s hold note, and refuses a staff id beside it', () => {
+        expect(exportFulfillmentOrder.safeParse({ ...closed, holdNote: 'x' }).success).toBe(true);
+        expect(exportFulfillmentOrder.safeParse({ ...closed, heldBy: 'u1' }).success).toBe(false);
     });
 });

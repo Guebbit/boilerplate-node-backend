@@ -204,8 +204,9 @@ window. **Why its own clock.** The order's clock starts only when an account is 
 live customer's note would never go. **Why "since the last change", not "since closing".** A
 fulfillment order held for ever never closes.
 
-The note is also left out of `POST /account/export`: it is staff's assessment, written for the shop's
-own use, and not the buyer's own data.
+The note is in `POST /account/export`, the same rule as a return's `declineReason`: staff's assessment of a
+person is that person's data (CJEU Nowak, C-434/16). Who wrote it is not (CJEU Pankki S, C-579/21), and the
+fulfillment order records no staff id, so none is exported.
 
 ## Backups and erasure
 
