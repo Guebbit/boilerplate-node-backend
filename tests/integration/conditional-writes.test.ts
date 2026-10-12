@@ -15,7 +15,12 @@ import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createProduct } from '@modules/products/tests/factories';
 import { createUser } from '@modules/users/tests/factories';
-import { createOrder, toOrderItem, readOrder } from '@modules/orders/tests/factories';
+import {
+    createOrder,
+    forceOrderStatus,
+    toOrderItem,
+    readOrder
+} from '@modules/orders/tests/factories';
 import { productModel } from '@modules/products/model';
 import { productRepository } from '@modules/products/repository';
 import { TokenType } from '@modules/users';
@@ -43,6 +48,8 @@ interface Resource {
     collection: string;
     /** Seeds a row: the path that writes it, the path that reads it, the caller, and the row's id. */
     seed: () => Promise<{ path: string; readPath: string; bearer: string; id: string }>;
+    /** Brings a seeded row to a state its hard delete accepts (an order must be cancelled). */
+    readyToDelete?: (id: string) => Promise<unknown>;
     /** A body the resource accepts on PATCH; `n` makes two edits differ. */
     edit: (n: number) => Record<string, unknown>;
     /** What `stored` reads back once edit `n` has landed. */
@@ -89,6 +96,7 @@ const RESOURCES: Resource[] = [
             const id = String(order._id);
             return { path: `/orders/${id}`, readPath: `/orders/${id}`, bearer, id };
         },
+        readyToDelete: (id) => forceOrderStatus(id, 'cancelled'),
         edit: (n) => ({ email: `edit-${n.toString()}@example.com` }),
         expected: (n) => `edit-${n.toString()}@example.com`,
         stored: (id) => readOrder(id).then((row) => row?.email)
@@ -144,6 +152,7 @@ describe.each(RESOURCES)('conditional writes on $name', (resource) => {
 
     it("writes when If-Match is the tag just read, and answers the row's NEW tag", async () => {
         const { path, readPath, bearer, id } = await resource.seed();
+        await resource.readyToDelete?.(id);
         const read = await api().get(readPath).set('Authorization', bearer);
 
         const write = await api()
@@ -159,6 +168,7 @@ describe.each(RESOURCES)('conditional writes on $name', (resource) => {
 
     it('answers 412 PRECONDITION_FAILED and leaves the row alone when the tag is stale', async () => {
         const { path, readPath, bearer, id } = await resource.seed();
+        await resource.readyToDelete?.(id);
         const read = await api().get(readPath).set('Authorization', bearer);
         // Someone else edits first.
         await api().patch(path).set('Authorization', bearer).send(resource.edit(1)).expect(200);
@@ -235,6 +245,7 @@ const DELETABLE = RESOURCES.filter((resource) => resource.name !== "the caller's
 describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
     it('refuses a stale tag and keeps the row', async () => {
         const { path, readPath, bearer, id } = await resource.seed();
+        await resource.readyToDelete?.(id);
         const read = await api().get(readPath).set('Authorization', bearer);
         await api().patch(path).set('Authorization', bearer).send(resource.edit(1)).expect(200);
 
@@ -249,6 +260,7 @@ describe.each(DELETABLE)('conditional DELETE on $name', (resource) => {
 
     it('deletes on the current tag', async () => {
         const { path, readPath, bearer, id } = await resource.seed();
+        await resource.readyToDelete?.(id);
         const read = await api().get(readPath).set('Authorization', bearer);
 
         const response = await api()

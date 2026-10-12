@@ -31,7 +31,7 @@ import { imageStore } from '@infrastructure/adapters/image-store';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
 import { accessibleFilterFor } from '@kernel/access/query';
-import { emitDomainEvent } from '@kernel/events';
+import { announceInTransaction } from '@kernel/outbox';
 import { exampleAuditActions } from '../audit';
 import { exampleAnalyticsEvents } from '../analytics';
 import { exampleCreatedTotal } from '../metrics';
@@ -74,17 +74,12 @@ const bodyTooLong = (body: string | undefined): ResponseReject | undefined => {
 };
 
 /**
- * Announce a publish: the domain event (a webhook and the owner's mail listen to it) and the
- * analytics event. Fire and forget — a listener's failure never undoes the edit.
+ * Record a publish as an analytics event. The domain event is not here: it rides the outbox, in
+ * the transaction that wrote the publish.
  * @param example - the example that was just published
  * @param context - the caller, for the analytics base
  */
-const announcePublished = (example: ExampleDocument, context: CallerContext): void => {
-    void emitDomainEvent(EXAMPLE_PUBLISHED, {
-        exampleId: String(example._id),
-        userId: String(example.userId),
-        title: example.title
-    });
+const analysePublished = (example: ExampleDocument, context: CallerContext): void => {
     emitAnalyticsEvent({
         ...buildAnalyticsBase(context),
         event: exampleAnalyticsEvents.EXAMPLE_PUBLISHED,
@@ -179,6 +174,52 @@ export const search = (
         );
 
 /**
+ * Write an edit that moves an example INTO published, and announce it through the outbox.
+ *
+ * The write matches only while the status is still the one read, so of two racing publishes one
+ * lands and announces. The loser re-reads and goes through the update again, where the example
+ * is already published and nothing is announced.
+ *
+ * See: docs/tools/outbox.md
+ *
+ * @param example - the loaded example, already carrying the edit in memory
+ * @param before - the status it was read in
+ * @param context - the caller
+ * @returns the saved example, or `null` when a peer changed the status first
+ */
+const publishAndAnnounce = (
+    example: ExampleDocument,
+    before: ExampleDocument['status'],
+    context: CallerContext
+): Promise<ExampleDocument | null> =>
+    announceInTransaction(
+        (session) =>
+            exampleRepository.publishFrom(
+                String(example._id),
+                before,
+                {
+                    title: example.title,
+                    body: example.body,
+                    status: example.status,
+                    publishedAt: example.publishedAt
+                },
+                session
+            ),
+        (saved) => ({
+            name: EXAMPLE_PUBLISHED,
+            payload: {
+                exampleId: String(saved._id),
+                userId: String(saved.userId),
+                title: saved.title
+            },
+            aggregateId: String(saved._id)
+        })
+    ).then((saved) => {
+        if (saved) analysePublished(saved, context);
+        return saved;
+    });
+
+/**
  * Write a validated change onto an example already loaded, then audit and announce it.
  *
  * @param example - the loaded example, already cleared by the scope and the rank rule
@@ -203,7 +244,7 @@ const applyUpdate = (
     example.status = next;
     if (shouldStampPublishedAt(next, example.publishedAt)) example.publishedAt = new Date();
 
-    return exampleRepository.save(example).then((saved) => {
+    const finish = (saved: ExampleDocument): Promise<ExampleResult> => {
         recordAudit(context, {
             action: exampleAuditActions.EXAMPLE_UPDATED,
             outcome: 'success',
@@ -211,11 +252,26 @@ const applyUpdate = (
             targetId: String(saved._id),
             metadata: { status: next }
         });
-        if (!isPublished(before) && isPublished(next)) announcePublished(saved, context);
         return presentWithOwner(saved).then((shaped) =>
             generateSuccess(shaped, 200, t('example.updated'))
         );
-    });
+    };
+
+    if (isPublished(before) || !isPublished(next))
+        return exampleRepository.save(example).then(finish);
+
+    return publishAndAnnounce(example, before, context).then((saved) =>
+        saved
+            ? finish(saved)
+            : // A peer moved the status first: start over from what it left.
+              exampleRepository
+                  .findScoped(String(example._id), scopeOf(context, 'update'))
+                  .then((fresh) =>
+                      fresh
+                          ? applyUpdate(fresh, changes, context)
+                          : generateReject(404, [t('example.not-found')])
+                  )
+    );
 };
 
 /**

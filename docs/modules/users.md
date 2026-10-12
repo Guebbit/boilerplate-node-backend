@@ -126,7 +126,8 @@ sequenceDiagram
 
 **Credentials are the owner's alone.** `POST /users` takes no password: the account is created
 without one and always mails a setup link (`USER_SETUP_REQUESTED`, handled in
-[`account`](./account.md)), so no administrator ever types, sees or resets another person's
+[`account`](./account.md); it rides the [outbox](../tools/outbox.md) in the account's own
+transaction, so a lost mail is retried and a refused grant sends none), so no administrator ever types, sees or resets another person's
 password, second factor or sign-in email. Each row also carries an `actions` block (`update`,
 `ban`, `delete`) with the rank already applied, which is what a screen renders its buttons from.
 

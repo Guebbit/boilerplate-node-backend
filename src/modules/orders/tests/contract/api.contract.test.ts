@@ -13,13 +13,14 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
+import { OrderStatus } from '@types';
 
 setupTestDb();
 
 /** An order with real lines — the download-scope suite is `invoicing`'s own, not this file's. */
-const seedOrderFor = async (user: Parameters<typeof createOrder>[0]) => {
+const seedOrderFor = async (user: Parameters<typeof createOrder>[0], status?: OrderStatus) => {
     const product = await createProduct();
-    return createOrder(user, [toOrderItem(product, 2)]);
+    return createOrder(user, [toOrderItem(product, 2)], status ? { status } : undefined);
 };
 
 describe('GET /orders — the filters it now publishes', () => {
@@ -492,9 +493,9 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
         expect(stored?.deletedAt).toBeInstanceOf(Date);
     });
 
-    it('matches the contract for a hard delete, and the row is gone', async () => {
+    it('matches the contract for a hard delete of a cancelled order, and the row is gone', async () => {
         const { bearer, user } = await authenticateAs('admin');
-        const order = await seedOrderFor(user);
+        const order = await seedOrderFor(user, OrderStatus.cancelled);
 
         const response = await api()
             .delete(`/orders/${String(order._id)}/hard`)
@@ -502,6 +503,19 @@ describe('DELETE /orders and DELETE /orders/{id}/hard', () => {
 
         expect(response.status).toBe(200);
         await expect(orderRepository.findById(String(order._id))).resolves.toBeNull();
+    });
+
+    it('refuses a hard delete of an open order with 409 ORDER_NOT_CANCELLED, and keeps it', async () => {
+        const { bearer, user } = await authenticateAs('admin');
+        const order = await seedOrderFor(user);
+
+        const response = await api()
+            .delete(`/orders/${String(order._id)}/hard`)
+            .set('Authorization', bearer);
+
+        expect(response.status).toBe(409);
+        expect(response.body.errors[0].code).toBe('ORDER_NOT_CANCELLED');
+        await expect(orderRepository.findById(String(order._id))).resolves.not.toBeNull();
     });
 
     it('matches the error contract for a hard delete of an id nobody holds', async () => {

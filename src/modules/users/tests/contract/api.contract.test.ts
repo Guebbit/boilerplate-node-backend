@@ -10,7 +10,8 @@ import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
-import { onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
+import { settleOutboxNudges } from '@kernel/outbox';
 import { USER_SETUP_REQUESTED } from '../../events';
 
 setupTestDb();
@@ -143,6 +144,7 @@ describe('POST /users', () => {
     });
 
     it('creates a user without a password, exposes no credentials, and mails the owner a setup link', async () => {
+        markDomainEventsWired();
         const seen: string[] = [];
         onDomainEvent(USER_SETUP_REQUESTED, ({ userId }) => {
             seen.push(userId);
@@ -152,6 +154,8 @@ describe('POST /users', () => {
             email: 'admin-created@example.com',
             username: 'admincreated'
         });
+
+        await settleOutboxNudges();
 
         expect(response.status).toBe(201);
         assertNoCredentials(response.body);

@@ -13,6 +13,7 @@
             "awaiting-stock": "This order still has units awaiting stock, so it cannot be moved past dispatch by hand."
         },
         "invoiced": "This order has an issued invoice and can no longer be permanently deleted.",
+        "not-cancelled": "Cancel this order before deleting it permanently.",
         "email-confirm": {
             "subject": "Order received — awaiting payment",
             "meta-title": "Order received",

@@ -13,6 +13,7 @@ x-error-codes:
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
     ORDER_NOT_CANCELLABLE: { status: 409, description: 'The order is not in a state that can still be cancelled.' }
+    ORDER_NOT_CANCELLED: { status: 409, description: 'A hard delete needs a cancelled order: this one is still open. Cancel it first (`POST /orders/{id}/cancel`).' }
     ORDER_OVERRIDE_NOT_ALLOWED: { status: 409, description: 'This status transition is not on the admin override''s allowed list.' }
     ORDER_OVERRIDE_AWAITING_STOCK: { status: 409, description: 'The order still has units awaiting stock; overriding it forward would ship goods the stock ledger never counted out.' }
 
@@ -146,7 +147,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record; a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`.
+            description: Deletes the order identified by the `id` field in the request body. Set `hardDelete` to `true`, in the query or the body, to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid); a `true` from any source wins, so a `false` sent elsewhere does not cancel it. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`.
             operationId: deleteOrder
             x-alias-of: deleteOrderById
             security:
@@ -167,8 +168,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A hard delete on an order `invoicing` has already issued. `errors[].code` is
-                # `ORDER_INVOICED`. Never answered for a soft delete, which the row survives.
+                # A hard delete refused. `errors[].code` is `ORDER_INVOICED` for an order that was paid,
+                # and `ORDER_NOT_CANCELLED` for one still open: only a cancelled, never-paid order
+                # may be hard-deleted. Never answered for a soft delete, which the row survives.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -297,7 +299,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Delete order
-            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record. A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
+            description: Deletes the order identified by `{id}` in the path. Pass the `hardDelete` query parameter as `true` to permanently remove the record, which is only allowed for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid). A soft delete is one-way and safe to repeat — undo it with `POST /orders/{id}/restore`. Functionally equivalent to `DELETE /orders`.
             operationId: deleteOrderById
             security:
                 - bearerAuth: []
@@ -315,8 +317,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A hard delete on an order `invoicing` has already issued. `errors[].code` is
-                # `ORDER_INVOICED`. Never answered for a soft delete, which the row survives.
+                # A hard delete refused. `errors[].code` is `ORDER_INVOICED` for an order that was paid,
+                # and `ORDER_NOT_CANCELLED` for one still open: only a cancelled, never-paid order
+                # may be hard-deleted. Never answered for a soft delete, which the row survives.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -354,7 +357,7 @@ paths:
         delete:
             tags: [Orders]
             summary: Permanently delete order
-            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`.
+            description: Permanently removes the order identified by `{id}`, rather than soft-deleting it. Functionally equivalent to `DELETE /orders/{id}?hardDelete=true`, and only for an order that is cancelled and was never paid (409 `ORDER_NOT_CANCELLED` while it is open, 409 `ORDER_INVOICED` once paid).
             operationId: hardDeleteOrderById
             x-alias-of: deleteOrderById
             security:
@@ -366,8 +369,9 @@ paths:
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
-                # A hard delete on an order `invoicing` has already issued. `errors[].code` is
-                # `ORDER_INVOICED`. Never answered for a soft delete, which the row survives.
+                # A hard delete refused. `errors[].code` is `ORDER_INVOICED` for an order that was paid,
+                # and `ORDER_NOT_CANCELLED` for one still open: only a cancelled, never-paid order
+                # may be hard-deleted. Never answered for a soft delete, which the row survives.
                 '409': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Conflict' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
