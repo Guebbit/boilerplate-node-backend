@@ -10,6 +10,9 @@
  * login and refresh paths, where an anonymous request could schedule it. Those two prune only
  * their own account (`src/modules/account/session/prune.ts`).
  *
+ * It also forgets the previous email of every account whose 7-day undo link is gone, since the
+ * address is kept only for that link (`reapLapsedPreviousEmails`).
+ *
  * Safe to repeat, and guarded by `withLease` anyway: a second runner would only scan the same
  * documents for nothing. The lease records this job's outcome under `reap:expired-tokens` itself,
  * so `runScript` is passed no name (a skipped run must not be recorded as a success).
@@ -25,7 +28,7 @@ import '@infrastructure/runtime/mongoose-boot';
 import { logger } from '@infrastructure/adapters/logger';
 import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { withLease } from '@infrastructure/persistence/lease';
-import { reapExpiredTokens } from '@modules/account';
+import { reapExpiredTokens, reapLapsedPreviousEmails } from '@modules/account';
 import { runScript } from '../run-script';
 
 /**
@@ -34,16 +37,27 @@ import { runScript } from '../run-script';
  */
 const LEASE_TTL_MS = 30 * 60 * 1000;
 
+/** Both sweeps, one after the other: the expired tokens, then the lapsed previous emails. */
+const sweep = (): Promise<{ pruned: number; cleared: number }> =>
+    reapExpiredTokens().then((pruned) =>
+        reapLapsedPreviousEmails().then((cleared) => ({ pruned, cleared }))
+    );
+
 /** Connect (the lease lives in Mongo), then sweep every account's expired tokens under the lease. */
 const main = (): Promise<void> =>
     startJob()
-        .then(() => withLease('reap:expired-tokens', LEASE_TTL_MS, reapExpiredTokens))
-        .then((pruned) => {
-            if (pruned === undefined)
+        .then(() => withLease('reap:expired-tokens', LEASE_TTL_MS, sweep))
+        .then((swept) => {
+            if (swept === undefined)
                 logger.info({
                     message: 'Expired-token reaper skipped: another holder already has the lease.'
                 });
-            else logger.info({ message: 'Expired tokens reaped.', accountsPruned: pruned });
+            else
+                logger.info({
+                    message: 'Expired tokens reaped.',
+                    accountsPruned: swept.pruned,
+                    previousEmailsCleared: swept.cleared
+                });
         });
 
 // Entry point: run `main`, and close the connection on both paths. No job name is passed: the

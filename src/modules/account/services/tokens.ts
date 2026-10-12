@@ -2,11 +2,12 @@
  * @module
  * The user's `tokens` array, owned in one place: every non-password flow (reset, verification,
  * delete confirmation, refresh sessions) is an entry in it, "live" is defined once here.
- * {@link findLiveToken}/{@link spendLiveToken} stay separate for `two-factor.ts`, which does other
+ * {@link findLiveToken}/{@link spendLiveToken} stay separate for `two-factor-challenge.ts`, which does other
  * work between finding a token and spending it (a login challenge, a password reset);
  * {@link redeemLiveToken} composes both for the confirm controllers that don't — a refusal never says why.
  */
 
+import { randomBytes } from 'node:crypto';
 import type { CallerContext, Session } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
@@ -22,6 +23,24 @@ import {
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import type { ResponseSuccess, ResponseReject } from '@infrastructure/http/response';
 import { t } from '@infrastructure/i18n';
+
+/**
+ * Add a token to the user (e.g. password reset).
+ * Tokens are consumed by the appropriate flow (passwordChange, etc.).
+ */
+export const tokenAdd = (
+    user: UserDocument,
+    type: string,
+    expirationTime?: number
+): Promise<string> => {
+    const token = randomBytes(16).toString('hex');
+    // Delegates to `userService.tokenAdd`, the named door onto the document method the JWT layer
+    // already uses, rather than duplicating "append a token" here. Both issue a `$push` — the
+    // array must be APPENDED TO, never rebuilt. Rebuilding it (`user.tokens = [...]`) writes the
+    // whole array back, erasing anything added by a concurrent request in between; `tokens` is
+    // exactly the field where two sessions and a reset link routinely collide like that.
+    return userService.tokenAdd(user, type, expirationTime ?? 0, token);
+};
 
 /**
  * Find the account holding a LIVE token of this type, without spending it — and the entry

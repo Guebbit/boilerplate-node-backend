@@ -1314,7 +1314,7 @@ describe('spendLiveToken', () => {
 
 /**
  * A refused password must never burn the link it arrived with: the breach check needs the found
- * user, so it sits between the find and the atomic spend (`services/profile.ts`).
+ * user, so it sits between the find and the atomic spend (`services/password-reset.ts`).
  */
 describe('completePasswordReset', () => {
     /** On the bundled breach list and strong enough to clear the composition rules. */

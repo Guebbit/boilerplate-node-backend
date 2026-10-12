@@ -13,7 +13,7 @@
  *   (`session/login-observability.ts`), so both must audit the caller's REAL role and increment
  *   the shared `auth_login_total` counter. Refresh is not in this second table on purpose — it
  *   audits its own `AUTH_TOKEN_REFRESHED` action and its own `auth_refresh_total` counter
- *   (`services/authentication.ts#refreshAccessToken`), a different rule, not a missing test of
+ *   (`services/refresh.ts#refreshAccessToken`), a different rule, not a missing test of
  *   this one.
  */
 
@@ -217,7 +217,7 @@ describe.each([passwordPath, oauthPath, refreshPath])(
                 assertRefused(response);
                 // A refused password attempt still audits an AUTH_LOGIN *failure* — same as a
                 // wrong password, on purpose (an unknown/blocked account must cost an attacker no
-                // less than a live one, see `services/authentication.ts#login`). What every path
+                // less than a live one, see `services/login.ts#login`). What every path
                 // shares is that NONE of them may audit a SUCCESS here.
                 const successfulLogins = auditSpy.mock.calls.filter(
                     ([event]) =>

@@ -27,7 +27,7 @@ const TOKEN = 'a1b2c3d4e5f6';
 /**
  * The four that exist to deliver a link, paired with the `accountFrontendLink` kind each must
  * delegate to. `setupRequestEmail` shares `resetRequestEmail`'s kind deliberately — both spend a
- * `password`-type token at `POST /account/reset-confirm` (see `authentication.ts`'s
+ * `password`-type token at `POST /account/reset-confirm` (see `password-reset-request.ts`'s
  * `requestAccountSetup`) — so it's excluded from the "each token to its own kind" case below.
  */
 const LINK_EMAILS = [

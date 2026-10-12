@@ -65,6 +65,13 @@ export const tokenRemoveByValue = (token: string) => userRepository.tokenRemoveB
 export const tokenRemoveExpired = (supersededRetentionMs: number, userId?: string) =>
     userRepository.tokenRemoveExpired(supersededRetentionMs, userId);
 
+/**
+ * Forget the previous email of every account whose undo link has lapsed — the end of the
+ * `changed` state. Whole collection: the nightly token reaper is the only caller.
+ */
+export const clearLapsedPreviousEmail = (undoTokenType: string) =>
+    userRepository.clearLapsedPreviousEmail(undoTokenType);
+
 /** Mark a refresh token superseded — the one-time-use half of rotation. */
 export const tokenSupersede = (token: string) => userRepository.tokenSupersede(token);
 

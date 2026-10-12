@@ -248,11 +248,35 @@ Neither is a layer — they are the repeated ends of controllers.
 | `login-observability.ts` | the metrics / audit / analytics emit meaning "a login happened"           | `post-login.ts`, `post-login-2fa.ts`                  |
 
 ::: tip Why the observability tail is not in the service
-`services/authentication.ts` checks credentials; it cannot know whether a session exists. The
+`services/login.ts` checks credentials; it cannot know whether a session exists. The
 SUCCESS emit must fire only **after** cookies and an access token are real, which is a
 controller-layer fact — so `login()` and `verifyLoginChallenge()` are deliberately kept ignorant of
 it.
 :::
+
+### The mint guard {#the-mint-guard}
+
+"No session without the second factor" is enforced where a session is minted, not only where a
+login branches. `createRefreshToken` refuses a **first** session for an account whose
+`twoFactorEnabledAt` is set unless `amr` carries `otp`, with `SecondFactorRequiredError`:
+
+```mermaid
+flowchart LR
+    P["password login"] --> Q{"2FA armed?"}
+    O["OAuth callback"] --> Q
+    Q -->|no| M["createRefreshToken<br/><i>first session</i>"]
+    Q -->|yes| C["challenge, then code<br/><i>amr gains 'otp'</i>"]
+    C --> M
+    X["a login path added later<br/><i>forgot the branch</i>"] --> M
+    M -->|armed, no 'otp' in amr| E["SecondFactorRequiredError"]
+    M -->|otherwise| T["session"]
+```
+
+The controllers still branch to the challenge first, so the guard is the backstop for the path that
+forgot to: it fails loudly (a `500`, never a session) instead of handing out a session the factor
+never guarded. A **re-mint** (`reissueSession`, `remintRefreshCookie`) continues a session the
+caller already holds and is not checked; that door, and `amr` becoming required, are a separate
+decision.
 
 ## Logout everywhere
 
@@ -276,6 +300,7 @@ So every "I may be compromised" event also moves `tokensValidAfter` on the user,
 | email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
 | email change undone ("not me")        | yes, FIRST, before the address is touched                      | n/a: the undo link is the credential                                                    |
 | refresh reuse detected                | yes                                                            | n/a                                                                                     |
+| admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                | n/a: an unban or a restore does not bring the old tokens back                           |
 | plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
 
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot

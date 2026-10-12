@@ -1448,7 +1448,7 @@ far more product code than this — but that code is written once, by whoever fo
 fork inherits _unchanged_ is the core: the cache adapter, the queue adapter, the upload pipeline,
 the auth service, the error interpreter. A bug there ships to every project that ever started here.
 
-So the order is by **blast radius**, not by percentage. `src/modules/account/services/authentication.ts` at 53% mattered more
+So the order is by **blast radius**, not by percentage. the account login service (`src/modules/account/services/login.ts` since the split) at 53% mattered more
 than a lower-scoring model of an order line, because every application has logins and only this one
 has orders.
 

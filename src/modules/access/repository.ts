@@ -6,7 +6,7 @@
  * See: docs/theory/authorization.md
  */
 
-import { Types } from 'mongoose';
+import { Types, type ClientSession } from 'mongoose';
 import type { AuthorizationScope } from '@types';
 import { membershipModel, tenantModel } from './model';
 import type { MembershipDocument, TenantDocument } from './model';
@@ -49,18 +49,23 @@ export const membershipRepository = {
     ): Promise<MembershipDocument | null> =>
         membershipModel.findOne({ userId, tenantId, scope }).exec(),
 
-    /** Create-or-overwrite the role a person holds in one place. */
+    /**
+     * Create-or-overwrite the role a person holds in one place.
+     *
+     * @param session - joins the write to the caller's transaction (an account create or update)
+     */
     upsertRole: (
         userId: string,
         tenantId: string | null,
         scope: AuthorizationScope,
-        role: string
+        role: string,
+        session?: ClientSession
     ): Promise<MembershipDocument> =>
         membershipModel
             .findOneAndUpdate(
                 { userId, tenantId, scope },
                 { $set: { role } },
-                { returnDocument: 'after', upsert: true }
+                { returnDocument: 'after', upsert: true, session }
             )
             // `upsert: true` + `returnDocument: 'after'` guarantee a document — found or just
             // created — so this can never resolve `null` the way a plain `findOneAndUpdate` can.
@@ -69,6 +74,15 @@ export const membershipRepository = {
     /** Remove one row by its own id. */
     deleteById: (id: MembershipDocument['_id']): Promise<{ deletedCount?: number }> =>
         membershipModel.deleteOne({ _id: id }).exec(),
+
+    /**
+     * Every row a person holds, in every place.
+     *
+     * @param session - joins the delete to the caller's transaction (a hard delete's cascade)
+     */
+    deleteByUserId: (userId: string, session?: ClientSession): Promise<{ deletedCount?: number }> =>
+        // https://mongoosejs.com/docs/api/model.html#Model.deleteMany()
+        membershipModel.deleteMany({ userId }, { session }).exec(),
 
     /** Every membership row for a set of people, in one place — the batched sibling of `findOne`. */
     findByUserIds: (
