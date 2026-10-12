@@ -12,6 +12,7 @@
             "not-allowed": "Questa forzatura non può spostare l'ordine a quello stato dalla posizione in cui si trova."
         },
         "invoiced": "Questo ordine ha una fattura emessa e non può più essere eliminato definitivamente.",
+        "not-cancelled": "Annulla questo ordine prima di eliminarlo definitivamente.",
         "email-confirm": {
             "subject": "Ordine ricevuto — in attesa di pagamento",
             "meta-title": "Ordine ricevuto",

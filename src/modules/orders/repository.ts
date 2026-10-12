@@ -555,15 +555,15 @@ const incrementOrderNumberCounter = (year: number): Promise<number> =>
         .then((counter) => counter.seq);
 
 /**
- * Permanently remove an order that is still unpaid, as one conditional write: the delete's own
- * filter carries `paidAt: null`, so a settlement that committed after the caller read the document
- * stops it (Optimistic Offline Lock). Checked against the request's `If-Match` like `deleteOne`.
+ * Permanently remove an order that is cancelled and was never paid, as one conditional write: the
+ * delete's own filter carries both, so a settlement or a status move that landed after the caller
+ * read the document stops it (Optimistic Offline Lock). Checked against the request's `If-Match`
+ * like `deleteOne`.
  *
  * @param document - the order, as the caller read it
- * @param session - the caller's transaction
- * @returns `false` when nothing was removed: the order was paid meanwhile, or is already gone
+ * @returns `false` when nothing was removed: the order moved on meanwhile, or is already gone
  */
-const deleteUnpaid = (document: OrderDocument, session?: ClientSession): Promise<boolean> => {
+const deleteCancelledUnpaid = (document: OrderDocument): Promise<boolean> => {
     let deleted = false;
 
     return checkedDelete(document, () => {
@@ -571,8 +571,10 @@ const deleteUnpaid = (document: OrderDocument, session?: ClientSession): Promise
         // `paidAt`, so an order never paid matches. Cleared after, as `versioning.ts` does, so a
         // second use of the same object is not filtered on this one.
         // https://mongoosejs.com/docs/api/document.html#Document.prototype.$where
-        Object.assign(document, { $where: { ...(document.$where as object), paidAt: null } });
-        return (document.deleteOne(session ? { session } : undefined) as Promise<DeleteOutcome>)
+        Object.assign(document, {
+            $where: { ...(document.$where as object), status: OrderStatus.cancelled, paidAt: null }
+        });
+        return (document.deleteOne() as Promise<DeleteOutcome>)
             .then((outcome) => {
                 deleted = outcome.deletedCount > 0;
                 return outcome;
@@ -601,7 +603,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
         id: string,
         scope?: Record<string, unknown>
     ) => Promise<OrderDocument | undefined>;
-    deleteUnpaid: (document: OrderDocument, session?: ClientSession) => Promise<boolean>;
+    deleteCancelledUnpaid: (document: OrderDocument) => Promise<boolean>;
     ownerScope: (userId: string) => Record<string, unknown>;
     updateStatusIfIn: (
         id: string,
@@ -658,7 +660,7 @@ export const orderRepository: Omit<Repository<OrderDocument, Order>, 'search'> &
     aggregate,
     search,
     findByIdScoped,
-    deleteUnpaid,
+    deleteCancelledUnpaid,
     ownerScope,
     updateStatusIfIn,
     markPaid,

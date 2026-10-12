@@ -63,7 +63,7 @@ describe('removeById', () => {
 
     it('audits ORDER_DELETED with hardDelete:true in metadata on a hard delete', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const order = await seedOrder(OrderStatus.pending);
+        const order = await seedOrder(OrderStatus.cancelled);
 
         await removeById(String(order._id), true, callerContextAs('admin'));
 
