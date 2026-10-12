@@ -1,5 +1,5 @@
-summary: "Shipping rates as pure rules, and the staff doors that record a parcel's handover and arrival."
+summary: 'Shipping rates as pure rules, fulfillment orders, and the staff doors that cut a shipment, record its arrival and hold or release a fulfillment order.'
 subdomain: supporting
 group: shop
 dependsOn:
-    - orders # a shipment is about an order
+    - orders # a fulfillment order and a shipment are about an order

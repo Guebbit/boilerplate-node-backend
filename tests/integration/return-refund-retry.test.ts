@@ -12,8 +12,8 @@ import { resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import { createOrder, forceOrderStatus, toOrderItem } from '@modules/orders/tests/factories';
-import { OrderStatus } from '@types';
+import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { inventoryService } from '@modules/inventory';
 import paymentsModule from '@modules/payments/module';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
@@ -54,9 +54,8 @@ const withdrawnOrder = async () => {
     const intent = await createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
     await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
-    await forceOrderStatus(orderId, OrderStatus.delivered);
-    // The forced status skips the parcel's own move, so the units leave the shelf here.
-    await inventoryService.shipForOrder(orderId);
+    // Through the real doors: each shipment takes its own units off the shelf.
+    await carryOrderTo(orderId, 'delivered');
     const outcome = await createReturn(
         { orderId, reason: 'withdrawal' },
         asCustomer(user.id),

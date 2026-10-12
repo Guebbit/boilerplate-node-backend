@@ -1,12 +1,13 @@
 # returns
 
 ::: tip At a glance
-**Owns** — the `Return` collection, outright: the request to send goods back, its lines, and where it
-stands. A withdrawal is one of these.
+**Owns** — the `Return` collection, outright: the request to send goods back — or the record that an
+unshipped remainder was cancelled — its lines, and where it stands. A withdrawal is one of these.
 **Depends on** — [`orders`](./orders.md) (the order a return is about, its owner, and the cancel a
 withdrawal before dispatch becomes), [`inventory`](./inventory.md) (received goods back on sale),
 [`payments`](./payments.md) (the refund, and `payment.refunded` closing the return) and
-[`delivery`](./delivery.md) (the delivery a withdrawal refunds).
+[`delivery`](./delivery.md) (what has shipped, what remains of each fulfillment order, and the
+delivery a withdrawal refunds).
 **Breaks if you change** — `orders`' `OrderActions.withdraw`/`withdrawUntil` (the button reads them)
 and `cancelById`'s `withdrawal` option; `payments`' `refundForReturn` and the `returnId` on a refund.
 :::
@@ -114,9 +115,15 @@ flowchart TD
     B -- "pending · paid · processing" --> C["orders' cancel<br/><i>refund in full · stock released</i>"]
     C --> D["a Return, born closed<br/><i>no lines · refundAmount = the order, or 0 if unpaid</i>"]
     D --> G["acknowledgement mailed<br/><i>201 + Location</i>"]
-    B -- "shipped · delivered" --> E["a Return, born approved<br/><i>lines coming back</i>"]
+    B -- "something has shipped" --> E["a Return, born approved<br/><i>lines coming back: at most what shipped,<br/>less what earlier returns took</i>"]
     E --> F["acknowledgement mailed<br/><i>201 + Location, with date and time</i>"]
+    B -- "kind: cancellation" --> X["the remainder of one fulfillment order<br/>cancelled — see below"]
 ```
+
+**Before dispatch** reads `fulfillment.shipped`, not the order's status: an order that shipped in part
+is still `processing`, and refunding it whole would refund goods the buyer already holds. A withdrawal
+that loses a race against a shipment is opened again as what the order now is — a return, never a full
+refund.
 
 - **Before dispatch the Return is a record, not a flow.** The order is still in the shop's hands, so
   `orders`' cancel already does everything — refund in full, release the stock hold. The Return
@@ -145,8 +152,10 @@ flowchart TD
 
 ## Lines
 
-A return names what comes back: `lines` of `productId` and `quantity`, checked against what the order
-held less what earlier non-declined returns already took (`domain/quantities.ts`, pure). No `lines`
+A return names what comes back: `lines` of `productId` and `quantity`, checked against what has
+**shipped** (`delivery`'s fulfillment orders, per product) less what earlier non-declined returns
+already took (`domain/quantities.ts`, pure). Goods that never left cannot come back; an order that
+shipped in part offers only what did. No `lines`
 means everything still left — the shape of a withdrawal. The title and the gross unit price are
 frozen onto the line, so a refund of it reads the same later whatever the catalogue does.
 
@@ -193,14 +202,19 @@ switch for it. Until one is built, the full withdrawal period is the lawful defa
 
 `orders` cannot import `payments` or `returns`, so it cannot derive the money or the return on read.
 Both are **stamped by their owner through `orders`' own service door** (`markPaymentStatus`,
-`markReturnStatus`), the way `delivery` reports a shipment. `fulfillmentStatus` needs nothing
-outside, so it derives from `status`.
+`markReturnStatus`), the way `delivery` reports a shipment. `fulfillmentStatus` reads the summary
+`delivery` reports, so it is derived on read.
 
-| Field               | Values                                                                   | Stamped by                                                    |
-| ------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                    | `payments` (the refund states); `paid`/`unpaid` from `paidAt` |
-| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `shipped` · `fulfilled`                  | derived from `status`                                         |
-| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned` | `returns`, after every move (`services/projection.ts`)        |
+| Field               | Values                                                                                      | Stamped by                                                                                   |
+| ------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `paymentStatus`     | `unpaid` · `paid` · `partially_refunded` · `refunded`                                       | `payments` (the refund states); `paid`/`unpaid` from `paidAt`                                |
+| `fulfillmentStatus` | `unfulfilled` · `in_progress` · `on_hold` · `partially_fulfilled` · `shipped` · `fulfilled` | derived from `status` and `delivery`'s summary ([table](./orders.md#the-fulfilment-summary)) |
+| `returnStatus`      | `none` · `requested` · `in_progress` · `partially_returned` · `returned`                    | `returns`, after every move (`services/projection.ts`)                                       |
+
+`returnStatus` measures what came back against what the order held **less what a remainder cancel took**:
+a cancelled unit never shipped, so it can never return, and without that a cancel would keep the order
+from ever reading `returned` (and `withdraw` from ever turning off). A cancellation never counts as
+goods coming back.
 
 `returnStatus` is a report of a fact already decided, so a failed stamp is logged and never undoes the
 move; the next move stamps again. `paymentStatus` is not: `payments` stamps it inside the refund's
@@ -240,18 +254,97 @@ sequenceDiagram
 - **The amount** is the returned lines at the price the order froze, plus refundable delivery, less
   an optional handling deduction (Art. 14(2)) staff enter at receipt. It is fixed then and shown as
   `refundAmount`. `src/modules/returns/services/refund-amount.ts` is pure integer arithmetic.
-- **Delivery is refunded only on a full return** — one carrying every unit on the order — and never
-  twice. For a withdrawal it is capped at the cheapest standard delivery the shop offers, so a paid
+- **Delivery is refunded by whichever cancel or return takes the _last unit_ of the order** — every
+  unit then cancelled or back, counted against ORDERED quantity — and never twice (see
+  [below](#the-delivery-across-several-cancels-and-returns)). For a return that closes the order it is capped at the cheapest standard delivery the shop offers, so a paid
   express upgrade stays with the shop (Art. 13(2)); on a €150 express order, where standard would
   have been free, the refundable delivery is zero. `pickup` is collection, not delivery, and does
   not count. Goods that were faulty or not what was ordered are the seller's own doing: the whole
-  delivery goes back.
+  delivery goes back. What an earlier cancel or return already refunded of the delivery is taken off
+  first, so the cap is on what is still owed.
 - **The refund is clamped to what the payment has left**, so a goodwill refund made earlier can
   never make a return over-refund. The credit note follows the refund
   ([`invoicing`](./invoicing.md)).
 - **Return postage** follows `NODE_RETURN_POSTAGE_PAYER`. It changes what the customer is told, not the
   refund: with `consumer` the customer posts at their own cost (Art. 14(1), told beforehand), with
   `shop` the shop covers it.
+
+## Cancelling what has not shipped
+
+Once any shipment left, an order can no longer be cancelled whole. What remains is cancelled **one
+fulfillment order at a time**, as a Return of `kind: cancellation`, **closed when made**: its `lines`
+are the remainder, and the refund of them follows the commit. The legal basis is CRD recital 40
+(withdraw before delivery) and Commission Notice 2021/C 525/01 §5.5.1 (partial withdrawal); the
+Shopify rule for the staff side: a partly shipped order cannot be cancelled, you refund the unshipped
+items, under the Refund permission.
+
+| Case                     | The door                                                           | Result                                                                                                   |
+| ------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| nothing shipped anywhere | the order's own cancel (as always)                                 | order `cancelled`, full refund including delivery; every fulfillment order cancelled                     |
+| something shipped        | `POST /returns` `{kind: cancellation, fulfillmentOrderId, reason}` | the remainder's lines cancelled; refund of those lines (+ delivery on the last unit); units back on sale |
+| everything shipped       | a return, as always                                                | —                                                                                                        |
+
+Why here and not in `delivery`: a remainder cancel moves **money, stock and the shipping rule**, and
+only this module already reaches all four. In **one transaction**, under the order's lock row, it
+asks `delivery` to mark the lines (`cancelRemainder`, which also recomputes the order's summary and
+moves its status when that completes it), gives the units back (`inventory.releaseLinesForOrder`) and
+writes the Return. The refund follows, as on receipt, through `refundForReturn` with
+`reason: cancellation` and the Return's id; a refund the provider refuses stays open for the payment
+sweep, and the Return stays closed.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as buyer or staff
+    participant R as returns
+    participant D as delivery
+    participant I as inventory
+    participant P as payments
+    C->>R: POST /returns {kind: cancellation, fulfillmentOrderId}
+    Note over R: owner or key checks · then one transaction under the order's lock
+    R->>D: cancelRemainder(fulfillmentOrderId)
+    D-->>R: the lines cancelled, the summary updated
+    R->>I: releaseLinesForOrder(lines)
+    R->>R: write the Return (closed) · return.requested · return.closed
+    Note over R: commit
+    R->>P: refundForReturn(reason: cancellation, returnId)
+    P-->>C: the refund's own mail
+```
+
+**Who may.** The buyer, as part of their withdrawal (`reason: withdrawal`; never on goods Art. 16
+excludes, and inside the window). **Staff** (out of stock for good, a sweep that got no answer) need
+the **refund key**, `payments.any.update` — `stepUp: critical`, so the route asks for a fresh session —
+held by moderator and admin; the manager and the warehouse do not hold it. `ownMoneyRefusal` and the
+rank rule apply, as on every door that sends money out: nobody refunds their own order, nor one whose
+buyer ranks at or above them. No new key and no new verb: it is one more thing the refund permission
+already means.
+
+Refused: `RETURN_CANCELLATION_INVALID` (422) — no `fulfillmentOrderId`, `lines` sent, or a return that
+names one; `RETURN_NOTHING_TO_CANCEL` (409) — nothing has shipped (cancel the order instead), or
+nothing is left on that fulfillment order.
+
+### The delivery across several cancels and returns
+
+CRD Art. 13(1) refunds "all payments … including … the costs of delivery"; Art. 13(2) lets the premium
+over the cheapest standard delivery be kept; the CJEU (C-511/08 _Heinrich Heine_) forbids charging the
+outbound delivery to a consumer who withdraws. The Notice is silent on partial withdrawal, so the rule
+is the one that never refunds twice and never splits it:
+
+| Detail       | Rule                                                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| "last unit"  | every ordered unit is cancelled, back (a return `received` or `closed`), or in the act being settled                                 |
+| Which amount | closed by a **cancel** → all the delivery still owed; closed by a **return** → that return's reason rule (cheapest standard vs full) |
+| Two at once  | decided under the per-order lock (`ReturnOrderLock`): exactly one is last. A receipt takes the lock too                              |
+| Never twice  | each cancel and return stores the delivery inside its refund; the next is quoted on what is still owed                               |
+
+## The options read
+
+`GET /returns/options?orderId=` is the server's answer to "what can I still return, and what can I
+still cancel?", so the frontend shows and never counts: `returnable` is the quantity per product that
+has **shipped** and is not already coming back; `cancellable` lists each fulfillment order with a
+remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
+unit). The owner reads their own order's, staff holding `returns.any.read` any. The cancel recomputes
+under the lock, so what was quoted is what is refunded unless something moved in between.
 
 ## GDPR
 
@@ -273,11 +366,12 @@ dates stay. No early wipe on account erasure. The reasoning:
 There is no `returns.self.*` key: a customer opening or reading their own return needs only to be
 signed in, the way an order's own cancel works, and "own" is the ORDER's owner.
 
-| Key                   | Held by                                       | Does                                            |
-| --------------------- | --------------------------------------------- | ----------------------------------------------- |
-| `returns.any.read`    | manager, warehouse, support, moderator, admin | reads every return                              |
-| `returns.any.update`  | manager, support, moderator, admin            | approves or declines a request                  |
-| `returns.any.receive` | manager, warehouse, admin                     | records the goods arriving (`stepUp: critical`) |
+| Key                   | Held by                                       | Does                                                                                                             |
+| --------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `returns.any.read`    | manager, warehouse, support, moderator, admin | reads every return                                                                                               |
+| `returns.any.update`  | manager, support, moderator, admin            | approves or declines a request                                                                                   |
+| `returns.any.receive` | manager, warehouse, admin                     | records the goods arriving (`stepUp: critical`)                                                                  |
+| `payments.any.update` | moderator, admin                              | cancels an unshipped remainder, as a refund (`stepUp: critical`) — see [above](#cancelling-what-has-not-shipped) |
 
 `receive` is narrower than `update` the way `delivery.any.start` is narrower than
 `orders.any.update`: the warehouse holds the parcel and may say it arrived, without being handed the
@@ -296,5 +390,6 @@ The return address (`NODE_RETURN_ADDRESS_*`) and who pays postage (`NODE_RETURN_
 ## Related pages
 
 - [`orders`](./orders.md) — the withdrawal clock and the cancel a pre-dispatch withdrawal becomes
+- [`delivery`](./delivery.md) — what has shipped, and the remainder a cancel marks
 - [`payments`](./payments.md#refund-records) — the money side
 - [`invoicing`](./invoicing.md) — the credit note a refund issues

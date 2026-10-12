@@ -7,7 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { successResponse } from '@infrastructure/http/response';
-import { deliveryService } from '../service';
+import { deliveryService } from '../services';
 import type { ShippingMethodsResponse } from '@types';
 
 /**

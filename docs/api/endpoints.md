@@ -72,7 +72,7 @@ An order's money, behind a provider port (`NODE_PAYMENT_PROVIDER`, no default: u
 
 > The domain behind these routes: [`delivery`](../modules/delivery.md) · routes and middleware: `src/modules/delivery/routes.ts`
 
-Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. There is no courier simulation: `POST /delivery/order/{orderId}/ship` and `.../deliver` are staff recording a real handover and a real arrival, one order at a time, each door then reporting the move to `orders` — never the other way around. A tracked method's own `ship` call refuses with a named 422 unless it carries a `trackingCode`.
+Shipping rates as pure domain rules (flat rates, free-above thresholds), priced authoritatively at checkout via `POST /cart/checkout`'s `shippingMethodId`. There is no courier simulation: `POST /delivery/fulfillment-orders/{id}/shipments` and `POST /delivery/shipments/{id}/deliver` are staff recording a real handover and a real arrival, one shipment at a time, each door then reporting the move to `orders` in the same transaction — never the other way around. An order ships in as many shipments as it takes, and `GET /delivery/order/{orderId}` answers its fulfillment orders and shipments, each with its own `actions`. A tracked method's shipment call refuses with a named 422 unless it carries a `trackingCode`. What has not shipped is held (`…/hold`, `…/release`) or cancelled through [`returns`](../modules/returns.md#cancelling-what-has-not-shipped).
 
 ## Inventory
 

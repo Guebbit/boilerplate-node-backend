@@ -21,9 +21,12 @@ import {
     reserveForOrder,
     commitForOrder,
     shipForOrder,
+    shipLinesForOrder,
+    releaseLinesForOrder,
     releaseForOrder,
     releaseCommittedForOrder,
     runReservationSweep,
+    refreshStockCacheForProducts,
     receive,
     adjust,
     listLevels,
@@ -34,6 +37,7 @@ import { reservationRepository, stockLevelRepository } from '../../repository';
 import { reservationModel, stockLevelModel } from '../../model';
 import { inventoryAuditActions } from '../../audit';
 import * as auditPort from '@infrastructure/observability/audit';
+import { withTransaction } from '@infrastructure/runtime/database';
 
 /*
  * The audit port is REPLACED, not spied on: `jest.spyOn` cannot redefine the non-configurable
@@ -404,6 +408,123 @@ describe('commitForOrder', () => {
                 metadata: { reservationStatus: 'none', stage: 'commit' }
             })
         );
+    });
+});
+
+/** Three units of one product, held and committed — the hold a paid order has. */
+const committedHold = async () => {
+    const product = await createProduct({ onHand: 10 });
+    const productId = String(product._id);
+    const orderId = anOrderId();
+    await reserveForOrder(orderId, [{ productId, quantity: 3 }]);
+    await commitForOrder(orderId);
+    return { productId, orderId };
+};
+
+describe('shipLinesForOrder and releaseLinesForOrder', () => {
+    it('ships some units: onHand and reserved drop together, and the hold keeps the rest', async () => {
+        const { productId, orderId } = await committedHold();
+
+        const shipped = await withTransaction((session) =>
+            shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
+        );
+        await refreshStockCacheForProducts([productId]);
+
+        expect(shipped).toBe(true);
+        expect(await countersOf(productId)).toEqual({ onHand: 9, reserved: 2, available: 7 });
+        const hold = await reservationRepository.findByOrderId(orderId);
+        expect(hold).toMatchObject({ status: 'committed' });
+        expect(hold?.items.map(({ quantity }) => quantity)).toEqual([2]);
+    });
+
+    it('ends the hold shipped with its last unit, and a later whole-hold ship has nothing to take', async () => {
+        const { productId, orderId } = await committedHold();
+
+        await withTransaction((session) =>
+            shipLinesForOrder(orderId, [{ productId, quantity: 3 }], session)
+        );
+
+        const hold = await reservationRepository.findByOrderId(orderId);
+        expect(hold?.status).toBe('shipped');
+        expect(await shipForOrder(orderId)).toBe(false);
+    });
+
+    it('takes no more than the hold holds of a product', async () => {
+        const { productId, orderId } = await committedHold();
+
+        await withTransaction((session) =>
+            shipLinesForOrder(orderId, [{ productId, quantity: 9 }], session)
+        );
+
+        expect(await levelOf(productId)).toEqual({ onHand: 7, reserved: 0 });
+    });
+
+    it('gives some units back: reserved drops, the units stay on the shelf and sellable', async () => {
+        const { productId, orderId } = await committedHold();
+
+        const released = await withTransaction((session) =>
+            releaseLinesForOrder(orderId, [{ productId, quantity: 2 }], session)
+        );
+        await refreshStockCacheForProducts([productId]);
+
+        expect(released).toBe(true);
+        expect(await countersOf(productId)).toEqual({ onHand: 10, reserved: 1, available: 9 });
+        const hold = await reservationRepository.findByOrderId(orderId);
+        expect(hold?.status).toBe('committed');
+    });
+
+    it('ends the hold released when the last units are given back', async () => {
+        const { productId, orderId } = await committedHold();
+
+        await withTransaction((session) =>
+            releaseLinesForOrder(orderId, [{ productId, quantity: 3 }], session)
+        );
+
+        const hold = await reservationRepository.findByOrderId(orderId);
+        expect(hold?.status).toBe('released');
+    });
+
+    it('moves nothing, in either direction, when the caller’s transaction rolls back', async () => {
+        const { productId, orderId } = await committedHold();
+
+        await expect(
+            withTransaction((session) =>
+                shipLinesForOrder(orderId, [{ productId, quantity: 1 }], session).then(() => {
+                    throw new Error('the act failed later');
+                })
+            )
+        ).rejects.toThrow('the act failed later');
+
+        expect(await levelOf(productId)).toEqual({ onHand: 10, reserved: 3 });
+        const hold = await reservationRepository.findByOrderId(orderId);
+        expect(hold?.items[0].quantity).toBe(3);
+    });
+
+    it('raises the alarm for a ship with no hold behind it, and answers false', async () => {
+        const auditSpy = observePort(auditPort.emitAuditEvent);
+        const product = await createProduct({ onHand: 10 });
+
+        const shipped = await withTransaction((session) =>
+            shipLinesForOrder(
+                anOrderId(),
+                [{ productId: String(product._id), quantity: 1 }],
+                session
+            )
+        );
+
+        expect(shipped).toBe(false);
+        expect(auditSpy).toHaveBeenCalled();
+    });
+
+    it('answers false for a release with no open hold, silently', async () => {
+        const { productId, orderId } = await committedHold();
+        await shipForOrder(orderId);
+
+        const released = await withTransaction((session) =>
+            releaseLinesForOrder(orderId, [{ productId, quantity: 1 }], session)
+        );
+
+        expect(released).toBe(false);
     });
 });
 

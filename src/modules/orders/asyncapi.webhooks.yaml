@@ -24,14 +24,6 @@ channels:
         messages:
             OrderPaidEvent:
                 $ref: '#/components/messages/OrderPaidEvent'
-    order.shipped:
-        address: order.shipped
-        description: An order was marked shipped.
-        servers:
-            - $ref: '#/servers/subscriberEndpoint'
-        messages:
-            OrderShippedEvent:
-                $ref: '#/components/messages/OrderShippedEvent'
     order.cancelled:
         address: order.cancelled
         description: An order was cancelled.
@@ -62,14 +54,6 @@ operations:
             who cares."
         messages:
             - $ref: '#/channels/order.paid/messages/OrderPaidEvent'
-    webhookOrderShipped:
-        action: send
-        channel:
-            $ref: '#/channels/order.shipped'
-        summary: An order moved to the `shipped` status.
-        description: Derived from `order.status_changed` filtered to `to = 'shipped'`, same as `order.paid`.
-        messages:
-            - $ref: '#/channels/order.shipped/messages/OrderShippedEvent'
     webhookOrderCancelled:
         action: send
         channel:
@@ -94,13 +78,6 @@ components:
                 $ref: '#/components/schemas/WebhookHeaders'
             payload:
                 $ref: '#/components/schemas/OrderPaidEnvelope'
-        OrderShippedEvent:
-            name: OrderShippedEvent
-            title: Order shipped
-            headers:
-                $ref: '#/components/schemas/WebhookHeaders'
-            payload:
-                $ref: '#/components/schemas/OrderShippedEnvelope'
         OrderCancelledEvent:
             name: OrderCancelledEvent
             title: Order cancelled
@@ -163,24 +140,6 @@ components:
                     type: string
                     enum:
                         - order.paid
-                timestamp:
-                    type: string
-                    format: date-time
-                data:
-                    $ref: '#/components/schemas/OrderIdPayload'
-            additionalProperties: false
-        OrderShippedEnvelope:
-            type: object
-            required:
-                - type
-                - timestamp
-                - data
-            properties:
-                type:
-                    title: OrderShippedEventType
-                    type: string
-                    enum:
-                        - order.shipped
                 timestamp:
                     type: string
                     format: date-time

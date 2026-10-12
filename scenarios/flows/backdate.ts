@@ -14,7 +14,7 @@
 
 import { orderModel } from '@modules/orders/model';
 import { paymentModel } from '@modules/payments/model';
-import { shipmentModel } from '@modules/delivery/model';
+import { fulfillmentOrderModel, shipmentModel } from '@modules/delivery/model';
 import { reservationModel, stockMovementModel } from '@modules/inventory/model';
 import { auditLogModel } from '@modules/audit-logs/model';
 import type { Model, QueryFilter } from 'mongoose';
@@ -67,10 +67,22 @@ const TRAILS = [
         'createdAt',
         'updatedAt',
         'deletedAt',
-        'withdrawUntil'
+        'withdrawUntil',
+        'fulfillment.lastDeliveredAt'
     ]),
     mover(paymentModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'receivedAt']),
-    mover(shipmentModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'deliveredAt']),
+    mover(fulfillmentOrderModel, (orderId) => ({ orderId }), [
+        'createdAt',
+        'updatedAt',
+        'agreedAt',
+        'expectedAt'
+    ]),
+    mover(shipmentModel, (orderId) => ({ orderId }), [
+        'createdAt',
+        'updatedAt',
+        'shippedAt',
+        'deliveredAt'
+    ]),
     mover(reservationModel, (orderId) => ({ orderId }), ['createdAt', 'updatedAt', 'expiresAt']),
     mover(stockMovementModel, (orderId) => ({ reference: orderId }), ['createdAt', 'updatedAt']),
     mover(auditLogModel, (orderId) => ({ targetId: orderId }), ['timestamp'])

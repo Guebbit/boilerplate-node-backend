@@ -25,6 +25,7 @@ export type ReturnStamp = Partial<
         | 'receivedAt'
         | 'handlingDeduction'
         | 'refundAmount'
+        | 'shippingRefund'
         | 'closedAt'
     >
 >;

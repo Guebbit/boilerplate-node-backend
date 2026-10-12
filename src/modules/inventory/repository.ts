@@ -345,6 +345,16 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
         to: ReservationStatus,
         session?: ClientSession
     ) => Promise<ReservationDocument | null>;
+    findOpenByOrderId: (
+        orderId: string,
+        session: ClientSession
+    ) => Promise<ReservationDocument | null>;
+    replaceItems: (
+        orderId: string,
+        items: readonly { productId: string; quantity: number }[],
+        endsAs: ReservationStatus | undefined,
+        session: ClientSession
+    ) => Promise<ReservationDocument | null>;
     findExpired: (now: Date, limit: number) => Promise<ReservationDocument[]>;
     narrowToTaken: (
         orderId: string,
@@ -409,6 +419,45 @@ export const reservationRepository: Repository<ReservationDocument, Wire<Reserva
                 { orderId: toObjectId(orderId), status: from },
                 { $set: { status: to } },
                 // Return the post-update doc — caller needs the items it just claimed.
+                { returnDocument: 'after', session }
+            )
+            .exec(),
+
+    /**
+     * The hold, but only while it still sets units aside (`held` or `committed`) — the read a
+     * partial shipment or a remainder cancel starts from, inside its own transaction.
+     *
+     * @param orderId - the order
+     * @param session - the caller's transaction
+     * @returns the hold, or `null` when none is open
+     */
+    findOpenByOrderId: (orderId: string, session: ClientSession) =>
+        reservationModel
+            .findOne({ orderId: toObjectId(orderId), status: { $in: ['held', 'committed'] } })
+            .session(session)
+            .exec(),
+
+    /**
+     * Rewrite an open hold's items after some left it, optionally ending the hold in the same
+     * write. Conditional on the hold still being open, so a racing cancel that already released it
+     * matches nothing.
+     *
+     * @param orderId - the order
+     * @param items - what the hold still sets aside
+     * @param endsAs - the terminal status to write when nothing is left, else `undefined`
+     * @param session - the caller's transaction
+     * @returns the hold as it now stands, or `null` if it was no longer open
+     */
+    replaceItems: (orderId, items, endsAs, session) =>
+        reservationModel
+            .findOneAndUpdate(
+                { orderId: toObjectId(orderId), status: { $in: ['held', 'committed'] } },
+                {
+                    $set: {
+                        items: toReservationItems(items),
+                        ...(endsAs ? { status: endsAs } : {})
+                    }
+                },
                 { returnDocument: 'after', session }
             )
             .exec(),

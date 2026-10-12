@@ -1,20 +1,34 @@
 {
     "delivery": {
         "order-not-found": "The order was not found",
+        "fulfillment-order-not-found": "The fulfillment order was not found",
+        "shipment-not-found": "The shipment was not found",
         "not-paid": "This order is not awaiting fulfilment",
-        "not-shipped": "Nothing has shipped for this order yet",
         "not-processing": "This order is not ready to ship",
-        "not-shippable-for-delivery": "This order has not shipped yet",
-        "nothing-to-ship": "This order has nothing to ship — mark it fulfilled instead",
-        "not-digital-only": "This order has physical items — ship it instead of marking it fulfilled",
+        "not-shippable": "This fulfillment order cannot ship right now",
+        "not-physical": "This fulfillment order has nothing to ship — fulfil it instead",
+        "not-digital": "This fulfillment order has physical items — ship it instead of fulfilling it",
+        "lines-invalid": "The lines name a product that is not here, or more than remains",
+        "not-holdable": "Only an open fulfillment order can be put on hold",
+        "not-releasable": "This fulfillment order is not on hold, or waits for stock and is released only by it arriving",
+        "not-deliverable": "This shipment has already been delivered, or its order cannot take a delivery now",
         "tracking-code-required": "A tracking code is required for this shipping method",
         "override-reason-required": "A reason is required to force this move",
+        "email-line": "{{quantity}} × {{title}}",
         "email-shipped": {
             "subject": "Your order is on its way",
             "meta-title": "Order shipped",
             "greeting": "Hello, {{name}}!",
-            "body": "Good news — your order has left the warehouse.",
-            "tracking": "Track your parcel with code {{code}}."
+            "body": "Good news — part of your order has left the warehouse.",
+            "tracking": "Track your parcel with code {{code}}.",
+            "more": "{{count}} more items will follow in another shipment."
+        },
+        "email-delivered": {
+            "subject": "Your shipment has arrived",
+            "meta-title": "Shipment delivered",
+            "greeting": "Hello, {{name}}!",
+            "body": "Your shipment has arrived.",
+            "withdraw-until": "You may withdraw from the purchase until {{date}}."
         }
     }
 }

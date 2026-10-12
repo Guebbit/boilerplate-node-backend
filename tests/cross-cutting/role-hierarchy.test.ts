@@ -118,7 +118,7 @@ const runRow = async (row: HierarchyRow, callerRole: string) => {
 describe('the rank rule, row by row', () => {
     it('has a row for every route the rule covers', () => {
         // The count is pinned, and the sweep in `tests/cross-cutting/role-hierarchy-routes.test.ts` pins the names.
-        expect(HIERARCHY_ROWS).toHaveLength(28);
+        expect(HIERARCHY_ROWS).toHaveLength(31);
     });
 
     for (const row of HIERARCHY_ROWS) {

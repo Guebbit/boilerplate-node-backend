@@ -10,7 +10,7 @@ import type { Order } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
-import { deliveryService } from '../service';
+import { deliveryService } from '../services';
 import { catchAs, refused } from '@infrastructure/http/controller';
 
 /** Handles `POST /delivery/order/:orderId/start`. */

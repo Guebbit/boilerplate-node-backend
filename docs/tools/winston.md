@@ -160,10 +160,13 @@ than one, from a generic helper that takes the target as a runtime parameter.
 | `api-keys`       | `SYSTEM_API_KEYS_REVOKED_ON_COMPROMISE`      | `system.api_keys.revoked_on_compromise`      | `user`                 |
 | `cart`           | `USER_CART_ITEM_REMOVED`                     | `user.cart.item_removed`                     | `product`              |
 | `cart`           | `USER_CART_REORDERED`                        | `user.cart.reordered`                        | —                      |
-| `delivery`       | `ADMIN_ORDER_DELIVERED`                      | `admin.order.delivered`                      | —                      |
-| `delivery`       | `ADMIN_ORDER_FULFILLED`                      | `admin.order.fulfilled`                      | —                      |
-| `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | —                      |
-| `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | —                      |
+| `delivery`       | `ADMIN_FULFILLMENT_ORDER_HELD`               | `admin.fulfillment_order.held`               | —                      |
+| `delivery`       | `ADMIN_FULFILLMENT_ORDER_RELEASED`           | `admin.fulfillment_order.released`           | —                      |
+| `delivery`       | `ADMIN_ORDER_DELIVERED`                      | `admin.order.delivered`                      | `order`                |
+| `delivery`       | `ADMIN_ORDER_FULFILLED`                      | `admin.order.fulfilled`                      | `order`                |
+| `delivery`       | `ADMIN_ORDER_FULFILMENT_STARTED`             | `admin.order.fulfilment_started`             | `order`                |
+| `delivery`       | `ADMIN_ORDER_SHIPPED`                        | `admin.order.shipped`                        | `order`                |
+| `delivery`       | `ADMIN_SHIPMENT_TRACKING_EDITED`             | `admin.shipment.tracking_edited`             | `order`                |
 | `example`        | `EXAMPLE_COVER_CHANGED`                      | `example.cover_changed`                      | `example`              |
 | `example`        | `EXAMPLE_CREATED`                            | `example.created`                            | `example`              |
 | `example`        | `EXAMPLE_DELETED`                            | `example.deleted`                            | `example`              |

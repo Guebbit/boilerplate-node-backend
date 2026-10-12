@@ -240,7 +240,10 @@ export const cancelById = (
             moveToCancelled(
                 id,
                 statusesLeadingTo(OrderStatus.cancelled, actor),
-                scope,
+                // Part of the WRITE's filter, not a preceding read: a shipment racing this cancel
+                // writes `fulfillment.shipped` in its own transaction, and exactly one of the two
+                // matches. Goods that left cannot be cancelled whole.
+                { ...scope, 'fulfillment.shipped': { $ne: true } },
                 /*
                  * The intent to refund is written WITH the cancel, in one document write, because
                  * the announcement below is not durable — `@kernel/events` has no retry, so a

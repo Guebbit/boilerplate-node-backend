@@ -16,9 +16,9 @@ import {
     readOrder,
     setWithdrawUntil,
     toOrderItem,
-    forceOrderStatus,
     markOrderPaidAt
 } from '@modules/orders/tests/factories';
+import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { resetDomainEvents, onDomainEvent } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
@@ -71,7 +71,16 @@ const orderIn = async (status: OrderStatus) => {
     const user = await createUser({ email: `customer-${customers}@example.com` });
     const shirt = await createProduct({ title: 'Shirt', price: 30 });
     const mug = await createProduct({ title: 'Mug', price: 10 });
-    const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], { status });
+    const carried = status === OrderStatus.shipped || status === OrderStatus.delivered;
+    const order = await createOrder(user, [toOrderItem(shirt, 2), toOrderItem(mug, 1)], {
+        status: carried ? OrderStatus.processing : status
+    });
+    // Goods that left or arrived get there through the real doors, so the shipments exist.
+    if (carried) {
+        await carryOrderTo(String(order._id), status);
+        // The shipped and delivered mails belong to the setup, not to what the test is about.
+        mockEnqueueEmail.mockClear();
+    }
     return { user, shirt, mug, order, orderId: String(order._id) };
 };
 
@@ -224,9 +233,11 @@ const orderWithExcluded = async () => {
         noWithdrawal: true
     });
     const order = await createOrder(user, [toOrderItem(shirt, 1), toOrderItem(engraved, 1)], {
-        status: OrderStatus.delivered
+        status: OrderStatus.processing
     });
     const orderId = String(order._id);
+    await carryOrderTo(orderId, 'delivered');
+    mockEnqueueEmail.mockClear();
     await setWithdrawUntil(orderId, new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     return { user, shirt, engraved, orderId };
 };
@@ -698,7 +709,7 @@ describe('the account export', () => {
         const mine = await requestedReturn();
         await requestedReturn();
         // Detaching the account (erasure) must not lose the record — it is keyed by the order.
-        await forceOrderStatus(mine.orderId, OrderStatus.delivered);
+        await carryOrderTo(mine.orderId, 'delivered');
 
         const exported = await collectPersonalData(mine.user.id);
 

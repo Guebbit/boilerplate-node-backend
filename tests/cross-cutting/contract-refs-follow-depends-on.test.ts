@@ -59,7 +59,7 @@ describe('contract references and dependsOn', () => {
 
     it('finds the references it means to check', () => {
         // Exact, not "at least": a sweep that silently found nothing would pass for ever.
-        expect(references).toHaveLength(20);
+        expect(references).toHaveLength(16);
     });
 
     it('has every cross-module $ref declared as a dependency of the module that writes it', () => {

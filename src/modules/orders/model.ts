@@ -31,8 +31,8 @@ import { sumLineItems, orderTotal, type LineItem } from './domain/totals';
 import { orderTaxBreakdown, type TaxableLineItem } from './domain/tax';
 import { isPayable } from './domain/lifecycle';
 import { decryptSerializedOrder } from './pii';
+import { fulfillmentStatusOf, type FulfillmentSummary } from './domain/fulfillment';
 import {
-    fulfillmentStatusOf,
     paymentStatusOf,
     returnStatusOf,
     STAMPED_PAYMENT_STATUSES,
@@ -196,6 +196,13 @@ export interface OrderDocument
      * holds goods. The wire's `returnStatus` is derived from this.
      */
     returnStatus?: StampedReturnStatus;
+    /**
+     * Where the goods stand, as `delivery` last reported it — written only through
+     * `services/fulfillment.ts`'s `recordFulfillmentProgress`, inside the transaction of the act
+     * that changed it. Absent until the order's fulfillment orders exist. Internal: the wire's
+     * `fulfillmentStatus` and `actions` are derived from it.
+     */
+    fulfillment?: FulfillmentSummary;
     /**
      * What the cancel decided but has not yet seen through. Written in the same conditional write
      * that moves the status, so the intent and the decision cannot come apart; emptied once the
@@ -435,6 +442,21 @@ export const orderSchema = new Schema<OrderDocument>(
         withdrawUntil: {
             type: Date
         },
+        // Reported by `delivery`, never written by `orders` on its own — see the interface field.
+        fulfillment: {
+            type: new Schema<FulfillmentSummary>(
+                {
+                    shipped: { type: Boolean, required: true },
+                    remaining: { type: Number, required: true, min: 0 },
+                    onHold: { type: Number, required: true, min: 0 },
+                    awaitingStock: { type: Number, required: true, min: 0 },
+                    undelivered: { type: Number, required: true, min: 0 },
+                    lastDeliveredAt: { type: Date }
+                },
+                { _id: false }
+            ),
+            default: undefined
+        },
         // Stamped by the owning module, never by `orders` itself — see the interface fields.
         paymentStatus: {
             type: String,
@@ -654,8 +676,8 @@ const applyTransferInstructions = (serialized: Record<string, unknown>) => {
 };
 
 /**
- * The three statuses beside `status`, resolved from what is stored — and `paidAt` stripped, since
- * this is its last reader. It is not in `omit` for that reason: `omit` runs before `after`, and the
+ * The three statuses beside `status`, resolved from what is stored — and `paidAt` and
+ * `fulfillment` stripped, since this is their last reader. It is not in `omit` for that reason: `omit` runs before `after`, and the
  * `paid`/`unpaid` half of `paymentStatus` is derived from it.
  * @param serialized - the order as it is being serialized
  */
@@ -665,7 +687,11 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
         serialized.paymentStatus as StampedPaymentStatus | undefined,
         serialized.paidAt as Date | undefined
     );
-    serialized.fulfillmentStatus = fulfillmentStatusOf(serialized.status as OrderStatus);
+    serialized.fulfillmentStatus = fulfillmentStatusOf(
+        serialized.status as OrderStatus,
+        serialized.fulfillment as FulfillmentSummary | undefined
+    );
+    delete serialized.fulfillment;
     serialized.returnStatus = returnStatusOf(
         serialized.returnStatus as StampedReturnStatus | undefined
     );

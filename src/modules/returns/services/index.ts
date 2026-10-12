@@ -9,6 +9,7 @@ import { createReturn } from './create';
 import { approveReturn, declineReturn } from './decide';
 import { receiveReturn } from './receive';
 import { listReturns, getReturn, withActions } from './read';
+import { getReturnOptions } from './options';
 import { scrubReturnText } from './retention';
 
 export { createReturn, type CreateReturnInput, type CreateReturnOutcome } from './create';
@@ -16,6 +17,7 @@ export { approveReturn, declineReturn } from './decide';
 export { receiveReturn, type ReceiveReturnInput } from './receive';
 export { closeReturn } from './close';
 export { listReturns, getReturn, withActions, type ReturnFilters } from './read';
+export { getReturnOptions } from './options';
 export { collectPersonalData } from './personal-data';
 export { scrubReturnText } from './retention';
 
@@ -27,6 +29,7 @@ export const returnService = {
     receiveReturn,
     listReturns,
     getReturn,
+    getReturnOptions,
     withActions,
     scrubReturnText
 };

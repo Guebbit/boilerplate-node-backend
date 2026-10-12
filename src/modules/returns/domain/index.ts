@@ -9,17 +9,23 @@ export {
     RECEIVABLE_RETURN_STATUSES,
     CLOSABLE_RETURN_STATUSES,
     QUANTITY_HOLDING_RETURN_STATUSES,
+    BACK_RETURN_STATUSES,
+    holdsReturnedGoods,
     initialStatusFor
 } from './lifecycle';
-export type { ReturnStatus, ReturnReason } from './lifecycle';
+export type { ReturnStatus, ReturnReason, ReturnKind } from './lifecycle';
 
 export {
     returnableQuantities,
     returnableLinesOf,
     wireLines,
-    checkRequestedLines
+    checkRequestedLines,
+    takesLastUnit
 } from './quantities';
 export type { ProductQuantity, LinesVerdict } from './quantities';
 
 export { projectReturnStatus } from './status-projection';
 export type { ProjectedReturn, ProjectedReturnStatus } from './status-projection';
+
+export { accountsOf } from './accounting';
+export type { AccountedReturn, OrderAccounts } from './accounting';

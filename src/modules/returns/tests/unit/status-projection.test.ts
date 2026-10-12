@@ -11,8 +11,13 @@ const ordered = new Map([
 ]);
 
 /** A return with the given status over the given lines. */
-const ret = (status: ProjectedReturn['status'], lines: [string, number][]): ProjectedReturn => ({
+const ret = (
+    status: ProjectedReturn['status'],
+    lines: [string, number][],
+    kind: ProjectedReturn['kind'] = 'return'
+): ProjectedReturn => ({
     status,
+    kind,
     lines: lines.map(([productId, quantity]) => ({ productId, quantity }))
 });
 
@@ -58,5 +63,27 @@ describe('projectReturnStatus', () => {
         expect(
             projectReturnStatus([ret('received', [['a', 2]]), ret('closed', [['b', 1]])], ordered)
         ).toBe('returned');
+    });
+
+    it('does not count a cancellation as goods coming back — its units never shipped', () => {
+        expect(
+            projectReturnStatus([ret('closed', [['a', 2]], 'cancellation')], ordered)
+        ).toBeUndefined();
+        expect(
+            projectReturnStatus(
+                [ret('closed', [['a', 1]], 'cancellation'), ret('closed', [['a', 1]])],
+                ordered
+            )
+        ).toBe('partially_returned');
+    });
+
+    it('reads returned once every unit that could come back has — what a cancel took is out of the order', () => {
+        // Ordered 2 of `a`, 1 of `b`: the caller subtracts the cancelled `b` before asking.
+        const left = new Map([
+            ['a', 2],
+            ['b', 0]
+        ]);
+
+        expect(projectReturnStatus([ret('closed', [['a', 2]])], left)).toBe('returned');
     });
 });

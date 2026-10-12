@@ -203,25 +203,133 @@ export const recordOfflinePayment = (
 export const startProcessing = (owner: Caller, orderId: string): Promise<void> =>
     owner.call('POST', `/delivery/order/${orderId}/start`).then(() => undefined);
 
+/** The part of `GET /delivery/order/{id}` the flows read: what can ship and what is out. */
+interface FulfillmentData {
+    fulfillmentOrders: {
+        id: string;
+        kind: string;
+        status: string;
+        lines: { productId: string; remaining: number }[];
+    }[];
+    shipments: { id: string; status: string }[];
+}
+
+/** The order's fulfillment orders and shipments, as staff read them. */
+const readFulfillment = (owner: Caller, orderId: string): Promise<FulfillmentData> =>
+    owner.call<FulfillmentData>('GET', `/delivery/order/${orderId}`);
+
 /**
- * Record a parcel's handover to the carrier — the door that moves an order `processing → shipped`
- * now. `trackingCode` is only required for a `tracked` method; every order this scenario ships
- * uses one that is not, so it stays unset.
+ * Run `step` over `items` one after another — each is an HTTP call whose order matters, and the
+ * app's per-order transaction does not take two at once.
+ */
+const inSequence = async <T>(
+    items: readonly T[],
+    step: (item: T) => Promise<unknown>
+): Promise<void> => {
+    for (const item of items) await step(item);
+};
+
+/**
+ * Record a shipment's handover to the carrier: every physical fulfillment order of the order, in
+ * full, one shipment each — the door that moves an order `processing → shipped`. `trackingCode` is
+ * only required for a `tracked` method; every order this scenario ships uses one that is not, so it
+ * stays unset.
  *
  * @param owner - a caller holding `delivery.any.update`
  */
 export const shipOrder = (owner: Caller, orderId: string, trackingCode?: string): Promise<void> =>
-    owner
-        .call('POST', `/delivery/order/${orderId}/ship`, trackingCode ? { trackingCode } : {})
-        .then(() => undefined);
+    readFulfillment(owner, orderId).then(({ fulfillmentOrders }) =>
+        inSequence(
+            fulfillmentOrders.filter(
+                ({ kind, status }) => kind === 'physical' && status === 'open'
+            ),
+            ({ id }) =>
+                owner.call(
+                    'POST',
+                    `/delivery/fulfillment-orders/${id}/shipments`,
+                    trackingCode ? { trackingCode } : {}
+                )
+        )
+    );
 
 /**
- * Record a parcel's arrival — the door that moves an order `shipped → delivered` now.
+ * Ship ONE line's worth of an order — some of its units, not all of them: the order stays
+ * `processing` and reads `partially_fulfilled`.
+ *
+ * @param owner - a caller holding `delivery.any.update`
+ * @param productId - the product to ship
+ * @param quantity - how many units of it
+ */
+export const shipPart = (
+    owner: Caller,
+    orderId: string,
+    productId: string,
+    quantity: number
+): Promise<void> =>
+    readFulfillment(owner, orderId).then(({ fulfillmentOrders }) => {
+        const [first] = fulfillmentOrders;
+        return owner
+            .call('POST', `/delivery/fulfillment-orders/${first.id}/shipments`, {
+                lines: [{ productId, quantity }]
+            })
+            .then(() => undefined);
+    });
+
+/**
+ * Put the order's first fulfillment order on hold — the warehouse's "do not ship yet".
+ *
+ * @param owner - a caller holding `delivery.any.update`
+ * @param reason - `incorrect_address`, `high_risk` or `other`
+ */
+export const holdOrder = (owner: Caller, orderId: string, reason: string): Promise<void> =>
+    readFulfillment(owner, orderId).then(({ fulfillmentOrders }) =>
+        owner
+            .call('POST', `/delivery/fulfillment-orders/${fulfillmentOrders[0].id}/hold`, {
+                reason,
+                note: 'Held for the demo.'
+            })
+            .then(() => undefined)
+    );
+
+/**
+ * Record every shipment's arrival — the door that moves an order `shipped → delivered` once the
+ * last one is in.
  *
  * @param owner - a caller holding `delivery.any.update`
  */
 export const deliverOrder = (owner: Caller, orderId: string): Promise<void> =>
-    owner.call('POST', `/delivery/order/${orderId}/deliver`).then(() => undefined);
+    readFulfillment(owner, orderId).then(({ shipments }) =>
+        inSequence(
+            shipments.filter(({ status }) => status === 'shipped'),
+            ({ id }) => owner.call('POST', `/delivery/shipments/${id}/deliver`)
+        )
+    );
+
+/**
+ * Cancel what has not shipped yet, as the buyer's own withdrawal: the remainder of the order's
+ * first fulfillment order that still has one — `POST /returns` with `kind: cancellation`.
+ *
+ * @param caller - the order's own buyer
+ * @returns the cancellation's id
+ */
+export const cancelRemainder = (caller: Caller, orderId: string): Promise<string> =>
+    caller
+        .call<{ fulfillmentOrders: { id: string; lines: { remaining: number }[] }[] }>(
+            'GET',
+            `/delivery/order/${orderId}`
+        )
+        .then(({ fulfillmentOrders }) => {
+            const open = fulfillmentOrders.find(({ lines }) =>
+                lines.some(({ remaining }) => remaining > 0)
+            );
+            return caller.call<{ id: string }>('POST', '/returns', {
+                orderId,
+                reason: 'withdrawal',
+                kind: 'cancellation',
+                fulfillmentOrderId: open?.id
+            });
+        })
+        .then((cancelled) => cancelled.id);
 
 /**
  * Cancel an order. `refund` is the operator's choice alone — a customer cancelling their own paid

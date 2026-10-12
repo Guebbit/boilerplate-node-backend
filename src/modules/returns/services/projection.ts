@@ -22,13 +22,21 @@ export const syncReturnStatus = (orderId: string): Promise<void> =>
         .then(([returns, order]) => {
             if (!order) return undefined;
 
-            // Excluded goods never come back, so they must not keep the order from reading `returned`.
+            // Excluded goods never come back, and a unit cancelled before it shipped never will, so
+            // neither may keep the order from reading `returned`.
+            const cancelled = returns
+                .filter(({ kind }) => kind === 'cancellation')
+                .flatMap(({ lines }) => wireLines(lines));
             const status = projectReturnStatus(
-                returns.map(({ status: returnStatus, lines }) => ({
+                returns.map(({ status: returnStatus, kind, lines }) => ({
                     status: returnStatus,
+                    kind,
                     lines: wireLines(lines)
                 })),
-                returnableQuantities(returnableLinesOf(order.items, isExcludedFromWithdrawal), [])
+                returnableQuantities(
+                    returnableLinesOf(order.items, isExcludedFromWithdrawal),
+                    cancelled
+                )
             );
             return orderService.markReturnStatus(orderId, status).then(() => undefined);
         })

@@ -9,17 +9,12 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct, countersOf } from '@modules/products/tests/factories';
-import {
-    createOrder,
-    forceOrderStatus,
-    readOrder,
-    toOrderItem
-} from '@modules/orders/tests/factories';
+import { createOrder, readOrder, toOrderItem } from '@modules/orders/tests/factories';
+import { carryOrderTo } from '@modules/delivery/tests/factories';
 import { assignRole } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
-import { OrderStatus } from '@types';
 import { inventoryService } from '@modules/inventory';
 import { createIntent, confirmPayment, paymentService } from '@modules/payments';
 import paymentsModule from '@modules/payments/module';
@@ -93,9 +88,8 @@ const paidAndDelivered = async (
     const intent = await createIntent(orderId, asCustomer(user.id));
     if (!intent.success) throw new Error('intent refused');
     await confirmPayment(intent.data.id, 'pm_card_visa', asCustomer(user.id), testCallerContext);
-    await forceOrderStatus(orderId, OrderStatus.delivered);
-    // The forced status skips the parcel's own move, so the units leave the shelf here.
-    await inventoryService.shipForOrder(orderId);
+    // Through the real doors: each shipment takes its own units off the shelf.
+    await carryOrderTo(orderId, 'delivered');
     return { user, shirt, mug, orderId };
 };
 
@@ -338,7 +332,7 @@ describe('what the customer gets back', () => {
             asCustomer(user.id),
             testCallerContext
         );
-        await forceOrderStatus(orderId, OrderStatus.delivered);
+        await carryOrderTo(orderId, 'delivered');
         const outcome = await createReturn(
             { orderId, reason: 'withdrawal' },
             asCustomer(user.id),
