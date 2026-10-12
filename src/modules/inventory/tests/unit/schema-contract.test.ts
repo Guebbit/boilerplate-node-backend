@@ -37,7 +37,7 @@ describe('stockMovementSchema — the ledger', () => {
         expect(enumOf(stockMovementSchema, 'reason')).toEqual(Object.values(StockMovementReason));
     });
 
-    it('carries the ten reasons the contract states, in order', () => {
+    it('carries the nine reasons the contract states, in order', () => {
         /*
          * The literal list from `StockMovementReason` in `src/modules/inventory/openapi.yaml`.
          * `MOVEMENT_REASONS` is defined as `Object.values(StockMovementReason)`, so comparing the
@@ -46,7 +46,6 @@ describe('stockMovementSchema — the ledger', () => {
          */
         expect(MOVEMENT_REASONS).toEqual([
             'reserve',
-            'commit',
             'ship',
             'release',
             'expire',

@@ -245,10 +245,9 @@ components:
         # `domain/transitions.ts`, which is the one place that mapping is written.
         StockMovementReason:
             type: string
-            enum: [reserve, commit, ship, release, expire, receive, adjust, restock, preorder, allocate]
+            enum: [reserve, ship, release, expire, receive, adjust, restock, preorder, allocate]
             description: |
                 * `reserve` — an order claimed units. `reserved` up, `onHand` unchanged.
-                * `commit` — the order was paid for. The claim is settled and nothing moves: the units stay on the shelf, still spoken for.
                 * `ship` — the parcel left (or a digital order was fulfilled). Both down: the units are off the shelf.
                 * `release` — the hold was given up (the order was cancelled, paid or not). `reserved` down.
                 * `expire` — the hold timed out unpaid. Same counters as `release`, different story.

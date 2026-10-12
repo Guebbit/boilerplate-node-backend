@@ -3,8 +3,8 @@
  * Inventory rules. Pure: data in, verdict out — no status codes, no i18n, no database. A product
  * carries two counters, `onHand` (units that exist) and `reserved` (units an open order has
  * claimed), and a third, `preordered`, for units that do not exist yet and are only promised.
- * Ten transitions move those counters, and this file is the one place that says what each does — an
- * eleventh is one entry here plus one enum value in `openapi.yaml`. What a customer
+ * Nine transitions move those counters, and this file is the one place that says what each does — an
+ * tenth is one entry here plus one enum value in `openapi.yaml`. What a customer
  * may actually buy from those two counters is `@modules/products`'s `availableStock`
  * (`src/modules/products/domain/stock.ts`), not this module's own concern.
  *
@@ -34,10 +34,9 @@ export interface CounterDelta {
 }
 
 /**
- * The ten transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
+ * The nine transitions, as a total map from reason to what it does. `receive`, `adjust`, `ship`
  * and `restock` change how many units are on the shelf; `ship` moves both columns together so a
- * dispatch doesn't change availability; `commit` moves neither (payment settles the claim, the
- * units stay on the shelf until dispatch); `release` and `expire` are the same arithmetic under
+ * dispatch doesn't change availability; `release` and `expire` are the same arithmetic under
  * two names, kept separate because the ledger records which story it was.
  * @param reason - which transition
  * @param quantity - how many units; signed only for `adjust`, positive for everything else
@@ -54,11 +53,6 @@ export const counterDeltaFor = (
         // A hold. The units stay where they are and stop being sellable.
         case StockMovementReason.reserve: {
             return { onHandDelta: 0, reservedDelta: quantity, preorderedDelta: 0 };
-        }
-
-        // The order was paid: the claim is settled, the units stay on the shelf and stay spoken for.
-        case StockMovementReason.commit: {
-            return { onHandDelta: 0, reservedDelta: 0, preorderedDelta: 0 };
         }
 
         // The parcel leaves: the units are off the shelf and no longer spoken for.
