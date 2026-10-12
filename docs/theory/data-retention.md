@@ -107,6 +107,9 @@ API keys is a live integration, not an idle account.
 | invoices                    | the tax record               | untouched                                 |
 | return free text            | the legal-claims window      | its own clock, below                      |
 
+A banned account is minimised like any other: minimising drops data and deletes nothing, so a ban is no
+reason to keep the address book.
+
 Each module says what it drops through its `personalData.minimise` hook, the twin of the erase
 hook ([modules](./modules.md)). No warning mail: nothing goes that the customer cannot re-enter.
 An account that comes back and goes quiet again is minimised again.
