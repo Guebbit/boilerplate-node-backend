@@ -20,6 +20,7 @@ import {
     listAttention,
     listPayments,
     listRefunds,
+    methodMix,
     retryOpenRefunds
 } from '@modules/payments/services';
 import { withEnvironment } from '@tests/environment';
@@ -346,5 +347,33 @@ describe('listAttention', () => {
 
         await orderService.clearRefundOwed(String(order._id));
         expect(await attentionRows()).toEqual([]);
+    });
+});
+
+describe('methodMix', () => {
+    it('groups the payments that took money by method and provider, and skips the rest', async () => {
+        await seedPayment({ amount: 50 });
+        await seedPayment({ amount: 30, status: 'refunded' });
+        await seedPayment({
+            amount: 20,
+            method: 'cash',
+            provider: 'manual',
+            providerRef: undefined
+        });
+        // Never took money.
+        await seedPayment({ amount: 99, status: 'declined' });
+        await seedPayment({ amount: 99, status: 'requires_confirmation' });
+
+        const rows = await methodMix({
+            from: new Date(Date.now() - 3_600_000),
+            to: new Date(Date.now() + 3_600_000),
+            interval: 'day',
+            timeZone: 'Europe/Rome'
+        });
+
+        expect(rows.toSorted((a, b) => a.method.localeCompare(b.method))).toEqual([
+            { method: 'card', provider: 'fake', currency: 'EUR', payments: 2, amount: 8000 },
+            { method: 'cash', provider: 'manual', currency: 'EUR', payments: 1, amount: 2000 }
+        ]);
     });
 });

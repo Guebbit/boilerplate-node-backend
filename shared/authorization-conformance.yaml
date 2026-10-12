@@ -48,6 +48,7 @@ admin-permissions: &admin_permissions
     - payments.any.read
     - payments.any.create
     - payments.any.update
+    - stats.any.read
     - inventory.any.read
     - inventory.any.create
     - inventory.any.sweep

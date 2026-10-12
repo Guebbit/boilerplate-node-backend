@@ -26,7 +26,9 @@ flowchart LR
     inventory["inventory"]
     orders["orders"]
     payments["payments"]
+    stats["stats"]
 
+    stats --> returns
     returns --> delivery
     returns --> inventory
     returns --> orders
@@ -38,7 +40,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class delivery,inventory,payments supporting;
+    class delivery,inventory,payments,stats supporting;
     class returns centre;
 ```
 
@@ -252,6 +254,13 @@ sequenceDiagram
 - **Return postage** follows `NODE_RETURN_POSTAGE_PAYER`. It changes what the customer is told, not the
   refund: with `consumer` the customer posts at their own cost (Art. 14(1), told beforehand), with
   `shop` the shop covers it.
+
+## Reads for the stats
+
+`returnService.returnedBuckets`, `returnedByProduct` and `returnedSeries` count units whose goods
+were received (`received`, `closed`), dated by `receivedAt` in the shop's zone (index
+`{status, receivedAt}`). A return asked for but not received counts nothing. [`stats`](./stats.md)
+composes them into "units reversed" and the return rate.
 
 ## GDPR
 

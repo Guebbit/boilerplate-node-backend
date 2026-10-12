@@ -1,0 +1,9 @@
+summary: 'Sales numbers, read on demand from the modules that own them.'
+noAudit: 'Reads only. It stores nothing and changes no state, so there is no action for an audit row to name.'
+subdomain: supporting
+group: shop
+dependsOn:
+    - invoicing # every money figure: invoices and credit notes are the frozen, dated rows
+    - orders # counts, units, products, customers and the open pipeline
+    - payments # the payments mix
+    - returns # units that came back

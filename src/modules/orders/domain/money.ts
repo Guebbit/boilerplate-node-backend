@@ -120,6 +120,16 @@ export const scaleMoney = (amount: Money, count: unknown): Money =>
     asMoney(amount * wholeCount(count));
 
 /**
+ * An amount shared evenly over a count, rounded half-up to the nearest minor unit — an average order
+ * value. Nothing over zero orders: 0 rather than a division by nothing.
+ * @param amount - the total
+ * @param count - how many it is shared over
+ * @returns `amount / count` rounded, or `NO_MONEY` when `count` is not positive
+ */
+export const averageMoney = (amount: Money, count: number): Money =>
+    count > 0 ? asMoney(Math.round(amount / count)) : NO_MONEY;
+
+/**
  * Subtract one amount from another — exact integer subtraction, same reasoning as {@link addMoney}.
  * @param minuend - the starting amount
  * @param subtrahend - the amount to take away

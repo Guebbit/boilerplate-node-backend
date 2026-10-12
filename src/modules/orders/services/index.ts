@@ -46,6 +46,15 @@ import {
     markReturnStatus
 } from './status';
 import { overrideStatus, forceMove } from './override';
+import {
+    paidBuckets,
+    productTotals,
+    categoryTotals,
+    productSeries,
+    customerCounts,
+    cancellationCohort,
+    pipeline
+} from './stats';
 
 /*
  * Every operation is published by name as well as through the object below: `module.ts` wires
@@ -99,6 +108,14 @@ export {
 export { freezeOrderLines } from './snapshot';
 export { reencryptOrders } from './reencrypt';
 export { allocateOrderNumber } from './order-numbering';
+export type {
+    PaidBucket,
+    ProductTotal,
+    CategoryTotal,
+    ProductSeriesRead,
+    AwaitingTransfers,
+    PipelineRead
+} from './stats';
 // Config getters, re-exported here (not directly from `../index.ts`) because a module's public
 // barrel may only publish services/domain/events/emails/model — see `local/barrel-allowed-sources`.
 // The shop's identity and return address are read by `invoicing`, `delivery` and `returns` from here.
@@ -145,6 +162,13 @@ export const orderService = {
     getByTransferReference,
     findManyByIds,
     findOwedRefunds,
+    paidBuckets,
+    productTotals,
+    categoryTotals,
+    productSeries,
+    customerCounts,
+    cancellationCohort,
+    pipeline,
     recordCreated,
     update,
     updateById,

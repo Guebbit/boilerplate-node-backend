@@ -20,6 +20,7 @@ export {
     addMoney,
     subtractMoney,
     scaleMoney,
+    averageMoney,
     apportion,
     NO_MONEY
 } from './money';
@@ -71,4 +72,4 @@ export {
 export type { StampedPaymentStatus, StampedReturnStatus } from './projections';
 
 /** The shop-calendar year of an instant: the year every numbered series is cut at. */
-export { yearInZone } from './shop-time';
+export { yearInZone, zonedStartOfDay } from './shop-time';

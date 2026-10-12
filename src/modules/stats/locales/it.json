@@ -1,0 +1,11 @@
+{
+    "stats": {
+        "product-not-found": "Prodotto non trovato.",
+        "range": {
+            "invalid-day": "Una data deve essere un giorno reale scritto AAAA-MM-GG.",
+            "out-of-order": "Il primo giorno non può seguire l'ultimo.",
+            "too-long": "Un periodo può coprire al massimo due anni.",
+            "too-many-buckets": "Quel periodo richiederebbe più di 400 intervalli: scegli un intervallo più ampio o un periodo più breve."
+        }
+    }
+}

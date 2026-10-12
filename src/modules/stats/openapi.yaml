@@ -1,0 +1,650 @@
+openapi: 3.1.0
+info:
+    title: stats — module contract
+    version: '0.1.0'
+
+# The tags this module's operations file themselves under, with what each is for.
+tags:
+    - name: Stats
+      description: Sales numbers for the staff dashboard, read on demand from the modules that own them.
+
+paths:
+    /stats/sales:
+        get:
+            tags: [Stats]
+            summary: Sales over time (staff)
+            description: >-
+                Headline totals, the same totals for the equal-length period before, and one
+                bucket per day, week (Monday) or month, per currency. Every figure is net of VAT
+                unless it says otherwise; money is grouped by currency and never converted. A sale
+                is dated by `paidAt`, a reversal by the credit note's `issuedAt`, and days are the
+                shop's (`NODE_SHOP_TIMEZONE`), so a bucket edge is shop-local midnight. `from` and
+                `to` are shop-local calendar days, both inclusive; the range may not pass two years
+                or 400 buckets. Needs `stats.any.read`. Never cached: it is the shop's money.
+            operationId: getSalesStats
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+                - $ref: '#/components/parameters/StatsIntervalParam'
+            responses:
+                '200':
+                    description: The sales figures
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SalesStatsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/products:
+        get:
+            tags: [Stats]
+            summary: Top products (staff)
+            description: >-
+                The products that sold most in the period, by net sales: units ordered, units
+                reversed by returns received in the period, net units and net sales (VAT out).
+                Reads the order lines as they were frozen, so a deleted order drops out. Needs
+                `stats.any.read`.
+            operationId: getProductStats
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+                - name: limit
+                  in: query
+                  schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+                  description: How many products to return.
+            responses:
+                '200':
+                    description: The ranked products
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductStatsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/products/{productId}:
+        get:
+            tags: [Stats]
+            summary: One product's sales over time (staff)
+            description: >-
+                Units ordered and units reversed for one product, per bucket, plus its title as
+                the orders froze it. The orders behind it are `GET /orders?productId=…&paidFrom=…`.
+                Needs `stats.any.read`.
+            operationId: getProductSalesSeries
+            security:
+                - bearerAuth: []
+            parameters:
+                - name: productId
+                  in: path
+                  required: true
+                  schema:
+                      $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+                - $ref: '#/components/parameters/StatsIntervalParam'
+            responses:
+                '200':
+                    description: The series
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProductSeriesEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/categories:
+        get:
+            tags: [Stats]
+            summary: Sales by category (staff)
+            description: >-
+                Net sales and units per category, from the categories each order line froze. A
+                product in two categories counts in both, so the rows do not add up to the total.
+                Needs `stats.any.read`.
+            operationId: getCategoryStats
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+            responses:
+                '200':
+                    description: The categories
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CategoryStatsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/payments:
+        get:
+            tags: [Stats]
+            summary: Payments mix (staff)
+            description: >-
+                Payments that took money in the period (`succeeded` or since `refunded`), by
+                method and provider, with their count and amount. Needs `stats.any.read`.
+            operationId: getPaymentMixStats
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+            responses:
+                '200':
+                    description: The mix
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PaymentMixEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/operations:
+        get:
+            tags: [Stats]
+            summary: Operations rates (staff)
+            description: >-
+                Cancellation rate as a cohort (orders placed in the period that ended cancelled),
+                return rate (units returned ÷ units ordered, Shopify's `returned_quantity_rate`)
+                and refund rate (credit notes ÷ invoices, VAT included). Needs `stats.any.read`.
+            operationId: getOperationsStats
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+            responses:
+                '200':
+                    description: The rates
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/OperationsStatsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/customers:
+        get:
+            tags: [Stats]
+            summary: New and returning customers (staff)
+            description: >-
+                Customers who paid in the period, split into new (their first paid order falls in
+                the period) and returning. Matched by account only, never by email: every erased
+                account shares one placeholder address. Needs `stats.any.read`.
+            operationId: getCustomerStats
+            security:
+                - bearerAuth: []
+            parameters:
+                - $ref: '#/components/parameters/StatsFromParam'
+                - $ref: '#/components/parameters/StatsToParam'
+            responses:
+                '200':
+                    description: The counts
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/CustomerStatsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+    /stats/pipeline:
+        get:
+            tags: [Stats]
+            summary: What is waiting right now (staff)
+            description: >-
+                A snapshot, not a period: bank transfers awaiting money (count, amount incl. VAT,
+                the nearest `payBy`) and paid orders not yet shipped. Needs `stats.any.read`.
+            operationId: getPipelineStats
+            security:
+                - bearerAuth: []
+            responses:
+                '200':
+                    description: The snapshot
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/PipelineStatsEnvelope'
+                '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
+                '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
+                '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
+
+components:
+    parameters:
+        StatsFromParam:
+            name: from
+            in: query
+            required: true
+            description: First shop-local calendar day of the period, inclusive.
+            schema: { type: string, format: date }
+        StatsToParam:
+            name: to
+            in: query
+            required: true
+            description: Last shop-local calendar day of the period, inclusive. At most two years after `from`.
+            schema: { type: string, format: date }
+        StatsIntervalParam:
+            name: interval
+            in: query
+            required: false
+            schema:
+                $ref: '#/components/schemas/StatsInterval'
+
+    schemas:
+        StatsInterval:
+            type: string
+            enum: [day, week, month]
+            default: day
+            description: The bucket size. A week starts on Monday.
+
+        StatsPeriod:
+            type: object
+            additionalProperties: false
+            required: [from, to, timeZone]
+            properties:
+                from: { type: string, format: date }
+                to: { type: string, format: date }
+                interval:
+                    $ref: '#/components/schemas/StatsInterval'
+                timeZone:
+                    type: string
+                    description: The shop's IANA time zone every day and bucket edge follows.
+
+        # Every field is a figure over one period (or one bucket of it).
+        SalesFigures:
+            type: object
+            additionalProperties: false
+            required:
+                [orders, unitsOrdered, unitsReversed, netUnits, grossSales, discounts, reversals, netSales, shipping, taxes, totalSales, refunds, averageOrderValue]
+            properties:
+                orders:
+                    type: integer
+                    description: Orders paid in the period, by `paidAt`.
+                unitsOrdered:
+                    type: integer
+                    description: Units on those orders.
+                unitsReversed:
+                    type: integer
+                    description: Units of returns received in the period. A cancellation is not counted, since it has no date.
+                netUnits:
+                    type: integer
+                    description: '`unitsOrdered` minus `unitsReversed`.'
+                grossSales:
+                    type: number
+                    format: double
+                    description: Goods net of VAT on invoices issued in the period, before shipping, discounts and reversals.
+                discounts:
+                    type: number
+                    format: double
+                    description: Always 0 until a discount exists.
+                reversals:
+                    type: number
+                    format: double
+                    description: The goods part (net of VAT) of credit notes issued in the period.
+                netSales:
+                    type: number
+                    format: double
+                    description: '`grossSales` minus `discounts` minus `reversals`.'
+                shipping:
+                    type: number
+                    format: double
+                    description: Shipping net of VAT charged minus refunded. Exact for full refunds only, since a partial credit note folds its shipping into goods.
+                taxes:
+                    type: number
+                    format: double
+                    description: VAT charged minus VAT refunded.
+                totalSales:
+                    type: number
+                    format: double
+                    description: '`netSales` plus `shipping` plus `taxes`.'
+                refunds:
+                    type: number
+                    format: double
+                    description: Credit notes issued in the period, VAT included.
+                averageOrderValue:
+                    type: number
+                    format: double
+                    description: (`grossSales` minus `discounts`) divided by `orders`; 0 with no orders.
+
+        SalesBucket:
+            type: object
+            additionalProperties: false
+            required: [start, figures]
+            properties:
+                start:
+                    type: string
+                    format: date-time
+                    description: The bucket's first instant, shop-local midnight.
+                figures:
+                    $ref: '#/components/schemas/SalesFigures'
+
+        SalesCurrency:
+            type: object
+            additionalProperties: false
+            required: [currency, totals, previous, buckets]
+            properties:
+                currency: { type: string }
+                totals:
+                    $ref: '#/components/schemas/SalesFigures'
+                previous:
+                    allOf:
+                        - $ref: '#/components/schemas/SalesFigures'
+                    description: The same totals over the equal-length period just before, for the "vs previous" figure.
+                buckets:
+                    type: array
+                    description: Every bucket of the range, empty ones included.
+                    items:
+                        $ref: '#/components/schemas/SalesBucket'
+
+        SalesStats:
+            type: object
+            additionalProperties: false
+            required: [period, currencies]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                currencies:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/SalesCurrency'
+
+        ProductSalesRow:
+            type: object
+            additionalProperties: false
+            required: [productId, title, currency, unitsOrdered, unitsReversed, netUnits, netSales]
+            properties:
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title: { type: string }
+                currency: { type: string }
+                unitsOrdered: { type: integer }
+                unitsReversed: { type: integer }
+                netUnits: { type: integer }
+                netSales:
+                    type: number
+                    format: double
+                    description: Net of VAT, from the frozen line price and rate.
+
+        ProductStats:
+            type: object
+            additionalProperties: false
+            required: [period, products]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                products:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProductSalesRow'
+
+        ProductSeriesBucket:
+            type: object
+            additionalProperties: false
+            required: [start, unitsOrdered, unitsReversed]
+            properties:
+                start: { type: string, format: date-time }
+                unitsOrdered: { type: integer }
+                unitsReversed: { type: integer }
+
+        ProductSeries:
+            type: object
+            additionalProperties: false
+            required: [period, productId, buckets]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                productId:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Id'
+                title:
+                    type: string
+                    description: As the orders froze it; absent when the product sold nothing in the period.
+                buckets:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/ProductSeriesBucket'
+
+        CategorySalesRow:
+            type: object
+            additionalProperties: false
+            required: [category, currency, unitsOrdered, netSales]
+            properties:
+                category: { type: string }
+                currency: { type: string }
+                unitsOrdered: { type: integer }
+                netSales: { type: number, format: double }
+
+        CategoryStats:
+            type: object
+            additionalProperties: false
+            required: [period, categories]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                categories:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/CategorySalesRow'
+
+        PaymentMixRow:
+            type: object
+            additionalProperties: false
+            required: [method, provider, currency, payments, amount]
+            properties:
+                method:
+                    type: string
+                    enum: [card, bank_transfer, cash, other]
+                provider: { type: string }
+                currency: { type: string }
+                payments: { type: integer }
+                amount: { type: number, format: double }
+
+        PaymentMix:
+            type: object
+            additionalProperties: false
+            required: [period, rows]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                rows:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/PaymentMixRow'
+
+        OperationsStats:
+            type: object
+            additionalProperties: false
+            required: [period, cancellation, returns, refunds]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                cancellation:
+                    type: object
+                    additionalProperties: false
+                    required: [placed, cancelled, rate]
+                    description: A cohort, meaning orders placed in the period that ended cancelled, not cancellations dated by when they happened.
+                    properties:
+                        placed: { type: integer }
+                        cancelled: { type: integer }
+                        rate: { type: number, format: double, minimum: 0, maximum: 1 }
+                returns:
+                    type: object
+                    additionalProperties: false
+                    required: [unitsOrdered, unitsReturned, rate]
+                    properties:
+                        unitsOrdered: { type: integer }
+                        unitsReturned: { type: integer }
+                        rate: { type: number, format: double, minimum: 0 }
+                refunds:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [currency, invoiced, credited, rate]
+                        properties:
+                            currency: { type: string }
+                            invoiced: { type: number, format: double, description: 'Invoices issued in the period, VAT included.' }
+                            credited: { type: number, format: double, description: 'Credit notes issued in the period, VAT included.' }
+                            rate: { type: number, format: double, minimum: 0 }
+
+        CustomerStats:
+            type: object
+            additionalProperties: false
+            required: [period, customers, newCustomers, returningCustomers, returningRate]
+            properties:
+                period:
+                    $ref: '#/components/schemas/StatsPeriod'
+                customers: { type: integer, description: Accounts with at least one paid order in the period. }
+                newCustomers: { type: integer, description: Of those, accounts whose first paid order is in the period. }
+                returningCustomers: { type: integer }
+                returningRate: { type: number, format: double, minimum: 0, maximum: 1 }
+
+        PipelineStats:
+            type: object
+            additionalProperties: false
+            required: [awaitingTransfers, paidNotShipped]
+            properties:
+                awaitingTransfers:
+                    type: array
+                    items:
+                        type: object
+                        additionalProperties: false
+                        required: [currency, count, amount]
+                        properties:
+                            currency: { type: string }
+                            count: { type: integer }
+                            amount: { type: number, format: double }
+                            nearestPayBy: { type: string, format: date-time }
+                paidNotShipped:
+                    type: integer
+                    description: Orders `paid` or `processing`, so not yet handed to a carrier.
+
+        SalesStatsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/SalesStats'
+
+        ProductStatsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ProductStats'
+
+        ProductSeriesEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/ProductSeries'
+
+        CategoryStatsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CategoryStats'
+
+        PaymentMixEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PaymentMix'
+
+        OperationsStatsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/OperationsStats'
+
+        CustomerStatsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/CustomerStats'
+
+        PipelineStatsEnvelope:
+            type: object
+            additionalProperties: false
+            required: [success, status, message, data]
+            properties:
+                success:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeSuccess'
+                status:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeStatus'
+                message:
+                    $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/EnvelopeMessage'
+                data:
+                    $ref: '#/components/schemas/PipelineStats'

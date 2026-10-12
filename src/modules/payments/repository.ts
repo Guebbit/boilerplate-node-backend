@@ -9,6 +9,7 @@
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
+import { decimalSum, type ReportWindow } from '@infrastructure/persistence/report';
 import type { RefundFailureReason, RefundReason, RefundStatus } from '@types';
 import type { PaymentDocument, RefundRecord } from './model';
 import {
@@ -57,6 +58,13 @@ const PAYMENT_SEARCHABLE = {
     },
     sortable: PAYMENT_SORTABLE
 };
+
+/** The payments mix, one row per method, provider and currency; `amount` is a decimal sum. */
+export interface MixSums {
+    _id: { method: PaymentMethod; provider: string; currency: string };
+    payments: number;
+    amount: unknown;
+}
 
 /** One refund with the ids of the payment it sits on, as `$unwind` hands it back. */
 export interface RefundRow {
@@ -231,6 +239,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         scope: Record<string, unknown>
     ) => Promise<{ items: PaymentDocument[]; meta: PaginatedMeta }>;
     searchRefunds: (filters: RefundFilters) => Promise<{ items: RefundRow[]; meta: PaginatedMeta }>;
+    sumMix: (window: ReportWindow) => Promise<MixSums[]>;
     findOpenRefundRows: (options: {
         manual: boolean;
         openBefore?: Date;
@@ -564,6 +573,27 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         const items = await (chosen ? query.collation(SORT_COLLATION) : query).exec();
         return { items, meta: buildPaginatedMeta(pagination, totalItems) };
     },
+
+    /**
+     * Payments created in the window that took money, grouped by method, provider and currency.
+     * @param window - createdAt bounds
+     */
+    sumMix: (window) =>
+        aggregatePayments<MixSums>([
+            {
+                $match: {
+                    status: { $in: [PaymentStatus.succeeded, PaymentStatus.refunded] },
+                    createdAt: { $gte: window.from, $lt: window.to }
+                }
+            },
+            {
+                $group: {
+                    _id: { method: '$method', provider: '$provider', currency: '$currency' },
+                    payments: { $sum: 1 },
+                    amount: decimalSum('$amount')
+                }
+            }
+        ]),
 
     /**
      * One page of refunds across every payment, newest first — the Refunds tab. The `$match` on

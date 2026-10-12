@@ -10,6 +10,7 @@ import { approveReturn, declineReturn } from './decide';
 import { receiveReturn } from './receive';
 import { listReturns, getReturn, withActions } from './read';
 import { scrubReturnText } from './retention';
+import { returnedBuckets, returnedByProduct, returnedSeries } from './stats';
 
 export { createReturn, type CreateReturnInput, type CreateReturnOutcome } from './create';
 export { approveReturn, declineReturn } from './decide';
@@ -18,6 +19,7 @@ export { closeReturn } from './close';
 export { listReturns, getReturn, withActions, type ReturnFilters } from './read';
 export { collectPersonalData } from './personal-data';
 export { scrubReturnText } from './retention';
+export type { ReturnedBucket } from './stats';
 
 /** The service's one handle. Named for the record it serves. */
 export const returnService = {
@@ -28,5 +30,8 @@ export const returnService = {
     listReturns,
     getReturn,
     withActions,
-    scrubReturnText
+    scrubReturnText,
+    returnedBuckets,
+    returnedByProduct,
+    returnedSeries
 };

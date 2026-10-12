@@ -65,6 +65,7 @@ const MODULE_ORDER: readonly string[] = [
     'invoicing',
     'delivery',
     'returns',
+    'stats',
     'inventory',
     'webhooks',
     'api-keys'

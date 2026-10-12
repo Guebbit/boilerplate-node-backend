@@ -22,10 +22,12 @@ flowchart LR
     invoicing["invoicing"]
     orders["orders"]
     returns["returns"]
+    stats["stats"]
 
     cart --> payments
     invoicing --> payments
     returns --> payments
+    stats --> payments
     payments --> inventory
     payments --> orders
     orders -. "order.cancelled" .-> payments
@@ -38,7 +40,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,orders core;
-    class inventory,invoicing,returns supporting;
+    class inventory,invoicing,returns,stats supporting;
     class payments centre;
 ```
 
@@ -550,6 +552,9 @@ failed refund's `failureReason`. The reason is a closed code (`declined`, `insuf
 `failure_reason` shape. A provider adapter throws `PaymentProviderError(code, message)`; anything
 else is `unknown`. The provider's own wording goes to the log and is never stored. The fake
 provider's `setFakeRefundFailure` simulates each code.
+
+`paymentService.methodMix` groups the payments that took money (`succeeded`, or `refunded` since) by
+method, provider and currency, for [`stats`](./stats.md).
 
 **Needs attention** lists four sources: a provider refund open longer than
 `NODE_PAYMENT_ATTENTION_MINUTES`; a refund owed by hand on a `manual` payment (nothing but the

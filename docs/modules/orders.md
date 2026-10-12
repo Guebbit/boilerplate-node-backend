@@ -25,6 +25,7 @@ flowchart LR
     payments["payments"]
     products["products"]
     returns["returns"]
+    stats["stats"]
     users["users"]
 
     cart --> orders
@@ -32,6 +33,7 @@ flowchart LR
     invoicing --> orders
     payments --> orders
     returns --> orders
+    stats --> orders
     orders --> access
     orders --> inventory
     orders --> products
@@ -46,7 +48,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class cart,products core;
-    class delivery,inventory,invoicing,payments,returns supporting;
+    class delivery,inventory,invoicing,payments,returns,stats supporting;
     class access,users generic;
     class orders centre;
 ```
@@ -269,6 +271,9 @@ second call silent.
   no addresses). The staff payments list uses it to name its rows.
 - `orderService.findOwedRefunds(cutoff, limit)` lists orders cancelled after payment whose refund
   is still owed: the payments page's needs-attention read.
+- `orderService.paidBuckets`, `productTotals`, `categoryTotals`, `productSeries`, `customerCounts`,
+  `cancellationCohort` and `pipeline` are the grouped reads [`stats`](./stats.md) composes: each
+  answers a few hundred rows at most, counts live orders only, and dates a sale by `paidAt`.
 - `GET /orders` and `POST /orders/search` filter by `createdFrom`/`createdTo` and `paidFrom`/`paidTo`
   (inclusive instants; an unpaid order has no `paidAt`, so no paid bound matches it), by
   `paymentStatus` and `returnStatus`, and sort by `paidAt`. The two statuses are derived on read,

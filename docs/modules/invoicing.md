@@ -21,7 +21,9 @@ flowchart LR
     invoicing["invoicing<br/><i>this module</i>"]
     orders["orders"]
     payments["payments"]
+    stats["stats"]
 
+    stats --> invoicing
     invoicing --> orders
     invoicing --> payments
     orders -. "order.status_changed" .-> invoicing
@@ -32,7 +34,7 @@ flowchart LR
     classDef generic fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef centre fill:#ede9fe,stroke:#7c3aed,stroke-width:2px,color:#111827;
     class orders core;
-    class payments supporting;
+    class payments,stats supporting;
     class invoicing centre;
 ```
 
@@ -119,6 +121,10 @@ The number's year is the year of the document's own `issuedAt` on the shop's cal
 (`NODE_SHOP_TIMEZONE`, [orders](./orders.md#configuration)), taken from the very instant that is stored,
 so a sale at 00:30 on 1 January in Rome starts the new series instead of ending the old one. The
 date printed on the document uses the same zone.
+
+`invoicingService.moneyBuckets` sums invoices and credit notes per currency and shop-local bucket by
+`issuedAt` (indexed). It is where every money figure of [`stats`](./stats.md) comes from: the
+documents are frozen and dated, and carry the VAT and shipping split a payment's refund does not.
 
 A listener failure is logged by `emitDomainEvent` and never rolls back the write that triggered
 it: an order that reached `paid` stays `paid` whether or not its invoice freeze succeeded, so an

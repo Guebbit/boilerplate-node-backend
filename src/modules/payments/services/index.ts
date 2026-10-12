@@ -42,6 +42,7 @@ import {
 } from './retention';
 import { getOrderByReference } from './lookup';
 import { listPayments, listRefunds, listAttention } from './list';
+import { methodMix } from './stats';
 import { listPaymentMethods } from '../config';
 
 /*
@@ -74,6 +75,7 @@ export {
 export { callerScope, payerScope, buyerOrderScope, readsAllPayments } from './scope';
 export { getOrderByReference } from './lookup';
 export { listPayments, listRefunds, listAttention } from './list';
+export { methodMix, type MixRow } from './stats';
 export { listPaymentMethods, type PaymentMethodInfo } from '../config';
 
 /** The module's one service handle. Named for the record it serves, like `paymentRepository`. */
@@ -96,6 +98,7 @@ export const paymentService = {
     listPayments,
     listRefunds,
     listAttention,
+    methodMix,
     detachUserId,
     findOwnPayments,
     findOwnPaymentsForExport,
