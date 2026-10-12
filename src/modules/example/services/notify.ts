@@ -17,6 +17,7 @@ import { examplePublishedEmail } from '../emails';
  *
  * A vanished owner (erased between the edit and this listener) means nobody to tell, not an error.
  * A rejection here is logged by the event bus and never reaches the request that published.
+ * The event rides the outbox, and a retry re-runs every handler, so the mail can repeat.
  *
  * @param payload - the `example.published` event
  */

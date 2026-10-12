@@ -13,6 +13,7 @@
             "awaiting-stock": "Questo ordine ha ancora unità in attesa di scorte, quindi non può essere spostato oltre la spedizione a mano."
         },
         "invoiced": "Questo ordine ha una fattura emessa e non può più essere eliminato definitivamente.",
+        "not-cancelled": "Annulla questo ordine prima di eliminarlo definitivamente.",
         "email-confirm": {
             "subject": "Ordine ricevuto — in attesa di pagamento",
             "meta-title": "Ordine ricevuto",

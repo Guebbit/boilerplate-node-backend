@@ -35,6 +35,12 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
         session?: ClientSession
     ) => Promise<void>;
     markEdited: (id: string, session?: ClientSession) => Promise<void>;
+    publishFrom: (
+        id: string,
+        before: ExampleDocument['status'],
+        fields: Pick<ExampleDocument, 'title' | 'body' | 'status' | 'publishedAt'>,
+        session: ClientSession
+    ) => Promise<ExampleDocument | null>;
     writebackImage: ImageWriteback;
 } = {
     ...createRepository<ExampleDocument, ExampleRow>(exampleModel, {
@@ -126,6 +132,28 @@ export const exampleRepository: Repository<ExampleDocument, ExampleRow> & {
             )
             .exec()
             .then(() => undefined),
+
+    /**
+     * Move an example into published, but only while it still holds the status the caller read.
+     * Two requests publishing one draft both read `draft`; only one write matches, so only one
+     * of them announces.
+     *
+     * @param id - the example
+     * @param before - the status the caller read; the write matches nothing if it has moved
+     * @param fields - the edit to write: the new status, its text and the publish stamp
+     * @param session - the publish's transaction, shared with the outbox row
+     * @returns the saved example, or `null` when a peer changed the status first
+     */
+    publishFrom: (id, before, fields, session) =>
+        exampleModel
+            .findOneAndUpdate(
+                { _id: toObjectId(id), status: before },
+                { $set: fields },
+                // `returnDocument: 'after'` answers the written row; `session` joins the transaction.
+                // https://mongoosejs.com/docs/api/model.html#Model.findOneAndUpdate()
+                { returnDocument: 'after', session }
+            )
+            .exec(),
 
     /**
      * The image pipeline's writeback — see `ImageTarget.writeback`. Matches on the pending key, so
