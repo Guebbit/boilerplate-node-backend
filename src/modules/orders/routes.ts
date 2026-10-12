@@ -18,6 +18,7 @@ import { replaceOrderById, updateOrderById } from './controllers/update-order';
 import { deleteOrders } from './controllers/delete-orders';
 import { restoreOrders } from './controllers/restore-orders';
 import { getOrderItem } from './controllers/get-order-item';
+import { getOrderTimeline } from './controllers/get-order-timeline';
 import { postCancelOrder } from './controllers/post-cancel-order';
 import { postOrderStatusOverride } from './controllers/post-order-status-override';
 import { invalidateCache, noStore, privateNoCache } from '@infrastructure/http/middlewares/cache';
@@ -72,6 +73,10 @@ router.post(
     requirePermission('orders.any.override'),
     postOrderStatusOverride
 );
+
+// GET /orders/:id/timeline — the order's history; scoped like the order itself, and what each
+// caller sees of it is decided per row (the audience table in the domain layer). Never Redis-cached.
+router.get('/:id/timeline', privateNoCache, getOrderTimeline);
 
 // GET /orders/:id — never Redis-cached, same reasoning as the search routes above: this is the
 // caller's OWN order.

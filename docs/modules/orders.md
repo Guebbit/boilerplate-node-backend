@@ -292,8 +292,8 @@ is cancelled one fulfillment order at a time, through [`returns`](./returns.md#c
 
 A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
 against the wrong order — needs `orders.any.override`, a step-up permission granted to `admin` by
-name. Two modes, both requiring a `reason`, both writing an embedded override-history entry
-(who, when, from → to, mode, reason):
+name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
+[timeline](#the-timeline) (who, when, from → to, mode, reason):
 
 - **Forced** — `delivery`'s ship and deliver doors accept `forced: true`. The regular operation still
   runs; the order skips a step (ship from `paid` without `start`, deliver without a carrier
@@ -319,6 +319,76 @@ An override into `shipped` or `delivered` also takes whatever is left of the ord
 shelf (`inventory.shipForOrder`), in the same transaction as the status write — the same dispatch a
 normal shipment triggers for its own units. An override into `processing` moves no stock. A hold
 already `shipped` makes the second call silent.
+
+## The timeline
+
+What happened to an order, oldest first: `GET /orders/{id}/timeline`. One append-only collection,
+`orderevents`, owned by `orders` and typed as an `AppendOnlyLedger` (the stock-movement precedent).
+It is its own collection because the alternatives fail: an array on the order collides with the
+conditional status writes siblings make in their own transactions, the audit log expires at 90
+days, and rebuilding from the siblings would need reads `orders` may not make.
+
+```mermaid
+flowchart LR
+    subgraph orders
+        M[status moves<br/>created, paid, processing,<br/>shipped, delivered, cancelled,<br/>status_overridden]
+    end
+    subgraph siblings["modules that import orders"]
+        P[payments<br/>declines, refunds]
+        D[delivery<br/>shipments, holds, remainder]
+        R[returns<br/>request to close]
+        I[invoicing<br/>invoice, credit note]
+    end
+    M -- same transaction --> E[(orderevents)]
+    P -- appendTimeline with session --> E
+    D -- appendTimeline with session --> E
+    R -- appendTimeline with session --> E
+    I -- appendTimeline with session --> E
+    E --> S[staff: every row, actor, text]
+    E --> B[buyer: buyer-visible types, no actor]
+    E --> X[data export: every row]
+```
+
+**Two writers, one door.** `orders` writes its own moves inside the move's transaction (the
+`markPaid`, `markProcessing`, `markShipped`, `markDelivered` and `markFulfilmentComplete` doors take
+an `actor`). A module that depends on `orders` calls `orderService.appendTimeline(orderId, entry,
+session)` in its own transaction, so a row commits with the fact it describes or not at all, and a
+write that lost its race leaves no row. `orders` cannot listen to them: they import it.
+
+**Types and audience.** `domain/timeline.ts` decides, per type, whether the buyer may read it
+(Magento's `is_visible_on_front`, WooCommerce's `is_customer_note`); a private row is hidden whole,
+never stripped field by field. The set of types is the contract's `OrderTimelineType`, so a type
+added there without an audience row fails to compile.
+
+| Group     | Type                                                                                         | Buyer sees |
+| --------- | -------------------------------------------------------------------------------------------- | ---------- |
+| Order     | `created`, `paid`, `processing`, `shipped`, `delivered`, `cancelled`                         | yes        |
+| Order     | `status_overridden` (mode, from, to, and the staff's reason as `text`)                       | no         |
+| Payment   | `payment_declined`, `refund_issued`, `refund_settled`                                        | yes        |
+| Payment   | `refund_failed` (a failure code, never the provider's wording)                               | no         |
+| Shipments | `shipment_shipped`, `shipment_delivered`, `remainder_cancelled`                              | yes        |
+| Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
+| Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |
+| Documents | `invoice_issued`, `credit_note_issued`                                                       | yes        |
+
+A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
+`declineReason`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
+outlive the original. The one free text `orders` owns is an override's reason (`text`).
+
+**GDPR.**
+
+- Rows live as long as the order, and go with it on a hard delete.
+- `text` has its own clock, `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`, counted from the row's own
+  instant and swept by `npm run reap:orders`. The order's clock starts only at erasure or
+  inactivity, so a live customer's text would otherwise never go. The row stays.
+- An erased account loses its name on every row it made (`actor` unset), staff or buyer.
+- The buyer's data export (`orderTimeline` section of `POST /account/export`) carries every row of
+  their own orders, staff text and actor included: the export is their data, the screen is a view.
+- The buyer's own screen never shows `actor`: who at the shop did something is the shop's business.
+
+Not built: `note_added` (no staff-note door exists), `email_sent`, and the preorder types
+(`release_date_moved`, `delay_notice_sent`, `wait_confirmed`, `wait_expired`), which arrive with the
+preorder lane as new rows in the table above.
 
 ## Reads other modules compose
 
@@ -493,6 +563,7 @@ when the shop offers a longer withdrawal period.
 | `NODE_SHIP_TO_COUNTRIES`                                           | `NODE_SHOP_COUNTRY` | Comma-separated ISO-3166 codes checkout will ship a physical order to; a resolved address outside it refuses with 422 once the chosen method needs one. Defaults to the shop's own country alone                                    |
 | `NODE_WITHDRAWAL_PERIOD_DAYS`                                      | `30`                | Days a consumer has to withdraw. The legal 14 plus the margin in [the withdrawal window](#the-withdrawal-window) gives a floor of 21, so a smaller value is refused at read; the default is 30                                      |
 | `NODE_ORDER_PII_RETENTION_DAYS`                                    | `3650`              | Days after an order's `createdAt` (or account erasure or inactivity minimisation, if later) before `reap:orders` replaces its remaining personal data with placeholders                                                             |
+| `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                             | `1095`              | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                                                           |
 | `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                                                                  |
 | `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                                                          |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                                                              |

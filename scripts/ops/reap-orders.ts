@@ -12,6 +12,10 @@
  * order's remaining PII: the email is replaced, both addresses and the notes are unset. Amounts,
  * line items and dates survive: revenue history stays intact, only the person is gone from it.
  *
+ * Second sweep, same run: the free text staff wrote on timeline rows (an override's reason) is
+ * unset once it is `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` old. That clock is the row's own, since
+ * the order's starts only at erasure, so a live customer's text would otherwise never go.
+ *
  * Meant to run periodically (the same cron container as the other `reap:*` scripts), never on
  * every boot.
  *
@@ -27,10 +31,11 @@ import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { orderService } from '@modules/orders';
 import { runScript } from '../run-script';
 
-/** Connect, anonymize every order past its retention window, and resolve nothing. */
+/** Connect, anonymize every order and unset every timeline text past its retention window, and resolve nothing. */
 const main = (): Promise<void> =>
     startJob()
         .then(() => orderService.anonymizeDueOrders())
+        .then(() => orderService.scrubTimelineText())
         .then(() => undefined);
 
 // Entry point: run `main`, record the outcome under `reap:orders` for `/observability/health`, and close

@@ -54,6 +54,14 @@ import {
 } from './fulfillment';
 import { overrideStatus } from './override';
 import {
+    appendTimeline,
+    readTimeline,
+    collectTimelineOf,
+    clearTimelineActor,
+    scrubTimelineText,
+    deleteTimelineOf
+} from './timeline';
+import {
     paidBuckets,
     productTotals,
     categoryTotals,
@@ -104,6 +112,14 @@ export {
     type ForcedFulfilment
 } from './fulfillment';
 export { overrideStatus } from './override';
+export {
+    appendTimeline,
+    readTimeline,
+    collectTimelineOf,
+    clearTimelineActor,
+    scrubTimelineText,
+    deleteTimelineOf
+} from './timeline';
 export { detachUserId, eraseUserOrders, startOrderPiiClock, anonymizeDueOrders } from './retention';
 export {
     callerScope,
@@ -203,6 +219,12 @@ export const orderService = {
     shipStock,
     refreshShelf,
     overrideStatus,
+    appendTimeline,
+    readTimeline,
+    collectTimelineOf,
+    clearTimelineActor,
+    scrubTimelineText,
+    deleteTimelineOf,
     detachUserId,
     eraseUserOrders,
     startOrderPiiClock,

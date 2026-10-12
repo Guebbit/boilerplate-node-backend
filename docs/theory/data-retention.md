@@ -127,6 +127,19 @@ link mailed to that old address. When the link lapses the purpose is over, so th
 
 The states are in [Proving an address](../modules/account.md#proving-an-address).
 
+## Free text on the order timeline
+
+An order's [timeline](../modules/orders.md#the-timeline) holds one free-text field, `text`: the
+reason a staff member gave for an override. Everything else on a row is an id, a code or a number.
+
+| Rule                         | Why                                                                                          |
+| ---------------------------- | -------------------------------------------------------------------------------------------- |
+| Own clock, from the row      | The order's clock starts only at erasure, so a live customer's text would never go.          |
+| `npm run reap:orders` unsets | The row, its type and its codes stay: they are the accounting trail.                         |
+| Never copy a sibling's text  | `reap:returns` clears a return's `note` while a copy here would live on. Ids and codes only. |
+| Export carries it            | A staff assessment of a person is that person's data (the Nowak ruling above).               |
+| Screen hides the actor       | The buyer's view never shows who at the shop did it (Pankki S); the export may.              |
+
 ## Free text on returns
 
 A return carries a required `reason` (`withdrawal`, `defective`, `wrong_item`, `other`) and two

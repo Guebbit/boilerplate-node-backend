@@ -33,6 +33,7 @@ describe('order routes — what is mounted', () => {
             'DELETE /',
             'POST /:id/cancel',
             'POST /:id/status-override',
+            'GET /:id/timeline',
             'GET /:id',
             'PUT /:id',
             'PATCH /:id',

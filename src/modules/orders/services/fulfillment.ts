@@ -14,6 +14,7 @@ import { inventoryService } from '@modules/inventory';
 import type { OrderDocument } from '../model';
 import { orderRepository } from '../repository';
 import type { FulfillmentSummary } from '../domain';
+import { appendTimeline } from './timeline';
 
 /**
  * Report where the goods stand, replacing the last report. The write is conditional on the order
@@ -44,7 +45,7 @@ export const readOrder = (orderId: string, session: ClientSession): Promise<Orde
 
 /** What a forced fulfilment act reports about itself. */
 export interface ForcedFulfilment {
-    /** Why the normal door did not apply — recorded as the history row's reason. */
+    /** Why the normal door did not apply — recorded as the timeline row's text. */
     reason: string;
     /** The override holder who forced it. */
     actorUserId: string;
@@ -55,10 +56,10 @@ export interface ForcedFulfilment {
 }
 
 /**
- * Leave a history row for a forced fulfilment act — a shipment from `paid`, a delivery without a
+ * Leave a timeline row for a forced fulfilment act — a shipment from `paid`, a delivery without a
  * carrier confirmation. The act does not always move the order, but staff skipped a step and the
- * row says so, in the same list a status override writes to. `to` is whatever the order's status
- * is once the act's own moves have landed, read in the act's snapshot.
+ * row says so, the same `status_overridden` a status override writes. `to` is whatever the order's
+ * status is once the act's own moves have landed, read in the act's snapshot.
  *
  * @param orderId - the order
  * @param forced - who forced it, why, and when
@@ -72,18 +73,17 @@ export const recordForcedFulfilment = (
 ): Promise<OrderDocument | null> =>
     orderRepository.findInSession(orderId, session).then((order) =>
         order
-            ? orderRepository.pushOverrideEntry(
+            ? appendTimeline(
                   orderId,
                   {
-                      from: forced.from,
-                      to: order.status,
-                      mode: 'forced',
-                      reason: forced.reason,
-                      actorUserId: forced.actorUserId,
+                      type: 'status_overridden',
+                      actor: forced.actorUserId,
+                      text: forced.reason,
+                      data: { mode: 'forced', from: forced.from, to: order.status },
                       at: forced.at
                   },
                   session
-              )
+              ).then(() => order)
             : null
     );
 

@@ -41,7 +41,7 @@ import {
     type StampedReturnStatus
 } from './domain/projections';
 import { OrderStatus, PaymentMethodId, RateType } from '@types';
-import type { Order } from '@types';
+import type { Order, OrderTimelineType } from '@types';
 
 /**
  * `ProductSnapshot` minus `taxClass`, plus the resolved `taxRate` — same reasoning as
@@ -232,36 +232,7 @@ export interface OrderDocument
      *          through `transferInstructions.reference`.
      */
     transferReference?: string;
-    /**
-     * The admin-override history — `services/override.ts`'s only writer, never emptied. Absent
-     * (not `[]`) on an order no override has ever touched, the same "owes nothing" vs. "was never
-     * asked" distinction `pendingEffects` already uses. Each entry is one override, forced or
-     * status-only; `PUT`/`POST` normal writes never append here.
-     */
-    statusOverrides?: OrderStatusOverride[];
     deletedAt?: Date;
-}
-
-/** The two doors an override goes through — the schema's `enum` for `mode`. */
-const ORDER_OVERRIDE_MODES = ['forced', 'status'] as const;
-
-/** One admin override event, embedded in order-arrival order — never reordered or deleted. */
-export interface OrderStatusOverride {
-    /** The order's status immediately before this override. */
-    from: OrderStatus;
-    /** The status this override moved the order to. */
-    to: OrderStatus;
-    /** `'forced'` — a delivery door skipped its normal `from` gate; `'status'` — the status-only door. */
-    mode: (typeof ORDER_OVERRIDE_MODES)[number];
-    /** Required on every override — why the normal path didn't apply. */
-    reason: string;
-    /**
-     * The admin who made the call, as `caller.id` gave it. A plain string, not an ObjectId: this
-     * is a historical record, never queried by it, and `Caller.id` carries no guarantee of being
-     * one (an API-key caller, or a test fixture, can hand it a value that is not).
-     */
-    actorUserId: string;
-    at: Date;
 }
 
 /**
@@ -528,26 +499,6 @@ export const orderSchema = new Schema<OrderDocument>(
          */
         transferReference: {
             type: String
-        },
-        /*
-         * `default: undefined`, same reasoning as `pendingEffects` above: an order no override has
-         * ever touched carries no key at all. Only `services/override.ts`'s `$push` creates it.
-         */
-        statusOverrides: {
-            type: [
-                new Schema<OrderStatusOverride>(
-                    {
-                        from: { type: String, enum: Object.values(OrderStatus), required: true },
-                        to: { type: String, enum: Object.values(OrderStatus), required: true },
-                        mode: { type: String, enum: [...ORDER_OVERRIDE_MODES], required: true },
-                        reason: { type: String, required: true },
-                        actorUserId: { type: String, required: true },
-                        at: { type: Date, required: true }
-                    },
-                    { _id: false }
-                )
-            ],
-            default: undefined
         }
     },
     {
@@ -726,11 +677,10 @@ const applyOrderProjections = (serialized: Record<string, unknown>) => {
 export const applyOrderTransform = applySerialization(orderSchema, {
     // `anonymizeAfter` is the reaper's own bookkeeping and `pendingEffects` the cancel sweep's,
     // neither part of the `Order` contract — same reasoning as `users`' `pendingImageKey`/
-    // `inactivityWarnedAt`. `statusOverrides` is staff-only history (who overrode the status, and
-    // why) — never the owning customer's to read off their own order. `transferReference` is NOT
+    // `inactivityWarnedAt`. `transferReference` is NOT
     // listed here: `omit` runs before `after` below, and `applyTransferInstructions` still needs
     // to read it — it strips the raw field itself, once it no longer does.
-    omit: ['anonymizeAfter', 'pendingEffects', 'statusOverrides', 'withdrawUntil'],
+    omit: ['anonymizeAfter', 'pendingEffects', 'withdrawUntil'],
     after: (serialized) => {
         applyOrderItems(serialized);
         // `currency` is required on the schema, so a serialized order always carries it; the
@@ -773,4 +723,63 @@ const orderNumberCounterSchema = new Schema<OrderNumberCounterDocument, OrderNum
 export const orderNumberCounterModel = model<OrderNumberCounterDocument, OrderNumberCounterModel>(
     'OrderNumberCounter',
     orderNumberCounterSchema
+);
+
+/**
+ * One row of an order's timeline. Append-only by design — see `./repository`'s
+ * `orderEventRepository` for the two sanctioned scrubs (an erased staff account, aged free text).
+ */
+export interface OrderEventDocument extends Document {
+    /** The order it belongs to. */
+    orderId: Types.ObjectId;
+    /** When it happened. */
+    at: Date;
+    /** What happened; the audience of each type is `./domain/timeline`'s table. */
+    type: OrderTimelineType;
+    /**
+     * The account that made the change, as `caller.id` gave it: a plain string, like the audit
+     * log's, since an API-key caller or a fixture carries no ObjectId. Unset for the system, and
+     * unset again when that account is erased.
+     */
+    actor?: string;
+    /** Free text `orders` owns (an override's reason); unset on its own retention clock. */
+    text?: string;
+    /** Ids, codes and numbers the type needs to say; never another module's free text. */
+    data: Record<string, unknown>;
+}
+
+/** Mongoose model type for {@link OrderEventDocument}. */
+export type OrderEventModel = Model<OrderEventDocument>;
+
+/** Timeline schema. No timestamps: `at` is the fact's own instant, and a row is never edited. */
+const orderEventSchema = new Schema<OrderEventDocument, OrderEventModel>(
+    {
+        orderId: { type: Schema.Types.ObjectId, ref: 'Order', required: true },
+        at: { type: Date, required: true },
+        type: { type: String, required: true },
+        actor: { type: String },
+        text: { type: String },
+        // `minimize: false` below keeps an empty `data` stored as `{}`, so a reader never meets a hole.
+        data: { type: Schema.Types.Mixed, required: true, default: {} }
+    },
+    { minimize: false }
+);
+
+/* The one read: "what happened to THIS order, oldest first". */
+orderEventSchema.index({ orderId: 1, at: 1 }, { name: 'orderevents_orderId_at' });
+/* The free-text reap's query: only rows still holding text, so the index stays as small as the text. */
+orderEventSchema.index(
+    { at: 1 },
+    { name: 'orderevents_text_at', partialFilterExpression: { text: { $exists: true } } }
+);
+/* An erased staff account's rows. Sparse: most rows are the system's and carry no actor. */
+orderEventSchema.index({ actor: 1 }, { name: 'orderevents_actor', sparse: true });
+
+/** Normalizes a serialized row: `_id` → `id`, `__v` dropped. Owed to the repository factory's lean reads. */
+export const applyOrderEventTransform = applySerialization(orderEventSchema);
+
+/** Mongoose model for the timeline. Collection `orderevents`, Mongoose's default pluralization. */
+export const orderEventModel = model<OrderEventDocument, OrderEventModel>(
+    'OrderEvent',
+    orderEventSchema
 );

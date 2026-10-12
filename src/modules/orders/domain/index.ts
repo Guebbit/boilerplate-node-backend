@@ -77,3 +77,7 @@ export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
 
 /** The shop-calendar year of an instant: the year every numbered series is cut at. */
 export { yearInZone, zonedStartOfDay } from './shop-time';
+
+/** What an order's timeline may say, and which audience each type is for. */
+export { TIMELINE_AUDIENCE, isBuyerVisible } from './timeline';
+export type { TimelineAudience, TimelineEntryInput } from './timeline';

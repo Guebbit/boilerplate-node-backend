@@ -243,8 +243,8 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 `forced` lets staff skip a step, never a rule: ship from `paid` without `start` (the order then moves
 `paid → processing → …` by itself), or record a delivery without a carrier confirmation. It needs
 `orders.any.override` (itself step-up gated, and the route asks for the fresh session before the
-controller runs) and a `reason`. It leaves a history row on the order — `orderService.recordForcedFulfilment`
-appends to `statusOverrides` without a move of its own — and the shipment is stored with `forced: true`.
+controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
+`orderService.recordForcedFulfilment` appends it without a move of its own — and the shipment is stored with `forced: true`.
 
 ## Delivering
 
