@@ -271,7 +271,8 @@ The narrowest surface in the repo is `observability`'s — it owns no collection
 sibling could want, so its barrel publishes services nothing has needed to import yet (see that
 module's own page). The widest is `users`, and it is wide
 because it is the `users` end of the one shared-kernel relationship in the repo — `account`
-authenticates the record `users` administers.
+authenticates the record `users` administers. The credentials stay on that record deliberately;
+the reasoning is in [account-two-factor](../modules/account-two-factor.md#what-the-user-document-carries).
 
 ---
 
