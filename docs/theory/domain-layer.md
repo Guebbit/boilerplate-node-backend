@@ -212,13 +212,13 @@ not its business — `OrderStatus` is generated from `openapi.yaml`, so the valu
 moves (`orders/services/status.ts`, `delivery`) and the admin override all read the table, which is
 the whole point of a domain folder: the rule exists once and the callers ask it.
 
-**`orders/domain/money.ts` is the case for a value type in a codebase that is not otherwise doing
+**`shared-kernel/money.ts` is the case for a value type in a codebase that is not otherwise doing
 tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
 whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` still
 types these `number`/`double` and no response shape moves; what moves is that no site outside this
-file holds a rounding rule of its own. It stays inside `orders` because `orders` is the only module
-that does money arithmetic — and because the lint rule below forbids a domain folder from importing
-a shared kernel, which is where a jointly-owned money type would otherwise live.
+file holds a rounding rule of its own. It lives in `src/shared-kernel/` because six modules do money
+arithmetic, and a domain folder may import that tier — the one thing outside itself it may reach, since
+the tier imports only npm and `@types`.
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
 itself.** It is one table (`counterDeltaFor`) mapping each of the seven stock movement reasons to the
@@ -337,7 +337,7 @@ enforces and what it refuses.
 | Concept                             | Today                                                                   |
 | ----------------------------------- | ----------------------------------------------------------------------- |
 | Entity                              | none — a Mongoose document is the model                                 |
-| Value object                        | `Money` only — `orders/domain/money.ts`, internal to the arithmetic     |
+| Value object                        | `Money` only — `shared-kernel/money.ts`, internal to the arithmetic     |
 | Aggregate root                      | implicit only                                                           |
 | Repository returning domain objects | no — returns `OrderDocument`                                            |
 | Invariants at construction          | no — Mongoose schema validators, plus the lifecycle table on the writes |

@@ -367,7 +367,7 @@ interface being edited.
 
 ## 3. Money
 
-`src/modules/orders/domain/money.ts` — a branded integer count of minor units.
+`src/shared-kernel/money.ts` — a branded integer count of minor units.
 
 ### The boundary, which is the whole design
 
@@ -412,37 +412,38 @@ blank price. So every construction point funnels through one private `asMoney`, 
 with one meaning.
 
 That is a property over every possible input, which is why
-`src/modules/orders/tests/unit/money.property.test.ts` is property-based rather than a table of
+`tests/unit/shared-kernel/money.property.test.ts` is property-based rather than a table of
 examples. It found the `-0` case.
 
-### Why it lives in `orders`, and why a shared kernel was not an option
+### Why it lives in `src/shared-kernel/`
 
-`orders` is the only module that does money **arithmetic**. `cart` reads `sumLineItems` and
-`payments` reads `orderTotal`, both through the orders barrel; `delivery` returns flat rates from a
-table. The modules
-that look like they share the concept share a _function_, and that function already has an owner.
+Money arithmetic is not one module's business: `orders`, `payments`, `returns`, `invoicing`,
+`cart` and `stats` all add, scale or convert amounts. A type six modules need has no single owner,
+so it sits in its own tier, `src/shared-kernel/`.
 
 There is also a hard constraint. The domain layer may not import `@kernel/*`, `@infrastructure/*`,
-`@modules/*` or even `../*` — see the folder rule in `eslint.config.ts`. A jointly-owned value type,
-the textbook **Shared Kernel**, would have to sit somewhere no `domain/` folder can reach it.
+`@modules/*` or even `../*` — see the folder rule in `eslint.config.ts`. A jointly-owned value type
+therefore has to sit somewhere a `domain/` folder CAN reach, without loosening that rule. The
+`shared-kernel` tier does it: it imports npm and `@types` only, and every tier may import it.
 
 ```mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
 flowchart TD
-    K["@kernel/*"] -.->|"❌ lint"| D["orders/domain/money.ts"]
+    K["@kernel/*"] -.->|"❌ lint"| D["domain/ folders"]
     I["@infrastructure/*"] -.->|"❌ lint"| D
     S["@modules/*"] -.->|"❌ lint"| D
-    T["@types<br/><i>generated contract</i>"] -->|"✅"| D
-    D -->|"via the barrel"| C["cart, payments<br/><i>service layer</i>"]
+    SK["src/shared-kernel/money.ts<br/><i>npm and @types only</i>"] -->|"✅"| D
+    SK -->|"✅"| C["services, repositories, stats<br/><i>every other tier</i>"]
 
     classDef pure fill:#dcfce7,stroke:#16a34a,color:#111827;
     classDef banned fill:#fee2e2,stroke:#dc2626,color:#111827;
-    class D,T pure;
+    class D,SK pure;
     class K,I,S banned;
 ```
 
-If a type is ever genuinely shared across contexts, that rule needs revisiting first. That is a
-design decision, not a config edit.
+The tier is about the code, not the term: it holds our own pure helpers and shares no model, unlike
+the `shared-kernel` relationship in [Strategic DDD](./strategic-ddd.md), where two modules read and
+write one document.
 
 ### Per-rate VAT, and where shipping's own split goes
 
@@ -455,7 +456,7 @@ order's frozen lines, not three separate ones:
 - **Shipping's own split** (`shippingNetAmount`/`shippingTaxAmount`) — delivery carries no VAT
   rate of its own; it is taxed as ancillary to what it delivers, apportioned pro-rata across the
   lines by their own gross value (`apportion`, the same "remainder to the largest weight" rule
-  `money.ts` uses elsewhere), then taxed at _each line's own rate_. Two lines at different rates
+  `shared-kernel/money.ts` has), then taxed at _each line's own rate_. Two lines at different rates
   split shipping's cost between them and pay two different amounts of tax on their own halves.
 - **Per rate** (`taxSummary[]`) — one row per DISTINCT rate charged on the order, goods and
   shipping folded into the same row, since shipping was never a rate of its own to begin with.

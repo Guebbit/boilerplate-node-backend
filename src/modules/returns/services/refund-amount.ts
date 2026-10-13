@@ -17,7 +17,7 @@
  * See: docs/modules/returns.md#what-the-customer-gets-back
  */
 
-import { toDecimalAmount, toMinorUnits, type Money } from '@modules/orders';
+import { toDecimalAmount, toMinorUnits, type Money } from '@shared-kernel/money';
 import type { ReturnReason } from '../domain';
 
 /** What the calculation needs from the return and its order. */

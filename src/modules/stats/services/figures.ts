@@ -14,7 +14,7 @@ import {
     subtractMoney,
     toDecimalAmount,
     type Money
-} from '@modules/orders';
+} from '@shared-kernel/money';
 
 /** What one bucket of one currency adds up to, before any figure is derived. */
 export interface RawFigures {

@@ -24,14 +24,13 @@
 import {
     addMoney,
     apportion,
-    orderTaxBreakdown,
     scaleMoney,
     toDecimalAmount,
     toMinorUnits,
     NO_MONEY,
-    type Money,
-    type OrderTaxBreakdown
-} from '@modules/orders';
+    type Money
+} from '@shared-kernel/money';
+import { orderTaxBreakdown, type OrderTaxBreakdown } from '@modules/orders';
 import type { InvoiceDocument, InvoiceLine } from '../model';
 
 /** What a partial credit note freezes in place of the invoice's own lines and totals. */

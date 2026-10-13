@@ -14,13 +14,8 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import type { PaymentStatus, AuthContext } from '@types';
-import {
-    orderService,
-    bankTransferHoldHours,
-    isPayable,
-    paymentSettled,
-    toMinorUnits
-} from '@modules/orders';
+import { toMinorUnits } from '@shared-kernel/money';
+import { orderService, bankTransferHoldHours, isPayable, paymentSettled } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';

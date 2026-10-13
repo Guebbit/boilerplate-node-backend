@@ -139,17 +139,17 @@ const DOMAIN_MODULES = MODULE_NAMES.filter((name) =>
  * only named `mongoose`/`mongodb` and `express`/`supertest` — `redis`, `amqplib`, `node:fs`, or
  * any other framework or IO dependency would have passed uncaught, defeating the point of a
  * "pure domain logic" boundary. One rule per module instead, stating what `domain/` MAY reach:
- * its own module's domain siblings (so `tax.ts` can still import `money.ts`), and `@types` — the
- * only two things any `domain/` file in this repo actually imports today. A genuinely new, pure
+ * its own module's domain siblings, `@types` and `src/shared-kernel` (Money) — the only three
+ * things any `domain/` file in this repo actually imports today. A genuinely new, pure
  * utility a future domain file needs is a line added here, deliberately, rather than a dependency
  * that arrives silently because nothing was checking.
  */
 const domainPurityRules = DOMAIN_MODULES.map((name) => ({
     name: `domain-purity-${name}`,
-    comment: `${name}/domain/ may reach its own domain siblings and @types, nothing else — no framework, no database driver, no queue client, no filesystem. Add the specific pure package here if a domain rule genuinely needs one; don't widen this to a deny-list again.`,
+    comment: `${name}/domain/ may reach its own domain siblings, @types and src/shared-kernel, nothing else — no framework, no database driver, no queue client, no filesystem. Add the specific pure package here if a domain rule genuinely needs one; don't widen this to a deny-list again.`,
     severity: 'error',
     from: { path: `^src/modules/${name}/domain/` },
-    to: { pathNot: `^src/modules/${name}/domain/|^src/types` }
+    to: { pathNot: `^src/modules/${name}/domain/|^src/types|^src/shared-kernel/` }
 }));
 
 /** @type {import('dependency-cruiser').IConfiguration} */
@@ -173,6 +173,15 @@ module.exports = {
         },
 
         ...domainPurityRules,
+
+        {
+            name: 'shared-kernel-is-npm-only',
+            comment:
+                'src/shared-kernel/ sits below every tier so that domain/ may import it. A file in it that reached a tier would hand that reach to every importer, domain/ included.',
+            severity: 'error',
+            from: { path: '^src/shared-kernel/' },
+            to: { path: '^src/', pathNot: '^src/shared-kernel/|^src/types' }
+        },
 
         {
             name: 'infrastructure-cannot-reach-domains',
@@ -297,7 +306,7 @@ module.exports = {
 
     options: {
         /*
-         * The aliases (`@modules`, `@kernel`, `@infrastructure`, `@app`, `@types`) live in
+         * The aliases (`@modules`, `@kernel`, `@shared-kernel`, `@infrastructure`, `@app`, `@types`) live in
          * `tsconfig.json`, and without reading it every one of them is an unresolvable
          * specifier — the graph would be a set of disconnected files and every rule above
          * would pass over nothing.

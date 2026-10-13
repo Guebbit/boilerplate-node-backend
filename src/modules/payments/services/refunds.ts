@@ -35,13 +35,13 @@ import { announceInTransaction } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
-    orderService,
     toMinorUnits,
     toDecimalAmount,
     addMoney,
     subtractMoney,
     type Money
-} from '@modules/orders';
+} from '@shared-kernel/money';
+import { orderService } from '@modules/orders';
 import { paymentsAuditActions } from '../audit';
 import { PaymentProviderError, providerNamed } from '../providers';
 import { paymentRepository } from '../repository';
