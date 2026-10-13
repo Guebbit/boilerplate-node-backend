@@ -122,12 +122,7 @@ describe('productService.validateCreateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 
-    /**
-     * `openapi.yaml` declares `CreateProductRequest.price` with `minimum: 0`, and
-     * `zodProductCreateSchema` overrides the field for its i18n message. `.extend()` REPLACES a
-     * field, so the override has to restate every constraint it wants to keep — the previous one
-     * did not, and a negative price was accepted despite the contract forbidding it.
-     */
+    /** `openapi.yaml` declares `CreateProductRequest.price` with `minimum: 0`; the schema is the generated one. */
     it('rejects a negative price, as the contract minimum requires', () => {
         const errors = productService.validateCreateData({
             ...FALLBACK_TRANSLATIONS,
@@ -190,9 +185,7 @@ describe('productService.validateCreateData', () => {
     /**
      * The messages are what the API sends a client verbatim, so a wrong i18n key is a user-visible
      * bug the assertions above can't see — a missing key makes i18next return the key itself, still a
-     * non-empty string. This caught exactly that: `users/services/validation.ts`'s `validateData` asked for
-     * `signup.user-field-*` while `en.json` defined them under `login.*`, so a failed email showed
-     * "users.field-email-invalid".
+     * non-empty string.
      */
     it('returns translated messages, never raw i18n keys', () => {
         const errors = productService.validateCreateData({
