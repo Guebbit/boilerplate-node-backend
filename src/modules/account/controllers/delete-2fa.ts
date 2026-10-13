@@ -13,6 +13,7 @@ import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
 import { t } from '@infrastructure/i18n';
 import { callerContextOf } from '@infrastructure/http/request';
+import { AMR, withProofs } from '../domain/session-proof';
 
 /**
  * DELETE /account/2fa — drops every armed factor and the backup codes with them. Requires fresh
@@ -43,7 +44,13 @@ export const delete2fa = (
                     }
                     authTwoFactorDisableTotal.inc({ method: 'all', status: 'success' });
                     // Disabling revoked every session, this one included: keep the caller in.
-                    return remintSession(request, response, id, amr, snapshot).then(() => {
+                    return remintSession(
+                        request,
+                        response,
+                        id,
+                        withProofs(amr, AMR.otp),
+                        snapshot
+                    ).then(() => {
                         successResponse<undefined>(
                             response,
                             undefined,

@@ -13,7 +13,7 @@ import { api } from '@tests/http';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { reauthWindowSeconds } from '@kernel/config';
-import { createAccessToken, createRefreshToken } from '../../session/jwt';
+import { createAccessToken, startSession } from '../../session/jwt';
 import { settleInlineExports } from '../../services/export';
 
 /** Every queued mail, newest last — what the recipient would read. */
@@ -65,7 +65,7 @@ const sessionFor = async (amr: string[], withPassword: boolean) => {
               email: 'oauth@example.com',
               verifiedAt: new Date()
           });
-    const refreshToken = await createRefreshToken(user.id, undefined, amr);
+    const refreshToken = await startSession(user.id, amr);
     const token = await createAccessToken(refreshToken);
     return {
         user,
@@ -106,9 +106,7 @@ describe('GET /account/reauth', () => {
             username: 'nobody',
             email: 'nobody@example.com'
         });
-        const token = await createRefreshToken(user.id, undefined, ['google']).then(
-            createAccessToken
-        );
+        const token = await startSession(user.id, ['google']).then(createAccessToken);
 
         const response = await api().get('/account/reauth').set('Authorization', `Bearer ${token}`);
 

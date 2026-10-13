@@ -16,7 +16,8 @@ import { hashToken } from '@infrastructure/security/hash-token';
 import type { AuthContext } from '@types';
 import { sessionRepository } from '../repository';
 import {
-    createRefreshToken,
+    startSession,
+    continueSession,
     createAccessToken,
     rememberOfRefreshToken,
     verifyAccessToken,
@@ -25,31 +26,29 @@ import {
     type TokenData
 } from './jwt';
 import { createSessionCookie, createLoggedCookie } from './cookies';
-import { getCookieMaxAgeMilliseconds } from './config';
+import { getCookieMaxAgeMilliseconds, type RefreshTokenExpiryTime } from './config';
 import { resolveProof } from './auth-context';
 import { listSessions } from './listing';
-import type {
-    IssuedSession,
-    IssueOptions,
-    SessionRequest,
-    SessionSnapshot,
-    SessionStrategy
-} from './strategy';
+import type { IssuedSession, SessionRequest, SessionSnapshot, SessionStrategy } from './strategy';
 
 /**
  * Mint a refresh token, set its cookies, and exchange it for an access token.
  *
  * @param response - the live response to set the refresh/logged cookies on
  * @param userId - whose session this is
- * @param options - the login's tier, proof and mint kind
+ * @param amr - the proofs the session claims
+ * @param remember - the tier, absent for a browser-session login
+ * @param mint - {@link startSession} (guarded) for a login, {@link continueSession} for a re-mint
  * @returns the access token to hand back in the body
  */
 const mintSession = (
     response: Response,
     userId: string,
-    { remember, amr, mint = 'first' }: IssueOptions
+    amr: readonly string[],
+    remember: RefreshTokenExpiryTime | undefined,
+    mint: typeof startSession
 ): Promise<IssuedSession> =>
-    createRefreshToken(userId, remember, amr, mint).then((refreshToken) => {
+    mint(userId, amr, remember).then((refreshToken) => {
         const maxAgeMs = getCookieMaxAgeMilliseconds(remember);
         createSessionCookie(response, refreshToken, maxAgeMs);
         createLoggedCookie(response, maxAgeMs);
@@ -111,18 +110,19 @@ export const jwtStrategy: SessionStrategy = {
     // access token as a bearer.
     cookieAuthenticates: false,
 
-    issue: (_request, response, userId, options = {}) => mintSession(response, userId, options),
+    issue: (_request, response, userId, { amr, remember }) =>
+        mintSession(response, userId, amr, remember, startSession),
 
     snapshot: snapshotOf,
 
-    reissue: (request: SessionRequest & Pick<Request, 'get'>, response, userId, options = {}) => {
+    reissue: (request: SessionRequest & Pick<Request, 'get'>, response, userId, options) => {
         const previous = readSessionCookie(request);
         const ready = options.snapshot
             ? Promise.resolve(options.snapshot)
             : snapshotOf(request, userId);
         return ready
             .then(({ remember }) =>
-                mintSession(response, userId, { remember, amr: options.amr, mint: 'remint' })
+                mintSession(response, userId, options.amr, remember, continueSession)
             )
             .then((issued) => retireRefreshToken(previous).then(() => issued));
     },
@@ -131,12 +131,10 @@ export const jwtStrategy: SessionStrategy = {
         (snapshot ? Promise.resolve(snapshot) : snapshotOf(request, userId))
             .then(({ remember }) => {
                 const maxAgeMs = getCookieMaxAgeMilliseconds(remember);
-                return createRefreshToken(userId, remember, [...amr], 'remint').then(
-                    (refreshToken) => {
-                        createSessionCookie(response, refreshToken, maxAgeMs);
-                        createLoggedCookie(response, maxAgeMs);
-                    }
-                );
+                return continueSession(userId, amr, remember).then((refreshToken) => {
+                    createSessionCookie(response, refreshToken, maxAgeMs);
+                    createLoggedCookie(response, maxAgeMs);
+                });
             })
             .catch((error: unknown) => {
                 logger.warn({

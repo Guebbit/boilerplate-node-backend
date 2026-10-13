@@ -21,6 +21,7 @@ import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 import { isUnrestrictedCaller } from '../roles';
 import { readMfaChallengeCookie, destroyMfaChallengeCookie } from '../oauth/mfa-redirect';
+import { AMR, withProofs } from '../domain/session-proof';
 
 /**
  * POST /account/login/2fa — the answer to the `{ mfaRequired: true, challenge }` response from
@@ -61,7 +62,7 @@ export const postLoginTwoFactor = (
 
             return issueSession(request, response, userId, {
                 remember: toRememberTier(remember),
-                amr: [...amr, 'otp'],
+                amr: withProofs(amr, AMR.otp),
                 transport
             }).then((issued) =>
                 // Read fresh from the membership — the document carries no role of its own.

@@ -189,7 +189,7 @@ const refreshPath: LoginPath = {
         const jwtCookie = setCookie(login, '__Host-session')!;
 
         // Deactivated/deleted AFTER the session was minted — the account holder's next refresh
-        // must not continue it, same guard `createRefreshToken` applies at the initial mint.
+        // must not continue it, same guard `startSession` applies at the initial mint.
         const loaded = await userRepository.findByIdWithCredentials(user.id);
         Object.assign(loaded!, badState(kind));
         await loaded!.save();
@@ -259,3 +259,57 @@ describe.each([passwordPath, oauthPath])(
         );
     }
 );
+
+/** An account with a second factor armed, as `createUser` takes it. */
+const armed = (): Record<string, unknown> => ({
+    twoFactorEnabledAt: new Date().toISOString(),
+    twoFactorMethods: [{ method: 'totp', enrolledAt: new Date(), secret: 'ciphertext' }]
+});
+
+/** How each way in reaches an armed account — all must stop at the challenge. */
+const ARMED_ATTEMPTS: [name: string, attempt: () => Promise<Response>][] = [
+    [
+        'password login',
+        async () => {
+            const user = await createUser({ email: 'armed-pw@example.com', ...armed() });
+            return api()
+                .post('/account/login')
+                .send({ email: user.email, password: PLAIN_PASSWORD });
+        }
+    ],
+    [
+        'OAuth login',
+        async () => {
+            const user = await createUser({
+                email: FAKE_OAUTH_EMAIL,
+                verifiedAt: new Date(),
+                ...armed()
+            });
+            await userRepository.linkOAuthAccount(user.id, {
+                provider: 'fake',
+                providerId: FAKE_OAUTH_PROVIDER_ID,
+                connectedAt: new Date()
+            });
+            return fakeLogin();
+        }
+    ],
+    [
+        'OAuth link-by-email',
+        async () => {
+            await createUser({ email: FAKE_OAUTH_EMAIL, verifiedAt: new Date(), ...armed() });
+            return fakeLogin();
+        }
+    ]
+];
+
+describe.each(ARMED_ATTEMPTS)('%s on an account with a second factor armed', (_name, attempt) => {
+    it('answers with a challenge and never a session cookie', async () => {
+        const response = await attempt();
+
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+        expect(setCookie(response, 'isAuth')).toBeUndefined();
+        // Password answers 200 with the challenge in the body, OAuth redirects to the MFA page.
+        if (response.status === 302) expect(response.headers.location).toContain('mfa');
+        else expect(response.body.data).toHaveProperty('challenge');
+    });
+});

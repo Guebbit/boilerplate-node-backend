@@ -163,6 +163,11 @@ look like a fresh proof, which is precisely the thing the claim exists to deny.
 [2FA](./account-two-factor.md) login is `['pwd', 'otp']`, an [OAuth](./account-oauth.md) callback is
 `['google']`, and a future WebAuthn passkey is `['hwk']` without a schema change.
 
+No mint defaults its `amr`: `issue` and `reissue` take it as a required option, and the JWT layer splits
+into `startSession` (a first session, guarded) and `continueSession` (a re-mint, not). A re-mint claims
+what the call proved: a verified code adds `otp` to what the caller held, a password change claims
+`['pwd']` alone.
+
 ::: warning Both are optional, and absent means infinitely old
 A token signed before these claims existed carries neither. Every reader treats a missing
 `auth_time` as `0` rather than trusting it, so a pre-existing session is asked to re-authenticate at
@@ -331,7 +336,7 @@ it.
 ### The mint guard {#the-mint-guard}
 
 "No session without the second factor" is enforced where a session is minted, not only where a
-login branches. Both modes call `assertSecondFactor` (`mint-guard.ts`) from their `issue`, which refuses a **first** session for an account whose
+login branches. Both modes call `assertSecondFactor` (`mint-guard.ts`) from their `issue`, never from a re-mint. The rule itself is the pure `firstSessionRefused` in `domain/session-proof.ts`, which also owns the `AMR` values and `withProofs`. The guard refuses a **first** session for an account whose
 `twoFactorEnabledAt` is set unless `amr` carries `otp`, with `SecondFactorRequiredError`:
 
 ```mermaid

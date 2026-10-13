@@ -16,6 +16,7 @@ import { reissueSession, sessionSnapshotOf } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
+import { AMR } from '../domain/session-proof';
 
 /**
  * POST /account/password — changes the password by proving the current one (no email
@@ -67,7 +68,7 @@ export const postPasswordChange = (
              * A 500 here would tell them the opposite of what happened, so a failed re-mint
              * degrades to "no new token" rather than "the change failed".
              */
-            return reissueSession(request, response, id, { snapshot })
+            return reissueSession(request, response, id, { amr: [AMR.password], snapshot })
                 .then((issued) => {
                     authPasswordChangeTotal.inc({ status: 'success' });
                     successResponse<AuthTokens>(

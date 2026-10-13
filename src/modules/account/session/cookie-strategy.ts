@@ -59,7 +59,7 @@ type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt' | 
  * @param inherited - when this REPLACES a session, the identity, device and expiry it keeps
  * @returns the plaintext id (the only moment it exists here) and the row's expiry
  */
-const startSession = (
+const storeSession = (
     userId: string,
     proof: { amr: readonly string[] },
     remember: RefreshTokenExpiryTime | undefined,
@@ -93,7 +93,7 @@ const startSession = (
  * browser-session cookie, whose server-side limit is still the `short` tier.
  *
  * @param response - the live response
- * @param started - the id and expiry {@link startSession} returned
+ * @param started - the id and expiry {@link storeSession} returned
  * @param remember - the tier, deciding whether the cookie persists
  * @param transport - where the credential goes
  */
@@ -155,7 +155,7 @@ const replaceSession = (
     snapshot: SessionSnapshot
 ): Promise<{ id: string; expiresAt: Date }> => {
     const previous = credentialOf(request);
-    return startSession(userId, { amr }, snapshot.remember, snapshot).then((started) =>
+    return storeSession(userId, { amr }, snapshot.remember, snapshot).then((started) =>
         (previous ? sessionRepository.removeByHash(hashToken(previous)) : Promise.resolve(0))
             .then(() => started)
             .catch((error: unknown) => {
@@ -203,14 +203,14 @@ export const cookieStrategy: SessionStrategy = {
     // Every route a session reaches takes the cookie: the page holds no token to send.
     cookieAuthenticates: true,
 
-    issue: (request, response, userId, options: IssueOptions = {}) => {
-        const { remember, amr = ['pwd'], mint = 'first', transport = 'cookie' } = options;
+    issue: (request, response, userId, options: IssueOptions) => {
+        const { remember, amr, transport = 'cookie' } = options;
         return userService.findAuthenticatableById(userId).then((user) => {
             if (!user) throw new Error('User not found');
-            assertSecondFactor(user, amr, mint);
+            assertSecondFactor(user, amr);
             // The label is read once, at the sign-in, from the client that made it.
             const device = describeDevice(request.get('user-agent'));
-            return startSession(userId, { amr }, remember, { device }).then((started) =>
+            return storeSession(userId, { amr }, remember, { device }).then((started) =>
                 deliver(response, started, remember, transport)
             );
         });
@@ -218,10 +218,10 @@ export const cookieStrategy: SessionStrategy = {
 
     snapshot: snapshotOf,
 
-    reissue: (request, response, userId, options = {}) =>
+    reissue: (request, response, userId, options) =>
         (options.snapshot ? Promise.resolve(options.snapshot) : snapshotOf(request, userId)).then(
             (snapshot) =>
-                replaceSession(request, userId, options.amr ?? ['pwd'], snapshot).then((started) =>
+                replaceSession(request, userId, options.amr, snapshot).then((started) =>
                     deliver(response, started, snapshot.remember, transportOf(request))
                 )
         ),

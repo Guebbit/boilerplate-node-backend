@@ -17,11 +17,11 @@ import { createUser } from '@modules/users/tests/factories';
 import {
     verifyAccessToken,
     verifyRefreshToken,
-    createRefreshToken,
     createAccessToken,
     rotateRefreshToken,
     rememberOfRefreshToken,
-    TokenReuseError
+    TokenReuseError,
+    startSession
 } from '@modules/account/session/jwt';
 import { withEnvironmentOverrides, setEnvironment } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
@@ -121,7 +121,7 @@ describe('token types (`typ` header)', () => {
             { NODE_TOKEN_ACCESS: 'shared-secret', NODE_TOKEN_REFRESH: 'shared-secret' },
             async () => {
                 const user = await createUser();
-                const refresh = await createRefreshToken(String(user._id));
+                const refresh = await startSession(String(user._id), ['pwd']);
 
                 await expect(verifyAccessToken(refresh)).rejects.toMatchObject({
                     reason: 'malformed',
@@ -136,7 +136,7 @@ describe('token types (`typ` header)', () => {
             { NODE_TOKEN_ACCESS: 'shared-secret', NODE_TOKEN_REFRESH: 'shared-secret' },
             async () => {
                 const user = await createUser();
-                const refresh = await createRefreshToken(String(user._id));
+                const refresh = await startSession(String(user._id), ['pwd']);
                 const access = await createAccessToken(refresh);
 
                 await expect(verifyRefreshToken(access)).rejects.toThrow('Wrong token type');
@@ -155,7 +155,7 @@ describe('token types (`typ` header)', () => {
 
     it('stamps the RFC 9068 `at+jwt` and a matching `rt+jwt` on what it signs', async () => {
         const user = await createUser();
-        const refresh = await createRefreshToken(String(user._id));
+        const refresh = await startSession(String(user._id), ['pwd']);
         const access = await createAccessToken(refresh);
 
         expect(decodeProtectedHeader(refresh).typ).toBe('rt+jwt');
@@ -167,8 +167,8 @@ describe('verifyRefreshToken after a rotation', () => {
     it('refuses a rotated-away token without revoking the family, and still rotates inside the grace window', async () => {
         const user = await createUser();
         const id = String(user._id);
-        const original = await createRefreshToken(id);
-        const sibling = await createRefreshToken(id);
+        const original = await startSession(id, ['pwd']);
+        const sibling = await startSession(id, ['pwd']);
 
         const rotated = await rotateRefreshToken(original);
 
@@ -236,11 +236,11 @@ describe('verifyRefreshToken', () => {
     });
 });
 
-describe('createRefreshToken', () => {
+describe('startSession', () => {
     it('persists a verifiable refresh token as a session row', async () => {
         const user = await createUser();
 
-        const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
+        const issued = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.SHORT);
 
         // Round-trip through the verifier rather than inspecting the string: what matters is
         // that the token this function produced is one the system will later accept.
@@ -250,7 +250,7 @@ describe('createRefreshToken', () => {
     it('stores a `jwt` session row, as a digest, with an expiry and its sign-in time', async () => {
         const user = await createUser();
 
-        const issued = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
+        const issued = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.SHORT);
 
         // Stored as a digest, never the plaintext `issued`.
         const stored = await sessionRowFor(issued);
@@ -266,7 +266,7 @@ describe('createRefreshToken', () => {
     it('rejects for an unknown user id', async () => {
         // A signed token must never be issued for an identity that does not exist.
         await expect(
-            createRefreshToken('507f1f77bcf86cd799439011', RefreshTokenExpiryTime.SHORT)
+            startSession('507f1f77bcf86cd799439011', ['pwd'], RefreshTokenExpiryTime.SHORT)
         ).rejects.toThrow('User not found');
     });
 
@@ -281,15 +281,15 @@ describe('createRefreshToken', () => {
         const user = await createUser(overrides);
 
         await expect(
-            createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT)
+            startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.SHORT)
         ).rejects.toThrow('User not found');
     });
 
     it('adds a row per login rather than replacing, so multi-device login works', async () => {
         const user = await createUser();
 
-        const first = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
-        const second = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
+        const first = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.SHORT);
+        const second = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.SHORT);
 
         // Both must remain individually verifiable: signing in on a phone must not sign the
         // laptop out. A write that replaced the account's rows would break exactly this.
@@ -306,8 +306,9 @@ describe('createRefreshToken', () => {
 describe('createAccessToken', () => {
     it('exchanges a stored refresh token for a verifiable access token', async () => {
         const user = await createUser();
-        const refreshToken = await createRefreshToken(
+        const refreshToken = await startSession(
             String(user._id),
+            ['pwd'],
             RefreshTokenExpiryTime.SHORT
         );
 
@@ -321,8 +322,9 @@ describe('createAccessToken', () => {
     it('refuses to mint an access token from a revoked refresh token', async () => {
         // The entire point of the stateful refresh check: after logout, no new access tokens.
         const user = await createUser();
-        const refreshToken = await createRefreshToken(
+        const refreshToken = await startSession(
             String(user._id),
+            ['pwd'],
             RefreshTokenExpiryTime.SHORT
         );
 
@@ -338,8 +340,9 @@ describe('createAccessToken', () => {
     it('carries the identity of the refresh token, not a caller-supplied one', async () => {
         const owner = await createUser({ email: 'owner@example.com' });
         const other = await createUser({ email: 'other@example.com' });
-        const refreshToken = await createRefreshToken(
+        const refreshToken = await startSession(
             String(owner._id),
+            ['pwd'],
             RefreshTokenExpiryTime.SHORT
         );
 
@@ -357,8 +360,9 @@ describe('createAccessToken', () => {
         freezeDate();
         try {
             const user = await createUser();
-            const refreshToken = await createRefreshToken(
+            const refreshToken = await startSession(
                 String(user._id),
+                ['pwd'],
                 RefreshTokenExpiryTime.SHORT
             );
             const { auth_time: mintedAt } = await verifyRefreshToken(refreshToken);
@@ -378,8 +382,9 @@ describe('createAccessToken', () => {
 
     it('carries amr forward from the refresh token', async () => {
         const user = await createUser();
-        const refreshToken = await createRefreshToken(
+        const refreshToken = await startSession(
             String(user._id),
+            ['pwd'],
             RefreshTokenExpiryTime.SHORT
         );
 
@@ -390,13 +395,14 @@ describe('createAccessToken', () => {
 });
 
 describe('rotateRefreshToken', () => {
-    // The same guard `createRefreshToken` applies, at rotation's own reissue step —
+    // The same guard `startSession` applies, at rotation's own reissue step —
     // deactivating an account mid-session must stop its NEXT refresh from reissuing, not just
     // block a fresh login.
     it('refuses to reissue for an account deactivated since the token was minted', async () => {
         const user = await createUser();
-        const refreshToken = await createRefreshToken(
+        const refreshToken = await startSession(
             String(user._id),
+            ['pwd'],
             RefreshTokenExpiryTime.SHORT
         );
 
@@ -409,8 +415,9 @@ describe('rotateRefreshToken', () => {
 
     it('carries a ticked tier forward: persistent cookie, claim intact, remaining window', async () => {
         const user = await createUser();
-        const refreshToken = await createRefreshToken(
+        const refreshToken = await startSession(
             String(user._id),
+            ['pwd'],
             RefreshTokenExpiryTime.MEDIUM
         );
 
@@ -427,7 +434,7 @@ describe('rotateRefreshToken', () => {
 
     it('keeps a browser-session login a session login across TWO rotations', async () => {
         const user = await createUser();
-        const refreshToken = await createRefreshToken(String(user._id));
+        const refreshToken = await startSession(String(user._id), ['pwd']);
 
         const first = await rotateRefreshToken(refreshToken);
         const second = await rotateRefreshToken(first.refreshToken);
@@ -441,7 +448,7 @@ describe('rotateRefreshToken', () => {
 
     it('keeps the short-tier server limit on a rotated browser-session token', async () => {
         const user = await createUser();
-        const refreshToken = await createRefreshToken(String(user._id));
+        const refreshToken = await startSession(String(user._id), ['pwd']);
 
         const { refreshToken: rotated } = await rotateRefreshToken(refreshToken);
 
@@ -454,7 +461,7 @@ describe('rotateRefreshToken', () => {
 describe('rememberOfRefreshToken', () => {
     it('reads the ticked tier off a refresh token naming the caller', async () => {
         const user = await createUser();
-        const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.LONG);
+        const token = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.LONG);
 
         await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBe(
             RefreshTokenExpiryTime.LONG
@@ -463,14 +470,14 @@ describe('rememberOfRefreshToken', () => {
 
     it('answers undefined for a browser-session login', async () => {
         const user = await createUser();
-        const token = await createRefreshToken(String(user._id));
+        const token = await startSession(String(user._id), ['pwd']);
 
         await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBeUndefined();
     });
 
     it('answers undefined for a token naming somebody else', async () => {
         const user = await createUser();
-        const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.LONG);
+        const token = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.LONG);
 
         await expect(rememberOfRefreshToken(token, 'someone-else')).resolves.toBeUndefined();
     });
@@ -483,7 +490,7 @@ describe('rememberOfRefreshToken', () => {
     it('still reads the tier after the token has been revoked, since it never asks the database', async () => {
         // A password change revokes every session, THEN re-mints: the tier must outlive the row.
         const user = await createUser();
-        const token = await createRefreshToken(String(user._id), RefreshTokenExpiryTime.MEDIUM);
+        const token = await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.MEDIUM);
         await sessionRepository.removeAll(user.id);
 
         await expect(rememberOfRefreshToken(token, String(user._id))).resolves.toBe(
@@ -546,8 +553,8 @@ describe('rotateRefreshToken reuse detection', () => {
             const user = await createUser();
             const id = String(user._id);
 
-            const attacked = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
-            const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+            const attacked = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
+            const bystander = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
 
             // The legitimate rotation. `attacked` is superseded from here on.
             await rotateRefreshToken(attacked);
@@ -579,8 +586,8 @@ describe('rotateRefreshToken reuse detection', () => {
             const user = await createUser();
             const id = String(user._id);
 
-            const raced = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
-            const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+            const raced = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
+            const bystander = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
 
             await rotateRefreshToken(raced);
 
@@ -604,8 +611,8 @@ describe('rotateRefreshToken reuse detection', () => {
             const user = await createUser();
             const id = String(user._id);
 
-            const stale = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
-            const bystander = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+            const stale = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
+            const bystander = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
 
             await rotateRefreshToken(stale);
             pastGrace();
@@ -639,7 +646,7 @@ describe('rotateRefreshToken retention', () => {
             },
             async () => {
                 const user = await createUser();
-                const live = await createRefreshToken(user.id, RefreshTokenExpiryTime.SHORT);
+                const live = await startSession(user.id, ['pwd'], RefreshTokenExpiryTime.SHORT);
                 const before = await sessionRowFor(live);
 
                 const { refreshToken } = await rotateRefreshToken(live);
@@ -663,7 +670,7 @@ describe('rotateRefreshToken retention', () => {
     it('never moves a superseded row past its own expiry', async () => {
         await withEnvironmentOverrides({ NODE_TOKEN_REUSE_WINDOW_MS: '999999999' }, async () => {
             const user = await createUser();
-            const live = await createRefreshToken(user.id, RefreshTokenExpiryTime.SHORT);
+            const live = await startSession(user.id, ['pwd'], RefreshTokenExpiryTime.SHORT);
 
             await rotateRefreshToken(live);
 
@@ -682,8 +689,8 @@ describe('rotateRefreshToken retention', () => {
             async () => {
                 const user = await createUser();
                 const id = String(user._id);
-                const attacked = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
-                const other = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+                const attacked = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
+                const other = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
 
                 await rotateRefreshToken(attacked);
                 advanceDate(GRACE_MS * 5);
@@ -712,7 +719,7 @@ describe('the activity stamp the inactivity reaper reads', () => {
         const user = await createUser();
         expect(await activeAt(String(user._id))).toBeUndefined();
 
-        await createRefreshToken(String(user._id), RefreshTokenExpiryTime.SHORT);
+        await startSession(String(user._id), ['pwd'], RefreshTokenExpiryTime.SHORT);
 
         expect(await activeAt(String(user._id))).toEqual(new Date());
     });
@@ -720,7 +727,7 @@ describe('the activity stamp the inactivity reaper reads', () => {
     it('stamps a refresh', async () => {
         const user = await createUser();
         const id = String(user._id);
-        const first = await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        const first = await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
         // Backdated by hand: the token itself lives an hour, so the clock cannot move a day.
         await userRepository.updateMany(
             { _id: id },
@@ -736,14 +743,14 @@ describe('the activity stamp the inactivity reaper reads', () => {
         const user = await createUser();
         const id = String(user._id);
         const stamped = new Date();
-        await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
 
         advanceDate(DAY_MS - 1000);
-        await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
         expect(await activeAt(id)).toEqual(stamped);
 
         advanceDate(2000);
-        await createRefreshToken(id, RefreshTokenExpiryTime.SHORT);
+        await startSession(id, ['pwd'], RefreshTokenExpiryTime.SHORT);
         expect(await activeAt(id)).toEqual(new Date());
     });
 });

@@ -14,6 +14,7 @@ import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorEnrollTotal } from '../metrics';
+import { AMR, withProofs } from '../domain/session-proof';
 
 /**
  * POST /account/2fa/methods/{method}/confirm — arms the pending method against a code the caller
@@ -48,7 +49,13 @@ export const post2faConfirm = (
 
                     authTwoFactorEnrollTotal.inc({ method, status: 'success' });
                     // Arming a factor revoked every session, this one included: keep the caller in.
-                    return remintSession(request, response, id, amr, snapshot).then(() => {
+                    return remintSession(
+                        request,
+                        response,
+                        id,
+                        withProofs(amr, AMR.otp),
+                        snapshot
+                    ).then(() => {
                         successResponse<TwoFactorConfirmed>(
                             response,
                             result.data,

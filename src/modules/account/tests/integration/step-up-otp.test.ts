@@ -16,7 +16,7 @@ import {
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
-import { createAccessToken, createRefreshToken } from '../../session/jwt';
+import { createAccessToken, continueSession } from '../../session/jwt';
 import { plantToken, removeTokensOfKind } from '../factories';
 
 /** Every queued mail, newest last — what each recipient would read. */
@@ -47,7 +47,7 @@ beforeEach(() => {
  * its factor, which a first-session mint would rightly refuse.
  */
 const sessionWith = async (userId: string, amr: string[]) => {
-    const refreshToken = await createRefreshToken(userId, undefined, amr, 'remint');
+    const refreshToken = await continueSession(userId, amr);
     const token = await createAccessToken(refreshToken);
     return { bearer: `Bearer ${token}`, cookie: `__Host-session=${refreshToken}` };
 };

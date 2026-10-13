@@ -29,7 +29,7 @@ import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
 import { predatesSessionEpoch } from './epoch';
 import { recordActivity } from './activity';
-import { assertSecondFactor, type SessionMint } from './mint-guard';
+import { assertSecondFactor } from './mint-guard';
 
 /**
  * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
@@ -39,15 +39,15 @@ export interface TokenData {
     id: string;
     /**
      * Epoch seconds at which the user last actually proved themselves — stamped once, at login
-     * (`createRefreshToken`), then COPIED FORWARD on every access-token mint and every rotation,
+     * (`startSession`), then COPIED FORWARD on every access-token mint and every rotation,
      * never re-stamped from the clock. Required: `keyForId` already refuses any token whose `kid`
      * names no current ring member, and every token this app has ever signed under a live ring
      * member carries this claim — there is no reachable token that carries a `kid` but not this.
      */
     auth_time: number;
     /**
-     * How the `auth_time` proof was made — RFC 8176 values. `['pwd']` today; a second factor
-     * would add `'otp'`. Copied forward exactly like `auth_time`, same reasoning.
+     * How the `auth_time` proof was made — RFC 8176 values. `['pwd']` for a password login; a second
+     * factor adds `'otp'`. Copied forward exactly like `auth_time`, same reasoning.
      */
     amr: string[];
     /**
@@ -260,36 +260,30 @@ const signAccessToken = (claims: TokenData): Promise<string> =>
  * Sign a refresh-token payload with the refresh ring's current key.
  *
  * The random `jti` is what makes two refresh tokens minted in the same second different — see
- * `createRefreshToken`'s note on why that matters.
+ * `mintRefreshToken`'s note on why that matters.
  */
 const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<string> =>
     signToken(claims, getRefreshTokenRing(), 'refresh', expiresInSeconds, randomUUID());
 
 /**
- * Create a refresh token, sign it, and store its session row.
- *
- * This is the choke point of every login path: a FIRST session for an account with a second
- * factor armed is refused unless `amr` carries it, so a path that forgot to branch to the
- * challenge cannot hand out a session. See docs/modules/account-sessions.md#the-mint-guard.
+ * Sign a refresh token for an account, and store its session row. The one place a refresh row is
+ * written; {@link startSession} and {@link continueSession} differ only in the guard in front.
  *
  * @param id - user ID
- * @param remember - the ticked "remember me" tier; absent for a browser-session login, whose token
- *   still lives for the `short` tier
- * @param amr - how `auth_time` was proved — `['pwd']` unless a 2FA login supplies `['pwd', 'otp']`
- * @param mint - `'first'` (the default) for a login or signup, `'remint'` for a re-mint that
- *   replaces a session the caller already holds
+ * @param amr - how `auth_time` was proved
+ * @param remember - the ticked "remember me" tier, absent for a browser-session login
+ * @param guard - runs on the loaded account before anything is signed; throws to refuse
  * @returns the signed refresh token
- * @throws {SecondFactorRequiredError} for a first session on a 2FA account without the factor in `amr` (see `./mint-guard`)
  */
-export const createRefreshToken = (
+const mintRefreshToken = (
     id: string,
-    remember?: RefreshTokenExpiryTime,
-    amr: readonly string[] = ['pwd'],
-    mint: SessionMint = 'first'
+    amr: readonly string[],
+    remember: RefreshTokenExpiryTime | undefined,
+    guard: (user: { id: string; twoFactorEnabledAt?: Date }) => void
 ): Promise<string> =>
     userService.findAuthenticatableById(id).then((user) => {
         if (!user) throw new Error('User not found');
-        assertSecondFactor(user, amr, mint);
+        guard(user);
         /*
          * Signed through `signRefreshToken`, whose `jti` is what makes two refresh tokens
          * minted in the same second different. The payload is `{ id }` plus JWT's own
@@ -326,6 +320,44 @@ export const createRefreshToken = (
                 .then(() => token);
         });
     });
+
+/**
+ * Start an account's FIRST session on this proof: a login or a signup.
+ *
+ * This is the choke point of every login path: an account with a second factor armed is refused
+ * unless `amr` carries it, so a path that forgot to branch to the challenge cannot hand out a
+ * session. See docs/modules/account-sessions.md#the-mint-guard.
+ *
+ * @param id - user ID
+ * @param amr - how `auth_time` was proved, e.g. `[AMR.password]` or `[AMR.password, AMR.otp]`
+ * @param remember - the ticked "remember me" tier; absent for a browser-session login, whose
+ *   token still lives for the `short` tier
+ * @returns the signed refresh token
+ * @throws {SecondFactorRequiredError} for a 2FA account whose `amr` lacks the second factor
+ */
+export const startSession = (
+    id: string,
+    amr: readonly string[],
+    remember?: RefreshTokenExpiryTime
+): Promise<string> =>
+    mintRefreshToken(id, amr, remember, (user) => {
+        assertSecondFactor(user, amr);
+    });
+
+/**
+ * Continue a session the caller already holds under a new token: a re-authentication, a password
+ * change, a factor change. Not guarded: the session being replaced already passed the factor.
+ *
+ * @param id - user ID
+ * @param amr - the proofs the continued session claims; never defaulted
+ * @param remember - the tier the replaced session had
+ * @returns the signed refresh token
+ */
+export const continueSession = (
+    id: string,
+    amr: readonly string[],
+    remember?: RefreshTokenExpiryTime
+): Promise<string> => mintRefreshToken(id, amr, remember, () => undefined);
 
 /**
  * Exchange a valid refresh token for a short-lived access token.

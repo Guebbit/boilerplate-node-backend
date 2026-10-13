@@ -44,13 +44,14 @@ import {
 import { maskEmail } from '../two-factor/methods/email';
 import { sendAccountMail } from './mail';
 import { proveSecondFactor } from './two-factor-lockout';
+import { AMR } from '../domain/session-proof';
 
 /**
  * The RFC 8176 `amr` value each method earns the session. `email` is this app's own value, not a
  * registered one (RFC 8176 leaves values context-specific): `otp` means a second factor here, and
  * a mailed step-up code is not one.
  */
-const AMR_OF_METHOD: Record<ReauthMethod, string> = { password: 'pwd', email: 'email' };
+const AMR_OF_METHOD: Record<ReauthMethod, string> = { password: AMR.password, email: AMR.email };
 
 /**
  * The session's `amr` after a re-authentication: ONLY what this re-authentication proved. Proofs
@@ -63,7 +64,7 @@ const AMR_OF_METHOD: Record<ReauthMethod, string> = { password: 'pwd', email: 'e
  */
 export const amrAfterReauth = (method: ReauthMethod, otpProven: boolean): string[] => [
     AMR_OF_METHOD[method],
-    ...(otpProven ? ['otp'] : [])
+    ...(otpProven ? [AMR.otp] : [])
 ];
 
 /** What a verified re-authentication hands the controller: the `amr` its new session earns. */

@@ -359,9 +359,9 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         });
         const response = asStub<Response>({ cookie: jest.fn(), clearCookie: jest.fn() });
 
-        await expect(activeStrategy().issue(request, response, user.id)).rejects.toBeInstanceOf(
-            SecondFactorRequiredError
-        );
+        await expect(
+            activeStrategy().issue(request, response, user.id, { amr: ['pwd'] })
+        ).rejects.toBeInstanceOf(SecondFactorRequiredError);
         expect(await sessionRowsOf(user.id)).toEqual([]);
 
         await expect(

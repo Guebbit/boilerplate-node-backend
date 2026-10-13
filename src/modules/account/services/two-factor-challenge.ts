@@ -135,7 +135,10 @@ export const verifyLoginChallenge = (
         .then<ResponseSuccess<VerifiedChallenge> | ResponseReject>((found) => {
             if (!found) return generateReject(401, [t('account.two-factor.challenge-invalid')]);
             const { user, entry } = found;
-            if (!user.twoFactorEnabledAt) return generateReject(401, []);
+            // A challenge names how its first factor was proven; one without is refused rather
+            // than defaulted to a password proof it never made.
+            if (!user.twoFactorEnabledAt || !entry.amr) return generateReject(401, []);
+            const { amr } = entry;
 
             return verifyArmedFactor(user, code, context).then((verdict) =>
                 settleVerdict(verdict, user, () =>
@@ -149,7 +152,7 @@ export const verifyLoginChallenge = (
                                 ? userService.persistTwoFactorMethods(user).then((saved) =>
                                       generateSuccess({
                                           user: saved,
-                                          amr: entry.amr ?? ['pwd']
+                                          amr
                                       })
                                   )
                                 : generateReject(401, [t('account.two-factor.challenge-invalid')])

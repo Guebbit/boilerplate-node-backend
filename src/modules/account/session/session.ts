@@ -25,7 +25,7 @@ type SessionCaller = SessionRequest & Pick<Request, 'get'>;
  * @param request - the request that logged in, for the transport and the device
  * @param response - the live response to set the cookies on
  * @param userId - whose session this is
- * @param options - the "remember me" tier, how `auth_time` was proved, the mint kind and transport
+ * @param options - the "remember me" tier, how `auth_time` was proved, and transport
  * @returns the credential fields the response body carries (`AuthTokens` on the wire)
  * @throws when the session cannot be persisted or signed, or `SecondFactorRequiredError` for a
  *   first session on an account whose second factor `amr` does not carry
@@ -34,7 +34,7 @@ export const issueSession = (
     request: SessionCaller,
     response: Response,
     userId: string,
-    options?: IssueOptions
+    options: IssueOptions
 ): Promise<IssuedSession> => activeStrategy().issue(request, response, userId, options);
 
 /**
@@ -58,8 +58,8 @@ export const sessionSnapshotOf = (
  * @param request - the authenticated request, carrying the current credential
  * @param response - the live response to set the cookies on
  * @param userId - whose session this is
- * @param options - `amr`: what THIS re-proof showed (absent keeps `['pwd']`, right for a password
- *   change and wrong for a re-authentication, which passes the proofs it just made);
+ * @param options - `amr`: the proofs the replacement claims (`[AMR.password]` after a password
+ *   change, what the call just proved after a re-authentication);
  *   `snapshot`: from {@link sessionSnapshotOf}, when the change deleted the session first
  * @returns the credential fields the response body carries
  */
@@ -67,7 +67,7 @@ export const reissueSession = (
     request: SessionCaller,
     response: Response,
     userId: string,
-    options?: ReissueOptions
+    options: ReissueOptions
 ): Promise<IssuedSession> => activeStrategy().reissue(request, response, userId, options);
 
 /**
