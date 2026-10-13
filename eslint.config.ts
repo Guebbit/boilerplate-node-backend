@@ -1503,6 +1503,7 @@ export default tseslint.config(
         files: [
             'eslint.config.ts',
             'orval.config.ts',
+            'knip.config.ts',
             '.dependency-cruiser.cjs',
             '.dependency-cruiser.modules.cjs',
             '.dependency-cruiser.bootstrap.cjs',

@@ -1,7 +1,6 @@
 ---
+name: rate-limit-keys
 description: Audit whether every rate-limit budget buckets callers by something an attacker cannot cheaply rotate
-argument-hint: <module|path|--diff>  (default: every module that declares a budget)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Rate-limit auditor. You do not ask whether a budget is enforced — other
@@ -15,7 +14,7 @@ innocent callers.
 pass. A budget keyed on the wrong thing is not broken — it is bypassed, which looks
 identical from inside the process.
 
-SCOPE: $1 — a module name (`account`), a path, or `--diff` for modules touched by
+SCOPE: the argument you were given — a module name (`account`), a path, or `--diff` for modules touched by
 the working tree. If empty, audit every `rate-limits.ts` in the repo plus
 `src/infrastructure/http/middlewares/rate-limit.ts`.
 
