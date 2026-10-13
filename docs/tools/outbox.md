@@ -115,21 +115,28 @@ Rules of thumb:
 - **Nudge after commit.** Skipping it only delays delivery to the next sweep.
 - **Declare the event** on `DomainEventMap` in the module's `events.ts`, as for any domain event.
 
-## Why `payment.succeeded` is written when the marker clears
+## Why `payment.succeeded` is written in the settlement transaction
 
-`settlePayment` sets `pendingEffects: ['commit']` when it writes `succeeded`. Announcing at that
-write would announce an order that is then found lost and refunded. So the announcement is written
-in the transaction that **clears the marker** — once the stock commit landed.
+`settlePayment` writes the payment's `succeeded`, the order's `paid`, the hold's commit and the
+`payment.succeeded` row in ONE transaction. An order found lost writes `succeeded` and an open refund
+record instead, and announces nothing. The row therefore exists exactly when the money is kept.
 
-| Where the settlement dies                | What happens                                                              |
-| ---------------------------------------- | ------------------------------------------------------------------------- |
-| Before the `succeeded` write             | Nothing charged; provider redelivers                                      |
-| After it, before the commit or the clear | Marker stays. `sweep:payment-effects` commits, then writes the outbox row |
-| After the clear transaction              | Row exists. The relay publishes it                                        |
-| Order cancelled in between               | Sweep marks a refund owed and announces nothing                           |
+```mermaid
+flowchart TD
+    W["provider says succeeded"] --> T["one transaction"]
+    T --> A["payment succeeded<br/>(the gate: one caller wins)"]
+    A --> B{"order still payable?"}
+    B -->|yes| C["order paid + hold committed<br/>+ payment.succeeded row"]
+    B -->|no| D["open refund record,<br/>no announcement"]
+    C --> E["after commit: nudge relay, mail"]
+    D --> F["after commit: provider refund;<br/>retryOpenRefunds if it fails"]
+```
 
-`clearPendingEffectsOnce` reports whether **this** call removed the marker, so a settlement racing
-the sweep enqueues once.
+| Where the settlement dies             | What happens                                                          |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| Before the transaction commits        | Nothing changed. The provider redelivers, or the reconcile sweep asks |
+| After it, before the relay publishes  | Row exists. The relay publishes it                                    |
+| Order cancelled before the money came | Refund record committed with `succeeded`; the sweep finishes it       |
 
 ## Writing a consumer
 

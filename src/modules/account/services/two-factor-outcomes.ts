@@ -6,7 +6,7 @@
 
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { userService, MFA_LOCK_MS, type UserDocument } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import {
     generateReject,
     type ResponseSuccess,
@@ -26,7 +26,11 @@ import {
 import { sendAccountMail } from './mail';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
-import { DELIVERED_CODE_RESEND_SECONDS, type TwoFactorMethodHandler } from '../two-factor';
+import {
+    DELIVERED_CODE_RESEND_SECONDS,
+    MFA_LOCK_MS,
+    type TwoFactorMethodHandler
+} from '../two-factor';
 
 /**
  * The error code a client branches on to render a resend countdown rather than a generic 429.

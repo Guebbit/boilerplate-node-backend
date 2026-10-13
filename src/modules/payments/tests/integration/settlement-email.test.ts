@@ -1,8 +1,8 @@
 /**
  * @module
  * A payment settling to `succeeded` mails the buyer: the placed-order confirmation only says the
- * order was received, never that it was paid. This pins that `settlePayment`'s happy path sends
- * {@link paymentSucceededEmail}, and only on the write that
+ * order was received, never that it was paid. This pins that the `payment.succeeded` listener sends
+ * {@link paymentReceivedEmail}, and only on the write that
  * actually commits the stock (never on a decline, or a retry of an already-settled payment).
  */
 
@@ -13,6 +13,9 @@ import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { createIntent, confirmPayment } from '@modules/payments/services';
 import { FAKE_DECLINE_METHOD } from '@scenarios/support/doubles/payments/fake';
+import paymentsModule from '@modules/payments/module';
+import { resetDomainEvents } from '@kernel/events';
+import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext } from '@tests/callers';
 
 jest.mock('@infrastructure/adapters/mailer', () => ({
@@ -23,8 +26,14 @@ const mockEnqueueEmail = enqueueEmail as jest.MockedFunction<typeof enqueueEmail
 
 setupTestDb();
 
-beforeEach(() => mockEnqueueEmail.mockClear());
-afterEach(() => jest.restoreAllMocks());
+beforeEach(() => {
+    mockEnqueueEmail.mockClear();
+    registerCheckoutModules([paymentsModule]);
+});
+afterEach(() => {
+    resetDomainEvents();
+    jest.restoreAllMocks();
+});
 
 /** The reference the demo's own panel sends — an opaque handle, never a card number. */
 const GOOD_METHOD = 'pm_card_visa';
@@ -54,7 +63,7 @@ const orderFor = async () => {
 
 /** Whether a payment-succeeded mail has been enqueued so far. */
 const paidMailSent = (): boolean =>
-    mockEnqueueEmail.mock.calls.some(([, template]) => template === 'orders.order-paid');
+    mockEnqueueEmail.mock.calls.some(([, template]) => template === 'payments.payment-received');
 
 describe('payment succeeded — the customer gets an email', () => {
     it('mails the buyer once the payment settles and the stock actually commits', async () => {
@@ -70,7 +79,7 @@ describe('payment succeeded — the customer gets an email', () => {
         await waitUntil(paidMailSent);
 
         const [envelope] = mockEnqueueEmail.mock.calls.find(
-            ([, template]) => template === 'orders.order-paid'
+            ([, template]) => template === 'payments.payment-received'
         )!;
         expect(envelope.to).toBe(order.email);
     });
@@ -105,7 +114,7 @@ describe('payment succeeded — the customer gets an email', () => {
         await new Promise((resolve) => setTimeout(resolve, 100));
 
         const paidCalls = mockEnqueueEmail.mock.calls.filter(
-            ([, template]) => template === 'orders.order-paid'
+            ([, template]) => template === 'payments.payment-received'
         );
         expect(paidCalls).toHaveLength(1);
     });

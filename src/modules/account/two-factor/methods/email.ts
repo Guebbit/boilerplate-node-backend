@@ -17,11 +17,11 @@ import { sendAccountMail } from '../../services/mail';
 import type { TwoFactorMethodHandler } from '../registry';
 import {
     armDeliveredCode,
-    consumeDeliveredCode,
     generateDeliveredCode,
     DELIVERED_CODE_RESEND_SECONDS,
     DELIVERED_CODE_TTL_MS
 } from '../delivered-codes';
+import { verifyDeliveredCode } from '../delivered-code-verify';
 
 /**
  * `ada.lovelace@example.com` → `a***e@example.com`. Enough for the owner to recognise the
@@ -98,5 +98,6 @@ export const emailMethod: TwoFactorMethodHandler = {
 
     send: deliver,
 
-    verify: (_user, entry, code) => Promise.resolve(consumeDeliveredCode(entry, code))
+    verify: (user, entry, code) =>
+        verifyDeliveredCode(user, { kind: 'method', method: entry.method }, entry, code)
 };

@@ -82,6 +82,12 @@ longer exists, and keeping it would refuse the first valid code.
 The fields live on [`users`](./users.md)' `User`, because that is the account record. This module
 is the only writer.
 
+Why they stay there rather than in a collection of their own: they are **bounded** (a handful of
+entries and ten digests), **read at every login** next to the password hash, and **die with the
+user**, so a second collection would add a join and a deletion step for nothing. The races that
+motivated asking were not about storage, so they are fixed in the write below. Revisit when a
+factor can be many per account, such as passkeys.
+
 | Field                     | Holds                                            | On the contract?                          |
 | ------------------------- | ------------------------------------------------ | ----------------------------------------- |
 | `twoFactorMethods[]`      | one `TwoFactorMethodRecord` per method           | no — `select: false` credential material  |
@@ -119,13 +125,36 @@ flowchart LR
   over.
 - **Removal is named.** The loaded copy no longer holds a removed entry, so the caller says which
   method (or `'all'`) to drop. An entry two requests both started is kept once.
-- **One write.** The armed flag, backup codes and session epoch ride in the same update, so a
-  factor change and its session revocation still land together.
+- **One write.** The backup codes (when set outright) and the session epoch ride in the same
+  update, so a factor change and its session revocation still land together.
+- **The armed flag is derived inside the write.** The copy never sends `twoFactorEnabledAt`: a
+  final pipeline stage sets it (keeping its date) when any stored entry is armed, and removes it
+  otherwise. Two removals, or a restart beside a confirm, can no longer leave the flag disagreeing
+  with the factors.
+- **The first backup-code set is minted inside the write too.** `confirm` sends a candidate set;
+  it is stored only if the account holds none by then, and the response shows the codes only when
+  the stored salt is the request's own. Turning 2FA off discards the set in the same stage, only
+  when no entry is armed.
+- **A backup code is spent by its own conditional write.** `spendBackupCode` pulls the one digest
+  while it is still stored, so of two requests carrying the same code exactly one takes it, and a
+  list regenerated in between (other digests) is never resurrected. The loaded copy is mirrored
+  and left unmodified, so the diff above never sends the list back.
 - **Not an edit.** The update runs with `timestamps: false`: it moves neither `updatedAt` nor the
   `ETag` an admin editor holds, like the other credential bookkeeping writes.
 
-A delivered code's `codeAttempts` is still read-then-write; what bounds guessing is the
-per-account reservation above, not that counter.
+A mailed code is checked by a pure function (`checkDeliveredCode`: none, expired, match, miss) and
+paid for by a conditional write, never a read-modify-write on the loaded copy:
+
+- **Spend.** `spendDeliveredCode` unsets the code only while the SAME digest is still stored,
+  unexpired and under its attempt ceiling. Of two requests carrying one code, one matches.
+- **Miss.** `recordDeliveredMiss` `$inc`s the counter, then burns the code if the STORED counter
+  reached the ceiling. Parallel wrong guesses are each counted; a right code arriving after the
+  ceiling finds the spend filter closed.
+- **Step-up code.** `reauthCode` rides the same two doors (slot `reauth`), and its arming is a
+  `timestamps: false` write, so sending a code is no edit of the account and moves no `ETag`.
+
+The per-account reservation above still bounds guessing across codes; these writes make the
+per-code ceiling real.
 
 ## The endpoint surface, and what guards each one
 

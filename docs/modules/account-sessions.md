@@ -200,7 +200,8 @@ flowchart TD
   refuses it, so the route cannot mail unrequested codes to an account with a better proof.
 - **Storage.** The code's HMAC sits on the user as `reauthCode`, separate from `twoFactorMethods`
   because it is not a factor: never armed, never challenges a login. Lifetime, cooldown and the
-  five-guess ceiling are `two-factor/delivered-codes.ts`'s, shared.
+  five-guess ceiling are `two-factor/delivered-codes.ts`'s, shared; spending and counting are
+  conditional writes ([concurrent writes](./account-two-factor.md#concurrent-writes)).
 - **Budget.** The send spends the same per-account hourly budget as
   `POST /account/2fa/methods/{method}/send`, since both fill the same mailbox.
 - **`amr`.** The re-minted session claims ONLY what that call proved: `pwd` or the new `email`, plus

@@ -14,4 +14,6 @@ export * from './domain';
 
 export * from './events';
 
+export * from './emails';
+
 export type * from './model';

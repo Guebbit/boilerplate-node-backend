@@ -8,12 +8,7 @@
  * The invoice document itself is `invoicing`'s own — see
  * `src/modules/invoicing/tests/unit/emails.test.ts`.
  */
-import {
-    orderConfirmEmail,
-    orderCancelledEmail,
-    refundIssuedEmail,
-    type OrderLines
-} from '@modules/orders/emails';
+import { orderConfirmEmail, orderCancelledEmail, type OrderLines } from '@modules/orders/emails';
 import { orderTotal } from '@modules/orders/domain';
 import { orderFrontendLink } from '@modules/orders/config';
 
@@ -210,40 +205,5 @@ describe('orderCancelledEmail', () => {
         for (const mail of [english, italian])
             for (const value of [mail.subject, mail.data.body, mail.data.refundNote])
                 expect(value).not.toMatch(/^orders\./);
-    });
-});
-
-describe('refundIssuedEmail', () => {
-    it('names the refunded template, the order and the amount that went back', () => {
-        const mail = refundIssuedEmail(
-            'en',
-            NAME,
-            '2026-000041',
-            { amount: 12.5, currency: 'EUR' },
-            true
-        );
-
-        expect(mail.template).toBe('orders.order-refunded');
-        expect(mail.data.body).toContain('2026-000041');
-        expect(mail.data.body).toContain('12.50');
-    });
-
-    it('tells a full refund from a partial one', () => {
-        const refund = { amount: 5, currency: 'EUR' };
-
-        const full = refundIssuedEmail('en', NAME, ORDER_ID, refund, true).data.detail;
-        const partial = refundIssuedEmail('en', NAME, ORDER_ID, refund, false).data.detail;
-
-        expect(full).not.toBe(partial);
-        expect(full).toContain('everything');
-        expect(partial).toContain('part');
-    });
-
-    it('translates by the recipient locale', () => {
-        const refund = { amount: 5, currency: 'EUR' };
-
-        expect(refundIssuedEmail('it', NAME, ORDER_ID, refund, true).subject).not.toBe(
-            refundIssuedEmail('en', NAME, ORDER_ID, refund, true).subject
-        );
     });
 });

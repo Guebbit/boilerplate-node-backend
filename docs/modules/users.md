@@ -1,7 +1,7 @@
 # users
 
 ::: tip At a glance
-**Owns** — the user record: email, password hash, role name, the second-factor and linked-provider material, and the session epoch. Sessions and one-time tokens are [`account`](./account.md)'s own collections.
+**Owns** — the user record: email, password hash, role name, the second-factor and linked-provider material, and the session epoch. Credentials stay on the record on purpose: bounded, read at login, dying with the user ([why](./account-two-factor.md#what-the-user-document-carries)). Sessions and one-time tokens are [`account`](./account.md)'s own collections.
 **Depends on** — nothing. Authentication is next door in [`account`](./account.md).
 **Breaks if you change** — the credential fields (password, second factors, linked providers, the epoch). `account` reads and writes them, and it is the repo's only shared-kernel edge.
 :::

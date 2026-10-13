@@ -8,6 +8,7 @@ import { logger } from '@infrastructure/adapters/logger';
 import { StockMovementReason } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { withTransaction } from '@infrastructure/runtime/database';
+import { nudgeOutbox } from '@kernel/outbox';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import type { ReservationStatus } from '../model';
 import { reservationRepository } from '../repository';
@@ -16,7 +17,7 @@ import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
 import { applyToEveryLine } from './transition';
 import { refreshStockCacheForProducts } from './returns';
-import { allocateForOrder } from './allocate';
+import { allocateWithin } from './allocate';
 
 /**
  * Claim a hold and move its counters as ONE unit: both land, or neither does.
@@ -89,6 +90,39 @@ const raiseOrphanAlarm = (
 };
 
 /**
+ * The body of {@link commitForOrder}, in the caller's transaction: claim the hold, then serve any
+ * preorder lines the claim just made eligible.
+ *
+ * @param orderId - the order that was paid for
+ * @param session - the payment's transaction
+ * @returns whether the claim landed, and how many preorder allocations it triggered
+ */
+const commitWithin = async (
+    orderId: string,
+    session: ClientSession
+): Promise<{ committed: boolean; allocated: number }> => {
+    const hold = await reservationRepository.claimStatus(orderId, 'held', 'committed', session);
+    if (hold) {
+        // Paid preorder units wait for stock; stock that already arrived serves them now.
+        const preorderProducts = hold.items
+            .filter((item) => item.kind === 'preorder')
+            .map((item) => String(item.productId));
+        const allocations =
+            preorderProducts.length > 0 ? await allocateWithin(preorderProducts, session) : [];
+        return { committed: true, allocated: allocations.length };
+    }
+
+    // The claim missed. Read what the reservation actually is, to tell a benign replay from the
+    // states meaning the order is paid with nothing held.
+    const existing = await reservationRepository.findByOrderId(orderId);
+    if (existing?.status === 'committed' || existing?.status === 'shipped')
+        return { committed: false, allocated: 0 };
+
+    raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'commit');
+    return { committed: false, allocated: 0 };
+};
+
+/**
  * Settle an order's hold at payment: `held → committed`. No counter moves — the units stay on
  * the shelf, still spoken for, until {@link shipForOrder}. No ledger row: the ledger has one row
  * per counter change, and the payment's date is the hold's `committedAt`, also the preorder
@@ -103,22 +137,21 @@ const raiseOrphanAlarm = (
  * `docs/modules/inventory-reservations.md` — rather than swallowed like the replay is.
  *
  * @param orderId - the order that was paid for
+ * @param session - the payment's transaction. The commit then lands with the order's `paid` move
+ *   and the caller owes {@link refreshStockCacheForOrder} and a `nudgeOutbox` once it has
+ *   committed; absent, this opens its own and does both
  * @returns whether this call was the one that committed
  */
-export const commitForOrder = async (orderId: string): Promise<boolean> => {
-    if (await reservationRepository.claimStatus(orderId, 'held', 'committed')) {
-        // Paid preorder units wait for stock; stock that already arrived serves them now.
-        await allocateForOrder(orderId);
-        return true;
-    }
+export const commitForOrder = (orderId: string, session?: ClientSession): Promise<boolean> => {
+    if (session) return commitWithin(orderId, session).then(({ committed }) => committed);
 
-    // The claim missed. Read what the reservation actually is, to tell a benign replay from the
-    // states meaning the order is paid with nothing held.
-    const existing = await reservationRepository.findByOrderId(orderId);
-    if (existing?.status === 'committed' || existing?.status === 'shipped') return false;
-
-    raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'commit');
-    return false;
+    return withTransaction((active) => commitWithin(orderId, active)).then(
+        ({ committed, allocated }) => {
+            if (allocated === 0) return committed;
+            nudgeOutbox();
+            return refreshStockCacheForOrder(orderId).then(() => committed);
+        }
+    );
 };
 
 /**

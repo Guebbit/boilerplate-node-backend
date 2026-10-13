@@ -158,6 +158,12 @@ export interface DeliveredCodeState {
 }
 
 /**
+ * Where a delivered code lives on the account: the step-up code, or one 2FA method's entry.
+ * The users door addresses the right fields from this, in one conditional write.
+ */
+export type DeliveredCodeSlot = { kind: 'reauth' } | { kind: 'method'; method: string };
+
+/**
  * One second factor on an account — armed or still pending confirmation.
  *
  * One shape for every method rather than a per-method collection: `account/two-factor/` decides

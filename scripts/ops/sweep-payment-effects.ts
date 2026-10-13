@@ -1,24 +1,20 @@
 #!/usr/bin/env tsx
 /**
  * @module
- * Retry the stock commit or refund a settlement started but never finished — `npm run
- * sweep:payment-effects`.
+ * Finish what a settlement left owing — `npm run sweep:payment-effects`.
  *
- * `settlePayment` sets `pendingEffects: ['commit']` in the same write that moves a payment to
- * `succeeded`, then commits the held stock (or, if the order has moved on, marks the refund owed
- * instead) and clears the marker. A crash between those steps leaves the marker standing with
- * nothing to redeliver it — unlike a webhook, nobody retries a settlement that already answered
- * its caller. This sweep is the only thing that ever will.
+ * Settlement is one transaction (payment, order, hold, outbox rows), so nothing is left half-done
+ * by a crash; what can still be owed is the provider's side: a refund the provider has not
+ * answered, and a payment whose webhook never arrived.
  *
- * It also retries every refund the provider refused (`payments.refunds[].status` `failed` or
+ * It retries every refund the provider refused (`payments.refunds[].status` `failed` or
  * `pending`), with the same idempotency key, until it lands.
  *
  * And it reconciles unsettled payments untouched for `NODE_PAYMENT_RECONCILE_MINUTES`: the
  * provider is asked, and its answer settled, for a webhook that never arrived.
  *
- * No module registration needed: unlike `sweep-order-effects.ts`, this sweep calls
- * `inventoryService.commitForOrder` and `orderService.markRefundOwed` directly rather than
- * emitting an event, so there is no listener it depends on.
+ * No module registration needed: unlike `sweep-order-effects.ts`, this sweep calls the payment
+ * service directly rather than emitting an event, so there is no listener it depends on.
  *
  * Meant to run every 5 minutes, well inside the 30-minute reservation hold — see
  * docs/reference/ops.md#scheduled-jobs.
@@ -35,10 +31,9 @@ import { startJob, stopDatabase } from '@infrastructure/runtime/database';
 import { paymentService } from '@modules/payments';
 import { runScript } from '../run-script';
 
-/** Connect, retry every owed effect and open refund, reconcile stale payments, resolve nothing. */
+/** Connect, retry every open refund, reconcile stale payments, resolve nothing. */
 const main = (): Promise<void> =>
     startJob()
-        .then(() => paymentService.retryPendingEffects())
         .then(() => paymentService.retryOpenRefunds())
         .then(() => paymentService.reconcileStalePayments())
         .then(() => undefined);

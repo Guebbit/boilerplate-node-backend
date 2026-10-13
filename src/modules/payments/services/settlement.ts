@@ -7,38 +7,39 @@
 
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
     generateSuccess,
     generateReject,
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { OrderStatus } from '@types';
 import type { PaymentStatus, AuthContext } from '@types';
 import {
     orderService,
     bankTransferHoldHours,
     isPayable,
-    mailBuyer,
-    paymentSucceededEmail,
+    paymentSettled,
     toMinorUnits
 } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
+import { withTransaction } from '@infrastructure/runtime/database';
+import type { ClientSession } from 'mongoose';
+import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { paymentsAnalyticsEvents } from '../analytics';
 import { paymentsAuditActions } from '../audit';
 import { paymentAmountMismatchTotal } from '../metrics';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
-import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
+import { paymentRepository } from '../repository';
 import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import type { PaymentDocument } from '../model';
 import { payerScope } from './scope';
-import { performRefund } from './refunds';
-import { announcePaymentSucceeded, recordDecline } from './announce';
+import { CANCELLATION_REQUEST, openRefund, performRefund } from './refunds';
+import { recordDecline } from './announce';
+import { PAYMENT_SUCCEEDED } from '../events';
 import { notPayable } from './errors';
 import { ERROR_CODES } from '@api/error-codes';
 
@@ -111,7 +112,6 @@ const refundLostPayment = async (orderId: string): Promise<PaymentDocument | nul
             // Stryker restore all
             return null;
         });
-    await paymentRepository.clearPendingEffects(orderId);
     return refunded;
 };
 
@@ -166,7 +166,6 @@ const settleMismatch = (
     const orderId = String(payment.orderId);
 
     // What ARRIVED is written over the frozen figures, so the refund returns what was collected.
-    // No `pendingEffects`: there is no stock commit owed for a payment that is not accepted.
     return paymentRepository
         .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'succeeded', {
             ...(state.cardLast4 ? { cardLast4: state.cardLast4 } : {}),
@@ -211,6 +210,132 @@ const settleMismatch = (
             const current = await paymentRepository.findByOrderId(orderId);
             return { payment: current ?? recorded, orderLost: true, transitioned: true };
         });
+};
+
+/** What the settlement transaction decided, for what must happen once it has committed. */
+type SettlementOutcome =
+    | { kind: 'replay'; payment: null }
+    | { kind: 'paid' | 'lost'; payment: PaymentDocument };
+
+/**
+ * The success branch's one atomic step: the payment's `succeeded` write, the order's `paid` move
+ * (which also commits the stock hold), their timeline rows and outbox rows — or, when the order
+ * can no longer be paid, the `succeeded` write and an open refund record for the whole amount.
+ * Everything commits together or nothing does.
+ *
+ * Database only: no provider call, no mail. The driver re-runs this callback on a transient
+ * error, so anything else would happen twice.
+ *
+ * Gate:    the PAYMENT write. `SETTLEABLE_PAYMENT_STATUSES` excludes the terminal states, so
+ *          exactly one caller sees its own write land; a webhook and a confirm racing each other
+ *          commit once. The other finds nothing to do — `replay`.
+ * Replay:  `markPaid` answering `null` on an order that is already past payment (a move that
+ *          landed some other way) still commits the hold and announces; nothing is lost.
+ * Lost:    the order was cancelled (or otherwise left `pending`) before the money arrived. The
+ *          refund record is opened here, so the money is never durable without its way back; the
+ *          provider call happens after the commit.
+ *
+ * @param payment - the payment, as frozen at the intent
+ * @param extra - what the provider reported beside the status, written with it
+ * @param paid - how the order is told it was paid: `paidBy` is `card` when the provider took the
+ *   money, `actor` the staff member who recorded it by hand
+ * @param session - the settlement's transaction
+ */
+const settleWithin = async (
+    payment: PaymentDocument,
+    extra: Partial<PaymentDocument>,
+    paid: { paidBy: 'card' | undefined; actor: string | null | undefined },
+    session: ClientSession
+): Promise<SettlementOutcome> => {
+    const orderId = String(payment.orderId);
+    const succeeded = await paymentRepository.updateStatusIfIn(
+        orderId,
+        SETTLEABLE_PAYMENT_STATUSES,
+        'succeeded',
+        extra,
+        session
+    );
+    if (!succeeded) return { kind: 'replay', payment: null };
+
+    const moved = await orderService.markPaid(
+        orderId,
+        paid.paidBy,
+        { actor: paid.actor, method: payment.method },
+        session
+    );
+    if (!moved) {
+        // The write matched nothing: either the order is already past payment, or it is gone.
+        const current = await orderService.getById(orderId);
+        if (!current || !paymentSettled(current.status)) {
+            await openRefund(succeeded, CANCELLATION_REQUEST, undefined, session);
+            return { kind: 'lost', payment: succeeded };
+        }
+        await inventoryService.commitForOrder(orderId, session);
+    }
+
+    await enqueueOutboxEvent(
+        PAYMENT_SUCCEEDED,
+        { paymentId: String(succeeded._id), orderId },
+        orderId,
+        session
+    );
+    return { kind: 'paid', payment: succeeded };
+};
+
+/**
+ * What only a committed settlement allows: wake the outbox relay, bring the catalogue's stock
+ * cache into step (a preorder may have been served), and for money that arrived too late, ask
+ * the provider to return it. A failed refund is logged and left to `retryOpenRefunds`: the open
+ * record is already durable.
+ *
+ * @param payment - the payment as the caller read it, for the answer when nothing was written
+ * @param outcome - what the transaction decided
+ */
+const afterSettlement = (
+    payment: PaymentDocument,
+    outcome: SettlementOutcome
+): Promise<Settlement> => {
+    const orderId = String(payment.orderId);
+
+    if (outcome.kind === 'replay')
+        // Whoever won already did the rest. The answer is the payment as they left it, never the
+        // pre-read this call holds: that copy still says `requires_confirmation`.
+        return paymentRepository.findByOrderId(orderId).then((current) => ({
+            payment: current ?? payment,
+            orderLost: false,
+            transitioned: false
+        }));
+
+    nudgeOutbox();
+
+    if (outcome.kind === 'lost')
+        return performRefund(orderId)
+            .catch((error: unknown) => {
+                // Stryker disable all
+                logger.error({
+                    message: `Payments: could not refund order ${orderId} after its payment landed on an order no longer payable — left for the retry sweep`,
+                    error
+                });
+                // Stryker restore all
+                return null;
+            })
+            .then((refunded) => ({
+                payment: refunded ?? outcome.payment,
+                orderLost: true,
+                transitioned: true
+            }));
+
+    return inventoryService
+        .refreshStockCacheForOrder(orderId)
+        .catch((error: unknown) => {
+            // Stryker disable all
+            logger.error({
+                message: `Payments: could not refresh the stock cache for order ${orderId} after its payment settled`,
+                error
+            });
+            // Stryker restore all
+        })
+        .then(() => ({ payment: outcome.payment, orderLost: false, transitioned: true }));
 };
 
 /**
@@ -285,95 +410,12 @@ export const settlePayment = (
     const mismatched = payment.provider === 'manual' ? [] : receiptMismatch(payment, state);
     if (mismatched.length > 0) return settleMismatch(payment, state, mismatched);
 
-    // The order's move IS the gate (module rule 2), and it is conditional, so exactly one of two
-    // racing settlements gets past it. `markPaid` is `orders`' own conditional write — this
-    // module reports the fact, it never writes the order's status itself. `markPaid` fires
-    // `order.status_changed` (fire-and-forget) the moment the write lands, which is BEFORE
-    // `commitForOrder` below runs — a subscriber reacting to the status move sees `paid` before
-    // the reservation is actually committed. Safe today: `webhooks`, the one listener, forwards
-    // only `{ orderId }`, carries no stock figure that ordering could make stale, and nothing else
-    // in this application listens. Reorder the two (commit, then report) if a future listener
-    // ever needs to read committed stock in reaction to this event.
     // A card settling the order is how it was paid, whatever checkout chose: the order page shows
     // its payment method beside "Paid, card ending …", and the two must agree.
     const paidBy = payment.method === 'card' ? 'card' : undefined;
-    return orderService
-        .markPaid(orderId, paidBy, { actor, method: payment.method })
-        .then(async () => {
-            // `pendingEffects: ['commit']` lands in the SAME write as the status move — the durable
-            // note that the stock commit below is still owed, for `effects.ts#retryPendingEffects` to
-            // find if this call dies before either branch below clears it.
-            const succeeded = await paymentRepository.updateStatusIfIn(
-                orderId,
-                SETTLEABLE_PAYMENT_STATUSES,
-                'succeeded',
-                { ...extra, pendingEffects: ['commit'] }
-            );
-
-            // Neither write moved anything: an earlier call already settled this payment (both
-            // writes are terminal-once-applied), or this delivery lost every race there was —
-            // either way, whoever won already did (or is doing) the rest, or there is nothing to
-            // do. Acting again here is exactly the double-commit / wrongful-refund this guards.
-            // The answer is the payment as the winner left it, never the pre-read this call holds:
-            // that copy still says `requires_confirmation`.
-            if (!succeeded)
-                return paymentRepository.findByOrderId(orderId).then((current) => ({
-                    payment: current ?? payment,
-                    orderLost: false,
-                    transitioned: false
-                }));
-
-            // The order's CURRENT status, read after the payment write — never what `markPaid`
-            // answered, which is a copy from before it. Between the two writes the customer may
-            // cancel the order from `paid`, and that cancel's refund found nothing `succeeded` to
-            // return yet: trusting the copy would keep the money for a cancelled order. The read
-            // also covers `markPaid` answering null — another settlement raced this order to `paid`
-            // (nothing lost), or it was already cancelled.
-            const orderNow = await orderService.getById(orderId);
-            const orderIsPaid = orderNow?.status === OrderStatus.paid;
-
-            if (!orderIsPaid) {
-                // The money moved but the order was gone (cancelled, or a racing tab won). Put it
-                // straight back — the invariant is the module docblock's rule 2.
-                const refunded = await refundLostPayment(orderId);
-                return { payment: refunded ?? succeeded, orderLost: true, transitioned: true };
-            }
-
-            /*
-             * The units finally leave — held since checkout, recoverable until now.
-             *
-             * Reached at most once per order: `succeeded` above is itself an at-most-once write
-             * (terminal once applied), and this is the only call whose `succeeded` write can ever
-             * be truthy — `markPaid`'s own race does not gate this: a redelivered event
-             * can legitimately lose it while still being the one true settlement. The result is not
-             * checked: `false` covers both a harmless replay (the hold is already `committed`) and
-             * a hold an expiry sweep beat the payment to — the customer has a paid order either
-             * way, and `inventory` tells the two apart and alarms only the second.
-             */
-            await inventoryService.commitForOrder(orderId);
-
-            // The commit landed (or was already a harmless replay) — the effect this marker tracked
-            // is done, so the marker goes and `payment.succeeded` is written to the outbox in the
-            // same transaction. If this call dies before it, the marker stays and the sweep
-            // (`./effects.ts`) finishes both; if it dies after, the relay publishes the row. The
-            // `webhooks` fan-out and every other listener run from the relay, never from here.
-            await announcePaymentSucceeded(String(succeeded._id), orderId);
-
-            // The customer's answer to "did my card go through" — `orderConfirmEmail` at checkout
-            // only ever said the order was received, never that it was paid. Fire-and-forget, same
-            // reasoning as the domain event just above: a slow mail send must not hold up this
-            // settlement's own caller.
-            void mailBuyer(orderNow, (locale, name) => {
-                const mail = paymentSucceededEmail(locale, name, orderNow, orderId);
-                void enqueueEmail(
-                    { to: orderNow.email, subject: mail.subject },
-                    mail.template,
-                    mail.data
-                );
-            });
-
-            return { payment: succeeded, orderLost: false, transitioned: true };
-        });
+    return withTransaction((session) =>
+        settleWithin(payment, extra, { paidBy, actor }, session)
+    ).then((outcome) => afterSettlement(payment, outcome));
 };
 
 /**
@@ -643,12 +685,10 @@ export const syncPayment = (
  * order, so a body that said `succeeded` after a later `declined` would otherwise un-decline a
  * payment; asking costs one provider call per accepted event.
  *
- * Claims the event id first, and stops if somebody already has it: the status writes below are
- * at-most-once by themselves, but committing inventory and emitting `ORDER_STATUS_CHANGED` are
- * not, and a provider retries a delivery for days. A settlement that then fails releases the claim
- * before the rejection leaves — the provider WILL redeliver, and that redelivery is the only thing
- * that can still pay this order. The residual: a process crash between the claim and the release
- * still strands the row, unreleased and unreachable by any future retry.
+ * No ledger of seen event ids: a redelivery re-reads the provider and settles again, and every
+ * effect is gated by a conditional write (the payment's own `succeeded` write is the gate, in one
+ * transaction with the order and the hold), so a repeat settles once. A settlement that fails
+ * rejects, the provider redelivers, and the redelivery is the retry.
  *
  * Deliberately quiet — it answers nothing to anyone, so an event this application cannot act on is
  * logged and dropped rather than raised. A provider reads any non-2xx as a failed delivery and
@@ -656,31 +696,26 @@ export const syncPayment = (
  *
  * @param event - the delivery, already verified and normalised by the provider
  */
-export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void> =>
-    claimWebhookEvent(event.id).then((claimed) => {
-        // A retry of something already applied. Silent by design: a provider retrying is normal
-        // traffic, not an incident.
-        if (!claimed) return;
+export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void> => {
+    if (!event.providerRef) {
+        // Stryker disable all
+        logger.info({
+            message: 'Payment webhook named no intent to apply.',
+            eventId: event.id
+        });
+        // Stryker restore all
+        return Promise.resolve();
+    }
 
-        if (!event.providerRef) {
-            // Stryker disable all
-            logger.info({
-                message: 'Payment webhook named no intent to apply.',
-                eventId: event.id
-            });
-            // Stryker restore all
-            return;
-        }
-
-        return applyWebhookSettlement(event.providerRef).catch((error: unknown) =>
-            // The claim is what makes a retry a no-op, so a settlement that failed has to give it
-            // back before the rejection leaves: the provider WILL redeliver, and that redelivery
-            // is the only thing that can still pay this order.
-            releaseWebhookEvent(event.id).then(() => {
-                throw error;
-            })
-        );
+    // Stryker disable all
+    logger.info({
+        message: 'Payment webhook received.',
+        eventId: event.id,
+        providerRef: event.providerRef
     });
+    // Stryker restore all
+    return applyWebhookSettlement(event.providerRef);
+};
 
 /**
  * Ask the provider what became of a payment and settle the answer — the step the webhook, the

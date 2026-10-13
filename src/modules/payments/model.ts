@@ -18,7 +18,6 @@ import {
     RefundReason,
     RefundStatus
 } from '@types';
-import { paymentWebhookEventRetentionDays } from './config';
 
 /**
  * One returned product line a refund pays back — Shopify's `refund_line_items`, reduced to what a
@@ -127,24 +126,9 @@ export interface PaymentDocument extends Document {
     amountRefunded: number;
     /** One record per refund attempt, oldest first. */
     refunds: RefundRecord[];
-    /**
-     * Effects still owed for this payment's current `succeeded` write — hidden from the API, like
-     * `providerRef`. Set in the SAME write that moves the payment to `succeeded`, so a crash
-     * before the effect actually runs (today, only `commit`: taking the held stock) leaves a
-     * durable note that it is still owed. `payments/services/effects.ts#retryPendingEffects`
-     * finds these on a schedule and finishes or drops them; `settlement.ts` clears the field once
-     * the effect has run or the order it was for is no longer payable.
-     */
-    pendingEffects?: PaymentEffect[];
     createdAt?: Date;
     updatedAt?: Date;
 }
-
-/** Every effect a payment can still owe — the schema's `enum`, and the source of {@link PaymentEffect}. */
-const PAYMENT_EFFECTS = ['commit'] as const;
-
-/** The one effect a `succeeded` write can still owe once it returns — see {@link PaymentDocument.pendingEffects}. */
-export type PaymentEffect = (typeof PAYMENT_EFFECTS)[number];
 
 /** Payment Document model type. Queries live in `./repository`, rules in `./service`. */
 export type PaymentModel = Model<PaymentDocument>;
@@ -250,10 +234,6 @@ export const paymentSchema = new Schema<PaymentDocument>(
         refunds: {
             type: [refundSchema],
             default: []
-        },
-        pendingEffects: {
-            type: [String],
-            enum: [...PAYMENT_EFFECTS]
         }
     },
     {
@@ -268,14 +248,6 @@ paymentSchema.index({ status: 1, createdAt: -1 }, { name: 'payments_status_creat
 paymentSchema.index(
     { 'refunds.status': 1, 'refunds.createdAt': -1 },
     { name: 'payments_refunds_status_createdAt' }
-);
-
-// Backs `effects.ts#retryPendingEffects`'s own scan: which payments still owe an effect, oldest
-// first. `updatedAt` in the key (not just a query filter) is what lets the sweep skip a payment
-// this same second's settlement is still in the middle of, without a second index for that alone.
-paymentSchema.index(
-    { pendingEffects: 1, updatedAt: 1 },
-    { name: 'payments_pendingEffects_updatedAt' }
 );
 
 /**
@@ -312,13 +284,13 @@ const wireRefund = (refund: Record<string, unknown>): Record<string, unknown> =>
  * repository factory for its lean reads (see `normalize` in
  * @infrastructure/persistence/create-repository).
  *
- * `providerRef` and `pendingEffects` are omitted here rather than left to each caller: both are
- * internal bookkeeping (a provider handle, a retry marker) no client operation reads, and the
- * contract declares `additionalProperties: false`, so a serializer that let either through would
- * fail the spec as well as publish it.
+ * `providerRef` is omitted here rather than left to each caller: it is internal bookkeeping (a
+ * provider handle) no client operation reads, and the contract declares
+ * `additionalProperties: false`, so a serializer that let it through would fail the spec as well
+ * as publish it.
  */
 export const applyPaymentTransform = applySerialization(paymentSchema, {
-    omit: ['providerRef', 'pendingEffects'],
+    omit: ['providerRef'],
     after: (serialized) => {
         // The embedded refunds get the same treatment a top-level document does, by hand: the lean
         // path never runs the subschema's own transform, and the `toJSON` path runs it on
@@ -334,52 +306,3 @@ export const applyPaymentTransform = applySerialization(paymentSchema, {
  * Model
  */
 export const paymentModel = model<PaymentDocument, PaymentModel>('Payment', paymentSchema);
-
-/**
- * How long a processed webhook event id is remembered, in days. Past any provider's retry window.
- * Read at import: changing `NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS` needs `npm run db:sync`.
- */
-const webhookEventRetentionDays = paymentWebhookEventRetentionDays();
-
-/**
- * One webhook delivery this application has already acted on.
- *
- * A provider retries a webhook until it gets a 2xx — for days — so the same event arrives many
- * times, and the conditional status writes in `service.ts` are only at-most-once for the STATUS.
- * Committing inventory and emitting `ORDER_STATUS_CHANGED` are not conditional on anything, so
- * without this ledger a retry re-fires them.
- */
-export interface PaymentWebhookEventDocument extends Document {
-    /** The provider's own event id — the thing that repeats across retries. */
-    eventId: string;
-    /** When it was first accepted; the TTL index reads this. */
-    receivedAt: Date;
-}
-
-/** The ledger's model type. Its one query lives in `./repository`. */
-export type PaymentWebhookEventModel = Model<PaymentWebhookEventDocument>;
-
-/** Mongoose schema for the webhook ledger — see {@link PaymentWebhookEventDocument}. */
-export const paymentWebhookEventSchema = new Schema<PaymentWebhookEventDocument>({
-    // `unique` is the whole mechanism: one insert either wins or is refused, where a read followed
-    // by a write is a race two concurrent deliveries could both pass.
-    eventId: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    receivedAt: {
-        type: Date,
-        required: true,
-        default: () => new Date(),
-        // mongod drops the row once it is older than the window, so the collection does not grow
-        // forever for a guarantee that stops mattering as soon as the retries stop.
-        expires: webhookEventRetentionDays * 24 * 60 * 60
-    }
-});
-
-/** Mongoose model for the webhook ledger — claimed and released by `./repository`. */
-export const paymentWebhookEventModel = model<
-    PaymentWebhookEventDocument,
-    PaymentWebhookEventModel
->('PaymentWebhookEvent', paymentWebhookEventSchema);

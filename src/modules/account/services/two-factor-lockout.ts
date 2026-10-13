@@ -15,7 +15,13 @@ import {
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import type { CallerContext } from '@types';
 import { constantTimeEqual } from '@infrastructure/security/constant-time';
-import { hashBackupCode, orderedEntries, type TwoFactorMethodHandler } from '../two-factor';
+import {
+    MFA_LOCK_MS,
+    MFA_MAX_FAILURES,
+    hashBackupCode,
+    orderedEntries,
+    type TwoFactorMethodHandler
+} from '../two-factor';
 import { rejectWrongCode, rejectLocked, notifyLocked } from './two-factor-outcomes';
 
 /** The account's armed factors, in the registry's own order rather than enrollment order. */
@@ -29,19 +35,18 @@ export const armedEntries = (user: UserDocument) =>
  *
  * `code` is scrypt'd once, under the account's own salt, then checked against EVERY stored digest
  * — never returning as soon as one matches — so the loop's own running time never says which
- * position (if any) matched. Which code was spent is still recorded, in the write that follows.
+ * position (if any) matched. The spend itself is one conditional pull: of two requests carrying
+ * the same code, only one takes it.
  */
-const consumeBackupCode = (user: UserDocument, code: string): boolean => {
-    if (!user.twoFactorBackupCodeSalt) return false;
+const consumeBackupCode = (user: UserDocument, code: string): Promise<boolean> => {
+    if (!user.twoFactorBackupCodeSalt) return Promise.resolve(false);
 
     const digest = hashBackupCode(code, user.twoFactorBackupCodeSalt);
-    let matchIndex = -1;
-    for (const [index, stored] of user.twoFactorBackupCodes.entries())
-        if (constantTimeEqual(stored, digest)) matchIndex = index;
-    if (matchIndex === -1) return false;
+    let matched = false;
+    for (const stored of user.twoFactorBackupCodes)
+        if (constantTimeEqual(stored, digest)) matched = true;
 
-    user.twoFactorBackupCodes.splice(matchIndex, 1);
-    return true;
+    return matched ? userService.spendBackupCode(user, digest) : Promise.resolve(false);
 };
 
 /**
@@ -94,16 +99,18 @@ export const verifyArmedFactor = (
     code: string,
     context: CallerContext
 ): Promise<FactorVerdict> =>
-    userService.reserveMfaAttempt(user.id).then(({ reserved, lockedNow }) => {
-        if (!reserved) return 'locked' as const;
-        if (lockedNow) notifyLocked(user, context);
+    userService
+        .reserveMfaAttempt(user.id, MFA_MAX_FAILURES, MFA_LOCK_MS)
+        .then(({ reserved, lockedNow }) => {
+            if (!reserved) return 'locked' as const;
+            if (lockedNow) notifyLocked(user, context);
 
-        return verifyAnyFactor(user, code).then((matched) =>
-            matched
-                ? userService.resetMfaAttempts(user.id).then(() => 'matched' as const)
-                : ('wrong' as const)
-        );
-    });
+            return verifyAnyFactor(user, code).then((matched) =>
+                matched
+                    ? userService.resetMfaAttempts(user.id).then(() => 'matched' as const)
+                    : ('wrong' as const)
+            );
+        });
 
 /**
  * Turn a {@link FactorVerdict} into the response: run `onMatch` for a right code, refuse a locked

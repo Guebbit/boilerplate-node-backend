@@ -53,34 +53,6 @@ const entryFor = (user: UserDocument, method: string): TwoFactorMethodRecord => 
 };
 
 /**
- * Re-derive the account-level flag from the entries, after any change to them.
- *
- * The flag only: backup codes are NOT touched here. `setupTwoFactorMethod` disarms a factor
- * mid-re-enrollment, and discarding the codes there would mean an abandoned "I lost my phone"
- * attempt silently invalidated the list the user wrote down — the one thing they have left.
- * Dropping them belongs to the two calls that DELIBERATELY end 2FA; see {@link discardIfDisarmed}.
- */
-const syncArmedState = (user: UserDocument): void => {
-    user.twoFactorEnabledAt = user.twoFactorMethods.some((entry) => entry.enrolledAt)
-        ? (user.twoFactorEnabledAt ?? new Date())
-        : undefined;
-};
-
-/**
- * Turning 2FA off deliberately takes the backup codes with it: they recover a second factor that
- * no longer exists, and leaving them behind would arm the next enrollment with someone's old list.
- */
-const discardIfDisarmed = (user: UserDocument): void => {
-    syncArmedState(user);
-    if (user.twoFactorEnabledAt) {
-        return;
-    }
-
-    user.twoFactorBackupCodes = [];
-    user.twoFactorBackupCodeSalt = undefined;
-};
-
-/**
  * `GET /account/2fa` — what this account has armed and what it could still add.
  *
  * @param userId - the caller
@@ -180,7 +152,9 @@ const beginSetup = (
     clearDeliveredCode(entry);
 
     return handler.setup(user, entry, context).then((payload) => {
-        syncArmedState(user);
+        // The armed flag is derived by the write itself, from the entries as stored: a disarmed
+        // factor mid-re-enrollment leaves the backup codes alone, since an abandoned "I lost my
+        // phone" attempt must not invalidate the list the user wrote down.
         return userService.persistTwoFactorMethods(user).then(() => generateSuccess(payload));
     });
 };
@@ -282,26 +256,29 @@ const armMethod = (
     // re-enrollment, and after the tenth code has been spent. Either way the answer is the same:
     // an account with a second factor and no way back in is the state to avoid.
     const backupCodes = user.twoFactorBackupCodes.length === 0 ? generateBackupCodes() : undefined;
+    const salt = backupCodes ? generateBackupCodeSalt() : undefined;
 
     entry.enrolledAt = new Date();
-    if (backupCodes) {
-        const salt = generateBackupCodeSalt();
-        user.twoFactorBackupCodeSalt = salt;
-        user.twoFactorBackupCodes = hashBackupCodes(backupCodes, salt);
-    }
-    syncArmedState(user);
 
     // The epoch rides in the factor's own save: a second write failing cannot leave old sessions live.
     userService.markSessionsEnded(user);
     return userService
-        .persistTwoFactorMethods(user)
-        .then(() => dropSessions(user.id))
-        .then(() =>
-            generateSuccess({
-                method: entry.method,
-                ...(backupCodes && { backupCodes }),
-                backupCodesRemaining: user.twoFactorBackupCodes.length
-            })
+        .persistTwoFactorWrite(user, {
+            // Stored only if the account still has no code when the write lands: two first
+            // confirms mint one set between them.
+            ...(backupCodes &&
+                salt && { mintCodes: { salt, digests: hashBackupCodes(backupCodes, salt) } })
+        })
+        .then((stored) =>
+            dropSessions(user.id).then(() =>
+                generateSuccess({
+                    method: entry.method,
+                    // Shown only when the stored set is this request's own; the other confirm's
+                    // codes are the ones that work.
+                    ...(backupCodes && stored.backupCodeSalt === salt && { backupCodes }),
+                    backupCodesRemaining: stored.backupCodeCount
+                })
+            )
         );
 };
 
@@ -342,12 +319,16 @@ export const removeTwoFactorMethod = (
         },
         (user) => {
             user.twoFactorMethods.splice(enrolledIndex, 1);
-            discardIfDisarmed(user);
             userService.markSessionsEnded(user);
             return (
                 userService
                     // Named, because the copy no longer holds the entry the write has to remove.
-                    .persistTwoFactorMethods(user, [method])
+                    // Turning 2FA off with the last factor takes the backup codes with it: they
+                    // recover a factor that no longer exists.
+                    .persistTwoFactorWrite(user, {
+                        dropped: [method],
+                        discardCodesIfDisarmed: true
+                    })
                     .then(() => dropSessions(user.id))
                     .then(() => {
                         // Removing the last factor is 2FA going off: say that, not just "a method left".
@@ -389,10 +370,9 @@ export const disableTwoFactor = (
                 : generateReject(422, [t('account.two-factor.not-enabled')]),
         (user) => {
             user.twoFactorMethods = [];
-            discardIfDisarmed(user);
             userService.markSessionsEnded(user);
             return userService
-                .persistTwoFactorMethods(user, 'all')
+                .persistTwoFactorWrite(user, { dropped: 'all', discardCodesIfDisarmed: true })
                 .then(() => dropSessions(user.id))
                 .then(() => {
                     notifyChange(user, 'disabled', '', context);

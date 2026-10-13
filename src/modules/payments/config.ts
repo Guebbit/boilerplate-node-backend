@@ -110,8 +110,7 @@ export const paymentsConfig = defineConfig({
         NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
         NODE_PAYMENT_RECONCILE_MINUTES: int({ default: 15, min: 0 }),
         NODE_PAYMENT_ATTENTION_MINUTES: int({ default: 60, min: 1 }),
-        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 }),
-        NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS: int({ default: 30, min: 1 })
+        NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 })
     },
     check: (config, environment) => [
         ...(config.NODE_PAYMENT_WEBHOOK_SECRET !== undefined &&
@@ -126,11 +125,10 @@ export const paymentsConfig = defineConfig({
 });
 
 /**
- * How old a `pendingEffects` marker must be before `effects.ts#retryPendingEffects` will act on
- * it. A settlement still between setting the marker and clearing it must never be raced by the
- * sweep that exists only for the crash case — this is that buffer. Read per call, like
- * `@modules/inventory`'s own config, so a change applies to the next sweep tick and a test can
- * vary it per case. Same naming pattern as `orders`' own `orderEffectRetryMinutes`.
+ * How long an open refund sits untouched before `effects.ts#retryOpenRefunds` finishes it. A refund
+ * whose request is still in flight must never be raced by the sweep that exists only for the
+ * crash case — this is that buffer. Read per call, like `@modules/inventory`'s own config, so a
+ * change applies to the next sweep tick and a test can vary it per case.
  * @returns the grace window in minutes
  */
 export const paymentEffectRetryMinutes = (): number =>
@@ -161,14 +159,6 @@ export const paymentAttentionMinutes = (): number =>
  */
 export const abandonedPaymentRetentionDays = (): number =>
     paymentsConfig().NODE_PAYMENT_ABANDONED_RETENTION_DAYS;
-
-/**
- * Days a processed webhook event id is remembered by the dedupe ledger's TTL index. Must outlast
- * any provider's retry window; read once at import, since a TTL index is built once at startup.
- * @returns the retention, in days
- */
-export const paymentWebhookEventRetentionDays = (): number =>
-    paymentsConfig().NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS;
 
 /**
  * The provider's signing secrets, empty when unset: the first signs, any of them verifies.

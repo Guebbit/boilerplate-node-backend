@@ -115,8 +115,8 @@ const refundAttention = (row: RefundRow, kind: PaymentAttentionKind): PaymentAtt
 
 /**
  * Every problem still recorded on a document, oldest first: refunds open past the threshold,
- * refunds owed by hand, payments owing their stock commit, orders owing their refund. A fixed
- * problem has cleared its marker, so it is not here.
+ * refunds owed by hand, orders owing their refund. A fixed problem has cleared its marker, so it
+ * is not here.
  */
 export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
     const cutoff = new Date(Date.now() - paymentAttentionMinutes() * 60_000);
@@ -127,20 +127,11 @@ export const listAttention = (): Promise<{ items: PaymentAttentionItem[] }> => {
             limit: ATTENTION_LIMIT
         }),
         paymentRepository.findOpenRefundRows({ manual: true, limit: ATTENTION_LIMIT }),
-        paymentRepository.findPendingEffectsSince(cutoff, ATTENTION_LIMIT),
         orderService.findOwedRefunds(cutoff, ATTENTION_LIMIT)
-    ]).then(([stale, manual, effects, owed]) => ({
+    ]).then(([stale, manual, owed]) => ({
         items: [
             ...stale.map((row) => refundAttention(row, PaymentAttentionKind.stale_refund)),
             ...manual.map((row) => refundAttention(row, PaymentAttentionKind.manual_refund_owed)),
-            ...effects.map(
-                (payment): PaymentAttentionItem => ({
-                    kind: PaymentAttentionKind.payment_effect_pending,
-                    orderId: String(payment.orderId),
-                    paymentId: String(payment._id),
-                    since: (payment.updatedAt ?? cutoff).toISOString()
-                })
-            ),
             ...owed.map(
                 ({ orderId, since }): PaymentAttentionItem => ({
                     kind: PaymentAttentionKind.order_refund_owed,
