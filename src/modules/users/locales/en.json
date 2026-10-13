@@ -1,13 +1,5 @@
 {
     "users": {
-        "field-email-required": "Email is required",
-        "field-email-invalid": "Not a valid email",
-        "field-username-required": "Username is required",
-        "field-username-min": "Name is too short",
-        "field-username-max": "Name is too long",
-        "field-password-required": "Password is required",
-        "field-password-min": "Password is too short",
-        "field-password-max": "Password is too long",
         "not-found": "The requested user was not found.",
         "own-role-change": "Nobody can change their own role.",
         "hard-deleted": "User was permanently deleted.",

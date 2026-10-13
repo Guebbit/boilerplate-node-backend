@@ -7,8 +7,7 @@
  */
 import { Types } from 'mongoose';
 import { makeUser, PLAIN_PASSWORD } from '@modules/users/factories';
-import { zodUserSchema } from '../../model';
-import { signupBodyPasswordMin } from '@api/schemas.zod';
+import { SignupBody, signupBodyPasswordMin } from '@api/schemas.zod';
 import { isInBundledBreachList } from '@infrastructure/security/breached-passwords';
 import {
     LEGACY_PASSWORD,
@@ -21,7 +20,7 @@ const HEX = '65dc8a99604c307b702b5ccc';
 
 /** What every password-setting endpoint enforces, reduced to a yes/no. */
 const satisfiesPolicy = (password: string): boolean =>
-    zodUserSchema.pick({ password: true }).safeParse({ password }).success;
+    SignupBody.shape.password.safeParse(password).success;
 
 describe('makeUser', () => {
     it('builds a complete, insertable user with no overrides', () => {

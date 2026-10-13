@@ -57,8 +57,8 @@ module publishes its own field alongside it purely so a staff list has something
 
 **Authentication is not here.** Signup, login, password reset, sessions and the one-time-token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
-this module's barrel is the widest in the repo: alongside `userService`, it publishes
-`zodUserSchema` straight off the model — `account` needs it to authenticate the same document. `userRepository` and the model's
+this module's barrel is the widest in the repo: alongside `userService`, it publishes its events
+and the model's types — `account` needs them to authenticate the same document. `userRepository` and the model's
 runtime value stay inside even so: every read or write, `account`'s included, goes through
 `userService`, never the collection directly.
 

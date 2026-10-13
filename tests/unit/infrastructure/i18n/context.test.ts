@@ -23,7 +23,7 @@ import itUsers from '@modules/users/locales/it.json';
 describe('the ambient t', () => {
     it('resolves against the scope’s locale inside a scope', () => {
         runWithLocale('it', () => {
-            expect(t('users.field-email-invalid')).toBe(itUsers.users['field-email-invalid']);
+            expect(t('users.not-found')).toBe(itUsers.users['not-found']);
             expect(getCurrentLocale()).toBe('it');
             expect(getLocaleContext()?.locale).toBe('it');
         });
@@ -31,7 +31,7 @@ describe('the ambient t', () => {
 
     it('falls back to the global instance outside any scope', () => {
         expect(getLocaleContext()).toBeUndefined();
-        expect(t('users.field-email-invalid')).toBe(enUsers.users['field-email-invalid']);
+        expect(t('users.not-found')).toBe(enUsers.users['not-found']);
     });
 
     it('survives awaits, so a thunk deep in a promise chain still sees the scope', async () => {
@@ -41,10 +41,10 @@ describe('the ambient t', () => {
             // boundary a timer would — which is what the store has to survive — without asking
             // the test to guess how long a loaded machine needs.
             await new Promise((resolve) => setImmediate(resolve));
-            return t('users.field-email-invalid');
+            return t('users.not-found');
         });
 
-        expect(resolved).toBe(itUsers.users['field-email-invalid']);
+        expect(resolved).toBe(itUsers.users['not-found']);
     });
 
     it('keeps two overlapping scopes apart', async () => {
@@ -54,16 +54,16 @@ describe('the ambient t', () => {
                 // on the previous test for why these are not timers.
                 await new Promise((resolve) => setImmediate(resolve));
                 await new Promise((resolve) => setImmediate(resolve));
-                return t('users.field-email-invalid');
+                return t('users.not-found');
             }),
             runWithLocale('en', async () => {
                 await new Promise((resolve) => setImmediate(resolve));
-                return t('users.field-email-invalid');
+                return t('users.not-found');
             })
         ]);
 
-        expect(italian).toBe(itUsers.users['field-email-invalid']);
-        expect(english).toBe(enUsers.users['field-email-invalid']);
+        expect(italian).toBe(itUsers.users['not-found']);
+        expect(english).toBe(enUsers.users['not-found']);
     });
 
     it('binds a context without mutating the global language', () => {

@@ -65,7 +65,7 @@ const MODULE_BARREL_PATH = /(?:^|[/\\])src[/\\]modules[/\\]([^/\\]+)[/\\]index\.
  * named pick from `./model` must never carry, matched on this repo's own naming convention
  * (`<name>Schema`, `apply<Name>Transform`, `<name>Model`; see any `model.ts`). A Zod validation
  * schema is not a runtime value and is always named `zod<Name>Schema`, so it is carved out
- * explicitly rather than matched — `users/index.ts` names `zodUserSchema` this way on purpose.
+ * explicitly rather than matched.
  */
 const isModelRuntimeValueName = (name: string): boolean =>
     (name.endsWith('Schema') && !name.toLowerCase().startsWith('zod')) ||
