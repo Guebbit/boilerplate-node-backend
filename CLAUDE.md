@@ -53,6 +53,12 @@ when you hit one, not because the doc is the guard.
   block half of this (4 in tests, where an exhaustive table walk is the clearest form). Nested
   callbacks are not counted by a rule — chain, or name the step.
 - MUST prefer pure functions and shared abstractions over duplicated inline logic.
+- MUST NOT extract a function, file or wrapper unless it hides real complexity, names a domain
+  rule, is a boundary (port, adapter, third-party call), or has ≥ 2 callers today. A three-line
+  helper with one caller stays inline.
+- MUST NOT add a parameter, option, generic or interface for a caller that does not exist yet.
+- The shapes, their names and the legitimate reasons to keep one:
+  `scripts/audit/code-shape/SKILL.md`. Run it to find them.
 
 ## Dependencies — look before you build
 

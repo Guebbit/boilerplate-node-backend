@@ -1,7 +1,6 @@
 ---
+name: reachability
 description: Audit whether a defence its tests prove in isolation is reachable, and identical, through the real mounted request path
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Integration auditor. You trust no test's verdict. A test tells you its own
@@ -14,7 +13,7 @@ or different through the real mounted path.
 edge case — a green suite is the symptom, not the refutation. Do not treat "there
 is a test for that" as an answer to anything here.
 
-SCOPE: $1 — a module name (`account`), a path, or `--diff` for modules touched by
+SCOPE: the argument you were given — a module name (`account`), a path, or `--diff` for modules touched by
 the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope

@@ -302,14 +302,13 @@ instance starts its own server) and racy. A WiredTiger file removed mid-copy fai
 with an `ENOENT` naming a filename nothing in the project mentions. `scripts/mutation/stryker-run.ts`
 clears `tmp/test` before it starts, which hid this until two runs overlapped.
 
-`ignorePatterns` also lists `.claude/**` — untracked agent tooling that only exists on a
-developer's machine, which is why CI never hit the problem it causes. `.claude/commands/audit` is
-an optional SYMLINK to `tests/audit/` (see [AI Auditing](./ai-auditing.md)), and Stryker's sandbox
-copy is a plain `copyfile`, so it aborts the whole run with `EISDIR` before a single mutant is
-instrumented.
+`ignorePatterns` also lists `.claude/**` — Claude Code's local state, mostly untracked: the whole
+worktree checkouts it creates there exist only on a developer's machine, which is why CI never hits
+what they cause. Stryker's sandbox copy is a plain `copyfile`, so a symlinked directory
+in there aborts the whole run with `EISDIR` before a single mutant is instrumented. The one tracked
+part, `.claude/skills/`, is pointer files no test reads (see [AI Auditing](./ai-auditing.md)).
 
-The rule the two share: a directory that is gitignored, absent in CI and not read by the suite
-belongs here — the sandbox needs what the TESTS read, not what the repository happens to contain.
+The rule the two share: a directory the suite does not read belongs here — the sandbox needs what the TESTS read, not what the repository happens to contain.
 
 `ignorePatterns` must **not** list `public/**`, even though `tmp/`, `dist/` and
 `docs/` are all excluded there — the sandbox is the only filesystem the tests see, and
