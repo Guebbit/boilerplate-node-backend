@@ -57,6 +57,38 @@ export interface TwoFactorWrite {
     set: Record<string, unknown>;
     /** Account-level fields removed. */
     unset: string[];
+    /** Drop the backup codes and their salt when, after this write, no entry is armed. */
+    discardCodesIfDisarmed: boolean;
+    /** A first set of backup codes, stored only if the account holds none by the time the write lands. */
+    mintCodes?: MintedBackupCodes;
+}
+
+/** A backup-code set as stored: the digests and the salt they were scrypt'd under. */
+export interface MintedBackupCodes {
+    /** The salt the digests were hashed with — also how a caller recognises its own set afterwards. */
+    salt: string;
+    /** The stored digests. */
+    digests: string[];
+}
+
+/** What the write left in the document, read back in the same atomic step. */
+export interface TwoFactorWriteOutcome {
+    /** When the account became armed, or `undefined` when it holds no armed entry. */
+    enabledAt?: Date;
+    /** The salt of the backup-code set that is stored now, if any. */
+    backupCodeSalt?: string;
+    /** How many backup codes are stored now. */
+    backupCodeCount: number;
+}
+
+/** The two options a caller adds to a plan beyond what its loaded copy changed. */
+export interface TwoFactorWriteOptions {
+    /** Methods removed from the copy, or `'all'`. */
+    dropped?: readonly string[] | 'all';
+    /** See {@link TwoFactorWrite.discardCodesIfDisarmed}. */
+    discardCodesIfDisarmed?: boolean;
+    /** See {@link TwoFactorWrite.mintCodes}. */
+    mintCodes?: MintedBackupCodes;
 }
 
 /** Whether `field` may be SET by a write — everything but `lastUsedStep`. */
@@ -123,8 +155,15 @@ const wholeEntry = (entry: TwoFactorMethodRecord): TwoFactorMethodRecord => ({
 });
 
 /**
- * The account-level paths a request changed, other than the method array: the armed flag, the
- * backup codes and their salt, the session epoch.
+ * Account-level paths the write DERIVES inside the database, from the array as it is stored then.
+ * A copy's own value for them is a guess from what it loaded, and sending it is how two requests
+ * left the flag disagreeing with the factors.
+ */
+const DERIVED_PATHS = new Set(['twoFactorEnabledAt']);
+
+/**
+ * The account-level paths a request changed, other than the method array and the derived ones: the
+ * backup codes and their salt when set outright, the session epoch.
  *
  * @param user - the loaded copy
  */
@@ -132,7 +171,10 @@ const accountChanges = (user: UserDocument): Pick<TwoFactorWrite, 'set' | 'unset
     const out: Pick<TwoFactorWrite, 'set' | 'unset'> = { set: {}, unset: [] };
     const paths = user
         .directModifiedPaths()
-        .filter((path) => path !== '_id' && !path.startsWith('twoFactorMethods'));
+        .filter(
+            (path) =>
+                path !== '_id' && !path.startsWith('twoFactorMethods') && !DERIVED_PATHS.has(path)
+        );
 
     for (const path of paths) {
         const value: unknown = user.get(path);
@@ -146,12 +188,14 @@ const accountChanges = (user: UserDocument): Pick<TwoFactorWrite, 'set' | 'unset
  * Work out what a request changed on its loaded copy of an account's 2FA state.
  *
  * @param user - the loaded copy, credentials included, as the request left it
- * @param dropped - the methods the request removed (the copy no longer holds them), or `'all'`
+ * @param options - methods the request removed (the copy no longer holds them), and the two
+ *   conditional backup-code instructions
  */
 export const planTwoFactorWrite = (
     user: UserDocument,
-    dropped: readonly string[] | 'all' = []
+    options: TwoFactorWriteOptions = {}
 ): TwoFactorWrite => {
+    const { dropped = [], discardCodesIfDisarmed = false, mintCodes } = options;
     const entries = dropped === 'all' ? [] : [...user.twoFactorMethods];
     const added = entries
         .filter((entry) => !entry._id || isNewEntry(entry))
@@ -160,7 +204,14 @@ export const planTwoFactorWrite = (
         .flatMap((entry) => (entry._id && !isNewEntry(entry) ? [changeOf(entry, entry._id)] : []))
         .filter((change) => !isEmptyChange(change));
 
-    return { changed, added, dropped, ...accountChanges(user) };
+    return {
+        changed,
+        added,
+        dropped,
+        discardCodesIfDisarmed,
+        ...(mintCodes && { mintCodes }),
+        ...accountChanges(user)
+    };
 };
 
 /**
@@ -195,7 +246,9 @@ export const isEmptyWrite = (write: TwoFactorWrite): boolean =>
     write.dropped.length === 0 &&
     write.dropped !== 'all' &&
     Object.keys(write.set).length === 0 &&
-    write.unset.length === 0;
+    write.unset.length === 0 &&
+    !write.discardCodesIfDisarmed &&
+    !write.mintCodes;
 
 /** A value the aggregation language must take literally — a string starting with `$` is not a field path. */
 const literal = (value: unknown) => ({ $literal: value });
@@ -258,6 +311,65 @@ const methodsAfter = (write: TwoFactorWrite) => {
     return { $concatArrays: [patchedKept, literal(write.added)] };
 };
 
+/** Scratch field holding "is any stored entry armed" between the two derived stages; never persisted. */
+const ARMED_FIELD = '__armed';
+
+/**
+ * The two stages that derive the armed flag and the backup-code set from the array as stored after
+ * the write. Separate from the stage that writes the array because a `$set` stage reads the
+ * document as it was before that stage.
+ *
+ * - the flag keeps its date while armed and goes when no entry is;
+ * - a minted set lands only on an armed account that holds no code yet;
+ * - a discard empties the set only when no entry is armed.
+ */
+const derivedStages = (write: TwoFactorWrite): Record<string, unknown>[] => {
+    const armed = `$${ARMED_FIELD}`;
+    const storedCodes = { $ifNull: ['$twoFactorBackupCodes', []] };
+    const mints = {
+        $and: [armed, { $eq: [{ $size: storedCodes }, 0] }]
+    };
+    const discards = { $not: [armed] };
+    const codes = write.mintCodes
+        ? { $cond: [mints, literal(write.mintCodes.digests), storedCodes] }
+        : write.discardCodesIfDisarmed
+          ? { $cond: [discards, [], storedCodes] }
+          : undefined;
+    const salt = write.mintCodes
+        ? { $cond: [mints, literal(write.mintCodes.salt), '$twoFactorBackupCodeSalt'] }
+        : write.discardCodesIfDisarmed
+          ? { $cond: [discards, '$$REMOVE', '$twoFactorBackupCodeSalt'] }
+          : undefined;
+
+    return [
+        {
+            $set: {
+                [ARMED_FIELD]: {
+                    $anyElementTrue: [
+                        {
+                            $map: {
+                                input: { $ifNull: ['$twoFactorMethods', []] },
+                                as: 'entry',
+                                in: { $ne: [{ $ifNull: ['$$entry.enrolledAt', null] }, null] }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            $set: {
+                twoFactorEnabledAt: {
+                    $cond: [armed, { $ifNull: ['$twoFactorEnabledAt', '$$NOW'] }, '$$REMOVE']
+                },
+                ...(codes && { twoFactorBackupCodes: codes }),
+                ...(salt && { twoFactorBackupCodeSalt: salt })
+            }
+        },
+        { $unset: ARMED_FIELD }
+    ];
+};
+
 /**
  * The one aggregation-pipeline update that applies a {@link TwoFactorWrite}.
  * Run it with `timestamps: false`: a factor's own bookkeeping is not an edit of the account.
@@ -275,9 +387,11 @@ export const twoFactorWritePipeline = (write: TwoFactorWrite): Record<string, un
         ...Object.fromEntries(Object.entries(write.set).map(([k, v]) => [k, literal(v)])),
         ...(touchesMethods && { twoFactorMethods: methodsAfter(write) })
     };
+    const derives = touchesMethods || write.discardCodesIfDisarmed || Boolean(write.mintCodes);
 
     return [
         ...(Object.keys(set).length > 0 ? [{ $set: set }] : []),
-        ...(write.unset.length > 0 ? [{ $unset: write.unset }] : [])
+        ...(write.unset.length > 0 ? [{ $unset: write.unset }] : []),
+        ...(derives ? derivedStages(write) : [])
     ];
 };

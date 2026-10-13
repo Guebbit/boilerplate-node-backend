@@ -15,7 +15,9 @@ import {
     isEmptyWrite,
     markEntryWritten,
     planTwoFactorWrite,
-    settleTwoFactorWrite
+    settleTwoFactorWrite,
+    type TwoFactorWriteOptions,
+    type TwoFactorWriteOutcome
 } from '../two-factor-write';
 
 /** Forget the delivered code on a loaded entry — the copy of what the spend just did in the database. */
@@ -125,12 +127,70 @@ export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> 
 };
 
 /**
+ * Take a write's outcome back onto the loaded copy and leave those paths unmodified, so the
+ * copy reads what is stored and does not resend it.
+ *
+ * @param user - the copy the write was planned from
+ * @param outcome - what the database says it now holds
+ * @param options - the write's backup-code instructions, which decide what the copy mirrors
+ */
+const adoptOutcome = (
+    user: UserDocument,
+    outcome: TwoFactorWriteOutcome,
+    options: TwoFactorWriteOptions
+): void => {
+    user.twoFactorEnabledAt = outcome.enabledAt;
+    if (options.discardCodesIfDisarmed && !outcome.enabledAt) {
+        user.twoFactorBackupCodes = [];
+        user.twoFactorBackupCodeSalt = undefined;
+    }
+    if (options.mintCodes && outcome.backupCodeSalt === options.mintCodes.salt) {
+        user.twoFactorBackupCodes = options.mintCodes.digests;
+        user.twoFactorBackupCodeSalt = options.mintCodes.salt;
+    }
+    settleTwoFactorWrite(user);
+};
+
+/**
+ * {@link persistTwoFactorMethods} with the backup-code instructions and the outcome. An empty
+ * write sends nothing and answers from the copy.
+ *
+ * @param user - the loaded copy, credentials included, as the request left it
+ * @param options - methods removed, and whether to discard or mint backup codes inside the write
+ * @returns what is stored after the write; a caller that asked to mint compares `backupCodeSalt`
+ *   with its own to learn whether its set is the one that landed
+ * @throws DocumentNotFoundError when the account is gone, which `isLostRace` recognises
+ */
+export const persistTwoFactorWrite = (
+    user: UserDocument,
+    options: TwoFactorWriteOptions = {}
+): Promise<TwoFactorWriteOutcome> => {
+    const write = planTwoFactorWrite(user, options);
+    if (isEmptyWrite(write))
+        return Promise.resolve({
+            enabledAt: user.twoFactorEnabledAt,
+            backupCodeSalt: user.twoFactorBackupCodeSalt,
+            backupCodeCount: user.twoFactorBackupCodes.length
+        });
+
+    return userRepository.writeTwoFactor(user.id, write).then((outcome) => {
+        // The error Mongoose's own `save` raises for a vanished row, so `isLostRace` treats both alike.
+        if (!outcome) throw new MongooseError.DocumentNotFoundError(user.id);
+        adoptOutcome(user, outcome, options);
+        return outcome;
+    });
+};
+
+/**
  * Persist the 2FA changes a request made on its loaded copy — `account/services/two-factor-enrollment.ts`
  * calls this as the last step of every enrollment, confirmation, removal, disable and backup-code
  * action. The mutation stays `account`'s; this writes only what changed, per method and in one
  * atomic update, so a request holding an older copy cannot undo what a concurrent one wrote (a
  * claimed TOTP step above all) nor fail it with a lost-race error. A write that changes nothing
  * sends nothing.
+ *
+ * The armed flag is not the copy's to say: the database derives it from the entries as stored,
+ * and the copy takes the result back. See {@link persistTwoFactorWrite} for what that returns.
  *
  * @param user - the loaded copy, credentials included, as the request left it
  * @param dropped - the methods the request removed from the copy, or `'all'` for a disable;
@@ -141,17 +201,7 @@ export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> 
 export const persistTwoFactorMethods = (
     user: UserDocument,
     dropped: readonly string[] | 'all' = []
-): Promise<UserDocument> => {
-    const write = planTwoFactorWrite(user, dropped);
-    if (isEmptyWrite(write)) return Promise.resolve(user);
-
-    return userRepository.writeTwoFactor(user.id, write).then((found) => {
-        // The error Mongoose's own `save` raises for a vanished row, so `isLostRace` treats both alike.
-        if (!found) throw new MongooseError.DocumentNotFoundError(user.id);
-        settleTwoFactorWrite(user);
-        return user;
-    });
-};
+): Promise<UserDocument> => persistTwoFactorWrite(user, { dropped }).then(() => user);
 
 /**
  * Write the step-up code `account/services/reauth.ts` just armed on the loaded document. The

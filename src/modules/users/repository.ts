@@ -12,7 +12,11 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { AUTHENTICATABLE_FILTER } from './authenticatable';
-import { twoFactorWritePipeline, type TwoFactorWrite } from './two-factor-write';
+import {
+    twoFactorWritePipeline,
+    type TwoFactorWrite,
+    type TwoFactorWriteOutcome
+} from './two-factor-write';
 import { userModel, applyUserTransform } from './model';
 import type {
     UserDocument,
@@ -139,7 +143,10 @@ export const userRepository: Repository<UserDocument, UserWire> & {
         maxAttempts: number
     ) => Promise<void>;
     armReauthCode: (id: string, state: DeliveredCodeState) => Promise<boolean>;
-    writeTwoFactor: (id: string, write: TwoFactorWrite) => Promise<boolean>;
+    writeTwoFactor: (
+        id: string,
+        write: TwoFactorWrite
+    ) => Promise<TwoFactorWriteOutcome | undefined>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
@@ -544,18 +551,40 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      *
      * @param id - the account
      * @param write - what the request changed, from `planTwoFactorWrite`
-     * @returns whether the account still existed to take the write
+     * @returns what the write left in the document (flag, stored code set), or `undefined` when
+     *   the account is gone
      */
     writeTwoFactor: (id: string, write: TwoFactorWrite) =>
         userModel
             // `updatePipeline: true` is Mongoose's opt-in to an aggregation-pipeline update:
             // https://mongoosejs.com/docs/api/model.html#Model.updateOne()
-            .updateOne({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
+            // `returnDocument: 'after'` gives the document as written; `projection` keeps it to the
+            // three derived fields, so the caller learns the outcome without a second read.
+            .findOneAndUpdate({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
                 timestamps: false,
-                updatePipeline: true
+                updatePipeline: true,
+                returnDocument: 'after',
+                projection: {
+                    twoFactorEnabledAt: 1,
+                    twoFactorBackupCodeSalt: 1,
+                    twoFactorBackupCodes: 1
+                }
             })
+            .lean<{
+                twoFactorEnabledAt?: Date;
+                twoFactorBackupCodeSalt?: string;
+                twoFactorBackupCodes?: string[];
+            } | null>()
             .exec()
-            .then(({ matchedCount }) => matchedCount > 0),
+            .then((stored) =>
+                stored
+                    ? {
+                          enabledAt: stored.twoFactorEnabledAt,
+                          backupCodeSalt: stored.twoFactorBackupCodeSalt,
+                          backupCodeCount: stored.twoFactorBackupCodes?.length ?? 0
+                      }
+                    : undefined
+            ),
 
     /**
      * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in

@@ -82,6 +82,12 @@ longer exists, and keeping it would refuse the first valid code.
 The fields live on [`users`](./users.md)' `User`, because that is the account record. This module
 is the only writer.
 
+Why they stay there rather than in a collection of their own: they are **bounded** (a handful of
+entries and ten digests), **read at every login** next to the password hash, and **die with the
+user**, so a second collection would add a join and a deletion step for nothing. The races that
+motivated asking were not about storage, so they are fixed in the write below. Revisit when a
+factor can be many per account, such as passkeys.
+
 | Field                     | Holds                                            | On the contract?                          |
 | ------------------------- | ------------------------------------------------ | ----------------------------------------- |
 | `twoFactorMethods[]`      | one `TwoFactorMethodRecord` per method           | no — `select: false` credential material  |
@@ -119,8 +125,16 @@ flowchart LR
   over.
 - **Removal is named.** The loaded copy no longer holds a removed entry, so the caller says which
   method (or `'all'`) to drop. An entry two requests both started is kept once.
-- **One write.** The armed flag, backup codes and session epoch ride in the same update, so a
-  factor change and its session revocation still land together.
+- **One write.** The backup codes (when set outright) and the session epoch ride in the same
+  update, so a factor change and its session revocation still land together.
+- **The armed flag is derived inside the write.** The copy never sends `twoFactorEnabledAt`: a
+  final pipeline stage sets it (keeping its date) when any stored entry is armed, and removes it
+  otherwise. Two removals, or a restart beside a confirm, can no longer leave the flag disagreeing
+  with the factors.
+- **The first backup-code set is minted inside the write too.** `confirm` sends a candidate set;
+  it is stored only if the account holds none by then, and the response shows the codes only when
+  the stored salt is the request's own. Turning 2FA off discards the set in the same stage, only
+  when no entry is armed.
 - **A backup code is spent by its own conditional write.** `spendBackupCode` pulls the one digest
   while it is still stored, so of two requests carrying the same code exactly one takes it, and a
   list regenerated in between (other digests) is never resurrected. The loaded copy is mirrored

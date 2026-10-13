@@ -229,3 +229,37 @@ describe('a step-up code, in parallel', () => {
         expect(versionOf(await userRepository.findById(user.id))).toBe(before);
     });
 });
+
+describe('the first backup-code set, when two factors are confirmed in parallel', () => {
+    it('stores one set, and every code that was handed out works', async () => {
+        const { user, bearer } = await signedIn();
+        const totp = await api()
+            .post('/account/2fa/methods/totp/setup')
+            .set('Authorization', bearer)
+            .send();
+        await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send({});
+        const emailCode = mailedCode('account.two-factor-code');
+        const { secret } = totp.body.data as { secret: string };
+
+        const responses = await Promise.all([
+            api()
+                .post('/account/2fa/methods/totp/confirm')
+                .set('Authorization', bearer)
+                .send({ code: await codeFor(secret, 0) }),
+            confirmEmail(bearer, emailCode)
+        ]);
+        await forgetSessionEpoch();
+
+        expect(responses.map(({ status }) => status)).toEqual([200, 200]);
+        const handedOut = responses.flatMap(
+            ({ body }) => (body.data as { backupCodes?: string[] }).backupCodes ?? []
+        );
+        const stored = await userRepository.findByIdWithCredentials(user.id);
+        const salt = stored!.twoFactorBackupCodeSalt!;
+        // One request carries the set that was stored; the other carries none.
+        expect(handedOut).toHaveLength(stored!.twoFactorBackupCodes.length);
+        expect(handedOut.map((code) => hashBackupCode(code, salt)).toSorted()).toEqual(
+            stored!.twoFactorBackupCodes.toSorted()
+        );
+    });
+});
