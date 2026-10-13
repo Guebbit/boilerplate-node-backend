@@ -96,6 +96,10 @@ and emails, plus `export type *` from its model. See `docs/theory/strategic-ddd.
   writes past the domain rules a service enforces, so it stays reachable at
   `@modules/<name>/factories` — for tests, `scenarios/`, and a module's own `tests/factories.ts` —
   never from the barrel a production import goes through.
+- MUST NOT export a step that runs behind a guarded door — the function that does the write after
+  another one checked permissions, ownership or state (`payments`' `settlePayment`, `inventory`'s
+  `applyTransition`). Mark it `@internal` with a one-line reason;
+  `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` refuses a tagged step in any barrel.
 - An export in a file the barrel publishes is the module's public surface. Never remove it because
   nothing imports it yet — unused is allowed on purpose, since the alternative is a developer (or
   an AI) copying the logic, redeclaring the type, or casting around the gap instead of adding the
@@ -201,8 +205,8 @@ The rest:
   describes the code as it is now; git log is where the past lives.
 - Never reference an untracked `.md` file, by link OR by name — a root plan, audit or report doc is
   gitignored and deleted when its change lands, so a comment naming one is dangling for everyone
-  but its author. Stable targets: `docs/*` and the tracked root `CLAUDE.md`, `README.md` and
-  `SECURITY.md`. Nothing enforces this beyond `.gitignore`: `local/comment-links` checks `.ts`
+  but its author. Stable targets: `docs/*` and the tracked root `CLAUDE.md`, `README.md`,
+  `SECURITY.md` and `INSTALL.md`. Nothing enforces this beyond `.gitignore`: `local/comment-links` checks `.ts`
   references only.
 
 MUST: every exported function, interface, type and enum carries a docblock — `jsdoc/require-jsdoc`.
