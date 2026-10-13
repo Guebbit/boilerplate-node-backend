@@ -18,7 +18,6 @@ import {
     RefundReason,
     RefundStatus
 } from '@types';
-import { paymentWebhookEventRetentionDays } from './config';
 
 /**
  * One returned product line a refund pays back — Shopify's `refund_line_items`, reduced to what a
@@ -307,52 +306,3 @@ export const applyPaymentTransform = applySerialization(paymentSchema, {
  * Model
  */
 export const paymentModel = model<PaymentDocument, PaymentModel>('Payment', paymentSchema);
-
-/**
- * How long a processed webhook event id is remembered, in days. Past any provider's retry window.
- * Read at import: changing `NODE_PAYMENT_WEBHOOK_EVENT_RETENTION_DAYS` needs `npm run db:sync`.
- */
-const webhookEventRetentionDays = paymentWebhookEventRetentionDays();
-
-/**
- * One webhook delivery this application has already acted on.
- *
- * A provider retries a webhook until it gets a 2xx — for days — so the same event arrives many
- * times, and the conditional status writes in `service.ts` are only at-most-once for the STATUS.
- * Committing inventory and emitting `ORDER_STATUS_CHANGED` are not conditional on anything, so
- * without this ledger a retry re-fires them.
- */
-export interface PaymentWebhookEventDocument extends Document {
-    /** The provider's own event id — the thing that repeats across retries. */
-    eventId: string;
-    /** When it was first accepted; the TTL index reads this. */
-    receivedAt: Date;
-}
-
-/** The ledger's model type. Its one query lives in `./repository`. */
-export type PaymentWebhookEventModel = Model<PaymentWebhookEventDocument>;
-
-/** Mongoose schema for the webhook ledger — see {@link PaymentWebhookEventDocument}. */
-export const paymentWebhookEventSchema = new Schema<PaymentWebhookEventDocument>({
-    // `unique` is the whole mechanism: one insert either wins or is refused, where a read followed
-    // by a write is a race two concurrent deliveries could both pass.
-    eventId: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    receivedAt: {
-        type: Date,
-        required: true,
-        default: () => new Date(),
-        // mongod drops the row once it is older than the window, so the collection does not grow
-        // forever for a guarantee that stops mattering as soon as the retries stop.
-        expires: webhookEventRetentionDays * 24 * 60 * 60
-    }
-});
-
-/** Mongoose model for the webhook ledger — claimed and released by `./repository`. */
-export const paymentWebhookEventModel = model<
-    PaymentWebhookEventDocument,
-    PaymentWebhookEventModel
->('PaymentWebhookEvent', paymentWebhookEventSchema);

@@ -7,7 +7,7 @@
  */
 
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
-import { paymentModel, paymentWebhookEventModel, applyPaymentTransform } from './model';
+import { paymentModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
 import { decimalSum, type ReportWindow } from '@infrastructure/persistence/report';
 import type { RefundFailureReason, RefundReason, RefundStatus } from '@types';
@@ -637,37 +637,3 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
             .limit(limit)
             .exec()
 };
-
-/**
- * Claim a webhook event id for processing.
- *
- * The INSERT is the check. A read followed by a write is a race two concurrent deliveries can both
- * pass; the unique index refuses exactly one of them, whichever arrives second.
- *
- * @param eventId - the provider's event id
- * @returns `true` when this delivery is the first to claim it, `false` when it is a retry of one
- *   already acted on — in which case the caller must answer 2xx and do nothing else
- */
-export const claimWebhookEvent = (eventId: string): Promise<boolean> =>
-    paymentWebhookEventModel
-        .create({ eventId })
-        .then(() => true)
-        .catch((error: unknown) => {
-            if (isDuplicateKey(error)) return false;
-            throw error;
-        });
-
-/**
- * Give a claimed event id back, so the provider's next delivery of it is acted on.
- *
- * The compensating half of {@link claimWebhookEvent}. A settlement that failed has NOT been
- * applied, and a claim left standing over it turns every future redelivery into a silent no-op —
- * which is the one outcome the ledger exists to prevent.
- *
- * @param eventId - the provider's event id
- */
-export const releaseWebhookEvent = (eventId: string): Promise<void> =>
-    paymentWebhookEventModel
-        .deleteOne({ eventId })
-        .exec()
-        .then(() => undefined);

@@ -18,7 +18,8 @@ export const WEBHOOK_SIGNATURE_HEADER = 'x-payment-signature';
 /**
  * How far out of date a delivery may be and still be acted on. Replays older than this are
  * refused even when the signature is valid — a captured body stays valid forever otherwise, and
- * the event-id ledger only stops a SECOND settlement, not a first one that arrives late.
+ * the conditional writes of a settlement only stop a SECOND settlement, not a first one that
+ * arrives late.
  */
 const TOLERANCE_SECONDS = 300;
 

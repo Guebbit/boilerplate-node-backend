@@ -36,7 +36,7 @@ import { paymentsAuditActions } from '../audit';
 import { paymentAmountMismatchTotal } from '../metrics';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
-import { claimWebhookEvent, releaseWebhookEvent, paymentRepository } from '../repository';
+import { paymentRepository } from '../repository';
 import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import type { PaymentDocument } from '../model';
 import { payerScope } from './scope';
@@ -720,12 +720,10 @@ export const syncPayment = (
  * order, so a body that said `succeeded` after a later `declined` would otherwise un-decline a
  * payment; asking costs one provider call per accepted event.
  *
- * Claims the event id first, and stops if somebody already has it: the status writes below are
- * at-most-once by themselves, but committing inventory and emitting `ORDER_STATUS_CHANGED` are
- * not, and a provider retries a delivery for days. A settlement that then fails releases the claim
- * before the rejection leaves — the provider WILL redeliver, and that redelivery is the only thing
- * that can still pay this order. The residual: a process crash between the claim and the release
- * still strands the row, unreleased and unreachable by any future retry.
+ * No ledger of seen event ids: a redelivery re-reads the provider and settles again, and every
+ * effect is gated by a conditional write (the payment's own `succeeded` write is the gate, in one
+ * transaction with the order and the hold), so a repeat settles once. A settlement that fails
+ * rejects, the provider redelivers, and the redelivery is the retry.
  *
  * Deliberately quiet — it answers nothing to anyone, so an event this application cannot act on is
  * logged and dropped rather than raised. A provider reads any non-2xx as a failed delivery and
@@ -733,31 +731,26 @@ export const syncPayment = (
  *
  * @param event - the delivery, already verified and normalised by the provider
  */
-export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void> =>
-    claimWebhookEvent(event.id).then((claimed) => {
-        // A retry of something already applied. Silent by design: a provider retrying is normal
-        // traffic, not an incident.
-        if (!claimed) return;
+export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void> => {
+    if (!event.providerRef) {
+        // Stryker disable all
+        logger.info({
+            message: 'Payment webhook named no intent to apply.',
+            eventId: event.id
+        });
+        // Stryker restore all
+        return Promise.resolve();
+    }
 
-        if (!event.providerRef) {
-            // Stryker disable all
-            logger.info({
-                message: 'Payment webhook named no intent to apply.',
-                eventId: event.id
-            });
-            // Stryker restore all
-            return;
-        }
-
-        return applyWebhookSettlement(event.providerRef).catch((error: unknown) =>
-            // The claim is what makes a retry a no-op, so a settlement that failed has to give it
-            // back before the rejection leaves: the provider WILL redeliver, and that redelivery
-            // is the only thing that can still pay this order.
-            releaseWebhookEvent(event.id).then(() => {
-                throw error;
-            })
-        );
+    // Stryker disable all
+    logger.info({
+        message: 'Payment webhook received.',
+        eventId: event.id,
+        providerRef: event.providerRef
     });
+    // Stryker restore all
+    return applyWebhookSettlement(event.providerRef);
+};
 
 /**
  * Ask the provider what became of a payment and settle the answer — the step the webhook, the

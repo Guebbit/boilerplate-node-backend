@@ -463,8 +463,8 @@ describe('POST /payments/webhook', () => {
         setFakeOutcome(providerRef, { status: 'succeeded' });
         const event = { id: `evt_replay_${paymentId}`, providerRef };
 
-        // What the ledger actually protects: `first`/`replay` alone answer 200 on both branches
-        // (dedup vs. fresh apply), so a status-only assertion can never fail on a broken ledger.
+        // What the conditional writes actually protect: `first`/`replay` alone answer 200 on both
+        // branches, so a status-only assertion can never fail on a double settlement.
         const commitSpy = jest.spyOn(inventoryService, 'commitForOrder');
         const statusChanges: unknown[] = [];
         onDomainEvent(ORDER_STATUS_CHANGED, (payload) => {

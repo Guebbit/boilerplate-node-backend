@@ -1180,7 +1180,7 @@ describe('applyWebhookSettlement', () => {
  * the money bug this fix closes.
  */
 describe('applyWebhookDelivery', () => {
-    it('lets a delivery that failed to settle be redelivered, rather than swallowing it as a dupe', async () => {
+    it('settles on the redelivery of a delivery whose first settlement failed', async () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
         const providerRef = String(
@@ -1203,6 +1203,31 @@ describe('applyWebhookDelivery', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
         expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
+    });
+
+    it('settles a repeated delivery once, with no ledger of event ids behind it', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        setFakeOutcome(providerRef, { status: 'succeeded' });
+        const event = { id: 'evt_twice', providerRef };
+
+        await Promise.all([applyWebhookDelivery(event), applyWebhookDelivery(event)]);
+        await applyWebhookDelivery(event);
+
+        expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
+        expect(await outboxEventModel.countDocuments({ name: 'payment.succeeded' })).toBe(1);
+    });
+
+    it('does nothing for a delivery that names no intent', async () => {
+        const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
+
+        await expect(applyWebhookDelivery({ id: 'evt_no_intent' })).resolves.toBeUndefined();
+
+        expect(retrieveSpy).not.toHaveBeenCalled();
+        retrieveSpy.mockRestore();
     });
 });
 
