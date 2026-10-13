@@ -236,3 +236,160 @@ describe('persistTwoFactorMethods', () => {
         expect(await field(id, 'email', 'codeAttempts')).toBe(4);
     });
 });
+
+/** An armed account holding three stored digests. */
+const withCodes = () =>
+    createUser({
+        twoFactorEnabledAt: new Date().toISOString(),
+        twoFactorMethods: ARMED,
+        twoFactorBackupCodes: ['digest-a', 'digest-b', 'digest-c'],
+        twoFactorBackupCodeSalt: 'salt'
+    });
+
+/** The stored backup-code digests, read fresh. */
+const codesOf = (id: string): Promise<string[]> =>
+    load(id).then((user) => [...user.twoFactorBackupCodes]);
+
+describe('spendBackupCode', () => {
+    it('lets only one of two copies holding the same code spend it', async () => {
+        const { id } = await withCodes();
+        const first = await load(id);
+        const second = await load(id);
+
+        expect(await userService.spendBackupCode(first, 'digest-a')).toBe(true);
+        expect(await userService.spendBackupCode(second, 'digest-a')).toBe(false);
+
+        expect(await codesOf(id)).toEqual(['digest-b', 'digest-c']);
+        expect(second.twoFactorBackupCodes).toHaveLength(3);
+    });
+
+    it('keeps a code another copy spent from coming back when this copy persists', async () => {
+        const { id } = await withCodes();
+        const stale = await load(id);
+        const spender = await load(id);
+
+        await userService.spendBackupCode(spender, 'digest-a');
+        entryOf(stale, 'email').codeAttempts = 2;
+        await userService.persistTwoFactorMethods(stale);
+
+        expect(await codesOf(id)).toEqual(['digest-b', 'digest-c']);
+    });
+
+    it('settles the copy, so its next persist does not resend the list', async () => {
+        const { id } = await withCodes();
+        const user = await load(id);
+        const other = await load(id);
+
+        await userService.spendBackupCode(user, 'digest-a');
+        await userService.spendBackupCode(other, 'digest-b');
+        await userService.persistTwoFactorMethods(user);
+
+        expect(await codesOf(id)).toEqual(['digest-c']);
+    });
+});
+
+/** The derived armed flag of the stored account, read fresh. */
+const flagOf = (id: string): Promise<Date | undefined> =>
+    load(id).then((user) => user.twoFactorEnabledAt);
+
+/** A freshly minted set, as `confirm` would hand to the write. */
+const MINTED = { salt: 'own-salt', digests: ['m-1', 'm-2'] };
+
+describe('the armed flag and the first backup-code set', () => {
+    it('is derived from the stored entries: two copies removing different factors leave it off', async () => {
+        const { id } = await withCodes();
+        const first = await load(id);
+        const second = await load(id);
+
+        first.twoFactorMethods.shift();
+        second.twoFactorMethods.pop();
+        await userService.persistTwoFactorWrite(first, {
+            dropped: ['totp'],
+            discardCodesIfDisarmed: true
+        });
+        await userService.persistTwoFactorWrite(second, {
+            dropped: ['email'],
+            discardCodesIfDisarmed: true
+        });
+
+        expect(await flagOf(id)).toBeUndefined();
+        expect(await codesOf(id)).toEqual([]);
+        const stored = await load(id);
+        expect(stored.twoFactorBackupCodeSalt).toBeUndefined();
+    });
+
+    it('keeps the flag set when a stale copy arms a factor beside one another copy armed', async () => {
+        const { id } = await createUser({
+            twoFactorMethods: [{ method: 'totp', secret: 'pending' }]
+        });
+        const restarter = await load(id);
+        const confirmer = await load(id);
+
+        entryOf(confirmer, 'totp').enrolledAt = new Date();
+        await userService.persistTwoFactorWrite(confirmer);
+        // The restarter never saw the arming; its write touches the entry's secret only.
+        entryOf(restarter, 'totp').secret = 'again';
+        await userService.persistTwoFactorWrite(restarter);
+
+        expect(await flagOf(id)).toBeInstanceOf(Date);
+    });
+
+    it('keeps the date of an account that was already armed', async () => {
+        const armedAt = new Date('2026-01-01T00:00:00Z');
+        const { id } = await createUser({
+            twoFactorEnabledAt: armedAt.toISOString(),
+            twoFactorMethods: ARMED
+        });
+        const user = await load(id);
+
+        entryOf(user, 'email').codeAttempts = 2;
+        await userService.persistTwoFactorWrite(user);
+
+        expect(await flagOf(id)).toEqual(armedAt);
+    });
+
+    it('stores one first set between two arming copies, and tells each which one landed', async () => {
+        const { id } = await createUser({
+            twoFactorMethods: [
+                { method: 'totp', secret: 's' },
+                { method: 'email', codeHash: 'h' }
+            ]
+        });
+        const first = await load(id);
+        const second = await load(id);
+
+        entryOf(first, 'totp').enrolledAt = new Date();
+        entryOf(second, 'email').enrolledAt = new Date();
+        const one = await userService.persistTwoFactorWrite(first, { mintCodes: MINTED });
+        const two = await userService.persistTwoFactorWrite(second, {
+            mintCodes: { salt: 'other-salt', digests: ['x-1'] }
+        });
+
+        expect(one.backupCodeSalt).toBe('own-salt');
+        expect(two.backupCodeSalt).toBe('own-salt');
+        expect(await codesOf(id)).toEqual(['m-1', 'm-2']);
+        expect(second.twoFactorBackupCodes).toEqual([]);
+    });
+
+    it('does not mint a set for an account with no armed entry', async () => {
+        const { id } = await createUser({ twoFactorMethods: [{ method: 'totp', secret: 's' }] });
+        const user = await load(id);
+
+        entryOf(user, 'totp').secret = 'again';
+        await userService.persistTwoFactorWrite(user, { mintCodes: MINTED });
+
+        expect(await codesOf(id)).toEqual([]);
+    });
+
+    it('keeps the codes of a factor restarted mid-way, since only a deliberate end discards them', async () => {
+        const { id } = await withCodes();
+        const user = await load(id);
+
+        entryOf(user, 'totp').enrolledAt = undefined;
+        entryOf(user, 'email').enrolledAt = undefined;
+        await userService.persistTwoFactorMethods(user);
+
+        expect(await flagOf(id)).toBeUndefined();
+        expect(await codesOf(id)).toEqual(['digest-a', 'digest-b', 'digest-c']);
+    });
+});

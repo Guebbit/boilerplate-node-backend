@@ -14,7 +14,7 @@ import { generate, generateSecret } from 'otplib';
 import type { TwoFactorMethodRecord } from '@modules/users';
 import {
     armDeliveredCode,
-    consumeDeliveredCode,
+    checkDeliveredCode,
     deliveryCooldownRemaining,
     generateDeliveredCode,
     hashDeliveredCode,
@@ -156,34 +156,46 @@ describe('delivered codes — the shared machinery behind email, and every chann
         expect(codes.every((code) => /^\d{6}$/.test(code))).toBe(true);
     });
 
-    it('accepts the code it armed, and only once', () => {
+    it.each([
+        ['the code it armed', '123456', 0, 0, 'match'],
+        ['a wrong code', '000000', 0, 0, 'miss'],
+        ['a wrong code with attempts left', '000000', DELIVERED_CODE_MAX_ATTEMPTS - 1, 0, 'miss'],
+        [
+            'the right code past the attempt ceiling',
+            '123456',
+            DELIVERED_CODE_MAX_ATTEMPTS,
+            0,
+            'none'
+        ],
+        ['the right code at the expiry instant', '123456', 0, DELIVERED_CODE_TTL_MS, 'expired'],
+        ['the right code after expiry', '123456', 0, DELIVERED_CODE_TTL_MS + 1, 'expired'],
+        ['the right code just before expiry', '123456', 0, DELIVERED_CODE_TTL_MS - 1, 'match']
+    ])('answers %s with the verdict it earns', (_label, typed, attempts, elapsed, verdict) => {
         const record = entry();
         armDeliveredCode(record, '123456', now);
+        record.codeAttempts = attempts;
 
-        expect(consumeDeliveredCode(record, '123456', now)).toBe(true);
-        // Spent: the second presentation of a correct code has nothing left to match against.
-        expect(consumeDeliveredCode(record, '123456', now)).toBe(false);
+        expect(checkDeliveredCode(record, typed, new Date(now.getTime() + elapsed))).toBe(verdict);
     });
 
-    it('rejects a code past its expiry, and forgets it', () => {
+    it('answers none when nothing is in flight, or the expiry is missing', () => {
         const record = entry();
-        armDeliveredCode(record, '123456', now);
-        const late = new Date(now.getTime() + DELIVERED_CODE_TTL_MS + 1);
+        expect(checkDeliveredCode(record, '123456', now)).toBe('none');
 
-        expect(consumeDeliveredCode(record, '123456', late)).toBe(false);
-        expect(record.codeHash).toBeUndefined();
+        armDeliveredCode(record, '123456', now);
+        record.codeExpiresAt = undefined;
+        expect(checkDeliveredCode(record, '123456', now)).toBe('none');
     });
 
-    it('burns the code after DELIVERED_CODE_MAX_ATTEMPTS wrong guesses', () => {
+    it('changes nothing: a check is not a spend', () => {
         const record = entry();
         armDeliveredCode(record, '123456', now);
 
-        for (let attempt = 0; attempt < DELIVERED_CODE_MAX_ATTEMPTS; attempt++)
-            expect(consumeDeliveredCode(record, '000000', now)).toBe(false);
+        checkDeliveredCode(record, '123456', now);
+        checkDeliveredCode(record, '000000', now);
 
-        // The RIGHT code, presented after the ceiling: the budget is what protects six digits, so
-        // exhausting it has to cost the code itself rather than just the last guess.
-        expect(consumeDeliveredCode(record, '123456', now)).toBe(false);
+        expect(record.codeHash).toBeDefined();
+        expect(record.codeAttempts).toBe(0);
     });
 
     it('reports the cooldown remaining, and clears it once it elapses', () => {

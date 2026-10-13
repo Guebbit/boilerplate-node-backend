@@ -90,37 +90,28 @@ export const clearDeliveredCode = (entry: DeliveredCodeState): void => {
 };
 
 /**
- * Check a typed code against the one in flight, and advance the entry accordingly: a match
- * clears the code (one use, always), a miss counts an attempt and clears it at the ceiling.
- * Mutates `entry`; the caller still has to persist it.
+ * What a typed code is against the one in flight: nothing to compare (`none`: no code, or its
+ * attempts are spent), too late (`expired`), the right one (`match`), or a wrong one (`miss`).
+ */
+export type DeliveredCodeVerdict = 'none' | 'expired' | 'match' | 'miss';
+
+/**
+ * Compare a typed code with the one in flight. Pure: it changes nothing, because a read-then-write
+ * on a loaded copy lets two parallel requests both spend one code, or both count one guess. Spending
+ * and counting are the users door's conditional writes (see `./delivered-code-verify.ts`).
  *
  * @param entry - the entry holding the code in flight
  * @param code - the digits the caller typed
  * @param now - the clock, injectable for tests
- * @returns whether the code was accepted
  */
-export const consumeDeliveredCode = (
+export const checkDeliveredCode = (
     entry: DeliveredCodeState,
     code: string,
     now: Date = new Date()
-): boolean => {
-    if (!entry.codeHash || !entry.codeExpiresAt) return false;
-    if (entry.codeExpiresAt.getTime() <= now.getTime()) {
-        clearDeliveredCode(entry);
-        return false;
-    }
+): DeliveredCodeVerdict => {
+    if (!entry.codeHash || !entry.codeExpiresAt) return 'none';
+    if ((entry.codeAttempts ?? 0) >= DELIVERED_CODE_MAX_ATTEMPTS) return 'none';
+    if (entry.codeExpiresAt.getTime() <= now.getTime()) return 'expired';
 
-    const typed = hashDeliveredCode(code);
-    if (constantTimeEqual(entry.codeHash, typed)) {
-        clearDeliveredCode(entry);
-        return true;
-    }
-
-    // A wrong guess burns budget, not the account: past the ceiling only the code in flight dies,
-    // and the caller may ask for another one. Burning takes `codeSentAt` with it, so the cooldown
-    // is gone too — `mfaSendLimiter` is what actually caps how many replacements one challenge buys.
-    const attempts = (entry.codeAttempts ?? 0) + 1;
-    entry.codeAttempts = attempts;
-    if (attempts >= DELIVERED_CODE_MAX_ATTEMPTS) clearDeliveredCode(entry);
-    return false;
+    return constantTimeEqual(entry.codeHash, hashDeliveredCode(code)) ? 'match' : 'miss';
 };
