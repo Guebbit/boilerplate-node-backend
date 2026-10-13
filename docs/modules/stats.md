@@ -94,9 +94,10 @@ is the amount with VAT taken out.
 | Pipeline                 | transfers awaiting money (count, amount, nearest `payBy`), paid orders not shipped       | `orders`, a snapshot                           |
 
 Money is grouped by currency and never converted. One deployment has one currency
-(`NODE_DEFAULT_CURRENCY`), so a second group appears only after a config change. Sums use Decimal128
-in Mongo (`$toDecimal` then `$sum`), then one conversion to minor units per currency in code
-(`shared-kernel/money.ts`): summing stored doubles drifts.
+(`NODE_DEFAULT_CURRENCY`), so a second group appears only after a config change. Money is stored as
+Decimal128, so Mongo's plain `$sum` is exact; one conversion to minor units per currency follows in
+code (`shared-kernel/money.ts#toMinorUnits`, reading the sum as text). See
+[Money at rest](../theory/tactical-ddd.md#at-rest-decimal128).
 
 ## Dates and the time zone
 

@@ -10,6 +10,7 @@
 import type { ToObjectOptions } from 'mongoose';
 import { carryVersion } from './versioning';
 import { EDIT_REVISION } from './revision-plugin';
+import { reviveDecimals } from './money-field';
 
 /** A model's serializer: mutates a plain object into its wire shape and returns it. */
 export type SerializeTransform = (serialized: Record<string, unknown>) => Record<string, unknown>;
@@ -62,6 +63,8 @@ export const applySerialization = (
             delete serialized._id;
         }
         delete serialized.__v;
+        // A stored amount is a Decimal128; the wire (and every reader above this layer) wants a number.
+        reviveDecimals(serialized);
         // The edit counter is the row's version, not part of its wire shape: it rides beside the
         // object (`carryVersion`) so the item and update controllers can still derive the `ETag`.
         carryVersion(serialized, serialized);

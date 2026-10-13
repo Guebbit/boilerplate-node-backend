@@ -11,6 +11,7 @@ import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, makeOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { orderRepository } from '../../repository';
+import { toMinorUnits } from '@shared-kernel/money';
 import { DEFAULT_SORT } from '@infrastructure/persistence/search';
 
 setupTestDb();
@@ -111,7 +112,7 @@ describe('orderRepository', () => {
             // Manually compute totalPrice the same way the Order service does
             const [result] = await orderRepository.aggregate<{
                 totalQuantity: number;
-                totalPrice: number;
+                totalPrice: unknown;
             }>([
                 {
                     $addFields: {
@@ -130,7 +131,8 @@ describe('orderRepository', () => {
             ]);
 
             expect(result.totalQuantity).toBe(4);
-            expect(result.totalPrice).toBe(40); // 10 × 4
+            // A sum of stored money stays a Decimal128 until it is read as minor units.
+            expect(toMinorUnits(result.totalPrice, 'EUR')).toBe(4000); // 10 × 4
         });
 
         it('handles the $sort + $skip + $limit pagination pattern', async () => {

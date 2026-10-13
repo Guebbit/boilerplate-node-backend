@@ -395,6 +395,44 @@ what the customer owes, and its callers — the order serializer, `payments.crea
 the confirmation email — all read it rather than adding the two numbers themselves, so the payment
 intent cannot charge the lines and forget the shipping.
 
+### At rest: Decimal128
+
+A stored amount is a BSON `Decimal128`, MongoDB's own recommendation for money (a `double` is
+"unsuitable for monetary arithmetic"). It is exact on disk and in the database, so a `$sum` over it
+needs no conversion. Nothing above the persistence layer sees one.
+
+```mermaid
+%%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 40}}}%%
+flowchart LR
+    W["number<br/><i>19.99</i>"] -->|"cast by the schema"| D[("Decimal128<br/><i>stored</i>")]
+    D -->|"path getter · lean hook · serializer"| R["number<br/><i>19.99, the wire</i>"]
+    D -->|"$sum"| S["Decimal128<br/><i>exact sum</i>"]
+    S -->|"toMinorUnits, read as text"| M["Money<br/><i>integer cents</i>"]
+
+    classDef exact fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px;
+    class D,S,M exact;
+```
+
+- **One definition.** `moneyPath()` in `src/infrastructure/persistence/money-field.ts` is how a
+  model declares a money field, and `moneyPlugin` is what a lean read needs. Decimal128 has no `min`,
+  so `nonNegative` is a validator.
+- **Reading a sum.** `toMinorUnits` takes the `Decimal128` of a `$sum` as text and moves the digits;
+  it never multiplies a float. A `number` is still multiplied and rounded, for the wire's side.
+- **Not every aggregation is revived.** A lean read and `toJSON` hand back numbers. An aggregation's
+  output is whatever its pipeline shaped, so a pipeline that returns stored money row by row
+  (`payments/repository.ts#aggregateRefundRows`) revives it with `reviveDecimals`.
+
+### Which decimals a currency has
+
+`minorUnitExponent` reads a table pinned in `money.ts` from ISO 4217, never `Intl`. CLDR's display
+digits say 0 for HUF, IDR, COP, PKR, LBP and IQD, where ISO says 2, 2, 2, 2, 2 and 3: a HUF shop
+would lose the fillér. A code the table does not list gets 2. The six are pinned by a unit test.
+
+`fitsCurrency(amount, currency)` is the write-side rule: a price, a delivery rate or a refund with
+more places than the minor unit is refused, so the stored value is always the charged value
+(19.999 EUR is a 422, not a stored 19.999 charged as 20.00). It cannot be a contract `multipleOf`,
+because that cannot vary by currency, so it is a refinement beside each schema.
+
 ### Why a brand rather than a class
 
 A class would give the domain layer an object identity to maintain, a `toJSON` every serialization

@@ -1,11 +1,11 @@
 /**
  * @module
  * The pieces every grouped read behind the stats shares: a half-open window with a bucket size and
- * a zone, the `$dateTrunc` that buckets in that zone, and the Decimal128 sum that keeps money from
- * drifting. Not stats-specific — each owner module uses it for its own grouped read.
+ * a zone, and the `$dateTrunc` that buckets in that zone. Not stats-specific — each owner module
+ * uses it for its own grouped read.
  *
- * Why Decimal128: summing stored doubles drifts (0.1 + 0.2); `$toDecimal` first, then one
- * conversion to minor units per currency in JS.
+ * Money is stored as Decimal128, so a plain `$sum` of it is exact; the result is read once, as
+ * minor units per currency, by `toMinorUnits` (`@shared-kernel/money`).
  */
 
 /** The bucket sizes a grouped read may use. */
@@ -40,24 +40,3 @@ export const bucketOf = (field: string, { interval, timeZone }: ReportWindow) =>
         ...(interval === 'week' ? { startOfWeek: 'monday' } : {})
     }
 });
-
-/**
- * A Mongo sum of one numeric expression, kept in Decimal128 so cents add exactly.
- * @param expression - a field (`'$netTotal'`) or an expression already yielding a number
- */
-export const decimalSum = (expression: unknown) => ({ $sum: { $toDecimal: expression } });
-
-/**
- * A number out of what a `$sum` of decimals returned.
- *
- * The driver answers a `Decimal128`, whose `toString` is the exact decimal; a plain number passes
- * through. Read by text rather than by `instanceof`, so it does not depend on which copy of the
- * BSON library built the value.
- *
- * @param value - what the aggregation returned for the sum
- * @returns the value; 0 for anything that is not a number
- */
-export const numberOf = (value: unknown): number => {
-    const parsed = typeof value === 'number' ? value : Number(String(value));
-    return Number.isFinite(parsed) ? parsed : 0;
-};

@@ -13,6 +13,8 @@ import fc from 'fast-check';
 import {
     addMoney,
     apportion,
+    fitsCurrency,
+    minorUnitExponent,
     NO_MONEY,
     scaleMoney,
     scaleMoneyByRate,
@@ -146,10 +148,80 @@ describe("toMinorUnits/toDecimalAmount — each currency's own minor-unit expone
         );
     });
 
-    it('falls back to 2 decimal places for a currency code Intl cannot resolve', () => {
-        // A malformed `NODE_DEFAULT_CURRENCY` is a config mistake this function must survive
-        // rather than throw on — `Intl.NumberFormat` itself throws a `RangeError` for this input.
+    it('falls back to 2 decimal places for a currency code the pinned table does not list', () => {
         expect(toMinorUnits(19.9, 'NOT-A-CURRENCY')).toBe(1990);
+    });
+
+    it.each([
+        ['HUF', 2],
+        ['IDR', 2],
+        ['COP', 2],
+        ['PKR', 2],
+        ['LBP', 2],
+        ['IQD', 3]
+    ])('follows ISO 4217 for %s (%i places), not the CLDR display digits', (code, places) => {
+        // `Intl` answers 0 for all six; the pinned table is what keeps a HUF shop's fillér.
+        expect(toMinorUnits(1.5, code)).toBe(1.5 * 10 ** places);
+        expect(toDecimalAmount(asMoney(10 ** places), code)).toBe(1);
+    });
+
+    it.each([
+        ['JPY', 0],
+        ['ISK', 0],
+        ['EUR', 2],
+        ['KWD', 3],
+        ['BHD', 3],
+        ['CLF', 4]
+    ])('keeps %s at %i places', (code, places) => {
+        expect(minorUnitExponent(code)).toBe(places);
+    });
+});
+
+describe('toMinorUnits — decimal text', () => {
+    it('reads a stored decimal digit by digit, with no float in between', () => {
+        // 0.1 + 0.2 is 0.30000000000000004 as a float; as text it is exactly 0.30.
+        expect(toMinorUnits('0.30', EUR)).toBe(30);
+        expect(toMinorUnits('1234567890123.45', EUR)).toBe(123_456_789_012_345);
+        expect(toMinorUnits({ toString: () => '19.99' }, EUR)).toBe(1999);
+    });
+
+    it('rounds half-up on the first dropped digit and keeps the sign', () => {
+        expect(toMinorUnits('19.995', EUR)).toBe(2000);
+        expect(toMinorUnits('19.994', EUR)).toBe(1999);
+        expect(toMinorUnits('-4.50', EUR)).toBe(-450);
+        expect(toMinorUnits('7', 'JPY')).toBe(7);
+        expect(toMinorUnits('7.5', 'JPY')).toBe(8);
+    });
+
+    it('sends exponent notation down the numeric path', () => {
+        expect(toMinorUnits('1.5E+2', EUR)).toBe(15_000);
+    });
+});
+
+describe('fitsCurrency', () => {
+    it('accepts an amount with no more places than the currency has', () => {
+        expect(fitsCurrency(19.99, 'EUR')).toBe(true);
+        expect(fitsCurrency(20, 'EUR')).toBe(true);
+        expect(fitsCurrency(100, 'JPY')).toBe(true);
+        expect(fitsCurrency(1.999, 'KWD')).toBe(true);
+    });
+
+    it('refuses extra places and non-finite amounts', () => {
+        expect(fitsCurrency(19.999, 'EUR')).toBe(false);
+        expect(fitsCurrency(1.005, 'EUR')).toBe(false);
+        expect(fitsCurrency(100.5, 'JPY')).toBe(false);
+        expect(fitsCurrency(1.9999, 'KWD')).toBe(false);
+        expect(fitsCurrency(NaN, 'EUR')).toBe(false);
+        expect(fitsCurrency(Infinity, 'EUR')).toBe(false);
+    });
+
+    it('accepts every amount that came out of minor units', () => {
+        fc.assert(
+            fc.property(fc.integer({ min: 0, max: 100_000_000 }), (minor) => {
+                expect(fitsCurrency(toDecimalAmount(asMoney(minor), EUR), EUR)).toBe(true);
+            }),
+            RUN
+        );
     });
 });
 
