@@ -196,7 +196,7 @@ itself (6, 4 and 5 states).
 
 Everywhere else the folder stays optional, and creating an empty one to match a shape is how
 ceremony starts — most modules here don't have one. Modules with a `domain/` folder today: `orders`,
-`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns`, `account` and `example`.
+`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns`, `invoicing`, `account` and `example`.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 a few pure functions in `rates.ts` (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
@@ -323,15 +323,15 @@ one model and one language stop being valid_, not by where you put files.
 behind it, not a claim about intent. See [Strategic DDD](./strategic-ddd.md) for what each one
 enforces and what it refuses.
 
-| Concept                | Where                                                                                      |
-| ---------------------- | ------------------------------------------------------------------------------------------ |
-| Bounded context        | one folder per module; `rm -rf` deletes the domain                                         |
-| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one  |
-| Context map            | the docblock on each `module.ts`, beside the imports it describes                          |
-| Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                    |
-| Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project  |
-| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                   |
-| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`, `returns/domain/refund-amount.ts` |
+| Concept                | Where                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Bounded context        | one folder per module; `rm -rf` deletes the domain                                                                              |
+| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one                                       |
+| Context map            | the docblock on each `module.ts`, beside the imports it describes                                                               |
+| Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                                                         |
+| Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project                                       |
+| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                                                        |
+| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`, `returns/domain/refund-amount.ts`, `invoicing/domain/credit-shares.ts` |
 
 **Tactical DDD — absent, deliberately:**
 

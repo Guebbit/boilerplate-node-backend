@@ -94,7 +94,7 @@ which has no ship-to address at all, is still invoiced to someone), the seller's
 `issueCreditNote` (`services/issue-credit-note.ts`) freezes one credit note per REFUND
 (`PAYMENT_REFUNDED` carries `refundId`, this refund's `amount`, `full`, and — for a return — the
 `goods` it pays back). A full refund mirrors the invoice it corrects wholesale. A partial one
-carries only the refunded share: `src/modules/invoicing/services/partial-credit.ts` spreads the
+carries only the refunded share: `src/modules/invoicing/domain/credit-shares.ts` spreads the
 amount over the invoice's VAT rates, one line per rate, and the VAT is extracted the way the
 invoice's own was — so the credit note reconciles to the cent and only ever names rates the
 invoice charged. What each rate weighs depends on the refund:
@@ -231,7 +231,7 @@ field.
 
 Credit notes follow the same rule: a full refund mirrors the invoice's frozen figures; a partial
 one is split across the rates of what it pays back, and each rate's share has its VAT extracted and rounded
-once (`services/partial-credit.ts`). Several partial notes each round their own share, so their
+once (`services/credit-breakdown.ts`). Several partial notes each round their own share, so their
 VAT can differ from the invoice's by a minor unit in total; every document is self-consistent.
 
 ## VAT category codes
