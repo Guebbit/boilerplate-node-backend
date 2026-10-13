@@ -8,8 +8,11 @@ name: Image scan (SBOM + vulnerabilities)
 # the March 2026 `trivy-action` supply-chain compromise (CVE-2026-33634, every tag force-pushed
 # to a credential stealer).
 #
-# A REPORT, not a gate: `fail-build: false` below, so a new CVE in a base-image
-# package cannot block an unrelated merge. Read the uploaded `grype-report` artifact.
+# A REPORT on a push, a GATE only on the Monday schedule: a push run never fails the build, so a
+# new CVE in a base-image package cannot block an unrelated merge. The scheduled run fails on a
+# FIXED `high`-or-worse finding and opens a tracking issue (`image-scan-notify`). Either way the
+# findings go to the repo's Security tab as SARIF, category `grype-image`, and the table stays in
+# the job log and the `image-scan-report` artifact.
 #
 # Deliberately its own workflow rather than a `ci.yml` job: it does not need to run on every PR —
 # the image's dependency surface does not move between a docs typo and the next `npm ci`.
@@ -39,6 +42,8 @@ jobs:
         timeout-minutes: 20
         permissions:
             contents: read
+            # Required to upload the SARIF; the upload step below writes it, nothing else does.
+            security-events: write
         steps:
             - name: Checkout
               uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -61,17 +66,42 @@ jobs:
                   output-file: sbom.cdx.json
                   upload-release-assets: false
 
-            # Grype: scans the SBOM from the step above (not the image again — `sbom:` reuses it).
-            # `fail-build: false` and `output-format: table` — see the workflow header: this reports,
-            # it does not gate, and a table is readable straight from the job log.
+            # Grype, the report: scans the SBOM from the step above (not the image again — `sbom:`
+            # reuses it). A table is readable straight from the job log.
+            # `fail-build` is true only on the Monday schedule, `severity-cutoff: high` is what it
+            # fails on, and `only-fixed` keeps it to findings a rebuild or bump can close. The step
+            # fails after it has written the file, so the steps below run under `if: always()`.
             # https://github.com/anchore/scan-action
             - name: Scan the SBOM with Grype
               uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
               with:
                   sbom: sbom.cdx.json
-                  fail-build: false
+                  fail-build: ${{ github.event_name == 'schedule' }}
+                  severity-cutoff: high
+                  only-fixed: ${{ github.event_name == 'schedule' }}
                   output-format: table
                   output-file: grype-report.txt
+
+            # Grype, the same scan as SARIF for the Security tab. Never fails the build: the step
+            # above is the gate, this only records.
+            - name: Scan the SBOM with Grype (SARIF)
+              if: always()
+              id: grype-sarif
+              uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2 # v7.4.0
+              with:
+                  sbom: sbom.cdx.json
+                  fail-build: false
+                  output-format: sarif
+                  output-file: grype-results.sarif
+
+            # `category` keeps these results apart from CodeQL's in the Security tab.
+            # https://docs.github.com/en/code-security/code-scanning/integrating-with-code-scanning/uploading-a-sarif-file-to-github
+            - name: Upload the SARIF to code scanning
+              if: always()
+              uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+              with:
+                  sarif_file: grype-results.sarif
+                  category: grype-image
 
             - name: Upload the SBOM and vulnerability report
               if: always()
@@ -81,5 +111,28 @@ jobs:
                   path: |
                       sbom.cdx.json
                       grype-report.txt
+                      grype-results.sarif
                   retention-days: 90
                   if-no-files-found: warn
+
+    image-scan-notify:
+        # Only the scheduled run gates, so only it speaks. One issue, updated in place; shares
+        # `notify-failure` with `mutation.yml`. Separate from the build job on purpose: this one
+        # holds `issues: write`, that one runs a Docker build.
+        needs: [build-and-scan]
+        if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            issues: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+            - name: Open or update the image-scan issue
+              uses: ./.github/actions/notify-failure
+              with:
+                  title: 'Weekly image scan found a fixable high vulnerability'
+                  label: 'image-scan'
+                  workflow-name: 'image scan'

@@ -1,0 +1,76 @@
+name: Dependency audit (scheduled)
+
+# Asks the registry, weekly, about the dependencies we ship — new advisories land between pushes,
+# and `audit` in ci.yml only runs when somebody pushes.
+#
+# Two checks, one job:
+#   - `npm audit`             known advisories in production dependencies
+#   - `npm audit signatures`  every installed package carries a valid registry signature (and
+#                             provenance attestation, where its author published one)
+# https://docs.npmjs.com/cli/commands/npm-audit
+#
+# A red run opens (or updates) one tracking issue. The notify job is separate on purpose: it holds
+# `issues: write`, so it never sits next to a job that runs `npm ci` and its install scripts.
+
+on:
+    schedule:
+        # Monday, after the image scan (06:00).
+        - cron: '30 6 * * 1'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: audit-${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    NODE_VERSION: 24
+
+jobs:
+    audit:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        permissions:
+            contents: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+
+            - name: Setup
+              uses: ./.github/actions/setup
+              with:
+                  node-version: ${{ env.NODE_VERSION }}
+
+            # Same threshold as `audit` in ci.yml: `moderate` is where every advisory acted on so far sat.
+            - name: Audit dependencies
+              run: npm audit --omit=dev --audit-level=moderate
+
+            # `signatures` verifies against the registry's public keys; it needs the installed tree,
+            # which the setup step's `npm ci` just built.
+            - name: Verify registry signatures and provenance
+              run: npm audit signatures
+
+    audit-notify:
+        # One issue, updated in place, instead of a channel nobody watches. Shares `notify-failure`
+        # with `mutation.yml` and `schemathesis.yml`. No npm, no install: only the issue API.
+        needs: [audit]
+        if: always() && contains(needs.*.result, 'failure')
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        permissions:
+            issues: write
+        steps:
+            - name: Checkout
+              uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+              with:
+                  persist-credentials: false # no step after the checkout needs the token on disk
+            - name: Open or update the audit-failure issue
+              uses: ./.github/actions/notify-failure
+              with:
+                  title: 'Weekly dependency audit failed'
+                  label: 'dependency-audit'
+                  workflow-name: 'dependency audit'
