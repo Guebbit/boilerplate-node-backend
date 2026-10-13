@@ -28,7 +28,7 @@ export {
     WebhookRejected
 } from './webhook-signature';
 
-/** What the money is doing at the provider. `refunded` is ours, not theirs — it is a later act. */
+/** What the money is doing at the provider. `cancelled` and refund state are ours, not theirs. */
 export type ProviderPaymentStatus = 'requires_action' | 'processing' | 'succeeded' | 'declined';
 
 /** What a provider says about one intent, whether asked directly or through a webhook. */
@@ -149,7 +149,7 @@ export interface PaymentProvider {
      * `idempotencyKey` is what makes a RETRY of this call safe at the provider, not just at this
      * application: two calls carrying the same key (`refund:{paymentId}`) return the same refund
      * rather than returning the money twice — Stripe's own idempotency keys work this way. The
-     * caller's own conditional `succeeded → refunded` write is the other half, for the case where
+     * caller's own conditional `addRefund` write on `amountRefunded` is the other half, for the case where
      * this application's two callers never reach the provider at the same time to begin with.
      */
     refund(

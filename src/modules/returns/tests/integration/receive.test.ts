@@ -181,7 +181,7 @@ describe('receiving a return', () => {
         expect(await countersOf(fixture.shirt._id)).toMatchObject({ onHand: 10 });
         expect(await countersOf(fixture.mug._id)).toMatchObject({ onHand: 10 });
         const payment = await paymentOf(fixture.orderId);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.refunds[0]).toMatchObject({
             amount: 70,
             reason: 'return',
@@ -415,7 +415,7 @@ describe('what the customer gets back', () => {
         const payment = await paymentOf(fixture.orderId);
         // 70.00 was paid, 40.00 already went back: the return is owed 70.00 but only 30.00 is left.
         expect(payment.amountRefunded).toBe(70);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.refunds.map((refund) => refund.amount)).toEqual([40, 30]);
         expect(result.success && result.data.status).toBe('closed');
     });

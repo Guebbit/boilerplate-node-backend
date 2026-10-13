@@ -112,9 +112,10 @@ const seedEveryLabel = async (): Promise<Map<PaymentDisplayStatus, string>> => {
         ],
         [
             PaymentDisplayStatus.refunded,
-            { status: 'refunded', amountRefunded: 50, refunds: [refundRecord({ amount: 50 })] }
+            { amountRefunded: 50, refunds: [refundRecord({ amount: 50 })] }
         ],
-        [PaymentDisplayStatus.failed, { status: 'declined' }]
+        [PaymentDisplayStatus.failed, { status: 'declined' }],
+        [PaymentDisplayStatus.cancelled, { status: 'cancelled' }]
     ];
     const ids = new Map<PaymentDisplayStatus, string>();
     for (const [label, overrides] of cases) {
@@ -338,7 +339,11 @@ describe('listAttention', () => {
 describe('methodMix', () => {
     it('groups the payments that took money by method and provider, and skips the rest', async () => {
         await seedPayment({ amount: 50 });
-        await seedPayment({ amount: 30, status: 'refunded' });
+        await seedPayment({
+            amount: 30,
+            amountRefunded: 30,
+            refunds: [refundRecord({ amount: 30 })]
+        });
         await seedPayment({
             amount: 20,
             method: 'cash',

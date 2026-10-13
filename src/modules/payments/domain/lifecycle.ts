@@ -31,15 +31,35 @@ export const CONFIRMABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
 
 /**
  * The statuses a settlement (confirm, sync, or the provider's webhook) may move a payment away
- * from — every non-terminal one. `succeeded` and `refunded` are absent, which is what makes
- * `settlePayment` at-most-once: a webhook retried after either has landed finds nothing left to
- * move.
+ * from — every non-terminal one. `succeeded` and `cancelled` are absent, which is what makes
+ * `settlePayment` at-most-once: a webhook retried after `succeeded` has landed finds nothing left
+ * to move, and a late `processing` or `declined` report cannot reopen a cancelled intent.
  */
 export const SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
     'requires_confirmation',
     'requires_action',
     'processing',
     'declined'
+];
+
+/**
+ * The statuses the SUCCESS write may run from: the settleable ones plus `cancelled`. Money that
+ * lands on a cancelled intent is real, so it is recorded and (the order being gone) returned in
+ * the same transaction. Only the success write, the amount-mismatch write and the provider
+ * re-read's gate use this; every other write stays on {@link SETTLEABLE_PAYMENT_STATUSES}.
+ */
+export const SUCCESS_SETTLEABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+    ...SETTLEABLE_PAYMENT_STATUSES,
+    'cancelled'
+];
+
+/**
+ * The statuses the retention reaper may delete: attempts that never became money. An allow-list,
+ * so a money status added later is never deleted by default.
+ */
+export const REAPABLE_PAYMENT_STATUSES: readonly PaymentStatus[] = [
+    ...SETTLEABLE_PAYMENT_STATUSES,
+    'cancelled'
 ];
 
 /** The only status money can come back from: it has to have arrived first. */

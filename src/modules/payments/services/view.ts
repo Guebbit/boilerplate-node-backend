@@ -20,6 +20,7 @@ import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { CONFIRMABLE_PAYMENT_STATUSES, REFUNDABLE_PAYMENT_STATUS } from '../domain';
 import { presentPayment } from '../presenter';
+import { remainingOf } from './refunds';
 import { callerScope, readsAllPayments } from './scope';
 
 /**
@@ -93,7 +94,8 @@ export const withActions = (
                     authContext !== undefined &&
                     handlesMoney &&
                     holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&
-                    payment.status === REFUNDABLE_PAYMENT_STATUS
+                    payment.status === REFUNDABLE_PAYMENT_STATUS &&
+                    remainingOf(payment) > 0
             }
         })
     );

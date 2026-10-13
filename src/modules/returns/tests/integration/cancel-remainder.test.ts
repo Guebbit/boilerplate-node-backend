@@ -437,7 +437,7 @@ describe('the delivery, across several cancels and returns', () => {
 
         // Faulty goods: the delivery goes back whole, 5.00 — once, on the return that closed the order.
         expect(refunds.map(({ amount }) => amount)).toEqual([10, 65]);
-        expect(result.success && result.data.status).toBe('refunded');
+        expect(result.success && result.data.status).toBe('succeeded');
     });
 
     it('reads the order as returned once what could come back has, a cancel taking the rest out of the count', async () => {

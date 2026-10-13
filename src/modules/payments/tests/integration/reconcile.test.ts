@@ -88,6 +88,6 @@ describe('cancelling an order whose intent already succeeded at the provider', (
         await settleOutboxNudges();
         const payment = await paymentRepository.findByOrderId(orderId);
         const order = await orderService.getById(orderId);
-        expect([payment?.status, order?.status]).toEqual(['refunded', 'cancelled']);
+        expect([payment?.status, order?.status]).toEqual(['succeeded', 'cancelled']);
     });
 });

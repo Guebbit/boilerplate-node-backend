@@ -29,7 +29,11 @@ import { paymentAmountMismatchTotal } from '../metrics';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import { providerNamed, type ProviderPaymentState, type ProviderWebhookEvent } from '../providers';
 import { paymentRepository } from '../repository';
-import { CONFIRMABLE_PAYMENT_STATUSES, SETTLEABLE_PAYMENT_STATUSES } from '../domain';
+import {
+    CONFIRMABLE_PAYMENT_STATUSES,
+    SETTLEABLE_PAYMENT_STATUSES,
+    SUCCESS_SETTLEABLE_PAYMENT_STATUSES
+} from '../domain';
 import type { PaymentDocument } from '../model';
 import { payerScope } from './scope';
 import { CANCELLATION_REQUEST, openRefund, performRefund } from './refunds';
@@ -44,8 +48,8 @@ interface Settlement {
     payment: PaymentDocument;
     /**
      * Whether the money arrived at a moment when the order could no longer be paid. Putting it
-     * straight back was attempted; the payment reads `refunded` when that landed, still
-     * `succeeded` when the refund itself failed or the process died first (the retry sweep
+     * straight back was attempted; the payment's `displayStatus` reads `refunded` when that landed, `succeeded`
+     * (refund pending) when the refund itself failed or the process died first (the retry sweep
      * finishes it either way) — but the caller owes its client a refusal regardless, which is
      * the one thing the status alone does not say.
      */
@@ -86,7 +90,7 @@ const receiptMismatch = (payment: PaymentDocument, state: ProviderPaymentState):
  *
  * Marker:   written BEFORE the attempt. Unlike a cancel, nothing retries this call itself, so a
  *           throw with no durable note first would lose the refund.
- * Refund:   `performRefund`, not a bare `provider.refund` — the payment ends up saying
+ * Refund:   `performRefund`, not a bare `provider.refund` — the payment ends up reading
  *           `refunded`, through the same at-most-once guard every other refund goes through.
  * Failure:  logged, never rethrown — the caller must still answer its own caller, and `orders`'
  *           own `ORDER_REFUND_OWED` sweep is what finishes it if this attempt didn't.
@@ -162,7 +166,7 @@ const settleMismatch = (
 
     // What ARRIVED is written over the frozen figures, so the refund returns what was collected.
     return paymentRepository
-        .updateStatusIfIn(orderId, SETTLEABLE_PAYMENT_STATUSES, 'succeeded', {
+        .updateStatusIfIn(orderId, SUCCESS_SETTLEABLE_PAYMENT_STATUSES, 'succeeded', {
             ...(state.cardLast4 ? { cardLast4: state.cardLast4 } : {}),
             ...(state.amountReceived === undefined ? {} : { amount: state.amountReceived }),
             ...(state.currency ? { currency: state.currency } : {})
@@ -221,7 +225,7 @@ type SettlementOutcome =
  * Database only: no provider call, no mail. The driver re-runs this callback on a transient
  * error, so anything else would happen twice.
  *
- * Gate:    the PAYMENT write. `SETTLEABLE_PAYMENT_STATUSES` excludes the terminal states, so
+ * Gate:    the PAYMENT write. `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` excludes `succeeded`, so
  *          exactly one caller sees its own write land; a webhook and a confirm racing each other
  *          commit once. The other finds nothing to do — `replay`.
  * Replay:  `markPaid` answering `null` on an order that is already past payment (a move that
@@ -245,7 +249,7 @@ const settleWithin = async (
     const orderId = String(payment.orderId);
     const succeeded = await paymentRepository.updateStatusIfIn(
         orderId,
-        SETTLEABLE_PAYMENT_STATUSES,
+        SUCCESS_SETTLEABLE_PAYMENT_STATUSES,
         'succeeded',
         extra,
         session
@@ -339,8 +343,8 @@ const afterSettlement = (
  * only one.
  *
  * Every write is conditional, so a delivery that arrives twice, or races the browser's own call,
- * settles once. The PAYMENT write is what gates it — `SETTLEABLE_PAYMENT_STATUSES` excludes the
- * terminal states, so exactly one caller ever sees its own write succeed — not the order's own
+ * settles once. The PAYMENT write is what gates it — the settleable sets exclude `succeeded`, and
+ * the non-success ones `cancelled`, so exactly one caller ever sees its own write succeed — not the order's own
  * `pending → paid` move: a webhook retried after {@link applyWebhookDelivery} released its claim
  * re-enters here and can legitimately lose that race (the order already got there on the failed
  * first attempt) while still being the one call that must finish the job.
@@ -716,7 +720,7 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
  * Ask the provider what became of a payment and settle the answer — the step the webhook, the
  * reconciliation sweep and the cancel path's catch all share, so they cannot drift apart.
  *
- * A payment already past `SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
+ * A payment already past `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` is left alone without asking the provider
  * anything, the same shortcut {@link syncPayment} takes: nothing it could say would be acted on.
  *
  * @param payment - the payment to reconcile; it must hold a `providerRef`
@@ -724,7 +728,7 @@ export const applyWebhookDelivery = (event: ProviderWebhookEvent): Promise<void>
  *   provider was not asked
  */
 export const settleFromProvider = (payment: PaymentDocument): Promise<Settlement | null> => {
-    if (!SETTLEABLE_PAYMENT_STATUSES.includes(payment.status) || !payment.providerRef)
+    if (!SUCCESS_SETTLEABLE_PAYMENT_STATUSES.includes(payment.status) || !payment.providerRef)
         return Promise.resolve(null);
 
     return providerNamed(payment.provider)

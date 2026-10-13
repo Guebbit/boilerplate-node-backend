@@ -61,7 +61,6 @@ describe('performRefund — a succeeded payment with no providerRef', () => {
     it('audits a failure, not a success, for money that never actually moved', async () => {
         const refunded = asStub<PaymentDocument>({
             ...corruptedPayment,
-            status: 'refunded',
             amountRefunded: 10,
             refunds: [{ status: 'succeeded' }]
         });
@@ -80,7 +79,7 @@ describe('performRefund — a succeeded payment with no providerRef', () => {
         const { performRefund } = await import('../../services/refunds');
         const result = await performRefund('order-1', { caller: { role: 'admin' } } as never);
 
-        expect(result?.status).toBe('refunded');
+        expect(result?.status).toBe('succeeded');
         expect(recordAudit).toHaveBeenCalledTimes(1);
         expect(recordAudit.mock.calls[0][1]).toMatchObject({
             action: 'admin.payment.refunded',

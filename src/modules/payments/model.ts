@@ -3,7 +3,7 @@
  * One payment document per order, made a database fact by `unique` on `orderId` — a retry after a
  * decline re-confirms the SAME document rather than minting a second one. The status vocabulary
  * (`requires_confirmation`, `requires_action` and `processing` in flight, `succeeded`, `declined`
- * retryable, `refunded` terminal) is the provider-facing lifecycle, distinct from the order's
+ * retryable, `cancelled` terminal) is the provider-facing lifecycle, distinct from the order's
  * customer-facing status, and comes from `PaymentStatus` in the contract so the enum and the wire
  * cannot disagree.
  */
@@ -34,8 +34,8 @@ export interface RefundLine {
 
 /**
  * One attempt to give money back — a record per attempt, the way Stripe keeps a `Refund` per
- * request. The payment's own `status` says whether it is fully returned; these say how, when and
- * how much each time.
+ * request. Whether the payment is fully returned is read off these records (`displayStatus`); each says
+ * how, when and how much.
  */
 export interface RefundRecord {
     _id: Types.ObjectId;

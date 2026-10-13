@@ -98,7 +98,7 @@ export const recordOfflinePayment = async (
         reference: input.reference,
         receivedAt: input.receivedAt ? new Date(input.receivedAt) : new Date()
     });
-    // Nothing to upsert onto: the order's own money already moved (succeeded or refunded),
+    // Nothing to upsert onto: the order's own money already moved (succeeded),
     // raced past the `pending` check above.
     if (!upserted) return notPayable();
     const { payment, created } = upserted;

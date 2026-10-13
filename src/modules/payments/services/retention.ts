@@ -89,8 +89,7 @@ export const findOwnPaymentsForExport = (userId: string): Promise<ExportPayment[
     findOwnPayments(userId).then((payments) => payments.map((payment) => toExportPayment(payment)));
 
 /**
- * `scripts/ops/reap-payments.ts`'s sweep. Deletes payment attempts that never reached `succeeded` or
- * `refunded` and have not been touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) —
+ * `scripts/ops/reap-payments.ts`'s sweep. Deletes payment attempts that never reached `succeeded` and have not been touched in `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) —
  * an open checkout the customer walked away from (a declined card nobody retried, a challenge
  * nobody answered), not a financial record. A settled payment is never a candidate here or on
  * any other timer; see `docs/modules/payments.md`'s retention section.

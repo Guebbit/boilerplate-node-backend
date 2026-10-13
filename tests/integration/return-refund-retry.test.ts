@@ -91,6 +91,6 @@ describe('a return whose refund the provider refuses', () => {
             const closed = await returnRepository.findById(returnId);
             expect(closed?.closedAt).toBeInstanceOf(Date);
             const after = await paymentService.getForOrder(orderId, asAdmin());
-            expect(after.success && after.data.status).toBe('refunded');
+            expect(after.success && after.data.status).toBe('succeeded');
         }));
 });

@@ -1,6 +1,6 @@
 /**
  * @module
- * Credit-note issuance, end to end: a `succeeded` payment moving to `refunded` is the ONLY thing
+ * Credit-note issuance, end to end: a refund settling on a `succeeded` payment is the ONLY thing
  * that ever freezes a credit note — reached here through `payments`' real `refundForOrder` and the
  * real `module.ts` subscription to `PAYMENT_REFUNDED`, never by calling `issueCreditNote` directly.
  */

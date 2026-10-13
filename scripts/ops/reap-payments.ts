@@ -3,7 +3,7 @@
  * @module
  * Delete abandoned payment attempts — `npm run reap:payments`.
  *
- * Deletes, unlike `reap-orders.ts`: a payment that never reached `succeeded` or `refunded` was
+ * Deletes, unlike `reap-orders.ts`: a payment that never reached `succeeded` was
  * never money, so there is no invoice to keep. It is an open checkout the customer walked away
  * from — a declined card nobody retried, a 3-D Secure challenge nobody answered — past
  * `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30) since it was last touched. A payment that

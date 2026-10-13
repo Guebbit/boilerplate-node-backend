@@ -135,7 +135,7 @@ paths:
             tags: [Stats]
             summary: Payments mix (staff)
             description: >-
-                Payments that took money in the period (`succeeded` or since `refunded`), by
+                Payments that took money in the period (`succeeded`, refunded or not), by
                 method and provider, with their count and amount. Needs `stats.any.read`.
             operationId: getPaymentMixStats
             security:

@@ -316,7 +316,7 @@ export const clearRefundOwed = (orderId: string): Promise<void> =>
  *
  * Re-announces `ORDER_REFUND_OWED` — never `ORDER_CANCELLED` — for every order still owing a
  * refund, and clears the marker only once that send actually returns. Safe to run repeatedly —
- * `payments`' conditional `succeeded → refunded` move means a second announcement for an
+ * `payments`' conditional refund write means a second announcement for an
  * already-refunded order finds nothing to do, and an order cancelled while never paid finds
  * nothing either.
  *

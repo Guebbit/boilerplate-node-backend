@@ -546,9 +546,9 @@ describe('POST /payments/order/{orderId}/refund — the operator', () => {
             .set('Idempotency-Key', freshKey());
 
         expect(response.status).toBe(200);
-        expect(response.body.data.status).toBe('refunded');
+        expect(response.body.data.status).toBe('succeeded');
         const payment = await paymentRepository.findById(paymentId);
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('succeeded');
     });
 
     it('matches the error contract for a second refund — money comes back once', async () => {

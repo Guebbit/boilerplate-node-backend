@@ -301,7 +301,7 @@ describe('P5 — a customer cancelling while the payment settles', () => {
             const payment = await paymentModel.findById(paymentId);
             if (order?.status === 'cancelled')
                 // Never charged, or charged and given back — never charged and kept.
-                expect(['requires_confirmation', 'refunded']).toContain(payment?.status);
+                expect(['cancelled', 'succeeded']).toContain(payment?.status);
             else {
                 expect(order?.status).toBe('paid');
                 expect(payment?.status).toBe('succeeded');

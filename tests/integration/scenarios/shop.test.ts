@@ -431,7 +431,7 @@ describe('each subject names a row that really has the property', () => {
         const payment = await paymentModel
             .findOne({ orderId: subjects['payment.refunded'] })
             .exec();
-        expect(payment?.status).toBe('refunded');
+        expect(payment?.status).toBe('succeeded');
     });
 });
 

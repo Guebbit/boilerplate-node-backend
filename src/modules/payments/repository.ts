@@ -16,7 +16,8 @@ import type { PaymentDocument, RefundRecord } from './model';
 import {
     CONFIRMABLE_PAYMENT_STATUSES,
     OPEN_REFUND_STATUSES,
-    SETTLEABLE_PAYMENT_STATUSES
+    SETTLEABLE_PAYMENT_STATUSES,
+    REAPABLE_PAYMENT_STATUSES
 } from './domain';
 import {
     createRepository,
@@ -325,7 +326,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * amount and resets to `requires_confirmation`, but ONLY from a state where nobody has paid —
      * the `$in` guard enforces that the same way the order's own status machine does.
      *
-     * Past confirmation (`succeeded`, `refunded`) the filter misses and the upsert collides with
+     * Past confirmation (`succeeded`, `cancelled`) the filter misses and the upsert collides with
      * the unique index instead: that duplicate key IS the answer "this order's money already
      * moved", surfaced as `null` rather than an exception.
      */
@@ -388,8 +389,9 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
 
     /**
      * Delete every payment attempt that never became money and has sat untouched since before
-     * `cutoff` — `scripts/ops/reap-payments.ts`'s sweep. `succeeded` and `refunded` are excluded no
-     * matter how old: those are invoices, kept forever like `orders`' own records, not attempts.
+     * `cutoff` — `scripts/ops/reap-payments.ts`'s sweep. Only the statuses in `REAPABLE_PAYMENT_STATUSES`
+     * go, however old: `succeeded` is an invoice, kept forever like `orders`' own records, and a
+     * status added later is kept until someone names it reapable.
      * See `docs/modules/payments.md`'s retention section for the reasoning.
      *
      * @param cutoff - payments last touched at or before this instant are due
@@ -398,7 +400,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
     deleteAbandonedBefore: (cutoff: Date) =>
         paymentModel
             .deleteMany({
-                status: { $nin: [PaymentStatus.succeeded, PaymentStatus.refunded] },
+                status: { $in: [...REAPABLE_PAYMENT_STATUSES] },
                 updatedAt: { $lte: cutoff }
             })
             .exec()
@@ -538,7 +540,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         aggregatePayments<MixSums>([
             {
                 $match: {
-                    status: { $in: [PaymentStatus.succeeded, PaymentStatus.refunded] },
+                    status: PaymentStatus.succeeded,
                     createdAt: { $gte: window.from, $lt: window.to }
                 }
             },

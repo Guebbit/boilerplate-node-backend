@@ -95,7 +95,7 @@ describe('a partial refund', () => {
         await refund(orderId, { amount: 70 });
 
         const payment = await paymentOf(orderId);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.amountRefunded).toBe(100);
         expect(payment.refunds).toHaveLength(2);
     });
@@ -107,7 +107,7 @@ describe('a partial refund', () => {
         await refund(orderId);
 
         const payment = await paymentOf(orderId);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.refunds.map((entry) => entry.amount)).toEqual([30, 70]);
     });
 
@@ -179,11 +179,21 @@ describe('a refund that asks for too much', () => {
         expect(refundsNow).toHaveLength(1);
     });
 
-    it('is refused with 409 once nothing is left', async () => {
+    it('is refused with 422 and an amount once nothing is left', async () => {
         const { orderId } = await paidOrder();
         await refund(orderId);
 
         const result = await refund(orderId, { amount: 1 });
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_EXCEEDS_REMAINING');
+    });
+
+    it('is refused with 409 when no amount is named and nothing is left', async () => {
+        const { orderId } = await paidOrder();
+        await refund(orderId);
+
+        const result = await refund(orderId);
 
         expect(asReject(result).status).toBe(409);
     });
@@ -310,8 +320,9 @@ describe('a refund the provider refuses', () => {
 
             await retryOpenRefunds();
 
-            const { status: statusAfter } = await paymentOf(orderId);
-            expect(statusAfter).toBe('refunded');
+            const after = await paymentOf(orderId);
+            expect(after.status).toBe('succeeded');
+            expect(presentPayment(after).displayStatus).toBe('refunded');
         }));
 
     it('is completed, not doubled, when the operator retries the same refund', async () => {
@@ -323,7 +334,7 @@ describe('a refund the provider refuses', () => {
 
         expect(retried.success).toBe(true);
         const payment = await paymentOf(orderId);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.refunds).toHaveLength(1);
     });
 });
@@ -338,7 +349,7 @@ describe('cancelling an order that was already partly refunded', () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
 
         const payment = await paymentOf(orderId);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.refunds.map((entry) => [entry.amount, entry.reason])).toEqual([
             [30, 'goodwill'],
             [70, 'cancellation']
@@ -365,7 +376,7 @@ describe('a partial refund on a payment recorded by hand', () => {
         await refund(orderId);
 
         const payment = await paymentOf(orderId);
-        expect(payment.status).toBe('refunded');
+        expect(payment.status).toBe('succeeded');
         expect(payment.refundedByHand).toBe(true);
         expect(payment.refunds.every((entry) => entry.providerRefundRef === undefined)).toBe(true);
         expect(providerSpy).not.toHaveBeenCalled();
@@ -395,7 +406,7 @@ describe('the payment.refunded announcement', () => {
 
         await expect(refund(orderId)).rejects.toThrow('disk full');
 
-        // The provider was asked, but the record never settled, so the payment is not `refunded`
+        // The provider was asked, but the record never settled, so the payment does not read `refunded`
         // and the sweep finishes the refund under the same idempotency key.
         const payment = await paymentOf(orderId);
         expect(payment.status).toBe('succeeded');

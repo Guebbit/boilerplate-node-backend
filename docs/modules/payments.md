@@ -142,8 +142,9 @@ Two different questions, asked at two different moments, both owned by `orders`:
 cancel at any moment, and a cancel racing the settlement serialises on the order document: either
 the cancel lands first and `markPaid` finds the order gone (the money is put straight back, see
 [One settlement transaction](#one-settlement-transaction)), or the settlement lands first and the
-cancel's refund sees a `succeeded` payment. The conditional `succeeded → refunded` write makes sure
-only one of them refunds.
+cancel's refund sees a `succeeded` payment. What makes sure only one of them refunds is
+`addRefund`'s condition on `amountRefunded` (a second refund of the same money finds nothing left
+to ask back), not a status write.
 
 **Before the final write, the money is compared with what was asked.** A provider's `succeeded`
 carries `amountReceived`, `currency` and `paymentId`, and `settlePayment` checks all three against
@@ -231,12 +232,23 @@ Neither net adds a marker or a field: the payment's own status and `updatedAt` a
 
 `requires_confirmation` is entered once, by `POST /payments/intent`, and never again — nothing a
 provider reports is ever that value. From there, every non-terminal status can settle to any other
-non-terminal status: `CONFIRMABLE_PAYMENT_STATUSES` (`domain/lifecycle.ts`) gates which ones `POST
-/payments/{id}/confirm` accepts as a starting point (`requires_confirmation`, `declined` — a
-decline is retryable with another method), and `SETTLEABLE_PAYMENT_STATUSES` gates which ones
-`settlePayment` will still write over (everything except the two terminal states below). `succeeded`
-moves to `refunded` and nowhere else — and only once the refund records add up to `amount`
-([Refund records](#refund-records)); `refunded` moves nowhere.
+non-terminal status. Three sets in `domain/lifecycle.ts` say which write may run from where:
+
+| Set                                   | Statuses                                                             | Gates                                                                        |
+| ------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `CONFIRMABLE_PAYMENT_STATUSES`        | `requires_confirmation`, `declined`                                  | `POST /payments/{id}/confirm` (a decline is retryable with another method)   |
+| `SETTLEABLE_PAYMENT_STATUSES`         | `requires_confirmation`, `requires_action`, `processing`, `declined` | every write except the success write: in-flight, decline, the order's cancel |
+| `SUCCESS_SETTLEABLE_PAYMENT_STATUSES` | the settleable ones plus `cancelled`                                 | the success write, the amount-mismatch write and the provider re-read's gate |
+
+`succeeded` is terminal, and stays `succeeded` however much is refunded: refund state is read from
+the refund records and `amountRefunded` ([Refund records](#refund-records)), the way Stripe's
+PaymentIntent and Shopify's transactions do, and the order already carries `paymentStatus`.
+
+`cancelled` is written by the `order.cancelled` listener (`cancelOpenIntentForOrder`), only after
+the provider confirmed the intent closed, and only from a still-open status: a success racing it
+wins. A report that arrives later (`processing`, `declined`) moves nothing and announces nothing.
+Money that arrives on it is real: the success write runs from `cancelled`, finds the order gone and
+opens the refund for the whole amount in the same transaction.
 
 ```mermaid
 stateDiagram-v2
@@ -258,9 +270,12 @@ stateDiagram-v2
     declined --> declined: confirm, refused again
     requires_confirmation --> succeeded: recorded by hand
     declined --> succeeded: recorded by hand
-    succeeded --> refunded: the refunds add up to the amount paid
-    succeeded --> succeeded: a partial refund
-    refunded --> [*]
+    requires_confirmation --> cancelled: order cancelled
+    requires_action --> cancelled: order cancelled
+    processing --> cancelled: order cancelled
+    declined --> cancelled: order cancelled
+    cancelled --> succeeded: late success, refunded in the same transaction
+    succeeded --> succeeded: a refund, partial or whole
 ```
 
 **Each fact is reported once, by the call whose write made it true.** `settlePayment` says whether
@@ -336,7 +351,6 @@ sequenceDiagram
     P->>V: refund(part, idempotencyKey)
     alt provider answers
         P->>D: record succeeded (conditional on it still being open)
-        P->>D: payment refunded, only if the records add up to amount
         P->>D: order.paymentStatus stamped (same transaction)
         P-->>C: payment.refunded (once per refund)
     else provider refuses
@@ -540,19 +554,20 @@ flowchart LR
 ```
 
 `displayStatus` is derived, never stored (Shopify's `displayFinancialStatus`). An open refund wins
-over the status, and the label is read from the refund records, not `amountRefunded`, which counts
-a requested refund as done. The filter is the label's inverse, and the integration suite checks
+over the status. `amountRefunded` counts a requested refund as done, so it is compared with
+`amount` only once no refund is open (then equal means every unit went back). The filter is the label's inverse, and the integration suite checks
 every label both ways.
 
-| Label                | Stored                                              |
-| -------------------- | --------------------------------------------------- |
-| `incomplete`         | `requires_confirmation`, `requires_action`          |
-| `pending`            | `processing`                                        |
-| `succeeded`          | `succeeded`, no refund record                       |
-| `refund_pending`     | any refund record `pending` or `failed`             |
-| `partially_refunded` | `succeeded`, at least one settled refund, none open |
-| `refunded`           | `refunded`                                          |
-| `failed`             | `declined`                                          |
+| Label                | Stored                                                                |
+| -------------------- | --------------------------------------------------------------------- |
+| `incomplete`         | `requires_confirmation`, `requires_action`                            |
+| `pending`            | `processing`                                                          |
+| `succeeded`          | `succeeded`, no refund record                                         |
+| `refund_pending`     | any refund record `pending` or `failed`                               |
+| `partially_refunded` | `succeeded`, at least one settled refund, none open                   |
+| `refunded`           | `succeeded`, a settled refund, none open, `amountRefunded` = `amount` |
+| `failed`             | `declined`                                                            |
+| `cancelled`          | `cancelled`                                                           |
 
 **What staff see that a payer does not.** `providerRef`, each refund's `providerRefundRef` and a
 failed refund's `failureReason`. The reason is a closed code (`declined`, `insufficient_funds`,
@@ -561,7 +576,7 @@ failed refund's `failureReason`. The reason is a closed code (`declined`, `insuf
 else is `unknown`. The provider's own wording goes to the log and is never stored. The fake
 provider's `setFakeRefundFailure` simulates each code.
 
-`paymentService.methodMix` groups the payments that took money (`succeeded`, or `refunded` since) by
+`paymentService.methodMix` groups the payments that took money (`succeeded`) by
 method, provider and currency, for [`stats`](./stats.md).
 
 **Needs attention** lists four sources: a provider refund open longer than
@@ -645,9 +660,9 @@ the same reasoning that lets it appear on any receipt or bank statement. `amount
 that is already removed the moment an account is erased (`detachUserId`, immediate — no delay, no
 timer). So once a payment settles, there is nothing left for a retention job to do.
 
-**Does a settled payment ever get deleted?** No — same as `orders`, a `succeeded` or `refunded`
-payment is an invoice, kept indefinitely for tax and commercial-law reasons. Neither status is
-ever a candidate for `reap:payments`, `reap:orders`, or any other timer in this codebase.
+**Does a settled payment ever get deleted?** No — same as `orders`, a `succeeded`
+payment (refunded or not) is an invoice, kept indefinitely for tax and commercial-law reasons. It is
+never a candidate for `reap:payments`, `reap:orders`, or any other timer in this codebase.
 
 **What about a payment that never settles at all** — a declined card nobody retried, a 3-D Secure
 challenge nobody answered? That row was never a transaction: no money moved, so there is no
@@ -655,10 +670,10 @@ invoice to keep. `npm run reap:payments` deletes it once it has sat untouched (`
 `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout, not a financial
 record. Retrying resets the clock, the same way editing a cart resets `carts`' own TTL.
 
-| Payment state                            | Kept forever? | Mechanism                                      |
-| ---------------------------------------- | :-----------: | ---------------------------------------------- |
-| `succeeded` / `refunded`                 |      Yes      | Never touched by any timer — it is the invoice |
-| Anything else, untouched past the window |      No       | `npm run reap:payments` deletes the row        |
+| Payment state                                                                  | Kept forever? | Mechanism                                      |
+| ------------------------------------------------------------------------------ | :-----------: | ---------------------------------------------- |
+| `succeeded`                                                                    |      Yes      | Never touched by any timer — it is the invoice |
+| `requires_*`, `processing`, `declined`, `cancelled`, untouched past the window |      No       | `npm run reap:payments` deletes the row        |
 
 `npm run reap:payments` runs nightly from `docker/crontab`, alongside the rest of this repo's
 scheduled jobs — see [Scheduled jobs](../reference/ops.md#scheduled-jobs) for the full mechanism

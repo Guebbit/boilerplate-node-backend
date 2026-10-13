@@ -24,6 +24,7 @@ import type { PaymentDocument } from '../model';
 import { presentPayment } from '../presenter';
 import { paymentRepository } from '../repository';
 import { cardNotAvailable, notPayable } from './errors';
+import { SETTLEABLE_PAYMENT_STATUSES } from '../domain';
 import { settleFromProvider } from './settlement';
 import { buyerOrderScope } from './scope';
 import { ERROR_CODES } from '@api/error-codes';
@@ -160,23 +161,33 @@ export const cancelOpenIntent = (payment: PaymentDocument, reason: string): Prom
 /**
  * `order.cancelled`'s listener (see `../module.ts`): close a still-open, never-settled intent at
  * the provider once its order is gone, so an abandoned one cannot resolve on its own later with no
- * local row left to catch it. A `succeeded`/`refunded` payment is skipped outright — that
- * money is `payments`' own `order.refund_owed` listener to give back, not this one's to cancel.
+ * local row left to catch it, then record it `cancelled`. A `succeeded` or already `cancelled`
+ * payment is skipped outright — money is `payments`' own `order.refund_owed` listener to give
+ * back, not this one's to cancel.
  *
  * Best-effort, unlike {@link cancelOpenIntent}'s other caller (`recordOfflinePayment`): the order
  * is already cancelled by the time this runs, so there is no request left here to refuse — a
  * provider failure is only logged, never rethrown, so it cannot stop the cancel that already
  * happened. A provider that says the intent already succeeded is the one case acted on: the
  * payment is reconciled on the spot, which refunds money that landed on the cancelled order.
+ * `cancelled` is written only once the provider confirmed the close, and only from a still-open
+ * status, so a success racing this call wins.
  *
  * @param orderId - the order that was cancelled
  */
 export const cancelOpenIntentForOrder = (orderId: string): Promise<void> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
-        if (!payment || payment.status === 'succeeded' || payment.status === 'refunded')
-            return undefined;
+        if (!payment || !SETTLEABLE_PAYMENT_STATUSES.includes(payment.status)) return undefined;
 
         return cancelOpenIntent(payment, 'Order cancelled')
+            .then(() =>
+                paymentRepository.updateStatusIfIn(
+                    orderId,
+                    SETTLEABLE_PAYMENT_STATUSES,
+                    'cancelled'
+                )
+            )
+            .then(() => undefined)
             .catch((error: unknown) => {
                 if (!(error instanceof PaymentInFlightError)) throw error;
                 // The provider refused to close the intent: the customer's money landed (or is on

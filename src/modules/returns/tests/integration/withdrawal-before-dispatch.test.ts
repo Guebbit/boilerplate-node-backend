@@ -88,7 +88,8 @@ describe('a withdrawal before dispatch on a paid order', () => {
         expect(stored?.status).toBe(OrderStatus.cancelled);
         const payment = await paymentService.getForOrder(orderId, asAdmin());
         expect(payment.success && payment.data).toMatchObject({
-            status: 'refunded',
+            status: 'succeeded',
+            displayStatus: 'refunded',
             amountRefunded: 40
         });
         const [written] = await returnRepository.findByOrderId(orderId);

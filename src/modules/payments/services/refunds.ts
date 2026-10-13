@@ -10,8 +10,9 @@
  * Order:    the provider is asked next, and the record settles only once it confirms. A refusal
  *           leaves the record `failed` — open, retried by the sweep with the SAME idempotency key
  *           — instead of recording money as returned before anyone asked.
- * Full:     the payment moves `succeeded → refunded` only when the records add up to `amount`. A
- *           partial refund leaves it `succeeded`, which is what keeps the rest refundable.
+ * Full:     the payment stays `succeeded` however much goes back; `displayStatus` reads
+ *           `refunded` once the records add up to `amount`. What keeps a refunded payment from
+ *           refunding twice is `addRefund`'s condition on `amountRefunded`.
  * Provider: dispatched on the PAYMENT's own `provider`, never the deployment's configured one — a
  *           `manual` payment has no provider to ask, and a real PSP refund must go back to
  *           whichever provider actually took the money, even if the deployment has since switched.
@@ -320,14 +321,13 @@ const refundedPayload = (
 const stampOrder = (payment: PaymentDocument, session: ClientSession): Promise<boolean> =>
     orderService.markPaymentStatus(
         String(payment.orderId),
-        payment.status === 'refunded' ? 'refunded' : 'partially_refunded',
+        isFullyRefunded(payment) ? 'refunded' : 'partially_refunded',
         session
     );
 
 /**
  * The settlement's writes, inside the caller's transaction: the refund record goes `succeeded`,
- * the payment moves to `refunded` when that was the last of it, and the order's payment status
- * is stamped to match.
+ * and the order's payment status is stamped to match (`refunded` when that was the last of it).
  *
  * @param payment - the payment the refund belongs to
  * @param refund - the record being settled
@@ -345,19 +345,6 @@ const writeSettlement = (
 ): Promise<PaymentDocument | null> =>
     paymentRepository
         .settleRefund(String(payment._id), String(refund._id), fields, session)
-        .then((settled) => {
-            if (!settled) return null;
-            if (!isFullyRefunded(settled)) return settled;
-            return paymentRepository
-                .updateStatusIfIn(
-                    String(settled.orderId),
-                    [REFUNDABLE_PAYMENT_STATUS],
-                    'refunded',
-                    {},
-                    session
-                )
-                .then((moved) => moved ?? settled);
-        })
         .then((final) =>
             final
                 ? stampOrder(final, session)
@@ -373,7 +360,7 @@ const writeSettlement = (
         );
 
 /**
- * Settle one open refund, and move the payment to `refunded` if that was the last of it. The
+ * Settle one open refund. The
  * conditional write IS the idempotence: a second caller (the sweep racing the request) finds the
  * record already `succeeded` and answers `null`, so the announcement fires once. The
  * `payment.refunded` outbox row commits with the writes, never after them.
@@ -562,9 +549,8 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
  *  callers: present means the operator asked (audited `success`), absent means the automatic
  *  listener did (left for an operator, audited `PAYMENT_REFUND_OWED_BY_HAND` instead).
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
- * @returns the payment as it now stands — `refunded` once all of it is back, still `succeeded`
- *   after a partial refund or when a hand-paid refund is left for an operator — or `null` when
- *   there was nothing to return
+ * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
+ *   `displayStatus` says how much) — or `null` when there was nothing to return
  */
 export const performRefund = (
     orderId: string,
@@ -573,6 +559,9 @@ export const performRefund = (
 ): Promise<PaymentDocument | null> =>
     paymentRepository.findByOrderId(orderId).then((payment) => {
         if (payment?.status !== REFUNDABLE_PAYMENT_STATUS) return null;
+        // Everything is back already: a repeated cancel, or the hand-paid listener, has nothing to
+        // leave for anyone.
+        if (isFullyRefunded(payment)) return null;
 
         // Only the operator's own call (`context` present) may say hand-paid cash went back; the
         // automatic listener leaves it standing.

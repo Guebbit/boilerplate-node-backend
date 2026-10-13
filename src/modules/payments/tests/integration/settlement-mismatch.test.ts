@@ -115,7 +115,7 @@ describe.each(MISMATCHES)('a provider success whose %s is not the one frozen', (
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
         const payment = await paymentRepository.findByOrderId(orderId);
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('succeeded');
         expect(payment!.refunds).toHaveLength(1);
         // Nothing was paid: no announcement, no invoice, and the units are back on the shelf.
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
@@ -189,7 +189,7 @@ describe('the other doors into the same settlement', () => {
 
         expect(asReject(result).errors[0].code).toBe('PAYMENT_ORDER_NOT_PAYABLE');
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
-        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('refunded');
+        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
     });
 
     it('acknowledges the webhook delivery, and still cancels and refunds', async () => {
@@ -202,7 +202,7 @@ describe('the other doors into the same settlement', () => {
         ).resolves.toBeUndefined();
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
-        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('refunded');
+        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
     });
 
     it('treats a success that reports no figures at all as unverifiable, and refuses it', async () => {
@@ -278,7 +278,7 @@ describe('a crash after the mismatch was recorded', () => {
         await orderService.cancelById(orderId, SYSTEM_ACTOR, {}, undefined, true);
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
-        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('refunded');
+        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
         expect(user.id).toBeTruthy();
     });
 
@@ -294,6 +294,6 @@ describe('a crash after the mismatch was recorded', () => {
 
         await confirmPayment(paymentId, GOOD_METHOD, asCustomer(user.id), testCallerContext);
 
-        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('refunded');
+        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('succeeded');
     });
 });

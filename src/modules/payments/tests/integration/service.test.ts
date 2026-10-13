@@ -296,7 +296,7 @@ describe('confirmPayment', () => {
         confirmSpy.mockRestore();
         refundSpy.mockRestore();
 
-        // Nothing moved: the payment sits exactly where the intent left it, not `refunded` — there
+        // Nothing moved: the payment sits exactly where the intent left it, not refunded — there
         // was never any money to give back.
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('requires_confirmation');
@@ -394,7 +394,7 @@ describe('refund on cancel', () => {
 
         expect(cancelled.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('succeeded');
     });
 
     it('cancelling a never-paid order refunds nothing', async () => {
@@ -454,7 +454,7 @@ describe('refund on cancel', () => {
             expect(await orderService.retryPendingEffects()).toBe(1);
             expect(refundSpy).toHaveBeenCalledTimes(2);
             expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-                'refunded'
+                'succeeded'
             );
             refundSpy.mockRestore();
         }));
@@ -501,7 +501,7 @@ describe('refund on cancel', () => {
 
             expect(await retryOpenRefunds()).toBe(1);
             const finished = await paymentRepository.findByOrderId(String(order._id));
-            expect(finished!.status).toBe('refunded');
+            expect(finished!.status).toBe('succeeded');
             expect(finished!.refunds).toHaveLength(1);
             refundSpy.mockRestore();
             confirmSpy.mockRestore();
@@ -553,7 +553,9 @@ describe('refund on cancel', () => {
         await orderService.cancelById(String(order._id), auth(user));
 
         // The setup this test actually cares about: cancelling really did refund it already.
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+            'succeeded'
+        );
 
         // The webhook arrives unbidden and late — the browser-driven confirm already settled and
         // the cancel already refunded it by the time the provider's own callback catches up.
@@ -561,7 +563,7 @@ describe('refund on cancel', () => {
         await applyWebhookSettlement(providerRef);
 
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('succeeded');
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).not.toBe('paid');
     });
@@ -592,7 +594,7 @@ describe('refund on cancel', () => {
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
         const payment = await paymentRepository.findByOrderId(orderId);
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('succeeded');
         expect(payment!.refunds).toHaveLength(1);
         expect(payment!.refunds[0]).toMatchObject({ amount: 50, status: 'succeeded' });
         // The customer is told the order could not be paid, not that it was.
@@ -1240,7 +1242,7 @@ describe('refundByOrder', () => {
 
         expect(result.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('refunded');
+        expect(payment!.status).toBe('succeeded');
         const stored = await orderService.getById(String(order._id));
         expect(stored!.status).toBe('paid');
     });
@@ -1285,7 +1287,7 @@ describe('refundByOrder', () => {
 
     /*
      * The provider is asked first through THIS endpoint too, so a rejection leaves the payment
-     * `succeeded` rather than answering 500 with the row already saying `refunded` — a retry here
+     * `succeeded` rather than answering 500 with the refund already counted — a retry here
      * really is a retry, not a 409 "already refunded" over money that never actually came back.
      */
     it('a rejected attempt leaves the payment succeeded, so a retry can still return the money', async () => {
@@ -1304,7 +1306,9 @@ describe('refundByOrder', () => {
         const retried = await refundByOrder(String(order._id), asAdmin(), callerContextAs('admin'));
 
         expect(retried.success).toBe(true);
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe('refunded');
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+            'succeeded'
+        );
         refundSpy.mockRestore();
     });
 });
@@ -1527,7 +1531,7 @@ describe('recordOfflinePayment — refunding it back', () => {
 
         expect(refunded.success).toBe(true);
         const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment).toMatchObject({ status: 'refunded', refundedByHand: true });
+        expect(payment).toMatchObject({ status: 'succeeded', refundedByHand: true });
     });
 });
 

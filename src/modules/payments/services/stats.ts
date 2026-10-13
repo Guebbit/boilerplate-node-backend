@@ -18,7 +18,7 @@ export interface MixRow {
 }
 
 /**
- * Payments created in the window that took money (`succeeded`, or `refunded` since), by method and
+ * Payments created in the window that took money (`succeeded`, refunded or not), by method and
  * provider. A payment that never settled took none.
  * @param window - the half-open window
  */

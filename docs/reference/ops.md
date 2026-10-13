@@ -190,7 +190,7 @@ carries none: `cardLast4` is not a PAN, and `amount`/`currency`/`provider` were 
 data, so a settled payment is never touched by any timer.
 
 A payment that never settled is a different case, not a PII one: `npm run reap:payments` DELETES
-an attempt (never `succeeded`/`refunded`) once it has sat untouched for
+an attempt (never `succeeded`) once it has sat untouched for
 `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` (default 30 days) — an abandoned checkout is not an
 invoice, so there is nothing there worth keeping. See the script's own header, and
 [payments](../modules/payments.md)'s retention section for the full reasoning.
