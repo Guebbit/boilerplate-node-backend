@@ -255,6 +255,14 @@ flowchart LR
     class R,W,I,B,F,M done;
 ```
 
+Why the export lives in `account` and not in a `privacy` module: GDPR export, erasure and
+minimising are three jobs with three homes. Each module declares its own `personalData` section
+(`collect`, `erase`, `minimise`), so who holds what is already one registry in the kernel. Erasure
+and minimising stay in [`users`](./users.md), because they act on the User row inside one
+transaction. The export stays beside the account it serves, as in Discourse, Mastodon and Spatie's
+personal-data package, and it leans on this module's mailer, mail budget, audit actions and queue. A
+separate module would need an import cycle with `users`, or a new URL, and would change no behaviour.
+
 Decisions rather than mechanics:
 
 - **One live export per account.** Asking while one is `building` returns that one (and starts no
