@@ -306,9 +306,11 @@ components:
                     $ref: '../../../shared/contracts/openapi.root.yaml#/components/schemas/Email'
                 subject:
                     type: string
+                    minLength: 1
                     maxLength: 200
                 message:
                     type: string
+                    minLength: 1
                     maxLength: 5000
                 website:
                     type: string

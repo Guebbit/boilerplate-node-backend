@@ -252,43 +252,6 @@ export const orderConfirmEmail = (
 };
 
 /**
- * Payment received, sent once `payments`' settlement actually commits the stock —
- * `services/settlement.ts`'s `settlePayment` is the one caller. The customer's answer to "did my
- * card go through": {@link orderConfirmEmail} only ever said the order was received, never that
- * it was paid.
- */
-export const paymentSucceededEmail = (
-    locale: string,
-    name: string,
-    order: OrderLines,
-    orderId: string
-): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'orders.order-paid',
-        subject: t('orders.email-paid.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('orders.email-paid.meta-title'),
-            pageMetaLinks: [],
-            greeting: t('orders.email-paid.greeting', { name }),
-            body: t('orders.email-paid.body'),
-            lines: order.items.map((item) =>
-                t('orders.email-paid.line', {
-                    title: item.product.title,
-                    quantity: item.quantity,
-                    price: item.product.price
-                })
-            ),
-            total: t('orders.email-paid.total', { total: totalOf(order) }),
-            linkLabel: t('orders.email-paid.link-label'),
-            linkUrl: orderFrontendLink({ locale, id: orderId }),
-            footer: t('email.footer')
-        }
-    };
-};
-
-/**
  * The instructions and deadline for a `bank_transfer` checkout, sent instead of
  * {@link orderConfirmEmail} — there is nothing to confirm yet, only what the customer still has
  * to do. `payBy` is formatted with `Intl.DateTimeFormat` in the recipient's own language rather
@@ -439,44 +402,6 @@ export const orderCancelledEmail = (
             refundNote: t(`orders.email-cancelled.${cancelledRefundKey(!!order.paidAt, refund)}`, {
                 amount: money(locale, totalOf(order), order.currency)
             }),
-            footer: t('email.footer')
-        }
-    };
-};
-
-/**
- * Money went back to the customer outside a return — a refund that followed a cancel, or an
- * operator's own goodwill refund. A return's refund is announced by `returns`' own closing notice,
- * so it never reaches this builder. Sent when the refund SETTLES, not when it is asked for, so it
- * only ever says what already happened.
- *
- * @param locale - the recipient's language
- * @param name - the greeting's name
- * @param orderRef - the order's human number, or its id when it has none
- * @param refund - the amount that went back, a decimal in `currency`
- * @param full - whether this completes the refund of everything the customer paid
- */
-export const refundIssuedEmail = (
-    locale: string,
-    name: string,
-    orderRef: string,
-    refund: { amount: number; currency: string },
-    full: boolean
-): EmailContent => {
-    const t = translator(locale);
-    return {
-        template: 'orders.order-refunded',
-        subject: t('orders.email-refunded.subject'),
-        data: {
-            locale,
-            pageMetaTitle: t('orders.email-refunded.meta-title'),
-            pageMetaLinks: [],
-            greeting: t('orders.email-refunded.greeting', { name }),
-            body: t('orders.email-refunded.body', {
-                order: orderRef,
-                amount: money(locale, refund.amount, refund.currency)
-            }),
-            detail: t(`orders.email-refunded.${full ? 'detail-full' : 'detail-partial'}`),
             footer: t('email.footer')
         }
     };

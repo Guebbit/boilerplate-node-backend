@@ -570,7 +570,9 @@ describe('GET /orders/{id}/timeline', () => {
             .set('Authorization', buyer.bearer);
 
         expect(asStaff.status).toBe(200);
-        expect(asStaff.body.data).toMatchObject([
+        expect(
+            (asStaff.body.data as { type: string }[]).filter((row) => row.type !== 'invoice_issued')
+        ).toMatchObject([
             { type: 'paid', data: { method: 'card' } },
             {
                 type: 'status_overridden',
@@ -579,9 +581,14 @@ describe('GET /orders/{id}/timeline', () => {
             }
         ]);
         expect(asBuyer.status).toBe(200);
-        expect(asBuyer.body.data).toHaveLength(1);
-        expect(asBuyer.body.data[0]).toMatchObject({ type: 'paid' });
-        expect(asBuyer.body.data[0]).not.toHaveProperty('actor');
+        // The invoice row is buyer-visible and lands whenever the async invoice listener finishes,
+        // so the buyer's list is "paid, maybe the invoice", never the staff-only override.
+        const buyerRows = (asBuyer.body.data as { type: string }[]).filter(
+            (row) => row.type !== 'invoice_issued'
+        );
+        expect(buyerRows).toHaveLength(1);
+        expect(buyerRows[0]).toMatchObject({ type: 'paid' });
+        for (const row of asBuyer.body.data as object[]) expect(row).not.toHaveProperty('actor');
     });
 
     it('answers another buyer with the same 404 as an order that does not exist', async () => {

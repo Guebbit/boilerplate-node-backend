@@ -168,7 +168,7 @@ number, mint a `bank_transfer` reference when that's the payment method (minted 
 the write is about to land on, so a retried place cannot mint a second one for the same order),
 write the row. **The hold comes before the write, deliberately**: a refused hold then writes
 nothing at all — no order to roll back and no order number burned on a sale that never happened.
-Everything caller-specific — payment-method validation, the open-transfer cap, resolving a shipping
+Everything caller-specific — payment-method validation, the open-order cap (owned by `cart`), resolving a shipping
 address or method, cart pre-flight and clearing — stays with the caller; `placeOrder` only takes
 what it needs to hold and write. See [Checkout](./cart-checkout.md#the-sequence) for the storefront
 path in full.
@@ -545,7 +545,7 @@ Every cancel and every refund leaves one written trace, and each has exactly one
 | The reservation sweep cancelled (a hold timed out) | the expiry notice for the payment method                                      | `orders.order-transfer-expired`, `orders.order-card-expired` |
 | The customer withdrew before dispatch              | `returns`' withdrawal acknowledgement                                         | `returns.notice`                                             |
 | The account was erased                             | none: the address belongs to an account that no longer exists                 |                                                              |
-| Money went back outside a return                   | the amount, and whether it was everything                                     | `orders.order-refunded`                                      |
+| Money went back outside a return                   | the amount, and whether it was everything                                     | `payments.refund-issued` (sent by `payments`)                |
 | Money went back for a return                       | `returns`' closing notice                                                     | `returns.notice`                                             |
 
 The analytics event follows the same split: only a hold that timed out reports
@@ -563,12 +563,12 @@ flowchart TD
     cancel --> owed{"refund owed?"}
     owed -- yes --> refund["payments settles the refund"]
     refund --> ret{"for a return?"}
-    ret -- no --> refunded["orders.order-refunded"]
+    ret -- no --> refunded["payments.refund-issued"]
     ret -- yes --> closed["returns' closing notice"]
 ```
 
 The cancelled mail is sent when the cancel happens, so it says what is being returned. The refunded
-mail is sent when `payments` settles the refund, so it only ever says what already went back. A paid
+mail belongs to `payments`, which sends it from its own `payment.refunded` listener once the refund settles, so it only ever says what already went back. A paid
 cancel therefore sends both, a few moments apart. A refund the provider refused sends nothing: no
 money moved.
 
@@ -626,7 +626,6 @@ when the shop offers a longer withdrawal period.
 | `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`                             | `1095`              | Days after a timeline row's own instant before `reap:orders` unsets the free text staff wrote on it (an override's reason). The row stays                                                                                           |
 | `NODE_ORDER_EXPORT_MAX_ROWS`                                       | `20000`             | Most orders one `GET /orders/export` may carry. Over it: `422` `ORDER_EXPORT_TOO_LARGE`, before any byte of the file                                                                                                                |
 | `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`                                 | `10`                | Exports allowed per window, per ACCOUNT                                                                                                                                                                                             |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT`                          | `2`                 | How many unpaid orders one account may hold at once, whatever the payment method; each holds stock                                                                                                                                  |
 | `NODE_ADMIN_ORDER_MAX_LINES`                                       | `100`               | Most lines an admin-created order (`POST /orders`) may carry. Over it: `422` `ORDER_LINE_LIMIT_EXCEEDED`. The contract's own ceiling is 1000; a larger value has no effect                                                          |
 | `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`                               | `99999`             | Largest quantity on one line of an admin-created order. Same refusal. The contract's ceiling is 999999                                                                                                                              |
 | `NODE_ORDER_EFFECT_RETRY_MINUTES`                                  | `5`                 | Grace window after a cancel before `sweep:order-effects` retries an unsettled refund                                                                                                                                                |

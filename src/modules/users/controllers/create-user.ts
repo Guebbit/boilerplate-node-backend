@@ -31,9 +31,8 @@ export const createUser = (
     >,
     response: Response
 ) => {
-    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined` already means "no change" to `zodUserSchema`'s
-    // `.optional()` field the same way an absent key does — a defaulted empty string would
-    // reach the validator as a rejected value instead of the no-op it is meant to be.
+    // No `= ''` default: `''` is invalid input (`ImageUrl`'s own `minLength: 1`), and `undefined`
+    // already means "no change" to the body's optional field the same way an absent key does.
     const { imageUrl, thumbnailUrl, pendingImageKey } = readUploadedImage(request);
 
     /*
@@ -52,31 +51,11 @@ export const createUser = (
     if (!body) return;
     const { role, active } = body;
 
-    /**
-     * `false`: the password is never part of this body — the owner chooses it through the setup
-     * email `userService.create` queues.
-     */
-    const errors = userService.validateData(
-        {
-            ...body,
-            role,
-            active
-        },
-        false
-    );
-    if (errors.length > 0) {
-        rejectResponse(response, 422, errors);
-        return;
-    }
-
-    // Past the guard above, these have been checked against zodUserSchema — the assertion
-    // records what the validator just established rather than assuming it. `thumbnailUrl` is on
-    // `User` itself (readOnly on the contract); `pendingImageKey` is not, so it joins via an
-    // intersection — both are server-derived, never client-supplied.
-    const validated = { role, active, thumbnailUrl, pendingImageKey } as Pick<
-        User,
-        'role' | 'active' | 'thumbnailUrl'
-    > & { pendingImageKey?: string };
+    // `role`, `active` and the server-derived upload fields: `thumbnailUrl` is on `User` itself
+    // (readOnly on the contract); `pendingImageKey` is not, so it joins via an intersection — both
+    // are server-derived, never client-supplied.
+    const validated: Pick<User, 'role' | 'active' | 'thumbnailUrl'> & { pendingImageKey?: string } =
+        { role, active, thumbnailUrl, pendingImageKey };
 
     return userService
         .create(

@@ -1,6 +1,6 @@
 /**
  * @module
- * The user record's Mongoose schema and its Zod wire-validation twin — long, and deliberately one
+ * The user record's Mongoose schema — long, and deliberately one
  * file, since splitting would separate the password hash hook from the `select: false` that keeps
  * the hash off every read.
  * See: docs/modules/users.md
@@ -9,17 +9,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { hashPassword } from '@infrastructure/security/password-hash';
-import { z } from 'zod';
-import { t } from '@infrastructure/i18n';
 import { localeConfig } from '@infrastructure/i18n/config';
-import {
-    CreateUserBody,
-    createUserBodyEmailMax,
-    createUserBodyUsernameMax,
-    createUserBodyUsernameMin,
-    signupBodyPasswordMin,
-    signupBodyPasswordMax
-} from '@api/schemas.zod';
 import { type User } from '@types';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
@@ -168,6 +158,12 @@ export interface DeliveredCodeState {
 }
 
 /**
+ * Where a delivered code lives on the account: the step-up code, or one 2FA method's entry.
+ * The users door addresses the right fields from this, in one conditional write.
+ */
+export type DeliveredCodeSlot = { kind: 'reauth' } | { kind: 'method'; method: string };
+
+/**
  * One second factor on an account — armed or still pending confirmation.
  *
  * One shape for every method rather than a per-method collection: `account/two-factor/` decides
@@ -239,45 +235,6 @@ export interface UserDocument extends UserRecord, Document {
 export type UserModel = Model<UserDocument>;
 
 /**
- * Zod schema for user data validation, built on the orval-generated `CreateUserBody` so only
- * fields needing custom i18n messages are overridden. Sits beside the Mongoose schema on purpose,
- * like `zodProductCreateSchema` beside `products/model.ts` — one for the wire, one for storage.
- * Every message is a THUNK (`error: () => t(...)`), never called eagerly: this module evaluates
- * at import time, before `i18next.init()` runs in `app.ts`, so an eager call would return
- * `undefined` and Zod would silently fall back to its own English message.
- */
-export const zodUserSchema = CreateUserBody.extend({
-    email: z
-        .email({ error: () => t('users.field-email-invalid') })
-        .min(1, { error: () => t('users.field-email-required') })
-        // The generated ceiling (254, RFC 5321's path limit), restated like the username's: this
-        // `.extend()` replaces the generated field outright, and a replaced field drops its bound.
-        .max(createUserBodyEmailMax, { error: () => t('users.field-email-invalid') }),
-
-    // The floor comes from the generated `CreateUserBody` (`users/openapi.yaml`), so an admin
-    // creating or editing a user and a self-service signup share one number. It is restated here
-    // only to give the failure a translated message.
-    username: z
-        .string()
-        .min(1, { error: () => t('users.field-username-required') })
-        .min(createUserBodyUsernameMin, { error: () => t('users.field-username-min') })
-        // The ceiling is the generated one too (50, a display-name length). A name is printed in
-        // greetings and lists, so an unbounded one is text of the caller's choosing in many places.
-        .max(createUserBodyUsernameMax, { error: () => t('users.field-username-max') }),
-
-    // Length only (NIST SP 800-63B-4: no composition rules); the breached-password check does the
-    // rest. The floor is `SignupBody`'s (`/users` carries no password), restated here only to give
-    // the failure a translated message, like the username's above.
-    password: z
-        .string()
-        .min(1, { error: () => t('users.field-password-required') })
-        .min(signupBodyPasswordMin, { error: () => t('users.field-password-min') })
-        // The generated ceiling (128), restated like the others: this `.extend()` replaces the
-        // generated field outright, and a replaced field drops its bound.
-        .max(signupBodyPasswordMax, { error: () => t('users.field-password-max') })
-});
-
-/**
  * The Mongoose schema for user documents — field-level comments below cover the non-obvious
  * defaults.
  */
@@ -286,8 +243,8 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         email: {
             type: String,
             required: true,
-            // A backstop, not the real check — `zodUserSchema.email` above (and the generated
-            // `CreateUserBody`/`SignupBody`) already validate every parsed body. This covers the
+            // A backstop, not the real check — the generated `CreateUserBody`/`SignupBody`
+            // already validate every parsed body. This covers the
             // one path that skips Zod: `userService.registerFromOAuth` (`account/services/oauth.ts`)
             // writes a provider's own `email` straight through.
             //

@@ -173,7 +173,6 @@ export {
     bankTransferHoldHours,
     bankTransferIban,
     bankTransferIbanFriendly,
-    maxOpenUnpaidOrdersPerAccount,
     orderFrontendLink,
     shopCurrency,
     shopCountry,

@@ -107,7 +107,7 @@ its own supercronic, so the backup secrets stay out of the `cron` container. See
 | `npm run reap:mail-spool`        | 02:30 nightly  | No     | Deletes a spooled email attachment older than its retention window — a mail job died mid-flight.                                                                                |
 | `npm run sweep:webhook-retries`  | every minute   | No     | Re-enqueues a webhook delivery whose `nextAttemptAt` has come — the delayed-retry story's other half.                                                                           |
 | `npm run sweep:outbox`           | every minute   | No     | Publishes every due [outbox](../tools/outbox.md) event — the backstop for the writer's own after-commit nudge.                                                                  |
-| `npm run sweep:payment-effects`  | every 5 min    | No     | Finishes a stock commit a settlement set out to do but crashed before finishing, and settles unsettled payments whose webhook never arrived.                                    |
+| `npm run sweep:payment-effects`  | every 5 min    | No     | Retries refunds the provider has not answered, and settles unsettled payments whose webhook never arrived.                                                                      |
 | `npm run sweep:reservations`     | every 5 min    | Yes    | Drains every stale checkout hold (batches of 200) and cancels the order behind each.                                                                                            |
 | `npm run sweep:order-effects`    | every 5 min    | No     | Re-announces `ORDER_REFUND_OWED` for a refund the event bus's one delivery attempt did not carry through.                                                                       |
 
@@ -117,7 +117,7 @@ land on the connection pool at once — each job's own header in `scripts/ops/` 
 `sweep:order-effects` run on a different schedule entirely, every 5 minutes or faster, because the
 sweep interval IS the retry/expiry granularity for what each covers — see
 [webhooks](../modules/webhooks.md#the-delivery-path),
-[payments](../modules/payments.md#pending-effects),
+[payments](../modules/payments.md#one-settlement-transaction),
 [inventory](../modules/inventory-reservations.md) and [orders](../modules/orders.md). `tests/cross-cutting/scheduled-jobs.test.ts`
 asserts `docker/crontab` and `package.json`'s `reap:*`/`sweep:*` scripts agree in both directions —
 a script renamed in one and not the other is either a job that fails every run or cleanup that
@@ -247,17 +247,11 @@ ordinary window already fits it. Money that lands after the hold has expired any
 automatically regardless. Runs every 5 minutes, well inside both windows. See
 [Reservations](../modules/inventory-reservations.md).
 
-`npm run sweep:payment-effects` is the same kind of job for the OTHER direction: a settlement
-writes `pendingEffects: ['commit']` in the same document write that moves a payment to `succeeded`,
-then commits the held stock and clears the marker — three steps, only the first of which is
-durable on its own. A crash between them leaves a payment marked `succeeded` with nothing set
-aside for its order, and unlike a webhook nothing redelivers a settlement that already answered its
-caller. This sweep finds any payment whose marker is past `NODE_PAYMENT_EFFECT_RETRY_MINUTES`
-(default 1, the window a normal settlement takes to clear it itself): it repeats the commit when
-the order can still use it — safe, since claiming a hold is exactly-once — or, when the order moved
-on before settlement's own `orderLost` branch could react, marks the refund owed instead, for
-`sweep:order-effects` above to pick up. Runs every 5 minutes, comfortably inside the 15-minute
-reservation hold. See [payments](../modules/payments.md#pending-effects).
+`npm run sweep:payment-effects` is the provider-facing counterpart. A settlement is one database
+transaction (payment, order, hold, outbox rows), so a crash leaves nothing half-done; what can still
+be owed is the provider's side. The sweep retries every refund still open, with the same idempotency
+key, once it is past `NODE_PAYMENT_EFFECT_RETRY_MINUTES` (default 1: longer than a refund request in
+flight). Runs every 5 minutes. See [payments](../modules/payments.md#one-settlement-transaction).
 
 The same job reconciles lost webhooks: an unsettled payment untouched for
 `NODE_PAYMENT_RECONCILE_MINUTES` (default 15) is asked about at the provider and settled through the

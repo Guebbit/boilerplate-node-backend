@@ -1,72 +1,20 @@
 /**
  * @module
- * Retry the one effect a `succeeded` write can leave owing — the stock commit, or, when the order
- * moved away before settlement's own `orderLost` branch could react, the refund it owes instead.
- * `scripts/ops/sweep-payment-effects.ts` is the only caller; `settlement.ts` sets and clears the
- * marker itself on the normal path, so this is purely the crash-recovery half. Shaped like
- * `orders/services/cancel.ts`'s own sweep: sequential, warns on a full batch, and returns how many
- * actually settled.
- *
- * Also home to the reconciliation sweep: it asks the provider about payments nobody settled, the
- * net under a webhook that never arrived.
+ * The sweeps that finish what a settlement left owing: open refunds the provider refused or never
+ * answered, and payments whose provider decided without telling us (the net under a lost webhook).
+ * Shaped like `orders/services/cancel.ts`'s own sweep: sequential, warns on a full batch, and
+ * returns how many actually settled.
  */
 
 import { logger } from '@infrastructure/adapters/logger';
-import { orderService, paymentSettled } from '@modules/orders';
-import { inventoryService } from '@modules/inventory';
 import { paymentRepository } from '../repository';
 import type { PaymentDocument } from '../model';
 import { paymentEffectRetryMinutes, paymentReconcileMinutes } from '../config';
 import { settleOpenRefunds } from './refunds';
-import { announcePaymentSucceeded } from './announce';
 import { settleFromProvider } from './settlement';
 
 /** How many payments one sweep pass retries before asking to be run again. */
 const SWEEP_BATCH_SIZE = 200;
-
-/**
- * Finish one payment's owed effect: commit the stock and announce `payment.succeeded` if the order
- * can still use it, mark a refund owed if the order moved on before settlement's own `orderLost`
- * branch could react, or just drop the marker if there is nothing left to do either way.
- *
- * @param payment - a payment whose `pendingEffects` names `commit`
- * @returns whether this payment's effect was discharged
- */
-const retryOne = (payment: PaymentDocument): Promise<boolean> => {
-    const orderId = String(payment.orderId);
-    // Flattened into one chain, so a rejection anywhere along it — including `getById` itself —
-    // reaches the single `.catch` below instead of escaping the loop this feeds.
-    return orderService
-        .getById(orderId)
-        .then((order): Promise<unknown> => {
-            // The settlement died after charging: commit the stock, then announce — the announce
-            // clears the marker and writes `payment.succeeded` to the outbox in one transaction.
-            if (order !== undefined && paymentSettled(order.status))
-                return inventoryService
-                    .commitForOrder(orderId)
-                    .then(() => announcePaymentSucceeded(String(payment._id), orderId));
-
-            // The order moved away before settlement's own `orderLost` branch could react — a
-            // crash between writing `succeeded` and checking the order there. Nothing has marked
-            // the refund owed yet, so do it here, before the marker clears. Nothing is announced:
-            // the order never reached a paid state that stayed paid.
-            return (
-                payment.status === 'succeeded'
-                    ? orderService.markRefundOwed(orderId)
-                    : Promise.resolve()
-            ).then(() => paymentRepository.clearPendingEffects(orderId));
-        })
-        .then(() => true)
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not retry the pending effect for order ${orderId} — it stays marked, and the next sweep tries again`,
-                error
-            });
-            // Stryker restore all
-            return false;
-        });
-};
 
 /**
  * The skeleton both sweeps share: find the payments due, handle each one in turn, warn when the
@@ -81,7 +29,7 @@ const retryOne = (payment: PaymentDocument): Promise<boolean> => {
 const sweepDue = async (
     find: (cutoff: Date, limit: number) => Promise<PaymentDocument[]>,
     handle: (payment: PaymentDocument) => Promise<boolean>,
-    label: 'effect' | 'refund' | 'reconcile',
+    label: 'refund' | 'reconcile',
     graceMinutes: number
 ): Promise<number> => {
     const cutoff = new Date(Date.now() - graceMinutes * 60_000);
@@ -106,20 +54,6 @@ const sweepDue = async (
 
     return settled;
 };
-
-/**
- * Sweep every payment whose settlement died before it could commit stock, mark a refund owed, or
- * clear its marker.
- *
- * @returns how many payments were settled
- */
-export const retryPendingEffects = (): Promise<number> =>
-    sweepDue(
-        paymentRepository.findWithPendingEffects,
-        retryOne,
-        'effect',
-        paymentEffectRetryMinutes()
-    );
 
 /**
  * Retry one payment's open refunds; a failure is logged and leaves them open for the next sweep.

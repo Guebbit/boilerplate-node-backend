@@ -11,7 +11,7 @@ import { testCallerContext, callerContextAs } from '@tests/callers';
 import { systemCallerContext } from '@kernel/permissions';
 import type { ClientSession } from 'mongoose';
 import { personalDataErasers, setPersonalDataErasers } from '../../erasure-registry';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
 import * as userService from '@modules/users/services';
 import { USER_SETUP_REQUESTED } from '../../events';
 import { userRepository } from '../../repository';
@@ -87,122 +87,6 @@ const expectCreated = async (
     expect(result.success).toBe(true);
     return (result as ResponseSuccess<UserDocument>).data;
 };
-
-/** Validates an otherwise valid create body that carries only the given `imageUrl`. */
-const withImage = (imageUrl: string | null) =>
-    userService.validateData({
-        email: 'valid@example.com',
-        username: 'validuser',
-        password: PLAIN_PASSWORD,
-        imageUrl
-    });
-
-describe('userService.validateData', () => {
-    it('returns an empty array for valid user data', () => {
-        const errors = userService.validateData({
-            email: 'valid@example.com',
-            username: 'validuser',
-            password: PLAIN_PASSWORD
-        });
-
-        expect(errors).toHaveLength(0);
-    });
-
-    it('returns errors for an invalid email', () => {
-        const errors = userService.validateData({
-            email: 'not-an-email',
-            username: 'validuser',
-            password: PLAIN_PASSWORD
-        });
-
-        expect(errors.length).toBeGreaterThan(0);
-    });
-
-    it('returns errors for a username that is too short', () => {
-        const errors = userService.validateData({
-            email: 'valid@example.com',
-            username: 'ab',
-            password: PLAIN_PASSWORD
-        });
-
-        expect(errors.length).toBeGreaterThan(0);
-    });
-
-    it('does not require password when requirePassword is false', () => {
-        const errors = userService.validateData(
-            { email: 'valid@example.com', username: 'validuser' },
-            false
-        );
-
-        expect(errors).toHaveLength(0);
-    });
-
-    /**
-     * The fields a `.pick({ email, username, password })` would never look at. `active` is the
-     * costliest: an unchecked string reaches Mongoose and throws a CastError on save, so
-     * `POST /users` answers 500 where its own contract promises 422.
-     */
-    it.each(['active'])('rejects a wrong-typed %s flag', (field) => {
-        const errors = userService.validateData({
-            email: 'valid@example.com',
-            username: 'validuser',
-            password: PLAIN_PASSWORD,
-            [field]: 'not-a-boolean'
-        });
-
-        expect(errors.length).toBeGreaterThan(0);
-    });
-
-    it.each(['admin', 'customer', 'manager'])('accepts a declared role name (%s)', (role) => {
-        const errors = userService.validateData({
-            email: 'valid@example.com',
-            username: 'validuser',
-            password: PLAIN_PASSWORD,
-            role
-        });
-
-        expect(errors).toHaveLength(0);
-    });
-
-    // A client never names a path in the image store — it can only remove one with `null`.
-    it('refuses a path as the imageUrl, and accepts null', () => {
-        expect(withImage('/uploads/1700000000-avatar.jpg')).toHaveLength(1);
-        expect(withImage(null)).toHaveLength(0);
-    });
-
-    // Not strict: a PUT body legitimately carries `id`, which is not part of the user schema.
-    it('ignores body keys the schema does not declare', () => {
-        const errors = userService.validateData({
-            id: '65dc8a99604c307b702b5ccc',
-            email: 'valid@example.com',
-            username: 'validuser',
-            password: PLAIN_PASSWORD
-        });
-
-        expect(errors).toHaveLength(0);
-    });
-
-    /**
-     * A wrong i18n key is a user-visible bug the assertions above can't see: a missing key makes
-     * i18next return the key itself, still a non-empty string. This asserts against the SHAPE of
-     * a raw key — a dotted identifier, no spaces — so it keeps working when the copy is reworded.
-     */
-    it('returns translated messages, never raw i18n keys', () => {
-        const errors = userService.validateData({
-            email: 'not-an-email',
-            username: 'ab',
-            password: 'x'
-        });
-
-        expect(errors.length).toBeGreaterThan(0);
-        // `message` is the copy; `details.field` names the input it belongs to, which is what a
-        // form needs to highlight the right box rather than string-matching the sentence.
-        for (const { message, details } of errors) {
-            expect(message).not.toMatch(/^[a-z]+(?:\.[\da-z-]+)+$/);
-            expect(details).toEqual({ field: expect.any(String) });
-        }
-    });
-});
 
 // Backs the three `active` filter cases below, built so the two facts DISAGREE: the deactivated
 // account is not deleted, and the deleted account is still active.

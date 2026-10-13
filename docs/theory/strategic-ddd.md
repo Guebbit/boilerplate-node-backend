@@ -235,6 +235,11 @@ way a handle does. What it never publishes, no matter how convenient:
     > for a transition by name and gets a boolean — what it costs in counters is not their
     > business.
 
+- **A step beneath a guarded door.** The work a service does once another function has checked
+  scope, ownership or state (`payments`' `settlePayment`, `inventory`'s `applyTransition`).
+  Publishing it is a repository export one level up: the write goes through, the checks don't. A
+  judgement call, not a file name, so no lint rule checks it.
+
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
   that touch storage stay inside.
@@ -266,7 +271,8 @@ The narrowest surface in the repo is `observability`'s — it owns no collection
 sibling could want, so its barrel publishes services nothing has needed to import yet (see that
 module's own page). The widest is `users`, and it is wide
 because it is the `users` end of the one shared-kernel relationship in the repo — `account`
-authenticates the record `users` administers.
+authenticates the record `users` administers. The credentials stay on that record deliberately;
+the reasoning is in [account-two-factor](../modules/account-two-factor.md#what-the-user-document-carries).
 
 ---
 

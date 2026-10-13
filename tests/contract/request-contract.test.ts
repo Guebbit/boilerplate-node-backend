@@ -22,14 +22,14 @@
  *     `z.string()`, and tightening the validators to match instead would reject every upload the
  *     API itself produces. Correct the spec, not the validator.
  *   - **`.extend()` on a generated schema REPLACES a field**, dropping every constraint the
- *     override does not restate. `zodProductCreateSchema` overrides `price` for its i18n message and
- *     therefore has to restate `.min(0)` to keep the contract's `minimum: 0`.
+ *     override does not restate. So a hand schema over a generated body adds refinements
+ *     (`zodProductCreateSchema`) and never replaces a field.
  *   - **Coercion running before validation** hides a wrong type from the check that would reject
  *     it. `!!request.body.active` and `coerceStringArray(...)` run only for `multipart/form-data`,
  *     the one transport that needs them — see `readInput` and `docs/theory/request-input.md`.
  *   - **Validating a subset of a schema** lets an unchecked field reach Mongoose and throw a
- *     CastError, answering 500 where the contract promises 422. `userService.validateData`
- *     validates the whole schema, not a `.pick()` of it.
+ *     CastError, answering 500 where the contract promises 422. A controller parses the whole
+ *     generated body, not a `.pick()` of it.
  *
  * Generated data is additive, same convention as a module's `tests/factories.ts`: deterministic
  * scenario tests keep using the hand-written factories. This file exists specifically for what

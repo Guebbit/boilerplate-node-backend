@@ -11,13 +11,7 @@ import { model, Schema } from 'mongoose';
 import type { Document, Model, Types } from 'mongoose';
 import { z } from 'zod';
 import { getFallbackLocale, t } from '@infrastructure/i18n';
-import {
-    CreateProductBody,
-    ReplaceProductByIdBody,
-    UpdateProductByIdBody,
-    createProductBodyTranslationsOneDescriptionMax,
-    createProductBodyTranslationsOneTitleMax
-} from '@api/schemas.zod';
+import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 import type { TranslationFieldIssue } from '@kernel/registry';
@@ -88,38 +82,20 @@ export interface ProductDocument extends ProductRecord, Document {
 export type ProductModel = Model<ProductDocument, Record<string, never>, unknown>;
 
 /**
- * One locale's words for a product, with the same title-length rule this schema has always
- * enforced — applied per locale here so a Zod issue's path comes out `translations.<locale>.title`,
- * naming which language failed, instead of a bare `title`.
+ * The key one locale's fields are parked under to parse them through the contract's own
+ * `translations` map; its name never reaches a message.
  */
-const zodProductTranslationEntry = z.strictObject({
-    // Thunks, not eager calls: t() must run at parse time (post i18next.init()), see `users/model.ts`.
-    title: z
-        .string({ error: () => t('products.field-title-required') })
-        .min(1, { error: () => t('products.field-title-required') })
-        .min(5, { error: () => t('products.field-title-min') })
-        // The generated ceilings, restated: `.extend()` replaces `translations` outright, and a
-        // replaced field drops the bounds the contract put on it.
-        .max(createProductBodyTranslationsOneTitleMax),
-    description: z
-        .string()
-        .min(1, { error: () => t('products.field-description-empty') })
-        .max(createProductBodyTranslationsOneDescriptionMax)
-        .optional()
-});
+const CHECKED_LOCALE = 'checked';
 
 /**
- * `PATCH`'s locale entry: RFC 7396 one level down, so every field is optional and a description
- * may be `null` to clear it. A title has no legal cleared state — an empty locale is deleted with
- * the locale's own `null` — so it stays a string with the same length rules as on create.
+ * `PATCH`'s `translations` as the contract declares it: an object merges into a locale, `null`
+ * deletes it, absence leaves it untouched. The one source of the title floor and the description
+ * rules for the generic translator's door too.
  */
-const zodProductTranslationPatch = z.strictObject({
-    title: zodProductTranslationEntry.shape.title.optional(),
-    description: zodProductTranslationEntry.shape.description.nullable()
-});
+const translationsPatch = UpdateProductByIdBody.shape.translations.unwrap();
 
 /**
- * The rules {@link zodProductTranslationPatch} holds, as the `translatables` registry's
+ * The rules the contract puts on one locale's fields, as the `translatables` registry's
  * `checkFields`: what keeps the generic translator's door from landing a title under its minimum
  * or an empty description on a product.
  *
@@ -129,27 +105,15 @@ const zodProductTranslationPatch = z.strictObject({
 export const checkProductTranslationFields = (
     fields: Record<string, string | null>
 ): TranslationFieldIssue[] => {
-    const parsed = zodProductTranslationPatch.safeParse(fields);
+    const parsed = translationsPatch.safeParse({ [CHECKED_LOCALE]: fields });
     if (parsed.success) return [];
 
     return parsed.error.issues.map((issue) => ({
-        field: String(issue.path[0] ?? ''),
+        // Path is `[CHECKED_LOCALE, field, ...]`: the field is what the caller names.
+        field: String(issue.path[1] ?? ''),
         message: issue.message
     }));
 };
-
-/**
- * `ProductTranslationsPatch` restated for Zod: an object merges into a locale, `null` deletes it,
- * absence leaves it untouched.
- */
-const zodProductTranslationsPatch = z.record(z.string(), zodProductTranslationPatch.nullable());
-
-/**
- * `ProductTranslationsWrite` restated for Zod: a locale entry upserts, `null` deletes, absence
- * leaves it untouched — see the `PATCH /products/{id}` operation description for the full
- * three-way table.
- */
-const zodProductTranslations = z.record(z.string(), zodProductTranslationEntry.nullable());
 
 /**
  * The fallback locale (`NODE_FALLBACK_LOCALE`) MUST NOT be `null` — deleting it would leave the
@@ -200,52 +164,29 @@ const refineReleaseDate = (
 };
 
 /**
- * Zod schema for a product CREATE, built on the generated `CreateProductBody` — only fields
- * needing custom i18n messages, stricter rules, or a fallback-locale invariant are overridden;
- * every other contract constraint applies.
- *
- * `.min(0)` restates the contract's `minimum: 0`: `.extend()` REPLACES a field outright, so an
- * override that forgets a constraint silently drops it. A prior bare `.refine()` override did
- * exactly that, letting a negative price through despite the contract forbidding it.
+ * Zod schema for a product CREATE: the generated `CreateProductBody`, which already carries every
+ * field rule, plus the two business refinements it cannot express.
  */
-export const zodProductCreateSchema = CreateProductBody.extend({
-    price: z
-        .number({ error: () => t('products.field-price-invalid') })
-        .min(0, { error: () => t('products.field-price-min') }),
-    translations: zodProductTranslations
-}).superRefine((data, context) => {
+export const zodProductCreateSchema = CreateProductBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, true);
     refineReleaseDate(data.releaseDate, context);
 });
 
 /**
- * Zod schema for a product PUT, built on the generated `ReplaceProductByIdBody` — every writable
- * field stays genuinely required there; this only swaps in the custom-message price and the
- * fallback-locale guard. `mustBePresent: true`, as on create: a PUT's `translations` is the whole
- * set, so a locale it omits is deleted — and the fallback one can never be.
+ * Zod schema for a product PUT: the generated `ReplaceProductByIdBody` plus the same two
+ * refinements. `mustBePresent: true`, as on create: a PUT's `translations` is the whole set, so a
+ * locale it omits is deleted — and the fallback one can never be.
  */
-export const zodProductReplaceSchema = ReplaceProductByIdBody.extend({
-    price: z
-        .number({ error: () => t('products.field-price-invalid') })
-        .min(0, { error: () => t('products.field-price-min') }),
-    translations: zodProductTranslations
-}).superRefine((data, context) => {
+export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, true);
     refineReleaseDate(data.releaseDate, context);
 });
 
 /**
- * Zod schema for a product PATCH, built on the generated `UpdateProductByIdBody` — every field is
- * already optional there; this only adds the fallback-locale guard, which stays a refusal even
- * when the field is optional overall.
+ * Zod schema for a product PATCH: the generated `UpdateProductByIdBody` plus the same two
+ * refinements; the fallback-locale guard stays a refusal even though the field is optional.
  */
-export const zodProductUpdateSchema = UpdateProductByIdBody.extend({
-    price: z
-        .number({ error: () => t('products.field-price-invalid') })
-        .min(0, { error: () => t('products.field-price-min') })
-        .optional(),
-    translations: zodProductTranslationsPatch.optional()
-}).superRefine((data, context) => {
+export const zodProductUpdateSchema = UpdateProductByIdBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, false);
     refineReleaseDate(data.releaseDate, context);
 });

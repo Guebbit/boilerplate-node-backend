@@ -13,13 +13,12 @@
  * Below this:      `../session/` — JWT signing, the refresh cookie, shared expiry. Nothing
  *                  outside this module imports it directly; see `../index`.
  *
- * `./export` and `./export-job` are NOT imported here, on purpose. The build reaches
- * `cart`/`wishlist`/`orders`/… for the data-export payload, and this file is what the barrel
- * (`../index.ts`) publishes wholesale — one static import away from it puts every one of those
- * modules' barrels in this module's own reachability, which is how a sibling importing
- * `@modules/account` for anything at all risks a cycle. The export controllers and `../module.ts`
- * import them directly instead — this module's own files, not a barrel concern. `./export-rows`
- * (the reaper) reaches nothing but this module's own store, so it is published.
+ * `./export` and `./export-job` are NOT imported here, on purpose: they are this module's own
+ * wiring (queue, file store, mail budget), and no sibling has a use for them. The export reaches
+ * no sibling's data either — every module declares its own `personalData` section, and
+ * `../module.ts` hands the resolved list in. The export controllers and `../module.ts` import the
+ * two files directly. `./export-rows` (the reaper) reaches nothing but this module's own store,
+ * so it is published.
  */
 
 import * as signup from './signup';

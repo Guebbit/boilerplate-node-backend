@@ -17,7 +17,7 @@ import {
     toOrderItem
 } from '@modules/orders/tests/factories';
 import { resetDomainEvents } from '@kernel/events';
-import { settleOutboxNudges } from '@kernel/outbox';
+import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { userService } from '@modules/users';
 import { inventoryService } from '@modules/inventory';
@@ -31,7 +31,7 @@ import {
     withActions,
     refundByOrder,
     recordOfflinePayment,
-    retryPendingEffects
+    retryOpenRefunds
 } from '@modules/payments/services';
 import { paymentRepository } from '@modules/payments/repository';
 import { withEnvironment } from '@tests/environment';
@@ -459,8 +459,8 @@ describe('refund on cancel', () => {
             refundSpy.mockRestore();
         }));
 
-    it('leaves an owed refund on an order lost mid-payment for the sweep to finish', () =>
-        withEnvironment('NODE_ORDER_EFFECT_RETRY_MINUTES', '0', async () => {
+    it('leaves an open refund on an order lost mid-payment for the sweep to finish', () =>
+        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
             const { user, order } = await orderFor();
             const intent = await createIntent(String(order._id), auth(user));
             const paymentId = String((intent as { data?: { id?: string } }).data?.id);
@@ -469,7 +469,7 @@ describe('refund on cancel', () => {
                 .spyOn(fakePaymentProvider, 'refund')
                 .mockRejectedValueOnce(new Error('payment provider unreachable'));
             // The order is cancelled DURING the provider round trip — after A1's own payable check
-            // already read it as still pending, before `settlePayment`'s own re-read sees it gone.
+            // already read it as still pending, before the settlement transaction sees it gone.
             // That is settlement's own "order lost" branch, not a cancel's own refund (module
             // docblock rule 2), and A1 only closes the window BEFORE the provider is asked.
             const originalConfirm = fakePaymentProvider.confirm;
@@ -491,16 +491,18 @@ describe('refund on cancel', () => {
             );
 
             // settlePayment answers its own caller regardless — a rejected refund attempt is
-            // logged, never rethrown.
+            // logged, never rethrown. The record was opened with the `succeeded` write, so the
+            // money is never durable without its way back.
             expect(asReject(result).status).toBe(409);
-            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-                'succeeded'
-            );
+            const stuck = await paymentRepository.findByOrderId(String(order._id));
+            expect(stuck!.status).toBe('succeeded');
+            expect(stuck!.refunds).toHaveLength(1);
+            expect(stuck!.refunds[0]).toMatchObject({ amount: 50, status: 'failed' });
 
-            expect(await orderService.retryPendingEffects()).toBe(1);
-            expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
-                'refunded'
-            );
+            expect(await retryOpenRefunds()).toBe(1);
+            const finished = await paymentRepository.findByOrderId(String(order._id));
+            expect(finished!.status).toBe('refunded');
+            expect(finished!.refunds).toHaveLength(1);
             refundSpy.mockRestore();
             confirmSpy.mockRestore();
         }));
@@ -565,21 +567,20 @@ describe('refund on cancel', () => {
     });
 
     /*
-     * The interleaving a confirm and a customer cancel can produce: the confirm moves the order to
-     * `paid`, the customer cancels it from `paid` at once, and that cancel's refund runs while the
-     * payment still reads `requires_confirmation` — nothing to return yet. The confirm then writes
-     * `succeeded`. Unless it re-reads the order, it trusts its own stale `paid` copy and keeps
-     * money for an order that no longer exists. Forced here rather than hoped for under load.
+     * A cancel that lands between the provider's charge and the settlement transaction: the order
+     * is gone when the money arrives. The `succeeded` write and the refund record commit together,
+     * so there is exactly one record, and the provider is asked once the transaction has closed.
      */
-    it('returns a charge that lands after the customer cancelled the order it had just paid', async () => {
+    it('returns a charge that lands after the customer cancelled the order, with one refund record', async () => {
         const { user, order } = await orderFor();
         const orderId = String(order._id);
         const intent = await createIntent(orderId, auth(user));
-        const realMarkPaid = orderService.markPaid;
-        jest.spyOn(orderService, 'markPaid').mockImplementationOnce((id) =>
-            realMarkPaid(id).then((paid) =>
-                orderService.cancelById(id, auth(user)).then(() => paid)
-            )
+        const originalConfirm = fakePaymentProvider.confirm;
+        jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
+            async (providerRef, methodRef) => {
+                await orderService.cancelById(orderId, auth(user));
+                return originalConfirm(providerRef, methodRef);
+            }
         );
 
         const result = await confirmPayment(
@@ -590,9 +591,14 @@ describe('refund on cancel', () => {
         );
 
         expect((await orderService.getById(orderId))!.status).toBe('cancelled');
-        expect((await paymentRepository.findByOrderId(orderId))!.status).toBe('refunded');
+        const payment = await paymentRepository.findByOrderId(orderId);
+        expect(payment!.status).toBe('refunded');
+        expect(payment!.refunds).toHaveLength(1);
+        expect(payment!.refunds[0]).toMatchObject({ amount: 50, status: 'succeeded' });
         // The customer is told the order could not be paid, not that it was.
         expect(asReject(result).errors[0]).toMatchObject({ code: 'PAYMENT_ORDER_NOT_PAYABLE' });
+        // The order never reached a paid state that stayed paid: nothing announces a success.
+        expect(await outboxEventModel.countDocuments({ name: 'payment.succeeded' })).toBe(0);
     });
 });
 
@@ -777,139 +783,94 @@ describe('cancelling a paid order releases its claim', () => {
     });
 });
 
+/** How many outbox rows an event name has, whatever their delivery state. */
+const outboxCount = (name: string) => outboxEventModel.countDocuments({ name });
+
+/** The status the order's payment reads. */
+const paymentStatusOf = (orderId: string) =>
+    paymentRepository.findByOrderId(orderId).then((payment) => payment?.status);
+
+/** The status the order reads. */
+const orderStatusOf = (orderId: string) => readOrder(orderId).then((stored) => stored?.status);
+
 /**
- * A crash between the `succeeded` write and the stock commit would otherwise lose the commit
- * forever — a redelivered webhook stops at the payment's own conditional write (already
- * `succeeded`, so a retry moves nothing) and never reaches the commit again. The `pendingEffects`
- * marker is what survives that crash, and `retryPendingEffects` is what acts on it.
+ * A success settles in ONE transaction: the payment's `succeeded`, the order's `paid`, the hold's
+ * commit and the outbox rows land together or not at all, so no crash leaves a paid order whose
+ * payment can never be refunded.
  */
-describe('B14 — a lost stock commit is retried, not lost', () => {
-    it('marks the commit still owed when it throws, and leaves the hold untouched', async () => {
+describe('one settlement transaction', () => {
+    it('leaves payment, order, hold and outbox untouched when a step throws', async () => {
         const { user, product, order } = await placedOrder(10, 3);
+        const orderId = String(order._id);
+        const before = await outboxCount('order.status_changed');
+        // The commit runs AFTER the order's own move inside the transaction: the worst case,
+        // where two writes already happened and only a rollback undoes them.
         jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
             new Error('connection reset')
         );
 
-        // The write to `succeeded` already landed by the time the commit throws — same as the
-        // real crash this guards against, this call reports the failure to its own caller.
-        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+        await expect(payFor(orderId, user)).rejects.toThrow('connection reset');
 
-        const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('succeeded');
-        expect(payment!.pendingEffects).toEqual(['commit']);
-        // Nothing committed: the mocked failure stood in for the commit itself, before any
-        // counter moved.
+        expect(await paymentStatusOf(orderId)).toBe('requires_confirmation');
+        expect(await orderStatusOf(orderId)).toBe('pending');
+        expect(await outboxCount('payment.succeeded')).toBe(0);
+        expect(await outboxCount('order.status_changed')).toBe(before);
+        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
+        // The hold is still `held`: a real commit still claims it.
+        expect(await inventoryService.commitForOrder(orderId)).toBe(true);
+    });
+
+    it('settles on a retry once the failure has passed, announcing once', async () => {
+        const { user, order } = await placedOrder(10, 3);
+        const orderId = String(order._id);
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+        await expect(payFor(orderId, user)).rejects.toThrow('connection reset');
+
+        const paid = await payFor(orderId, user);
+
+        expect(paid.success).toBe(true);
+        expect(await orderStatusOf(orderId)).toBe('paid');
+        expect(await paymentStatusOf(orderId)).toBe('succeeded');
+        expect(await outboxCount('payment.succeeded')).toBe(1);
+    });
+
+    it('commits once when the webhook and the browser settle at the same moment', async () => {
+        const { user, order } = await placedOrder(10, 3);
+        const orderId = String(order._id);
+        const intent = await createIntent(orderId, auth(user));
+        const paymentId = String(intent.success && intent.data?.id);
+        const providerRef = String((await paymentRepository.findByOrderId(orderId))!.providerRef);
+        await confirmPayment(
+            paymentId,
+            'pm_card_authentication_required',
+            auth(user),
+            testCallerContext
+        );
+        const before = await outboxCount('order.status_changed');
+
+        await Promise.all([
+            applyWebhookSettlement(providerRef),
+            syncPayment(paymentId, auth(user), testCallerContext)
+        ]);
+
+        expect(await orderStatusOf(orderId)).toBe('paid');
+        expect(await outboxCount('payment.succeeded')).toBe(1);
+        expect(await outboxCount('order.status_changed')).toBe(before + 1);
+    });
+
+    it('leaves a paid order’s hold alone when the reservation sweep runs', async () => {
+        const { user, product, order } = await placedOrder(10, 3);
+        const orderId = String(order._id);
+        await payFor(orderId, user);
+
+        // Holds expire at once in the test environment: a hold still `held` would be released.
+        expect(await inventoryService.runReservationSweep()).toBe(0);
+
+        expect(await orderStatusOf(orderId)).toBe('paid');
         expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
     });
-
-    it('finishes the commit and clears the marker on the next sweep', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
-            const { user, product, order } = await placedOrder(10, 3);
-            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-                new Error('connection reset')
-            );
-            await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
-
-            expect(await retryPendingEffects()).toBe(1);
-
-            expect(await countersOf(product._id)).toEqual({
-                onHand: 10,
-                reserved: 3,
-                available: 7
-            });
-            const payment = await paymentRepository.findByOrderId(String(order._id));
-            // `[]`, not `undefined`: Mongoose defaults an array path back to empty once `$unset`
-            // has removed it from storage — this is the cleared state, not a leftover value.
-            expect(payment!.pendingEffects).toEqual([]);
-
-            // A second pass finds nothing left to do — the marker is gone.
-            expect(await retryPendingEffects()).toBe(0);
-        }));
-
-    it('drops the marker without committing when the order is no longer payable', async () => {
-        const { user, product, order } = await placedOrder(10, 3);
-        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-            new Error('connection reset')
-        );
-        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
-        await orderService.cancelById(String(order._id), auth(user));
-
-        await withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
-            expect(await retryPendingEffects()).toBe(1);
-        });
-
-        const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.pendingEffects).toEqual([]);
-        // Cancelling already released what a commit never took — the sweep must not commit a
-        // sale for an order nobody can fulfil any more.
-        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 0, available: 10 });
-    });
-
-    it('marks the refund owed when the order moved on before settlement could react to it', async () => {
-        const { user, product, order } = await placedOrder(10, 3);
-        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-            new Error('connection reset')
-        );
-        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
-        // Simulates the crash itself: the order moved away from `paid` by some other means (a
-        // race settlement's own `orderLost` branch never got to see, since the process died
-        // first) — no cancel ran, so nothing wrote the order's own refund marker yet.
-        await forceOrderStatus(String(order._id), 'cancelled');
-
-        await withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
-            expect(await retryPendingEffects()).toBe(1);
-        });
-
-        const payment = await paymentRepository.findByOrderId(String(order._id));
-        expect(payment!.status).toBe('succeeded');
-        expect(payment!.pendingEffects).toEqual([]);
-        const stored = await orderService.getById(String(order._id));
-        expect(stored!.pendingEffects).toEqual(['refund']);
-        // The commit never ran: the order can no longer use the stock it would have taken.
-        expect(await countersOf(product._id)).toEqual({ onHand: 10, reserved: 3, available: 7 });
-    });
-
-    it('a commit that fails during the sweep itself keeps its marker, without losing the rest of the batch', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
-            const first = await placedOrder(10, 3);
-            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-                new Error('connection reset')
-            );
-            await expect(payFor(String(first.order._id), first.user)).rejects.toThrow(
-                'connection reset'
-            );
-
-            const second = await placedOrder(10, 2, 'second-payment-effect@example.com');
-            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-                new Error('connection reset')
-            );
-            await expect(payFor(String(second.order._id), second.user)).rejects.toThrow(
-                'connection reset'
-            );
-
-            // Whichever of the two the sweep reaches first now throws inside `getById`, before it
-            // ever decides whether stock is still owed. A bare `Promise.all` with no per-item
-            // `.catch` around this call would reject wholesale, and NEITHER payment would be
-            // reported swept — the bug this guards.
-            jest.spyOn(orderService, 'getById').mockRejectedValueOnce(new Error('mongo blip'));
-
-            // One settled — the failing one keeps its marker for the next pass instead of
-            // silently losing the whole batch's count.
-            expect(await retryPendingEffects()).toBe(1);
-
-            const payments = await Promise.all([
-                paymentRepository.findByOrderId(String(first.order._id)),
-                paymentRepository.findByOrderId(String(second.order._id))
-            ]);
-            const cleared = payments.filter(
-                (payment) => (payment!.pendingEffects ?? []).length === 0
-            );
-            const stillOwed = payments.filter(
-                (payment) => (payment!.pendingEffects ?? []).length > 0
-            );
-            expect(cleared).toHaveLength(1);
-            expect(stillOwed).toHaveLength(1);
-        }));
 });
 
 /**
@@ -1219,7 +1180,7 @@ describe('applyWebhookSettlement', () => {
  * the money bug this fix closes.
  */
 describe('applyWebhookDelivery', () => {
-    it('lets a delivery that failed to settle be redelivered, rather than swallowing it as a dupe', async () => {
+    it('settles on the redelivery of a delivery whose first settlement failed', async () => {
         const { user, order } = await orderFor();
         await createIntent(String(order._id), auth(user));
         const providerRef = String(
@@ -1242,6 +1203,31 @@ describe('applyWebhookDelivery', () => {
         const payment = await paymentRepository.findByOrderId(String(order._id));
         expect(payment!.status).toBe('succeeded');
         expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
+    });
+
+    it('settles a repeated delivery once, with no ledger of event ids behind it', async () => {
+        const { user, order } = await orderFor();
+        await createIntent(String(order._id), auth(user));
+        const providerRef = String(
+            (await paymentRepository.findByOrderId(String(order._id)))!.providerRef
+        );
+        setFakeOutcome(providerRef, { status: 'succeeded' });
+        const event = { id: 'evt_twice', providerRef };
+
+        await Promise.all([applyWebhookDelivery(event), applyWebhookDelivery(event)]);
+        await applyWebhookDelivery(event);
+
+        expect((await orderService.getById(String(order._id)))!.status).toBe('paid');
+        expect(await outboxEventModel.countDocuments({ name: 'payment.succeeded' })).toBe(1);
+    });
+
+    it('does nothing for a delivery that names no intent', async () => {
+        const retrieveSpy = jest.spyOn(fakePaymentProvider, 'retrieve');
+
+        await expect(applyWebhookDelivery({ id: 'evt_no_intent' })).resolves.toBeUndefined();
+
+        expect(retrieveSpy).not.toHaveBeenCalled();
+        retrieveSpy.mockRestore();
     });
 });
 

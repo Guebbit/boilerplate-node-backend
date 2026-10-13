@@ -4,7 +4,7 @@
  * passwords. The overrides are read at module scope, so every case that exercises one reloads
  * the module rather than mutating an already-evaluated constant.
  */
-import { zodUserSchema } from '@modules/users';
+import { SignupBody } from '@api/schemas.zod';
 import {
     SEED_ADMIN_EMAIL,
     SEED_USER_EMAIL,
@@ -17,7 +17,7 @@ import { setEnvironment } from '@tests/environment';
 
 /** What every password-setting endpoint enforces, reduced to a yes/no. */
 const satisfiesPolicy = (password: string): boolean =>
-    zodUserSchema.pick({ password: true }).safeParse({ password }).success;
+    SignupBody.shape.password.safeParse(password).success;
 
 /** Reloads the module with the two vars set as given, so the constants re-evaluate. */
 const reloadWith = async (admin: string | undefined, user: string | undefined) => {

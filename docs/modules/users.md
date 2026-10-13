@@ -1,7 +1,7 @@
 # users
 
 ::: tip At a glance
-**Owns** — the user record: email, password hash, role name, the second-factor and linked-provider material, and the session epoch. Sessions and one-time tokens are [`account`](./account.md)'s own collections.
+**Owns** — the user record: email, password hash, role name, the second-factor and linked-provider material, and the session epoch. Credentials stay on the record on purpose: bounded, read at login, dying with the user ([why](./account-two-factor.md#what-the-user-document-carries)). Sessions and one-time tokens are [`account`](./account.md)'s own collections.
 **Depends on** — nothing. Authentication is next door in [`account`](./account.md).
 **Breaks if you change** — the credential fields (password, second factors, linked providers, the epoch). `account` reads and writes them, and it is the repo's only shared-kernel edge.
 :::
@@ -57,8 +57,8 @@ module publishes its own field alongside it purely so a staff list has something
 
 **Authentication is not here.** Signup, login, password reset, sessions and the one-time-token lifecycle all live in
 [`account`](./account.md), which is a _second service over this same collection_. That split is why
-this module's barrel is the widest in the repo: alongside `userService`, it publishes
-`zodUserSchema` straight off the model — `account` needs it to authenticate the same document. `userRepository` and the model's
+this module's barrel is the widest in the repo: alongside `userService`, it publishes its events
+and the model's types — `account` needs them to authenticate the same document. `userRepository` and the model's
 runtime value stay inside even so: every read or write, `account`'s included, goes through
 `userService`, never the collection directly.
 

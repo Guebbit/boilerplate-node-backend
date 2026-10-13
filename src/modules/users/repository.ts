@@ -12,9 +12,20 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { AUTHENTICATABLE_FILTER } from './authenticatable';
-import { twoFactorWritePipeline, type TwoFactorWrite } from './two-factor-write';
+import {
+    twoFactorWritePipeline,
+    type TwoFactorWrite,
+    type TwoFactorWriteOutcome
+} from './two-factor-write';
 import { userModel, applyUserTransform } from './model';
-import type { UserDocument, OAuthAccount, UserWire, MfaReservation } from './model';
+import type {
+    UserDocument,
+    OAuthAccount,
+    UserWire,
+    MfaReservation,
+    DeliveredCodeSlot,
+    DeliveredCodeState
+} from './model';
 import type { UpdateQuery, QueryFilter, UpdateWriteOpResult, ClientSession } from 'mongoose';
 import {
     createRepository,
@@ -56,6 +67,43 @@ const NOT_WARNED_THIS_STRETCH = {
     ]
 };
 
+/** The four fields one delivered code occupies, in a slot. */
+const CODE_FIELDS = ['codeHash', 'codeExpiresAt', 'codeSentAt', 'codeAttempts'] as const;
+
+/** One delivered-code field. */
+type CodeField = (typeof CODE_FIELDS)[number];
+
+/**
+ * The filter that finds one delivered code's slot on an account. A step-up code sits at
+ * `reauthCode.*`; a method's code sits inside its array entry, matched together by `$elemMatch`
+ * so every condition holds for the SAME entry (and `$` in the update points at it).
+ *
+ * @param id - the account
+ * @param slot - which code
+ * @param conditions - the field conditions, built with the path function it is handed
+ */
+const codeSlotFilter = (
+    id: string,
+    slot: DeliveredCodeSlot,
+    conditions: (field: (name: CodeField) => string) => Record<string, unknown>
+): QueryFilter<UserDocument> =>
+    slot.kind === 'reauth'
+        ? { _id: toObjectId(id), ...conditions((name) => `reauthCode.${name}`) }
+        : {
+              _id: toObjectId(id),
+              twoFactorMethods: {
+                  $elemMatch: { method: slot.method, ...conditions((name) => name) }
+              }
+          };
+
+/** The update path of one delivered-code field in a slot. */
+const codeSlotPath = (slot: DeliveredCodeSlot, name: CodeField): string =>
+    slot.kind === 'reauth' ? `reauthCode.${name}` : `twoFactorMethods.$.${name}`;
+
+/** An `$unset` document that clears every field of the code in a slot. */
+const clearedCode = (slot: DeliveredCodeSlot): Record<string, ''> =>
+    Object.fromEntries(CODE_FIELDS.map((name) => [codeSlotPath(slot, name), '']));
+
 /**
  * Standard CRUD via the repository factory, plus credential reads and soft-delete scoping. The
  * type is written out because Mongoose's generics are too large for TypeScript to serialize an
@@ -80,7 +128,25 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     resetMfaAttempts: (id: string) => Promise<void>;
     bumpSessionEpoch: (id: string, at: Date, session?: ClientSession) => Promise<void>;
     claimTotpStep: (id: string, method: string, step: number) => Promise<boolean>;
-    writeTwoFactor: (id: string, write: TwoFactorWrite) => Promise<boolean>;
+    spendBackupCode: (id: string, digest: string) => Promise<boolean>;
+    spendDeliveredCode: (
+        id: string,
+        slot: DeliveredCodeSlot,
+        hash: string,
+        now: Date,
+        maxAttempts: number
+    ) => Promise<boolean>;
+    recordDeliveredMiss: (
+        id: string,
+        slot: DeliveredCodeSlot,
+        hash: string,
+        maxAttempts: number
+    ) => Promise<void>;
+    armReauthCode: (id: string, state: DeliveredCodeState) => Promise<boolean>;
+    writeTwoFactor: (
+        id: string,
+        write: TwoFactorWrite
+    ) => Promise<TwoFactorWriteOutcome | undefined>;
     writebackImage: ImageWriteback;
     touchLastActive: (id: string, now: Date) => Promise<void>;
     touchApiKeyUse: (id: string, now: Date) => Promise<void>;
@@ -371,6 +437,111 @@ export const userRepository: Repository<UserDocument, UserWire> & {
             .then(({ modifiedCount }) => modifiedCount > 0),
 
     /**
+     * Spend one backup code: pull its digest from the stored list, but only while it is still
+     * there. The filter is the guard — of two requests holding the same code, one matches and the
+     * other finds nothing. A regenerated set has other digests, so a stale spend misses too.
+     * `timestamps: false`, like every factor bookkeeping write.
+     *
+     * @param id - the account
+     * @param digest - the stored form of the code, from `hashBackupCode`
+     * @returns whether THIS call spent the code
+     */
+    spendBackupCode: (id: string, digest: string) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id), twoFactorBackupCodes: digest },
+                { $pull: { twoFactorBackupCodes: digest } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Spend the delivered code in `slot`: unset it, but only while the SAME code (`hash`) is still
+     * in flight, unexpired, and under its attempt ceiling. Of two requests carrying one code,
+     * exactly one matches. `timestamps: false`: a code is bookkeeping, not an edit.
+     *
+     * @param id - the account
+     * @param slot - where the code lives
+     * @param hash - the stored digest the caller matched
+     * @param now - the clock the expiry is judged against
+     * @param maxAttempts - the ceiling on wrong guesses
+     * @returns whether THIS call spent the code
+     */
+    spendDeliveredCode: (id, slot, hash, now, maxAttempts) =>
+        userModel
+            .updateOne(
+                codeSlotFilter(id, slot, (field) => ({
+                    [field('codeHash')]: hash,
+                    [field('codeExpiresAt')]: { $gt: now },
+                    $or: [
+                        { [field('codeAttempts')]: null },
+                        { [field('codeAttempts')]: { $lt: maxAttempts } }
+                    ]
+                })),
+                { $unset: clearedCode(slot) },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ modifiedCount }) => modifiedCount > 0),
+
+    /**
+     * Count one wrong guess against the code `hash` in `slot`, then burn the code if that reached
+     * the ceiling. Two writes, each atomic: `$inc` never loses a count to a parallel guess, and the
+     * burn is conditional on the stored counter, not on this caller's loaded copy.
+     *
+     * @param id - the account
+     * @param slot - where the code lives
+     * @param hash - the code in flight the guess was made against
+     * @param maxAttempts - the ceiling on wrong guesses
+     */
+    recordDeliveredMiss: (id, slot, hash, maxAttempts) =>
+        userModel
+            .updateOne(
+                codeSlotFilter(id, slot, (field) => ({
+                    [field('codeHash')]: hash,
+                    $or: [
+                        { [field('codeAttempts')]: null },
+                        { [field('codeAttempts')]: { $lt: maxAttempts } }
+                    ]
+                })),
+                { $inc: { [codeSlotPath(slot, 'codeAttempts')]: 1 } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(() =>
+                userModel
+                    .updateOne(
+                        codeSlotFilter(id, slot, (field) => ({
+                            [field('codeHash')]: hash,
+                            [field('codeAttempts')]: { $gte: maxAttempts }
+                        })),
+                        { $unset: clearedCode(slot) },
+                        { timestamps: false }
+                    )
+                    .exec()
+            )
+            .then(() => undefined),
+
+    /**
+     * Arm the step-up code: replace the slot whole. `timestamps: false`, so sending a code is not
+     * an edit of the account (no `editRevision` move, no false 412 for an admin's open editor).
+     *
+     * @param id - the account
+     * @param state - the freshly armed code's fields
+     * @returns whether the account still existed
+     */
+    armReauthCode: (id, state) =>
+        userModel
+            .updateOne(
+                { _id: toObjectId(id) },
+                { $set: { reauthCode: state } },
+                { timestamps: false }
+            )
+            .exec()
+            .then(({ matchedCount }) => matchedCount > 0),
+
+    /**
      * Apply one request's 2FA changes as a single atomic update: per-method field writes, entries
      * added or dropped, and the account-level fields of the same change — see
      * `./two-factor-write.ts` for why this is not a `save()`.
@@ -380,18 +551,40 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      *
      * @param id - the account
      * @param write - what the request changed, from `planTwoFactorWrite`
-     * @returns whether the account still existed to take the write
+     * @returns what the write left in the document (flag, stored code set), or `undefined` when
+     *   the account is gone
      */
     writeTwoFactor: (id: string, write: TwoFactorWrite) =>
         userModel
             // `updatePipeline: true` is Mongoose's opt-in to an aggregation-pipeline update:
             // https://mongoosejs.com/docs/api/model.html#Model.updateOne()
-            .updateOne({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
+            // `returnDocument: 'after'` gives the document as written; `projection` keeps it to the
+            // three derived fields, so the caller learns the outcome without a second read.
+            .findOneAndUpdate({ _id: toObjectId(id) }, twoFactorWritePipeline(write), {
                 timestamps: false,
-                updatePipeline: true
+                updatePipeline: true,
+                returnDocument: 'after',
+                projection: {
+                    twoFactorEnabledAt: 1,
+                    twoFactorBackupCodeSalt: 1,
+                    twoFactorBackupCodes: 1
+                }
             })
+            .lean<{
+                twoFactorEnabledAt?: Date;
+                twoFactorBackupCodeSalt?: string;
+                twoFactorBackupCodes?: string[];
+            } | null>()
             .exec()
-            .then(({ matchedCount }) => matchedCount > 0),
+            .then((stored) =>
+                stored
+                    ? {
+                          enabledAt: stored.twoFactorEnabledAt,
+                          backupCodeSalt: stored.twoFactorBackupCodeSalt,
+                          backupCodeCount: stored.twoFactorBackupCodes?.length ?? 0
+                      }
+                    : undefined
+            ),
 
     /**
      * The image digest pipeline's writeback for the `users` collection — see `ImageTarget` in

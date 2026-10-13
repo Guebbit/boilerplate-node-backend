@@ -82,7 +82,7 @@ export interface RefundedByProvider {
  * https://docs.stripe.com/webhooks#handle-events-asynchronously
  */
 export interface ProviderWebhookEvent {
-    /** The provider's event id, deduplicated so a retried delivery settles nothing twice. */
+    /** The provider's event id, logged for tracing; a retried delivery settles nothing twice by the conditional writes. */
     id: string;
     /** Which intent it is about; `undefined` for an event this application does not act on. */
     providerRef?: string;

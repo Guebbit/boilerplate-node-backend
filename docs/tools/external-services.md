@@ -112,6 +112,9 @@ A provider that cannot be configured must behave as if the route did not exist â
 clear refusal), never silently wrong. That rule is why an unset payment provider is a hard failure
 rather than a checkout that quietly succeeds.
 
+For the payment port, [Writing a payment adapter](../modules/payments.md#writing-a-payment-adapter) lists
+what a card adapter must map, defend and not assume.
+
 ## See also
 
 - [Hosting](./hosting.md) â€” what a host must offer, same provider-neutral stance

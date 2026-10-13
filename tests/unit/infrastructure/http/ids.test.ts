@@ -151,7 +151,9 @@ describe('requireId', () => {
         expect(errorsOf(sent)).toEqual([
             {
                 code: 'VALIDATION_ERROR',
-                message: t('validation.invalid-format'),
+                message: t('validation.invalid-format', {
+                    attribute: t('validation.attributes.productId')
+                }),
                 details: { field: 'productId' }
             }
         ]);
@@ -181,7 +183,9 @@ describe('requireId', () => {
         expect(errorsOf(sent)).toEqual([
             {
                 code: 'VALIDATION_ERROR',
-                message: t('validation.required'),
+                message: t('validation.required', {
+                    attribute: t('validation.attributes.id')
+                }),
                 details: { field: 'id' }
             }
         ]);
@@ -264,7 +268,9 @@ describe('malformedIdIssues', () => {
         expect(malformedIdIssues(schema, { userId: 'abc' })).toEqual([
             {
                 code: 'VALIDATION_ERROR',
-                message: t('validation.invalid-format'),
+                message: t('validation.invalid-format', {
+                    attribute: t('validation.attributes.userId')
+                }),
                 details: { field: 'userId' }
             }
         ]);

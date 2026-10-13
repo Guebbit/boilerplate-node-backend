@@ -12,7 +12,6 @@
  */
 
 import { presentUser, presentUserWithCurrentRole, userActionsFor } from '../presenter';
-import { validateData } from './validation';
 import { search, getById, findByEmail } from './read';
 import { enqueueIfPending } from './image';
 import { create } from './create';
@@ -36,10 +35,14 @@ import {
     cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
-    persistReauthCode,
+    persistTwoFactorWrite,
+    armReauthCode,
+    spendDeliveredCode,
+    recordDeliveredMiss,
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
+    spendBackupCode,
     bumpSessionEpoch,
     touchLastActive,
     touchApiKeyUse
@@ -67,7 +70,6 @@ import {
  * operations directly, and the barrel's surface must not shrink when a file moves.
  */
 export { isAuthenticatable } from '../authenticatable';
-export { validateData } from './validation';
 export { search, getById, findByEmail } from './read';
 export { enqueueIfPending } from './image';
 export { create } from './create';
@@ -75,11 +77,9 @@ export { reencryptUserPhones, reencryptTwoFactorSecrets } from './reencrypt';
 export type { TwoFactorSecretRing } from './reencrypt';
 export { update, updateById } from './update';
 export { remove, restoreById, removeById } from './remove';
-export { MFA_MAX_FAILURES, MFA_LOCK_MS } from './credentials';
 
 /** The service's public surface — the controllers call through this, never the bare functions. */
 export const userService = {
-    validateData,
     search,
     getById,
     create,
@@ -108,10 +108,14 @@ export const userService = {
     cancelPendingEmail,
     markInactivityWarned,
     persistTwoFactorMethods,
-    persistReauthCode,
+    persistTwoFactorWrite,
+    armReauthCode,
+    spendDeliveredCode,
+    recordDeliveredMiss,
     reserveMfaAttempt,
     resetMfaAttempts,
     claimTotpStep,
+    spendBackupCode,
     bumpSessionEpoch,
     touchLastActive,
     touchApiKeyUse,

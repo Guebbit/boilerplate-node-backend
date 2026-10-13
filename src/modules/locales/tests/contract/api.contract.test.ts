@@ -11,7 +11,7 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs } from '@tests/http';
 import { listSupportedLocales, getDefaultLocale, getFallbackLocale } from '@infrastructure/i18n';
-import { readLocaleDictionary } from '@infrastructure/i18n';
+import { translator } from '@infrastructure/i18n';
 import { MISSING_ID } from '@tests/ids';
 import { createLanguage, PORTUGUESE } from './support';
 import itTranslation from '../../../../locales/it.json';
@@ -945,10 +945,12 @@ describe('a locale only the API has', () => {
         // The expected copy is read from the MERGED dictionary rather than imported from the
         // module that ships it: this spec is about locale negotiation, and it should not be the
         // thing that breaks when a domain it merely borrows an endpoint from is deleted.
-        const italian = readLocaleDictionary('it') as { users: Record<string, string> };
+        const italian = translator('it');
 
         expect(response.body.errors.map(({ message }: { message: string }) => message)).toContain(
-            italian.users['field-email-invalid']
+            italian('validation.format-email', {
+                attribute: italian('validation.attributes.email')
+            })
         );
     });
 

@@ -4,9 +4,29 @@
  */
 
 import { Error as MongooseError, type ClientSession } from 'mongoose';
-import type { MfaReservation, UserDocument } from '../model';
+import type {
+    DeliveredCodeSlot,
+    MfaReservation,
+    TwoFactorMethodRecord,
+    UserDocument
+} from '../model';
 import { userRepository } from '../repository';
-import { isEmptyWrite, planTwoFactorWrite, settleTwoFactorWrite } from '../two-factor-write';
+import {
+    isEmptyWrite,
+    markEntryWritten,
+    planTwoFactorWrite,
+    settleTwoFactorWrite,
+    type TwoFactorWriteOptions,
+    type TwoFactorWriteOutcome
+} from '../two-factor-write';
+
+/** Forget the delivered code on a loaded entry — the copy of what the spend just did in the database. */
+const clearEntryCode = (entry: TwoFactorMethodRecord): void => {
+    entry.codeHash = undefined;
+    entry.codeExpiresAt = undefined;
+    entry.codeSentAt = undefined;
+    entry.codeAttempts = undefined;
+};
 
 /**
  * Set an account's password — `account/services/password.ts`'s `passwordChange` is the only
@@ -107,12 +127,70 @@ export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> 
 };
 
 /**
+ * Take a write's outcome back onto the loaded copy and leave those paths unmodified, so the
+ * copy reads what is stored and does not resend it.
+ *
+ * @param user - the copy the write was planned from
+ * @param outcome - what the database says it now holds
+ * @param options - the write's backup-code instructions, which decide what the copy mirrors
+ */
+const adoptOutcome = (
+    user: UserDocument,
+    outcome: TwoFactorWriteOutcome,
+    options: TwoFactorWriteOptions
+): void => {
+    user.twoFactorEnabledAt = outcome.enabledAt;
+    if (options.discardCodesIfDisarmed && !outcome.enabledAt) {
+        user.twoFactorBackupCodes = [];
+        user.twoFactorBackupCodeSalt = undefined;
+    }
+    if (options.mintCodes && outcome.backupCodeSalt === options.mintCodes.salt) {
+        user.twoFactorBackupCodes = options.mintCodes.digests;
+        user.twoFactorBackupCodeSalt = options.mintCodes.salt;
+    }
+    settleTwoFactorWrite(user);
+};
+
+/**
+ * {@link persistTwoFactorMethods} with the backup-code instructions and the outcome. An empty
+ * write sends nothing and answers from the copy.
+ *
+ * @param user - the loaded copy, credentials included, as the request left it
+ * @param options - methods removed, and whether to discard or mint backup codes inside the write
+ * @returns what is stored after the write; a caller that asked to mint compares `backupCodeSalt`
+ *   with its own to learn whether its set is the one that landed
+ * @throws DocumentNotFoundError when the account is gone, which `isLostRace` recognises
+ */
+export const persistTwoFactorWrite = (
+    user: UserDocument,
+    options: TwoFactorWriteOptions = {}
+): Promise<TwoFactorWriteOutcome> => {
+    const write = planTwoFactorWrite(user, options);
+    if (isEmptyWrite(write))
+        return Promise.resolve({
+            enabledAt: user.twoFactorEnabledAt,
+            backupCodeSalt: user.twoFactorBackupCodeSalt,
+            backupCodeCount: user.twoFactorBackupCodes.length
+        });
+
+    return userRepository.writeTwoFactor(user.id, write).then((outcome) => {
+        // The error Mongoose's own `save` raises for a vanished row, so `isLostRace` treats both alike.
+        if (!outcome) throw new MongooseError.DocumentNotFoundError(user.id);
+        adoptOutcome(user, outcome, options);
+        return outcome;
+    });
+};
+
+/**
  * Persist the 2FA changes a request made on its loaded copy — `account/services/two-factor-enrollment.ts`
  * calls this as the last step of every enrollment, confirmation, removal, disable and backup-code
  * action. The mutation stays `account`'s; this writes only what changed, per method and in one
  * atomic update, so a request holding an older copy cannot undo what a concurrent one wrote (a
  * claimed TOTP step above all) nor fail it with a lost-race error. A write that changes nothing
  * sends nothing.
+ *
+ * The armed flag is not the copy's to say: the database derives it from the entries as stored,
+ * and the copy takes the result back. See {@link persistTwoFactorWrite} for what that returns.
  *
  * @param user - the loaded copy, credentials included, as the request left it
  * @param dropped - the methods the request removed from the copy, or `'all'` for a disable;
@@ -123,44 +201,93 @@ export const markInactivityWarned = (user: UserDocument): Promise<UserDocument> 
 export const persistTwoFactorMethods = (
     user: UserDocument,
     dropped: readonly string[] | 'all' = []
-): Promise<UserDocument> => {
-    const write = planTwoFactorWrite(user, dropped);
-    if (isEmptyWrite(write)) return Promise.resolve(user);
+): Promise<UserDocument> => persistTwoFactorWrite(user, { dropped }).then(() => user);
 
-    return userRepository.writeTwoFactor(user.id, write).then((found) => {
-        // The error Mongoose's own `save` raises for a vanished row, so `isLostRace` treats both alike.
-        if (!found) throw new MongooseError.DocumentNotFoundError(user.id);
-        settleTwoFactorWrite(user);
-        return user;
+/**
+ * Write the step-up code `account/services/reauth.ts` just armed on the loaded document. The
+ * arming stays `account`'s; this only stores it, without moving `updatedAt` or `editRevision`.
+ *
+ * @param user - the account, whose `reauthCode` carries the new code
+ * @throws {MongooseError.DocumentNotFoundError} when the account no longer exists
+ */
+export const armReauthCode = (user: UserDocument): Promise<void> => {
+    const { codeHash, codeExpiresAt, codeSentAt, codeAttempts } = user.reauthCode ?? {};
+    return userRepository
+        .armReauthCode(user.id, { codeHash, codeExpiresAt, codeSentAt, codeAttempts })
+        .then((found) => {
+            if (!found) throw new MongooseError.DocumentNotFoundError(user.id);
+            user.unmarkModified('reauthCode');
+        });
+};
+
+/**
+ * Bring a loaded copy in line with a delivered code that was just spent, and leave it unmodified
+ * so the request's later 2FA write does not send the stale fields back.
+ */
+const mirrorSpentCode = (user: UserDocument, slot: DeliveredCodeSlot): void => {
+    if (slot.kind === 'reauth') {
+        user.reauthCode = undefined;
+        user.unmarkModified('reauthCode');
+        return;
+    }
+    const entry = user.twoFactorMethods.find((candidate) => candidate.method === slot.method);
+    if (!entry) return;
+    clearEntryCode(entry);
+    markEntryWritten(entry);
+};
+
+/**
+ * Spend the delivered code in `slot`, atomically: `false` means a parallel request already did, or
+ * the code expired, was replaced or ran out of attempts since this copy was loaded.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param slot - where the code lives
+ * @param hash - the stored digest the caller matched
+ * @param maxAttempts - the ceiling on wrong guesses
+ * @param now - the clock the expiry is judged against
+ */
+export const spendDeliveredCode = (
+    user: UserDocument,
+    slot: DeliveredCodeSlot,
+    hash: string,
+    maxAttempts: number,
+    now: Date = new Date()
+): Promise<boolean> =>
+    userRepository.spendDeliveredCode(user.id, slot, hash, now, maxAttempts).then((spent) => {
+        if (spent) mirrorSpentCode(user, slot);
+        return spent;
     });
-};
 
 /**
- * Persist the step-up code `account/services/reauth.ts` armed, spent or burned on the loaded
- * document. The mutation stays `account`'s; this only writes it — same split as
- * {@link persistTwoFactorMethods}.
+ * Count one wrong guess against the code `hash` in `slot`; the code is burned once the stored
+ * counter reaches `maxAttempts`. The loaded copy is left as it was.
+ *
+ * @param user - the account
+ * @param slot - where the code lives
+ * @param hash - the code in flight the guess was made against
+ * @param maxAttempts - the ceiling on wrong guesses
  */
-export const persistReauthCode = (user: UserDocument): Promise<UserDocument> => {
-    user.markModified('reauthCode');
-    return userRepository.save(user);
-};
-
-/**
- * Wrong codes an account may have reserved against its armed 2FA before it locks. NIST SP 800-63B
- * allows at most 100; ten is what a person mistyping can plausibly reach.
- */
-export const MFA_MAX_FAILURES = 10;
-
-/** How long the lock lasts once {@link MFA_MAX_FAILURES} is reached. */
-export const MFA_LOCK_MS = 15 * 60_000;
+export const recordDeliveredMiss = (
+    user: UserDocument,
+    slot: DeliveredCodeSlot,
+    hash: string,
+    maxAttempts: number
+): Promise<void> => userRepository.recordDeliveredMiss(user.id, slot, hash, maxAttempts);
 
 /**
  * Reserve one wrong-code attempt against the account's armed 2FA, before any code is compared.
  * `reserved: false` means locked: the caller must refuse without comparing. `lockedNow` is true
- * for exactly the reservation that tripped the lock.
+ * for exactly the reservation that tripped the lock. The policy is `account`'s, passed in.
+ *
+ * @param id - the account
+ * @param maxFailures - reservations a window may hand out before it locks
+ * @param lockMs - how long the lock lasts
  */
-export const reserveMfaAttempt = (id: string): Promise<MfaReservation> =>
-    userRepository.reserveMfaAttempt(id, MFA_MAX_FAILURES, MFA_LOCK_MS);
+export const reserveMfaAttempt = (
+    id: string,
+    maxFailures: number,
+    lockMs: number
+): Promise<MfaReservation> => userRepository.reserveMfaAttempt(id, maxFailures, lockMs);
 
 /** Clear the 2FA attempt counter and lock — after a right code, or a completed password reset. */
 export const resetMfaAttempts = (id: string): Promise<void> => userRepository.resetMfaAttempts(id);
@@ -171,6 +298,25 @@ export const resetMfaAttempts = (id: string): Promise<void> => userRepository.re
  */
 export const claimTotpStep = (id: string, method: string, step: number): Promise<boolean> =>
     userRepository.claimTotpStep(id, method, step);
+
+/**
+ * Spend one backup code, atomically: `false` means a concurrent request already did (or the set
+ * was regenerated). On success the loaded copy is brought in line and left unmodified, so the
+ * request's later 2FA write does not send the list again.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param digest - the matching stored digest, from `hashBackupCode`
+ */
+export const spendBackupCode = (user: UserDocument, digest: string): Promise<boolean> =>
+    userRepository.spendBackupCode(user.id, digest).then((spent) => {
+        if (spent) {
+            user.twoFactorBackupCodes = user.twoFactorBackupCodes.filter(
+                (stored) => stored !== digest
+            );
+            user.unmarkModified('twoFactorBackupCodes');
+        }
+        return spent;
+    });
 
 /**
  * Move the account's session epoch to `at` (now by default): every access or refresh token minted

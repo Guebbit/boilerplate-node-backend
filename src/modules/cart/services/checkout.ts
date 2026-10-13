@@ -7,7 +7,7 @@
  */
 
 import { getDefaultLocale, t } from '@infrastructure/i18n';
-import { maxOpenUnpaidOrdersPerAccount, shipToCountries, shopCurrency } from '@modules/orders';
+import { shipToCountries, shopCurrency } from '@modules/orders';
 import {
     generateSuccess,
     generateReject,
@@ -32,7 +32,7 @@ import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { cartAnalyticsEvents } from '../analytics';
 import { cartRepository } from '../repository';
-import { cartLineMax } from '../config';
+import { cartLineMax, maxOpenUnpaidOrdersPerAccount } from '../config';
 import {
     evaluateCheckout,
     evaluateShippingRequirement,

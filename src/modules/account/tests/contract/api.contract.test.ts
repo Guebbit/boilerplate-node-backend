@@ -20,8 +20,11 @@ import { userService } from '@modules/users';
 import { decodeJwt } from 'jose';
 import { logger } from '@infrastructure/adapters/logger';
 import * as mailerPort from '@infrastructure/adapters/mailer';
-import itUsers from '@modules/users/locales/it.json';
-import itShared from '../../../../locales/it.json';
+import { translator } from '@infrastructure/i18n';
+import {
+    changePasswordBodyPasswordMin,
+    confirmPasswordResetBodyPasswordMin
+} from '@api/schemas.zod';
 import { WEAK_PASSWORD } from '@modules/users/tests/factories';
 import { loginWithCookie } from './support';
 import { getSessionMode } from '../../session/config';
@@ -660,12 +663,21 @@ describe('POST /account/pending-email/resend', () => {
     });
 });
 
+/** The Italian "password too short" sentence for a given contract floor, rendered by the same `t`. */
+const tooShortPasswordInItalian = (minimum: number): string => {
+    const italian = translator('it');
+    return italian('validation.too-small-string', {
+        attribute: italian('validation.attributes.password'),
+        minimum: String(minimum)
+    });
+};
+
 /**
- * `POST /account/reset-confirm` shares `postPasswordChange`'s shape-only parse, and for the same
- * reason. Its own describe because the flow needs a live one-time token rather than a session.
+ * `POST /account/reset-confirm`, its own describe because the flow needs a live one-time token
+ * rather than a session.
  */
 describe('POST /account/reset-confirm', () => {
-    it('answers a weak password with the password copy, not the generic size message', async () => {
+    it("answers a weak password with the password named, in the caller's language", async () => {
         const user = await createUser({ email: 'reset-copy@example.com' });
         await plantToken(user.id, 'password', 'a-live-reset-token', { ttlMs: 60 * 60 * 1000 });
 
@@ -683,8 +695,7 @@ describe('POST /account/reset-confirm', () => {
         );
 
         expect(response.status).toBe(422);
-        expect(messages).toContain(itUsers.users['field-password-min']);
-        expect(messages).not.toContain(itShared.validation['too-small-string']);
+        expect(messages).toContain(tooShortPasswordInItalian(confirmPasswordResetBodyPasswordMin));
     });
 
     /**
@@ -731,12 +742,10 @@ describe('POST /account/password', () => {
     });
 
     /**
-     * Message precedence, the same rule `tests/integration/locale.test.ts` pins for signup: a
-     * field with its own copy must not be answered with the generic size sentence from the global
-     * Zod error map. Parsing the generated `ChangePasswordBody` here would win that race, which is
-     * why this controller parses a shape-only schema and leaves the rules to the service.
+     * The contract's own body parses first, so the sentence is the shared size template with the
+     * password named, not a copy of its own.
      */
-    it('answers a weak password with the password copy, not the generic size message', async () => {
+    it("answers a weak password with the password named, in the caller's language", async () => {
         const { bearer } = await loginWithCookie();
 
         const response = await api()
@@ -754,8 +763,7 @@ describe('POST /account/password', () => {
         );
 
         expect(response.status).toBe(422);
-        expect(messages).toContain(itUsers.users['field-password-min']);
-        expect(messages).not.toContain(itShared.validation['too-small-string']);
+        expect(messages).toContain(tooShortPasswordInItalian(changePasswordBodyPasswordMin));
     });
 
     it('matches the error contract for a wrong current password — 422, never 401', async () => {

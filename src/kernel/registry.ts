@@ -251,8 +251,8 @@ export interface PersonalDataSubject {
  * {@link ImageTarget} and {@link TranslatableTarget} are built around — so `account`, which
  * assembles the export, cannot read every sibling's data directly either without importing them
  * all, which is exactly the cycle risk this manifest field removes. A module declares its own
- * section instead; the app tier collects every enabled module's and hands `account` the result the
- * same way it hands `locales` its `translatables` lookup.
+ * section instead; `account/module.ts`'s own `onRegistered` hook resolves every enabled module's
+ * sections once the list is known, the way `locales` builds its `translatables` lookup.
  */
 export interface PersonalDataSection {
     /** The key this section takes in the export envelope — matches the contract's property name. */

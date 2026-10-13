@@ -482,8 +482,8 @@ components:
                 data:
                     $ref: '#/components/schemas/Product'
 
-        # One locale's words for a product. `title` mirrors `zodProductSchema`'s length rules,
-        # enforced per locale — see the write operations' descriptions.
+        # One locale's words for a product, as read. The write shapes below carry the title's
+        # length rules, enforced per locale — see the write operations' descriptions.
         ProductTranslationFields:
             type: object
             additionalProperties: false
@@ -503,6 +503,7 @@ components:
             properties:
                 title:
                     type: string
+                    minLength: 5
                     maxLength: 200
                 description:
                     type: string
@@ -516,6 +517,7 @@ components:
             properties:
                 title:
                     type: string
+                    minLength: 5
                     maxLength: 200
                     description: A title is never cleared — an empty locale is deleted with the locale's own `null`.
                 description:

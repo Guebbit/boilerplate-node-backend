@@ -24,11 +24,14 @@ export {
     DELIVERED_CODE_TTL_MS,
     armDeliveredCode,
     clearDeliveredCode,
-    consumeDeliveredCode,
+    checkDeliveredCode,
     deliveryCooldownRemaining,
     generateDeliveredCode,
-    hashDeliveredCode
+    hashDeliveredCode,
+    type DeliveredCodeVerdict
 } from './delivered-codes';
+export { verifyDeliveredCode } from './delivered-code-verify';
+export { MFA_LOCK_MS, MFA_MAX_FAILURES } from './lockout';
 export {
     buildOtpauthUri,
     decryptTotpSecret,

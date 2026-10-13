@@ -1,23 +1,22 @@
 /**
  * @module
- * `payment.succeeded` rides the transactional outbox: it is written in the same transaction that
- * discharges the settlement's owed-effects marker, so a settlement that dies after charging still
- * announces — the sweep finishes it, the relay publishes it. Real Mongo throughout. See
- * docs/tools/outbox.md.
+ * `payment.succeeded` rides the transactional outbox: it is written in the settlement's own
+ * transaction, so it exists exactly when the payment is `succeeded` and the order `paid`. Real
+ * Mongo throughout. See docs/tools/outbox.md.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironment } from '@tests/environment';
 import { createUser } from '@modules/users/tests/factories';
 import { createProduct } from '@modules/products/tests/factories';
 import { onDomainEvent, resetDomainEvents } from '@kernel/events';
 import { outboxEventModel, relayOutbox, settleOutboxNudges } from '@kernel/outbox';
 import { orderService } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
-import { createIntent, confirmPayment, retryPendingEffects } from '@modules/payments/services';
-import { announcePaymentSucceeded, recordDecline } from '@modules/payments/services/announce';
+import { createIntent, confirmPayment } from '@modules/payments/services';
+import { recordDecline } from '@modules/payments/services/announce';
 import { paymentRepository } from '@modules/payments/repository';
 import { PAYMENT_FAILED, PAYMENT_SUCCEEDED } from '@modules/payments/events';
+import { fakePaymentProvider } from '@scenarios/support/doubles/payments/fake';
 import paymentsModule from '@modules/payments/module';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
@@ -65,7 +64,7 @@ const payFor = async (orderId: string, user: { id: string }) => {
 };
 
 describe('a settlement that completes', () => {
-    it('announces through the outbox, once, and the marker is gone', async () => {
+    it('announces through the outbox, once', async () => {
         const { user, order } = await placedOrder();
 
         await payFor(String(order._id), user);
@@ -79,61 +78,65 @@ describe('a settlement that completes', () => {
             status: 'published'
         });
         expect(heard).toEqual([{ orderId: String(order._id), eventId: String(rows[0]._id) }]);
-        expect((await paymentRepository.findByOrderId(String(order._id)))!.pendingEffects).toEqual(
-            []
-        );
     });
 
-    it('announces nothing a second time when asked again', async () => {
+    it('announces nothing a second time when the same payment is confirmed again', async () => {
         const { user, order } = await placedOrder();
         await payFor(String(order._id), user);
-        await settleOutboxNudges();
         const payment = (await paymentRepository.findByOrderId(String(order._id)))!;
-
-        // The marker is already gone: this caller is not the one that discharged it.
-        expect(await announcePaymentSucceeded(String(payment._id), String(order._id))).toBe(false);
+        await confirmPayment(
+            String(payment._id),
+            'pm_card_visa',
+            asCustomer(user.id),
+            testCallerContext
+        );
+        await settleOutboxNudges();
 
         expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(1);
     });
 });
 
 describe('a settlement that dies after charging', () => {
-    it('announces nothing at first, then the sweep and the relay still emit the event', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
-            const { user, order } = await placedOrder();
-            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-                new Error('connection reset')
-            );
-            await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+    it('announces nothing, because the payment itself did not commit', async () => {
+        const { user, order } = await placedOrder();
+        jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
+            new Error('connection reset')
+        );
+        await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
+        await settleOutboxNudges();
+        await relayOutbox();
 
-            // The money moved, but the settlement never reached its announcement.
-            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
-            expect(heard).toEqual([]);
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
+        expect(heard).toEqual([]);
+        expect((await paymentRepository.findByOrderId(String(order._id)))!.status).toBe(
+            'requires_confirmation'
+        );
+    });
 
-            expect(await retryPendingEffects()).toBe(1);
-            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(1);
-            await settleOutboxNudges();
-            await relayOutbox();
+    it('announces nothing when the order was cancelled meanwhile — the refund path owns that', async () => {
+        const { user, order } = await placedOrder();
+        const orderId = String(order._id);
+        const intent = await createIntent(orderId, asCustomer(user.id));
+        const originalConfirm = fakePaymentProvider.confirm;
+        jest.spyOn(fakePaymentProvider, 'confirm').mockImplementationOnce(
+            async (providerRef, methodRef) => {
+                await orderService.cancelById(orderId, asCustomer(user.id));
+                return originalConfirm(providerRef, methodRef);
+            }
+        );
+        await confirmPayment(
+            String(intent.success && intent.data?.id),
+            'pm_card_visa',
+            asCustomer(user.id),
+            testCallerContext
+        );
+        await settleOutboxNudges();
+        await relayOutbox();
 
-            expect(heard.map(({ orderId }) => orderId)).toEqual([String(order._id)]);
-        }));
-
-    it('announces nothing when the order was cancelled meanwhile — the refund path owns that', () =>
-        withEnvironment('NODE_PAYMENT_EFFECT_RETRY_MINUTES', '0', async () => {
-            const { user, order } = await placedOrder();
-            jest.spyOn(inventoryService, 'commitForOrder').mockRejectedValueOnce(
-                new Error('connection reset')
-            );
-            await expect(payFor(String(order._id), user)).rejects.toThrow('connection reset');
-            await orderService.cancelById(String(order._id), asCustomer(user.id));
-
-            await retryPendingEffects();
-            await relayOutbox();
-
-            // The refund the cancel owes announces itself; the payment never does.
-            expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
-            expect(heard).toEqual([]);
-        }));
+        // The refund the cancel owes announces itself; the payment never does.
+        expect(await outboxEventModel.countDocuments({ name: PAYMENT_SUCCEEDED })).toBe(0);
+        expect(heard).toEqual([]);
+    });
 });
 
 /** An order with a card intent that nobody has confirmed: the state a decline lands on. */

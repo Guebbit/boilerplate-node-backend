@@ -85,7 +85,7 @@ export const productService = {
     titlesOf,
     titlesById,
     // Same reason as `toProduct` just above: the update controller's factory needs these to
-    // validate PUT/PATCH bodies with the field-named price message, and may not reach `./model`
+    // validate PUT/PATCH bodies against the contract plus its two refinements, and may not reach `./model`
     // directly.
     zodProductReplaceSchema,
     zodProductUpdateSchema

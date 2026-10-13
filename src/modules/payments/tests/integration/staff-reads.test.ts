@@ -316,21 +316,6 @@ describe('listAttention', () => {
         ]);
     });
 
-    it('shows a payment whose stock commit is still owed', async () => {
-        const stuck = await seedPayment({ pendingEffects: ['commit'] });
-        await backdate(stuck.payment, 180);
-        await seedPayment({ pendingEffects: ['commit'] });
-
-        const rows = await attentionRows();
-
-        expect(rows).toEqual([
-            expect.objectContaining({
-                kind: 'payment_effect_pending',
-                orderId: String(stuck.order._id)
-            })
-        ]);
-    });
-
     it('shows an order whose refund is owed, and drops it once the refund has landed', async () => {
         const { order } = await seedPayment();
         // The marker's own `updatedAt` is what ages it, so write it three hours ago.

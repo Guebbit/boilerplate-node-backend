@@ -323,7 +323,8 @@ delivered method armed, because a mailed code has an SMTP queue and an app switc
 - **Enrollment is two steps, per method.** `POST /account/2fa/methods/{method}/setup` arms nothing;
   only `.../confirm`, given a code the caller demonstrably received, sets `enrolledAt`.
 - **Backup codes are minted once**, by whichever method an account arms first — they recover the
-  account, not the method. Losing the last factor discards them.
+  account, not the method. Losing the last factor discards them. A code is spent by one
+  conditional pull, so the same code sent twice in parallel works once.
 - **Email requires a verified address.** 2FA by mail is only ever as strong as the mailbox behind
   it, and an address nobody has proved control of is not a second factor at all.
 - **Replay** — a device code's RFC 6238 time step is stored, so the identical code cannot verify
