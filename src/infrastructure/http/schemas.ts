@@ -53,6 +53,19 @@ export const blankToUndefined = (value: unknown): unknown =>
     value === '' || value == undefined ? undefined : value;
 
 /**
+ * A text field that is trimmed BEFORE the contract's own rules see it.
+ *
+ * The contract cannot say "trimmed", so `"   "` would pass its `minLength: 1`; piping through the
+ * generated field keeps every bound it declares (no restated numbers) and makes a whitespace-only
+ * value read as empty, the way Laravel's `required` does.
+ *
+ * @param field - the generated schema for the field, bounds included
+ */
+export const trimmedInto = <TField extends z.ZodType<string, string>>(field: TField) =>
+    // Zod `.pipe`: the trimmed string is the input of `field`. https://zod.dev/api#pipes
+    z.string().trim().pipe(field);
+
+/**
  * The soft/hard delete switch.
  *
  * Read as a VALUE, never as presence: `!!request.query.hardDelete` would make `?hardDelete=false`

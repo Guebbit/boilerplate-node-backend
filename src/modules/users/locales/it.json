@@ -1,13 +1,5 @@
 {
     "users": {
-        "field-email-required": "L'email è obbligatoria",
-        "field-email-invalid": "Email non valida",
-        "field-username-required": "Il nome utente è obbligatorio",
-        "field-username-min": "Il nome è troppo corto",
-        "field-username-max": "Il nome è troppo lungo",
-        "field-password-required": "La password è obbligatoria",
-        "field-password-max": "La password è troppo lunga",
-        "field-password-min": "La password è troppo corta",
         "not-found": "L'utente richiesto non è stato trovato.",
         "own-role-change": "Nessuno può cambiare il proprio ruolo.",
         "hard-deleted": "L'utente è stato eliminato definitivamente.",

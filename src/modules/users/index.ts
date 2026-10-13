@@ -15,6 +15,4 @@ export * from './services';
 export * from './events';
 
 /** The schema's Zod twin. */
-export { zodUserSchema } from './model';
-
 export type * from './model';

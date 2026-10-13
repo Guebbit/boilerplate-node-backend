@@ -4,16 +4,25 @@
  *
  * Driven through real schemas rather than by calling the mapper: it is installed on the Zod
  * singleton, so parsing is the only path a request ever takes through it. Every branch is asserted
- * against the shipped English copy, because the failure this file exists to prevent is a message
+ * against the shipped English copy, rendered with the field's label, because the failure this file exists to prevent is a message
  * silently falling back to Zod's own English — which looks like a message, not like a bug.
  */
 
 import { z } from 'zod';
 import { registerValidationMessages } from '@infrastructure/http/validation-messages';
-import { readLocaleDictionary } from '@infrastructure/i18n';
+import { readLocaleDictionary, runWithLocale, translator } from '@infrastructure/i18n';
+
+/** The shipped English dictionary. */
+const dictionary = readLocaleDictionary('en') as {
+    validation: Record<string, string> & { attributes: Record<string, string> };
+};
 
 /** The shipped English validation copy, so no expectation retypes a sentence. */
-const copy = (readLocaleDictionary('en') as { validation: Record<string, string> }).validation;
+const copy = dictionary.validation;
+
+/** A sentence with its placeholders filled, rendered by the same `t` the map uses. */
+const render = (key: string, values: Record<string, string>): string =>
+    translator('en')(`validation.${key}`, values);
 
 /** The first issue's message from a parse that must fail. */
 const messageOf = (schema: z.ZodType, value: unknown): string => {
@@ -29,74 +38,155 @@ const messagesOf = (schema: z.ZodType, value: unknown): string[] => {
     return result.error!.issues.map(({ message }) => message);
 };
 
+/** The one-field object every sentence is tested through, so the label is part of the claim. */
+const field = (name: string, schema: z.ZodType) => z.object({ [name]: schema });
+
 beforeAll(() => {
     registerValidationMessages();
 });
 
 describe('a missing field versus a wrongly-typed one', () => {
-    /**
-     * Two different mistakes to whoever has to fix them: one is a field left out, the other a
-     * field filled in wrongly. Zod reports both as `invalid_type`.
-     */
-    it('names an absent field as required', () => {
-        expect(messageOf(z.object({ name: z.string() }), {})).toBe(copy.required);
+    it('names an absent field as required, with its label', () => {
+        expect(messageOf(field('email', z.string()), {})).toBe(
+            render('required', { attribute: copy.attributes.email })
+        );
     });
 
-    it('names a wrongly-typed field by the type it expected', () => {
-        expect(messageOf(z.object({ name: z.string() }), { name: 42 })).toBe(
-            copy['invalid-type'].replace('{{expected}}', 'string')
+    it.each([
+        ['string', z.string(), 42, 'type-string'],
+        ['number', z.number(), 'x', 'type-number'],
+        ['integer', z.number().int(), 3.5, 'type-integer'],
+        ['boolean', z.boolean(), 'x', 'type-boolean'],
+        ['array', z.array(z.string()), 'x', 'type-array'],
+        ['object', z.object({}), 'x', 'type-object'],
+        ['other', z.date(), 'x', 'type-other']
+    ])('names a wrongly-typed %s in its own words', (_name, schema, value, key) => {
+        expect(messageOf(field('quantity', schema), { quantity: value })).toBe(
+            render(key, { attribute: copy.attributes.quantity })
         );
     });
 
     it('does not answer "required" for a value that is present but null', () => {
-        expect(messageOf(z.object({ name: z.string() }), { name: null })).not.toBe(copy.required);
+        expect(messageOf(field('name', z.string()), { name: null })).not.toBe(
+            render('required', { attribute: copy.attributes.name })
+        );
+    });
+});
+
+describe('the label of the field', () => {
+    it('uses the innermost labelled segment and skips indexes', () => {
+        const schema = z.object({ items: z.array(z.object({ quantity: z.number() })) });
+
+        expect(messageOf(schema, { items: [{ quantity: 'x' }] })).toContain(
+            copy.attributes.quantity
+        );
+    });
+
+    it('skips an unlabelled segment and falls back to the one above it', () => {
+        const schema = z.object({ translations: z.record(z.string(), z.string().min(1)) });
+
+        expect(messageOf(schema, { translations: { zz: '' } })).toContain(
+            copy.attributes.translations
+        );
+    });
+
+    it('falls back to the neutral phrase when nothing on the path is labelled', () => {
+        expect(messageOf(field('unlabelledField', z.string()), {})).toBe(
+            render('required', { attribute: copy['attribute-fallback'] })
+        );
+    });
+
+    it('answers in the language of the request', () => {
+        const italian = readLocaleDictionary('it') as typeof dictionary;
+        const message = runWithLocale('it', () => messageOf(field('email', z.string()), {}));
+
+        expect(message).toBe(
+            translator('it')('validation.required', {
+                attribute: italian.validation.attributes.email
+            })
+        );
     });
 });
 
 describe('size constraints carry the unit they measure', () => {
-    /**
-     * A string's minimum counts characters, an array's counts items and a number's is the value
-     * itself. One "too small" for all three would leave the reader guessing the unit.
-     */
     it('measures a short string in characters', () => {
-        expect(messageOf(z.string().min(3), 'ab')).toBe(
-            copy['too-small-string'].replace('{{minimum}}', '3')
+        expect(messageOf(field('name', z.string().min(3)), { name: 'ab' })).toBe(
+            render('too-small-string', { attribute: copy.attributes.name, minimum: '3' })
+        );
+    });
+
+    it('answers "must not be empty" for a one-character minimum', () => {
+        expect(messageOf(field('name', z.string().min(1)), { name: '' })).toBe(
+            render('filled', { attribute: copy.attributes.name })
         );
     });
 
     it('measures a long string in characters', () => {
-        expect(messageOf(z.string().max(2), 'abc')).toBe(
-            copy['too-big-string'].replace('{{maximum}}', '2')
+        expect(messageOf(field('name', z.string().max(2)), { name: 'abc' })).toBe(
+            render('too-big-string', { attribute: copy.attributes.name, maximum: '2' })
+        );
+    });
+
+    it('does not pluralise a one-character ceiling', () => {
+        expect(messageOf(field('name', z.string().max(1)), { name: 'ab' })).toBe(
+            render('too-big-string-one', { attribute: copy.attributes.name })
         );
     });
 
     it('measures a small number as a value', () => {
-        expect(messageOf(z.number().min(5), 1)).toBe(
-            copy['too-small-number'].replace('{{minimum}}', '5')
+        expect(messageOf(field('price', z.number().min(5)), { price: 1 })).toBe(
+            render('too-small-number', { attribute: copy.attributes.price, minimum: '5' })
+        );
+    });
+
+    it('says "greater than" for an exclusive minimum, not "at least"', () => {
+        expect(messageOf(field('amount', z.number().gt(0)), { amount: 0 })).toBe(
+            render('too-small-number-exclusive', {
+                attribute: copy.attributes.amount,
+                minimum: '0'
+            })
         );
     });
 
     it('measures a large number as a value', () => {
-        expect(messageOf(z.number().max(5), 9)).toBe(
-            copy['too-big-number'].replace('{{maximum}}', '5')
+        expect(messageOf(field('price', z.number().max(5)), { price: 9 })).toBe(
+            render('too-big-number', { attribute: copy.attributes.price, maximum: '5' })
+        );
+    });
+
+    it('says "less than" for an exclusive maximum', () => {
+        expect(messageOf(field('price', z.number().lt(5)), { price: 5 })).toBe(
+            render('too-big-number-exclusive', { attribute: copy.attributes.price, maximum: '5' })
         );
     });
 
     it('measures a short array in items', () => {
-        expect(messageOf(z.array(z.string()).min(2), ['a'])).toBe(
-            copy['too-small-items'].replace('{{minimum}}', '2')
+        expect(messageOf(field('tags', z.array(z.string()).min(2)), { tags: ['a'] })).toBe(
+            render('too-small-items', { attribute: copy.attributes.tags, minimum: '2' })
+        );
+    });
+
+    it('does not pluralise a one-item minimum', () => {
+        expect(messageOf(field('tags', z.array(z.string()).min(1)), { tags: [] })).toBe(
+            render('too-small-items-one', { attribute: copy.attributes.tags })
         );
     });
 
     it('measures a long array in items', () => {
-        expect(messageOf(z.array(z.string()).max(1), ['a', 'b'])).toBe(
-            copy['too-big-items'].replace('{{maximum}}', '1')
+        expect(
+            messageOf(field('tags', z.array(z.string()).max(2)), { tags: ['a', 'b', 'c'] })
+        ).toBe(render('too-big-items', { attribute: copy.attributes.tags, maximum: '2' }));
+    });
+
+    it('does not pluralise a one-item ceiling', () => {
+        expect(messageOf(field('tags', z.array(z.string()).max(1)), { tags: ['a', 'b'] })).toBe(
+            render('too-big-items-one', { attribute: copy.attributes.tags })
         );
     });
 
     it('measures a set in items, not characters', () => {
-        expect(messageOf(z.set(z.string()).min(2), new Set(['a']))).toBe(
-            copy['too-small-items'].replace('{{minimum}}', '2')
+        expect(messageOf(field('tags', z.set(z.string()).min(2)), { tags: new Set(['a']) })).toBe(
+            render('too-small-items', { attribute: copy.attributes.tags, minimum: '2' })
         );
     });
 });
@@ -110,74 +200,72 @@ describe('formats worth their own sentence', () => {
         ['date', z.iso.date(), 'not-a-date'],
         ['time', z.iso.time(), 'not-a-time']
     ])('answers the %s sentence', (format, schema, value) => {
-        expect(messageOf(schema, value)).toBe(copy[`format-${format}`]);
+        expect(messageOf(field('value', schema), { value })).toBe(
+            render(`format-${format}`, { attribute: copy.attributes.value })
+        );
     });
 
-    /**
-     * An unnamed format — a bare regex — falls to the generic sentence rather than to a key that
-     * does not exist, which would render as the key itself.
-     */
+    /** An unnamed format — a bare regex — falls to the generic sentence, never to a missing key. */
     it('answers the generic format sentence for an unnamed format', () => {
-        expect(messageOf(z.string().regex(/^\d+$/), 'abc')).toBe(copy['invalid-format']);
+        expect(messageOf(field('sku', z.string().regex(/^\d+$/)), { sku: 'abc' })).toBe(
+            render('invalid-format', { attribute: copy.attributes.sku })
+        );
     });
 });
 
 describe('the remaining named constraints', () => {
     it('names the divisor a value had to be a multiple of', () => {
-        expect(messageOf(z.number().multipleOf(5), 7)).toBe(
-            copy['not-multiple-of'].replace('{{divisor}}', '5')
+        expect(messageOf(field('amount', z.number().multipleOf(5)), { amount: 7 })).toBe(
+            render('not-multiple-of', { attribute: copy.attributes.amount, divisor: '5' })
         );
     });
 
     it('lists every unrecognised key, comma-separated', () => {
         const schema = z.strictObject({ known: z.string() });
-        const message = messageOf(schema, { known: 'a', alpha: 1, beta: 2 });
 
-        expect(message).toBe(copy['unrecognized-keys'].replace('{{keys}}', 'alpha, beta'));
+        expect(messageOf(schema, { known: 'a', alpha: 1, beta: 2 })).toBe(
+            render('unrecognized-keys', { keys: 'alpha, beta' })
+        );
     });
 
     it('lists the values an enum accepts', () => {
-        expect(messageOf(z.enum(['red', 'blue']), 'green')).toBe(
-            copy['invalid-value'].replace('{{values}}', 'red, blue')
+        expect(messageOf(field('status', z.enum(['red', 'blue'])), { status: 'green' })).toBe(
+            render('invalid-value', { attribute: copy.attributes.status, values: 'red, blue' })
         );
     });
 });
 
 describe('nothing falls through to Zod English', () => {
-    /**
-     * The catch-all. A bare `.refine()` carries no message of its own, and before this map it
-     * answered Zod's "Invalid input" — untranslated, on a form a person is reading.
-     */
+    /** A bare `.refine()` carries no message of its own and used to answer Zod's "Invalid input". */
     it('answers the generic sentence for a refinement with no message', () => {
         expect(
             messageOf(
-                z.string().refine(() => false),
-                'anything'
+                field(
+                    'name',
+                    z.string().refine(() => false)
+                ),
+                { name: 'anything' }
             )
-        ).toBe(copy.invalid);
+        ).toBe(render('invalid', { attribute: copy.attributes.name }));
     });
 
-    it('answers the generic sentence for a union that matched nothing', () => {
-        const schema = z.union([z.literal('a'), z.literal('b')]);
+    it('answers a translated sentence for a union that matched nothing', () => {
+        const schema = field('value', z.union([z.literal('a'), z.literal('b')]));
 
-        expect(messageOf(schema, 'c')).not.toMatch(/Invalid input/);
+        expect(messageOf(schema, { value: 'c' })).not.toMatch(/Invalid input/);
     });
 
-    /**
-     * The property the whole file exists for, asserted once over a schema that breaks several
-     * rules at once: every message is ours, none is Zod's.
-     */
     it('translates every issue of a multi-error parse', () => {
         const schema = z.object({
             name: z.string().min(3),
-            age: z.number().max(10),
+            price: z.number().max(10),
             email: z.email()
         });
-        const messages = messagesOf(schema, { name: 'a', age: 99, email: 'nope' });
-        const known = new Set(Object.values(copy).map((sentence) => sentence.split('{{', 1)[0]));
 
-        expect(messages).toHaveLength(3);
-        for (const message of messages)
-            expect([...known].some((prefix) => message.startsWith(prefix))).toBe(true);
+        expect(messagesOf(schema, { name: 'a', price: 99, email: 'nope' })).toEqual([
+            render('too-small-string', { attribute: copy.attributes.name, minimum: '3' }),
+            render('too-big-number', { attribute: copy.attributes.price, maximum: '10' }),
+            render('format-email', { attribute: copy.attributes.email })
+        ]);
     });
 });

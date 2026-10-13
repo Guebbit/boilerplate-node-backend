@@ -20,7 +20,7 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userService, type UserDocument } from '@modules/users';
+import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { emitAnalyticsEvent, buildAnalyticsBase } from '@infrastructure/observability/analytics';
 import { recordAudit } from '@infrastructure/observability/audit';
@@ -53,18 +53,19 @@ export const getOwnProfile = (
 
 /**
  * What `PUT /account` and `PATCH /account` both ultimately write, validated with this codebase's
- * messages. `email`/`username` come from `zodUserSchema` (carries the i18n thunks); `locale`,
- * `imageUrl`, `phone`, `website` come straight from `UpdateAccountBody` — the merge-shaped
+ * messages. Every contract field comes straight from `UpdateAccountBody` — the merge-shaped
  * contract schema, since every field this function sees is already optional by the time it runs: `update-account.ts`'s PUT path already filled an omitted one with `null`
  * before calling here. `.partial()` last: every field is optional, and absence means "leave it
  * alone".
  */
-const zodProfileSchema = zodUserSchema
-    .pick({ email: true, username: true })
+const zodProfileSchema = UpdateAccountBody.pick({
+    email: true,
+    username: true,
+    locale: true,
+    phone: true,
+    website: true
+})
     .extend({
-        locale: UpdateAccountBody.shape.locale,
-        phone: UpdateAccountBody.shape.phone,
-        website: UpdateAccountBody.shape.website,
         // Absence still means "leave it alone", same as every other field here, not "withdraw
         // consent". `optionalBooleanSchema`, not `UpdateAccountBody.shape` directly: a multipart
         // request carries this as a string, and `'false'` is truthy.

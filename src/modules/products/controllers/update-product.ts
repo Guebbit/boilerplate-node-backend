@@ -16,9 +16,9 @@ import { productService } from '../services';
 /**
  * `PUT` and `PATCH /products/:id` — one handler pair over `productService.writeUpdate`.
  * Validated against `zodProductReplaceSchema`/`zodProductUpdateSchema`, not the raw generated
- * schemas: they carry the custom `products.field-price-*` messages and the fallback-locale guard,
- * so a bad price 422s with its field-named message here, at the one place the body is validated,
- * rather than a generic one from a schema `writeUpdate` would otherwise have to re-check.
+ * schemas: they add the fallback-locale guard and the release-date rule on top of the generated
+ * body, so a bad write 422s with its field-named message here, at the one place the body is
+ * validated, rather than from a schema `writeUpdate` would otherwise have to re-check.
  */
 export const { replace: replaceProduct, update: updateProduct } = createUpdateController({
     versioned: true,

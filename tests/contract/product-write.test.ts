@@ -15,15 +15,27 @@ import { makeLocale } from '@modules/locales/factories';
 import { localeService } from '@modules/locales/services';
 import { productRepository } from '@modules/products/repository';
 import { checkProductTranslationFields } from '@modules/products/model';
-import { mergedResources } from '@tests/i18n-boot';
+import { translator } from '@infrastructure/i18n';
 
 setupTestDb();
 
-/** The field-named copy the factory's own extended schema must be the one answering with. */
-const fieldPriceMin = () =>
-    (mergedResources().en.translation as { products: Record<string, string> }).products[
-        'field-price-min'
-    ];
+/** The sentence a negative price answers with, rendered from the shipped English copy. */
+const fieldPriceMin = () => {
+    const english = translator('en');
+    return english('validation.too-small-number', {
+        attribute: english('validation.attributes.price'),
+        minimum: '0'
+    });
+};
+
+/** The sentence a title under the contract's five-character floor answers with. */
+const titleTooShort = () => {
+    const english = translator('en');
+    return english('validation.too-small-string', {
+        attribute: english('validation.attributes.title'),
+        minimum: '5'
+    });
+};
 
 beforeAll(() => {
     localeService.setTranslatables({
@@ -66,6 +78,23 @@ describe('POST /products', () => {
 
         expect(response.status).toBe(201);
         expect(response.body.data.title).toBe('Memory Foam Bed');
+    });
+
+    it('rejects a four-character title, the contract declares five', async () => {
+        const { bearer } = await authenticateAsRole('editor');
+
+        const response = await api()
+            .post('/products')
+            .set('Authorization', bearer)
+            .send({ price: 10, translations: { en: { title: 'Abcd' } } });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors).toEqual([
+            expect.objectContaining({
+                message: titleTooShort(),
+                details: { field: 'translations.en.title' }
+            })
+        ]);
     });
 
     it('rejects a body missing the fallback locale', async () => {

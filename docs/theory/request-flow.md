@@ -158,9 +158,8 @@ move the stack trace off the handler, degrade the inference `parseBody`'s return
 hide the literal `.catch(` that `scripts/eslint/controller-chain-must-catch.ts` looks for.
 
 **Two endpoints deliberately do not parse a generated schema, and say so in place.**
-`post-signup` is validated by its service against `zodUserSchema`, whose messages come from the
-dictionary — parsing first would answer in Zod's own English and break the
-`Content-Language` guarantee `tests/integration/locale.test.ts` asserts. `post-login` answers one
+`post-signup` is validated by its service against `SignupBody` plus the two rules the contract
+cannot say (the repeat matches, terms accepted), so a direct caller of the service gets the same 422. `post-login` answers one
 way for every wrong credential: parsing first makes a too-short password a 422 while a wrong
 password of the right length is a 401, and it answers before `recordLoginFailure`, so the attempt
 most worth recording never reaches the audit trail.

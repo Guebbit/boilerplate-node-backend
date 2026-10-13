@@ -12,7 +12,6 @@
  */
 
 import { presentUser, presentUserWithCurrentRole, userActionsFor } from '../presenter';
-import { validateData } from './validation';
 import { search, getById, findByEmail } from './read';
 import { enqueueIfPending } from './image';
 import { create } from './create';
@@ -70,7 +69,6 @@ import {
  * operations directly, and the barrel's surface must not shrink when a file moves.
  */
 export { isAuthenticatable } from '../authenticatable';
-export { validateData } from './validation';
 export { search, getById, findByEmail } from './read';
 export { enqueueIfPending } from './image';
 export { create } from './create';
@@ -81,7 +79,6 @@ export { remove, restoreById, removeById } from './remove';
 
 /** The service's public surface — the controllers call through this, never the bare functions. */
 export const userService = {
-    validateData,
     search,
     getById,
     create,

@@ -5,10 +5,9 @@
  */
 
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { ChangePasswordBody, changePasswordBodyCurrentPasswordMax } from '@api/schemas.zod';
+import { ChangePasswordBody } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { ChangePasswordRequest, AuthTokens } from '@types';
@@ -17,21 +16,6 @@ import { reissueSession, sessionSnapshotOf } from '../session/session';
 import { authPasswordChangeTotal } from '../metrics';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
-
-/**
- * The contract's field list with its content rules dropped, for the shape check below.
- *
- * `ChangePasswordBody`'s generated `minLength` would refuse first, and the global error map
- * renders that as the GENERIC size sentence — shadowing the field's own copy, which
- * `accountService.validatePasswordChange` gives. Derived from the contract, so a field added there
- * still has to be accounted for here.
- */
-const changePasswordShape = ChangePasswordBody.extend({
-    // The ceiling stays: it bounds the hash work on a password that is only being compared.
-    currentPassword: z.string().max(changePasswordBodyCurrentPasswordMax),
-    password: z.string(),
-    passwordConfirm: z.string()
-});
 
 /**
  * POST /account/password — changes the password by proving the current one (no email
@@ -46,9 +30,9 @@ export const postPasswordChange = (
     /* Auth context is guaranteed by isAuth middleware */
     const { id } = request.authContext!;
 
-    // Shape first: absent fields are a malformed request, not a wrong password. Content rules
-    // are the service's, which answers in the caller's language.
-    const parseResult = changePasswordShape.safeParse(request.body);
+    // The contract's own body: an absent or out-of-bounds field is a malformed request, not a
+    // wrong password. The service adds only what the contract cannot say (the repeat matches).
+    const parseResult = ChangePasswordBody.safeParse(request.body);
     if (!parseResult.success) {
         authPasswordChangeTotal.inc({ status: 'failure' });
         return rejectValidation(response, parseResult.error);
