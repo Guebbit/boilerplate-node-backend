@@ -9,19 +9,19 @@
 
 import { model, Schema } from 'mongoose';
 import type { Document, Model } from 'mongoose';
-import { z } from 'zod';
 import { LocaleDirection, TranslationOrigin } from '@types';
 import type { Language, LocaleEntry, Translation } from '@types';
-import { createLocaleBodyNameMax } from '@api/schemas.zod';
+import { CreateLocaleBody } from '@api/schemas.zod';
+import { trimmedInto } from '@infrastructure/http/schemas';
 import { applySerialization } from '@infrastructure/persistence/serialize';
 
 /**
  * A display name that survives being trimmed. Shared by `create-locale.ts` and `update-locale.ts`.
  * `minLength: 1` in `openapi.yaml` accepts a single space, which Mongoose then trims to `""` at a
- * `required: true` column. Trimming before the length check here catches that at validation, with
- * a field-named error, instead of as a generic Mongoose 422. The ceiling is the contract's own.
+ * `required: true` column; trimming first piles the contract's own bounds on the trimmed value, so
+ * a blank name is refused at validation with a field-named error.
  */
-export const localeDisplayName = z.string().trim().min(1).max(createLocaleBodyNameMax);
+export const localeDisplayName = trimmedInto(CreateLocaleBody.shape.name);
 
 /**
  * A BCP 47 tag the way every lookup and write in this module compares it: trimmed, lowercased.
