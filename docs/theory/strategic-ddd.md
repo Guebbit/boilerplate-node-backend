@@ -244,7 +244,7 @@ way a handle does. What it never publishes, no matter how convenient:
   judgement call, not a file name, so a person marks the step `@internal` (TSDoc's own tag, with
   the one-line reason). `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` then refuses
   any tagged step a barrel reaches, and the
-  `tests/audit/reachability.md` audit (see [AI Auditing](../tools/ai-auditing.md))
+  `scripts/audit/reachability/SKILL.md` audit (see [AI Auditing](../tools/ai-auditing.md))
   hunts the ones nobody has tagged.
 
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.

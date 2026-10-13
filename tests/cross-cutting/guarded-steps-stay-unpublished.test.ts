@@ -8,7 +8,7 @@
  * No tool can tell a step from a door by its shape, so a person marks it: TSDoc's `@internal`
  * on the declaration. This suite then holds the line wherever the barrel reaches, through
  * `export *` chains, renamed re-exports and object literals that bundle functions.
- * Finding an untagged step is `tests/audit/reachability.md`'s job. See
+ * Finding an untagged step is `scripts/audit/reachability/SKILL.md`'s job. See
  * `docs/theory/strategic-ddd.md` §5.
  */
 
