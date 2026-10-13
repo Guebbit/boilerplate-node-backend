@@ -7,8 +7,8 @@
  *
  * Owner of the identity:  `orders`, because `invoicing`, `delivery` and `returns` all import
  *                         `orders` and `orders` may not import them back.
- * Bank transfer:          owned here, since `orders` renders `transferInstructions` and caps open
- *                         transfers at creation. `payments` and `cart` read it through
+ * Bank transfer:          owned here, since `orders` renders `transferInstructions`.
+ *                         `payments` and `cart` read it through
  *                         `services/index.ts` (a barrel may never publish a bare `config`).
  * VAT rates:              not here; `products` resolves them and `orders` only freezes the number.
  * Order link:             owned here, because `infrastructure/http/frontend-link.ts` does not know
@@ -59,7 +59,6 @@ export const ordersConfig = defineConfig({
         NODE_BANK_TRANSFER_IBAN: text(),
         NODE_BANK_TRANSFER_BIC: text(),
         NODE_BANK_TRANSFER_HOLD_HOURS: int({ default: 168, min: 1 }),
-        NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT: int({ default: 2, min: 1 }),
         NODE_ADMIN_ORDER_MAX_LINES: int({ default: 100, min: 1 }),
         NODE_ADMIN_ORDER_MAX_LINE_QUANTITY: int({ default: 99_999, min: 1 }),
         NODE_ORDER_EFFECT_RETRY_MINUTES: int({ default: 5, min: 0 }),
@@ -261,19 +260,6 @@ export const bankTransferBic = (): string | undefined => ordersConfig().NODE_BAN
  * @returns the hold window, in hours
  */
 export const bankTransferHoldHours = (): number => ordersConfig().NODE_BANK_TRANSFER_HOLD_HOURS;
-
-/**
- * How many of one account's orders may sit unpaid (`pending`) at once, whatever the payment method.
- * Every one holds stock, for 15 minutes by card and a week by bank transfer or a `processing` card,
- * so this is what stops one account hoarding the shelf across many uncompleted orders (OWASP
- * automated threat OAT-021, Denial of Inventory).
- *
- * 2 and not 1: a failed card, or a closed 3-D Secure window, leaves a `pending` order until its
- * hold expires, and with 1 the retry would be refused meanwhile.
- * @returns the cap on open unpaid orders per account
- */
-export const maxOpenUnpaidOrdersPerAccount = (): number =>
-    ordersConfig().NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT;
 
 /** The contract's hard ceiling on lines per admin-created order (`CreateOrderRequest.items.maxItems`). */
 export const ADMIN_ORDER_LINES_CEILING = 1000;

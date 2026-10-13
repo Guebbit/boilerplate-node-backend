@@ -224,6 +224,19 @@ flowchart LR
     class R,I bad;
 ```
 
+## Configuration
+
+| Variable                                  | Default | What it does                                                                                                                                                                                           |
+| ----------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NODE_CART_RETENTION_DAYS`                | `365`   | Days an untouched cart survives before the TTL index drops it                                                                                                                                          |
+| `NODE_CART_LINE_MAX`                      | `10`    | Most units one line may hold, 1 to 999. See [the story](#the-story)                                                                                                                                    |
+| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may hold, whatever the payment method; each holds stock. Checkout refuses the next with 409 `CART_OPEN_ORDER_LIMIT`. Admin `POST /orders` is not capped |
+
+The open-order cap is a checkout rule, not an order rule: the error code, the message and the
+checkout-only scope are all `cart`'s. Checkout asks `orders` for `openUnpaidOrderIds` and compares
+the count itself. Parallel checkouts cannot slip past it, because only the one that clears the
+cart's lines wins ([the race](./cart-checkout.md#the-race-and-why-it-is-a-409)).
+
 ## Related pages
 
 - [Checkout](./cart-checkout.md) — the flow, step by step
