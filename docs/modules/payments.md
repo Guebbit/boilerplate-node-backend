@@ -416,7 +416,7 @@ stateDiagram-v2
   releases a 15-minute card hold releases this one too, since it only ever reads each hold's own
   stored `expiresAt`. See [Inventory Reservations](./inventory-reservations.md#the-sweep).
 - **A week-long hold is free to take, so an account is capped, for every method.**
-  `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
+  `cart` owns the cap: `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` (default 2) counts that account's own unpaid (`pending`)
   orders, a `processing` card included; a third checkout is refused with `CART_OPEN_ORDER_LIMIT`,
   naming the open orders, before anything is written.
 - **`transferInstructions` is computed at read time, never frozen onto the order — except its own
@@ -427,8 +427,8 @@ stateDiagram-v2
   never recomputed. Present only while `paymentMethod` is `bank_transfer` and `status` is
   `pending`. See [Matching a transfer back to its order](#matching-a-transfer-back-to-its-order).
 - **`orders` owns the bank-transfer business rules outright**, `transferInstructions` and the
-  open-transfer cap alike — the reference-minting and open-transfer-cap config
-  live in `orders/config.ts`, since `orders` is the entity both rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
+  reference minting — that config lives in `orders/config.ts`, since `orders` is the entity both
+  rules constrain. `payments` and `cart` read it through `orders`' own barrel; `payments`
   keeps the `ibantools` validation, the one thing that stays genuinely its own. See
   [Libraries a module owns](../theory/modules.md#libraries-a-module-owns).
 - **Two emails, and a card timeout gets neither.** Checkout sends the instructions and the deadline
@@ -587,21 +587,20 @@ The `actor` is the operator who asked or recorded the money; an automatic refund
 
 ## Configuration
 
-| Variable                                  | Default | Meaning                                                                                                                                                                                                                                                                                                        |
-| ----------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NODE_PAYMENT_PROVIDER`                   | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
-| `NODE_PAYMENT_WEBHOOK_SECRET`             | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
-| `NODE_DEFAULT_CURRENCY`                   | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
-| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`   | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                                                                                                                                           |
-| `NODE_BANK_TRANSFER_BENEFICIARY`          | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
-| `NODE_BANK_TRANSFER_IBAN`                 | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
-| `NODE_BANK_TRANSFER_BIC`                  | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
-| `NODE_BANK_TRANSFER_HOLD_HOURS`           | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
-| `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` | `2`     | How many unpaid (`pending`) orders one account may have at once, of any method, before checkout refuses a new one                                                                                                                                                                                              |
-| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`       | `1`     | How long an open refund sits untouched before `sweep:payment-effects` retries it. See [One settlement transaction](#one-settlement-transaction)                                                                                                                                                                |
-| `NODE_PAYMENT_ATTENTION_MINUTES`          | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                      |
-| `NODE_PAYMENT_RECONCILE_MINUTES`          | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
-| `NODE_STRIPE_SECRET_KEY`                  | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |
+| Variable                                | Default | Meaning                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NODE_PAYMENT_PROVIDER`                 | —       | Which registered implementation answers. Unset: no card payments (`card` is not listed). A name this process does not carry throws at boot rather than silently taking no payments                                                                                                                             |
+| `NODE_PAYMENT_WEBHOOK_SECRET`           | —       | What `POST /payments/webhook` verifies deliveries against. With a live provider this is THEIR signing secret, and it is the only thing between an attacker and marking any order paid. A comma-separated list is a ring for rotating it: the first entry signs, any entry verifies, every entry 16+ characters |
+| `NODE_DEFAULT_CURRENCY`                 | `EUR`   | ISO-4217. Stamped on every payment document at creation; also what `products`, `cart` and `orders` (frozen at checkout) read for their own `currency` field — one shop, one currency                                                                                                                           |
+| `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` | `30`    | Days an attempt that never settled may sit untouched before `npm run reap:payments` deletes it. See Retention below.                                                                                                                                                                                           |
+| `NODE_BANK_TRANSFER_BENEFICIARY`        | —       | The account name a transfer is made out to. `bank_transfer` is offered only once this and `_IBAN` are both set                                                                                                                                                                                                 |
+| `NODE_BANK_TRANSFER_IBAN`               | —       | The account IBAN. Validated with `ibantools` at boot — a malformed value refuses to boot rather than silently advertising a dead account                                                                                                                                                                       |
+| `NODE_BANK_TRANSFER_BIC`                | —       | The account's BIC/SWIFT, optional even once transfer is offered. Validated at boot when set                                                                                                                                                                                                                    |
+| `NODE_BANK_TRANSFER_HOLD_HOURS`         | `168`   | How long checkout holds stock for a `bank_transfer` order — a week, not `NODE_RESERVATION_TTL_MINUTES`'s fifteen minutes                                                                                                                                                                                       |
+| `NODE_PAYMENT_EFFECT_RETRY_MINUTES`     | `1`     | How long an open refund sits untouched before `sweep:payment-effects` retries it. See [One settlement transaction](#one-settlement-transaction)                                                                                                                                                                |
+| `NODE_PAYMENT_ATTENTION_MINUTES`        | `60`    | How long a refund may stay open before `GET /payments/attention` lists it. The retry window is a minute, so this is how long a person would wait. See [the staff Payments page](#the-staff-payments-page)                                                                                                      |
+| `NODE_PAYMENT_RECONCILE_MINUTES`        | `15`    | How long an unsettled payment sits untouched before `sweep:payment-effects` asks the provider what became of it. See [Lost webhooks](#lost-webhooks)                                                                                                                                                           |
+| `NODE_STRIPE_SECRET_KEY`                | —       | Optional. No Stripe adapter ships; this is a boot gate for a project that adds one. Outside development/test (staging included) a `sk_test_` value refuses boot, since a deployment silently running test-mode payments is worse than failing to boot                                                          |
 
 The currency is stamped rather than looked up, so changing it affects new payments and leaves
 existing ones reading in the currency they were actually taken in. There is no conversion
@@ -650,6 +649,123 @@ and the module-removal convention that goes with owning one.
 This is a genuinely different shape from `orders`' retention: `orders` keeps every row forever and
 scrubs PII in place; `payments` keeps a settled row forever and deletes an unsettled one outright.
 Neither scrubs a settled payment, because there is nothing on it left to scrub.
+
+## Writing a payment adapter
+
+The boilerplate ships no PSP adapter. Production offers bank transfer and offline payments; card
+payments exist the day a deployment adds one file and one `registerPaymentProvider` call. This
+section is what that file has to get right. Everything said about Stripe is a claim about a third
+party and can go stale: check [Stripe's docs](https://docs.stripe.com/payments/paymentintents/lifecycle)
+before relying on it, and test against the provider's sandbox on the deployment that picks it.
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant A as This API
+    participant P as Your adapter
+    participant S as Provider
+    B->>A: POST /payments/intent
+    A->>P: prepare(charge, metadata)
+    P->>S: create intent, idempotent on paymentId
+    S-->>P: providerRef + client secret
+    B->>A: POST /payments/{id}/confirm (method reference)
+    A->>P: confirm(providerRef, ref)
+    P->>S: confirm intent
+    S-->>P: status
+    P-->>A: one of four words
+    B->>S: finish the challenge (requires_action only)
+    B->>A: POST /payments/{id}/sync
+    S->>A: webhook, signed over the raw body
+    A->>P: parseWebhook(rawBody, signature)
+    A->>P: retrieve(providerRef)
+    A->>A: settlePayment, once
+```
+
+### Status mapping
+
+The port speaks four words (`ProviderPaymentStatus`). An adapter maps its provider's own states
+onto them and nothing else is visible to the rest of the module.
+
+| Port word         | Stripe `PaymentIntent` status | Note                                                                    |
+| ----------------- | ----------------------------- | ----------------------------------------------------------------------- |
+| `requires_action` | `requires_action`             | The browser has a challenge (3-D Secure) to answer                      |
+| `processing`      | `processing`                  | Slow methods; extends the stock hold                                    |
+| `succeeded`       | `succeeded`                   | Report `amountReceived`, `currency`, `paymentId` and `cardLast4` too    |
+| `declined`        | `requires_payment_method`     | Stripe sends a refused attempt back to this state, so it is a decline   |
+| none              | `canceled`                    | No word exists for it today. Open: the vocabulary has not been extended |
+
+A decline is an answer, not an error: `confirm` returns `declined` and throws only on transport
+failure. `succeeded` without `amountReceived` is treated as a mismatch, so convert minor units to
+the decimal the payment stores.
+
+### Declines are reported once
+
+Stripe sends two events for one decline, and a payment can be declined more than once by
+different attempts. The module reports each fact once, from the call whose write made it true
+(`settlePayment` returns `transitioned`, and only then are the audit row and the analytics event written). Only a `confirm`
+may decline an already-`declined` payment, because a confirm is a new attempt: card A refused,
+then card B refused, are two failures. A webhook or a sync repeating the same decline reports
+nothing. The port carries no attempt id, so do not try to dedupe inside the adapter: return the
+status and let the settlement decide.
+
+### Idempotency keys expire
+
+`refund` receives a stable `idempotencyKey`. Stripe forgets a key after 24 hours
+([idempotent requests](https://docs.stripe.com/api/idempotent_requests)), so a refund retried by
+the effects sweep after that window, with the same key, is a NEW refund and returns the money
+twice. Before retrying an old refund, list the intent's existing refunds at the provider and
+return the matching one instead of creating another. Stamp your own reference on each refund's
+metadata so the match is exact.
+
+### The webhook
+
+`parseWebhook` receives the raw body, byte for byte. Verify the signature over those bytes first,
+then parse against the contract's schema, then return only the event id and the intent it names.
+The delivery's own claim about the outcome is never used: the settlement calls `retrieve`, so a
+late or reordered event is harmless. Throw `WebhookRejected` for anything that does not
+authenticate or parse; the route answers 400.
+
+### Refund errors
+
+Map the provider's refusal onto the closed `RefundFailureReason` and throw
+`PaymentProviderError(code, message)` (`providers/errors.ts`). Anything else an adapter throws is
+stored as `unknown`. The message is the provider's own wording and goes to the log, never the wire.
+
+### The reconcile sweep calls the provider
+
+[Lost webhooks](#lost-webhooks) are caught by `sweep:payment-effects`, which calls `retrieve` for
+each unsettled payment untouched for `NODE_PAYMENT_RECONCILE_MINUTES`, one at a time, up to 200 per
+run. That is one provider read per stale payment per run: mind the provider's rate limit, and do not
+answer a guess when it refuses.
+
+### A Stripe server-confirm walkthrough
+
+This repo confirms on the server, not through Checkout Sessions.
+
+1. `prepare` creates a `PaymentIntent` with `metadata.paymentId`, using the payment id as the
+   idempotency key, and returns its id and `client_secret`. Resuming a payment that already has
+   an intent returns that same intent.
+2. The browser mounts Stripe's Payment Element, calls `stripe.createConfirmationToken`, and posts
+   the token id (`ctoken_…`) as the method reference to `POST /payments/{id}/confirm`. This needs
+   Stripe.js in the storefront and its origins in the CSP; the storefront ships only a fake card
+   picker today.
+3. `confirm` calls `paymentIntents.confirm` with that token and maps the answer.
+4. On `requires_action` the browser calls `stripe.handleNextAction` with the client secret, then
+   `POST /payments/{id}/sync`, which `retrieve`s and settles.
+5. Whatever the browser did, the signed webhook arrives and settles the same payment once.
+
+### Port fit
+
+| The port needs...             | Embedded form (Stripe Payment Element, Adyen, Braintree) | Redirect (Mollie, PayPal, Stripe Checkout)                                        |
+| ----------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `prepare`: an id and a secret | Fits: intent id plus `clientSecret`                      | Partial: there is an id, but the customer needs a URL and the port has none       |
+| `confirm`: a method reference | Fits: a token or nonce from the browser                  | Does not apply: the customer pays at the provider, so there is nothing to confirm |
+| `retrieve` and the webhook    | Fits                                                     | Fits: thin event, then read the payment back                                      |
+| `refund`, `cancel`            | Fits                                                     | Fits                                                                              |
+
+The redirect gap is open. `PreparedPayment` carries only `clientSecret`, so a redirect provider
+cannot tell the storefront where to send the customer, and closing it changes the contract. Until
+it is decided, a redirect adapter has no honest place to put its URL.
 
 ## Related pages
 
