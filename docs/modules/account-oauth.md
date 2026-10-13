@@ -63,6 +63,19 @@ most.
 That is the whole of the open-redirect and callback-confusion defence, and it works only because
 `config.ts` is the single place both the start and the callback controller read them from.
 
+## Registering the provider apps {#registering-the-apps}
+
+This boilerplate owns no Google or GitHub app, so a real sign-in needs yours. Per provider:
+
+1. Register an OAuth app (Google: console.cloud.google.com/apis/credentials; GitHub:
+   github.com/settings/developers).
+2. Set its callback URL to `NODE_URL` + `account/oauth/<provider>/callback`: exactly the
+   [server-derived URI](#two-urls-both-server-derived), or the exchange fails.
+3. Put the client id and secret in the provider's two `NODE_OAUTH_*` variables (`.env-example` § C5).
+   A provider is offered only once both are set.
+4. Sign in once with each provider by hand. The tests drive the `fake` provider, so nothing else
+   proves the real console settings.
+
 ## The CSRF handshake
 
 A double-submit cookie, not server-side state: the value is minted and handed to the provider as
