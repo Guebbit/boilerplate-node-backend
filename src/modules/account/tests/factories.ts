@@ -6,12 +6,16 @@
  */
 
 import { Types } from 'mongoose';
+import type { Request, Response } from 'express';
 import { hashToken } from '@infrastructure/security/hash-token';
+import { asStub } from '@tests/stub';
 import { sessionModel, verificationTokenModel } from '../model';
 import type { SessionDocument } from '../model';
 import { sessionRepository, verificationTokenRepository } from '../repository';
 import type { SessionRow, VerificationTokenRow } from '../repository';
 import type { VerificationTokenType } from '../token-types';
+import { SESSION_COOKIE } from '@kernel/cookies';
+import { activeStrategy, type IssueOptions, type SessionRequest } from '../session/strategy';
 
 /** What a test may pin on a planted one-time token. */
 export interface PlantedToken {
@@ -225,3 +229,49 @@ export const tokenRowOf = (
     type: VerificationTokenType
 ): Promise<VerificationTokenRow | undefined> =>
     tokenRowsOf(userId).then((rows) => rows.find((row) => row.type === type));
+
+/** A session opened straight through the active strategy, in whichever mode the suite runs. */
+export interface MintedSession {
+    /** `Authorization` for the session: the access token in `jwt` mode, the `ses_…` id in `cookie` mode. */
+    bearer: `Bearer ${string}`;
+    /** The session cookie as a `Cookie` header: the refresh token in `jwt` mode, the id in `cookie` mode. */
+    cookie: string;
+}
+
+/**
+ * Open a session for an account the way a login does, without a login's second factor check or a
+ * password — what a suite wants when it needs a caller who proved ONLY what it says (`amr`), such
+ * as the shape an OAuth callback leaves behind. Goes through `activeStrategy().issue`, so the
+ * same line works in both session modes.
+ *
+ * @param userId - the account
+ * @param options - what the login proved (`amr`), and the rest of a login's own options
+ */
+export const mintSession = (userId: string, options: IssueOptions = {}): Promise<MintedSession> => {
+    const cookies = new Map<string, string>();
+    const response = asStub<Response>({
+        cookie: (name: string, value: string) => {
+            cookies.set(name, value);
+        },
+        clearCookie: () => undefined
+    });
+    const request = asStub<SessionRequest & Pick<Request, 'get'>>({
+        cookies: {},
+        headers: {},
+        get: () => undefined
+    });
+    // `bearer` transport: `cookie` mode returns the id in the result; `jwt` mode ignores it,
+    // returns its access token and puts the refresh token on the cookie stub above.
+    return activeStrategy()
+        .issue(request, response, userId, { transport: 'bearer', ...options })
+        .then((issued) => {
+            const credential = issued.token ?? issued.sessionToken;
+            const refresh = cookies.get(SESSION_COOKIE) ?? issued.sessionToken;
+            if (!credential || !refresh)
+                throw new Error('mintSession: the strategy issued nothing');
+            return {
+                bearer: `Bearer ${credential}` as const,
+                cookie: `${SESSION_COOKIE}=${refresh}`
+            };
+        });
+};

@@ -26,18 +26,8 @@ export interface OAuthIdentity {
     imageUrl?: string;
 }
 
-/** What the provider's redirect back to `/account/oauth/:provider/callback` carried. */
-export interface OAuthCallback {
-    /** The authorization `code`. */
-    code: string;
-    /** The `state` the provider echoed back. */
-    state: string;
-}
-
 /** What this login attempt kept at the start, and the callback must answer to. */
 export interface OAuthExpectation {
-    /** The SAME redirect URI the consent URL carried — some providers validate the two match. */
-    redirectUri: string;
     /** The CSRF `state` minted for this attempt; the exchange refuses a callback with another. */
     state: string;
     /**
@@ -67,9 +57,13 @@ export interface OAuthProvider {
     /**
      * Exchange an authorization code for the identity it names.
      *
-     * @param callback - what the provider's redirect carried
+     * @param callbackUrl - the callback route's own URL on the `NODE_URL` base, carrying the REAL
+     *   query string the provider's redirect arrived with (`code`, `state`, and `iss` when the
+     *   provider sends one), never a rebuilt one — the library checks the whole response, and its
+     *   redirect URI is this URL without the query
      * @param expected - what this attempt kept, for the exchange to check the callback against
-     * @throws when `state` differs, the exchange fails or the provider's answer cannot be parsed
+     * @throws when `state` differs, the response is malformed (a repeated or foreign parameter,
+     *   a foreign `iss`), the exchange fails or the provider's answer cannot be parsed
      */
-    exchangeCode(callback: OAuthCallback, expected: OAuthExpectation): Promise<OAuthIdentity>;
+    exchangeCode(callbackUrl: URL, expected: OAuthExpectation): Promise<OAuthIdentity>;
 }

@@ -20,12 +20,16 @@ const PROVIDER_NAME = 'google';
  * Google's endpoints, written down rather than discovered. `issuer` is the value the ID token's
  * `iss` must equal exactly: the library refuses the legacy bare `accounts.google.com` form Google
  * documents as also possible, which Google's current tokens do not use.
+ * `authorization_response_iss_parameter_supported` is what Google's discovery document publishes:
+ * it makes the library REQUIRE `iss` on the callback and compare it to `issuer` (RFC 9207), so a
+ * response that names no issuer, or another one, is refused.
  * https://accounts.google.com/.well-known/openid-configuration
  */
 const SERVER: client.ServerMetadata = {
     issuer: 'https://accounts.google.com',
     authorization_endpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-    token_endpoint: 'https://oauth2.googleapis.com/token'
+    token_endpoint: 'https://oauth2.googleapis.com/token',
+    authorization_response_iss_parameter_supported: true
 };
 
 /**
@@ -68,8 +72,8 @@ export const googleOAuthProvider: OAuthProvider = {
             codeChallenge
         }),
 
-    exchangeCode: (callback, expected) =>
-        redeemCode(configurationFor(PROVIDER_NAME, SERVER), callback, expected).then((tokens) =>
+    exchangeCode: (callbackUrl, expected) =>
+        redeemCode(configurationFor(PROVIDER_NAME, SERVER), callbackUrl, expected).then((tokens) =>
             identityOf(tokens.claims())
         )
 };

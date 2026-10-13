@@ -9,7 +9,8 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { api } from '@tests/http';
+import { api, loginBearer } from '@tests/http';
+import { mintSession } from '../factories';
 import { codeFor } from '@tests/totp';
 import { forgetSessionEpoch } from '@tests/session-epoch';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
@@ -39,21 +40,38 @@ beforeEach(() => {
     mockOutbox.length = 0;
 });
 
+/** A signed-in account and the bearer its next request carries. */
+interface Session {
+    user: Awaited<ReturnType<typeof createUser>>;
+    bearer: `Bearer ${string}`;
+}
+
 /** A verified account, logged in — the email factor refuses an unverified address. */
-const verifiedSession = async () => {
+const verifiedSession = async (): Promise<Session> => {
     const user = await createUser({ verifiedAt: new Date(), email: 'ada@example.com' });
-    const login = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
-    return { user, bearer: `Bearer ${login.body.data.token as string}` };
+    return { user, bearer: await loginBearer(user.email) };
+};
+
+/**
+ * Carry on after a factor change ended the session. Arming or removing a factor revokes every
+ * session the account holds; a browser's cookie is re-minted on the spot, but a client holding a
+ * bearer has to sign in again, so this opens the session that login would have, claiming what the
+ * factor proved.
+ *
+ * @param session - the session to carry on; its bearer is replaced
+ */
+const carryOn = async (session: Session): Promise<void> => {
+    const { bearer } = await mintSession(session.user.id, { amr: ['pwd', 'otp'] });
+    session.bearer = bearer;
 };
 
 /**
  * Arms the device factor, returning the secret for minting later codes.
  *
- * @param bearer - the caller's session
+ * @param session - the caller's session, which carries on afterwards
  */
-const armTotp = async (bearer: string) => {
+const armTotp = async (session: Session) => {
+    const { bearer } = session;
     const setup = await api()
         .post('/account/2fa/methods/totp/setup')
         .set('Authorization', bearer)
@@ -65,6 +83,7 @@ const armTotp = async (bearer: string) => {
         .send({ code: await codeFor(secret, 0) });
     backupCodesOf.set(secret, confirm.body.data.backupCodes as string[]);
     await forgetSessionEpoch();
+    await carryOn(session);
     return secret;
 };
 
@@ -74,10 +93,11 @@ const backupCodesOf = new Map<string, string[]>();
 /**
  * Arms the email factor with the mailed code.
  *
- * @param bearer - the caller's session
+ * @param session - the caller's session, which carries on afterwards
  * @param proof - a code from a factor already armed, which a second factor needs
  */
-const armEmail = async (bearer: string, proof?: string) => {
+const armEmail = async (session: Session, proof?: string) => {
+    const { bearer } = session;
     await api()
         .post('/account/2fa/methods/email/setup')
         .set('Authorization', bearer)
@@ -88,14 +108,15 @@ const armEmail = async (bearer: string, proof?: string) => {
         .set('Authorization', bearer)
         .send({ code: String(mail?.data.code) });
     await forgetSessionEpoch();
+    await carryOn(session);
 };
 
 describe('GET /account/2fa', () => {
     it('matches the contract for an account with a factor armed', async () => {
-        const { bearer } = await verifiedSession();
-        await armTotp(bearer);
+        const session = await verifiedSession();
+        await armTotp(session);
 
-        const response = await api().get('/account/2fa').set('Authorization', bearer);
+        const response = await api().get('/account/2fa').set('Authorization', session.bearer);
 
         expect(response.status).toBe(200);
         expect(response.body.data.methods.map((m: { method: string }) => m.method)).toEqual([
@@ -112,12 +133,12 @@ describe('GET /account/2fa', () => {
 
 describe('POST /account/2fa/backup-codes', () => {
     it('matches the contract, answering a fresh set on a current code', async () => {
-        const { bearer } = await verifiedSession();
-        const secret = await armTotp(bearer);
+        const session = await verifiedSession();
+        const secret = await armTotp(session);
 
         const response = await api()
             .post('/account/2fa/backup-codes')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
@@ -125,12 +146,12 @@ describe('POST /account/2fa/backup-codes', () => {
     });
 
     it('matches the error contract for a wrong code', async () => {
-        const { bearer } = await verifiedSession();
-        await armTotp(bearer);
+        const session = await verifiedSession();
+        await armTotp(session);
 
         const response = await api()
             .post('/account/2fa/backup-codes')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send({ code: '000000' });
 
         expect(response.status).toBe(422);
@@ -139,25 +160,25 @@ describe('POST /account/2fa/backup-codes', () => {
 
 describe('DELETE /account/2fa/methods/{method}', () => {
     it('matches the contract when one of two factors is removed', async () => {
-        const { bearer } = await verifiedSession();
-        const secret = await armTotp(bearer);
-        await armEmail(bearer, backupCodesOf.get(secret)?.[0]);
+        const session = await verifiedSession();
+        const secret = await armTotp(session);
+        await armEmail(session, backupCodesOf.get(secret)?.[0]);
 
         const response = await api()
             .delete('/account/2fa/methods/email')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
     });
 
     it('matches the error contract for a method this deployment does not run', async () => {
-        const { bearer } = await verifiedSession();
-        const secret = await armTotp(bearer);
+        const session = await verifiedSession();
+        const secret = await armTotp(session);
 
         const response = await api()
             .delete('/account/2fa/methods/carrier-pigeon')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(404);
@@ -166,17 +187,18 @@ describe('DELETE /account/2fa/methods/{method}', () => {
 
 describe('DELETE /account/2fa', () => {
     it('matches the contract, and leaves nothing armed', async () => {
-        const { bearer } = await verifiedSession();
-        const secret = await armTotp(bearer);
+        const session = await verifiedSession();
+        const secret = await armTotp(session);
 
         const response = await api()
             .delete('/account/2fa')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
         await forgetSessionEpoch();
-        const status = await api().get('/account/2fa').set('Authorization', bearer);
+        await carryOn(session);
+        const status = await api().get('/account/2fa').set('Authorization', session.bearer);
         expect(status.body.data.methods).toEqual([]);
     });
 
@@ -189,11 +211,11 @@ describe('DELETE /account/2fa', () => {
 
 describe('POST /account/login/2fa/send', () => {
     it('matches the contract, mailing a code for the challenge the password step issued', async () => {
-        const { user, bearer } = await verifiedSession();
-        await armEmail(bearer);
+        const session = await verifiedSession();
+        await armEmail(session);
         const login = await api()
             .post('/account/login')
-            .send({ email: user.email, password: PLAIN_PASSWORD });
+            .send({ email: session.user.email, password: PLAIN_PASSWORD });
 
         const response = await api()
             .post('/account/login/2fa/send')
@@ -214,12 +236,12 @@ describe('POST /account/login/2fa/send', () => {
 
 describe('POST /account/2fa/methods/{method}/send', () => {
     it('matches the contract, mailing the signed-in account a code for an armed method', async () => {
-        const { bearer } = await verifiedSession();
-        await armEmail(bearer);
+        const session = await verifiedSession();
+        await armEmail(session);
 
         const response = await api()
             .post('/account/2fa/methods/email/send')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send();
 
         expect(response.status).toBe(200);
@@ -227,11 +249,11 @@ describe('POST /account/2fa/methods/{method}/send', () => {
     });
 
     it('matches the error contract for a method that is not armed', async () => {
-        const { bearer } = await verifiedSession();
+        const session = await verifiedSession();
 
         const response = await api()
             .post('/account/2fa/methods/email/send')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send();
 
         expect(response.status).toBe(422);
@@ -246,12 +268,12 @@ describe('POST /account/2fa/methods/{method}/send', () => {
 
 describe('POST /account/2fa/methods/{method}/setup with a code', () => {
     it('matches the error contract when a second method is started without one', async () => {
-        const { bearer } = await verifiedSession();
-        await armTotp(bearer);
+        const session = await verifiedSession();
+        await armTotp(session);
 
         const response = await api()
             .post('/account/2fa/methods/email/setup')
-            .set('Authorization', bearer)
+            .set('Authorization', session.bearer)
             .send();
 
         expect(response.status).toBe(422);

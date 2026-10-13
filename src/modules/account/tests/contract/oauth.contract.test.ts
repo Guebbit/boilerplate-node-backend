@@ -8,14 +8,14 @@
  */
 
 import '@tests/contract';
-import { decodeJwt } from 'jose';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api } from '@tests/http';
+import { api, bearerForCookie } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
 import { userRepository } from '@modules/users/tests/factories';
 import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
+import { claimedAmr } from './support';
 
 setupTestDb();
 
@@ -280,10 +280,7 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
     it('challenges instead of minting a session, and mints one only once the code is answered', async () => {
         // First login creates the OAuth-only account; enroll TOTP on it through its own session.
         const created = await fakeLogin();
-        const refreshed = await api()
-            .post('/account/refresh')
-            .set('Cookie', setCookie(created, '__Host-session')!);
-        const bearer = `Bearer ${refreshed.body.data.token as string}`;
+        const bearer = await bearerForCookie(setCookie(created, '__Host-session')!);
         const setup = await api()
             .post('/account/2fa/methods/totp/setup')
             .set('Authorization', bearer)
@@ -319,8 +316,8 @@ describe('GET /account/oauth/:provider/callback — 2FA armed (1b)', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(finished.status).toBe(200);
-        const claims = decodeJwt(finished.body.data.token as string) as { amr?: string[] };
-        expect(claims.amr).toEqual(['fake', 'otp']);
+        const user = await userRepository.findOne({ email: 'oauth.demo@example.com' });
+        expect(await claimedAmr(finished, String(user?._id))).toEqual(['fake', 'otp']);
     });
 
     it('refuses to complete the challenge with no cookie and no challenge in the body', async () => {

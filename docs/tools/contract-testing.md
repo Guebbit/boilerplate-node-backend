@@ -75,23 +75,41 @@ Every file also drives the 401/403/404/422 branches through the real route: the 
 **A module's contract suite is co-located with the module**, one file per domain, so it is deleted
 along with it. Only the specs that belong to no domain live centrally.
 
-| Path                                                     | Contents                                                                                                             |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `tests/support/contract.ts`                              | Patches `supertest` to capture every response and judge it in one `afterEach`; `excludeFromSpecCheck` is the opt-out |
-| `tests/support/response-contract.ts`                     | The judge itself: matches a response's method+path+status to its generated Zod schema and parses the body            |
-| `src/modules/<name>/tests/contract/api.contract.test.ts` | One per routed module. Everything under that module's `basePath`                                                     |
-| `src/modules/users/tests/contract/…`                     | `/users` — the credential-leak guard, `assertNoCredentials()`                                                        |
-| `src/modules/orders/tests/contract/…`                    | `/orders` — the role-branch guard, unrestricted and scoped caller                                                    |
-| `tests/contract/system.test.ts`                          | `/` — the one route that belongs to no module                                                                        |
-| `tests/contract/route-spec-parity.test.ts`               | Every mounted route is in the spec, and every spec operation is mounted                                              |
-| `tests/contract/request-contract.test.ts`                | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                                     |
-| `tests/support/http.ts`                                  | `api()`, `authenticateAs()` — shared with [Integration Testing](./integration-testing.md)                            |
+| Path                                                     | Contents                                                                                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/support/contract.ts`                              | Patches `supertest` to capture every response and judge it in one `afterEach`; `excludeFromSpecCheck` is the opt-out            |
+| `tests/support/response-contract.ts`                     | The judge itself: matches a response's method+path+status to its generated Zod schema and parses the body                       |
+| `src/modules/<name>/tests/contract/api.contract.test.ts` | One per routed module. Everything under that module's `basePath`                                                                |
+| `src/modules/users/tests/contract/…`                     | `/users` — the credential-leak guard, `assertNoCredentials()`                                                                   |
+| `src/modules/orders/tests/contract/…`                    | `/orders` — the role-branch guard, unrestricted and scoped caller                                                               |
+| `tests/contract/system.test.ts`                          | `/` — the one route that belongs to no module                                                                                   |
+| `tests/contract/route-spec-parity.test.ts`               | Every mounted route is in the spec, and every spec operation is mounted                                                         |
+| `tests/contract/request-contract.test.ts`                | The other half — see [Contract-Derived Request Data](./contract-request-data.md)                                                |
+| `tests/support/http.ts`                                  | `api()`, `authenticateAs()`, `loginBearer()`, `bearerForCookie()` — shared with [Integration Testing](./integration-testing.md) |
+
+## Both session modes
+
+The suite runs under either `NODE_SESSION_MODE` (`npm run test:contract` is `jwt`, the default;
+`npm run test:contract:cookie` is `cookie`), and CI runs both. So a contract test never reads
+`data.token` straight off a login, nor calls `POST /account/refresh` to get a fresh bearer: both
+are `jwt`-only. It asks for the credential in a way that works in either mode:
+
+| Need                                            | Use                                                                                                            |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| A signed-in account, from `POST /account/login` | `authenticateAs()` or `loginBearer(email)`: `transport: "bearer"` makes `cookie` mode answer with a `ses_…` id |
+| A bearer for a session a cookie names           | `bearerForCookie(cookie)`: a `ses_…` id is its own bearer, a refresh token is exchanged                        |
+| A session that proved only what the test says   | `mintSession(userId, { amr })` (`account`'s `tests/factories.ts`): goes through the strategy                   |
+| What a re-proof claimed (`amr`)                 | `claimedAmr(response, userId)` (`account`'s contract `support.ts`): the token's claim, or the row              |
+
+A case that is about one mode's own machinery (refresh rotation, the origin check) lives in
+`account`'s `session-modes.test.ts`, which names the mode it is about.
 
 ## Commands
 
-| Command                 | Effect                                                                                                            |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `npm run test:contract` | `tsx scripts/testing/run-suite.ts contract` — jest over `tests/contract` and every `src/modules/*/tests/contract` |
+| Command                        | Effect                                                                                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `npm run test:contract`        | `tsx scripts/testing/run-suite.ts contract` — jest over `tests/contract` and every `src/modules/*/tests/contract`                                                              |
+| `npm run test:contract:cookie` | the same suite with `NODE_SESSION_MODE=cookie`: every operation answers the spec when a session id in a cookie, not an access token, is what signs the caller in. CI runs both |
 
 ## Related pages
 
