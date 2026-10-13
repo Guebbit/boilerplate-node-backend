@@ -24,6 +24,14 @@ const OAUTH_ENV_KEYS = [
     'NODE_OAUTH_GITHUB_CLIENT_SECRET'
 ] as const;
 
+/**
+ * The callback URL the controller hands a provider: the redirect URI plus the query as received.
+ *
+ * @param code - the `code` the provider's redirect carried
+ */
+const callbackWith = (code: string) =>
+    new URL(`https://api.test/callback?code=${encodeURIComponent(code)}&state=the-state`);
+
 describe('the OAuth provider registry', () => {
     withoutEnvironmentInThisFile(OAUTH_ENV_KEYS);
 
@@ -88,10 +96,10 @@ describe('fakeOAuthProvider', () => {
         );
         const code = new URL(url).searchParams.get('code')!;
 
-        const identity = await fakeOAuthProvider.exchangeCode(
-            { code, state: 'the-state' },
-            { redirectUri: 'https://api.test/callback', state: 'the-state', codeVerifier: verifier }
-        );
+        const identity = await fakeOAuthProvider.exchangeCode(callbackWith(code), {
+            state: 'the-state',
+            codeVerifier: verifier
+        });
 
         expect(identity.emailVerified).toBe(true);
         expect(identity.providerId).toBeTruthy();
@@ -100,14 +108,10 @@ describe('fakeOAuthProvider', () => {
 
     it('refuses any other code — no network call ever makes one up', async () => {
         await expect(
-            fakeOAuthProvider.exchangeCode(
-                { code: 'not-the-fixed-code.some-challenge', state: 'the-state' },
-                {
-                    redirectUri: 'https://api.test/callback',
-                    state: 'the-state',
-                    codeVerifier: 'irrelevant'
-                }
-            )
+            fakeOAuthProvider.exchangeCode(callbackWith('not-the-fixed-code.some-challenge'), {
+                state: 'the-state',
+                codeVerifier: 'irrelevant'
+            })
         ).rejects.toThrow(/unrecognised code/);
     });
 
@@ -120,15 +124,11 @@ describe('fakeOAuthProvider', () => {
         const code = new URL(url).searchParams.get('code')!;
 
         await expect(
-            fakeOAuthProvider.exchangeCode(
-                { code, state: 'the-state' },
-                {
-                    redirectUri: 'https://api.test/callback',
-                    state: 'the-state',
-                    // A DIFFERENT verifier than the one behind the challenge.
-                    codeVerifier: generateCodeVerifier()
-                }
-            )
+            fakeOAuthProvider.exchangeCode(callbackWith(code), {
+                state: 'the-state',
+                // A DIFFERENT verifier than the one behind the challenge.
+                codeVerifier: generateCodeVerifier()
+            })
         ).rejects.toThrow(/PKCE verifier/);
     });
 });

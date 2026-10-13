@@ -10,7 +10,7 @@
 import * as client from 'openid-client';
 import { readCappedText, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 import { getOAuthCredentials, OAUTH_FETCH_TIMEOUT_MS } from '../config';
-import type { OAuthCallback, OAuthExpectation } from './port';
+import type { OAuthExpectation } from './port';
 
 /**
  * The `fetch` `openid-client` makes every call through: token exchange and key-set download alike.
@@ -90,29 +90,28 @@ export const authorizationUrlFor = (
         .toString();
 
 /**
- * Redeem an authorization code, with the library checking `state` and PKCE.
+ * Redeem an authorization code, with the library checking the whole authorization response.
  *
- * openid-client: `authorizationCodeGrant` takes the URL the provider redirected to, rebuilt here
- * from what the callback carried, and compares its `state` to `expectedState`. It sends the
- * `code_verifier`, and for an OpenID provider verifies the ID token (signature against the
- * provider's key set, issuer, audience, expiry) before answering.
+ * openid-client: `authorizationCodeGrant` takes the URL the provider redirected to, query string
+ * included, and validates it as an authorization response: one `code`, the `state` against
+ * `expectedState`, `error=` refused, and `iss` checked against the server's issuer (required when
+ * the server metadata says the provider sends it, RFC 9207). Its `redirect_uri` for the token
+ * request is that URL without the query. It sends the `code_verifier`, and for an OpenID provider
+ * verifies the ID token (issuer, audience, expiry) before answering.
  * https://github.com/panva/openid-client/blob/main/docs/functions/authorizationCodeGrant.md
  *
  * @param configuration - the provider's configuration
- * @param callback - the `code` and `state` the provider's redirect carried
- * @param expected - what this attempt kept: the redirect URI, the `state` and the PKCE verifier
- * @throws when the state differs, the provider refuses the code, or the ID token does not verify
+ * @param callbackUrl - the callback URL carrying the provider's real query string
+ * @param expected - what this attempt kept: the `state` and the PKCE verifier
+ * @throws when the response is malformed, the state differs, the provider refuses the code, or the
+ *   ID token does not verify
  */
 export const redeemCode = (
     configuration: client.Configuration,
-    callback: OAuthCallback,
+    callbackUrl: URL,
     expected: OAuthExpectation
-) => {
-    const redirected = new URL(expected.redirectUri);
-    redirected.searchParams.set('code', callback.code);
-    redirected.searchParams.set('state', callback.state);
-    return client.authorizationCodeGrant(configuration, redirected, {
+) =>
+    client.authorizationCodeGrant(configuration, callbackUrl, {
         expectedState: expected.state,
         pkceCodeVerifier: expected.codeVerifier
     });
-};
