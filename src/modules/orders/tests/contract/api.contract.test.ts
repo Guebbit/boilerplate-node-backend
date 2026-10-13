@@ -8,10 +8,10 @@
  */
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, loginBearer } from '@tests/http';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
 import { orderRepository } from '../../repository';
 import { orderService } from '../../services';
 import { OrderStatus } from '@types';
@@ -212,13 +212,9 @@ describe('POST /orders/{id}/cancel', () => {
         const order = await seedOrderFor(owner);
 
         const stranger = await createUser({ email: 'stranger@example.com', username: 'stranger' });
-        const login = await api()
-            .post('/account/login')
-            .send({ email: stranger.email, password: PLAIN_PASSWORD });
-
         const response = await api()
             .post(`/orders/${String(order._id)}/cancel`)
-            .set('Authorization', `Bearer ${login.body.data.token as string}`);
+            .set('Authorization', await loginBearer(stranger.email));
 
         expect(response.status).toBe(404);
     });

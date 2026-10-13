@@ -57,6 +57,7 @@
         "demo:remove": "tsx scripts/ops/demo-remove.ts",
         "test:integration": "tsx scripts/testing/run-suite.ts integration",
         "test:contract": "tsx scripts/testing/run-suite.ts contract",
+        "test:contract:cookie": "cross-env NODE_SESSION_MODE=cookie tsx scripts/testing/run-suite.ts contract",
         "test:fuzz": "tsx scripts/testing/run-suite.ts fuzz",
         "test:order-random": "tsx scripts/testing/run-suite.ts integration contract fuzz --unsharded --runInBand --randomize --showSeed",
         "mutation": "tsx scripts/mutation/run-diff.ts",

@@ -21,6 +21,9 @@ import { loginWithCookie } from './support';
 
 setupTestDb();
 
+/** The metadata an exported session may carry, and nothing more: never a credential. */
+const EXPORTED_SESSION_KEYS = new Set(['id', 'createdAt', 'expiration', 'lastUsedAt', 'device']);
+
 describe('POST /account/export', () => {
     it("returns the caller's own data across collections, and satisfies the contract", async () => {
         const { user, bearer } = await loginWithCookie();
@@ -52,7 +55,13 @@ describe('POST /account/export', () => {
         );
         // The caller's own login, as metadata only: never a credential, and nothing but its handle.
         expect(data.sessions).toHaveLength(1);
-        expect(data.sessions[0]).toEqual({
+        // `lastUsedAt` (once the session was used) and `device` (`cookie` mode, when the client
+        // named a browser) are metadata too; anything else would be a field that should not be here.
+        const [session] = data.sessions;
+        expect(Object.keys(session ?? {}).filter((key) => !EXPORTED_SESSION_KEYS.has(key))).toEqual(
+            []
+        );
+        expect(session).toMatchObject({
             id: expect.any(String),
             createdAt: expect.any(String),
             expiration: expect.any(String)

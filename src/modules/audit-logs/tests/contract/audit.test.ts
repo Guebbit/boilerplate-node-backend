@@ -7,8 +7,8 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api } from '@tests/http';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { api, loginBearer } from '@tests/http';
+import { createUser } from '@modules/users/tests/factories';
 import { auditLogRepository } from '@modules/audit-logs/repository';
 
 setupTestDb();
@@ -19,11 +19,7 @@ setupTestDb();
  */
 const authenticateInRole = async (role: string) => {
     const user = await createUser({ verifiedAt: new Date() }, role);
-    const response = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
-
-    return { user, bearer: `Bearer ${String(response.body?.data?.token)}` as const };
+    return { user, bearer: await loginBearer(user.email) };
 };
 
 describe('GET /audit', () => {

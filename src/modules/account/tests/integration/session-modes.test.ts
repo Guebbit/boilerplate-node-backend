@@ -595,6 +595,23 @@ describe('cookie mode only', () => {
         expect(first?.lastUsedAt).toBeInstanceOf(Date);
         expect(second?.lastUsedAt).toEqual(first?.lastUsedAt);
     });
+
+    it('keeps an account in daily use from looking inactive to the reaper', async () => {
+        const { user, session } = await account('cookie');
+        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+        await userRepository.updateMany({ _id: user.id }, { $set: { lastActiveAt: twoDaysAgo } });
+
+        await api().get('/account').set(session.headers);
+
+        // Stamped off the request's path, like the session's own `lastUsedAt`.
+        const stamped = await eventually(async () => {
+            const doc = await userRepository.findByIdWithCredentials(user.id);
+            return doc?.lastActiveAt && doc.lastActiveAt > twoDaysAgo
+                ? doc.lastActiveAt
+                : undefined;
+        });
+        expect(stamped).toBeInstanceOf(Date);
+    });
 });
 
 describe('jwt mode only', () => {

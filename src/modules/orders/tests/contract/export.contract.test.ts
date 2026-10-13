@@ -7,7 +7,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, bearerForCookie } from '@tests/http';
 import { setCookie } from '@tests/cookies';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { reauthWindowSeconds } from '@kernel/config';
@@ -70,13 +70,9 @@ describe('GET /orders/export', () => {
             .send({ email: user.email, password: PLAIN_PASSWORD, remember: 'short' });
         const jwtCookie = setCookie(login, '__Host-session');
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
-        const refreshed = await api()
-            .post('/account/refresh')
-            .set('Cookie', jwtCookie ?? '');
+        const staleBearer = await bearerForCookie(jwtCookie ?? '');
 
-        const response = await api()
-            .get('/orders/export')
-            .set('Authorization', `Bearer ${refreshed.body.data.token as string}`);
+        const response = await api().get('/orders/export').set('Authorization', staleBearer);
 
         expect(response.status).toBe(401);
     });
