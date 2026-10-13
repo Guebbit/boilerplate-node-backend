@@ -12,10 +12,13 @@
  */
 import { api, authenticateAs } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import enUsers from '@modules/users/locales/en.json';
-import itUsers from '@modules/users/locales/it.json';
-import enShared from '../../src/locales/en.json';
-import itShared from '../../src/locales/it.json';
+import { translator } from '@infrastructure/i18n';
+
+/** The "not an email" sentence for the email field, in one language, rendered by the same `t`. */
+const emailRefusal = (locale: 'en' | 'it'): string => {
+    const t = translator(locale);
+    return t('validation.format-email', { attribute: t('validation.attributes.email') });
+};
 
 // Only the multipart case signs a user in; every other case rejects before any repository call.
 setupTestDb();
@@ -41,28 +44,28 @@ describe('Accept-Language negotiation', () => {
 
         expect(response.status).toBe(422);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toContain(itUsers.users['field-email-invalid']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('it'));
     });
 
     it('answers in English when the client asks for nothing', async () => {
         const response = await signupWith().send(INVALID_SIGNUP);
 
         expect(response.headers['content-language']).toBe('en');
-        expect(messagesOf(response.body)).toContain(enUsers.users['field-email-invalid']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('en'));
     });
 
     it('falls back when the requested language is not supported', async () => {
         const response = await signupWith('de').send(INVALID_SIGNUP);
 
         expect(response.headers['content-language']).toBe('en');
-        expect(messagesOf(response.body)).toContain(enUsers.users['field-email-invalid']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('en'));
     });
 
     it('honours q-weights rather than header order', async () => {
         const response = await signupWith('en;q=0.8,it;q=0.9').send(INVALID_SIGNUP);
 
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toContain(itUsers.users['field-email-invalid']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('it'));
     });
 
     it('matches a region tag against its base language', async () => {
@@ -102,7 +105,7 @@ describe('Accept-Language negotiation', () => {
 
         expect(response.status).toBe(422);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toContain(itShared.validation['format-email']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('it'));
     });
 
     /**
@@ -118,26 +121,21 @@ describe('Accept-Language negotiation', () => {
 
         for (const [index, response] of responses.entries()) {
             const language = languages[index];
-            const dictionaryUsers = language === 'it' ? itUsers.users : enUsers.users;
-
             expect(response.headers['content-language']).toBe(language);
-            expect(messagesOf(response.body)).toContain(dictionaryUsers['field-email-invalid']);
+            expect(messagesOf(response.body)).toContain(
+                emailRefusal(language === 'it' ? 'it' : 'en')
+            );
         }
     });
 });
 
 /**
- * The OTHER validation path, in the same language.
+ * The controller-parsed path, in the same language.
  *
- * `POST /account/signup` validates in the service against `zodUserSchema`, whose messages are
- * `t(...)` per field. `POST /feedback/contact` validates in the controller against the
- * orval-generated schema, which declares no messages at all — so it answered in Zod's own English
- * whatever the client asked for, while signup answered in Italian. Same 422, same client, two
- * languages, and which one you got depended on the endpoint.
- *
- * `@infrastructure/http/validation-messages` closes it by translating Zod's built-in refusals
- * globally, without touching the codegen. Public and rejected before any repository call, so like
- * the signup cases above these need no database.
+ * `POST /feedback/contact` validates in the controller against the orval-generated schema, which
+ * declares no messages at all. `@infrastructure/http/validation-messages` translates Zod's refusals
+ * globally, without touching the codegen, so it answers in the negotiated language like signup.
+ * Public and rejected before any repository call, so these need no database.
  */
 const INVALID_CONTACT = { email: 'not-an-email', subject: '', message: '' };
 
@@ -152,14 +150,14 @@ describe('generated-schema validation answers in the negotiated language', () =>
 
         expect(response.status).toBe(422);
         expect(response.headers['content-language']).toBe('it');
-        expect(messagesOf(response.body)).toContain(itShared.validation['format-email']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('it'));
     });
 
     it('answers in English when the client asks for nothing', async () => {
         const response = await contactWith().send(INVALID_CONTACT);
 
         expect(response.status).toBe(422);
-        expect(messagesOf(response.body)).toContain(enShared.validation['format-email']);
+        expect(messagesOf(response.body)).toContain(emailRefusal('en'));
     });
 
     it('never leaves a Zod default on the wire', async () => {
@@ -185,14 +183,5 @@ describe('generated-schema validation answers in the negotiated language', () =>
 
         // And nothing resolved to a raw dictionary key, the other way copy goes missing.
         for (const message of italianMessages) expect(message).not.toMatch(/^\w+(?:\.[\w-]+)+$/);
-    });
-
-    it('still lets a field with its own copy win over the shared map', async () => {
-        // Precedence, asserted rather than assumed: `zodUserSchema` declares `t(...)` per field,
-        // and the global map must not overwrite the specific sentence with a generic one.
-        const response = await signupWith('it').send(INVALID_SIGNUP);
-
-        expect(messagesOf(response.body)).toContain(itUsers.users['field-email-invalid']);
-        expect(messagesOf(response.body)).not.toContain(itShared.validation['format-email']);
     });
 });

@@ -17,7 +17,8 @@ import {
     validationErrors
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
-import { zodUserSchema, userService, type UserDocument } from '@modules/users';
+import { SignupBody } from '@api/schemas.zod';
+import { userService, type UserDocument } from '@modules/users';
 import { parseFormBoolean } from '@infrastructure/http/request';
 import type { CallerContext } from '@types';
 import { optionalBooleanSchema } from '@infrastructure/http/schemas';
@@ -34,7 +35,7 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
  * would keep honest. No image: signup takes none, so the new account has none.
  */
 export interface SignupInput {
-    /** The submitted address; `zodUserSchema` owns its shape. */
+    /** The submitted address; `SignupBody` owns its shape. */
     email: string;
 
     /** The submitted display name. */
@@ -153,25 +154,24 @@ export const signup = (
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const { email, username, password, passwordConfirm, analyticsConsent, termsAccepted } = input;
 
-    const parseResult = zodUserSchema
-        .extend({
-            passwordConfirm: z.string(),
-            // Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
-            // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
-            // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
-            analyticsConsent: optionalBooleanSchema,
-            // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
-            // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
-            termsAccepted: z.preprocess(
-                parseFormBoolean,
-                z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
-            )
-        })
+    const parseResult = SignupBody.extend({
+        // Shared with `PUT/PATCH /account`'s: both decode the same multipart-string trap
+        // (`optionalBooleanSchema`'s own doc covers it), signup just narrows it to
+        // non-optional-by-intent (absent lands as `undefined`, stored as `false`).
+        analyticsConsent: optionalBooleanSchema,
+        // Not `optionalBooleanSchema`'s shape: signup needs the multipart decode
+        // (`parseFormBoolean`) but a literal-true requirement, not an optional one.
+        termsAccepted: z.preprocess(
+            parseFormBoolean,
+            z.literal(true, { error: () => t('account.signup.terms-not-accepted') })
+        )
+    })
         .superRefine(({ passwordConfirm, password }, refinementContext) => {
             if (passwordConfirm !== password)
                 refinementContext.addIssue({
                     code: 'custom',
-                    message: t('account.signup.password-dont-match')
+                    message: t('account.signup.password-dont-match'),
+                    path: ['passwordConfirm']
                 });
         })
         .safeParse({

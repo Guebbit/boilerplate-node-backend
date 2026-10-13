@@ -22,7 +22,8 @@ import {
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
 import { assertPasswordNotBreached } from '@infrastructure/security/breached-passwords';
-import { zodUserSchema, userService, type UserDocument } from '@modules/users';
+import { SignupBody } from '@api/schemas.zod';
+import { userService, type UserDocument } from '@modules/users';
 import type { CallerContext } from '@types';
 import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAuditActions } from '../audit';
@@ -39,18 +40,19 @@ export const validatePasswordChange = (
     password = '',
     passwordConfirm = ''
 ): ResponseErrorItem[] => {
-    const parseResult = zodUserSchema
-        .pick({
-            password: true
-        })
-        .extend({
+    // `password` carries the contract's own bounds (the one every set-password body shares);
+    // only the match between the two is ours to say.
+    const parseResult = z
+        .object({
+            password: SignupBody.shape.password,
             passwordConfirm: z.string()
         })
         .superRefine(({ passwordConfirm, password }, context) => {
             if (passwordConfirm !== password) {
                 context.addIssue({
                     code: 'custom',
-                    message: t('account.signup.password-dont-match')
+                    message: t('account.signup.password-dont-match'),
+                    path: ['passwordConfirm']
                 });
             }
         })

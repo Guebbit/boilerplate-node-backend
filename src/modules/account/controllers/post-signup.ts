@@ -36,15 +36,14 @@ export const postSignup = (
     response: Response
 ) => {
     /*
-     * Read, not parsed against `SignupBody` — deliberate, not a gap. `accountService.signup`
-     * validates via `zodUserSchema`, whose messages are translated; the generated schema would
-     * answer first in Zod's own English (`tests/integration/locale.test.ts` asserts it doesn't).
+     * Read, not parsed here — deliberate, not a gap. `accountService.signup` parses it against
+     * `SignupBody` plus the two rules the contract cannot say (the repeat matches, terms accepted),
+     * so every caller of the service gets the same 422.
      */
     /*
-     * Defaulted rather than passed through as `undefined`: `signup` hands these straight to
-     * `zodUserSchema`, which wants strings. An
-     * absent body therefore answers the same translated 422 a body of empty fields does, instead
-     * of throwing — `false` for the terms because a request nobody sent accepted nothing.
+     * Defaulted rather than passed through as `undefined`: `SignupInput` wants strings. An absent
+     * body therefore answers the same 422 a body of empty fields does, instead of throwing —
+     * `false` for the terms because a request nobody sent accepted nothing.
      */
     const {
         email = '',
