@@ -80,6 +80,35 @@ describe('POST /feedback/contact', () => {
     });
 });
 
+describe('POST /feedback/contact — the contract bounds the form restates nothing of', () => {
+    // The controller trims, then pipes into the generated field: its ceilings must survive that.
+    it('refuses an email past the contract ceiling of 254 characters', async () => {
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, email: `${'a'.repeat(250)}@example.com` });
+
+        expect(response.status).toBe(422);
+    });
+
+    it.each(['subject', 'message'])('refuses a whitespace-only %s as empty', async (field) => {
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, [field]: '   ' });
+
+        expect(response.status).toBe(422);
+        expect(response.body.errors[0].details).toEqual({ field });
+    });
+
+    it('trims the text it keeps', async () => {
+        const response = await api()
+            .post('/feedback/contact')
+            .send({ ...CONTACT_PAYLOAD, subject: '  Broken checkout  ' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.data.subject).toBe('Broken checkout');
+    });
+});
+
 describe('GET /feedback', () => {
     it('matches the contract for an admin caller', async () => {
         const { bearer } = await authenticateAs('admin');
