@@ -13,6 +13,7 @@
 
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
+import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import { RateType, type OrderTaxSummaryRow } from '@types';
 import type { ShopIdentity } from '@modules/orders';
 
@@ -149,7 +150,7 @@ const lineSchema = new Schema<InvoiceLine>(
         productId: { type: Schema.Types.ObjectId },
         title: { type: String, required: true },
         quantity: { type: Number, required: true },
-        unitPrice: { type: Number, required: true },
+        unitPrice: moneyPath({ required: true }),
         taxRate: { type: Number, required: true, min: 0, max: 1 },
         rateType: { type: String, enum: Object.values(RateType) }
     },
@@ -160,9 +161,9 @@ const lineSchema = new Schema<InvoiceLine>(
 const taxSummaryRowSchema = new Schema<OrderTaxSummaryRow>(
     {
         rate: { type: Number, required: true },
-        netAmount: { type: Number, required: true },
-        taxAmount: { type: Number, required: true },
-        grossAmount: { type: Number, required: true }
+        netAmount: moneyPath({ required: true }),
+        taxAmount: moneyPath({ required: true }),
+        grossAmount: moneyPath({ required: true })
     },
     { _id: false }
 );
@@ -178,14 +179,14 @@ const frozenTaxDocumentFields = {
     billingAddress: { type: partySchema },
     seller: { type: sellerSchema, required: true },
     lines: { type: [lineSchema], required: true },
-    shippingCost: { type: Number, min: 0 },
-    netTotal: { type: Number, required: true },
-    taxTotal: { type: Number, required: true },
-    shippingNetAmount: { type: Number, required: true },
-    shippingTaxAmount: { type: Number, required: true },
+    shippingCost: moneyPath({ nonNegative: true }),
+    netTotal: moneyPath({ required: true }),
+    taxTotal: moneyPath({ required: true }),
+    shippingNetAmount: moneyPath({ required: true }),
+    shippingTaxAmount: moneyPath({ required: true }),
     taxSummary: { type: [taxSummaryRowSchema], required: true },
     shippingByRate: { type: [taxSummaryRowSchema], required: true },
-    grandTotal: { type: Number, required: true }
+    grandTotal: moneyPath({ required: true })
 };
 
 /**
@@ -196,6 +197,11 @@ const frozenTaxDocumentFields = {
 const invoiceSchema = new Schema<InvoiceDocument, InvoiceModel>(frozenTaxDocumentFields, {
     timestamps: true
 });
+
+/**
+ * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ */
+invoiceSchema.plugin(moneyPlugin);
 
 // One invoice per order — `repository.ts`'s own duplicate-key guard is what makes a redelivered
 // event idempotent; this index is what makes that guarantee real at the database, not just in the
@@ -218,6 +224,11 @@ const creditNoteSchema = new Schema<CreditNoteDocument, CreditNoteModel>(
     },
     { timestamps: true }
 );
+
+/**
+ * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ */
+creditNoteSchema.plugin(moneyPlugin);
 
 // One credit note per REFUND — `PAYMENT_REFUNDED` is fired from an at-most-once write, but the
 // event bus promises no de-duplication of its own, so this index is what makes a redelivered

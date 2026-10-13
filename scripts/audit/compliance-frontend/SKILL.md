@@ -1,21 +1,20 @@
 ---
+name: compliance-frontend
 description: Audit the paired frontend against the shared compliance registry's frontend-responsibility rules
-argument-hint: <area|path|--diff>  (default: the whole frontend repo)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Compliance reviewer, not a security or code reviewer. You check what the paired frontend
 publishes, renders and enforces against a cross-legal-domain rule list — not against either
 repo's own docs' aspirations.
 
-GOAL: For every rule in `tests/audit/compliance-rules.yaml` whose `responsibility` is `frontend`
+GOAL: For every rule in `scripts/audit/compliance-rules.yaml` whose `responsibility` is `frontend`
 or `both`, decide whether it applies, and if so whether it is met.
 
 REPO: this prompt reads the registry from this repo (`boilerplate-node-backend`) but evaluates
 evidence against the sibling checkout at `../boilerplate-vue-frontend`. If that checkout is not
 present at that path, stop and say so — do not guess at a different location.
 
-SCOPE: $1 — an area (`checkout`, `account`), a path inside the frontend repo, or `--diff` for
+SCOPE: the argument you were given — an area (`checkout`, `account`), a path inside the frontend repo, or `--diff` for
 areas the frontend's working tree touched. If empty, audit the **whole frontend repo** — unlike
 the other audits, an empty scope here is NOT "whatever `git status` touched": a compliance gap is
 almost never introduced by the change that happens to surface it.
@@ -33,11 +32,11 @@ Never invent a batch number.
 
 ## Steps
 
-1. Read `tests/audit/compliance-rules.yaml` (from this repo). Parse the `rules:` list only —
+1. Read `scripts/audit/compliance-rules.yaml` (from this repo). Parse the `rules:` list only —
    `suggested_rules:` is a staging area pending human approval and must never be evaluated or
    reported on.
 2. Filter to `responsibility: frontend` or `responsibility: both`.
-3. If $1 named an area or path, further filter to rules whose `evidence.frontend` hints fall
+3. If the scope named an area or path, further filter to rules whose `evidence.frontend` hints fall
    inside that scope — EXCEPT rules whose evidence is inherently sitewide (a published policy
    page, a global consent banner), which are always evaluated regardless of scope.
 4. For each remaining rule, in this order:

@@ -9,7 +9,8 @@
 import type { ClientSession, PipelineStage, Types } from 'mongoose';
 import { paymentModel, applyPaymentTransform } from './model';
 import { PaymentStatus, PaymentMethod } from '@types';
-import { decimalSum, type ReportWindow } from '@infrastructure/persistence/report';
+import { reviveDecimals } from '@infrastructure/persistence/money-field';
+import type { ReportWindow } from '@infrastructure/persistence/report';
 import type { RefundFailureReason, RefundReason, RefundStatus } from '@types';
 import type { PaymentDocument, RefundRecord } from './model';
 import {
@@ -114,6 +115,17 @@ const aggregatePayments = <T>(pipeline: PipelineStage[]): Promise<T[]> =>
 const REFUND_ROW_PROJECTION: PipelineStage = {
     $project: { _id: 0, paymentId: '$_id', orderId: 1, provider: 1, refund: '$refunds' }
 };
+
+/**
+ * Aggregation that ends in {@link REFUND_ROW_PROJECTION}. The rows carry a refund's stored
+ * `Decimal128` amounts, which an aggregation does not turn into numbers by itself.
+ * @param pipeline - the stages, projection included
+ */
+const aggregateRefundRows = (pipeline: PipelineStage[]): Promise<RefundRow[]> =>
+    aggregatePayments<RefundRow>(pipeline).then((rows) => {
+        for (const row of rows) reviveDecimals(row);
+        return rows;
+    });
 
 /** What an upsert answers: the row, and whether this call inserted it rather than refreshing one. */
 export interface UpsertedPayment {
@@ -534,7 +546,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
                 $group: {
                     _id: { method: '$method', provider: '$provider', currency: '$currency' },
                     payments: { $sum: 1 },
-                    amount: decimalSum('$amount')
+                    amount: { $sum: '$amount' }
                 }
             }
         ]),
@@ -559,7 +571,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
         ];
         const [counted, items] = await Promise.all([
             aggregatePayments<{ totalItems: number }>([...base, { $count: 'totalItems' }]),
-            aggregatePayments<RefundRow>([
+            aggregateRefundRows([
                 ...base,
                 { $sort: { 'refunds.createdAt': -1, 'refunds._id': -1, _id: -1 } },
                 { $skip: pagination.skip },
@@ -578,7 +590,7 @@ export const paymentRepository: Repository<PaymentDocument, PaymentWire> & {
      * @param options - which kind, the age cutoff for provider refunds, and the cap
      */
     findOpenRefundRows: ({ manual, openBefore, limit }) =>
-        aggregatePayments<RefundRow>([
+        aggregateRefundRows([
             {
                 $match: {
                     provider: manual ? 'manual' : { $ne: 'manual' },

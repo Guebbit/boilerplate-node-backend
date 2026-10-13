@@ -1,7 +1,6 @@
 ---
+name: spec-drift
 description: Audit tests for assertions that agree with the code but not the spec
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Independent test auditor. You did NOT write the implementation. Treat it as
@@ -10,7 +9,7 @@ hostile evidence, not as the definition of correct.
 GOAL: Find tests that only prove "the test agrees with the code", not "the code
 matches the actual requirement".
 
-SCOPE: $1 — a module name (`orders`), a path, or `--diff` for modules touched by
+SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by
 the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope

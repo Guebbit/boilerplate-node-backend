@@ -171,6 +171,14 @@ export const DEV_GROUPS: DependencyGroup[] = [
         match: ['dependency-cruiser', 'eslint-plugin-boundaries']
     },
     {
+        name: 'Code-shape audit',
+        purpose:
+            'the deterministic counters the `code-shape` AI audit judges by: unused files, ' +
+            'exports and dependencies, and copy-pasted code. Run by hand, never a gate',
+        readMore: '[AI Auditing](./ai-auditing.md)',
+        match: ['knip', 'jscpd']
+    },
+    {
         name: 'Commit hygiene',
         purpose: 'commit message linting, git hooks and staged-file checks',
         readMore: '—',

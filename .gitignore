@@ -48,18 +48,12 @@ src/modules/*/__factories-import-probe.ts
 
 # Claude Code's local state: session settings, and the worktrees it creates under
 # `.claude/worktrees/` — which `jest.config.js` already excludes from every test run. None of it
-# describes the project, so none of it is shared. `commands/` is un-ignored as a place a project
-# slash command COULD be checked in — nothing is right now, since the only thing that would live
-# there today (the `audit` symlink, below) is excluded on purpose.
+# describes the project, so none of it is shared. `skills/` is shared: it registers the
+# `scripts/audit/` prompts with Claude Code — see docs/tools/ai-auditing.md.
 /.claude/*
 !/.claude/commands/
 !/.claude/agents/
 !/.claude/skills/
-
-# The optional symlink that exposes tests/audit/*.md as Claude Code slash commands — see
-# docs/tools/ai-auditing.md. The prompts themselves are versioned; this is one developer's
-# convenience, regenerable with a single ln -s.
-/.claude/commands/audit
 
 # API client collections. Generated whole from openapi.yaml on demand — `npm run contracts:bundle
 # -- bruno insomnia postman` — and never read by the suite, the app or CI. Committing them put

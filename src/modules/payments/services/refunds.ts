@@ -35,6 +35,7 @@ import { announceInTransaction } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
+    fitsCurrency,
     toMinorUnits,
     toDecimalAmount,
     addMoney,
@@ -610,11 +611,11 @@ const refusalFor = (
         return generateReject(422, [t('payments.refund-currency-mismatch')]);
     if (amount === undefined) return undefined;
 
-    const minor = toMinorUnits(amount, payment.currency);
     // A decimal the currency has no minor unit for (0.001 EUR) would round to a different amount
     // than the one the operator typed — refused rather than quietly changed.
-    if (toDecimalAmount(minor, payment.currency) !== amount)
+    if (!fitsCurrency(amount, payment.currency))
         return generateReject(422, [t('payments.refund-invalid-amount')]);
+    const minor = toMinorUnits(amount, payment.currency);
     if (payment.status === REFUNDABLE_PAYMENT_STATUS && minor > remainingOf(payment))
         return generateReject(422, [
             {

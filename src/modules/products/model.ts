@@ -14,7 +14,9 @@ import { getFallbackLocale, t } from '@infrastructure/i18n';
 import { CreateProductBody, ReplaceProductByIdBody, UpdateProductByIdBody } from '@api/schemas.zod';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import type { TranslationFieldIssue } from '@kernel/registry';
+import { fitsCurrency, minorUnitExponent } from '@shared-kernel/money';
 import { availableStock, stockFlags } from './domain/stock';
 import { isPreorder, latestReleaseDate } from './domain/preorder';
 import { lowStockThreshold, productCurrency } from './config';
@@ -164,12 +166,34 @@ const refineReleaseDate = (
 };
 
 /**
+ * A price may have no more decimal places than the shop currency's minor unit: 19.999 EUR would
+ * be stored as typed and charged as 20.00. Shared by create, PUT and PATCH.
+ *
+ * @param price - the price in the body; absent (a PATCH leaving it alone) always passes
+ * @param context - the Zod context to report into
+ */
+const refinePricePlaces = (price: number | undefined, context: z.RefinementCtx): void => {
+    if (price === undefined) return;
+    const currency = productCurrency();
+    if (!fitsCurrency(price, currency))
+        context.addIssue({
+            code: 'custom',
+            message: t('products.field-price-extra-decimals', {
+                currency,
+                places: minorUnitExponent(currency)
+            }),
+            path: ['price']
+        });
+};
+
+/**
  * Zod schema for a product CREATE: the generated `CreateProductBody`, which already carries every
  * field rule, plus the two business refinements it cannot express.
  */
 export const zodProductCreateSchema = CreateProductBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, true);
     refineReleaseDate(data.releaseDate, context);
+    refinePricePlaces(data.price, context);
 });
 
 /**
@@ -180,6 +204,7 @@ export const zodProductCreateSchema = CreateProductBody.superRefine((data, conte
 export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, true);
     refineReleaseDate(data.releaseDate, context);
+    refinePricePlaces(data.price, context);
 });
 
 /**
@@ -189,6 +214,7 @@ export const zodProductReplaceSchema = ReplaceProductByIdBody.superRefine((data,
 export const zodProductUpdateSchema = UpdateProductByIdBody.superRefine((data, context) => {
     refineFallbackLocale(data.translations, context, false);
     refineReleaseDate(data.releaseDate, context);
+    refinePricePlaces(data.price, context);
 });
 
 /**
@@ -200,10 +226,7 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
             type: String,
             required: true
         },
-        price: {
-            type: Number,
-            required: true
-        },
+        price: moneyPath({ required: true }),
         /*
          * Absent means the shop's standard rate — `resolveTaxRate` (`./tax`) never returns "no
          * rate", it only narrows which one. `enum` matches the contract's `TaxClass` exactly, so
@@ -347,6 +370,11 @@ export const productSchema = new Schema<ProductDocument, ProductModel, unknown>(
         timestamps: true
     }
 );
+
+/**
+ * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ */
+productSchema.plugin(moneyPlugin);
 
 /**
  * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.

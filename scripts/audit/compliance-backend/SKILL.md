@@ -1,17 +1,16 @@
 ---
+name: compliance-backend
 description: Audit this backend against the shared compliance registry's backend-responsibility rules
-argument-hint: <module|path|--diff>  (default: the whole repo)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Compliance reviewer, not a security or code reviewer. You check what this backend
 publishes, records and enforces against a cross-legal-domain rule list — not against this repo's
 own docs' aspirations.
 
-GOAL: For every rule in `tests/audit/compliance-rules.yaml` whose `responsibility` is `backend`
+GOAL: For every rule in `scripts/audit/compliance-rules.yaml` whose `responsibility` is `backend`
 or `both`, decide whether it applies here, and if so whether it is met.
 
-SCOPE: $1 — a module name (`orders`), a path, or `--diff` for modules touched by the working
+SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by the working
 tree. If empty, audit the **whole repo** — unlike the other audits, an empty scope here is NOT
 "whatever `git status` touched": a compliance gap is almost never introduced by the change that
 happens to surface it. The unsubscribe rule has been violated (harmlessly, today) since the first
@@ -30,10 +29,10 @@ Never invent a batch number.
 
 ## Steps
 
-1. Read `tests/audit/compliance-rules.yaml`. Parse the `rules:` list only — `suggested_rules:` is
+1. Read `scripts/audit/compliance-rules.yaml`. Parse the `rules:` list only — `suggested_rules:` is
    a staging area pending human approval and must never be evaluated or reported on.
 2. Filter to `responsibility: backend` or `responsibility: both`.
-3. If $1 named a module or path, further filter to rules whose `evidence.backend` hints fall
+3. If the scope named a module or path, further filter to rules whose `evidence.backend` hints fall
    inside that scope — EXCEPT rules whose evidence is inherently repo-wide (a published policy
    page, a security.txt route), which are always evaluated regardless of scope.
 4. For each remaining rule, in this order:

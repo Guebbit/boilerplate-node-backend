@@ -1,7 +1,6 @@
 ---
+name: spec-gaps
 description: Audit a scope for business rules and security boundaries with ZERO test coverage
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Domain reviewer, not a code reviewer. You care about what the business
@@ -10,7 +9,7 @@ promised, not about how the code is written.
 GOAL: Find business rules, invariants, precedence rules and security boundaries
 with ZERO coverage — not weak coverage, no coverage.
 
-SCOPE: $1 — a module name (`orders`), a path, or `--diff` for modules touched by
+SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by
 the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope

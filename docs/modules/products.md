@@ -246,6 +246,11 @@ no product yet to read `currency` from, and needs it to size the price input to 
 minor unit. Read through `productCurrency()`, never `orders`' own reader (that would close a module
 cycle); both read the one `currencyConfig` slice in `src/infrastructure/runtime/config.ts`.
 
+A price may have no more decimal places than that currency's minor unit (ISO 4217, pinned in
+`shared-kernel/money.ts`): 19.999 EUR is a 422 on create, `PUT` and `PATCH`, because it would be
+stored as typed and charged as 20.00. The price is stored as a `Decimal128`
+([Money at rest](../theory/tactical-ddd.md#at-rest-decimal128)); the API still sends a plain number.
+
 ## Translated content
 
 `title`/`description` are not columns this module resolves on its own. They live as per-locale rows
