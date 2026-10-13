@@ -349,7 +349,9 @@ sequenceDiagram
   conditional on `amountRefunded` still being what the caller read — so two racing partial refunds
   cannot return more than was paid. A miss re-reads and re-checks.
 - **Exact sums.** Amounts are summed in integer minor units (`toMinorUnits`/`toDecimalAmount` from
-  `orders`), never by adding decimals.
+  `@shared-kernel/money`), never by adding decimals. They rest as `Decimal128`
+  ([Money at rest](../theory/tactical-ddd.md#at-rest-decimal128)); a refund with more places than
+  the currency's minor unit is refused (`fitsCurrency`).
 - **One key per record.** `refund:{paymentId}:{refundId}` — a retry of a refund is safe at the
   provider, and two different partial refunds are never mistaken for one.
 - **The order's status commits with the settlement.** `order.paymentStatus` (`partially_refunded`

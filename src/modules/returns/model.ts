@@ -13,6 +13,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import { RETURN_POSTAGE_PAYERS } from '@modules/orders';
 import type { ReturnPostagePayer } from '@modules/orders';
 import { ReturnKind, ReturnReason, ReturnStatus } from '@types';
@@ -81,7 +82,7 @@ const returnLineSchema = new Schema<ReturnLine>(
         productId: { type: Schema.Types.ObjectId, required: true },
         quantity: { type: Number, required: true, min: 1 },
         title: { type: String, required: true },
-        unitPrice: { type: Number, required: true, min: 0 }
+        unitPrice: moneyPath({ required: true, nonNegative: true })
     },
     { _id: false }
 );
@@ -115,13 +116,18 @@ export const returnSchema = new Schema<ReturnDocument>(
         declineReason: { type: String, maxlength: 500 },
         decidedAt: { type: Date },
         receivedAt: { type: Date },
-        handlingDeduction: { type: Number, min: 0 },
-        refundAmount: { type: Number, min: 0 },
-        shippingRefund: { type: Number, min: 0 },
+        handlingDeduction: moneyPath({ nonNegative: true }),
+        refundAmount: moneyPath({ nonNegative: true }),
+        shippingRefund: moneyPath({ nonNegative: true }),
         closedAt: { type: Date }
     },
     { timestamps: true }
 );
+
+/**
+ * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ */
+returnSchema.plugin(moneyPlugin);
 
 // Backs "every return on this order" — the quantity check when a new one is opened, the customer's
 // own view, and `collect` for the account export.

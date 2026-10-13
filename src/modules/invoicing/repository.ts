@@ -7,7 +7,7 @@
  */
 
 import { reencryptOf } from '@infrastructure/security/reencrypt';
-import { bucketOf, decimalSum, type ReportWindow } from '@infrastructure/persistence/report';
+import { bucketOf, type ReportWindow } from '@infrastructure/persistence/report';
 import { Types } from 'mongoose';
 import type { ClientSession, Document, Model } from 'mongoose';
 import {
@@ -38,7 +38,7 @@ export interface DocumentBucketRow {
 
 /**
  * Documents issued in a window, summed per currency and bucket. Goods are `netTotal` minus the
- * shipping net it includes, subtracted as decimals so cents do not drift.
+ * shipping net it includes, subtracted as stored Decimal128, so cents do not drift.
  *
  * @param model - the invoice or credit-note collection
  * @param window - the half-open window and the bucket size
@@ -62,16 +62,11 @@ const sumDocuments = <TDocument extends Document>(
                     _id: { currency: '$currency', bucket: bucketOf('$issuedAt', window) },
                     documents: { $sum: 1 },
                     goodsNet: {
-                        $sum: {
-                            $subtract: [
-                                { $toDecimal: '$netTotal' },
-                                { $toDecimal: '$shippingNetAmount' }
-                            ]
-                        }
+                        $sum: { $subtract: ['$netTotal', '$shippingNetAmount'] }
                     },
-                    shippingNet: decimalSum('$shippingNetAmount'),
-                    tax: decimalSum('$taxTotal'),
-                    gross: decimalSum('$grandTotal')
+                    shippingNet: { $sum: '$shippingNetAmount' },
+                    tax: { $sum: '$taxTotal' },
+                    gross: { $sum: '$grandTotal' }
                 }
             }
         ])

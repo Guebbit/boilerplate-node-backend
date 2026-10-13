@@ -5,12 +5,27 @@
  * a real database to prove a shipment persists; the pricing rule itself does not, and belongs here.
  */
 
+import { fitsCurrency } from '@shared-kernel/money';
 import {
     findShippingMethod,
     priceShipping,
     methodFitsWeight,
     SHIPPING_METHODS
 } from '../../domain/rates';
+
+describe('SHIPPING_METHODS', () => {
+    it.each(['JPY', 'EUR', 'KWD'])(
+        'quotes every rate and threshold in whole units a %s shop can charge exactly',
+        (currency) => {
+            // A rate with more places than the currency's minor unit would be stored as typed and
+            // charged rounded.
+            for (const { price, freeAbove } of SHIPPING_METHODS) {
+                expect(fitsCurrency(price, currency)).toBe(true);
+                expect(fitsCurrency(freeAbove ?? 0, currency)).toBe(true);
+            }
+        }
+    );
+});
 
 describe('findShippingMethod', () => {
     it('finds a method by id', () => {

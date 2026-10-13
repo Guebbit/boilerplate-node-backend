@@ -15,6 +15,7 @@ import {
     indexSpecs,
     optionsOf,
     pathOptions,
+    refuses,
     requiredPaths,
     subSchema,
     typeOf
@@ -81,7 +82,8 @@ describe('orderSchema — money', () => {
 
     it('refuses a negative shipping cost', () => {
         // A negative shipping cost is a discount applied where nothing checks discounts.
-        expect(pathOptions(orderSchema, 'shippingCost').min).toBe(0);
+        expect(refuses(orderSchema, 'shippingCost', -1)).toBe(true);
+        expect(refuses(orderSchema, 'shippingCost', 0)).toBe(false);
     });
 });
 

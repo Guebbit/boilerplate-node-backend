@@ -22,6 +22,7 @@ import type { Document, Model } from 'mongoose';
 import type { ProductSnapshot } from '@modules/products';
 import { revisionPlugin } from '@infrastructure/persistence/revision-plugin';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import {
     bankTransferBeneficiary,
     bankTransferIbanFriendly,
@@ -285,7 +286,7 @@ const orderAddressSchema = new Schema(
 const orderLineProductSchema = new Schema(
     {
         title: { type: String, required: true },
-        price: { type: Number, required: true },
+        price: moneyPath({ required: true }),
         description: { type: String },
         categories: { type: [String] },
         tags: { type: [String] },
@@ -388,10 +389,7 @@ export const orderSchema = new Schema<OrderDocument>(
         shippingMethod: {
             type: String
         },
-        shippingCost: {
-            type: Number,
-            min: 0
-        },
+        shippingCost: moneyPath({ nonNegative: true }),
         /*
          * The customer's checkout choice — a preference, not a lock: a card payment still
          * settles normally regardless of this value, and then rewrites it to `card`, so the
@@ -516,6 +514,11 @@ export const orderSchema = new Schema<OrderDocument>(
         timestamps: true
     }
 );
+
+/**
+ * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ */
+orderSchema.plugin(moneyPlugin);
 
 /**
  * The edit counter behind this resource's `ETag` and `If-Match` — see `@infrastructure/persistence/revision-plugin`.

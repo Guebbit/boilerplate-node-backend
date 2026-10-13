@@ -133,6 +133,28 @@ describe('productService.validateCreateData', () => {
         expect(errors.length).toBeGreaterThan(0);
     });
 
+    it('rejects a price with more places than the shop currency has, on create and update', () => {
+        // 19.999 EUR would be stored as typed and charged as 20.00.
+        const created = productService.validateCreateData({
+            ...FALLBACK_TRANSLATIONS,
+            price: 19.999,
+            active: true
+        });
+        const updated = productService.validateUpdateData({ price: 19.999 });
+
+        expect(created.map(({ message }) => message)).toContain(
+            'The price can have at most 2 decimal places in EUR'
+        );
+        expect(updated).toHaveLength(1);
+        expect(
+            productService.validateCreateData({
+                ...FALLBACK_TRANSLATIONS,
+                price: 19.99,
+                active: true
+            })
+        ).toHaveLength(0);
+    });
+
     it('accepts a price of exactly 0 — the minimum is inclusive', () => {
         const errors = productService.validateCreateData({
             translations: { en: { title: 'A Free Product' } },
