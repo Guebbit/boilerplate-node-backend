@@ -45,6 +45,7 @@ import {
     touchApiKeyUse
 } from './credentials';
 import { clearLapsedPreviousEmail } from './credentials';
+import { exportSignInMethods } from './sign-in-methods';
 import {
     registerSelfService,
     registerFromOAuth,
@@ -98,6 +99,7 @@ export const userService = {
     findByOAuthIdentity,
     findByIdWithPendingEmail,
     emailOrPendingEmailTaken,
+    exportSignInMethods,
     setPassword,
     markSessionsEnded,
     markEmailVerified,

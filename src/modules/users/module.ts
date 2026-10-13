@@ -54,6 +54,11 @@ export default {
         {
             section: 'profile',
             collect: (subject) => userService.findByIdWithCredentials(subject.userId)
+        },
+        // The ways in the account holds, as facts: providers linked and factors armed, no secrets.
+        {
+            section: 'signInMethods',
+            collect: (subject) => userService.exportSignInMethods(subject.userId)
         }
     ],
     // The PII encryption key: see `./config`.
