@@ -15,6 +15,7 @@ import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { asAdmin, asCustomer, testCallerContext } from '@tests/callers';
 import { asReject } from '@tests/response';
 import { productService } from '@modules/products';
+import { timelineOf } from '@modules/orders/tests/factories';
 import { fulfillmentOrdersOf, paidPreorderOrder } from '@modules/delivery/tests/factories';
 import { getForOrder, runPreorderSweep, cancelAllForOrder } from '@modules/delivery/services';
 import { confirmWait } from '@modules/delivery/services/confirm-wait';
@@ -371,5 +372,82 @@ describe('why a fulfillment order was cancelled', () => {
         const [silentOne] = await fulfillmentOrdersOf(silent.orderId);
         const [otherOne] = await fulfillmentOrdersOf(other.orderId);
         expect([silentOne.cancelReason, otherOne.cancelReason]).toEqual(['no_answer', 'order']);
+    });
+});
+
+/** The `[type, data]` pairs of an order's timeline, born-held row and all. */
+const trailOf = (orderId: string) =>
+    timelineOf(orderId).then((rows) => rows.map(({ type, data }) => ({ type, data })));
+
+/** The types alone. */
+const typesOf = (orderId: string) => trailOf(orderId).then((rows) => rows.map(({ type }) => type));
+
+describe('what the timeline says of a preorder', () => {
+    it('says the order was born held, with the reason code', async () => {
+        const { orderId } = await preorder(30);
+
+        expect(await trailOf(orderId)).toMatchObject([
+            { type: 'fulfillment_held', data: { reason: 'awaiting_stock' } }
+        ]);
+    });
+
+    it('writes the move, then the notice, for a slip, and each only once', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await moveDate(productIds[0], inDays(75));
+        const { onReleaseDateChanged } = await import('@modules/delivery/services');
+        await onReleaseDateChanged(productIds[0]);
+
+        const rows = await trailOf(orderId);
+
+        expect(rows.map(({ type }) => type)).toEqual([
+            'fulfillment_held',
+            'release_date_moved',
+            'delay_notice_sent'
+        ]);
+        expect(rows[1].data).toMatchObject({ from: expect.any(String), to: expect.any(String) });
+        expect(rows[2].data).toMatchObject({ reason: 'moved', needsAnswer: true });
+    });
+
+    it('writes only the move when the date goes earlier', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await moveDate(productIds[0], inDays(10));
+
+        expect(await typesOf(orderId)).toEqual(['fulfillment_held', 'release_date_moved']);
+    });
+
+    it('writes a null date when the date is cleared', async () => {
+        const { orderId, productIds } = await preorder(30);
+        await moveDate(productIds[0], null);
+
+        const rows = await trailOf(orderId);
+
+        expect(rows.map(({ type }) => type)).toEqual([
+            'fulfillment_held',
+            'release_date_moved',
+            'delay_notice_sent'
+        ]);
+        expect(rows[1].data).toMatchObject({ to: null });
+    });
+
+    it('writes wait_confirmed, by the buyer', async () => {
+        const { orderId, productIds, user } = await preorder(30);
+        await moveDate(productIds[0], inDays(75));
+        await confirmWait(await waitingIdOf(orderId), asCustomer(user.id), testCallerContext);
+
+        const rows = await timelineOf(orderId);
+        const confirmed = rows.at(-1);
+
+        expect(confirmed).toMatchObject({ type: 'wait_confirmed' });
+        expect(String(confirmed?.actor)).toBe(user.id);
+    });
+
+    it('writes wait_expired when the buyer stayed silent', async () => {
+        const { orderId } = await preorder(30);
+        await runPreorderSweep(inDays(31));
+        await runPreorderSweep(inDays(62));
+
+        const types = await typesOf(orderId);
+
+        expect(types.slice(-2)).toEqual(['delay_notice_sent', 'wait_expired']);
     });
 });

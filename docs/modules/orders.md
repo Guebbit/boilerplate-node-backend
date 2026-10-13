@@ -393,6 +393,7 @@ added there without an audience row fails to compile.
 | Shipments | `fulfillment_held`, `fulfillment_released` (a hold's reason code)                            | no         |
 | Returns   | `return_requested`, `return_approved`, `return_declined`, `return_received`, `return_closed` | yes        |
 | Documents | `invoice_issued`, `credit_note_issued`                                                       | yes        |
+| Preorders | `release_date_moved`, `delay_notice_sent`, `wait_confirmed`, `wait_expired`                  | yes        |
 
 A row holds ids, codes and numbers in `data`. Never a sibling's free text: `returns`' `note` and
 `declineReason`, `delivery`'s hold note are reaped on their own clocks, and a copy here would
@@ -428,7 +429,7 @@ flowchart LR
     C -- over NODE_ORDER_EXPORT_MAX_ROWS --> U[422 ORDER_EXPORT_TOO_LARGE<br/>before any byte]
     C -- within --> A[audit row: filter and row count]
     A --> S[cursor, in the list's order]
-    S --> W[csv-stringify, escape_formulas]
+    S --> W[csv-stringify, BOM, escape_formulas]
     W --> P[response, private no-store]
 ```
 

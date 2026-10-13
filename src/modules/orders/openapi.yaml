@@ -686,6 +686,10 @@ components:
                 - return_closed
                 - invoice_issued
                 - credit_note_issued
+                - release_date_moved
+                - delay_notice_sent
+                - wait_confirmed
+                - wait_expired
             description: >-
                 What happened. Order: `created`, `paid`, `processing`, `shipped`, `delivered`,
                 `cancelled`, `status_overridden`. Payment: `payment_declined`, `refund_issued`,
@@ -693,7 +697,8 @@ components:
                 `shipment_delivered`, `fulfillment_held`, `fulfillment_released`,
                 `remainder_cancelled`. Returns: `return_requested`, `return_approved`,
                 `return_declined`, `return_received`, `return_closed`. Documents: `invoice_issued`,
-                `credit_note_issued`.
+                `credit_note_issued`. Preorders: `release_date_moved`, `delay_notice_sent`,
+                `wait_confirmed`, `wait_expired`.
 
         OrderTimelineEntry:
             type: object

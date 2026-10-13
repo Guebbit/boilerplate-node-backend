@@ -171,7 +171,7 @@ export const fulfillmentOrderRepository: Repository<
         orderId: string,
         draft: FulfillmentOrderDraft,
         session: ClientSession
-    ) => Promise<void>;
+    ) => Promise<boolean>;
     claim: (
         id: string,
         revision: number,
@@ -239,6 +239,7 @@ export const fulfillmentOrderRepository: Repository<
      * @param orderId - the order
      * @param draft - the fulfillment order the grouping rule made
      * @param session - the act's transaction
+     * @returns whether this call made it, so a caller can narrate a birth exactly once
      */
     insertIfAbsent: (orderId, draft, session) =>
         fulfillmentOrderModel
@@ -261,7 +262,7 @@ export const fulfillmentOrderRepository: Repository<
                 { upsert: true, session }
             )
             .exec()
-            .then(() => undefined),
+            .then((result) => result.upsertedCount > 0),
 
     /**
      * Write a change to a fulfillment order, but only if nobody else has since the caller read it —

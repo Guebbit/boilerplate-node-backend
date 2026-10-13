@@ -58,8 +58,20 @@ export const ensureFulfillmentOrders = (orderId: string): Promise<void> =>
             const drafts = groupOrderLines(groupableLinesOf(order));
             return withTransaction(async (session) => {
                 // One after another: a transaction's session does not take parallel operations.
-                for (const draft of drafts)
-                    await fulfillmentOrderRepository.insertIfAbsent(orderId, draft, session);
+                for (const draft of drafts) {
+                    const born = await fulfillmentOrderRepository.insertIfAbsent(
+                        orderId,
+                        draft,
+                        session
+                    );
+                    // A preorder group is born on hold: say so, once, in staff's view of the order.
+                    if (born && draft.holdReason)
+                        await orderService.appendTimeline(
+                            orderId,
+                            { type: 'fulfillment_held', data: { reason: draft.holdReason } },
+                            session
+                        );
+                }
                 await reportProgress(orderId, session);
             });
         });

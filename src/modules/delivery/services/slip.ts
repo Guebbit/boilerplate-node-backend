@@ -17,6 +17,7 @@
  * See: docs/modules/delivery.md#preorders-and-a-moved-date
  */
 
+import { orderService } from '@modules/orders';
 import { productService } from '@modules/products';
 import { judgeSlip } from '../domain';
 import type { SlipVerdict } from '../domain';
@@ -52,6 +53,37 @@ const expectedFrom = (fulfillmentOrder: FulfillmentOrderDocument): Promise<Date 
         });
 
 /**
+ * Write the timeline's `release_date_moved`: the date this order's goods are now expected. Only
+ * called when the move landed, so a redelivered event (which finds the date already followed)
+ * writes no second row. `orders` cannot hear `products`' event itself: `products` is imported by
+ * it, so delivery, which already judges every waiting order, is the one to narrate.
+ *
+ * @param fulfillmentOrder - the fulfillment order as read before the move
+ * @param next - the date now expected, absent when the date was cleared
+ * @param now - the instant of the move
+ * @param session - the act's transaction
+ */
+const recordDateMoved = (
+    fulfillmentOrder: FulfillmentOrderDocument,
+    next: Date | undefined,
+    now: Date,
+    session: ClientSession
+): Promise<void> =>
+    orderService.appendTimeline(
+        String(fulfillmentOrder.orderId),
+        {
+            type: 'release_date_moved',
+            at: now,
+            data: {
+                fulfillmentOrderId: String(fulfillmentOrder._id),
+                from: fulfillmentOrder.expectedAt?.toISOString() ?? null,
+                to: next?.toISOString() ?? null
+            }
+        },
+        session
+    );
+
+/**
  * Apply a verdict to one fulfillment order, in the act's transaction.
  *
  * @param fulfillmentOrder - the fulfillment order as read in `session`
@@ -69,17 +101,19 @@ const apply = async (
 ): Promise<SentNotice | undefined> => {
     if (verdict.kind === 'earlier') {
         // Quietly follow the date; the buyer is not told good news is a notice, and consent stays.
-        if (next && next.getTime() !== fulfillmentOrder.expectedAt?.getTime())
-            await fulfillmentOrderRepository.claim(
+        if (next && next.getTime() !== fulfillmentOrder.expectedAt?.getTime()) {
+            const claimed = await fulfillmentOrderRepository.claim(
                 String(fulfillmentOrder._id),
                 fulfillmentOrder.revision,
                 { expectedAt: next },
                 session
             );
+            if (claimed) await recordDateMoved(fulfillmentOrder, next, now, session);
+        }
         return undefined;
     }
 
-    return recordNotice(
+    const sent = await recordNotice(
         fulfillmentOrder,
         {
             reason: 'moved',
@@ -90,6 +124,9 @@ const apply = async (
         now,
         session
     );
+    // After the notice, stamped `now` so the row still sorts before the notice's own.
+    if (sent) await recordDateMoved(fulfillmentOrder, next, now, session);
+    return sent;
 };
 
 /**

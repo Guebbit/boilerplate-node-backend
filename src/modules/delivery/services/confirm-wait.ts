@@ -69,14 +69,23 @@ export const confirmWait = (
                         { consent: FulfillmentConsent.confirmed, unset: ['consentDeadline'] },
                         session
                     );
-                    return (
-                        confirmed ??
-                        refuse(
+                    if (!confirmed)
+                        return refuse(
                             409,
                             ERROR_CODES.DELIVERY_NOT_AWAITING_ANSWER,
                             'delivery.not-awaiting-answer'
-                        )
+                        );
+
+                    await orderService.appendTimeline(
+                        String(order._id),
+                        {
+                            type: 'wait_confirmed',
+                            actor: authContext.id,
+                            data: { fulfillmentOrderId }
+                        },
+                        session
                     );
+                    return confirmed;
                 }).then((result) => {
                     if (result.refused) return result.reject;
                     recordAudit(context, {
