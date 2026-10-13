@@ -20,7 +20,9 @@ import {
     refundForOrder,
     cancelOpenIntentForOrder,
     detachUserId,
-    findOwnPaymentsForExport
+    findOwnPaymentsForExport,
+    mailPaymentReceived,
+    mailRefundIssued
 } from './services';
 import { paymentsRateLimits } from './rate-limits';
 // Also installs this module's event declarations (PAYMENT_SUCCEEDED, PAYMENT_FAILED,
@@ -96,8 +98,12 @@ export default {
         // nobody ever finished, still open at the provider. Best-effort — the cancel already
         // happened by the time this runs, so a provider failure here is logged, never rethrown.
         onDomainEvent(ORDER_CANCELLED, ({ orderId }) => cancelOpenIntentForOrder(orderId));
+        // This module's own two mails, from its own facts — see `./services/notify.ts`.
+        onDomainEvent(PAYMENT_SUCCEEDED, mailPaymentReceived);
+        onDomainEvent(PAYMENT_REFUNDED, mailRefundIssued);
     },
     locales: path.join(__dirname, 'locales'),
+    templates: path.join(__dirname, 'templates'),
     /**
      * One refunded payment, reached the way a shop reaches one: an order paid by card, then
      * cancelled by an operator, with this module's own `ORDER_REFUND_OWED` listener returning the

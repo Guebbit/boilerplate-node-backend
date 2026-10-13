@@ -20,7 +20,6 @@
 import { Types, type ClientSession } from 'mongoose';
 import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -37,8 +36,6 @@ import { withTransaction } from '@infrastructure/runtime/database';
 import { SYSTEM_ACTOR, callerForSubject } from '@kernel/permissions';
 import {
     orderService,
-    mailBuyer,
-    refundIssuedEmail,
     toMinorUnits,
     toDecimalAmount,
     addMoney,
@@ -248,53 +245,7 @@ const isFullyRefunded = (payment: PaymentDocument): boolean =>
     remainingOf(payment) === 0 && payment.refunds.every((refund) => refund.status === 'succeeded');
 
 /**
- * Tell the buyer their money went back, when it went back outside a return — a refund that
- * followed a cancel, or an operator's goodwill one. A return's refund is announced by `returns`'
- * own closing notice, so a `return` refund carrying a `returnId` is skipped here, as is a refund
- * that moved no money. A remainder cancel's refund carries a `returnId` too but has no closing
- * notice (its Return is closed at birth), so it is announced here like any cancellation's. Fire-and-forget, same reasoning as the `orderPaid` mail in `./settlement.ts`: a mail that
- * cannot be sent must never undo a refund that already went back.
- *
- * @param payment - the payment after the refund settled
- * @param refund - the record that settled
- */
-const mailRefundIssued = (payment: PaymentDocument, refund: RefundRecord): void => {
-    if (refund.returnId && refund.reason !== 'cancellation') return;
-
-    const orderId = String(payment.orderId);
-    // Started inside a promise so a synchronous throw (a malformed id) is reported, not raised.
-    void Promise.resolve()
-        .then(() => orderService.getById(orderId))
-        .then((order) =>
-            order
-                ? mailBuyer(order, (locale, name) => {
-                      const mail = refundIssuedEmail(
-                          locale,
-                          name,
-                          order.orderNumber,
-                          { amount: refund.amount, currency: refund.currency },
-                          payment.status === 'refunded'
-                      );
-                      void enqueueEmail(
-                          { to: order.email, subject: mail.subject },
-                          mail.template,
-                          mail.data
-                      );
-                  })
-                : undefined
-        )
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not mail the refund notice for order ${orderId}`,
-                error
-            });
-            // Stryker restore all
-        });
-};
-
-/**
- * Tell the rest of the system a refund landed: the log line, the audit row and the buyer's mail.
+ * Tell the rest of the system a refund landed: the log line and the audit row.
  * The `payment.refunded` fact itself is not here: it is written with the settlement
  * ({@link settleRefund}), so it exists exactly when the refund settled.
  *
@@ -324,7 +275,6 @@ const announceRefund = (
         targetId: orderId,
         metadata: { refundId: String(refund._id), amount: refund.amount }
     });
-    if (outcome === 'success') mailRefundIssued(payment, refund);
 };
 
 /**

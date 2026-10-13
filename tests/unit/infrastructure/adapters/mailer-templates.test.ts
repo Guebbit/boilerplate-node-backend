@@ -36,13 +36,12 @@ import { contactRequestEmail } from '@modules/feedback/emails';
 import { examplePublishedEmail } from '@modules/example';
 import {
     orderConfirmEmail,
-    paymentSucceededEmail,
     bankTransferInstructionsEmail,
     bankTransferExpiredEmail,
     cardHoldExpiredEmail,
-    orderCancelledEmail,
-    refundIssuedEmail
+    orderCancelledEmail
 } from '@modules/orders/emails';
+import { paymentReceivedEmail, refundIssuedEmail } from '@modules/payments/emails';
 import { buildDocumentView } from '@modules/invoicing/emails';
 import {
     preorderDelayedEmail,
@@ -134,7 +133,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         new Date('2026-09-19T12:00:00.000Z'),
         'an-order-id'
     ),
-    'orders.order-paid': paymentSucceededEmail(
+    'payments.payment-received': paymentReceivedEmail(
         locale,
         'Ada',
         {
@@ -162,7 +161,7 @@ const contentFor = (locale: string): Record<string, EmailContent> => ({
         '2026-000041',
         true
     ),
-    'orders.order-refunded': refundIssuedEmail(
+    'payments.refund-issued': refundIssuedEmail(
         locale,
         'Ada',
         '2026-000041',

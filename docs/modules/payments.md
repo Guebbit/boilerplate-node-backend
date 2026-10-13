@@ -569,6 +569,22 @@ cancelled after payment whose refund is still owed. An amount mismatch is not a 
 audit row `payment.amount_mismatch`, a counter, a log), so the page links to the audit log instead.
 Each source is capped at 100 rows.
 
+## The two mails
+
+Payments sends the buyer's money mails itself, from listeners on its own events, so every path
+that settles money is covered: the webhook, the browser confirm, an offline record and the
+recovery sweep.
+
+| Event               | Template                    | Skipped when                                                    |
+| ------------------- | --------------------------- | --------------------------------------------------------------- |
+| `payment.succeeded` | `payments.payment-received` | never                                                           |
+| `payment.refunded`  | `payments.refund-issued`    | a return's refund (`returns` closes it), or one that moved none |
+
+The refund mail reads the refund record, not the event, and says "that is everything" from the
+refunds settled up to that one rather than the payment's current status. A mail that fails is
+logged and never undoes money that landed. The transfer-instructions and transfer-expired mails
+stay in [`orders`](./orders.md#cancel-and-refund-mails): they announce placing or cancelling an order.
+
 ## The order timeline
 
 Payments feeds the order's [timeline](./orders.md#the-timeline) through `orderService.appendTimeline`,

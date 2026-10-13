@@ -136,9 +136,9 @@ describe('a withdrawal before dispatch on a paid order', () => {
         const named = (template: string) =>
             mockEnqueueEmail.mock.calls.filter(([, name]) => name === template);
         await settleOutboxNudges();
-        await waitFor(() => Promise.resolve(named('orders.order-refunded').length > 0));
+        await waitFor(() => Promise.resolve(named('payments.refund-issued').length > 0));
 
-        expect(named('orders.order-refunded')).toHaveLength(1);
+        expect(named('payments.refund-issued')).toHaveLength(1);
         expect(named('returns.notice')).toHaveLength(1);
         // A withdrawal is acknowledged by `returns`; the person-cancel mail is not for it.
         expect(named('orders.order-cancelled')).toHaveLength(0);

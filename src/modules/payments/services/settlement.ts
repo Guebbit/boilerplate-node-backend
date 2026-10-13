@@ -7,7 +7,6 @@
 
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import {
     generateSuccess,
     generateReject,
@@ -19,9 +18,7 @@ import {
     orderService,
     bankTransferHoldHours,
     isPayable,
-    mailBuyer,
     paymentSettled,
-    paymentSucceededEmail,
     toMinorUnits
 } from '@modules/orders';
 import { inventoryService } from '@modules/inventory';
@@ -286,37 +283,6 @@ const settleWithin = async (
 };
 
 /**
- * The mail that answers "did my card go through" — `orderConfirmEmail` at checkout only ever said
- * the order was received. Fire-and-forget: a slow mail send must not hold up the settlement's
- * caller, and one that fails must never undo money that landed.
- *
- * @param orderId - the order that was paid
- */
-const mailPaymentSucceeded = (orderId: string): void => {
-    void orderService
-        .getById(orderId)
-        .then((order) => {
-            if (!order) return;
-            void mailBuyer(order, (locale, name) => {
-                const mail = paymentSucceededEmail(locale, name, order, orderId);
-                void enqueueEmail(
-                    { to: order.email, subject: mail.subject },
-                    mail.template,
-                    mail.data
-                );
-            });
-        })
-        .catch((error: unknown) => {
-            // Stryker disable all
-            logger.error({
-                message: `Payments: could not read order ${orderId} to mail its payment confirmation`,
-                error
-            });
-            // Stryker restore all
-        });
-};
-
-/**
  * What only a committed settlement allows: wake the outbox relay, bring the catalogue's stock
  * cache into step (a preorder may have been served), and for money that arrived too late, ask
  * the provider to return it. A failed refund is logged and left to `retryOpenRefunds`: the open
@@ -359,7 +325,6 @@ const afterSettlement = (
                 transitioned: true
             }));
 
-    mailPaymentSucceeded(orderId);
     return inventoryService
         .refreshStockCacheForOrder(orderId)
         .catch((error: unknown) => {

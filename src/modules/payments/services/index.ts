@@ -63,6 +63,7 @@ export {
     applyWebhookSettlement
 } from './settlement';
 export { refundByOrder, refundForOrder, refundForReturn } from './refunds';
+export { mailPaymentReceived, mailRefundIssued } from './notify';
 export { retryOpenRefunds, reconcileStalePayments } from './effects';
 export { recordOfflinePayment, type OfflinePaymentInput } from './offline';
 export { getForOrder, withActions } from './view';

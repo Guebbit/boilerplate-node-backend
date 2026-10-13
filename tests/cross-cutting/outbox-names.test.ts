@@ -151,7 +151,7 @@ it('publishes the set the pair agreed on', () => {
      * far — and neither does the pending-email-change notice, nor bank transfer, which the PHP
      * twin has no equivalent feature for at all. `example.published` is Node-only until the twin builds its `example` module. `webhooks.subscription-disabled` is the same
      * story: the PHP twin has no webhook module yet. `returns.notice` is the same story: the PHP twin has no returns module yet. So are
-     * `orders.order-paid` (a payment settling to `succeeded` mails the buyer) and
+     * `payments.payment-received` (a payment settling to `succeeded` mails the buyer) and
      * `orders.order-card-expired` (a `card` hold's own expiry notice, the twin of
      * `orders.order-transfer-expired` for the other payment method) — both new here. So is
      * `account.two-factor-changed`, the notice that a second factor was added, replaced or removed. So is
@@ -160,7 +160,7 @@ it('publishes the set the pair agreed on', () => {
      * wholesale: the twin has no api-keys module at all yet. So is
      * `account.reauth-code`, the step-up code an account with no password passes with. So are
      * `orders.order-cancelled` (a person's cancel, saying what became of the money) and
-     * `orders.order-refunded` (money back outside a return) — new here, appended to the message
+     * `payments.refund-issued` (money back outside a return) — new here, appended to the message
      * for the twin's session. So are `account.export-ready` (the link to a finished data export) and
      * `account.export-failed` (its failure notice): the twin's export is still one synchronous
      * answer. So is `delivery.shipment-delivered`, the notice that a shipment arrived: an order ships in
@@ -191,10 +191,10 @@ it('publishes the set the pair agreed on', () => {
         'orders.order-cancelled',
         'orders.order-card-expired',
         'orders.order-confirm',
-        'orders.order-paid',
-        'orders.order-refunded',
         'orders.order-transfer-expired',
         'orders.order-transfer-instructions',
+        'payments.payment-received',
+        'payments.refund-issued',
         'returns.notice',
         'webhooks.subscription-disabled'
     ];
