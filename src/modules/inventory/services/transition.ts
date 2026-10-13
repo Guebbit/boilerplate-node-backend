@@ -59,6 +59,8 @@ export const syncStockCache = async (productId: string): Promise<void> => {
  *   catalogue's stock cache is NOT synced here: that write leaves this module and cannot roll
  *   back, so the caller runs {@link refreshStockCacheForOrder} once its transaction commits
  * @returns whether the counters actually moved
+ * @internal The step beneath every named transition this module publishes, which decide what may
+ *   move; it never leaves the barrel.
  */
 export const applyTransition = async (
     reason: StockMovementReason,

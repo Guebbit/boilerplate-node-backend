@@ -565,6 +565,8 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
  * @returns the payment as it now stands — `refunded` once all of it is back, still `succeeded`
  *   after a partial refund or when a hand-paid refund is left for an operator — or `null` when
  *   there was nothing to return
+ * @internal The step beneath `refundByOrder`, `refundForOrder` and `refundForReturn`, which carry
+ *   the own-money and scope checks; it never leaves the barrel.
  */
 export const performRefund = (
     orderId: string,

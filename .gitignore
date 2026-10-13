@@ -85,6 +85,7 @@ src/types/asyncapi.generated.ts
 !/README.md
 !/CLAUDE.md
 !/SECURITY.md
+!/INSTALL.md
 
 # 2brain:start — regenerate with: 2brain <repo-path>
 .2brain/graphify-out/cache/

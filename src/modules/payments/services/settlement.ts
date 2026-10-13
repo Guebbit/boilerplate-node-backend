@@ -351,6 +351,8 @@ const afterSettlement = (
  *   a decline of an already-declined payment is a new decline and not a repeat report of one
  * @param actor - the staff member who recorded the money by hand, for the order's timeline; absent
  *   when a provider reported it
+ * @internal The step beneath `confirmPayment`, `syncPayment`, `applyWebhookSettlement` and
+ *   `recordOfflinePayment`, which carry the scope and order-gate checks; it never leaves the barrel.
  */
 export const settlePayment = (
     payment: PaymentDocument,

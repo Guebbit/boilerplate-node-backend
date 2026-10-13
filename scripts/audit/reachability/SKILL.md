@@ -94,6 +94,24 @@ Each has bitten this repo. Each passed its tests throughout.
   chain — a generic 500 before the route ran, rather than a response without the
   header (`8710899c`).
 
+### 4b — steps nobody tagged
+
+The same family from the other side: a defence skipped through another entry point.
+A published door checks scope, ownership or state, then hands the write to a function.
+That function is the step beneath the door (`docs/theory/strategic-ddd.md` §5).
+
+For each module in scope:
+
+- List the barrel's doors that check scope, ownership or state, then call another function that
+  does the write (`payments`' `settlePayment`, `inventory`'s `applyTransition` are the known two).
+- That function is a finding when it is not tagged `@internal`.
+- It is a worse one when the barrel publishes it: a sibling module can then write past the checks.
+  `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` already refuses a TAGGED step in a
+  barrel, so a published untagged step is exactly what it cannot see.
+- Verdict: `reachable, behaviour differs` when published untagged; `not traced` when only
+  unpublished and untagged (a missing tag, not a hole). Proving request: the sibling call that
+  skips the check, as `import` line plus call.
+
 ### 5 — classify
 
 `reachable` / `reachable, behaviour differs` / `UNREACHABLE` / `not traced`.

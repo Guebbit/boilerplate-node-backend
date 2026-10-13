@@ -52,6 +52,7 @@ once to keep the full stack across restarts, instead of passing `:full` every ti
 
 → Host mode, the collections, the pre-commit gate: **[Getting Started](./docs/getting-started.md)**
 → Ports and running the pair: **[Pairing & Ports](./docs/tools/pairing-and-ports.md)**
+→ What to set up by hand before it is yours (accounts, keys, domain, legal): **[INSTALL.md](./INSTALL.md)**
 
 ---
 
