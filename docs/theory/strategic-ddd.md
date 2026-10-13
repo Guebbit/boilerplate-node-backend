@@ -241,7 +241,11 @@ way a handle does. What it never publishes, no matter how convenient:
 - **A step beneath a guarded door.** The work a service does once another function has checked
   scope, ownership or state (`payments`' `settlePayment`, `inventory`'s `applyTransition`).
   Publishing it is a repository export one level up: the write goes through, the checks don't. A
-  judgement call, not a file name, so no lint rule checks it.
+  judgement call, not a file name, so a person marks the step `@internal` (TSDoc's own tag, with
+  the one-line reason). `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` then refuses
+  any tagged step a barrel reaches, and the
+  `tests/audit/reachability.md` audit (see [AI Auditing](../tools/ai-auditing.md))
+  hunts the ones nobody has tagged.
 
 - **The model's runtime** — the mongoose schema, its `toJSON` transform, the model object itself.
   `export type * from './model'` still publishes every type the model declares; only the values
