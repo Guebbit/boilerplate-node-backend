@@ -8,7 +8,7 @@ import {
     refundAmountFor,
     shippingStillOwed,
     type RefundInputs
-} from '../../services/refund-amount';
+} from '../../domain/refund-amount';
 
 /** Two shirts at 30.00 and a mug at 10.00, 15.00 express paid where standard would be 5.00. */
 const base: RefundInputs = {

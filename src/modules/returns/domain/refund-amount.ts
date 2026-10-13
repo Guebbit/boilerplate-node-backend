@@ -18,7 +18,7 @@
  */
 
 import { toDecimalAmount, toMinorUnits, type Money } from '@shared-kernel/money';
-import type { ReturnReason } from '../domain';
+import type { ReturnReason } from './lifecycle';
 
 /** What the calculation needs from the return and its order. */
 export interface RefundInputs {
