@@ -6,7 +6,8 @@
  */
 
 import { invoicingService } from '@modules/invoicing';
-import { addMoney, orderService, toDecimalAmount } from '@modules/orders';
+import { addMoney, toDecimalAmount } from '@shared-kernel/money';
+import { orderService } from '@modules/orders';
 import { paymentService } from '@modules/payments';
 import { returnService } from '@modules/returns';
 import type {

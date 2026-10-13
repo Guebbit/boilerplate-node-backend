@@ -27,5 +27,13 @@ export type { ProductQuantity, LinesVerdict } from './quantities';
 export { projectReturnStatus } from './status-projection';
 export type { ProjectedReturn, ProjectedReturnStatus } from './status-projection';
 
+export { refundAmountFor, cancellationRefundFor, shippingStillOwed } from './refund-amount';
+export type {
+    RefundInputs,
+    RefundBreakdown,
+    RefundVerdict,
+    CancellationInputs
+} from './refund-amount';
+
 export { accountsOf } from './accounting';
 export type { AccountedReturn, OrderAccounts } from './accounting';

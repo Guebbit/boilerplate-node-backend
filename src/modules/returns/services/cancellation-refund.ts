@@ -6,9 +6,14 @@
  */
 
 import type { OrderDocument } from '@modules/orders';
-import { accountsOf, takesLastUnit } from '../domain';
+import {
+    accountsOf,
+    cancellationRefundFor,
+    shippingStillOwed,
+    takesLastUnit,
+    type RefundBreakdown
+} from '../domain';
 import type { AccountedReturn, ProductQuantity } from '../domain';
-import { cancellationRefundFor, shippingStillOwed, type RefundBreakdown } from './refund-amount';
 
 /**
  * What the order's other returns and cancels have settled, and what this cancel's lines are worth,
@@ -23,7 +28,7 @@ export const cancellationRefundOn = (
     earlier: readonly AccountedReturn[],
     lines: readonly ProductQuantity[]
 ): RefundBreakdown => {
-    const accounts = accountsOf(earlier);
+    const accounts = accountsOf(earlier, order.currency);
     const ordered = order.items.map((item) => ({
         productId: String(item.product._id),
         quantity: item.quantity

@@ -2,7 +2,7 @@
  * @module
  * Freezing a credit note off a refund — `module.ts`'s `PAYMENT_REFUNDED` listener's whole job. One
  * credit note per REFUND: a full refund mirrors the ORIGINAL invoice's lines and totals wholesale,
- * a partial one carries only the refunded share (see `./partial-credit.ts`), so an order refunded
+ * a partial one carries only the refunded share (see `../domain/credit-shares.ts`), so an order refunded
  * in parts ends up with a credit note per part.
  *
  * See: docs/modules/invoicing.md
@@ -17,7 +17,8 @@ import { invoicingRepository } from '../repository';
 import { decryptInvoiceParty, encryptInvoiceParty } from '../pii';
 import { findInvoiceForOrder } from './issue-invoice';
 import { allocateCreditNoteNumber } from './numbering';
-import { partialCredit, type RefundedGoods } from './partial-credit';
+import { creditShares, type CreditableInvoice, type RefundedGoods } from '../domain';
+import { creditBreakdownOf } from './credit-breakdown';
 import type { CreditNoteDocument, InvoiceDocument } from '../model';
 
 /** The refund a credit note is issued for — `PAYMENT_REFUNDED`'s payload, as this module needs it. */
@@ -28,9 +29,24 @@ export interface RefundedInput {
     amount: number;
     /** Whether this refund is the whole payment — the one case that mirrors the invoice. */
     full: boolean;
-    /** The goods and delivery it pays back, when it pays for specific ones — see `./partial-credit.ts`. */
+    /** The goods and delivery it pays back, when it pays for specific ones — see `../domain/credit-shares.ts`. */
     goods?: RefundedGoods;
 }
+
+/**
+ * The invoice as the domain's split reads it: plain data, ids as strings.
+ * @param invoice - the invoice being reversed
+ */
+const creditableOf = (invoice: InvoiceDocument): CreditableInvoice => ({
+    currency: invoice.currency,
+    lines: invoice.lines.map((line) => ({
+        productId: line.productId === undefined ? undefined : String(line.productId),
+        unitPrice: line.unitPrice,
+        taxRate: line.taxRate
+    })),
+    shippingByRate: invoice.shippingByRate,
+    taxSummary: invoice.taxSummary
+});
 
 /**
  * The frozen figures a credit note carries: the invoice's own for a full refund, or the refunded
@@ -66,12 +82,13 @@ const reversedFigures = (
             grandTotal: invoice.grandTotal
         };
 
-    const { lines, breakdown } = partialCredit(
-        invoice,
+    const lines = creditShares(
+        creditableOf(invoice),
         input.amount,
         translator(invoice.locale)('invoicing.document.partial-refund-line'),
         input.goods
     );
+    const breakdown = creditBreakdownOf(lines, invoice.currency);
     return {
         lines,
         netTotal: breakdown.netTotal,

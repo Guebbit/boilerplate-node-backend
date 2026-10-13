@@ -1,11 +1,11 @@
 /**
  * @module
- * The lines and VAT of a credit note that reverses only PART of an invoice — pure, so the
- * arithmetic is testable without a database.
+ * The lines of a credit note that reverses only PART of an invoice — pure, so the arithmetic is
+ * testable without a database, a model or the tax function.
  *
  * The refunded gross amount is spread across the invoice's VAT rates, and each share becomes one
- * line at that rate. VAT is then extracted from every share the way the invoice itself did it
- * (`orderTaxBreakdown`), so the figures reconcile exactly and every rate is one the invoice charged.
+ * line at that rate. Every rate is one the invoice charged; the VAT is extracted from the lines
+ * afterwards by `src/modules/invoicing/services/credit-breakdown.ts`, the way the invoice itself did it.
  *
  * What each rate weighs depends on what the refund pays back:
  *
@@ -24,20 +24,22 @@
 import {
     addMoney,
     apportion,
-    orderTaxBreakdown,
     scaleMoney,
     toDecimalAmount,
     toMinorUnits,
     NO_MONEY,
-    type Money,
-    type OrderTaxBreakdown
-} from '@modules/orders';
-import type { InvoiceDocument, InvoiceLine } from '../model';
+    type Money
+} from '@shared-kernel/money';
 
-/** What a partial credit note freezes in place of the invoice's own lines and totals. */
-export interface PartialCredit {
-    lines: InvoiceLine[];
-    breakdown: OrderTaxBreakdown;
+/** The part of an invoice the split reads, as plain data — the invoice document is not this layer's. */
+export interface CreditableInvoice {
+    currency: string;
+    /** The invoice's lines; `productId` is how returned goods find the rate they were sold at. */
+    lines: readonly { productId?: string | undefined; unitPrice: number; taxRate: number }[];
+    /** Delivery's own slice of the summary, per rate. */
+    shippingByRate: readonly { rate: number; grossAmount: number }[];
+    /** One row per distinct VAT rate the invoice charged. */
+    taxSummary: readonly { rate: number; grossAmount: number }[];
 }
 
 /** The goods and delivery a refund pays back — `PAYMENT_REFUNDED`'s `goods`. */
@@ -45,6 +47,16 @@ export interface RefundedGoods {
     lines: readonly { productId: string; quantity: number }[];
     /** The delivery cost inside the refund, a decimal. */
     shipping: number;
+}
+
+/** One line of a partial credit note: a share of the refund, at one rate the invoice charged. */
+export interface CreditLine {
+    title: string;
+    quantity: 1;
+    /** Gross (VAT-inclusive) amount of this share. */
+    unitPrice: number;
+    /** The decimal VAT rate this share is credited at. */
+    taxRate: number;
 }
 
 /**
@@ -55,7 +67,7 @@ export interface RefundedGoods {
  * @param goods - what the refund pays back
  * @returns the weights; all zero when nothing matched a line of the invoice
  */
-const goodsWeights = (invoice: InvoiceDocument, goods: RefundedGoods): Money[] => {
+const goodsWeights = (invoice: CreditableInvoice, goods: RefundedGoods): Money[] => {
     const { currency, lines, shippingByRate, taxSummary } = invoice;
     const weights = new Map<number, Money>(taxSummary.map((row) => [row.rate, NO_MONEY]));
     const add = (rate: number, amount: Money): void => {
@@ -63,7 +75,7 @@ const goodsWeights = (invoice: InvoiceDocument, goods: RefundedGoods): Money[] =
     };
 
     for (const { productId, quantity } of goods.lines) {
-        const line = lines.find((candidate) => String(candidate.productId) === productId);
+        const line = lines.find((candidate) => candidate.productId === productId);
         if (line) add(line.taxRate, scaleMoney(toMinorUnits(line.unitPrice, currency), quantity));
     }
 
@@ -84,14 +96,14 @@ const goodsWeights = (invoice: InvoiceDocument, goods: RefundedGoods): Money[] =
  * @param amount - the refunded gross amount, a decimal in the invoice's currency
  * @param lineTitle - the description every line carries, already in the invoice's language
  * @param goods - what the refund pays back, when it pays for specific goods; absent for goodwill
- * @returns one line per rate that took a share, and the VAT breakdown those lines derive
+ * @returns one line per rate that took a share
  */
-export const partialCredit = (
-    invoice: InvoiceDocument,
+export const creditShares = (
+    invoice: CreditableInvoice,
     amount: number,
     lineTitle: string,
     goods?: RefundedGoods
-): PartialCredit => {
+): CreditLine[] => {
     const { currency, taxSummary } = invoice;
     const everyRate = taxSummary.map((row) => toMinorUnits(row.grossAmount, currency));
     const weighted = goods ? goodsWeights(invoice, goods) : everyRate;
@@ -99,7 +111,7 @@ export const partialCredit = (
     const weights = addMoney(...weighted) === NO_MONEY ? everyRate : weighted;
     const shares = apportion(toMinorUnits(amount, currency), weights);
 
-    const lines = taxSummary.flatMap((row, index): InvoiceLine[] =>
+    return taxSummary.flatMap((row, index): CreditLine[] =>
         shares[index] > 0
             ? [
                   {
@@ -111,15 +123,4 @@ export const partialCredit = (
               ]
             : []
     );
-
-    const breakdown = orderTaxBreakdown({
-        items: lines.map((line) => ({
-            quantity: line.quantity,
-            product: { price: line.unitPrice, taxRate: line.taxRate, requiresShipping: false }
-        })),
-        shippingCost: undefined,
-        currency
-    });
-
-    return { lines, breakdown };
 };

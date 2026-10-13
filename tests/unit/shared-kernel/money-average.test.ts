@@ -2,7 +2,7 @@
  * `averageMoney` — an average order value. The subject is rounding to a whole minor unit, and the
  * empty case: no orders is no average, not a division by nothing.
  */
-import { NO_MONEY, averageMoney, toMinorUnits } from '../../domain';
+import { NO_MONEY, averageMoney, toMinorUnits } from '@shared-kernel/money';
 
 describe('averageMoney', () => {
     it('shares an amount evenly and rounds half-up to the minor unit', () => {

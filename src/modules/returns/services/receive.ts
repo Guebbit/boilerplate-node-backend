@@ -38,10 +38,17 @@ import { returnRepository } from '../repository';
 import type { ReturnDocument } from '../model';
 import { returnsAuditActions } from '../audit';
 import { RETURN_RECEIVED } from '../events';
-import { RECEIVABLE_RETURN_STATUSES, accountsOf, takesLastUnit, wireLines } from '../domain';
+import {
+    RECEIVABLE_RETURN_STATUSES,
+    accountsOf,
+    refundAmountFor,
+    shippingStillOwed,
+    takesLastUnit,
+    wireLines,
+    type RefundBreakdown
+} from '../domain';
 import { closeReturn } from './close';
 import { syncReturnStatus } from './projection';
-import { refundAmountFor, shippingStillOwed, type RefundBreakdown } from './refund-amount';
 
 /** What staff may enter when the goods arrive. */
 export interface ReceiveReturnInput {
@@ -77,7 +84,7 @@ const quote = (
     earlier: readonly ReturnDocument[],
     handlingDeduction: number
 ) => {
-    const accounts = accountsOf(earlier);
+    const accounts = accountsOf(earlier, returned.currency);
     const ordered = order.items.map((item) => ({
         productId: String(item.product._id),
         quantity: item.quantity

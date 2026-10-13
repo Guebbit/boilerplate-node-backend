@@ -3,7 +3,7 @@
  * The payments mix for the stats: how much money came in by which method and provider.
  */
 
-import { toMinorUnits, type Money } from '@modules/orders';
+import { toMinorUnits, type Money } from '@shared-kernel/money';
 import { numberOf, type ReportWindow } from '@infrastructure/persistence/report';
 import type { PaymentMethod } from '@types';
 import { paymentRepository } from '../repository';

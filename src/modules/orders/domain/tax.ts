@@ -17,7 +17,7 @@ import {
     wholeCount,
     type Money,
     NO_MONEY
-} from './money';
+} from '@shared-kernel/money';
 import { isShippedItem } from './rules';
 
 /** A priced, taxed line — what `orderTaxBreakdown` needs from each order item. */

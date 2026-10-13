@@ -923,6 +923,12 @@ export default tseslint.config(
                     partialMatch: false
                 },
                 { type: 'kernel', pattern: 'src/kernel', partialMatch: false },
+                /*
+                 * Our own pure, generic code that every tier — `domain/` included — may import
+                 * (Money first). It reaches npm and nothing else, so sharing it loosens no wall.
+                 * See `docs/theory/layers.md`.
+                 */
+                { type: 'shared-kernel', pattern: 'src/shared-kernel', partialMatch: false },
                 { type: 'infrastructure', pattern: 'src/infrastructure', partialMatch: false },
                 { type: 'app', pattern: 'src/app', partialMatch: false },
                 { type: 'types', pattern: 'src/types', partialMatch: false },
@@ -997,6 +1003,27 @@ export default tseslint.config(
                             // Downward, which is what the tiers are for: everything may reach the
                             // substrate below it, and `types` is erased at compile time.
                             allow: { to: { element: { type: ['infrastructure', 'types'] } } }
+                        },
+                        {
+                            // `shared-kernel` is pure and generic, so every tier may take from it —
+                            // `domain` included, which is the reason it exists.
+                            from: {
+                                element: {
+                                    type: [
+                                        'module',
+                                        'domain',
+                                        'app',
+                                        'kernel',
+                                        'infrastructure',
+                                        'scenarios'
+                                    ]
+                                }
+                            },
+                            allow: { to: { element: { type: 'shared-kernel' } } }
+                        },
+                        {
+                            from: { element: { type: 'shared-kernel' } },
+                            allow: { to: { element: { type: 'shared-kernel' } } }
                         },
                         {
                             // `kernel` is the module system, reachable by what sits above it.
@@ -1090,6 +1117,24 @@ export default tseslint.config(
                          * ── What is refused ───────────────────────────────────────────────────
                          */
                         {
+                            from: { element: { type: 'shared-kernel' } },
+                            disallow: {
+                                to: {
+                                    element: {
+                                        type: [
+                                            'infrastructure',
+                                            'kernel',
+                                            'module',
+                                            'domain',
+                                            'app'
+                                        ]
+                                    }
+                                }
+                            },
+                            message:
+                                'shared-kernel imports npm and @types only. It is below every tier so that domain/ can use it; one import of a tier would hand that reach back to whoever imports it.'
+                        },
+                        {
                             from: { element: { type: 'infrastructure' } },
                             disallow: {
                                 to: { element: { type: ['kernel', 'module', 'domain', 'app'] } }
@@ -1145,6 +1190,7 @@ export default tseslint.config(
                                             'module',
                                             'domain',
                                             'kernel',
+                                            'shared-kernel',
                                             'infrastructure',
                                             'types'
                                         ]

@@ -54,7 +54,8 @@ flowchart LR
     class C,S,R,M normal;
 ```
 
-**The arrow points inward only.** `domain/` may not import:
+**The arrow points inward only.** The one thing outside itself `domain/` may import is
+`@shared-kernel/*` (`Money`): that tier takes npm and `@types` only. `domain/` may not import:
 
 | Forbidden                                  | Why                                               |
 | ------------------------------------------ | ------------------------------------------------- |
@@ -195,7 +196,7 @@ itself (6, 4 and 5 states).
 
 Everywhere else the folder stays optional, and creating an empty one to match a shape is how
 ceremony starts — most modules here don't have one. Modules with a `domain/` folder today: `orders`,
-`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns`, `account` and `example`.
+`cart`, `delivery`, `inventory`, `products`, `webhooks`, `payments`, `feedback`, `returns`, `invoicing`, `account` and `example`.
 
 **`delivery/domain/` is the shortest worked example, and the best argument for the folder.** It is
 a few pure functions in `rates.ts` (`findShippingMethod`, `priceShipping`, `methodFitsWeight`,
@@ -212,13 +213,13 @@ not its business — `OrderStatus` is generated from `openapi.yaml`, so the valu
 moves (`orders/services/status.ts`, `delivery`) and the admin override all read the table, which is
 the whole point of a domain folder: the rule exists once and the callers ask it.
 
-**`orders/domain/money.ts` is the case for a value type in a codebase that is not otherwise doing
+**`shared-kernel/money.ts` is the case for a value type in a codebase that is not otherwise doing
 tactical DDD.** A `Money` is a branded integer count of minor units, so every total is computed in
 whole cents and converted back to a decimal exactly once, at the boundary. `openapi.yaml` still
 types these `number`/`double` and no response shape moves; what moves is that no site outside this
-file holds a rounding rule of its own. It stays inside `orders` because `orders` is the only module
-that does money arithmetic — and because the lint rule below forbids a domain folder from importing
-a shared kernel, which is where a jointly-owned money type would otherwise live.
+file holds a rounding rule of its own. It lives in `src/shared-kernel/` because six modules do money
+arithmetic, and a domain folder may import that tier — the one thing outside itself it may reach, since
+the tier imports only npm and `@types`.
 
 **`inventory/domain/transitions.ts` is the other kind of case: the folder holding the model
 itself.** It is one table (`counterDeltaFor`) mapping each of the seven stock movement reasons to the
@@ -322,22 +323,22 @@ one model and one language stop being valid_, not by where you put files.
 behind it, not a claim about intent. See [Strategic DDD](./strategic-ddd.md) for what each one
 enforces and what it refuses.
 
-| Concept                | Where                                                                                     |
-| ---------------------- | ----------------------------------------------------------------------------------------- |
-| Bounded context        | one folder per module; `rm -rf` deletes the domain                                        |
-| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one |
-| Context map            | the docblock on each `module.ts`, beside the imports it describes                         |
-| Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                   |
-| Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project |
-| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                  |
-| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`                                   |
+| Concept                | Where                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Bounded context        | one folder per module; `rm -rf` deletes the domain                                                                              |
+| Published language     | the module barrel, `index.ts` — lint forbids reaching past it, every module publishes one                                       |
+| Context map            | the docblock on each `module.ts`, beside the imports it describes                                                               |
+| Ubiquitous language    | the code's own identifiers, per context — see [Glossary](./glossary.md)                                                         |
+| Subdomain distillation | the table in [Strategic DDD](./strategic-ddd.md) §4 — a judgement, re-decided per project                                       |
+| Domain events          | `kernel/events.ts` — `products` emits, `cart` subscribes                                                                        |
+| Domain service         | `orders/domain/totals.ts`, `orders/domain/lifecycle.ts`, `returns/domain/refund-amount.ts`, `invoicing/domain/credit-shares.ts` |
 
 **Tactical DDD — absent, deliberately:**
 
 | Concept                             | Today                                                                   |
 | ----------------------------------- | ----------------------------------------------------------------------- |
 | Entity                              | none — a Mongoose document is the model                                 |
-| Value object                        | `Money` only — `orders/domain/money.ts`, internal to the arithmetic     |
+| Value object                        | `Money` only — `shared-kernel/money.ts`, internal to the arithmetic     |
 | Aggregate root                      | implicit only                                                           |
 | Repository returning domain objects | no — returns `OrderDocument`                                            |
 | Invariants at construction          | no — Mongoose schema validators, plus the lifecycle table on the writes |

@@ -15,10 +15,10 @@ import {
     type ResponseReject
 } from '@infrastructure/http/response';
 import { rejectDatabaseEnvelope } from '@infrastructure/http/errors';
+import { toMinorUnits } from '@shared-kernel/money';
 import {
     orderService,
     orderTotal,
-    toMinorUnits,
     placeOrder,
     sendOrderPlacedEmail,
     type OrderDocument

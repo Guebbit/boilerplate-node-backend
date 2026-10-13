@@ -5,6 +5,7 @@
  * by whichever cancel or return takes the LAST unit" is testable without a database.
  */
 
+import { addMoney, toDecimalAmount, toMinorUnits, NO_MONEY } from '@shared-kernel/money';
 import { BACK_RETURN_STATUSES } from './lifecycle';
 import type { ReturnKind, ReturnStatus } from './lifecycle';
 import { wireLines } from './quantities';
@@ -40,14 +41,19 @@ const isSettled = (returned: AccountedReturn): boolean =>
  * made knows whether it takes the last unit and how much delivery is still owed.
  *
  * @param returns - every return on the order EXCEPT the one being settled now
+ * @param currency - the order's currency; the delivery is summed in its minor units, not as floats
  */
-export const accountsOf = (returns: readonly AccountedReturn[]): OrderAccounts => {
+export const accountsOf = (
+    returns: readonly AccountedReturn[],
+    currency: string
+): OrderAccounts => {
     const settled = returns.filter((one) => isSettled(one));
+    let shippingRefunded = NO_MONEY;
+    for (const { shippingRefund } of settled)
+        shippingRefunded = addMoney(shippingRefunded, toMinorUnits(shippingRefund ?? 0, currency));
+
     return {
         accountedFor: settled.flatMap(({ lines }) => wireLines(lines)),
-        shippingRefunded: settled.reduce(
-            (total, { shippingRefund }) => total + (shippingRefund ?? 0),
-            0
-        )
+        shippingRefunded: toDecimalAmount(shippingRefunded, currency)
     };
 };

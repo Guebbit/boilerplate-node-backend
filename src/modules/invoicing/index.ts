@@ -10,6 +10,8 @@
 
 export * from './services';
 
+export * from './domain';
+
 export * from './emails';
 
 export type * from './model';

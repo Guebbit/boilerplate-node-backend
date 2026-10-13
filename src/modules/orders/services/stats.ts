@@ -16,7 +16,7 @@ import {
     numberOf,
     type ReportWindow
 } from '@infrastructure/persistence/report';
-import { toMinorUnits, type Money } from '../domain';
+import { toMinorUnits, type Money } from '@shared-kernel/money';
 import { orderRepository } from '../repository';
 
 /** Orders paid in a window: a `$match` on `paidAt`, live orders only. */
