@@ -39,13 +39,15 @@ const auditedFilter = (filters: SearchOrdersRequest): Record<string, unknown> =>
  * `csv-stringify`: a Transform that takes row objects and writes CSV.
  * https://csv.js.org/stringify/options/
  *   header:          write the column names as the first line
+ *   bom:             start with a UTF-8 byte-order mark, so Excel reads accents as UTF-8 and not as
+ *                    the machine's code page
  *   columns:         which keys, in which order; the key is also the header text
  *   escape_formulas: prefix a cell starting with `=`, `+`, `-`, `@`, tab or CR with `'`, so a
  *                    spreadsheet reads it as text (OWASP CSV Injection, ASVS 1.2.10). Does not
  *                    cover `\0` or the full-width `＝＋－＠`: documented, not handled.
  */
 const orderCsvWriter = () =>
-    stringify({ header: true, columns: [...ORDER_CSV_COLUMNS], escape_formulas: true });
+    stringify({ header: true, bom: true, columns: [...ORDER_CSV_COLUMNS], escape_formulas: true });
 
 /** An opened export: pipe `source` through `csv` into the response. */
 export interface OrderExport {

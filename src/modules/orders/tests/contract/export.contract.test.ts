@@ -37,6 +37,14 @@ describe('GET /orders/export', () => {
         expect(response.text.trim().split('\n')).toHaveLength(2);
     });
 
+    it('starts with a UTF-8 byte-order mark, so Excel reads accents as UTF-8', async () => {
+        const { bearer } = await authenticateAs('admin');
+
+        const response = await api().get('/orders/export').set('Authorization', bearer).buffer();
+
+        expect(response.text.codePointAt(0)).toBe(0xfe_ff);
+    });
+
     it('answers a manager, who holds the key too', async () => {
         const { bearer } = await authenticateAsRole('manager');
 
