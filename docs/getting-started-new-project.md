@@ -61,10 +61,9 @@ generated from each module's own `module.yaml`, so it is never behind.
 `npm run measure:demo-strip` is the checked version of that claim: on every push and PR, CI copies
 the repo to a scratch directory, applies a removal recipe (`--recipe shop` runs the real
 `demo:remove`, the `example` module included; `--recipe locales` deletes the optional locales module), then runs `regenerate`,
-`ts-check`, the cross-cutting suite and `docs:build` against what's left. It reports on its own
-squares (`demo-strip-measure` in `.github/workflows/ci.yml`) without blocking the merge gate —
-deliberately, until it has stayed green long enough to be promoted into the merge gate. It is the
-checked form of the promise: both recipes currently leave a repo that regenerates, type-checks and
+`ts-check`, the cross-cutting suite and `docs:build` against what's left. It runs on its own
+squares (`demo-strip-measure` in `.github/workflows/ci.yml`), and the merge gate waits for both. It
+is the checked form of the promise: both recipes leave a repo that regenerates, type-checks and
 passes the cross-cutting suite.
 
 ## Removing it

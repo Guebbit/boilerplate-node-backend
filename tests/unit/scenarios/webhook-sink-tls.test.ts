@@ -3,8 +3,8 @@
  * `scenarios/support/tls/` — the demo webhook sink's committed test CA and leaf.
  *
  * Asserted two ways: the chain itself (who signed it, what it covers, how long it lasts), and a
- * real handshake — a server on the leaf, a client trusting only the CA, the way
- * `NODE_EXTRA_CA_CERTS` makes the demo backend trust it. The remake recipe is
+ * real handshake — a server on the leaf, a client that does not trust the CA, which must refuse.
+ * The trusting side is `webhook-sink.test.ts`. The remake recipe is
  * `scenarios/tools/generate-webhook-sink-tls.ts`.
  */
 import { execFile } from 'node:child_process';
@@ -18,11 +18,8 @@ import { X509Certificate } from 'node:crypto';
 /** Where the committed fixtures live. */
 const TLS_DIRECTORY = path.join(__dirname, '../../../scenarios/support/tls');
 
-/** The CA's path, as `NODE_EXTRA_CA_CERTS` is given it. */
-const CA_PATH = path.join(TLS_DIRECTORY, 'webhook-sink-ca.pem');
-
 /** The three committed files, read once. */
-const ca = readFileSync(CA_PATH);
+const ca = readFileSync(path.join(TLS_DIRECTORY, 'webhook-sink-ca.pem'));
 const cert = readFileSync(path.join(TLS_DIRECTORY, 'webhook-sink-cert.pem'));
 const key = readFileSync(path.join(TLS_DIRECTORY, 'webhook-sink-key.pem'));
 
@@ -57,16 +54,14 @@ const stopSink = (server: Server): Promise<void> =>
     });
 
 /**
- * Run `fetch(url)` in a fresh Node process, so the process-start-only `NODE_EXTRA_CA_CERTS` is
- * honoured exactly as it is for the demo backend.
+ * Run `fetch(url)` in a fresh Node process, so nothing this test file trusts leaks into it.
  *
  * @param url - the sink to call
- * @param environment - extra environment for the child
  * @returns the status it saw, or `refused:<code>` when TLS failed
  */
-const callFromFreshProcess = (url: string, environment: Record<string, string>): Promise<string> =>
+const callFromFreshProcess = (url: string): Promise<string> =>
     promisify(execFile)(process.execPath, ['-e', CLIENT_SCRIPT, url], {
-        env: { ...process.env, NODE_EXTRA_CA_CERTS: '', ...environment }
+        env: { ...process.env, NODE_EXTRA_CA_CERTS: '' }
     }).then(({ stdout }) => stdout);
 
 describe('the demo webhook sink fixtures', () => {
@@ -95,13 +90,10 @@ describe('the demo webhook sink fixtures', () => {
         );
     });
 
-    it('is trusted through NODE_EXTRA_CA_CERTS, and refused without it', async () => {
+    it('is refused by a client that does not trust the test CA', async () => {
         const { server, url } = await startSink();
         try {
-            await expect(callFromFreshProcess(url, { NODE_EXTRA_CA_CERTS: CA_PATH })).resolves.toBe(
-                '200'
-            );
-            await expect(callFromFreshProcess(url, {})).resolves.toMatch(/^refused:/);
+            await expect(callFromFreshProcess(url)).resolves.toMatch(/^refused:/);
         } finally {
             await stopSink(server);
         }

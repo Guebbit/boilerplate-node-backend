@@ -175,7 +175,7 @@ anything and says so; `scenario:apply:reset` is how you rebuild on purpose.
 | `scenario:apply:reset` | empty the database and the rate-limit counters, then build it                                 | [Demo profile](./demo-profile.md)                 |
 | `db:cache:clear`       | drop every cached response under the app's prefix                                             | [Redis cache](./redis-cache.md)                   |
 | `scenario:images`      | regenerate the seed thumbnails                                                                | [Demo profile](./demo-profile.md)                 |
-| `scenario:tls`         | regenerate the webhook sink's TLS material (`dev` trusts it via `NODE_EXTRA_CA_CERTS`)        | [Demo profile](./demo-profile.md)                 |
+| `scenario:tls`         | regenerate the webhook sink's TLS material (the dev preload trusts it)                        | [Demo profile](./demo-profile.md)                 |
 | `db:bootstrap`         | `db:sync` followed by `scenario:apply`                                                        | runs on container boot                            |
 | `access:bootstrap`     | upsert the shop row; no accounts, no demo data                                                | [Deployment hardening](./deployment-hardening.md) |
 | `deploy:setup`         | `db:sync` followed by `access:bootstrap` — a deployment's first run                           | [Deployment hardening](./deployment-hardening.md) |

@@ -5,7 +5,7 @@
  *
  * Writes three files into `scenarios/support/tls/`:
  *
- *   webhook-sink-ca.pem    the test CA's certificate (what `NODE_EXTRA_CA_CERTS` points at)
+ *   webhook-sink-ca.pem    the test CA's certificate (what the dev preload trusts)
  *   webhook-sink-cert.pem  the sink's leaf certificate, signed by that CA
  *   webhook-sink-key.pem   the leaf's private key (public on purpose, see below)
  *

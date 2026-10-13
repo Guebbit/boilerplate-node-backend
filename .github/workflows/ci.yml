@@ -27,7 +27,7 @@ name: CI
 #                     `backup-drill` — the backup image backs up a real Mongo and the restore drill restores it
 #   - pair            frontend-e2e — the paired frontend's Cypress suite against this backend
 #   - supply chain    audit
-#   - adoption        demo-strip-measure — report-only, like audit
+#   - adoption        demo-strip-measure — the removal recipes still pass on a scratch copy
 #
 # The slow and hunting suites live elsewhere on a schedule: mutation.yml, fuzz.yml (the deep pass —
 # the shallow one is in `complete`), schemathesis.yml and order-random.yml.
@@ -907,11 +907,8 @@ jobs:
         # `locales` deletes the optional locales module — then runs regenerate, ts-check, the
         # cross-cutting suite and docs:build against what is left.
         #
-        # Deliberately NOT in the `ci` gate's `needs:` below, the same reasoning as `audit`: it is
-        # not green yet (the shop recipe still leaves residue tests that
-        # `demo:remove` lists for a human), and turning it red would block every PR on work this
-        # step only measures. It still runs on every push/PR and shows red on its own square — a
-        # punch list, not a gate. Promote it into `needs:` once both recipes are green.
+        # In the `ci` gate's `needs:` below: a change that makes a module harder to remove fails
+        # the merge instead of waiting for someone to look.
         strategy:
             fail-fast: false
             matrix:
@@ -963,8 +960,9 @@ jobs:
             - test-contract-cookie
             - container-gate
             - frontend-e2e
-            # `boot`, `audit` and `demo-strip-measure` are deliberately excluded — see their
-            # own comments above.
+            - demo-strip-measure
+            # `boot`, `backup-drill` and `audit` are deliberately excluded — see their own
+            # comments above.
         runs-on: ubuntu-latest
         timeout-minutes: 5
         permissions:
