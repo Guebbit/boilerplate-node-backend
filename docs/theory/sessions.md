@@ -12,10 +12,10 @@ the login code, from the frontend to the permission guards, behaves the same eit
 
 ## Which one to pick
 
-| Mode            | Pick it when                                                                                                 |
-| --------------- | ------------------------------------------------------------------------------------------------------------ |
-| `jwt` (default) | another service must verify a login without reading our database, or you want today's audited code untouched |
-| `cookie`        | the usual case: one site and its own single-page app. Fewer moving parts, and logout is a row delete         |
+| Mode            | Pick it when                                                                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `jwt` (default) | another service must verify a login without reading our database and you trust it with the signing secret (with HS256, whoever verifies can also mint), or you want today's audited code untouched |
+| `cookie`        | the usual case: one site and its own single-page app. Fewer moving parts, and logout is a row delete                                                                                               |
 
 Neither is the "secure" one. Both are standard patterns with a documented threat model, and each
 defends against what the other leaves open (see [what each defends against](#what-each-defends-against)).
@@ -109,13 +109,13 @@ Re-proving replaces the session in both modes: a new token pair, or a new id for
 
 ## What each defends against
 
-| Threat                              | `jwt`                                                                                                                  | `cookie`                                                                                          |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| A script reads the credential (XSS) | the access token is in memory, readable for up to ten minutes; the refresh cookie is not                               | nothing is readable: the id is HttpOnly                                                           |
-| A stolen credential is replayed     | a refresh token that was already swapped is detected, and every device is signed out                                   | a stolen id works until the owner ends that session, signs out everywhere or changes the password |
-| Cross-site request forgery          | most routes take a header, so there is little to forge; the few that take the cookie check the origin                  | every write the cookie authenticates checks the origin                                            |
-| Logging out                         | the refresh row goes at once; an access token already issued lives out its ten minutes, unless the session epoch moved | the row goes at once, and so does the access                                                      |
-| Another service must verify a login | possible with the access token's signature                                                                             | not possible: only this API can read the row                                                      |
+| Threat                              | `jwt`                                                                                                                                      | `cookie`                                                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| A script reads the credential (XSS) | the access token is in memory, readable for up to ten minutes; the refresh cookie is not                                                   | nothing is readable: the id is HttpOnly                                                           |
+| A stolen credential is replayed     | a refresh token that was already swapped is detected, and every device is signed out                                                       | a stolen id works until the owner ends that session, signs out everywhere or changes the password |
+| Cross-site request forgery          | most routes take a header, so there is little to forge; the few that take the cookie check the origin                                      | every write the cookie authenticates checks the origin                                            |
+| Logging out                         | the refresh row goes at once; an access token already issued lives out its ten minutes, unless the session epoch moved                     | the row goes at once, and so does the access                                                      |
+| Another service must verify a login | possible with the access token's signature, but a verifier holds the secret and so can also mint (HS256); asymmetric keys would avoid that | not possible: only this API can read the row                                                      |
 
 Both modes share the **session epoch**: logging out everywhere, a password reset and an undone email
 change move one timestamp on the account, and every session whose proof is older than it is refused.
