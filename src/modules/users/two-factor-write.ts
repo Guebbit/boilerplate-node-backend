@@ -164,6 +164,17 @@ export const planTwoFactorWrite = (
 };
 
 /**
+ * Mark one entry's assigned fields as already written, so the next plan does not send them again.
+ *
+ * @param entry - the subdocument whose fields were just written by another door
+ */
+export const markEntryWritten = (entry: TwoFactorMethodRecord): void => {
+    const unmark: unknown = Reflect.get(entry, 'unmarkModified');
+    if (typeof unmark === 'function')
+        for (const field of modifiedFieldsOf(entry)) Reflect.apply(unmark, entry, [field]);
+};
+
+/**
  * Mark a loaded copy as written, so its next write plans from here: the paths just sent are no
  * longer modified, and the entries it created are no longer new.
  *
@@ -172,9 +183,7 @@ export const planTwoFactorWrite = (
 export const settleTwoFactorWrite = (user: UserDocument): void => {
     for (const path of user.modifiedPaths()) user.unmarkModified(path);
     for (const entry of user.twoFactorMethods) {
-        const unmark: unknown = Reflect.get(entry, 'unmarkModified');
-        if (typeof unmark === 'function')
-            for (const field of modifiedFieldsOf(entry)) Reflect.apply(unmark, entry, [field]);
+        markEntryWritten(entry);
         Reflect.set(entry, '$isNew', false);
     }
 };

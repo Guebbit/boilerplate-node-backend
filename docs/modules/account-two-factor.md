@@ -128,8 +128,19 @@ flowchart LR
 - **Not an edit.** The update runs with `timestamps: false`: it moves neither `updatedAt` nor the
   `ETag` an admin editor holds, like the other credential bookkeeping writes.
 
-A delivered code's `codeAttempts` is still read-then-write; what bounds guessing is the
-per-account reservation above, not that counter.
+A mailed code is checked by a pure function (`checkDeliveredCode`: none, expired, match, miss) and
+paid for by a conditional write, never a read-modify-write on the loaded copy:
+
+- **Spend.** `spendDeliveredCode` unsets the code only while the SAME digest is still stored,
+  unexpired and under its attempt ceiling. Of two requests carrying one code, one matches.
+- **Miss.** `recordDeliveredMiss` `$inc`s the counter, then burns the code if the STORED counter
+  reached the ceiling. Parallel wrong guesses are each counted; a right code arriving after the
+  ceiling finds the spend filter closed.
+- **Step-up code.** `reauthCode` rides the same two doors (slot `reauth`), and its arming is a
+  `timestamps: false` write, so sending a code is no edit of the account and moves no `ETag`.
+
+The per-account reservation above still bounds guessing across codes; these writes make the
+per-code ceiling real.
 
 ## The endpoint surface, and what guards each one
 

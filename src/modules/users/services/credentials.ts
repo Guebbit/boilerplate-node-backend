@@ -4,9 +4,27 @@
  */
 
 import { Error as MongooseError, type ClientSession } from 'mongoose';
-import type { MfaReservation, UserDocument } from '../model';
+import type {
+    DeliveredCodeSlot,
+    MfaReservation,
+    TwoFactorMethodRecord,
+    UserDocument
+} from '../model';
 import { userRepository } from '../repository';
-import { isEmptyWrite, planTwoFactorWrite, settleTwoFactorWrite } from '../two-factor-write';
+import {
+    isEmptyWrite,
+    markEntryWritten,
+    planTwoFactorWrite,
+    settleTwoFactorWrite
+} from '../two-factor-write';
+
+/** Forget the delivered code on a loaded entry — the copy of what the spend just did in the database. */
+const clearEntryCode = (entry: TwoFactorMethodRecord): void => {
+    entry.codeHash = undefined;
+    entry.codeExpiresAt = undefined;
+    entry.codeSentAt = undefined;
+    entry.codeAttempts = undefined;
+};
 
 /**
  * Set an account's password — `account/services/password.ts`'s `passwordChange` is the only
@@ -136,14 +154,75 @@ export const persistTwoFactorMethods = (
 };
 
 /**
- * Persist the step-up code `account/services/reauth.ts` armed, spent or burned on the loaded
- * document. The mutation stays `account`'s; this only writes it — same split as
- * {@link persistTwoFactorMethods}.
+ * Write the step-up code `account/services/reauth.ts` just armed on the loaded document. The
+ * arming stays `account`'s; this only stores it, without moving `updatedAt` or `editRevision`.
+ *
+ * @param user - the account, whose `reauthCode` carries the new code
+ * @throws {MongooseError.DocumentNotFoundError} when the account no longer exists
  */
-export const persistReauthCode = (user: UserDocument): Promise<UserDocument> => {
-    user.markModified('reauthCode');
-    return userRepository.save(user);
+export const armReauthCode = (user: UserDocument): Promise<void> => {
+    const { codeHash, codeExpiresAt, codeSentAt, codeAttempts } = user.reauthCode ?? {};
+    return userRepository
+        .armReauthCode(user.id, { codeHash, codeExpiresAt, codeSentAt, codeAttempts })
+        .then((found) => {
+            if (!found) throw new MongooseError.DocumentNotFoundError(user.id);
+            user.unmarkModified('reauthCode');
+        });
 };
+
+/**
+ * Bring a loaded copy in line with a delivered code that was just spent, and leave it unmodified
+ * so the request's later 2FA write does not send the stale fields back.
+ */
+const mirrorSpentCode = (user: UserDocument, slot: DeliveredCodeSlot): void => {
+    if (slot.kind === 'reauth') {
+        user.reauthCode = undefined;
+        user.unmarkModified('reauthCode');
+        return;
+    }
+    const entry = user.twoFactorMethods.find((candidate) => candidate.method === slot.method);
+    if (!entry) return;
+    clearEntryCode(entry);
+    markEntryWritten(entry);
+};
+
+/**
+ * Spend the delivered code in `slot`, atomically: `false` means a parallel request already did, or
+ * the code expired, was replaced or ran out of attempts since this copy was loaded.
+ *
+ * @param user - the account, carrying its credential fields
+ * @param slot - where the code lives
+ * @param hash - the stored digest the caller matched
+ * @param maxAttempts - the ceiling on wrong guesses
+ * @param now - the clock the expiry is judged against
+ */
+export const spendDeliveredCode = (
+    user: UserDocument,
+    slot: DeliveredCodeSlot,
+    hash: string,
+    maxAttempts: number,
+    now: Date = new Date()
+): Promise<boolean> =>
+    userRepository.spendDeliveredCode(user.id, slot, hash, now, maxAttempts).then((spent) => {
+        if (spent) mirrorSpentCode(user, slot);
+        return spent;
+    });
+
+/**
+ * Count one wrong guess against the code `hash` in `slot`; the code is burned once the stored
+ * counter reaches `maxAttempts`. The loaded copy is left as it was.
+ *
+ * @param user - the account
+ * @param slot - where the code lives
+ * @param hash - the code in flight the guess was made against
+ * @param maxAttempts - the ceiling on wrong guesses
+ */
+export const recordDeliveredMiss = (
+    user: UserDocument,
+    slot: DeliveredCodeSlot,
+    hash: string,
+    maxAttempts: number
+): Promise<void> => userRepository.recordDeliveredMiss(user.id, slot, hash, maxAttempts);
 
 /**
  * Reserve one wrong-code attempt against the account's armed 2FA, before any code is compared.

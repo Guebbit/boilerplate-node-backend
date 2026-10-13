@@ -37,9 +37,9 @@ import {
     DELIVERED_CODE_RESEND_SECONDS,
     DELIVERED_CODE_TTL_MS,
     armDeliveredCode,
-    consumeDeliveredCode,
     generateDeliveredCode,
-    twoFactorMethod
+    twoFactorMethod,
+    verifyDeliveredCode
 } from '../two-factor';
 import { maskEmail } from '../two-factor/methods/email';
 import { sendAccountMail } from './mail';
@@ -137,7 +137,7 @@ const deliverCode = (
         Math.round(DELIVERED_CODE_TTL_MS / 60_000)
     );
     return sendAccountMail(user.email, mail)
-        .then(() => userService.persistReauthCode(user))
+        .then(() => userService.armReauthCode(user))
         .then(() =>
             generateSuccess({
                 method: 'email',
@@ -186,17 +186,11 @@ const passwordMatches = (user: UserDocument, password: string): Promise<boolean>
     user.password ? verifyPassword(password, user.password) : Promise.resolve(false);
 
 /**
- * Check a typed code against the one in flight. A wrong guess spends an attempt, so the entry is
- * persisted on a miss as well as on a hit: dropping that write is how an attempt ceiling quietly
- * becomes no ceiling.
+ * Check a typed code against the one in flight. A wrong guess is counted and a right one spent by
+ * conditional writes, so parallel requests can neither spend one code twice nor outrun the ceiling.
  */
-const codeMatches = (user: UserDocument, code: string): Promise<boolean> => {
-    const slot = user.reauthCode;
-    if (!slot) return Promise.resolve(false);
-
-    const accepted = consumeDeliveredCode(slot, code);
-    return userService.persistReauthCode(user).then(() => accepted);
-};
+const codeMatches = (user: UserDocument, code: string): Promise<boolean> =>
+    verifyDeliveredCode(user, { kind: 'reauth' }, user.reauthCode, code);
 
 /**
  * Prove whichever method the body names. Refuses a method the account does not have before
