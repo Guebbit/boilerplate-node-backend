@@ -91,7 +91,7 @@ export const SHARED_FILES: readonly SharedFile[] = [
      */
     { backend: 'shared/authorization-keys.yaml', frontend: 'contracts/authorization-keys.yaml' },
     /*
-     * The demo webhook sink's TLS pair. The backend trusts the CA (`NODE_EXTRA_CA_CERTS`), the
+     * The demo webhook sink's TLS pair. The backend trusts the CA (the dev preload), the
      * frontend's Cypress sink serves the leaf and its key: a fork between them fails every demo
      * delivery at the handshake, and nothing in either suite would say why.
      */

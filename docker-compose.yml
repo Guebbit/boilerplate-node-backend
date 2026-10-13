@@ -46,9 +46,6 @@ services:
             # "database" service, or NODE_DB_URI when set. Do not redeclare it here — an entry in
             # this block shadows `.env` and makes an external URI impossible to set without editing compose.
             NODE_ENV: 'development' # Node environment (production or development)
-            # Trusts the demo webhook sink's test CA, so a delivery to `webhook-tester-tls` verifies.
-            # Read once at process start (hence here, not `.env`); this service is development only.
-            NODE_EXTRA_CA_CERTS: '/app/scenarios/support/tls/webhook-sink-ca.pem'
             NODE_REDIS_URL: 'redis://redis:6379'
             # The `limits` instance: rate-limit counters and single-use claims, never evicted.
             NODE_RATE_LIMIT_REDIS_URL: 'redis://limits:6379'
@@ -668,8 +665,8 @@ services:
     # (`^https://` in the contract), so the sink is reached through this proxy and never directly.
     #
     # Serves the committed demo leaf certificate (`scenarios/support/tls/`), valid for 127.0.0.1
-    # and this service's own name. The backend trusts it through `NODE_EXTRA_CA_CERTS`, set by the
-    # `dev`, `demo` and `e2e:serve` scripts and by the `app` service above. Nothing else trusts it.
+    # and this service's own name. The dev preload trusts it
+    # (`scenarios/support/doubles/webhook-sink.ts`) whenever a sink URL is set. Nothing else trusts it.
     #
     # Remake and trust recipe: docs/modules/webhooks.md#https-in-the-demo
     # https://caddyserver.com/docs/caddyfile/directives/reverse_proxy

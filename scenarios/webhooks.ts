@@ -13,8 +13,8 @@
  * because the dev preload registers the sink's origin with `@infrastructure/adapters/ssrf-guard`
  * (`scenarios/support/doubles/webhook-sink.ts`), which lets THIS ONE origin through without a
  * public address — the sink is on loopback, which the guard refuses for everyone else. The sink's
- * certificate is the test CA's (`scenarios/support/tls/`), trusted by the backend through
- * `NODE_EXTRA_CA_CERTS`.
+ * certificate is the test CA's (`scenarios/support/tls/`), trusted by the dev preload
+ * (`scenarios/support/doubles/webhook-sink.ts`).
  *
  * A fixed session id, not a generated one: `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` means a
  * POST to `/<any-uuid>` creates that session on arrival, so this subscription is watchable without
