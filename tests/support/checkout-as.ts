@@ -5,7 +5,7 @@
  * check goes through here instead of spelling the body out each time.
  */
 
-import { toMinorUnits } from '@modules/orders';
+import { toMinorUnits } from '@shared-kernel/money';
 import { api } from '@tests/http';
 
 /** What a client's cart screen would show as the total, in the shape the checkout request names it. */

@@ -1,6 +1,6 @@
 /**
  * @module
- * Property-based tests — `src/modules/orders/domain/money.ts`. `Money` claims that no monetary
+ * Property-based tests — `src/shared-kernel/money.ts`. `Money` claims that no monetary
  * arithmetic here can produce `NaN`, `Infinity` or a fraction of a MINOR UNIT, for EVERY input —
  * so the arbitraries are hostile rather than realistic. Seeded, so a failure reproduces; any
  * counterexample found gets written back as an ordinary `it()`. Most cases price in EUR (2
@@ -21,7 +21,7 @@ import {
     toMinorUnits,
     wholeCount,
     type Money
-} from '../../domain/money';
+} from '@shared-kernel/money';
 
 /** A literal minor-unit count, branded — `Money` is a brand the module itself never exposes a
  * bare constructor for; these are hand-verified integers, not values a real caller could forge. */

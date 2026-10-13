@@ -256,7 +256,7 @@ sequenceDiagram
   claimed: the order's hold was `committed` at payment and stays that way.
 - **The amount** is the returned lines at the price the order froze, plus refundable delivery, less
   an optional handling deduction (Art. 14(2)) staff enter at receipt. It is fixed then and shown as
-  `refundAmount`. `src/modules/returns/services/refund-amount.ts` is pure integer arithmetic.
+  `refundAmount`. `src/modules/returns/domain/refund-amount.ts` is pure integer arithmetic.
 - **Delivery is refunded by whichever cancel or return takes the _last unit_ of the order** — every
   unit then cancelled or back, counted against ORDERED quantity — and never twice (see
   [below](#the-delivery-across-several-cancels-and-returns)). For a return that closes the order it is capped at the cheapest standard delivery the shop offers, so a paid

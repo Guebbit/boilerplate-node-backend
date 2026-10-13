@@ -226,21 +226,28 @@ describe('takesLastUnit', () => {
 
 describe('accountsOf', () => {
     it('counts a cancellation and a return whose goods are back, and not one still on its way', () => {
-        const accounts = accountsOf([
-            {
-                kind: 'cancellation',
-                status: 'closed',
-                lines: [{ productId: id('a'), quantity: 1 }],
-                shippingRefund: 4
-            },
-            {
-                kind: 'return',
-                status: 'received',
-                lines: [{ productId: id('b'), quantity: 1 }]
-            },
-            { kind: 'return', status: 'approved', lines: [{ productId: id('a'), quantity: 9 }] },
-            { kind: 'return', status: 'declined', lines: [{ productId: id('a'), quantity: 9 }] }
-        ]);
+        const accounts = accountsOf(
+            [
+                {
+                    kind: 'cancellation',
+                    status: 'closed',
+                    lines: [{ productId: id('a'), quantity: 1 }],
+                    shippingRefund: 4
+                },
+                {
+                    kind: 'return',
+                    status: 'received',
+                    lines: [{ productId: id('b'), quantity: 1 }]
+                },
+                {
+                    kind: 'return',
+                    status: 'approved',
+                    lines: [{ productId: id('a'), quantity: 9 }]
+                },
+                { kind: 'return', status: 'declined', lines: [{ productId: id('a'), quantity: 9 }] }
+            ],
+            'EUR'
+        );
 
         expect(accounts.accountedFor).toEqual([
             { productId: 'a', quantity: 1 },
@@ -249,17 +256,31 @@ describe('accountsOf', () => {
     });
 
     it('sums the delivery already refunded, from the ones that settled', () => {
-        const accounts = accountsOf([
-            { kind: 'cancellation', status: 'closed', lines: [], shippingRefund: 4 },
-            { kind: 'return', status: 'closed', lines: [], shippingRefund: 1.5 },
-            { kind: 'return', status: 'requested', lines: [], shippingRefund: 99 }
-        ]);
+        const accounts = accountsOf(
+            [
+                { kind: 'cancellation', status: 'closed', lines: [], shippingRefund: 4 },
+                { kind: 'return', status: 'closed', lines: [], shippingRefund: 1.5 },
+                { kind: 'return', status: 'requested', lines: [], shippingRefund: 99 }
+            ],
+            'EUR'
+        );
 
         expect(accounts.shippingRefunded).toBe(5.5);
     });
 
+    it('sums in minor units, so thirds of a cent cannot drift', () => {
+        const refunds = [0.1, 0.2].map((shippingRefund) => ({
+            kind: 'return' as const,
+            status: 'closed' as const,
+            lines: [],
+            shippingRefund
+        }));
+
+        expect(accountsOf(refunds, 'EUR').shippingRefunded).toBe(0.3);
+    });
+
     it('is empty for an order with no returns', () => {
-        expect(accountsOf([])).toEqual({ accountedFor: [], shippingRefunded: 0 });
+        expect(accountsOf([], 'EUR')).toEqual({ accountedFor: [], shippingRefunded: 0 });
     });
 
     it('treats the settled statuses as received and closed', () => {

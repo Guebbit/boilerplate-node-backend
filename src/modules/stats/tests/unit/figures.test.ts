@@ -2,7 +2,7 @@
  * The sales formulas on a fixed table. The subject is that net sales takes the reversals off, that
  * shipping and VAT are charged-minus-refunded, and that nothing is divided by zero orders.
  */
-import { toMinorUnits } from '@modules/orders';
+import { toMinorUnits } from '@shared-kernel/money';
 import { addRawFigures, emptyRawFigures, figuresOf, rateOf } from '../../services/figures';
 
 /** Minor units of a EUR amount. */
