@@ -9,11 +9,11 @@
 import '@tests/contract';
 import sharp from 'sharp';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, loginBearer } from '@tests/http';
 import { requestAndDownloadExport } from '@tests/account-export';
 import { emptyFileSandbox } from '@tests/file-sandbox';
 import { MISSING_ID } from '@tests/ids';
-import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser } from '@modules/users/tests/factories';
 import { ExampleStatus } from '@types';
 import { createExample } from '../factories';
 
@@ -67,11 +67,7 @@ const etagOf = (request: PromiseLike<{ headers: Record<string, string> }>): Prom
 /** A signed-in account that holds no membership at all, so no `examples.*` key. */
 const authenticateWithoutRole = async () => {
     const user = await createUser({ email: 'norole@example.com', verifiedAt: new Date() });
-    const login = await api()
-        .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD });
-
-    return `Bearer ${String(login.body.data.token)}`;
+    return loginBearer(user.email);
 };
 
 describe('GET /examples/published/{id}', () => {

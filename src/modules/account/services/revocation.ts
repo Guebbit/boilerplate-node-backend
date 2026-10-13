@@ -1,20 +1,25 @@
 /**
  * @module
- * Ending sessions, in one place. Every "I may be compromised" event moves the account's session
- * epoch (so live ACCESS tokens die too) and deletes its session rows. The epoch is the part that
- * matters, so it rides in the credential's own write (or, for logout-all and the email undo, in its
- * own transaction first); the row deletion is housekeeping. A password change goes further and
- * purges what an attacker could still redeem.
+ * Ending sessions, in one place: {@link revokeFor} acts on a cause from the `REVOCATION` table
+ * (`../domain/revocation.ts`), which says what each cause moves, purges and announces.
  *
- * The caller survives by re-minting its own session in the same response
- * (`../session/session.ts`) — except logout-all, which signs the caller out as well.
- * See docs/modules/account-sessions.md.
+ * The epoch is the part that matters (it kills live ACCESS tokens too). A cause either rides it in
+ * the credential's own write, or {@link revokeFor} moves it in its own transaction. The row and
+ * link deletion that follows is housekeeping.
+ *
+ * See docs/modules/account-sessions.md#revocation.
  */
 
 import { userService } from '@modules/users';
 import { logger } from '@infrastructure/adapters/logger';
 import { announceInTransaction, type OutboxAnnouncement } from '@kernel/outbox';
-import { ACCOUNT_SESSIONS_REVOKED, type SessionsRevokedReason } from '../events';
+import { ACCOUNT_SESSIONS_REVOKED } from '../events';
+import {
+    REVOCATION,
+    announces,
+    type RevocationCause,
+    type SessionsRevokedReason
+} from '../domain/revocation';
 import { sessionRepository } from '../repository';
 import { removeTokens } from './tokens';
 import {
@@ -42,57 +47,9 @@ export const sessionsRevokedAnnouncement = (
 });
 
 /**
- * Move the epoch and write the `account.sessions-revoked` row in ONE transaction, so subscribers
- * hear of it exactly when the sessions died, and a failing subscriber is retried by the relay
- * rather than skipped.
- *
- * @param userId - the account
- * @param reason - why its sessions ended
- */
-export const announceSessionsRevoked = (
-    userId: string,
-    reason: SessionsRevokedReason
-): Promise<void> =>
-    announceInTransaction(
-        // Hands back the id: a `write` that resolves to nothing announces nothing.
-        (session) => userService.bumpSessionEpoch(userId, undefined, session).then(() => userId),
-        (id) => sessionsRevokedAnnouncement(id, reason)
-    ).then(() => undefined);
-
-/**
- * Delete every session row. Housekeeping once the epoch has moved: the epoch already refuses
- * them, so a failure here is logged and not turned into an error for a change that has landed.
- *
- * @param userId - the account
- */
-export const dropSessions = (userId: string): Promise<void> =>
-    sessionRepository
-        .removeAll(userId)
-        .then(() => undefined)
-        .catch((error: unknown) => {
-            logger.warn({
-                message: 'Sessions ended, but deleting their rows failed.',
-                userId,
-                error
-            });
-        });
-
-/**
- * Logout everywhere, or any other wholesale end of sessions that must be announced:
- * {@link announceSessionsRevoked}, then {@link dropSessions}.
- *
- * @param userId - the account
- * @param reason - why its sessions ended
- */
-export const revokeAllSessionsAnnounced = (
-    userId: string,
-    reason: SessionsRevokedReason
-): Promise<void> => announceSessionsRevoked(userId, reason).then(() => dropSessions(userId));
-
-/**
- * The one-time token kinds a password change must kill, listed by name rather than "everything":
- * a kind added later (the email-change undo link) must opt IN to being purged, and the undo token
- * deliberately never does.
+ * The one-time token kinds a cause with `pending` kills, listed by name rather than "everything":
+ * a kind added later must opt IN to being purged, and the email-change undo token deliberately
+ * never does (it is already spent by the time its cause runs).
  */
 const PENDING_TOKEN_TYPES: readonly VerificationTokenType[] = [
     PASSWORD_RESET_TOKEN_TYPE,
@@ -103,14 +60,54 @@ const PENDING_TOKEN_TYPES: readonly VerificationTokenType[] = [
 ];
 
 /**
- * What a changed or reset password purges once the epoch has already moved (in the password's own
- * write): every session, every pending one-time token and every live MFA challenge — a link
- * mailed before the change must not outlive the password it was issued under.
+ * Move the epoch, for a cause that owns it. An announcing cause writes the
+ * `account.sessions-revoked` row in the SAME transaction, so subscribers hear of it exactly when
+ * the sessions died, and a failing subscriber is retried by the relay rather than skipped.
  *
+ * @param cause - why sessions end
  * @param userId - the account
  */
-export const purgeAfterPasswordChange = (userId: string): Promise<void> =>
+const moveEpoch = (cause: RevocationCause, userId: string): Promise<void> => {
+    if (REVOCATION[cause].epoch === 'with-write') return Promise.resolve();
+    if (!announces(cause)) return userService.bumpSessionEpoch(userId);
+
+    return announceInTransaction(
+        // Hands back the id: a `write` that resolves to nothing announces nothing.
+        (session) => userService.bumpSessionEpoch(userId, undefined, session).then(() => userId),
+        (id) => sessionsRevokedAnnouncement(id, cause)
+    ).then(() => undefined);
+};
+
+/**
+ * Delete the session rows, and the pending links when the cause purges them. Housekeeping once the
+ * epoch has moved: it already refuses every old token, so a failure here is logged and not turned
+ * into an error for a change that has landed.
+ *
+ * @param cause - why sessions end
+ * @param userId - the account
+ */
+const settle = (cause: RevocationCause, userId: string): Promise<void> =>
     Promise.all([
         sessionRepository.removeAll(userId),
-        removeTokens(userId, PENDING_TOKEN_TYPES)
-    ]).then(() => undefined);
+        REVOCATION[cause].pending ? removeTokens(userId, PENDING_TOKEN_TYPES) : undefined
+    ])
+        .then(() => undefined)
+        .catch((error: unknown) => {
+            logger.warn({
+                message: 'Sessions ended, but deleting their rows or links failed.',
+                userId,
+                cause,
+                error
+            });
+        });
+
+/**
+ * End the account's sessions for a cause: move the epoch if the cause owns it, then delete the
+ * rows and any pending links. A cause that rides the epoch in its own write (`with-write`) calls
+ * this AFTER that write, for the rest.
+ *
+ * @param cause - why sessions end
+ * @param userId - the account
+ */
+export const revokeFor = (cause: RevocationCause, userId: string): Promise<void> =>
+    moveEpoch(cause, userId).then(() => settle(cause, userId));

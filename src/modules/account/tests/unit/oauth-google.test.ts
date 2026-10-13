@@ -17,11 +17,18 @@ const CLIENT_ID = 'test-google-client-id';
 /** Where Google is told to send the user back — asserted verbatim, not parsed. */
 const REDIRECT_URI = 'https://api.test/account/oauth/google/callback';
 
-/** What Google's redirect back carried. */
-const CALLBACK = { code: 'a-code', state: 'the-state' };
+/**
+ * The callback URL as the controller builds it: the redirect URI plus the query exactly as Google's
+ * redirect carried it — `iss` included, since Google publishes that it sends one.
+ *
+ * @param query - the raw query string, without the `?`
+ */
+const callbackWith = (
+    query = 'code=a-code&state=the-state&iss=https%3A%2F%2Faccounts.google.com'
+) => new URL(`${REDIRECT_URI}?${query}`);
 
 /** What the attempt kept at the start. */
-const EXPECTED = { redirectUri: REDIRECT_URI, state: 'the-state', codeVerifier: 'the-verifier' };
+const EXPECTED = { state: 'the-state', codeVerifier: 'the-verifier' };
 
 /** A key pair to give the test ID tokens a well-formed RS256 signature. */
 let signing: Awaited<ReturnType<typeof generateKeyPair>>;
@@ -78,7 +85,7 @@ const tokenResponse = (idTokenValue: string | undefined) => ({
 });
 
 /** One redemption of the callback every case starts from. */
-const exchange = () => googleOAuthProvider.exchangeCode(CALLBACK, EXPECTED);
+const exchange = () => googleOAuthProvider.exchangeCode(callbackWith(), EXPECTED);
 
 describe('google provider configuration', () => {
     it('is true once both env vars are set', () => {
@@ -142,9 +149,74 @@ describe('googleOAuthProvider.exchangeCode', () => {
         const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
 
         await expect(
-            googleOAuthProvider.exchangeCode({ ...CALLBACK, state: 'forged' }, EXPECTED)
+            googleOAuthProvider.exchangeCode(
+                callbackWith('code=a-code&state=forged&iss=https%3A%2F%2Faccounts.google.com'),
+                EXPECTED
+            )
         ).rejects.toThrow();
         expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a callback that names another issuer, before any request (RFC 9207)', async () => {
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
+
+        await expect(
+            googleOAuthProvider.exchangeCode(
+                callbackWith('code=a-code&state=the-state&iss=https%3A%2F%2Fevil.example'),
+                EXPECTED
+            )
+        ).rejects.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a callback that names no issuer at all, since Google is known to send one', async () => {
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
+
+        await expect(
+            googleOAuthProvider.exchangeCode(callbackWith('code=a-code&state=the-state'), EXPECTED)
+        ).rejects.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a repeated `code`, which only the raw query can show', async () => {
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
+
+        await expect(
+            googleOAuthProvider.exchangeCode(
+                callbackWith(
+                    'code=a-code&code=another&state=the-state&iss=https%3A%2F%2Faccounts.google.com'
+                ),
+                EXPECTED
+            )
+        ).rejects.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('refuses a callback that carries an `error` instead of a code', async () => {
+        const spy = mockGoogle(tokenResponse(await idToken(validClaims())));
+
+        await expect(
+            googleOAuthProvider.exchangeCode(
+                callbackWith(
+                    'error=access_denied&state=the-state&iss=https%3A%2F%2Faccounts.google.com'
+                ),
+                EXPECTED
+            )
+        ).rejects.toThrow();
+        expect(spy).not.toHaveBeenCalled();
+    });
+
+    it('lets the extra parameters Google adds through', async () => {
+        mockGoogle(tokenResponse(await idToken(validClaims())));
+
+        await expect(
+            googleOAuthProvider.exchangeCode(
+                callbackWith(
+                    'code=a-code&state=the-state&iss=https%3A%2F%2Faccounts.google.com&scope=openid+email&authuser=0&prompt=consent'
+                ),
+                EXPECTED
+            )
+        ).resolves.toMatchObject({ providerId: 'google-subject-1' });
     });
 
     it('refuses the bare `accounts.google.com` issuer spelling: only the https form is pinned', async () => {

@@ -29,7 +29,7 @@ import {
 } from '../oauth/state';
 import { createMfaChallengeCookie } from '../oauth/mfa-redirect';
 import {
-    oauthRedirectUri,
+    oauthCallbackUrl,
     oauthFrontendCallbackUrl,
     oauthFrontendMfaCallbackUrl
 } from '../oauth/config';
@@ -131,14 +131,10 @@ export const getOAuthCallback = (request: Request, response: Response) => {
     }
 
     return provider
-        .exchangeCode(
-            { code: query.code, state: String(query.state) },
-            {
-                redirectUri: oauthRedirectUri(provider.name),
-                state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
-                codeVerifier: verifier
-            }
-        )
+        .exchangeCode(oauthCallbackUrl(provider.name, request.originalUrl), {
+            state: String(cookieOf(request, OAUTH_STATE_COOKIE)),
+            codeVerifier: verifier
+        })
         .then((identity) => loginOrCreateFromOAuth(provider.name, identity, context))
         .then(({ user, outcome }) => {
             /*

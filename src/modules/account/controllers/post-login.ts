@@ -18,6 +18,7 @@ import { rejectDatabaseError } from '@infrastructure/http/errors';
 import { rejectValidation, refused } from '@infrastructure/http/controller';
 import type { LoginRequest, LoginOutcome } from '@types';
 import { isUnrestrictedCaller } from '../roles';
+import { AMR } from '../domain/session-proof';
 
 /** The "remember me" tiers the contract declares, checked against the enum the cookies use. */
 const rememberSchema = z.object({
@@ -89,17 +90,23 @@ export const postLogin = (
              * `postLoginTwoFactor` is what finishes it.
              */
             if (data.twoFactorEnabledAt) {
-                return twoFactorService.buildLoginChallenge(data, ['pwd']).then((challenge) => {
-                    successResponse<LoginOutcome>(
-                        response,
-                        challenge,
-                        200,
-                        'Two-factor authentication required'
-                    );
-                });
+                return twoFactorService
+                    .buildLoginChallenge(data, [AMR.password])
+                    .then((challenge) => {
+                        successResponse<LoginOutcome>(
+                            response,
+                            challenge,
+                            200,
+                            'Two-factor authentication required'
+                        );
+                    });
             }
 
-            return issueSession(request, response, userId, { remember, transport }).then((issued) =>
+            return issueSession(request, response, userId, {
+                amr: [AMR.password],
+                remember,
+                transport
+            }).then((issued) =>
                 // Read fresh from the membership — the document carries no role of its own.
                 isUnrestrictedCaller(userId).then((unrestricted) => {
                     recordLoginSuccess(request, userId, unrestricted);

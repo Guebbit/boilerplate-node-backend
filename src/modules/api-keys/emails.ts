@@ -8,9 +8,7 @@
 
 import type { EmailContent } from '@infrastructure/adapters/mailer';
 import { translator } from '@infrastructure/i18n';
-
-/** Why every credential a person minted was revoked at once — an `account.sessions-revoked` reason. */
-export type RevocationReason = 'logout-all' | 'password-reset' | 'email-change-undo';
+import type { SessionsRevokedReason } from '@modules/account';
 
 /**
  * Sent to the minter the moment a credential is created: a stolen session that mints a key is
@@ -53,7 +51,7 @@ export const apiKeyMintedEmail = (
  */
 export const apiKeysRevokedEmail = (
     locale: string,
-    reason: RevocationReason,
+    reason: SessionsRevokedReason,
     credentials: readonly string[]
 ): EmailContent => {
     const t = translator(locale);

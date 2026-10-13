@@ -7,11 +7,10 @@
 import { z } from 'zod';
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
-import { logger } from '@infrastructure/adapters/logger';
 import { announceInTransaction } from '@kernel/outbox';
 import { withTransaction } from '@infrastructure/runtime/database';
-import type { SessionsRevokedReason } from '../events';
-import { purgeAfterPasswordChange, sessionsRevokedAnnouncement } from './revocation';
+import { announces, type RevocationCause } from '../domain/revocation';
+import { revokeFor, sessionsRevokedAnnouncement } from './revocation';
 import {
     generateSuccess,
     generateReject,
@@ -65,6 +64,9 @@ export const validatePasswordChange = (
     return validationErrors(parseResult.error);
 };
 
+/** The causes a password write can have: the two that end sessions by changing the credential. */
+type PasswordCause = Extract<RevocationCause, 'password-change' | 'password-reset'>;
+
 /**
  * Change user password with validation, then revoke every refresh token on the account.
  * The funnel both `passwordResetChange` and `passwordChangeWithCurrent` end at, so a future
@@ -84,15 +86,15 @@ export const validatePasswordChange = (
  *   refused password must not leave a half-applied change on the document, and the only place
  *   that can be guaranteed is here, next to the `save`. May return a `Promise` — `markVerified`'s
  *   role promotion is a membership write, not a field mutation, so it cannot be purely synchronous.
- * @param announceAs - when set, the change also announces `account.sessions-revoked` with this
- *   reason, through the outbox, in the write's own transaction
+ * @param cause - which password event this is; a cause that announces also writes
+ *   `account.sessions-revoked` through the outbox, in the write's own transaction
  */
 export const passwordChange = (
     user: UserDocument,
     password = '',
     passwordConfirm = '',
     beforeSave?: (user: UserDocument) => void | Promise<void>,
-    announceAs?: SessionsRevokedReason
+    cause: PasswordCause = 'password-change'
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     const errors = validatePasswordChange(password, passwordConfirm);
 
@@ -103,7 +105,7 @@ export const passwordChange = (
     return assertPasswordNotBreached(password).then((breachErrors) => {
         if (breachErrors.length > 0) return generateReject(422, breachErrors);
 
-        return writePassword(user, password, beforeSave, announceAs);
+        return writePassword(user, password, beforeSave, cause);
     });
 };
 
@@ -127,41 +129,33 @@ const passwordAndEpochWrite =
  * The write half of {@link passwordChange}, for a caller that has already run every check on the
  * password itself — shape, match, breach — and must not run the breach lookup a second time.
  *
- * One transaction holds the new password, the session epoch and, when `announceAs` is given, the
+ * One transaction holds the new password, the session epoch and, when the cause announces, the
  * `account.sessions-revoked` outbox row: the credential cannot change while old sessions stay live,
- * and the event exists exactly when the change does. The token purge that follows is housekeeping
- * (the epoch already refuses every old token), so its failure is logged, not turned into a 500.
+ * and the event exists exactly when the change does. The purge that follows is housekeeping
+ * (the epoch already refuses every old token), so `revokeFor` logs its failure, not a 500.
  *
  * @param user - the account, carrying its credential fields
  * @param password - the new password, already accepted
  * @param beforeSave - a caller's own mutation to ride along in the same write
- * @param announceAs - the reason to announce to subscribers, or nothing for a silent change
+ * @param cause - which password event this is, and so what it announces and purges
  */
 export const writePassword = (
     user: UserDocument,
     password: string,
     beforeSave?: (user: UserDocument) => void | Promise<void>,
-    announceAs?: SessionsRevokedReason
+    cause: PasswordCause = 'password-change'
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
     Promise.resolve(beforeSave?.(user))
         .then(() => {
             const write = passwordAndEpochWrite(user, password);
-            return announceAs
+            return announces(cause)
                 ? announceInTransaction(write, (saved) =>
-                      sessionsRevokedAnnouncement(saved.id, announceAs)
+                      sessionsRevokedAnnouncement(saved.id, cause)
                   )
                 : withTransaction(write);
         })
         .then((savedUser) =>
-            purgeAfterPasswordChange(savedUser.id)
-                .catch((error: unknown) => {
-                    logger.warn({
-                        message: 'Password written, but its token purge failed.',
-                        userId: savedUser.id,
-                        error
-                    });
-                })
-                .then(() => generateSuccess<UserDocument>(savedUser))
+            revokeFor(cause, savedUser.id).then(() => generateSuccess<UserDocument>(savedUser))
         )
         .catch((error: unknown) => rejectDatabaseEnvelope('auth', error));
 

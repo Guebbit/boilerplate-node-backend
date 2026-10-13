@@ -52,8 +52,8 @@ jest.mock('@modules/account/repository', () => {
 import {
     verifyAccessToken,
     verifyRefreshToken,
-    createRefreshToken,
-    createAccessToken
+    createAccessToken,
+    startSession
 } from '@modules/account/session/jwt';
 import { userService } from '@modules/users';
 import { sessionRepository } from '@modules/account/repository';
@@ -95,7 +95,7 @@ const holdingLive = () => {
     mockedUsers.findAuthenticatableById.mockResolvedValue(signedInUser());
 };
 
-/** Lets `createRefreshToken` find its user and store its row. */
+/** Lets `startSession` find its user and store its row. */
 const mintable = () => {
     mockedUsers.findAuthenticatableById.mockResolvedValue(signedInUser());
     mockedUsers.touchLastActive.mockResolvedValue(undefined);
@@ -220,7 +220,7 @@ describe('verifyAccessToken', () => {
     });
 
     /**
-     * `alg: none` and algorithm confusion, at the VERIFY side. `createRefreshToken`'s "pins HS256
+     * `alg: none` and algorithm confusion, at the VERIFY side. `startSession`'s "pins HS256
      * rather than letting the header choose" test above only proves signing pins the algorithm;
      * it says nothing about what `verify` accepts. Built by hand rather than through
      * a signing library, none of which will produce `alg: none`.
@@ -320,7 +320,7 @@ describe('the signing-key ring', () => {
     it('stamps the kid of the key it actually signed with', async () => {
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
 
         expect(decodeProtectedHeader(token).kid).toBe(keyId('refresh-secret'));
     });
@@ -340,7 +340,7 @@ describe('the signing-key ring', () => {
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret,refresh-secret' });
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
 
         expect(decodeProtectedHeader(token).kid).toBe(keyId('new-refresh-secret'));
     });
@@ -360,18 +360,18 @@ describe('the signing-key ring', () => {
         // "A ring of one behaves precisely as today" — the whole point of the migration.
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
         holdingLive();
 
         await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
     });
 });
 
-describe('createRefreshToken', () => {
+describe('startSession', () => {
     it('stores a `jwt` session row holding the digest of the token it returns', async () => {
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
 
         expect(mockedSessions.insert).toHaveBeenCalledTimes(1);
         // Only the digest is stored: the token's value is as good as a password.
@@ -383,7 +383,7 @@ describe('createRefreshToken', () => {
     it('starts a new session family and stamps when the sign-in happened', async () => {
         mintable();
 
-        await createRefreshToken(USER_ID);
+        await startSession(USER_ID, ['pwd']);
 
         const [row] = mockedSessions.insert.mock.calls[0] as [
             { familyId: unknown; startedAt: Date }
@@ -395,7 +395,7 @@ describe('createRefreshToken', () => {
     it('signs the id with the refresh secret, not the access one', async () => {
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
 
         // Verifies against the refresh secret...
         holdingLive();
@@ -409,7 +409,7 @@ describe('createRefreshToken', () => {
         // time is half of the defence; the library's default verification is the other half.
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
 
         expect(decodeProtectedHeader(token).alg).toBe('HS256');
     });
@@ -419,8 +419,8 @@ describe('createRefreshToken', () => {
         // produce byte-identical tokens, and revoking one revokes both.
         mintable();
 
-        const first = await createRefreshToken(USER_ID);
-        const second = await createRefreshToken(USER_ID);
+        const first = await startSession(USER_ID, ['pwd']);
+        const second = await startSession(USER_ID, ['pwd']);
 
         expect(first).not.toBe(second);
         expect((decodeJwt(first) as { jti: string }).jti).not.toBe(
@@ -434,7 +434,7 @@ describe('createRefreshToken', () => {
         // disagree about when a session ends.
         mintable();
 
-        const token = await createRefreshToken(USER_ID, 'long' as never);
+        const token = await startSession(USER_ID, ['pwd'], 'long' as never);
         const { iat, exp } = decodeJwt(token) as { iat: number; exp: number };
         const [row] = mockedSessions.insert.mock.calls[0] as [{ startedAt: Date; expiresAt: Date }];
 
@@ -445,7 +445,7 @@ describe('createRefreshToken', () => {
     it('gives a browser-session login (no tier) the short tier as its server-side limit', async () => {
         mintable();
 
-        const token = await createRefreshToken(USER_ID);
+        const token = await startSession(USER_ID, ['pwd']);
         const { iat, exp } = decodeJwt(token) as { iat: number; exp: number };
         const [row] = mockedSessions.insert.mock.calls[0] as [{ startedAt: Date; expiresAt: Date }];
 
@@ -457,8 +457,8 @@ describe('createRefreshToken', () => {
     it('stamps the ticked tier as a claim, and stamps none for a browser-session login', async () => {
         mintable();
 
-        const remembered = decodeJwt(await createRefreshToken(USER_ID, 'long' as never));
-        const session = decodeJwt(await createRefreshToken(USER_ID));
+        const remembered = decodeJwt(await startSession(USER_ID, ['pwd'], 'long' as never));
+        const session = decodeJwt(await startSession(USER_ID, ['pwd']));
 
         expect(remembered).toMatchObject({ remember: 'long' });
         expect(session).not.toHaveProperty('remember');
@@ -467,7 +467,7 @@ describe('createRefreshToken', () => {
     it('refuses to issue a token for a user that does not exist', async () => {
         mockedUsers.findAuthenticatableById.mockResolvedValue(null);
 
-        await expect(createRefreshToken(USER_ID)).rejects.toThrow('User not found');
+        await expect(startSession(USER_ID, ['pwd'])).rejects.toThrow('User not found');
         expect(mockedSessions.insert).not.toHaveBeenCalled();
     });
 });

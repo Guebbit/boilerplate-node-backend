@@ -12,7 +12,7 @@ import { testCallerContext } from '@tests/callers';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
 import * as auditPort from '@infrastructure/observability/audit';
-import { createRefreshToken, verifyAccessToken } from '@modules/account/session/jwt';
+import { verifyAccessToken, startSession } from '@modules/account/session/jwt';
 import { accountAuditActions } from '../../audit';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { tokenRowsOf, dropSessionOf } from '../factories';
@@ -292,12 +292,12 @@ describe('accountService.passwordChange', () => {
 
 /**
  * A user holding one real, stored refresh token — what the refresh cookie would have carried.
- * `createRefreshToken`'s OWN return value, not a re-read from storage: the stored
+ * `startSession`'s OWN return value, not a re-read from storage: the stored
  * row holds a `hashToken` digest, never the plaintext JWT.
  */
 const issueRefreshToken = async () => {
     const user = await createUser({ email: 'refresh@example.com', username: 'refresher' });
-    return createRefreshToken(user.id);
+    return startSession(user.id, ['pwd']);
 };
 
 /**
@@ -390,8 +390,8 @@ describe('accountService.refreshAccessToken', () => {
         const user = await createUser({ email: 'reuse@example.com' });
         // A second, unrelated live session — this is what proves the revoke is account-wide, not
         // just the one token.
-        const other = await createRefreshToken(user.id);
-        const refreshToken = await createRefreshToken(user.id);
+        const other = await startSession(user.id, ['pwd']);
+        const refreshToken = await startSession(user.id, ['pwd']);
 
         await accountService.refreshAccessToken(refreshToken, testCallerContext);
 

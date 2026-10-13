@@ -63,6 +63,40 @@ most.
 That is the whole of the open-redirect and callback-confusion defence, and it works only because
 `config.ts` is the single place both the start and the callback controller read them from.
 
+## Registering the provider apps {#registering-the-apps}
+
+This boilerplate owns no Google or GitHub app, so a real sign-in needs yours. Per provider:
+
+1. Register an OAuth app (Google: console.cloud.google.com/apis/credentials; GitHub:
+   github.com/settings/developers).
+2. Set its callback URL to `NODE_URL` + `account/oauth/<provider>/callback`: exactly the
+   [server-derived URI](#two-urls-both-server-derived), or the exchange fails.
+3. Put the client id and secret in the provider's two `NODE_OAUTH_*` variables (`.env-example` § C5).
+   A provider is offered only once both are set.
+4. Sign in once with each provider by hand. The tests drive the `fake` provider, so nothing else
+   proves the real console settings.
+
+The callback hands the library that same URL with the request's **raw query string** attached
+(`oauthCallbackUrl`, sliced off `request.originalUrl`), not a rebuilt one. The library then judges
+the whole authorization response: a repeated `code` or `state`, an `error=`, a wrong `state` and a
+foreign `iss` are each refused, and the `redirect_uri` it sends to the token endpoint is that URL
+without the query. A rebuilt query would have hidden all of those, since `request.query` folds a
+repeated parameter into an array.
+
+```mermaid
+sequenceDiagram
+    participant P as provider
+    participant B as browser
+    participant C as callback controller
+    participant L as openid-client
+    P->>B: 302 to the callback, with code, state and (Google) iss
+    B->>C: GET /account/oauth/:provider/callback?code=…&state=…&iss=…
+    C->>C: NODE_URL + route + raw query (never Host or scheme)
+    C->>L: authorizationCodeGrant(that URL, expected state, PKCE verifier)
+    L->>L: one code, state matches, iss matches, no error
+    L->>P: token request, redirect_uri without the query
+```
+
 ## The CSRF handshake
 
 A double-submit cookie, not server-side state: the value is minted and handed to the provider as
@@ -78,8 +112,8 @@ A second cookie, `oauth_verifier`, rides beside it: the **PKCE** verifier (RFC 7
 `state` defeats a forged callback; the verifier defeats a stolen authorization code, since the
 code is redeemable only by whoever holds it. Same lifetime, flags and clearing points. The port's
 `authorizeUrl` takes the challenge and `exchangeCode` the verifier, together with the `state` the
-provider echoed back and the one the cookie held: the library compares them again, so a callback
-with another attempt's `state` is refused before any request leaves.
+cookie held: the library compares it with the one the provider echoed back, so a callback with
+another attempt's `state` is refused before any request leaves.
 
 ## The protocol is `openid-client`'s
 
@@ -98,7 +132,10 @@ Google's ID token comes straight from its token endpoint over TLS, so its **sign
 checked**: OpenID Connect Core 3.1.3.7 step 6 accepts the channel in its place, and it is the same
 trust the `code` and the access token already rest on. Google's issuer is pinned to
 `https://accounts.google.com`; the bare `accounts.google.com` spelling its documentation also
-mentions is refused. GitHub answers a failed exchange with HTTP 200 and an `error` body, which the
+mentions is refused. Google's discovery document says it sends `iss` on the redirect
+(RFC 9207), and the static metadata says so too (`authorization_response_iss_parameter_supported`),
+so a callback with no `iss`, or another one, is refused as well. GitHub sends none and is not asked
+for one. GitHub answers a failed exchange with HTTP 200 and an `error` body, which the
 library reads as the failure it is.
 
 ## What else rides the round trip: `continue` and `locale`

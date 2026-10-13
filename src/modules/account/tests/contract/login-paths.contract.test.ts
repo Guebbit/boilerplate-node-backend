@@ -29,6 +29,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { accountAuditActions } from '../../audit';
 import { authLoginTotal } from '../../metrics';
+import { getSessionMode } from '../../session/config';
 
 /* Replaced, not spied on — a CommonJS namespace import exposes each export as a
  * non-configurable getter, which `jest.spyOn` cannot redefine under every transform this repo
@@ -178,9 +179,13 @@ const oauthPath: LoginPath = {
     successStatus: 302
 };
 
-/** `GET /account/refresh` — the mint-time backstop (`jwt.ts`'s `reissueRotated`), not a fresh login. */
-const refreshPath: LoginPath = {
-    name: 'refresh',
+/**
+ * Continuing a session the account held before it was banned or deleted: in `jwt` mode that is
+ * `POST /account/refresh` (the mint-time backstop, `jwt.ts`'s `reissueRotated`), in `cookie` mode
+ * the next request carrying the cookie, which resolves the row and refuses the account.
+ */
+const continuationPath: LoginPath = {
+    name: getSessionMode() === 'cookie' ? 'the next request of a session' : 'refresh',
     attemptRefused: async (kind, auditSpy) => {
         const user = await createUser({ email: `refresh-${kind}@example.com` });
         const login = await api()
@@ -189,7 +194,7 @@ const refreshPath: LoginPath = {
         const jwtCookie = setCookie(login, '__Host-session')!;
 
         // Deactivated/deleted AFTER the session was minted — the account holder's next refresh
-        // must not continue it, same guard `createRefreshToken` applies at the initial mint.
+        // must not continue it, same guard `startSession` applies at the initial mint.
         const loaded = await userRepository.findByIdWithCredentials(user.id);
         Object.assign(loaded!, badState(kind));
         await loaded!.save();
@@ -197,14 +202,16 @@ const refreshPath: LoginPath = {
         // Cleared AFTER the setup login above (a genuine success, its own AUTH_LOGIN) and BEFORE
         // the refusal under test.
         auditSpy.mockClear();
-        return api().post('/account/refresh').set('Cookie', jwtCookie);
+        return getSessionMode() === 'cookie'
+            ? api().get('/account').set('Cookie', jwtCookie)
+            : api().post('/account/refresh').set('Cookie', jwtCookie);
     },
     assertRefused: (response) => {
         expect(response.status).toBe(401);
     }
 };
 
-describe.each([passwordPath, oauthPath, refreshPath])(
+describe.each([passwordPath, oauthPath, continuationPath])(
     '$name refuses a deactivated or soft-deleted account',
     ({ attemptRefused, assertRefused }) => {
         it.each(['deactivated', 'soft-deleted'] as const)(
@@ -259,3 +266,57 @@ describe.each([passwordPath, oauthPath])(
         );
     }
 );
+
+/** An account with a second factor armed, as `createUser` takes it. */
+const armed = (): Record<string, unknown> => ({
+    twoFactorEnabledAt: new Date().toISOString(),
+    twoFactorMethods: [{ method: 'totp', enrolledAt: new Date(), secret: 'ciphertext' }]
+});
+
+/** How each way in reaches an armed account — all must stop at the challenge. */
+const ARMED_ATTEMPTS: [name: string, attempt: () => Promise<Response>][] = [
+    [
+        'password login',
+        async () => {
+            const user = await createUser({ email: 'armed-pw@example.com', ...armed() });
+            return api()
+                .post('/account/login')
+                .send({ email: user.email, password: PLAIN_PASSWORD });
+        }
+    ],
+    [
+        'OAuth login',
+        async () => {
+            const user = await createUser({
+                email: FAKE_OAUTH_EMAIL,
+                verifiedAt: new Date(),
+                ...armed()
+            });
+            await userRepository.linkOAuthAccount(user.id, {
+                provider: 'fake',
+                providerId: FAKE_OAUTH_PROVIDER_ID,
+                connectedAt: new Date()
+            });
+            return fakeLogin();
+        }
+    ],
+    [
+        'OAuth link-by-email',
+        async () => {
+            await createUser({ email: FAKE_OAUTH_EMAIL, verifiedAt: new Date(), ...armed() });
+            return fakeLogin();
+        }
+    ]
+];
+
+describe.each(ARMED_ATTEMPTS)('%s on an account with a second factor armed', (_name, attempt) => {
+    it('answers with a challenge and never a session cookie', async () => {
+        const response = await attempt();
+
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+        expect(setCookie(response, 'isAuth')).toBeUndefined();
+        // Password answers 200 with the challenge in the body, OAuth redirects to the MFA page.
+        if (response.status === 302) expect(response.headers.location).toContain('mfa');
+        else expect(response.body.data).toHaveProperty('challenge');
+    });
+});

@@ -551,6 +551,8 @@ const settledElsewhere = (orderId: string, refund: RefundRecord): Promise<Paymen
  * @param request - the amount and the reason; omitted, it is everything left, for a cancellation
  * @returns the payment as it now stands — always still `succeeded`, whatever was returned (its
  *   `displayStatus` says how much) — or `null` when there was nothing to return
+ * @internal The step beneath `refundByOrder`, `refundForOrder` and `refundForReturn`, which carry
+ *   the own-money and scope checks; it never leaves the barrel.
  */
 export const performRefund = (
     orderId: string,

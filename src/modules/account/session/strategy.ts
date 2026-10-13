@@ -21,7 +21,6 @@ import type { SessionMode } from '../session-mode';
 import { getSessionMode, type RefreshTokenExpiryTime } from './config';
 import { jwtStrategy } from './jwt-strategy';
 import { cookieStrategy } from './cookie-strategy';
-import type { SessionMint } from './mint-guard';
 
 /** The slice of a request a strategy reads: the session cookie, the headers and how it authenticated. */
 export type SessionRequest = Pick<Request, 'cookies' | 'headers' | 'sessionVia'>;
@@ -42,10 +41,8 @@ export type SessionTransport = (typeof SESSION_TRANSPORTS)[number];
 export interface IssueOptions {
     /** The ticked "remember me" tier; absent for a browser-session login. */
     remember?: RefreshTokenExpiryTime;
-    /** How `authTime` was proved. Defaults to `['pwd']`. */
-    amr?: readonly string[];
-    /** `'first'` (default) is checked for a second factor; `'remint'` continues a session already held. */
-    mint?: SessionMint;
+    /** How `authTime` was proved; the mint refuses a 2FA account whose proof lacks `otp`. */
+    amr: readonly string[];
     /** Where the credential goes. Defaults to `'cookie'`. */
     transport?: SessionTransport;
 }
@@ -73,8 +70,8 @@ export interface IssuedSession {
 
 /** A re-mint: the proof the new session claims, and what the old one carried. */
 export interface ReissueOptions {
-    /** What THIS re-proof showed; absent keeps `['pwd']`. */
-    amr?: readonly string[];
+    /** The proofs the replacement session claims. */
+    amr: readonly string[];
     snapshot?: SessionSnapshot;
 }
 
@@ -94,7 +91,7 @@ export interface SessionStrategy {
         request: SessionRequest & Pick<Request, 'get'>,
         response: Response,
         userId: string,
-        options?: IssueOptions
+        options: IssueOptions
     ): Promise<IssuedSession>;
 
     /** What the caller's own session carries, for {@link SessionStrategy.reissue} after a change. */
@@ -105,7 +102,7 @@ export interface SessionStrategy {
         request: SessionRequest & Pick<Request, 'get'>,
         response: Response,
         userId: string,
-        options?: ReissueOptions
+        options: ReissueOptions
     ): Promise<IssuedSession>;
 
     /**

@@ -40,6 +40,12 @@ flowchart LR
 None of this needs a line of code, and nothing here calls GitHub for you: a boilerplate that flipped
 settings on your behalf would need a token with admin rights on your repository.
 
+### The paired-frontend job {#ci-pairing}
+
+`ci.yml` checks out the paired frontend to compare contracts. It looks for `Guebbit/boilerplate-vue-frontend`
+unless the repository variable `SPEC_SIBLING_REPO` names another; a private frontend also needs a
+`SPEC_SIBLING_TOKEN` secret that can read it. A copy with no paired frontend deletes that job.
+
 ## What "the demo" actually is
 
 Every module under `src/modules/` carries a `group` in its own `module.yaml` —

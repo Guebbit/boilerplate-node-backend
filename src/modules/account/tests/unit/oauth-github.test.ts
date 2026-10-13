@@ -20,10 +20,10 @@ const jsonResponse = (body: unknown, ok = true): Response =>
     Response.json(body, { status: ok ? 200 : 400 });
 
 /** What GitHub's redirect back carried. */
-const CALLBACK = { code: 'a-code', state: 'the-state' };
+const CALLBACK = new URL(`${REDIRECT_URI}?code=a-code&state=the-state`);
 
 /** What the attempt kept at the start. */
-const EXPECTED = { redirectUri: REDIRECT_URI, state: 'the-state', codeVerifier: 'the-verifier' };
+const EXPECTED = { state: 'the-state', codeVerifier: 'the-verifier' };
 
 /** A successful token-endpoint answer, shaped the way GitHub sends it. */
 const TOKEN = { access_token: 'gh-token', token_type: 'bearer', scope: 'read:user,user:email' };
@@ -121,7 +121,10 @@ describe('githubOAuthProvider.exchangeCode', () => {
         const spy = jest.spyOn(globalThis, 'fetch');
 
         await expect(
-            githubOAuthProvider.exchangeCode({ ...CALLBACK, state: 'forged' }, EXPECTED)
+            githubOAuthProvider.exchangeCode(
+                new URL(`${REDIRECT_URI}?code=a-code&state=forged`),
+                EXPECTED
+            )
         ).rejects.toThrow();
         expect(spy).not.toHaveBeenCalled();
     });

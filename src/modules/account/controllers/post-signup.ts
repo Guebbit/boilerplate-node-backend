@@ -16,6 +16,7 @@ import { sendVerificationEmail } from '../services';
 import { userService } from '@modules/users';
 import { SIGNUP_DEFAULT_ROLE } from '@modules/access';
 import { logAntibotRefusal } from '@infrastructure/http/middlewares/antibot-log';
+import { AMR } from '../domain/session-proof';
 
 /**
  * Where a signup's 201 says the new account lives. The same value for a refused address (nothing
@@ -114,7 +115,7 @@ export const postSignup = (
              * signup issues a session at all. Rung 2 is off by default, and the 409 for an
              * address in use already leaks existence.
              */
-            return issueSession(request, response, data.id).then(() => {
+            return issueSession(request, response, data.id, { amr: [AMR.password] }).then(() => {
                 // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
                 // ever grant this one role, so it's what the membership just written holds, by
                 // construction — see `signup.ts#signup`.

@@ -12,7 +12,7 @@ import { cookieHeader } from '@tests/cookies';
 import { createUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { withEnvironmentOverrides } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
-import { createRefreshToken, rotateRefreshToken, TokenReuseError } from '../../session/jwt';
+import { rotateRefreshToken, TokenReuseError, startSession } from '../../session/jwt';
 import { RefreshTokenExpiryTime } from '../../session/config';
 
 setupTestDb();
@@ -94,7 +94,7 @@ describe('reuse detection with a session family', () => {
             async () => {
                 freezeDate();
                 const user = await createUser({ verifiedAt: new Date() });
-                const first = await createRefreshToken(user.id, RefreshTokenExpiryTime.SHORT);
+                const first = await startSession(user.id, ['pwd'], RefreshTokenExpiryTime.SHORT);
                 const { refreshToken: successor } = await rotateRefreshToken(first);
                 // Replaying the superseded token outside the grace window is theft.
                 advanceDate(5000);

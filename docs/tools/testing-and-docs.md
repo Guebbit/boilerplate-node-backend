@@ -36,17 +36,17 @@ flowchart TB
     class LiveFE ext;
 ```
 
-| Layer                     | Question it answers                                                                                 | Tool(s)                            | Command                              | Detail page                                                 |
-| ------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------ | ----------------------------------------------------------- |
-| Unit                      | Is this unit's logic right?                                                                         | Jest, no database                  | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
-| Integration               | Are the units actually wired together?                                                              | Jest + supertest                   | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
-| Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | orval strict Zod schemas           | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
-| Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG  | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
-| Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                         | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
-| Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`   | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
-| Fuzzing                   | Does any spec-valid request produce a 5xx or an undocumented response — on ANY endpoint?            | spec walk + fast-check             | `npm run test:fuzz`                  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
-| Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner              | `npm run mutation`                   | [Mutation Testing](./mutation-testing.md)                   |
-| Audit                     | Does the code do what the **docs** promise, and do the tests check the spec or just the code?       | prompts in `tests/audit/` + an LLM | by hand, never in CI                 | [AI Auditing](./ai-auditing.md)                             |
+| Layer                     | Question it answers                                                                                 | Tool(s)                              | Command                              | Detail page                                                 |
+| ------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------ | ------------------------------------ | ----------------------------------------------------------- |
+| Unit                      | Is this unit's logic right?                                                                         | Jest, no database                    | `npm run test:unit`                  | [Unit Testing](./unit-testing.md)                           |
+| Integration               | Are the units actually wired together?                                                              | Jest + supertest                     | `npm run test:integration`           | [Integration Testing](./integration-testing.md)             |
+| Contract — Response Shape | Does the wire response match `openapi.yaml`, exactly?                                               | orval strict Zod schemas             | `npm run test:contract`              | [Contract Testing](./contract-testing.md)                   |
+| Contract — Request Data   | Does the API accept every payload the contract declares legal, and reject what it declares illegal? | A zod-v4 AST walker + seeded PRNG    | `npm run test:contract` (same suite) | [Contract-Derived Request Data](./contract-request-data.md) |
+| Property                  | Does the rule hold for _every_ input, not just the ones someone thought of?                         | fast-check                           | `npm run test:unit` (same suite)     | [Property Testing](./property-testing.md)                   |
+| Concurrency               | Does it still hold when N requests arrive at once?                                                  | supertest + `Promise.allSettled`     | `npm run test:integration` (same)    | [Concurrency Testing](./concurrency-testing.md)             |
+| Fuzzing                   | Does any spec-valid request produce a 5xx or an undocumented response — on ANY endpoint?            | spec walk + fast-check               | `npm run test:fuzz`                  | [Spec-Driven Fuzzing](./fuzz-testing.md)                    |
+| Mutation                  | Do the tests notice when the source is wrong?                                                       | Stryker + jest-runner                | `npm run mutation`                   | [Mutation Testing](./mutation-testing.md)                   |
+| Audit                     | Does the code do what the **docs** promise, and do the tests check the spec or just the code?       | prompts in `scripts/audit/` + an LLM | by hand, never in CI                 | [AI Auditing](./ai-auditing.md)                             |
 
 Each layer answers a question no other layer answers — a layer that duplicates another's question is cost without coverage:
 
@@ -155,15 +155,16 @@ Cypress runs are an order of magnitude slower than these, because they drive a r
 A `setupTestDb()`-calling spec lives in that module's own `tests/integration/`, never its
 `tests/unit/` — the placement rule every module follows.
 
-| Command                      | What it runs                                                                          |
-| ---------------------------- | ------------------------------------------------------------------------------------- |
-| `npm run test:unit`          | one function, no database                                                             |
-| `npm run test:cross-cutting` | the sweeps: one rule across every module                                              |
-| `npm run test:integration`   | a real database, or the real app over HTTP, `--runInBand`                             |
-| `npm run test:contract`      | HTTP against the spec, `--runInBand`                                                  |
-| `npm run test:fuzz`          | the spec, hostile, `--runInBand`                                                      |
-| `npm test`                   | all five, in that order                                                               |
-| `npm run mutation:full`      | whole scope, sharded and monthly in CI, see [Mutation Testing](./mutation-testing.md) |
+| Command                        | What it runs                                                                          |
+| ------------------------------ | ------------------------------------------------------------------------------------- |
+| `npm run test:unit`            | one function, no database                                                             |
+| `npm run test:cross-cutting`   | the sweeps: one rule across every module                                              |
+| `npm run test:integration`     | a real database, or the real app over HTTP, `--runInBand`                             |
+| `npm run test:contract`        | HTTP against the spec, `--runInBand`                                                  |
+| `npm run test:contract:cookie` | the same suite with `NODE_SESSION_MODE=cookie`; CI runs both                          |
+| `npm run test:fuzz`            | the spec, hostile, `--runInBand`                                                      |
+| `npm test`                     | all five, in that order                                                               |
+| `npm run mutation:full`        | whole scope, sharded and monthly in CI, see [Mutation Testing](./mutation-testing.md) |
 
 The mutation run's swc transform skips type-checking, which `npm run ts-check` does once for the
 whole project anyway, so the same tests run markedly faster there. See `jest.config.mutation.js`.

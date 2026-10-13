@@ -163,6 +163,11 @@ look like a fresh proof, which is precisely the thing the claim exists to deny.
 [2FA](./account-two-factor.md) login is `['pwd', 'otp']`, an [OAuth](./account-oauth.md) callback is
 `['google']`, and a future WebAuthn passkey is `['hwk']` without a schema change.
 
+No mint defaults its `amr`: `issue` and `reissue` take it as a required option, and the JWT layer splits
+into `startSession` (a first session, guarded) and `continueSession` (a re-mint, not). A re-mint claims
+what the call proved: a verified code adds `otp` to what the caller held, a password change claims
+`['pwd']` alone.
+
 ::: warning Both are optional, and absent means infinitely old
 A token signed before these claims existed carries neither. Every reader treats a missing
 `auth_time` as `0` rather than trusting it, so a pre-existing session is asked to re-authenticate at
@@ -331,7 +336,7 @@ it.
 ### The mint guard {#the-mint-guard}
 
 "No session without the second factor" is enforced where a session is minted, not only where a
-login branches. Both modes call `assertSecondFactor` (`mint-guard.ts`) from their `issue`, which refuses a **first** session for an account whose
+login branches. Both modes call `assertSecondFactor` (`mint-guard.ts`) from their `issue`, never from a re-mint. The rule itself is the pure `firstSessionRefused` in `domain/session-proof.ts`, which also owns the `AMR` values and `withProofs`. The guard refuses a **first** session for an account whose
 `twoFactorEnabledAt` is set unless `amr` carries `otp`, with `SecondFactorRequiredError`:
 
 ```mermaid
@@ -432,16 +437,25 @@ So every "I may be compromised" event also moves `tokensValidAfter` on the user,
 `verifyRefreshToken` and the rotation for a refresh one. `auth_time`, not `iat`, because one
 `/refresh` resets `iat` and would walk a stolen session out of the cut.
 
-| Event                                 | Epoch moves                                                    | The caller                                                                              |
-| ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| logout everywhere                     | yes                                                            | signed out too                                                                          |
-| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged | survives: new session in the response                                                   |
-| 2FA factor armed, removed or disabled | yes                                                            | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
-| email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
-| email change undone ("not me")        | yes, FIRST, before the address is touched                      | n/a: the undo link is the credential                                                    |
-| refresh reuse detected                | yes                                                            | n/a                                                                                     |
-| admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                | n/a: an unban or a restore does not bring the old tokens back                           |
-| plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
+| Event                                 | Epoch moves                                                         | The caller                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| logout everywhere                     | yes                                                                 | signed out too                                                                          |
+| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged      | survives: new session in the response                                                   |
+| 2FA factor armed, removed or disabled | yes                                                                 | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
+| email change confirmed                | yes                                                                 | the confirming request is usually the mailbox, not a session                            |
+| email change undone ("not me")        | yes, FIRST, before the address is touched, and pending links purged | n/a: the undo link is the credential                                                    |
+| refresh reuse detected                | yes                                                                 | n/a                                                                                     |
+| admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                     | n/a: an unban or a restore does not bring the old tokens back                           |
+| plain logout                          | no: one access token lives out its ten minutes                      | n/a                                                                                     |
+
+### One table, keyed by cause {#revocation}
+
+`REVOCATION` (`domain/revocation.ts`) lists every cause once: where its epoch is written, whether
+pending links are purged, whether it announces `account.sessions-revoked`, whether the caller is
+re-minted, and which session modes it applies to. `revokeFor(cause, userId)` in
+`services/revocation.ts` acts on a row; the reasons an event can carry (`SessionsRevokedReason`),
+and so the cases `api-keys` mails about, are derived from the rows that announce. Adding a cause
+means adding a row, and the compiler asks for its test trigger.
 
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two

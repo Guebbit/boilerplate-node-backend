@@ -14,6 +14,7 @@ import { t } from '@infrastructure/i18n';
 import { twoFactorService } from '../services';
 import { remintSession, sessionSnapshotOf } from '../session/session';
 import { authTwoFactorDisableTotal } from '../metrics';
+import { AMR, withProofs } from '../domain/session-proof';
 
 /**
  * DELETE /account/2fa/methods/{method} — drops one factor and leaves the rest armed. Fresh
@@ -48,7 +49,13 @@ export const delete2faMethod = (
                     }
                     authTwoFactorDisableTotal.inc({ method, status: 'success' });
                     // Removing a factor revoked every session, this one included: keep the caller in.
-                    return remintSession(request, response, id, amr, snapshot).then(() => {
+                    return remintSession(
+                        request,
+                        response,
+                        id,
+                        withProofs(amr, AMR.otp),
+                        snapshot
+                    ).then(() => {
                         successResponse<undefined>(
                             response,
                             undefined,

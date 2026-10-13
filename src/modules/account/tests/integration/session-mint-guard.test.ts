@@ -9,7 +9,7 @@
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
 import { sessionRowsOf } from '../factories';
-import { createRefreshToken } from '../../session/jwt';
+import { continueSession, startSession } from '../../session/jwt';
 import { SecondFactorRequiredError } from '../../session/mint-guard';
 
 setupTestDb();
@@ -24,48 +24,49 @@ const armedUser = () =>
 /** How many refresh sessions the account holds. */
 const sessionsOf = (id: string): Promise<number> => sessionRowsOf(id).then((rows) => rows.length);
 
-describe('a first session for an account with a second factor armed', () => {
-    it('is refused when the proof is the password alone, and stores nothing', async () => {
-        const user = await armedUser();
+/** Every proof a mint can be handed, against whether the account is armed and which kind of mint it is. */
+const CASES: readonly {
+    name: string;
+    armed: boolean;
+    amr: string[];
+    mint: 'start' | 'continue';
+    minted: boolean;
+}[] = [
+    { name: 'armed, password alone', armed: true, amr: ['pwd'], mint: 'start', minted: false },
+    { name: 'armed, federated alone', armed: true, amr: ['google'], mint: 'start', minted: false },
+    {
+        name: 'armed, mailed code',
+        armed: true,
+        amr: ['pwd', 'email'],
+        mint: 'start',
+        minted: false
+    },
+    {
+        name: 'armed, password and otp',
+        armed: true,
+        amr: ['pwd', 'otp'],
+        mint: 'start',
+        minted: true
+    },
+    { name: 'unarmed, password alone', armed: false, amr: ['pwd'], mint: 'start', minted: true },
+    {
+        name: 'armed, re-mint on password alone',
+        armed: true,
+        amr: ['pwd'],
+        mint: 'continue',
+        minted: true
+    }
+];
 
-        await expect(createRefreshToken(user.id)).rejects.toBeInstanceOf(SecondFactorRequiredError);
+describe('the mint guard, over proofs x armed x mint kind', () => {
+    it.each(CASES)('$name', async ({ armed, amr, mint, minted }) => {
+        const user = await (armed ? armedUser() : createUser());
+        const attempt = (mint === 'start' ? startSession : continueSession)(user.id, amr);
 
-        expect(await sessionsOf(user.id)).toBe(0);
-    });
+        if (minted) await attempt;
+        else await expect(attempt).rejects.toBeInstanceOf(SecondFactorRequiredError);
 
-    it('is refused when the proof is a federated login alone', async () => {
-        const user = await armedUser();
-
-        await expect(createRefreshToken(user.id, undefined, ['google'])).rejects.toBeInstanceOf(
-            SecondFactorRequiredError
-        );
-    });
-
-    it('is minted once the proof carries the second factor', async () => {
-        const user = await armedUser();
-
-        await createRefreshToken(user.id, undefined, ['pwd', 'otp']);
-
-        expect(await sessionsOf(user.id)).toBe(1);
-    });
-});
-
-describe('a re-mint for an account with a second factor armed', () => {
-    it('continues the session the caller already holds, so it is not checked again', async () => {
-        const user = await armedUser();
-
-        await createRefreshToken(user.id, undefined, ['pwd'], 'remint');
-
-        expect(await sessionsOf(user.id)).toBe(1);
-    });
-});
-
-describe('a first session for an account with no second factor', () => {
-    it('is minted on the password alone', async () => {
-        const user = await createUser();
-
-        await createRefreshToken(user.id);
-
-        expect(await sessionsOf(user.id)).toBe(1);
+        // A refusal stores nothing; a mint stores exactly one row.
+        expect(await sessionsOf(user.id)).toBe(minted ? 1 : 0);
     });
 });

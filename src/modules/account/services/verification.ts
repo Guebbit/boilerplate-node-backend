@@ -12,10 +12,10 @@
 import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { userService, type UserDocument } from '@modules/users';
-import { issueToken, removeTokens, tokenSentAt } from './tokens';
+import { issueToken, tokenSentAt } from './tokens';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
-import { announceSessionsRevoked, dropSessions } from './revocation';
+import { revokeFor } from './revocation';
 import { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
 
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
@@ -340,7 +340,7 @@ export const completeEmailChange = (
             // the audit below, for the same reason.
             promoteVerifiedCustomer(saved.id, DEPLOYMENT_TENANT_ID).then(() => saved)
         )
-        .then((saved) => dropSessions(saved.id).then(() => saved))
+        .then((saved) => revokeFor('email-change-confirm', saved.id).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_COMPLETED)
         );
@@ -367,19 +367,15 @@ export const undoEmailChange = (
     context: CallerContext
 ): Promise<UserDocument> =>
     // The sessions end FIRST, as their own write: the undo token is already spent, so a restore
-    // that fails (409) must not leave a thief signed in with no way for the owner to retry.
-    announceSessionsRevoked(user.id, 'email-change-undo')
+    // that fails (409) must not leave a thief signed in with no way for the owner to retry. Every
+    // pending link dies with them, the confirmation link included: it would swap back in the
+    // address the owner just refused.
+    revokeFor('email-change-undo', user.id)
         .then(() =>
             undoRestoresPreviousEmail(emailChangeStateOf(user))
                 ? userService.restorePreviousEmail(user)
                 : userService.cancelPendingEmail(user)
         )
-        .then((saved) =>
-            // The confirmation link is dead whichever way this went: it would swap back in the
-            // address the owner just refused.
-            removeTokens(saved.id, [EMAIL_CHANGE_TOKEN_TYPE]).then(() => saved)
-        )
-        .then((saved) => dropSessions(saved.id).then(() => saved))
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
         );

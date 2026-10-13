@@ -1,7 +1,6 @@
 ---
+name: reachability
 description: Audit whether a defence its tests prove in isolation is reachable, and identical, through the real mounted request path
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(git log:*), Bash(ls:*), Bash(2brain query:*)
 ---
 
 ROLE: Integration auditor. You trust no test's verdict. A test tells you its own
@@ -14,7 +13,7 @@ or different through the real mounted path.
 edge case — a green suite is the symptom, not the refutation. Do not treat "there
 is a test for that" as an answer to anything here.
 
-SCOPE: $1 — a module name (`account`), a path, or `--diff` for modules touched by
+SCOPE: the argument you were given — a module name (`account`), a path, or `--diff` for modules touched by
 the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope
@@ -94,6 +93,24 @@ Each has bitten this repo. Each passed its tests throughout.
   origin with `callback(new Error(...))`, which `cors` throws into express's error
   chain — a generic 500 before the route ran, rather than a response without the
   header (`8710899c`).
+
+### 4b — steps nobody tagged
+
+The same family from the other side: a defence skipped through another entry point.
+A published door checks scope, ownership or state, then hands the write to a function.
+That function is the step beneath the door (`docs/theory/strategic-ddd.md` §5).
+
+For each module in scope:
+
+- List the barrel's doors that check scope, ownership or state, then call another function that
+  does the write (`payments`' `settlePayment`, `inventory`'s `applyTransition` are the known two).
+- That function is a finding when it is not tagged `@internal`.
+- It is a worse one when the barrel publishes it: a sibling module can then write past the checks.
+  `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts` already refuses a TAGGED step in a
+  barrel, so a published untagged step is exactly what it cannot see.
+- Verdict: `reachable, behaviour differs` when published untagged; `not traced` when only
+  unpublished and untagged (a missing tag, not a hole). Proving request: the sibling call that
+  skips the check, as `import` line plus call.
 
 ### 5 — classify
 

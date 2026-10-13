@@ -13,7 +13,7 @@ import { forgetSessionEpoch } from '@tests/session-epoch';
 import { createUser, PLAIN_PASSWORD, userRepository } from '@modules/users/tests/factories';
 import { twoFactorService } from '@modules/account/services';
 import { DELIVERED_CODE_MAX_ATTEMPTS, hashBackupCode } from '@modules/account/two-factor';
-import { createAccessToken, createRefreshToken } from '@modules/account/session/jwt';
+import { createAccessToken, startSession } from '@modules/account/session/jwt';
 import { testCallerContext } from '@tests/callers';
 import { versionOf } from '@infrastructure/persistence/versioning';
 
@@ -184,7 +184,7 @@ const oauthOnlySession = async () => {
         email: 'oauth@example.com',
         verifiedAt: new Date()
     });
-    const token = await createRefreshToken(user.id, undefined, ['google']).then(createAccessToken);
+    const token = await startSession(user.id, ['google']).then(createAccessToken);
     return { user, bearer: `Bearer ${token}` as const };
 };
 

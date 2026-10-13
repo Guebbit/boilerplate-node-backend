@@ -9,9 +9,10 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, bearerForCookie, loginBearer } from '@tests/http';
 import { requestAndDownloadExport } from '@tests/account-export';
 import { setCookie, cookieHeader } from '@tests/cookies';
+import { setEnvironment } from '@tests/environment';
 import { createUser, PLAIN_PASSWORD, REPLACEMENT_PASSWORD } from '@modules/users/tests/factories';
 import { userRepository } from '@modules/users/tests/factories';
 import { EMAIL_VERIFY_TOKEN_TYPE } from '@modules/account/services';
@@ -26,6 +27,7 @@ import {
 } from '@api/schemas.zod';
 import { WEAK_PASSWORD } from '@modules/users/tests/factories';
 import { loginWithCookie } from './support';
+import { getSessionMode } from '../../session/config';
 import {
     getExpiryTime,
     getAccessExpiryTime,
@@ -94,6 +96,27 @@ const cookieMaxAge = (response: { headers: Record<string, unknown> }, name: stri
     return match ? Number(match[1]) : undefined;
 };
 
+/**
+ * Pins `NODE_SESSION_MODE=jwt` for a case about the access/refresh pair itself: rotation, the
+ * access token's own window, the refresh cookie a bearer call sets. Every other case in this file
+ * runs in whichever mode the suite runs in, and `npm run test:contract:cookie` runs them all.
+ */
+const inJwtMode = (): void => setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+
+/**
+ * Whether the session a cookie names is still alive: `POST /account/refresh` in `jwt` mode, which
+ * answers 200 for a live refresh token and 401 for a dead one, and `GET /account` in `cookie` mode,
+ * which has no refresh and where the cookie alone authenticates.
+ *
+ * @param cookie - the session cookie as a `Cookie` header
+ * @returns the status the probe answered
+ */
+const statusOfSession = async (cookie: string): Promise<number> =>
+    (getSessionMode() === 'cookie'
+        ? await api().get('/account').set('Cookie', cookie)
+        : await api().post('/account/refresh').set('Cookie', cookie)
+    ).status;
+
 describe('POST /account/login — remember me', () => {
     it('sizes the refresh cookie by the requested tier', async () => {
         const user = await createUser();
@@ -105,9 +128,12 @@ describe('POST /account/login — remember me', () => {
         // Read through the same accessor the app signs with, not the raw variable: the tiers carry
         // code-side defaults, so an environment that never sets them still has a right answer.
         const expected = getExpiryTime(RefreshTokenExpiryTime.MEDIUM);
-        expect(cookieMaxAge(response, '__Host-session')).toBe(expected);
+        // `jwt` counts the tier exactly; `cookie` counts what is left of the row, which a second
+        // may already have eaten into.
+        expect(cookieMaxAge(response, '__Host-session')).toBeGreaterThan(expected - 5);
+        expect(cookieMaxAge(response, '__Host-session')).toBeLessThanOrEqual(expected);
         // The UI hint expires in step with the credential it describes.
-        expect(cookieMaxAge(response, 'isAuth')).toBe(expected);
+        expect(cookieMaxAge(response, 'isAuth')).toBe(cookieMaxAge(response, '__Host-session'));
     });
 
     it('sets browser-session cookies (no Max-Age, no Expires) when no tier is asked for', async () => {
@@ -125,6 +151,7 @@ describe('POST /account/login — remember me', () => {
     });
 
     it('still gives the access token the short window, not the refresh fallback', async () => {
+        inJwtMode();
         const user = await createUser();
         const response = await api()
             .post('/account/login')
@@ -160,7 +187,15 @@ const loginRemembering = async (remember?: 'short' | 'medium' | 'long', email?: 
     return {
         user,
         bearer: `Bearer ${response.body.data.token as string}` as const,
-        jwtCookie
+        jwtCookie,
+        // What the browser sends next: `jwt` mode needs the access token beside the refresh
+        // cookie, `cookie` mode the cookie alone (a bearer would make the reply a bearer's: no cookie).
+        headers: (getSessionMode() === 'cookie'
+            ? { Cookie: jwtCookie }
+            : {
+                  Authorization: `Bearer ${response.body.data.token as string}`,
+                  Cookie: jwtCookie
+              }) as Record<string, string>
     };
 };
 
@@ -221,6 +256,7 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it('refresh rotation keeps a browser-session login a session cookie', async () => {
+        inJwtMode();
         const { jwtCookie } = await loginRemembering();
 
         const rotated = await api().post('/account/refresh').set('Cookie', jwtCookie);
@@ -236,6 +272,7 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it('refresh rotation keeps a remembered login persistent, for what is left of its window', async () => {
+        inJwtMode();
         const { jwtCookie } = await loginRemembering('medium');
 
         const rotated = await api().post('/account/refresh').set('Cookie', jwtCookie);
@@ -248,6 +285,7 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it('refresh rotation keeps the access token on its own short window', async () => {
+        inJwtMode();
         const { jwtCookie } = await loginRemembering();
 
         const rotated = await api().post('/account/refresh').set('Cookie', jwtCookie);
@@ -260,6 +298,7 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it('gives a browser-session login a server-side limit of the short tier', async () => {
+        inJwtMode();
         const { jwtCookie } = await loginRemembering();
 
         const value = /__Host-session=([^;]+)/.exec(jwtCookie)![1];
@@ -268,26 +307,26 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it('reauth keeps a remembered login at its tier', async () => {
-        const { bearer, jwtCookie } = await loginRemembering('medium');
+        const { headers } = await loginRemembering('medium');
 
         const response = await api()
             .post('/account/reauth')
-            .set('Authorization', bearer)
-            .set('Cookie', jwtCookie)
+            .set(headers)
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
-        expect(cookieMaxAge(response, '__Host-session')).toBe(MEDIUM);
-        expect(cookieMaxAge(response, 'isAuth')).toBe(MEDIUM);
+        // Exact in `jwt` mode; `cookie` mode carries what is left of the row.
+        expect(cookieMaxAge(response, '__Host-session')).toBeGreaterThan(MEDIUM - 5);
+        expect(cookieMaxAge(response, '__Host-session')).toBeLessThanOrEqual(MEDIUM);
+        expect(cookieMaxAge(response, 'isAuth')).toBe(cookieMaxAge(response, '__Host-session'));
     });
 
     it('reauth keeps a browser-session login a session cookie', async () => {
-        const { bearer, jwtCookie } = await loginRemembering();
+        const { headers } = await loginRemembering();
 
         const response = await api()
             .post('/account/reauth')
-            .set('Authorization', bearer)
-            .set('Cookie', jwtCookie)
+            .set(headers)
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(response.status).toBe(200);
@@ -295,40 +334,36 @@ describe('the "remember me" choice survives every re-mint', () => {
     });
 
     it('a password change keeps a remembered login at its tier', async () => {
-        const { bearer, jwtCookie } = await loginRemembering('medium');
+        const { headers } = await loginRemembering('medium');
 
-        const response = await api()
-            .post('/account/password')
-            .set('Authorization', bearer)
-            .set('Cookie', jwtCookie)
-            .send({
-                currentPassword: PLAIN_PASSWORD,
-                password: REPLACEMENT_PASSWORD,
-                passwordConfirm: REPLACEMENT_PASSWORD
-            });
+        const response = await api().post('/account/password').set(headers).send({
+            currentPassword: PLAIN_PASSWORD,
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
+        });
 
         expect(response.status).toBe(200);
-        expect(cookieMaxAge(response, '__Host-session')).toBe(MEDIUM);
+        expect(cookieMaxAge(response, '__Host-session')).toBeGreaterThan(MEDIUM - 5);
+        expect(cookieMaxAge(response, '__Host-session')).toBeLessThanOrEqual(MEDIUM);
     });
 
     it('a password change keeps a browser-session login a session cookie', async () => {
-        const { bearer, jwtCookie } = await loginRemembering();
+        const { headers } = await loginRemembering();
 
-        const response = await api()
-            .post('/account/password')
-            .set('Authorization', bearer)
-            .set('Cookie', jwtCookie)
-            .send({
-                currentPassword: PLAIN_PASSWORD,
-                password: REPLACEMENT_PASSWORD,
-                passwordConfirm: REPLACEMENT_PASSWORD
-            });
+        const response = await api().post('/account/password').set(headers).send({
+            currentPassword: PLAIN_PASSWORD,
+            password: REPLACEMENT_PASSWORD,
+            passwordConfirm: REPLACEMENT_PASSWORD
+        });
 
         expect(response.status).toBe(200);
         expectSessionCookies(response);
     });
 
     it("reauth ignores another user's refresh cookie rather than adopting its tier", async () => {
+        // A refresh cookie riding beside a bearer is a `jwt` mode shape: in `cookie` mode the
+        // bearer IS the session and the cookie is never consulted.
+        inJwtMode();
         const remembered = await loginRemembering('long', 'other@example.com');
         const { bearer } = await loginRemembering();
 
@@ -404,8 +439,7 @@ const loginRemembered = async () => {
  */
 const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
     advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
-    const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
-    return `Bearer ${refreshed.body.data.token as string}`;
+    return bearerForCookie(jwtCookie);
 };
 
 describe("PUT /account's step-up depends on whether the email actually changes", () => {
@@ -774,6 +808,7 @@ describe('POST /account/password', () => {
 
 describe('POST /account/reauth', () => {
     it('re-mints the session with a fresh access token', async () => {
+        inJwtMode();
         const { bearer } = await loginWithCookie();
 
         const response = await api()
@@ -800,6 +835,7 @@ describe('POST /account/reauth', () => {
     });
 
     it('sets a fresh refresh cookie too, same as POST /account/password', async () => {
+        inJwtMode();
         const { bearer } = await loginWithCookie();
 
         const response = await api()
@@ -846,7 +882,12 @@ describe('POST /account/export', () => {
         expect(profile.email).toBe(user.email);
         // The caller's own login, as metadata only: its handle and when it ends, never a credential.
         expect(sessions).toHaveLength(1);
-        expect(Object.keys(sessions[0]).toSorted()).toEqual(['createdAt', 'expiration', 'id']);
+        // `lastUsedAt` and `device` are metadata too; they appear once the session was used / in `cookie` mode.
+        expect(
+            Object.keys(sessions[0])
+                .filter((key) => !['lastUsedAt', 'device'].includes(key))
+                .toSorted()
+        ).toEqual(['createdAt', 'expiration', 'id']);
     });
 });
 
@@ -934,10 +975,10 @@ describe('POST /account/logout', () => {
 
         expect(response.status).toBe(200);
 
-        // The revoked cookie can no longer mint access tokens — the session is dead server-side,
-        // not merely cleared client-side.
-        const refresh = await api().post('/account/refresh').set('Cookie', jwtCookie);
-        expect(refresh.status).toBe(401);
+        // The revoked cookie names nothing any more (it can no longer mint access tokens in `jwt`
+        // mode, no longer authenticates in `cookie` mode): the session is dead server-side, not
+        // merely cleared client-side.
+        expect(await statusOfSession(jwtCookie)).toBe(401);
     });
 
     it('answers 200 with no cookie at all — the caller already has what they asked for', async () => {
@@ -962,6 +1003,8 @@ describe('GET /account/sessions', () => {
     });
 
     it('flags nothing current for a bearer-only caller', async () => {
+        // An access token does not identify a session; a `cookie`-mode `ses_…` bearer does.
+        inJwtMode();
         const { bearer } = await loginWithCookie();
 
         const response = await api().get('/account/sessions').set('Authorization', bearer);
@@ -977,6 +1020,9 @@ describe('GET /account/sessions', () => {
      * — splitting them would let either regress alone while the field never actually changed.
      */
     it('reports lastUsedAt only once the session has been used', async () => {
+        // The use is the refresh cookie's exchange; `cookie` mode's own stamp is pinned in
+        // `integration/session-modes.test.ts`.
+        inJwtMode();
         const { bearer, jwtCookie } = await loginWithCookie();
 
         const before = await api()
@@ -1113,12 +1159,9 @@ describe('POST /account/verify-request and /account/verify-confirm', () => {
 
         expect(setCookie(response, '__Host-session')).toBeDefined();
 
-        // The access token comes from the bootstrap the frontend already runs after OAuth.
-        const refresh = await api()
-            .post('/account/refresh')
-            .set('Cookie', cookieHeader(response, '__Host-session'));
-        expect(refresh.status).toBe(200);
-        expect(refresh.body.data.token).toEqual(expect.any(String));
+        // The session is the cookie: `jwt` mode turns it into an access token through the
+        // bootstrap the frontend already runs after OAuth, `cookie` mode authenticates by it.
+        expect(await statusOfSession(cookieHeader(response, '__Host-session'))).toBe(200);
     });
 
     /*
@@ -1226,7 +1269,11 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
         const confirm = await api().post('/account/email-change-confirm').send({ token });
         expect(confirm.status).toBe(200);
 
-        const account = await api().get('/account').set('Authorization', bearer);
+        // A confirmed email change ends every session (the old bearer included, in `cookie`
+        // mode), so the account signs in again under the new address.
+        const account = await api()
+            .get('/account')
+            .set('Authorization', await loginBearer('ada+shop@mail.example.photography'));
         expect(account.body.data.email).toBe('ada+shop@mail.example.photography');
     });
 
@@ -1266,8 +1313,7 @@ describe('PATCH /account (email change) and /account/email-change-confirm', () =
 
         await api().post('/account/email-change-confirm').send({ token });
 
-        const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
-        expect(refreshed.status).toBe(401);
+        expect(await statusOfSession(jwtCookie)).toBe(401);
         expect(await userRepository.findById(user.id)).not.toBeNull();
     });
 

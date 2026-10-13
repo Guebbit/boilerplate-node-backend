@@ -31,7 +31,8 @@ import { mintApiKey, displayIdOf } from '../credentials';
 import { apiKeysAuditActions } from '../audit';
 import { ERROR_CODES } from '@api/error-codes';
 import { presentApiKey } from '../presenter';
-import { apiKeyMintedEmail, apiKeysRevokedEmail, type RevocationReason } from '../emails';
+import { apiKeyMintedEmail, apiKeysRevokedEmail } from '../emails';
+import type { SessionsRevokedReason } from '@modules/account';
 import type { ApiKeyDocument } from '../model';
 
 /**
@@ -251,7 +252,7 @@ export const revoke = (
  */
 const notifyRevoked = (
     userId: string,
-    reason: RevocationReason,
+    reason: SessionsRevokedReason,
     revoked: readonly ApiKeyDocument[]
 ): Promise<void> =>
     userService
@@ -286,7 +287,7 @@ const notifyRevoked = (
  * @param userId - the minter
  * @param reason - which `account` event asked for this
  */
-export const revokeAllMintedBy = (userId: string, reason: RevocationReason): Promise<void> =>
+export const revokeAllMintedBy = (userId: string, reason: SessionsRevokedReason): Promise<void> =>
     apiKeyRepository.findActiveByMinter(userId).then((live) => {
         if (live.length === 0) return undefined;
 

@@ -158,6 +158,20 @@ anything that is not a database write, so a rollback could not undo it. `orders`
 the account's never-paid orders, see [When the account is erased](./orders.md#when-the-account-is-erased).
 A failing step is logged and never turns a committed erasure into an error.
 
+## What this module adds to the data export
+
+Two sections of `POST /account/export`: `profile` (the record) and `signInMethods`. The second
+exists because a linked provider's own subject id is an online identifier (GDPR Art. 4(1)) and
+part of what an access request answers (Art. 15), yet it sits behind `select: false` and so is not
+in `profile`.
+
+| Exported                                                      | Never exported                                                 |
+| ------------------------------------------------------------- | -------------------------------------------------------------- |
+| each linked provider: `provider`, `providerId`, `connectedAt` | a second factor's secret, a code in flight, its delivery state |
+| each armed second factor: `method`, `enrolledAt`              | the backup-code digests, the password hash                     |
+
+A factor whose setup was never confirmed has no `enrolledAt`, guards no login, and is left out.
+
 ## Libraries
 
 None. Passwords are hashed with argon2id from `node:crypto` (`infrastructure/security/password-hash.ts`),

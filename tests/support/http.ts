@@ -13,6 +13,7 @@
  */
 import request from 'supertest';
 import { createApp } from '../../src/app';
+import { cookieValue } from './cookies';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import type { UserDocument } from '@modules/users';
 
@@ -46,7 +47,7 @@ export const authenticateAs = async (
         ? createAdminUser({ verifiedAt: new Date() })
         : createUser({ verifiedAt: new Date() }, 'customer'));
 
-    return authenticateUser(user, role);
+    return authenticateUser(user);
 };
 
 /**
@@ -70,31 +71,62 @@ export const authenticateAsRole = async (role: string): Promise<AuthenticatedTes
         role
     );
 
-    return authenticateUser(user, role);
+    return authenticateUser(user);
 };
 
-/** Shared by {@link authenticateAs} and {@link authenticateAsRole} — the login round trip itself. */
-const authenticateUser = async (
-    user: UserDocument,
-    role: string
-): Promise<AuthenticatedTestUser> => {
-    // `transport: 'bearer'` is ignored in `jwt` mode and, in `cookie` mode, is what makes the login
-    // hand back an id to send as a bearer instead of a cookie a test would have to carry.
+/**
+ * Log an existing account in through `POST /account/login` and answer the bearer a client sends
+ * next. Mode-agnostic: `transport: 'bearer'` is ignored in `jwt` mode (the access token comes
+ * back) and in `cookie` mode makes the login hand back a `ses_…` id to send as a bearer instead of
+ * a cookie a test would have to carry.
+ *
+ * @param email - the account's address
+ * @param password - its password; the factories' shared one by default
+ * @param body - more of the login body (`remember`)
+ * @throws {Error} when the login is refused or answers no credential
+ */
+export const loginBearer = async (
+    email: string,
+    password: string = PLAIN_PASSWORD,
+    body: Record<string, unknown> = {}
+): Promise<`Bearer ${string}`> => {
     const response = await api()
         .post('/account/login')
-        .send({ email: user.email, password: PLAIN_PASSWORD, transport: 'bearer' });
+        .send({ email, password, transport: 'bearer', ...body });
 
     if (response.status !== 200)
         throw new Error(
-            `authenticateAs('${role}') failed: POST /account/login returned ${response.status} ` +
+            `loginBearer('${email}') failed: POST /account/login returned ${response.status} ` +
                 `— ${JSON.stringify(response.body)}`
         );
 
     const token = response.body?.data?.token ?? response.body?.data?.sessionToken;
     if (!token)
         throw new Error(
-            `authenticateAs('${role}'): no token in login response — ${JSON.stringify(response.body)}`
+            `loginBearer('${email}'): no token in login response — ${JSON.stringify(response.body)}`
         );
 
-    return { user, token, bearer: `Bearer ${token}` as const };
+    return `Bearer ${token}`;
+};
+
+/**
+ * A bearer for the session a cookie names. A `cookie`-mode cookie carries a `ses_…` id, which is
+ * itself a valid bearer; a `jwt`-mode cookie is a refresh token, exchanged for a fresh access
+ * token (which is also what a lapsed one needs). Told apart by the credential's own prefix, so a
+ * suite does not have to know which mode it runs in.
+ *
+ * @param cookie - the session cookie, as a `Cookie` header or a `Set-Cookie` line
+ */
+export const bearerForCookie = async (cookie: string): Promise<`Bearer ${string}`> => {
+    const value = cookieValue(cookie);
+    if (value.startsWith('ses_')) return `Bearer ${value}`;
+
+    const refreshed = await api().post('/account/refresh').set('Cookie', cookie);
+    return `Bearer ${refreshed.body.data.token as string}`;
+};
+
+/** Shared by {@link authenticateAs} and {@link authenticateAsRole} — the login round trip itself. */
+const authenticateUser = async (user: UserDocument): Promise<AuthenticatedTestUser> => {
+    const bearer = await loginBearer(user.email);
+    return { user, token: bearer.slice('Bearer '.length), bearer };
 };
