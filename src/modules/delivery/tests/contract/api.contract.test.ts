@@ -8,7 +8,7 @@
 
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
-import { api, authenticateAs, authenticateAsRole } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole, bearerForCookie } from '@tests/http';
 import { MISSING_ID } from '@tests/ids';
 import { setCookie } from '@tests/cookies';
 import { freezeDate, advanceDate } from '@tests/clock';
@@ -552,8 +552,7 @@ const loginAdminRemembered = async () => {
  */
 const staleButRefreshedBearer = async (jwtCookie: string): Promise<`Bearer ${string}`> => {
     advanceDate((reauthWindowSeconds('critical') + 1) * 1000);
-    const refreshed = await api().post('/account/refresh').set('Cookie', jwtCookie);
-    return `Bearer ${refreshed.body.data.token as string}`;
+    return bearerForCookie(jwtCookie);
 };
 
 describe('forced ship/deliver demands the same step-up POST /orders/{id}/status-override does (SD-10)', () => {

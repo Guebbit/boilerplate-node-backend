@@ -13,7 +13,7 @@ import {
     enumOf,
     indexOptionSpecs,
     optionsOf,
-    pathOptions,
+    refuses,
     refOf,
     requiredPaths,
     typeOf
@@ -50,7 +50,14 @@ describe('paymentSchema', () => {
     it('refuses a negative amount', () => {
         // A negative charge is a refund issued through the wrong door — one that no refund path
         // audits, reconciles or reports.
-        expect(pathOptions(paymentSchema, 'amount').min).toBe(0);
+        expect(refuses(paymentSchema, 'amount', -0.01)).toBe(true);
+        expect(refuses(paymentSchema, 'amount', 0)).toBe(false);
+    });
+
+    it('stores every amount as a Decimal128, so a database sum is exact', () => {
+        expect(typeOf(paymentSchema, 'amount')).toBe('Decimal128');
+        expect(typeOf(paymentSchema, 'amountRefunded')).toBe('Decimal128');
+        expect(defaultOf(paymentSchema, 'amountRefunded')).toBe(0);
     });
 
     it('restricts status to the contract enum and starts unconfirmed', () => {

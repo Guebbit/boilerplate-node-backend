@@ -29,6 +29,7 @@ import * as auditPort from '@infrastructure/observability/audit';
 import { observePort } from '@tests/ports';
 import { accountAuditActions } from '../../audit';
 import { authLoginTotal } from '../../metrics';
+import { getSessionMode } from '../../session/config';
 
 /* Replaced, not spied on — a CommonJS namespace import exposes each export as a
  * non-configurable getter, which `jest.spyOn` cannot redefine under every transform this repo
@@ -178,9 +179,13 @@ const oauthPath: LoginPath = {
     successStatus: 302
 };
 
-/** `GET /account/refresh` — the mint-time backstop (`jwt.ts`'s `reissueRotated`), not a fresh login. */
-const refreshPath: LoginPath = {
-    name: 'refresh',
+/**
+ * Continuing a session the account held before it was banned or deleted: in `jwt` mode that is
+ * `POST /account/refresh` (the mint-time backstop, `jwt.ts`'s `reissueRotated`), in `cookie` mode
+ * the next request carrying the cookie, which resolves the row and refuses the account.
+ */
+const continuationPath: LoginPath = {
+    name: getSessionMode() === 'cookie' ? 'the next request of a session' : 'refresh',
     attemptRefused: async (kind, auditSpy) => {
         const user = await createUser({ email: `refresh-${kind}@example.com` });
         const login = await api()
@@ -197,14 +202,16 @@ const refreshPath: LoginPath = {
         // Cleared AFTER the setup login above (a genuine success, its own AUTH_LOGIN) and BEFORE
         // the refusal under test.
         auditSpy.mockClear();
-        return api().post('/account/refresh').set('Cookie', jwtCookie);
+        return getSessionMode() === 'cookie'
+            ? api().get('/account').set('Cookie', jwtCookie)
+            : api().post('/account/refresh').set('Cookie', jwtCookie);
     },
     assertRefused: (response) => {
         expect(response.status).toBe(401);
     }
 };
 
-describe.each([passwordPath, oauthPath, refreshPath])(
+describe.each([passwordPath, oauthPath, continuationPath])(
     '$name refuses a deactivated or soft-deleted account',
     ({ attemptRefused, assertRefused }) => {
         it.each(['deactivated', 'soft-deleted'] as const)(

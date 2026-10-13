@@ -4,7 +4,7 @@
  */
 
 import { toMinorUnits, type Money } from '@shared-kernel/money';
-import { numberOf, type ReportWindow } from '@infrastructure/persistence/report';
+import { type ReportWindow } from '@infrastructure/persistence/report';
 import type { PaymentMethod } from '@types';
 import { paymentRepository } from '../repository';
 
@@ -29,6 +29,6 @@ export const methodMix = (window: ReportWindow): Promise<MixRow[]> =>
             provider: row._id.provider,
             currency: row._id.currency,
             payments: row.payments,
-            amount: toMinorUnits(numberOf(row.amount), row._id.currency)
+            amount: toMinorUnits(row.amount, row._id.currency)
         }))
     );

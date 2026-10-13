@@ -18,7 +18,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment, withEnvironment } from '@tests/environment';
 import { asReject } from '@tests/response';
 import { testCallerContext } from '@tests/callers';
-import { createUser } from '@modules/users/tests/factories';
+import { createUser, userRepository } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { createNotification } from '@modules/notifications/tests/factories';
 import type { PersonalDataSection } from '@kernel/registry';
@@ -195,6 +195,46 @@ describe('what the export holds of the notifications module', () => {
             'notifications.cart-line-removed',
             'notifications.wishlist-item-removed'
         ]);
+    });
+});
+
+describe('what the export holds of the users module', () => {
+    it('lists the providers linked and the factors armed, with no secret among them', async () => {
+        const user = await createUser({
+            email: 'ada@example.com',
+            verifiedAt: new Date(),
+            twoFactorMethods: [
+                {
+                    method: 'totp',
+                    enrolledAt: new Date('2026-04-02T09:30:00.000Z'),
+                    secret: 'hidden'
+                }
+            ]
+        });
+        await userRepository.linkOAuthAccount(user.id, {
+            provider: 'github',
+            providerId: '4242',
+            connectedAt: new Date('2026-03-01T10:00:00.000Z')
+        });
+
+        const result = await requestExport(user.id, user.email, testCallerContext);
+        await settleInlineExports();
+
+        if (!result.success) throw new Error('the request was refused');
+        const file = await fileOf(`${result.data.id}.json`);
+        expect(JSON.parse(file)).toMatchObject({
+            signInMethods: {
+                providers: [
+                    {
+                        provider: 'github',
+                        providerId: '4242',
+                        connectedAt: '2026-03-01T10:00:00.000Z'
+                    }
+                ],
+                twoFactor: [{ method: 'totp', enrolledAt: '2026-04-02T09:30:00.000Z' }]
+            }
+        });
+        expect(file).not.toContain('hidden');
     });
 });
 

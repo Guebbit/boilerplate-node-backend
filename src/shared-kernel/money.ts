@@ -6,8 +6,8 @@
  * at compile time — so `toDecimalAmount` is the only way back out.
  *
  * A currency's minor unit is NOT always a hundredth: JPY/KRW have none (the yen IS its own minor
- * unit), KWD/BHD have a thousandth (the fils). {@link toMinorUnits}/{@link toDecimalAmount} both
- * take the currency they're converting FOR, so a caller pricing a JPY order never multiplies by
+ * unit), KWD/BHD have a thousandth (the fils). The exponents are ISO 4217's, pinned below.
+ * {@link toMinorUnits}/{@link toDecimalAmount} both take the currency they're converting FOR, so a caller pricing a JPY order never multiplies by
  * 100 where it should multiply by 1 — see Fowler's Money pattern, or Stripe's own "zero-decimal
  * currencies" table for the same rule under a different name.
  *
@@ -28,57 +28,80 @@ const asMoney = (value: number): Money =>
     (Number.isFinite(value) ? (value === 0 ? 0 : value) : 0) as Money;
 
 /**
- * How many decimal places a currency's minor unit represents — 2 for EUR/USD, 0 for JPY/KRW, 3
- * for KWD/BHD. Cached per code: constructing an `Intl.NumberFormat` is real work, and this runs on
- * every money conversion.
+ * ISO 4217 minor-unit exponents, pinned in-repo. A currency's exponent decides how a stored
+ * amount is read, so it must not follow a runtime's display table: `Intl` (CLDR) answers 0 for
+ * HUF, IDR, COP, PKR, LBP and IQD, where ISO 4217 says 2, 2, 2, 2, 2 and 3.
+ * https://www.six-group.com/en/products-services/financial-information/data-standards.html
  *
- * `Intl.NumberFormat` throws a `RangeError` for a currency code it doesn't recognise — a
- * synchronous throw from a call we don't own, so a `try`/`catch` guards it rather than one more
- * validation this module would have to keep in step with ISO 4217 by hand. `NODE_DEFAULT_CURRENCY`
- * and an order's own frozen `currency` are both plain strings, never checked against the standard
- * at the point they're set — 2 is `Intl`'s own default for a style it otherwise can't resolve.
- * https://tc39.es/ecma402/#sec-currencydigits
+ * Exponent 2 is the rule; the other three lists are the exceptions. Codes are listed under the
+ * exponent ISO publishes for them.
  */
-const minorUnitExponentCache = new Map<string, number>();
+const ISO_4217_EXPONENTS: Readonly<Record<string, number>> = Object.fromEntries(
+    (
+        [
+            [0, 'BIF CLP DJF GNF ISK JPY KMF KRW PYG RWF UGX UYI VND VUV XAF XOF XPF'],
+            [3, 'BHD IQD JOD KWD LYD OMR TND'],
+            [4, 'CLF UYW'],
+            [
+                2,
+                `AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BMD BND BOB BRL BSD BTN BWP
+                BYN BZD CAD CDF CHF CNY COP CRC CUP CVE CZK DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP
+                GEL GHS GIP GMD GTQ GYD HKD HNL HTG HUF IDR ILS INR IRR JMD KES KGS KHR KPW KYD KZT
+                LAK LBP LKR LRD LSL MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN
+                NIO NOK NPR NZD PAB PEN PGK PHP PKR PLN QAR RON RSD RUB SAR SBD SCR SDG SEK SGD SHP
+                SLE SOS SRD SSP STN SVC SYP SZL THB TJS TMT TOP TRY TTD TWD TZS UAH USD UYU UZS VED
+                VES WST XCD XCG YER ZAR ZMW ZWG`
+            ]
+        ] as const
+    ).flatMap(([exponent, codes]) => codes.split(/\s+/).map((code) => [code, exponent] as const))
+);
 
 /**
+ * How many decimal places a currency's minor unit represents — 2 for EUR/USD, 0 for JPY/KRW, 3
+ * for KWD/BHD — read from the pinned {@link ISO_4217_EXPONENTS} table. A code the table does not
+ * list gets 2, the rule the standard itself follows for almost every currency.
  * @param currency - an ISO-4217 code
  * @returns the number of decimal places that currency's minor unit represents
  */
-const minorUnitExponent = (currency: string): number => {
-    const cached = minorUnitExponentCache.get(currency);
-    if (cached !== undefined) return cached;
+export const minorUnitExponent = (currency: string): number => ISO_4217_EXPONENTS[currency] ?? 2;
 
-    let exponent = 2;
-    // `Intl.NumberFormat` throws a `RangeError` for a currency code it doesn't recognise; there
-    // is no verdict-returning way to ask it first, and a malformed `NODE_DEFAULT_CURRENCY` must
-    // fall back to 2, not crash the process that reads it.
-    // eslint-disable-next-line no-restricted-syntax -- contains exactly that RangeError, see above
-    try {
-        // `maximumFractionDigits` is typed optional (some `style`s never set it) though the spec
-        // guarantees `'currency'` always does — the `?? 2` is TypeScript's own requirement, not a
-        // second fallback this code path can actually reach.
-        exponent =
-            new Intl.NumberFormat('en', { style: 'currency', currency }).resolvedOptions()
-                .maximumFractionDigits ?? 2;
-    } catch {
-        // Stryker disable next-line -- an unrecognised currency code is a config mistake, not a
-        // branch this suite drives; the fallback above already covers it.
-    }
+/**
+ * The plain decimal notation a stored amount arrives in when it is read as text — a `Decimal128`
+ * prints this way, and so does a string. Anything else (exponent form, junk) takes the numeric path.
+ */
+const PLAIN_DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
 
-    minorUnitExponentCache.set(currency, exponent);
-    return exponent;
+/**
+ * Read plain decimal text as minor units by moving the digits, never by multiplying a float.
+ * Digits beyond the exponent round half-up on the first dropped digit.
+ * @param match - the {@link PLAIN_DECIMAL} match of the text
+ * @param exponent - the currency's decimal places
+ * @returns the minor units, as a plain number
+ */
+const minorUnitsOfText = (match: RegExpExecArray, exponent: number): number => {
+    const [, sign, whole, fraction = ''] = match;
+    const scaled = Number(whole + fraction.padEnd(exponent, '0').slice(0, exponent));
+    const roundsUp = Number(fraction.charAt(exponent) || '0') >= 5;
+    return (sign === '-' ? -1 : 1) * (scaled + (roundsUp ? 1 : 0));
 };
 
 /**
  * Read a decimal amount as minor units, rounding to the nearest integer. `unknown` because
  * callers get raw aggregate output, where an unpopulated line carries no number at all.
+ *
+ * A `Decimal128` (or a numeric string) is read digit by digit, so a stored amount goes to minor
+ * units without a float in between; a `number` is multiplied and rounded.
  * @param value - a decimal amount, or anything at all
  * @param currency - the ISO-4217 code `value` is priced in — decides the scale factor
  * @returns the amount in minor units, rounded to the nearest one
  */
-export const toMinorUnits = (value: unknown, currency: string): Money =>
-    asMoney(Math.round(Number(value) * 10 ** minorUnitExponent(currency)));
+export const toMinorUnits = (value: unknown, currency: string): Money => {
+    const exponent = minorUnitExponent(currency);
+    const match = typeof value === 'number' ? null : PLAIN_DECIMAL.exec(String(value));
+    return asMoney(
+        match ? minorUnitsOfText(match, exponent) : Math.round(Number(value) * 10 ** exponent)
+    );
+};
 
 /**
  * Return an amount as the decimal `number` the contract publishes.
@@ -88,6 +111,16 @@ export const toMinorUnits = (value: unknown, currency: string): Money =>
  */
 export const toDecimalAmount = (amount: Money, currency: string): number =>
     amount / 10 ** minorUnitExponent(currency);
+
+/**
+ * Whether a decimal amount has no more places than the currency's minor unit — 19.99 EUR does,
+ * 19.999 EUR and 100.5 JPY do not. The check that keeps what is stored equal to what is charged.
+ * @param amount - a decimal amount
+ * @param currency - the ISO-4217 code `amount` is priced in
+ * @returns true when `amount` survives a trip through minor units unchanged
+ */
+export const fitsCurrency = (amount: number, currency: string): boolean =>
+    Number.isFinite(amount) && toDecimalAmount(toMinorUnits(amount, currency), currency) === amount;
 
 /**
  * Add amounts with exact integer addition — no floating-point drift.

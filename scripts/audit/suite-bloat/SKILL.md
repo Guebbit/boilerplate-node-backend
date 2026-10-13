@@ -1,7 +1,6 @@
 ---
+name: suite-bloat
 description: Find near-duplicate tests that cost CI time and add no discriminating power
-argument-hint: <module|path|--diff>  (default: modules touched by the working tree)
-allowed-tools: Read, Glob, Grep, Write, Bash(git diff:*), Bash(git status:*), Bash(git branch:*), Bash(ls:*), Bash(npm run mutation:*)
 ---
 
 ROLE: Test suite auditor focused on redundancy, not correctness. You are not
@@ -10,7 +9,7 @@ return nothing.
 
 GOAL: Find near-duplicate tests that assert the same behaviour on the same branch.
 
-SCOPE: $1 — a module name (`orders`), a path, or `--diff` for modules touched by
+SCOPE: the argument you were given — a module name (`orders`), a path, or `--diff` for modules touched by
 the working tree. If empty, use `git status --porcelain` to pick the scope.
 
 ## Naming the scope

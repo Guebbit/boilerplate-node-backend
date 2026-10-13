@@ -109,8 +109,8 @@ export const githubOAuthProvider: OAuthProvider = {
             codeChallenge
         }),
 
-    exchangeCode: (callback, expected) =>
-        redeemCode(configurationFor(PROVIDER_NAME, SERVER), callback, expected)
+    exchangeCode: (callbackUrl, expected) =>
+        redeemCode(configurationFor(PROVIDER_NAME, SERVER), callbackUrl, expected)
             .then(({ access_token: accessToken }) =>
                 Promise.all([
                     githubApiGet<GithubUser>('/user', accessToken),

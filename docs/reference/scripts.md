@@ -4,8 +4,8 @@
 entry. Most of it never ships — `scripts/ops/` and `scripts/db/` are the two exceptions,
 because those run against a live deployment rather than from a developer's terminal;
 `docker/Dockerfile.production` copies both into the production image and nothing else under
-`scripts/`. `scripts/eslint/` holds the lint rules this codebase wrote for itself, and
-`.husky/` holds the git hooks.
+`scripts/`. `scripts/eslint/` holds the lint rules this codebase wrote for itself, `scripts/audit/`
+holds the AI audit prompts beside the scripts they run, and `.husky/` holds the git hooks.
 
 Every script's user-facing name and when to run it is on
 [Package Scripts](../tools/package-scripts.md). This page says what each _file_ is.
@@ -25,6 +25,7 @@ scripts/
 ├── mutation/                 the Stryker runs and the per-file ratchet
 ├── testing/                  everything else that runs or reads a test suite
 ├── docs/                     generators that write into docs/
+├── audit/                    AI audit prompts, each with the scripts it runs, documented below
 ├── docker/                   generators that write into docker/
 ├── db/                       deploy-time database scripts — see [Data](./data.md)
 ├── ops/                      the scheduled `reap:*`/`sweep:*` jobs, documented below
@@ -146,6 +147,19 @@ afterwards — neither of those is in any gate.
 | `scripts/testing/run-prism-smoke-test.ts`                                                                                                                       | Boots Prism against `openapi.yaml` and proves it answers — `npm run test:prism`. A smoke test of the contract, not of the app: Prism serves the spec's own examples.                                   | [Contract Testing (Response)](../tools/contract-testing.md) |
 | `scripts/testing/report-results.ts`                                                                                                                             | Turns a runner's JSON report into which **module** a failure belongs to and where the time went — `npm run test:report`.                                                                               | [Testing (overview)](../tools/testing-and-docs.md)          |
 | `scripts/testing/scratch-copy.ts`<br>`scripts/testing/measure-scaffold.ts`<br>`scripts/testing/measure-demo-strip.ts`<br>`scripts/testing/demo-module-names.ts` | The `measure:*` family: a scratch copy of the checkout is wrecked on purpose (a module scaffolded, the shop stripped) and the repo's own checks are run against what is left. Report-only, in no gate. | [Module scaffolder](../tools/module-scaffolder.md)          |
+
+## AI audits — `scripts/audit/`
+
+One folder per audit, in the [Agent Skills](https://agentskills.io) layout: a `SKILL.md` an AI reads
+and follows, and a `scripts/` folder for what it runs. The folder is the audit's subject, so the
+skill's own `scripts/` is the one place a filename repeats a folder's word.
+
+| File                                                              | What it is                                                                                                                                                               | Read next                                                                          |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `scripts/audit/*/SKILL.md`                                        | The eight audit prompts. Each is registered with Claude Code by a pointer under `.claude/skills/`.                                                                       | [AI Auditing](../tools/ai-auditing.md)                                             |
+| `scripts/audit/compliance-rules.yaml`                             | The compliance registry both compliance prompts read, one rule per backend or frontend responsibility.                                                                   | [AI Auditing](../tools/ai-auditing.md)                                             |
+| `scripts/audit/code-shape/scripts/shallow-candidates.ts`          | Counts, through the TypeScript checker, what the `code-shape` audit judges: small functions with 1–2 users, pass-throughs, optional parameters never passed, lazy files. | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
+| `scripts/audit/code-shape/scripts/generate-shallow-candidates.ts` | Its CLI — `npm run audit:shallow -- <paths>`. Writes `tmp/reports/audit/code-shape/shallow.json`.                                                                        | [AI Auditing](../tools/ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
 
 ## Docs — `scripts/docs/`
 

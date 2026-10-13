@@ -205,3 +205,18 @@ export const refOf = (schema: IntrospectableSchema, path: string): string | unde
 /** The Mongoose type name of a path — `String`, `Number`, `ObjectId`, `Array`, `Embedded`. */
 export const typeOf = (schema: IntrospectableSchema, path: string): string | undefined =>
     (schema.path(path) as SchemaPath | undefined)?.instance;
+
+/**
+ * Whether a path's own validators refuse a value — what a `min` used to be read back as, for a
+ * path (money) whose type has no `min` and so carries a validator instead.
+ */
+export const refuses = (schema: IntrospectableSchema, path: string, value: unknown): boolean => {
+    const schemaType = schema.path(path) as
+        | {
+              cast?: (candidate: unknown) => unknown;
+              doValidateSync?: (candidate: unknown) => unknown;
+          }
+        | undefined;
+    // Cast first, as a write would: `required` is checked on the stored type, not the number.
+    return Boolean(schemaType?.doValidateSync?.(schemaType.cast?.(value)));
+};

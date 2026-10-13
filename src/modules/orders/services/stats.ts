@@ -10,12 +10,7 @@
 
 import type { PipelineStage } from 'mongoose';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
-import {
-    bucketOf,
-    decimalSum,
-    numberOf,
-    type ReportWindow
-} from '@infrastructure/persistence/report';
+import { bucketOf, type ReportWindow } from '@infrastructure/persistence/report';
 import { toMinorUnits, type Money } from '@shared-kernel/money';
 import { orderRepository } from '../repository';
 
@@ -33,7 +28,7 @@ const LINE_NET = {
         { $toDecimal: '$items.quantity' },
         {
             $divide: [
-                { $toDecimal: '$items.product.price' },
+                '$items.product.price',
                 { $add: [{ $toDecimal: 1 }, { $toDecimal: '$items.product.taxRate' }] }
             ]
         }
@@ -106,7 +101,7 @@ export const productTotals = (window: ReportWindow, limit: number): Promise<Prod
                     _id: { currency: '$currency', productId: '$items.product._id' },
                     title: { $first: '$items.product.title' },
                     units: { $sum: '$items.quantity' },
-                    netSales: decimalSum(LINE_NET)
+                    netSales: { $sum: LINE_NET }
                 }
             },
             { $sort: { netSales: -1, '_id.productId': 1 } },
@@ -118,7 +113,7 @@ export const productTotals = (window: ReportWindow, limit: number): Promise<Prod
                 productId: String(row._id.productId),
                 title: row.title,
                 units: row.units,
-                netSales: toMinorUnits(numberOf(row.netSales), row._id.currency)
+                netSales: toMinorUnits(row.netSales, row._id.currency)
             }))
         );
 
@@ -149,7 +144,7 @@ export const categoryTotals = (window: ReportWindow): Promise<CategoryTotal[]> =
                 $group: {
                     _id: { currency: '$currency', category: '$items.product.categories' },
                     units: { $sum: '$items.quantity' },
-                    netSales: decimalSum(LINE_NET)
+                    netSales: { $sum: LINE_NET }
                 }
             },
             { $sort: { netSales: -1, '_id.category': 1 } }
@@ -159,7 +154,7 @@ export const categoryTotals = (window: ReportWindow): Promise<CategoryTotal[]> =
                 currency: row._id.currency,
                 category: row._id.category,
                 units: row.units,
-                netSales: toMinorUnits(numberOf(row.netSales), row._id.currency)
+                netSales: toMinorUnits(row.netSales, row._id.currency)
             }))
         );
 
@@ -277,15 +272,12 @@ const ORDER_TOTAL = {
                 $map: {
                     input: '$items',
                     in: {
-                        $multiply: [
-                            { $toDecimal: '$$this.quantity' },
-                            { $toDecimal: '$$this.product.price' }
-                        ]
+                        $multiply: [{ $toDecimal: '$$this.quantity' }, '$$this.product.price']
                     }
                 }
             }
         },
-        { $toDecimal: { $ifNull: ['$shippingCost', 0] } }
+        { $ifNull: ['$shippingCost', 0] }
     ]
 };
 
@@ -318,7 +310,7 @@ export const pipeline = (): Promise<PipelineRead> =>
                             $group: {
                                 _id: '$currency',
                                 count: { $sum: 1 },
-                                amount: decimalSum(ORDER_TOTAL),
+                                amount: { $sum: ORDER_TOTAL },
                                 nearest: { $min: '$payBy' }
                             }
                         }
@@ -334,7 +326,7 @@ export const pipeline = (): Promise<PipelineRead> =>
             awaitingTransfers: facet.transfers.map((row) => ({
                 currency: row._id,
                 count: row.count,
-                amount: toMinorUnits(numberOf(row.amount), row._id),
+                amount: toMinorUnits(row.amount, row._id),
                 ...(row.nearest ? { nearestPayBy: row.nearest } : {})
             })),
             paidNotShipped: facet.paid.at(0)?.n ?? 0

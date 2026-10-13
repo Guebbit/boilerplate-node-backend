@@ -8,6 +8,13 @@ tags:
     - name: Users
       description: Administration of user accounts and their roles.
 
+# This module's section of the account data export (`POST /account/export`): the bundler adds it
+# to `AccountExportResponse`. Removing the module removes the section.
+x-personal-data:
+    signInMethods:
+        schema:
+            $ref: '#/components/schemas/ExportSignInMethods'
+
 paths:
     # --------- Users ---------
     /users:
@@ -327,6 +334,52 @@ paths:
 
 components:
     schemas:
+        # The ways into an account, as facts. Never a secret, a code in flight, a delivery address
+        # or a hash — `POST /account/export` answers what the account holds, not how to use it.
+        ExportSignInMethods:
+            type: object
+            additionalProperties: false
+            required: [providers, twoFactor]
+            properties:
+                providers:
+                    type: array
+                    description: The identity providers linked to the account.
+                    items:
+                        $ref: '#/components/schemas/ExportLinkedProvider'
+                twoFactor:
+                    type: array
+                    description: The second factors armed on the account. A setup never confirmed is left out.
+                    items:
+                        $ref: '#/components/schemas/ExportTwoFactorMethod'
+
+        ExportLinkedProvider:
+            type: object
+            additionalProperties: false
+            required: [provider, providerId, connectedAt]
+            properties:
+                provider:
+                    type: string
+                    description: Registry name of the provider, e.g. `google`.
+                providerId:
+                    type: string
+                    description: The provider's own stable identifier for the account (its `sub`), an online identifier under GDPR Art. 4(1).
+                connectedAt:
+                    type: string
+                    format: date-time
+
+        ExportTwoFactorMethod:
+            type: object
+            additionalProperties: false
+            required: [method, enrolledAt]
+            properties:
+                method:
+                    type: string
+                    description: Wire name of the factor, e.g. `totp` or `email`.
+                enrolledAt:
+                    type: string
+                    format: date-time
+                    description: When the factor was armed.
+
         # The ONE sort grammar, shared with every list (docs/api/sorting.md). `-` sorts
         # descending; earlier entries rank first; ties end on the id. Text fields sort
         # case-insensitively.

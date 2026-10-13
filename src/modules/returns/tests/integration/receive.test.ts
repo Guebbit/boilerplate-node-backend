@@ -436,9 +436,14 @@ describe('the credit note a received return issues', () => {
             return notes.length > 0;
         });
 
-        expect(notes[0].toObject().taxSummary).toEqual([
-            { rate: 0.1, netAmount: 9.09, taxAmount: 0.91, grossAmount: 10 }
-        ]);
+        expect(
+            notes[0].taxSummary.map(({ rate, netAmount, taxAmount, grossAmount }) => ({
+                rate,
+                netAmount,
+                taxAmount,
+                grossAmount
+            }))
+        ).toEqual([{ rate: 0.1, netAmount: 9.09, taxAmount: 0.91, grossAmount: 10 }]);
     });
 
     it("keeps the refund's goods off the wire — they are the credit note's input only", async () => {

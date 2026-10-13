@@ -1,5 +1,5 @@
-# Shared compliance rule registry. Read by tests/audit/compliance-backend.md and
-# tests/audit/compliance-frontend.md, which each filter by `responsibility` and evaluate only
+# Shared compliance rule registry. Read by scripts/audit/compliance-backend/SKILL.md and
+# scripts/audit/compliance-frontend/SKILL.md, which each filter by `responsibility` and evaluate only
 # their own `evidence.<side>` hints. Byte-identical with the sibling repo — see
 # docs/tools/ai-auditing.md. `rules:` is what either prompt evaluates; `suggested_rules:` is a
 # staging area for candidates pending human approval and MUST NOT be read by either prompt.
@@ -133,7 +133,7 @@ rules:
       applies_when: >
           Only if the app has AI-driven runtime features. NOT-APPLICABLE as of this registry's
           writing — no AI/LLM runtime feature exists anywhere in src/ (the only AI usage in this repo
-          is the human-run tests/audit/*.md prompts themselves, which are tooling, not a product
+          is the human-run scripts/audit/*/SKILL.md prompts themselves, which are tooling, not a product
           feature). Re-evaluate the moment a runtime AI feature is added.
       evidence:
           backend:

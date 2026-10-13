@@ -106,6 +106,25 @@ const backendUrl = (path: string): string => new URL(path, siteConfig().NODE_URL
 export const oauthRedirectUri = (provider: string): string =>
     backendUrl(`account/oauth/${provider}/callback`);
 
+/**
+ * The callback URL a provider's redirect arrived at: this app's own redirect URI for `provider`
+ * with the request's RAW query string attached.
+ *
+ * Built on the `NODE_URL` base and never from the request's Host or scheme, which a client can
+ * forge. The query is sliced off `originalUrl` as sent, not rebuilt from `request.query`: the
+ * parser folds a repeated `code` into an array, and the library's refusal of a repeated parameter
+ * is exactly what a rebuilt query would hide.
+ *
+ * @param provider - the registry key, matching the route's `:provider`
+ * @param originalUrl - Express's `request.originalUrl`, path and query as received
+ */
+export const oauthCallbackUrl = (provider: string, originalUrl: string): URL => {
+    const callback = new URL(oauthRedirectUri(provider));
+    const queryStart = originalUrl.indexOf('?');
+    callback.search = queryStart === -1 ? '' : originalUrl.slice(queryStart);
+    return callback;
+};
+
 /** The paired frontend's OAuth landing page — everything below appends its own query to this. */
 const oauthFrontendCallbackBase = (): string => `${siteConfig().NODE_FRONTEND_URL}/oauth/callback`;
 

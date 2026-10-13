@@ -10,7 +10,7 @@
  */
 
 import { NO_MONEY, toMinorUnits, type Money } from '@shared-kernel/money';
-import { numberOf, type ReportWindow } from '@infrastructure/persistence/report';
+import { type ReportWindow } from '@infrastructure/persistence/report';
 import { invoicingRepository, type DocumentBucketRow } from '../repository';
 
 /** What one kind of document adds up to in one bucket, in minor units. */
@@ -49,10 +49,10 @@ const NONE: DocumentTotals = {
  */
 const totalsOf = (row: DocumentBucketRow): DocumentTotals => ({
     documents: row.documents,
-    goodsNet: toMinorUnits(numberOf(row.goodsNet), row.currency),
-    shippingNet: toMinorUnits(numberOf(row.shippingNet), row.currency),
-    tax: toMinorUnits(numberOf(row.tax), row.currency),
-    gross: toMinorUnits(numberOf(row.gross), row.currency)
+    goodsNet: toMinorUnits(row.goodsNet, row.currency),
+    shippingNet: toMinorUnits(row.shippingNet, row.currency),
+    tax: toMinorUnits(row.tax, row.currency),
+    gross: toMinorUnits(row.gross, row.currency)
 });
 
 /**

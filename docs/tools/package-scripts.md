@@ -86,6 +86,17 @@ off to `npm run` — see [Database & seed scripts](#database-seed-scripts). `com
 | `mutation:pull`      | fetch the newest baseline the GitHub sweep uploaded into `mutation-baseline.json` (needs `gh auth login`)                        | [Mutation Testing](./mutation-testing.md#the-github-sweep) |
 | `measure:scaffold`   | scaffold a module in a scratch copy and run the gate on it                                                                       | [Module scaffolder](./module-scaffolder.md)                |
 
+## Audit scripts
+
+The deterministic half of the `code-shape` AI audit. Each writes a list for the audit to judge and
+never fails — none is a gate.
+
+| Script             | Job                                                                                   | Read more                                                                   |
+| ------------------ | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `audit:shallow`    | small functions with 1–2 users, pass-throughs, unused optional parameters, lazy files | [AI Auditing](./ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
+| `audit:unused`     | knip: unused files, exports, types and dependencies                                   | [AI Auditing](./ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
+| `audit:duplicates` | jscpd: copy-pasted and near-miss blocks, to `tmp/reports/audit/code-shape/jscpd/`     | [AI Auditing](./ai-auditing.md#code-shape-the-tools-count-the-model-judges) |
+
 ## Contract scripts
 
 Two stages, and they run in this order: **bundle** the committed documents from their per-module

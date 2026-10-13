@@ -11,6 +11,7 @@
 import { model, Schema, Types } from 'mongoose';
 import type { Document, Model } from 'mongoose';
 import { applySerialization } from '@infrastructure/persistence/serialize';
+import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import {
     PaymentStatus,
     PaymentMethod,
@@ -136,7 +137,7 @@ export type PaymentModel = Model<PaymentDocument>;
 /** One refund attempt, embedded. Addressed by its own `_id` — the settle and fail writes match on it. */
 const refundSchema = new Schema<RefundRecord>(
     {
-        amount: { type: Number, required: true, min: 0 },
+        amount: moneyPath({ required: true, nonNegative: true }),
         currency: { type: String, required: true },
         status: {
             type: String,
@@ -158,7 +159,7 @@ const refundSchema = new Schema<RefundRecord>(
             ],
             default: undefined
         },
-        shipping: { type: Number, min: 0 },
+        shipping: moneyPath({ nonNegative: true }),
         providerRefundRef: { type: String },
         failureReason: { type: String, enum: Object.values(RefundFailureReason) },
         settledAt: { type: Date }
@@ -180,11 +181,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
             type: Schema.Types.ObjectId,
             ref: 'User'
         },
-        amount: {
-            type: Number,
-            required: true,
-            min: 0
-        },
+        amount: moneyPath({ required: true, nonNegative: true }),
         currency: {
             type: String,
             required: true
@@ -225,12 +222,7 @@ export const paymentSchema = new Schema<PaymentDocument>(
         refundedByHand: {
             type: Boolean
         },
-        amountRefunded: {
-            type: Number,
-            required: true,
-            default: 0,
-            min: 0
-        },
+        amountRefunded: moneyPath({ required: true, nonNegative: true, default: 0 }),
         refunds: {
             type: [refundSchema],
             default: []
@@ -240,6 +232,11 @@ export const paymentSchema = new Schema<PaymentDocument>(
         timestamps: true
     }
 );
+
+/**
+ * Money is stored as Decimal128 and a lean read hands numbers back — see `@infrastructure/persistence/money-field`.
+ */
+paymentSchema.plugin(moneyPlugin);
 
 // The staff list: newest first, optionally by status.
 paymentSchema.index({ createdAt: -1 }, { name: 'payments_createdAt' });

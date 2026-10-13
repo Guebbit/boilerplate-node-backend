@@ -6,15 +6,15 @@
  */
 
 import '@tests/contract';
-import { decodeJwt } from 'jose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
-import { api } from '@tests/http';
+import { api, bearerForCookie } from '@tests/http';
 import { freezeDate, advanceDate } from '@tests/clock';
 import { createUser, userRepository, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { reauthWindowSeconds } from '@kernel/config';
-import { createAccessToken, startSession } from '../../session/jwt';
 import { settleInlineExports } from '../../services/export';
+import { mintSession } from '../factories';
+import { bearerIn, claimedAmr } from './support';
 
 /** Every queued mail, newest last — what the recipient would read. */
 const mockOutbox: { template: string; data: Record<string, unknown> }[] = [];
@@ -47,9 +47,6 @@ afterEach(() => jest.useRealTimers());
 const mailedCode = (): string =>
     String(mockOutbox.findLast(({ template }) => template === 'account.reauth-code')?.data.code);
 
-/** The `amr` claim of an access token. */
-const amrOf = (token: string): string[] => (decodeJwt(token) as { amr: string[] }).amr;
-
 /**
  * A session whose login proved `amr`, for an account that has (or has not) a password — the shape
  * an OAuth callback leaves behind, without a provider round trip.
@@ -65,13 +62,8 @@ const sessionFor = async (amr: string[], withPassword: boolean) => {
               email: 'oauth@example.com',
               verifiedAt: new Date()
           });
-    const refreshToken = await startSession(user.id, amr);
-    const token = await createAccessToken(refreshToken);
-    return {
-        user,
-        bearer: `Bearer ${token}` as const,
-        jwtCookie: `__Host-session=${refreshToken}`
-    };
+    const { bearer, cookie } = await mintSession(user.id, { amr });
+    return { user, bearer, jwtCookie: cookie };
 };
 
 /** Ask for a code, then spend it. */
@@ -106,9 +98,9 @@ describe('GET /account/reauth', () => {
             username: 'nobody',
             email: 'nobody@example.com'
         });
-        const token = await startSession(user.id, ['google']).then(createAccessToken);
+        const { bearer } = await mintSession(user.id, { amr: ['google'] });
 
-        const response = await api().get('/account/reauth').set('Authorization', `Bearer ${token}`);
+        const response = await api().get('/account/reauth').set('Authorization', bearer);
 
         expect(response.body.data).toEqual({ methods: [] });
     });
@@ -173,21 +165,23 @@ describe('POST /account/reauth/methods/email/send', () => {
 
 describe('POST /account/reauth with a mailed code', () => {
     it('re-mints the session claiming only `email`, not what the login proved', async () => {
-        const { bearer } = await sessionFor(['google'], false);
+        const { user, bearer } = await sessionFor(['google'], false);
 
         const response = await reauthByEmail(bearer);
 
         expect(response.status).toBe(200);
-        expect(amrOf(response.body.data.token as string)).toEqual(['email']);
+        expect(await claimedAmr(response, user.id)).toEqual(['email']);
     });
 
     it('spends the code: the same one cannot pass twice', async () => {
         const { bearer } = await sessionFor(['google'], false);
-        await reauthByEmail(bearer);
+        const first = await reauthByEmail(bearer);
 
+        // The re-proof replaced the session, so the replay carries the one it handed back: in
+        // `cookie` mode the old id is gone, and the refusal under test is the code's, not a 401.
         const replay = await api()
             .post('/account/reauth')
-            .set('Authorization', bearer)
+            .set('Authorization', bearerIn(first))
             .send({ method: 'email', code: mailedCode() });
 
         expect(replay.status).toBe(422);
@@ -247,11 +241,9 @@ describe('POST /account/reauth with a mailed code', () => {
 
     it('lets a stale session with no password get fresh again', async () => {
         freezeDate();
-        const { bearer, jwtCookie } = await sessionFor(['google'], false);
+        const { jwtCookie } = await sessionFor(['google'], false);
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
-        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
-        const staleBearer = `Bearer ${stale.body.data.token as string}`;
-        expect(bearer).not.toBe(staleBearer);
+        const staleBearer = await bearerForCookie(jwtCookie);
         const blocked = await api()
             .post('/account/export')
             .set('Authorization', staleBearer)
@@ -261,7 +253,7 @@ describe('POST /account/reauth with a mailed code', () => {
         const fresh = await reauthByEmail(staleBearer);
         const allowed = await api()
             .post('/account/export')
-            .set('Authorization', `Bearer ${fresh.body.data.token as string}`)
+            .set('Authorization', bearerIn(fresh))
             .send();
 
         // 202: asking is what a fresh session unlocks; the build runs behind it.
@@ -273,11 +265,11 @@ describe('POST /account/reauth with a mailed code', () => {
         freezeDate();
         const { jwtCookie } = await sessionFor(['pwd'], true);
         advanceDate((reauthWindowSeconds('sensitive') + 1) * 1000);
-        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
+        const staleBearer = await bearerForCookie(jwtCookie);
 
         const response = await api()
             .get(`/account/export/${'0'.repeat(24)}`)
-            .set('Authorization', `Bearer ${stale.body.data.token as string}`);
+            .set('Authorization', staleBearer);
 
         expect(response.status).toBe(401);
     });
@@ -289,11 +281,11 @@ describe('the step-up window', () => {
         freezeDate();
         const { jwtCookie } = await sessionFor(['pwd'], true);
         advanceDate(61 * 1000);
-        const stale = await api().post('/account/refresh').set('Cookie', jwtCookie);
+        const staleBearer = await bearerForCookie(jwtCookie);
 
         const response = await api()
             .post('/account/logout-all')
-            .set('Authorization', `Bearer ${stale.body.data.token as string}`)
+            .set('Authorization', staleBearer)
             .send();
 
         expect(response.status).toBe(401);
@@ -315,14 +307,14 @@ describe('POST /account/reauth with a password', () => {
     });
 
     it('does NOT keep the second factor the login proved: a password-only re-auth earns `pwd` alone', async () => {
-        const { bearer } = await sessionFor(['pwd', 'otp'], true);
+        const { user, bearer } = await sessionFor(['pwd', 'otp'], true);
 
         const response = await api()
             .post('/account/reauth')
             .set('Authorization', bearer)
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
-        expect(amrOf(response.body.data.token as string)).toEqual(['pwd']);
+        expect(await claimedAmr(response, user.id)).toEqual(['pwd']);
     });
 
     it('rejects the untagged body the endpoint used to take', async () => {

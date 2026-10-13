@@ -38,8 +38,8 @@ export const fakeOAuthProvider: OAuthProvider = {
     authorizeUrl: (state, redirectUri, codeChallenge) =>
         `${redirectUri}?code=${FAKE_OAUTH_CODE}.${codeChallenge}&state=${encodeURIComponent(state)}`,
 
-    exchangeCode: ({ code }, { codeVerifier }) => {
-        const [fixedPart, challenge] = code.split('.', 2);
+    exchangeCode: (callbackUrl, { codeVerifier }) => {
+        const [fixedPart, challenge] = (callbackUrl.searchParams.get('code') ?? '').split('.', 2);
         if (fixedPart !== FAKE_OAUTH_CODE || !challenge)
             return Promise.reject(new Error('fake provider: unrecognised code'));
 

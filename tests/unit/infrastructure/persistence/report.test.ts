@@ -1,8 +1,8 @@
 /**
- * `report.ts` — the `$dateTrunc` every grouped read buckets with, and the decimal read-back. The
- * subject is the one option that only means something for one unit: Monday-first weeks.
+ * `report.ts` — the `$dateTrunc` every grouped read buckets with. The subject is the one option
+ * that only means something for one unit: Monday-first weeks.
  */
-import { bucketOf, decimalSum, numberOf } from '@infrastructure/persistence/report';
+import { bucketOf } from '@infrastructure/persistence/report';
 
 const window = (interval: 'day' | 'week' | 'month') => ({
     from: new Date('2026-01-01T00:00:00Z'),
@@ -24,21 +24,5 @@ describe('bucketOf', () => {
             startOfWeek: 'monday'
         });
         expect(bucketOf('$paidAt', window('month')).$dateTrunc).not.toHaveProperty('startOfWeek');
-    });
-});
-
-describe('decimalSum', () => {
-    it('converts to Decimal128 before summing, so cents add exactly', () => {
-        expect(decimalSum('$netTotal')).toEqual({ $sum: { $toDecimal: '$netTotal' } });
-    });
-});
-
-describe('numberOf', () => {
-    it('reads a decimal by its text, a number as itself, and anything else as 0', () => {
-        expect(numberOf({ toString: () => '12.30' })).toBe(12.3);
-        expect(numberOf(4)).toBe(4);
-        expect(numberOf(undefined)).toBe(0);
-        expect(numberOf('not a number')).toBe(0);
-        expect(numberOf(NaN)).toBe(0);
     });
 });

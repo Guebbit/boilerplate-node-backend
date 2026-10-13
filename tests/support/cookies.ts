@@ -23,6 +23,17 @@ export const setCookie = (
 };
 
 /**
+ * The value a cookie carries, out of a `Cookie` header or a `Set-Cookie` line: what sits between
+ * the first `=` and the first `;`.
+ *
+ * @param cookie - `name=value`, with or without attributes after it
+ */
+export const cookieValue = (cookie: string): string => {
+    const [pair = ''] = cookie.split(';', 1);
+    return decodeURIComponent(pair.slice(pair.indexOf('=') + 1));
+};
+
+/**
  * The named cookies rewritten as one `Cookie` request header, so a follow-up call carries them.
  * Each directive is cut at the first `;` — the flags are the browser's business, not the server's.
  *
