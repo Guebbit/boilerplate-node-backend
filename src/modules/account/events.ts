@@ -5,8 +5,9 @@
  * enumerates domains.
  */
 
-/** Why an account's sessions were ended wholesale — the cases a subscriber must treat as a compromise. */
-export type SessionsRevokedReason = 'logout-all' | 'password-reset' | 'email-change-undo';
+import type { SessionsRevokedReason } from './domain/revocation';
+
+export type { SessionsRevokedReason } from './domain/revocation';
 
 /** Registers this module's event payloads into the kernel's app-wide `DomainEventMap`. */
 declare module '@kernel/events' {

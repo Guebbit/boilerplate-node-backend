@@ -30,6 +30,7 @@ import { keyId, keyForId } from './key-ring';
 import { predatesSessionEpoch } from './epoch';
 import { recordActivity } from './activity';
 import { assertSecondFactor } from './mint-guard';
+import { revokeFor } from '../services/revocation';
 
 /**
  * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
@@ -394,10 +395,7 @@ export class TokenReuseError extends Error {
  * already dead.
  */
 const revokeAllRefreshTokens = (userId: string): Promise<void> =>
-    userService
-        .bumpSessionEpoch(userId)
-        .then(() => sessionRepository.removeAll(userId))
-        .then(() => undefined);
+    revokeFor('refresh-reuse', userId);
 
 /**
  * Store a rotation's successor row and answer the new pair. The successor continues the session:

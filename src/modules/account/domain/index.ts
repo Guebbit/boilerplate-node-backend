@@ -16,3 +16,5 @@ export {
 export type { EmailChangeEvent, EmailChangeFields, EmailChangeState } from './email-change';
 
 export { AMR, firstSessionRefused, withProofs } from './session-proof';
+export { REVOCATION, announces } from './revocation';
+export type { RevocationCause, RevocationRow, SessionsRevokedReason } from './revocation';

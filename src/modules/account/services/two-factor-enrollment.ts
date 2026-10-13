@@ -23,7 +23,7 @@ import type {
     TwoFactorStatus
 } from '@types';
 import { accountAuditActions } from '../audit';
-import { dropSessions } from './revocation';
+import { revokeFor } from './revocation';
 import {
     availableTwoFactorMethods,
     clearDeliveredCode,
@@ -270,7 +270,7 @@ const armMethod = (
                 salt && { mintCodes: { salt, digests: hashBackupCodes(backupCodes, salt) } })
         })
         .then((stored) =>
-            dropSessions(user.id).then(() =>
+            revokeFor('two-factor-change', user.id).then(() =>
                 generateSuccess({
                     method: entry.method,
                     // Shown only when the stored set is this request's own; the other confirm's
@@ -329,7 +329,7 @@ export const removeTwoFactorMethod = (
                         dropped: [method],
                         discardCodesIfDisarmed: true
                     })
-                    .then(() => dropSessions(user.id))
+                    .then(() => revokeFor('two-factor-change', user.id))
                     .then(() => {
                         // Removing the last factor is 2FA going off: say that, not just "a method left".
                         notifyChange(
@@ -373,7 +373,7 @@ export const disableTwoFactor = (
             userService.markSessionsEnded(user);
             return userService
                 .persistTwoFactorWrite(user, { dropped: 'all', discardCodesIfDisarmed: true })
-                .then(() => dropSessions(user.id))
+                .then(() => revokeFor('two-factor-change', user.id))
                 .then(() => {
                     notifyChange(user, 'disabled', '', context);
                     return generateSuccess(undefined);

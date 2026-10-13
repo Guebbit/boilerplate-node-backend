@@ -103,7 +103,7 @@ a person with none live gets neither audit row nor mail), so a redelivery does n
   token must not turn ten minutes into a long-lived key. GitHub's sudo mode asks the same.
 - **Every key expires**, at most one year out. A key that never expires never gets rotated.
 - **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere,
-  a password reset or an email-change undo ("this wasn't me") revoked them. `account` only announces the event; this module owns what it
+  a password reset or an email-change undo ("this wasn't me") revoked them. These are the causes whose row in `REVOCATION` (`account/domain/revocation.ts`) announces; the list is derived there, not restated. `account` only announces the event; this module owns what it
   means for keys. An ordinary password change, where the owner typed the current password, leaves
   keys alone.
 - **A replayed refresh token leaves keys alone.** It signs every device out (see

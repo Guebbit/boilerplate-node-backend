@@ -3,7 +3,7 @@
  * Ending sessions on purpose: one of the caller's own, the current one, or all of them.
  */
 
-import { revokeAllSessionsAnnounced } from './revocation';
+import { revokeFor } from './revocation';
 import {
     generateSuccess,
     generateReject,
@@ -95,7 +95,7 @@ export const logoutEverywhere = (
                 // Gone-but-verified is 401 here too — `openapi.yaml` declares no 404 for
                 // `logoutAll`, and the caller's session is exactly what no longer exists.
                 if (!user) return generateReject(401, []);
-                return revokeAllSessionsAnnounced(user.id, 'logout-all').then(() =>
+                return revokeFor('logout-all', user.id).then(() =>
                     generateSuccess<UserDocument>(user)
                 );
             }

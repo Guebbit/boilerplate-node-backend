@@ -437,16 +437,25 @@ So every "I may be compromised" event also moves `tokensValidAfter` on the user,
 `verifyRefreshToken` and the rotation for a refresh one. `auth_time`, not `iat`, because one
 `/refresh` resets `iat` and would walk a stolen session out of the cut.
 
-| Event                                 | Epoch moves                                                    | The caller                                                                              |
-| ------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| logout everywhere                     | yes                                                            | signed out too                                                                          |
-| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged | survives: new session in the response                                                   |
-| 2FA factor armed, removed or disabled | yes                                                            | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
-| email change confirmed                | yes                                                            | the confirming request is usually the mailbox, not a session                            |
-| email change undone ("not me")        | yes, FIRST, before the address is touched                      | n/a: the undo link is the credential                                                    |
-| refresh reuse detected                | yes                                                            | n/a                                                                                     |
-| admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                | n/a: an unban or a restore does not bring the old tokens back                           |
-| plain logout                          | no: one access token lives out its ten minutes                 | n/a                                                                                     |
+| Event                                 | Epoch moves                                                         | The caller                                                                              |
+| ------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| logout everywhere                     | yes                                                                 | signed out too                                                                          |
+| password change or reset              | yes, and pending one-time tokens and MFA challenges are purged      | survives: new session in the response                                                   |
+| 2FA factor armed, removed or disabled | yes                                                                 | survives: refresh cookie re-minted, the client's next `/refresh` swaps the access token |
+| email change confirmed                | yes                                                                 | the confirming request is usually the mailbox, not a session                            |
+| email change undone ("not me")        | yes, FIRST, before the address is touched, and pending links purged | n/a: the undo link is the credential                                                    |
+| refresh reuse detected                | yes                                                                 | n/a                                                                                     |
+| admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                     | n/a: an unban or a restore does not bring the old tokens back                           |
+| plain logout                          | no: one access token lives out its ten minutes                      | n/a                                                                                     |
+
+### One table, keyed by cause {#revocation}
+
+`REVOCATION` (`domain/revocation.ts`) lists every cause once: where its epoch is written, whether
+pending links are purged, whether it announces `account.sessions-revoked`, whether the caller is
+re-minted, and which session modes it applies to. `revokeFor(cause, userId)` in
+`services/revocation.ts` acts on a row; the reasons an event can carry (`SessionsRevokedReason`),
+and so the cases `api-keys` mails about, are derived from the rows that announce. Adding a cause
+means adding a row, and the compiler asks for its test trigger.
 
 **Where the epoch is written.** In the credential's own write, so a second write failing cannot
 leave an old session live: the password's transaction, the swap's `save`, the factor's `save`. Two
