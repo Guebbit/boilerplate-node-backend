@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { removeSeedImages } from '../../../../scripts/ops/demo-remove-scenarios';
+import { removeSeedImages } from '../../../../scripts/scaffold/demo-remove-scenarios';
 
 /** What `scenarios/users.ts` looks like around its avatar spreads. */
 const USERS = `import userImages from './users-images.generated.json';

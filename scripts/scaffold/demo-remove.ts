@@ -28,7 +28,7 @@ import {
     stripDemoJobs
 } from './demo-remove-scenarios';
 
-/** Repo root, two levels up from `scripts/ops/`. */
+/** Repo root, two levels up from `scripts/scaffold/`. */
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
 /** Print every step's own report line. */

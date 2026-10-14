@@ -240,9 +240,9 @@ live in `.env` and this one cannot.
 
 ## Periodic jobs
 
-`reap:*` (retention deletes), `sweep:*` (retry and repair loops), `reencrypt` and
-`refresh:breached-passwords` are the entry points the production crontab runs. Each is a script
-under `scripts/ops/`; the schedule table and what each one deletes live in
+`reap:*` (retention deletes) and `sweep:*` (retry and repair loops) are the entry points the
+production crontab runs; `reencrypt` is run by hand against a deployment. Each is a script under
+`scripts/ops/`; the schedule table and what each one deletes live in
 [Ops](../reference/ops.md).
 
 ## Related pages

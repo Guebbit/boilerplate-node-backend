@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { assertCorpusDigest } from '../../../../scripts/ops/corpus-digest';
+import { assertCorpusDigest } from '../../../../scripts/security/corpus-digest';
 
 /** A small body and its real SHA-256, so the happy path proves the digest is computed over the bytes. */
 const body = new TextEncoder().encode('123456\npassword\n');

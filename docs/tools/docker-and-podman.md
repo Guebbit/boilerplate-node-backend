@@ -237,9 +237,9 @@ safe. The test doubles (a fake payment provider, a mail log) are not deleted: th
 **Who owns the code in the production image**: root, read-only to `node`. The runtime stage copies
 without `--chown`; only `public/images`, `tmp/storage` and `tmp/quarantine` belong to `node`. A write
 primitive gained through a dependency therefore cannot rewrite the code it runs, with or without
-the compose file's `read_only`. `scripts/ops/` is copied file by file — exactly the jobs
-`docker/crontab` runs, so a one-off tool (`demo-remove*`, `refresh-breached-passwords`) never ships;
-a cross-cutting test keeps the two lists equal.
+the compose file's `read_only`. `scripts/ops/` is copied whole: it holds only what runs against a
+deployment, and developer tools (`demo:remove`, `refresh:breached-passwords`) live in other folders.
+A cross-cutting test checks that every crontab job's file is under `scripts/ops/`.
 
 **Boot check**: `docker/boot-check.sh <image>` starts the production image against a throwaway Mongo
 with the fail-closed env set, waits for `/livez`, and fails if `node` can write under `/app/src`. CI's

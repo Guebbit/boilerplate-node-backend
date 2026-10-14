@@ -5,7 +5,7 @@ import {
     readRemovedAuthorization,
     stripConformanceCases,
     stripRoleGrants
-} from '../../../../scripts/ops/demo-remove-authorization';
+} from '../../../../scripts/scaffold/demo-remove-authorization';
 
 /** A throwaway repo root. */
 let root: string;

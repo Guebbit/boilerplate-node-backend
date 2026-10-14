@@ -22,7 +22,7 @@
 
 import os from 'node:os';
 import path from 'node:path';
-import { removeModules } from '../ops/demo-remove-modules';
+import { removeModules } from '../scaffold/demo-remove-modules';
 import { readDemoModuleNames } from './demo-module-names';
 import { assembleScratchCopy, runIn } from './scratch-copy';
 
@@ -87,7 +87,7 @@ const RECIPES: Partial<Record<string, Recipe>> = {
     shop: {
         // The real command, inside the scratch copy: `__dirname` there resolves to the scratch root.
         apply: () => {
-            runInScratch('npx', ['tsx', 'scripts/ops/demo-remove.ts']);
+            runInScratch('npx', ['tsx', 'scripts/scaffold/demo-remove.ts']);
         },
         describe: () =>
             `every group: shop and group: example module (${readDemoModuleNames(REPO_ROOT).join(', ')})`

@@ -10,9 +10,9 @@
  * the filtered output is small enough to commit (~226 KB, ~20k entries) even though the source is
  * not (94 MB).
  *
- * Run BY HAND, no scheduler: the repo has none, and a top-N breach list changes on the order of
- * years, not days. Re-run it whenever `PasswordNew`'s pattern changes — nothing else notices that
- * the list has silently under-blocked in the meantime.
+ * Run BY HAND, never scheduled: a top-N breach list changes on the order of years, not days.
+ * Re-run it whenever `PasswordNew`'s pattern changes — nothing else notices that the list has
+ * silently under-blocked in the meantime.
  *
  * See: docs/theory/defences/authentication.md
  */

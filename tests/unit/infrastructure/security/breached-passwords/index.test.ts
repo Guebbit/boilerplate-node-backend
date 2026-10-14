@@ -14,7 +14,7 @@ import {
 } from '@infrastructure/security/breached-passwords';
 import { setEnvironment } from '@tests/environment';
 
-/** In the committed list — see `scripts/ops/refresh-breached-passwords.ts`. */
+/** In the committed list — see `scripts/security/refresh-breached-passwords.ts`. */
 const IN_LIST_PASSWORD = 'Password1!';
 
 /** Composition-valid but not in the (filtered, ~20k-entry) bundled list. */

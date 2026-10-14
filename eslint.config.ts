@@ -837,7 +837,7 @@ export default tseslint.config(
      * The other two corners `factoriesImportPattern` above does not reach: a module's own
      * controllers (excluded there so the `@infrastructure/http/controller` exemption above could
      * be stated once, by `ignores`, rather than by listing every non-controller folder) and
-     * `scripts/ops/`'s one-off scripts, which have no more business seeding through a test
+     * `scripts/ops/`'s deployment scripts, which have no more business seeding through a test
      * builder than a controller does.
      */
     {

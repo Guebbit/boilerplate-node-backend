@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { stripModuleDoubles } from '../../../../scripts/ops/demo-remove-scenarios';
+import { stripModuleDoubles } from '../../../../scripts/scaffold/demo-remove-scenarios';
 
 /** What `scenarios/support/doubles/register.ts` looks like with two modules' doubles in it. */
 const REGISTER = `import { registerPaymentDouble } from './payments/register';

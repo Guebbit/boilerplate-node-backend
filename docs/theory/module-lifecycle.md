@@ -445,7 +445,7 @@ invalidate the claim — and some of them are **supposed** to break:
 
 ### What `demo:remove` does about the residue
 
-`npm run demo:remove` (and `removeModules` in `scripts/ops/demo-remove-modules.ts`, which the
+`npm run demo:remove` (and `removeModules` in `scripts/scaffold/demo-remove-modules.ts`, which the
 locales recipe of `measure:demo-strip` shares) takes the mechanical share of the residue out itself:
 
 - **A test that imports a removed module is deleted**, and so is every test that imports one of

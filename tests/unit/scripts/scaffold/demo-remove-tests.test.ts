@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { removeResidueTests } from '../../../../scripts/ops/demo-remove-tests';
+import { removeResidueTests } from '../../../../scripts/scaffold/demo-remove-tests';
 
 /** The alias of the removed module, spelled once so no fixture below reads as a real import. */
 const REMOVED = '@modules/cart';
