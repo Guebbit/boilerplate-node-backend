@@ -117,6 +117,10 @@ describe('POST /api-keys', () => {
             });
 
         expect(response.status).toBe(422);
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'permissions', permissions: ['platform.observability.any.read'] }
+        });
     });
 
     it('422s an empty permissions list', async () => {
@@ -171,6 +175,10 @@ describe('POST /api-keys', () => {
         const fine = await mint(ahead(360));
 
         expect(tooFar.status).toBe(422);
+        expect(tooFar.body.errors[0]).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'expiresAt' }
+        });
         expect(fine.status).toBe(201);
     });
 

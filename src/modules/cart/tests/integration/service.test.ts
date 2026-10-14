@@ -1055,7 +1055,10 @@ describe('orderConfirm', () => {
         const result = await orderConfirm(user.id, testCallerContext, undefined);
 
         expect(asReject(result).status).toBe(422);
-        expect(asReject(result).errors[0].code).toBe('CART_ADDRESS_REQUIRED');
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'CART_ADDRESS_REQUIRED',
+            details: { field: 'addressId' }
+        });
         await expect(countOrders({ userId: user._id })).resolves.toBe(0);
     });
 

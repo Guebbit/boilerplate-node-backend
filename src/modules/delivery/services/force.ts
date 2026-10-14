@@ -5,7 +5,7 @@
  */
 
 import { t } from '@infrastructure/i18n';
-import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import { fieldError, generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { holdsKey } from '@kernel/ability';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
@@ -30,10 +30,11 @@ export const refuseUnearnedForce = (
         ]);
     if (!reason)
         return generateReject(422, [
-            {
-                code: ERROR_CODES.DELIVERY_OVERRIDE_REASON_REQUIRED,
-                message: t('delivery.override-reason-required')
-            }
+            fieldError(
+                'reason',
+                t('delivery.override-reason-required'),
+                ERROR_CODES.DELIVERY_OVERRIDE_REASON_REQUIRED
+            )
         ]);
     return undefined;
 };

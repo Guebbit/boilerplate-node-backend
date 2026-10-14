@@ -19,6 +19,7 @@
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseReject,
@@ -247,10 +248,11 @@ const receiveFor = (
         (claimed) => {
             if (claimed.kind === 'deduction-too-high')
                 return generateReject(422, [
-                    {
-                        code: ERROR_CODES.RETURN_DEDUCTION_INVALID,
-                        message: t('returns.deduction-too-high')
-                    }
+                    fieldError(
+                        'handlingDeduction',
+                        t('returns.deduction-too-high'),
+                        ERROR_CODES.RETURN_DEDUCTION_INVALID
+                    )
                 ]);
             if (claimed.kind === 'lost') return notReceivable();
 

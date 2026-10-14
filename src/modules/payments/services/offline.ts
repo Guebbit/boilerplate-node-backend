@@ -9,6 +9,7 @@
 
 import { t } from '@infrastructure/i18n';
 import {
+    fieldError,
     generateSuccess,
     generateReject,
     type ResponseSuccess,
@@ -57,7 +58,7 @@ export const recordOfflinePayment = async (
     context: CallerContext
 ): Promise<ResponseSuccess<PaymentDocument> | ResponseReject> => {
     if (input.receivedAt && new Date(input.receivedAt).getTime() > Date.now())
-        return generateReject(422, [t('payments.received-at-future')]);
+        return generateReject(422, [fieldError('receivedAt', t('payments.received-at-future'))]);
 
     const order = await orderService.getById(orderId);
     if (!order) return generateReject(404, [t('payments.order-not-found')]);

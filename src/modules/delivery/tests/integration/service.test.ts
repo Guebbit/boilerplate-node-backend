@@ -487,7 +487,10 @@ describe('delivering', () => {
         );
 
         expect(asReject(noKey).status).toBe(403);
-        expect(asReject(noReason).errors[0].code).toBe('DELIVERY_OVERRIDE_REASON_REQUIRED');
+        expect(asReject(noReason).errors[0]).toMatchObject({
+            code: 'DELIVERY_OVERRIDE_REASON_REQUIRED',
+            details: { field: 'reason' }
+        });
     });
 
     it('corrects a tracking code while the shipment is out, and not after it arrived', async () => {

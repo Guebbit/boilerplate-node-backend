@@ -21,7 +21,7 @@ import type { ZodType } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { isPlainObject } from '@infrastructure/object-guards';
 import { readInput, type RequestSurface } from '@infrastructure/http/request';
-import { rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
+import { fieldError, rejectResponse, type ResponseErrorItem } from '@infrastructure/http/response';
 import { attributeOf } from '@infrastructure/http/validation-messages';
 
 /**
@@ -56,13 +56,13 @@ export const isValidObjectId = (id: unknown): id is string =>
  * @param field - the request field, dotted like every other validation issue (`items.0.productId`)
  * @param value - what the request carried; `undefined` reads as "missing", anything else as "malformed"
  */
-const fieldIdIssue = (field: string, value: unknown): ResponseErrorItem => ({
-    code: 'VALIDATION_ERROR',
-    message: t(value === undefined ? 'validation.required' : 'validation.invalid-format', {
-        attribute: attributeOf(field.split('.'))
-    }),
-    details: { field }
-});
+const fieldIdIssue = (field: string, value: unknown): ResponseErrorItem =>
+    fieldError(
+        field,
+        t(value === undefined ? 'validation.required' : 'validation.invalid-format', {
+            attribute: attributeOf(field.split('.'))
+        })
+    );
 
 /** What {@link requireId} needs to know about the id it reads. */
 export interface RequiredId {

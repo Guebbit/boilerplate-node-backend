@@ -7,7 +7,7 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { fieldError, successResponse, rejectResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { t } from '@infrastructure/i18n';
 import { AdjustStockBody } from '@api/schemas.zod';
@@ -24,7 +24,7 @@ export const postAdjustment = (request: Request, response: Response) => {
     // Zero can't be expressed as a schema constraint, so it's checked here.
     // Refused rather than silently accepted — a no-op would write a meaningless ledger row.
     if (delta === 0) {
-        rejectResponse(response, 422, [t('inventory.adjust-zero')]);
+        rejectResponse(response, 422, [fieldError('delta', t('inventory.adjust-zero'))]);
         return Promise.resolve();
     }
 

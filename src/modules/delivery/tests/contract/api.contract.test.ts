@@ -256,7 +256,10 @@ describe('POST /delivery/fulfillment-orders/{id}/shipments', () => {
             .send({});
 
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].code).toBe('DELIVERY_TRACKING_CODE_REQUIRED');
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'DELIVERY_TRACKING_CODE_REQUIRED',
+            details: { field: 'trackingCode' }
+        });
     });
 
     it('matches the error contract for more units than remain', async () => {

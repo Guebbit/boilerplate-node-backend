@@ -267,6 +267,25 @@ export const rejectResponse = (
 ) => response.status(status).json(generateReject(status, errors)) as Response<ResponseReject>;
 
 /**
+ * The error item for a refusal about one request field: `details.field` names it.
+ *
+ * The contract's rule is "a refusal about one field names it", whatever its code, so a client puts
+ * the message under that input instead of in a banner.
+ *
+ * @param field - the request field, dotted like a Zod path (`shippingAddress.zip`)
+ * @param message - the translated text
+ * @param code - the error code; `VALIDATION_ERROR` unless the refusal has a domain code of its own
+ * @param extra - more structured context, beside `field` (a limit, the offending values)
+ * @returns one error item
+ */
+export const fieldError = (
+    field: string,
+    message: string,
+    code: ErrorCode = 'VALIDATION_ERROR',
+    extra: Record<string, unknown> = {}
+): ResponseErrorItem => ({ code, message, details: { ...extra, field } });
+
+/**
  * Turn a Zod failure into the contract's error list, keeping the field that failed.
  *
  * Lives beside `ResponseErrorItem` rather than in `./controller`, because four SERVICES import it
@@ -280,9 +299,7 @@ export const rejectResponse = (
 export const validationErrors = (error: ZodError): ResponseErrorItem[] =>
     error.issues.map((issue) => {
         const field = issue.path.join('.');
-        return {
-            code: 'VALIDATION_ERROR',
-            message: issue.message,
-            ...(field ? { details: { field } } : {})
-        };
+        return field
+            ? fieldError(field, issue.message)
+            : { code: 'VALIDATION_ERROR', message: issue.message };
     });

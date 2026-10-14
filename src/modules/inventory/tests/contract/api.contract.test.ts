@@ -211,6 +211,10 @@ describe('POST /inventory/adjustments', () => {
             .send({ productId: String(product._id), delta: 0 });
 
         expect(response.status).toBe(422);
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'delta' }
+        });
     });
 });
 

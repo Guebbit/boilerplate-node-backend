@@ -157,6 +157,12 @@ and `catchAs`. Helpers rather than a wrapper, deliberately: a wrapper that owned
 move the stack trace off the handler, degrade the inference `parseBody`'s return type carries, and
 hide the literal `.catch(` that `scripts/eslint/controller-chain-must-catch.ts` looks for.
 
+**A refusal about one field names it**, whatever its code: `details.field` carries the dotted path
+(`shippingAddress.zip`), so a client shows the message under that input instead of in a banner.
+A schema failure is `VALIDATION_ERROR`; a business rule about one field keeps its domain code
+(`RETURN_DEDUCTION_INVALID` on `handlingDeduction`). Both build their item with `fieldError` from
+`@infrastructure/http/response`. This is Stripe's `param`, and RFC 9457's `errors[].pointer`.
+
 **Two endpoints deliberately do not parse a generated schema, and say so in place.**
 `post-signup` is validated by its service against `SignupBody` plus the two rules the contract
 cannot say (the repeat matches, terms accepted), so a direct caller of the service gets the same 422. `post-login` answers one

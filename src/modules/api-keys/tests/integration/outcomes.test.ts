@@ -151,7 +151,7 @@ describe('the one-year ceiling', () => {
         expect(result.errors[0]).toMatchObject({
             code: 'VALIDATION_ERROR',
             message: 'A credential may expire at most one year from now.',
-            details: { expiresAt: tooFar }
+            details: { field: 'expiresAt' }
         });
     });
 

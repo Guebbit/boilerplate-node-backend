@@ -19,10 +19,9 @@
  */
 
 import type { ClientSession } from 'mongoose';
-import { generateReject, type ResponseReject } from '@infrastructure/http/response';
+import { fieldError, generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { t, getCurrentLocale, getFallbackLocale, localeCandidatesFor } from '@infrastructure/i18n';
 import { carryVersion } from '@infrastructure/persistence/versioning';
-import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * One entity's translated field values, keyed by field name — `{ title, description }` for a
@@ -246,11 +245,10 @@ export const planTranslations = (
     if (otherLocale !== undefined)
         return Promise.resolve(
             generateReject(422, [
-                {
-                    code: ERROR_CODES.VALIDATION_ERROR,
-                    message: t('translation.error-locale-unavailable', { locale: otherLocale }),
-                    details: { field: otherLocale }
-                }
+                fieldError(
+                    otherLocale,
+                    t('translation.error-locale-unavailable', { locale: otherLocale })
+                )
             ])
         );
 
@@ -258,11 +256,10 @@ export const planTranslations = (
     if (!fallbackSlot || Object.keys(fallbackSlot.fields).length === 0)
         return Promise.resolve(
             generateReject(422, [
-                {
-                    code: ERROR_CODES.VALIDATION_ERROR,
-                    message: t('translation.error-fallback-required', { locale: fallbackLocale }),
-                    details: { field: fallbackLocale }
-                }
+                fieldError(
+                    fallbackLocale,
+                    t('translation.error-fallback-required', { locale: fallbackLocale })
+                )
             ])
         );
 

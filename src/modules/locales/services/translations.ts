@@ -17,6 +17,7 @@ import type { TranslatableTarget } from '@kernel/registry';
 import { clearOmittedFields } from '@kernel/translation';
 import type { TranslationWritePlan, TranslationWriteSlot } from '@kernel/translation';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseReject,
@@ -29,7 +30,6 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { localeAuditActions } from '../audit';
 import { deriveSourceDigest, localeRepository, translationRepository } from '../repository';
 import { translatableTarget } from './translatables';
-import { ERROR_CODES } from '@api/error-codes';
 
 /**
  * The GET/PUT/PATCH admin shape: `translations` is already wire-shaped, `translationRepository`'s
@@ -60,14 +60,7 @@ const slotRejection = (
     messageKey: string,
     parameters: Record<string, string> | undefined,
     field: string
-): ResponseReject =>
-    generateReject(422, [
-        {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: t(messageKey, parameters),
-            details: { field }
-        }
-    ]);
+): ResponseReject => generateReject(422, [fieldError(field, t(messageKey, parameters))]);
 
 /**
  * One locale slot's outcome, before any write happens — the whole batch validates before anything
@@ -122,13 +115,7 @@ const planSlot = (
         // cannot land what that one would refuse.
         const broken = target.checkFields?.(value.fields, locale === fallbackLocale).at(0);
         if (broken)
-            return generateReject(422, [
-                {
-                    code: ERROR_CODES.VALIDATION_ERROR,
-                    message: broken.message,
-                    details: { field: `${locale}.${broken.field}` }
-                }
-            ]);
+            return generateReject(422, [fieldError(`${locale}.${broken.field}`, broken.message)]);
 
         return { locale, kind: 'upsert', fields: value.fields, origin: value.origin ?? 'human' };
     };
