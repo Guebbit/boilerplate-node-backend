@@ -8,8 +8,8 @@
  *
  * The three optional product reads mount no identity guard at all (`getAuth` alone: an anonymous
  * caller reads the public catalogue, a key holding the wider keys sees drafts and stock), so the
- * guards cannot name them. They are listed by hand below, and the canary holds the list to the
- * spec, in both directions.
+ * guards cannot name them. They are listed by hand below, while `products` is deployed, and the
+ * canary holds the list to the spec, in both directions.
  *
  * See: docs/tools/security.md#machine-to-machine-credentials
  */
@@ -17,18 +17,16 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { everyMountedRoute } from '@tests/contract-routes';
-import { REPO_ROOT } from '@tests/paths';
+import { isDeployed, REPO_ROOT } from '@tests/paths';
 import { findKey } from '@kernel/permissions';
 
 /** An operation's security requirements, as the bundle holds them. */
 type Security = Record<string, string[]>[];
 
 /** Operations that stay anonymous-readable but give an API key the wider view. */
-const KEY_AWARE_OPTIONAL_READS = new Set([
-    'GET /products',
-    'POST /products/search',
-    'GET /products/{id}'
-]);
+const KEY_AWARE_OPTIONAL_READS = new Set(
+    isDeployed('products') ? ['GET /products', 'POST /products/search', 'GET /products/{id}'] : []
+);
 
 /** `METHOD /spec/{path}` for each operation's security list, read from the bundle. */
 const specSecurity = (): Map<string, Security | undefined> => {

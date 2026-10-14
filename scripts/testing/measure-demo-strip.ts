@@ -3,17 +3,17 @@
  * Measure how far "a module is removable" actually is — `npm run measure:demo-strip
  * [-- --recipe shop|locales]`.
  *
- * NOT `demo:remove`, and not meant to be green. It applies a removal RECIPE to a scratch copy of
- * the checkout, regenerates, then runs `ts-check`, the cross-cutting suite and `docs:build`
- * against what is left. Whatever breaks is the punch list:
+ * NOT `demo:remove` itself. It applies a removal RECIPE to a scratch copy of the checkout,
+ * regenerates, then runs `ts-check`, the cross-cutting suite and `docs:build` against what is
+ * left. Every recipe is meant to leave a working repo; whatever breaks is new coupling:
  *
  * | recipe   | what it does                                                                    |
  * | -------- | ------------------------------------------------------------------------------- |
  * | `shop`   | the real `demo:remove` — every `group: shop` module plus the files that name it |
  * | `locales`| the optional-locales recipe: the folder and every registry line that names it   |
  *
- * Report-only, on purpose: turning this red would block every PR on work this step is not scoped
- * to do. Promote it into the `ci` gate once it is green.
+ * CI runs it as the `demo-strip-measure` job, one square per recipe. Whether the merge gate waits
+ * for that job is said once, beside it in `.github/workflows/ci.yml`.
  *
  * Runs against a SCRATCH COPY, never this checkout (`scripts/testing/scratch-copy.ts`).
  *
@@ -134,7 +134,7 @@ recipe.apply();
 const results = CHECKS.map((check) => ({ check, passed: run(check) }));
 
 // The summary: a header, then one PASS/FAIL line per check.
-console.info(`\n[demo-strip] summary (${recipeName}) — report-only, not a merge gate:`);
+console.info(`\n[demo-strip] summary (${recipeName}):`);
 
 // One line per check.
 for (const { check, passed } of results)
@@ -151,5 +151,5 @@ console.info(
               'for what still couples the rest of the repo to what was removed.'
 );
 
-// `exitCode`, not `exit()`: lets pending output flush. CI runs this report-only, never as a gate.
+// `exitCode`, not `exit()`: lets pending output flush. The exit code is what CI's square reads.
 process.exitCode = allPassed ? 0 : 1;

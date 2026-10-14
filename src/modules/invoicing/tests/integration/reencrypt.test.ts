@@ -1,7 +1,7 @@
 /**
  * @module
- * `reencryptInvoices`: the buyer address frozen on an invoice moves from the old PII key to the
- * new one, and still decrypts under the invoice's own id.
+ * The manifest's `reencrypt` walk: the buyer address frozen on an invoice moves from the old PII
+ * key to the new one, and still decrypts under the invoice's own id.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -18,7 +18,6 @@ import { createUser } from '@modules/users/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
 import { invoiceModel } from '../../model';
 import { decryptInvoiceParty } from '../../pii';
-import { reencryptInvoices } from '../../services';
 import { withEnvironment } from '@tests/environment';
 import { versionOf } from '@infrastructure/security/versioned-secret';
 import { invoicingRepository } from '../../repository';
@@ -42,7 +41,7 @@ const waitForInvoice = async (orderId: string, timeoutMs = 2000) => {
     }
 };
 
-describe('reencryptInvoices', () => {
+describe('invoicing reencrypt', () => {
     it('moves the buyer address to the newest key, and a second run changes nothing', async () => {
         const user = await createUser();
         const product = await createProduct({ price: 10 });
@@ -60,9 +59,9 @@ describe('reencryptInvoices', () => {
         const rotation = 'v2:new-pii-key-material,v1:test-pii-encryption-key';
 
         await withEnvironment('NODE_PII_ENCRYPTION_KEY', rotation, async () => {
-            const first = await reencryptInvoices();
+            const first = await invoicingModule.reencrypt(false);
             expect(first.rewritten).toBe(5);
-            const second = await reencryptInvoices();
+            const second = await invoicingModule.reencrypt(false);
             expect(second.rewritten).toBe(0);
 
             const raw = await invoiceModel.findById(invoice._id).exec();

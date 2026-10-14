@@ -38,6 +38,7 @@ import { setPersonalDataSections } from './services/personal-data-registry';
 import { eraseExports } from './services/export';
 import { exportSessions, eraseSessionsAndTokens } from './services/sessions';
 import { runExportJob } from './services/export-job';
+import { reencryptTotpSecrets } from './services/reencrypt';
 
 /**
  * Everything this module installs once every enabled module is known: the auth resolver the whole
@@ -99,6 +100,8 @@ export default {
     ],
     // Token rings, the token windows and the second-factor key: see `./session/config.ts`.
     config: [accountConfig.slice, sessionConfig.slice, oauthConfig.slice],
+    // The TOTP secrets, stored on the `users` document but encrypted under this module's key.
+    reencrypt: reencryptTotpSecrets,
     onRegistered,
     subscribe: () => {
         /*

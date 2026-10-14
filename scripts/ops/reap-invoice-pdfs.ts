@@ -13,8 +13,8 @@
  * Filesystem-only and safe to run repeatedly. It connects to Mongo briefly, like
  * `reap:quarantine`, because `runScript` records the outcome in `leases`.
  *
- * Owned by `invoicing` — deletes with the module, along with the `reap:invoice-pdfs` npm script
- * and its `docker/crontab` line.
+ * Removal: owned by `invoicing` — deletes with the module, along with the `reap:invoice-pdfs` npm
+ * script and its `docker/crontab` line.
  *
  * See: docs/modules/invoicing.md
  */

@@ -14,6 +14,7 @@
 import { z } from 'zod';
 import * as schemas from '@api/schemas.zod';
 import { listSupportedLocales, readLocaleDictionary } from '@infrastructure/i18n';
+import { isDeployed } from '@tests/paths';
 
 /** Query fields shared by many routes, labelled although they are not `*Body` properties. */
 const SHARED_QUERY_FIELDS = ['page', 'pageSize', 'text', 'since'];
@@ -63,7 +64,8 @@ const expected = [...new Set([...bodyFields(), ...SHARED_QUERY_FIELDS])].toSorte
 
 describe('validation attribute labels', () => {
     it('finds body fields to label, so the checks below are not vacuous', () => {
-        expect(expected.length).toBeGreaterThan(100);
+        // More than half the fields are the shop's; the foundation alone clears the lower floor.
+        expect(expected.length).toBeGreaterThan(isDeployed('orders') ? 100 : 40);
     });
 
     it.each(listSupportedLocales())('%s labels exactly the fields requests carry', (locale) => {

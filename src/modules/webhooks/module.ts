@@ -20,7 +20,12 @@ import { logger } from '@infrastructure/adapters/logger';
 import { isQueueEnabled } from '@infrastructure/adapters/queue';
 import { WORKER_CHANNELS, WebhookDeliverJobPayloadSchema } from '@types';
 import { router } from './routes';
-import { subscribeToWebhookEvents, processDeliveryJob, registerWebhookCatalogue } from './services';
+import {
+    subscribeToWebhookEvents,
+    processDeliveryJob,
+    registerWebhookCatalogue,
+    reencryptWebhookSecrets
+} from './services';
 import { webhooksConfig } from './config';
 
 /**
@@ -68,6 +73,8 @@ export default {
     ],
     // The secret-ring key, retention and the demo-sink gate: see `./config`.
     config: [webhooksConfig.slice],
+    // Every subscription's signing-secret ring is encrypted at rest.
+    reencrypt: reencryptWebhookSecrets,
     // `ownerUserId` on a subscription points at whoever configured the shop's integration — an
     // operator, not a `POST /account/export` subject. A pointer, never a copy: nothing here
     // duplicates personal data that `users` already owns, and no email is stored at all.

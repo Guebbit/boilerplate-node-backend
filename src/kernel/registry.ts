@@ -17,6 +17,7 @@ import type { ConfigSlice } from '@infrastructure/config/define';
 import { markDomainEventsWired } from '@kernel/events';
 import type { RateLimitBudget } from '@types';
 import type { AnalyticsEventInput } from '@infrastructure/observability/analytics';
+import type { ReencryptReport } from '@infrastructure/security/reencrypt';
 
 /**
  * A module's writeback for the image digest pipeline — how the worker (or the no-broker inline
@@ -450,6 +451,16 @@ export interface AppModule {
      * `INFRASTRUCTURE_RATE_LIMITS`.
      */
     rateLimits?: readonly RateLimitBudget[];
+
+    /**
+     * Moves this module's encrypted fields onto the newest key of their ring, after a rotation.
+     * `npm run reencrypt` runs every enabled module's, so deleting a module deletes its walk.
+     * Most modules store nothing encrypted and have none.
+     *
+     * See: docs/tools/security.md#database-credential-and-key-rotation
+     * @param dryRun - count what a real run would move, and write nothing
+     */
+    reencrypt?: (dryRun: boolean) => Promise<ReencryptReport>;
 
     /**
      * What this module holds about one person, for `POST /account/export` — see

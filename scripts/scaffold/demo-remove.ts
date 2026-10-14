@@ -1,6 +1,6 @@
 #!/usr/bin/env tsx
 /**
- * `npm run demo:remove` — the actual one-command strip. `measure:demo-strip` is its report-only
+ * `npm run demo:remove` — the actual one-command strip. `measure:demo-strip` is its measuring
  * twin: same recipe, run against a scratch copy.
  *
  * Deletes every `group: shop` and `group: example` module folder, the reap/sweep scripts and
