@@ -62,9 +62,9 @@ generated from each module's own `module.yaml`, so it is never behind.
 the repo to a scratch directory, applies a removal recipe (`--recipe shop` runs the real
 `demo:remove`, the `example` module included; `--recipe locales` deletes the optional locales module), then runs `regenerate`,
 `ts-check`, the cross-cutting suite and `docs:build` against what's left. It runs on its own
-squares (`demo-strip-measure` in `.github/workflows/ci.yml`), and the merge gate waits for both. It
-is the checked form of the promise: both recipes leave a repo that regenerates, type-checks and
-passes the cross-cutting suite.
+squares (`demo-strip-measure` in `.github/workflows/ci.yml`). The merge gate does not wait for them
+yet: they join it after their first green run on GitHub. It is the checked form of the promise:
+both recipes leave a repo that regenerates, type-checks and passes the cross-cutting suite.
 
 ## Removing it
 
