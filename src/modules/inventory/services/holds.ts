@@ -232,18 +232,20 @@ const takeLines = (
  * @param session - the shipment's transaction; see {@link refreshStockCacheForOrder}
  * @returns whether an open hold was there
  */
-export const shipLinesForOrder = async (
+export const shipLinesForOrder = (
     orderId: string,
     lines: readonly StockLine[],
     session: ClientSession
-): Promise<boolean> => {
-    if (await takeLines(orderId, lines, StockMovementReason.ship, 'shipped', session)) return true;
+): Promise<boolean> =>
+    takeLines(orderId, lines, StockMovementReason.ship, 'shipped', session).then((taken) => {
+        if (taken) return true;
 
-    const existing = await reservationRepository.findByOrderId(orderId);
-    if (existing?.status !== 'shipped')
-        raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'ship');
-    return false;
-};
+        return reservationRepository.findByOrderId(orderId).then((existing) => {
+            if (existing?.status !== 'shipped')
+                raiseOrphanAlarm(orderId, existing?.status ?? 'none', 'ship');
+            return false;
+        });
+    });
 
 /**
  * Give SOME of an order's units back — the unshipped remainder of one fulfillment order,

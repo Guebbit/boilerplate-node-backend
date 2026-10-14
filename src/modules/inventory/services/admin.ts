@@ -25,25 +25,23 @@ import { allocateWithin } from './allocate';
  * One product's counters, read back after a write.
  *
  * @param productId - the product
+ * @param title - the product's title, already loaded by the caller's existence check
  * @returns its level, or `null` if the product has no level row (never received, or gone)
  */
-const levelFor = async (productId: string): Promise<InventoryLevel | null> => {
-    const [level, product] = await Promise.all([
-        stockLevelRepository.findByProductId(productId),
-        productService.findByIdRaw(productId)
-    ]);
-    if (!level || !product) return null;
-
-    return {
-        productId: String(level.productId),
-        title: product.title,
-        onHand: level.onHand,
-        reserved: level.reserved,
-        available: level.available,
-        preorderLimit: level.preorderLimit,
-        preordered: level.preordered
-    };
-};
+const levelFor = (productId: string, title: string): Promise<InventoryLevel | null> =>
+    stockLevelRepository.findByProductId(productId).then((level) =>
+        level
+            ? {
+                  productId: String(level.productId),
+                  title,
+                  onHand: level.onHand,
+                  reserved: level.reserved,
+                  available: level.available,
+                  preorderLimit: level.preorderLimit,
+                  preordered: level.preordered
+              }
+            : null
+    );
 
 /**
  * A delivery and the preorders it serves, as ONE transaction: the units arrive and are allocated
@@ -104,7 +102,7 @@ interface AdminStockTransition {
  * The shared body of every admin stock transition — see {@link AdminStockTransition} for what
  * `receive` and `adjust` each supply to make it theirs.
  */
-const applyAdminStockTransition = async ({
+const applyAdminStockTransition = ({
     reason,
     productId,
     amount,
@@ -115,35 +113,39 @@ const applyAdminStockTransition = async ({
     auditAction,
     buildAuditMetadata,
     successMessageKey
-}: AdminStockTransition): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> => {
+}: AdminStockTransition): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
     // Checked BEFORE the write: `conditionFor`'s `receive` case is `{}` (any row matches, or a
     // fresh one is created), so an unknown product would otherwise still get a level row AND a
     // ledger entry before this ever found out there was nothing to receive against.
-    const product = await productService.findByIdRaw(productId);
-    if (!product) return generateReject(404, [t('inventory.product-not-found')]);
+    productService.findByIdRaw(productId).then((product) => {
+        if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
-    const applied = allocates
-        ? await receiveAndAllocate(productId, amount, note)
-        : await applyTransition(reason, productId, amount, note === undefined ? {} : { note });
-    if (!applied) {
-        return onFailure
-            ? onFailure(productId)
-            : generateReject(404, [t('inventory.product-not-found')]);
-    }
+        const applied = allocates
+            ? receiveAndAllocate(productId, amount, note)
+            : applyTransition(reason, productId, amount, note === undefined ? {} : { note });
 
-    const level = await levelFor(productId);
-    if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+        return applied.then((moved) => {
+            if (!moved) {
+                return onFailure
+                    ? onFailure(productId)
+                    : generateReject(404, [t('inventory.product-not-found')]);
+            }
 
-    recordAudit(context, {
-        action: auditAction,
-        outcome: 'success',
-        targetType: 'product',
-        targetId: productId,
-        metadata: buildAuditMetadata(level)
+            return levelFor(productId, product.title).then((level) => {
+                if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+
+                recordAudit(context, {
+                    action: auditAction,
+                    outcome: 'success',
+                    targetType: 'product',
+                    targetId: productId,
+                    metadata: buildAuditMetadata(level)
+                });
+
+                return generateSuccess(level, 200, t(successMessageKey));
+            });
+        });
     });
-
-    return generateSuccess(level, 200, t(successMessageKey));
-};
 
 /**
  * Units arrive from a supplier. The only guard is that the product exists, so a refusal means
@@ -228,26 +230,28 @@ export const adjust = (
  * @param context - audit context for `ADMIN_PREORDER_LIMIT_SET`; tests omit it to skip the emit
  * @returns the counters after the change, or 404 if the product is unknown
  */
-export const setPreorderLimit = async (
+export const setPreorderLimit = (
     productId: string,
     preorderLimit: number,
     context?: CallerContext
-): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> => {
-    const product = await productService.findByIdRaw(productId);
-    if (!product) return generateReject(404, [t('inventory.product-not-found')]);
+): Promise<ResponseSuccess<InventoryLevel> | ResponseReject> =>
+    productService.findByIdRaw(productId).then((product) => {
+        if (!product) return generateReject(404, [t('inventory.product-not-found')]);
 
-    await stockLevelRepository.setPreorderLimit(productId, preorderLimit);
+        return stockLevelRepository
+            .setPreorderLimit(productId, preorderLimit)
+            .then(() => levelFor(productId, product.title))
+            .then((level) => {
+                if (!level) return generateReject(404, [t('inventory.product-not-found')]);
 
-    const level = await levelFor(productId);
-    if (!level) return generateReject(404, [t('inventory.product-not-found')]);
+                recordAudit(context, {
+                    action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
+                    outcome: 'success',
+                    targetType: 'product',
+                    targetId: productId,
+                    metadata: { preorderLimit }
+                });
 
-    recordAudit(context, {
-        action: inventoryAuditActions.ADMIN_PREORDER_LIMIT_SET,
-        outcome: 'success',
-        targetType: 'product',
-        targetId: productId,
-        metadata: { preorderLimit }
+                return generateSuccess(level, 200, t('inventory.preorder-limit-success'));
+            });
     });
-
-    return generateSuccess(level, 200, t('inventory.preorder-limit-success'));
-};
