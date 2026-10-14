@@ -235,6 +235,15 @@ export interface UserDocument extends UserRecord, Document {
 export type UserModel = Model<UserDocument>;
 
 /**
+ * The associated data binding a stored phone to its account: a ciphertext copied to another row
+ * fails its auth tag. Written, read and re-encrypted under this one spelling, since a typo in any
+ * copy makes the phone undecryptable.
+ *
+ * @param userId - the account's `_id`
+ */
+export const phoneAad = (userId: string): string => `users:phone:${userId}`;
+
+/**
  * The Mongoose schema for user documents — field-level comments below cover the non-obvious
  * defaults.
  */

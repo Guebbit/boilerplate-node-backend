@@ -13,7 +13,7 @@ import { heldKeys } from '@kernel/ability';
 import { isBelowLevel, levelOfRoles } from '@kernel/permissions';
 import { levelsOfMany, rolesOf, rolesOfMany } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
-import type { UserDocument, UserWire } from './model';
+import { phoneAad, type UserDocument, type UserWire } from './model';
 
 /**
  * Maps a loaded account straight onto the `User` contract, ISO-stringifying the four fields
@@ -46,7 +46,7 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
         // the one place that decrypts it.
         ...(document.phone === undefined
             ? {}
-            : { phone: decryptPii(document.phone, `users:phone:${document.id}`, 'user phone') }),
+            : { phone: decryptPii(document.phone, phoneAad(document.id), 'user phone') }),
         ...(document.website === undefined ? {} : { website: document.website }),
         ...(document.analyticsConsent === undefined
             ? {}

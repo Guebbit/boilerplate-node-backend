@@ -8,7 +8,7 @@
 import type { EncryptedField } from '@infrastructure/security/reencrypt';
 import { getPiiEncryptionKeyRing, piiBinding } from '@infrastructure/security/pii-encryption';
 import type { SecretBinding, VersionedKey } from '@infrastructure/security/versioned-secret';
-import type { UserDocument } from '../model';
+import { phoneAad, type UserDocument } from '../model';
 import { userRepository } from '../repository';
 
 /**
@@ -28,7 +28,7 @@ export const reencryptUserPhones = (dryRun = false) =>
                           {
                               path: 'phone',
                               stored: user.phone,
-                              binding: piiBinding(`users:phone:${String(user._id)}`),
+                              binding: piiBinding(phoneAad(String(user._id))),
                               label: 'users.phone'
                           }
                       ]
