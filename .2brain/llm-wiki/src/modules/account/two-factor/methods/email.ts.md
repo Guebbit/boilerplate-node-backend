@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/two-factor/methods/email.ts
-sha256: 89f398d7689d99d1e643f748063012e4cbabe0afca05e350c76b28c0e93cb1f9
-generated_at: 2026-09-27T14:38:11.042655+00:00
+sha256: 535e7c8f2fb01213812de67c2396e0f808392e83440e789ec7679b1a8ea9e9b9
+generated_at: 2026-10-14T14:49:37.078868+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the email channel of two-factor authentication as a `TwoFactorMethodHandler`. Because email is a *delivered* method (not a TOTP-style computed method), both setup and login reduce to the same three steps: generate a code, arm its digest on the method entry, and mail it to the user. All code-lifecycle policy (TTL, resend cooldown, attempt ceiling) is delegated to the shared `delivered-codes` module so future channels can reuse it.
+Implements the **email** two-factor method as a *delivered* code channel: setup and login both reduce to "generate a code, mail it, store its digest on the entry." All shared lifetime/cooldown/attempt logic lives in `../delivered-codes.ts`; this file only wires the email-specific send, eligibility, and verification steps into the `TwoFactorMethodHandler` interface.
 
 ## Key elements
 
-- **`maskEmail(email)`** – Redacts an address to `f***o@domain` form. Lives here (server-side) so every client renders the same masking.
-- **`deliver(user, entry, context)`** – Core action. Calls `generateDeliveredCode` → `armDeliveredCode` (mutates `entry`) → composes the i18n'd email via `twoFactorCodeEmail` → dispatches with `sendAccountMail` → returns a `TwoFactorDelivery` including the masked recipient, resend-after window, and `expiresAt`.
-- **`emailMethod`** (exported) – The `TwoFactorMethodHandler` record:
-  - `available` – True only in demo mode or when `NODE_SMTP_HOST` is set.
-  - `eligibility` – Requires `user.verifiedAt`; otherwise reports a localized "unverified" reason.
-  - `target` – Returns the masked email for UI display.
-  - `setup` / `send` – Both call `deliver`; `setup` additionally stamps `delivers: true` as the `TwoFactorSetup` discriminator.
-  - `verify` – Delegates to `consumeDeliveredCode`.
+- **`maskEmail(email)`** – Exported utility. Redacts the local part to `first***last` (or all-asterisks if ≤ 2 chars) so UIs show a recognisable-but-private address. Done server-side so every client masks identically.
+- **`deliver(user, entry, context)`** – Internal. Generates a code via `generateDeliveredCode`, arms it on `entry` (mutates in place; caller persists), builds the i18n'd mail through `twoFactorCodeEmail`, sends it with `sendAccountMail`, and returns a `TwoFactorDelivery` (masked recipient, resend cooldown, `expiresAt`).
+- **`emailMethod`** – Exported `TwoFactorMethodHandler` object:
+  - `available` – gates on `mailDelivers(mailConfig())`; a deployment with no readable transport must not offer the method.
+  - `eligibility` – requires `user.verifiedAt`; unverified addresses are rejected with an i18n reason.
+  - `target` – returns `maskEmail(user.email)`.
+  - `setup` / `send` – both delegate to `deliver`; setup additionally tags the result with `delivers: true` so the client can distinguish the setup half of the union.
+  - `verify` – delegates to `verifyDeliveredCode` with a `{ kind: 'method', method }` scope discriminator.
 
 ## Relationships
 
-- **`@infrastructure/i18n`** (`context.ts`, `index.ts`) – Provides `t()` for the localized "unverified" eligibility reason.
-- **`@infrastructure/runtime/demo-profile.ts`** – `isDemoMode()` gates `available` so demo can offer email 2FA without a real SMTP host.
-- **`@types`** (`index.ts`, `auth-context.ts`) – Source of `CallerContext` and `TwoFactorDelivery` types.
-- **`@modules/users`** (`index.ts`, `model.ts`) – Source of `UserDocument` and `TwoFactorMethodRecord` types.
-- **`../../emails`** – `twoFactorCodeEmail` (compose the code email) and `recipientLocale` (pick the user's language at send time).
-- **`../../services/mail`** – `sendAccountMail` performs the actual SMTP/outbox dispatch.
-- **`../registry`** – `TwoFactorMethodHandler` is the contract `emailMethod` satisfies; the registry collects all handlers.
-- **`../delivered-codes`** – Owns `generateDeliveredCode`, `armDeliveredCode`, `consumeDeliveredCode`, and the `DELIVERED_CODE_*` constants. This file contains *no* code-expiry or attempt logic of its own.
+| Neighbor | Interaction |
+|---|---|
+| `../delivered-codes.ts` | Source of `generateDeliveredCode`, `armDeliveredCode`, `DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_RESEND_SECONDS` — all shared delivered-code mechanics. |
+| `../delivered-code-verify.ts` | `verifyDeliveredCode` handles the actual code check; this file passes the user, scope, entry, and raw code. |
+| `../registry.ts` | Provides the `TwoFactorMethodHandler` type that `emailMethod` satisfies. |
+| `../../emails.ts` | Supplies `twoFactorCodeEmail` (mail body builder), `recipientLocale`, and `greetableName`. |
+| `../../services/mail.ts` | `sendAccountMail` is the transport call that actually dispatches the message. |
+| `@infrastructure/adapters/config.ts` | `mailConfig()` feeds the `available()` check. |
+| `@infrastructure/adapters/mail-transports.ts` | `mailDelivers()` determines whether the configured transport can reach a real inbox. |
+| `@infrastructure/i18n/index.ts` | `t()` resolves the "email not verified" eligibility reason string. |
+| `@modules/users/index.ts` | Type imports: `UserDocument`, `TwoFactorMethodRecord`. |
+| `@types/index.ts` | Type imports: `CallerContext`, `TwoFactorDelivery`. |
 
 ## Notes
 
-- **No expiry/attempt logic here.** All time-based and rate-limiting rules live in `delivered-codes.ts`; adding a new delivered channel (SMS, etc.) reuses that module without touching this file's policy.
-- **`entry.codeExpiresAt!`** uses a non-null assertion immediately after `armDeliveredCode` sets it. Safe by construction, but a refactor that reorders those calls would break the assumption.
-- **`setup` and `send` are the same call.** The only difference is the `delivers: true` discriminator the client reads to know which half of `TwoFactorSetup` is populated.
-- **Locale is resolved at send time**, not in the mail worker. The email body is fully rendered before `sendAccountMail` is invoked, so the worker never needs locale context.
-- **Eligibility is `verifiedAt`-gated, not a flag.** The file's doc comment stresses that an unverified mailbox is not a second factor; there is no admin override path in this module.
+- **`setup` ≡ `send`.** Enrollment and login perform the identical send; the only difference is the `delivers: true` flag the client uses to pick the populated half of the `TwoFactorSetup` union.
+- **`deliver` mutates `entry`.** The calling service (enrollment flow or login flow) is responsible for persisting the entry after the promise resolves.
+- **Recipient is read live, not frozen.** The destination address comes from the current `UserDocument` each time; changing the email is itself a re-authenticated action, so no second copy needs syncing.
+- **`available()` is deployment-level, not per-user.** It checks transport configuration, while `eligibility` checks per-user state (`verifiedAt`). Both must pass before the method appears to a user.

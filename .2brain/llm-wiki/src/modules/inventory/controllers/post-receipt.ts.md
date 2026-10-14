@@ -1,31 +1,26 @@
 ---
 source: src/modules/inventory/controllers/post-receipt.ts
-sha256: 3674a8ce0e74ee7c1bcfe5d0787ee719b427fa525fe44a8d9e7cf75fdaa05660
-generated_at: 2026-09-23T18:44:01.876688+00:00
+sha256: 2c27299f4465f072568d0e8b32c0da24de933705ab309f4e751d128770f54edf
+generated_at: 2026-10-14T15:53:30.780321+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/controllers/post-receipt.ts
 
 ## Purpose
-
-Handles `POST /inventory/receipts`. Validates the incoming stock-receipt payload, delegates the state change to the inventory service, and returns the updated inventory level. This is an audited entry point: a receipt is one of only two ways units can enter the shop, and the resulting row records which admin added how many.
+Handles `POST /inventory/receipts` — the endpoint through which units from a supplier are added to shop inventory. It validates the incoming body, delegates to the inventory service, and returns the resulting stock level (or a refusal).
 
 ## Key elements
-
-- **`postReceipt`** (exported) — Express handler for the endpoint. Parses `request.body` against the `ReceiveStockBody` Zod schema, extracts `productId`, `quantity`, and `note`, calls `inventoryService.receive()` with the caller's context, then either responds with a refusal or sends a `200` success carrying the new `InventoryLevel`.
+- **`postReceipt`** (exported) — The sole handler. Reads `productId`, `quantity`, and `note` from the parsed body, calls `inventoryService.receive(...)` with the caller's context, and responds with either a 200 success carrying an `InventoryLevel` payload or a refusal.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** — Provides the three controller helpers used here: `parseBody` (schema validation), `refused` (uniform refusal handling), and `catchAs` (error-to-response mapping).
-- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts the authenticated admin's identity so the service can stamp the audit row.
-- **`@infrastructure/http/response`** — `successResponse` formats the JSON body and status code for a successful result.
-- **`../service`** — The single business-logic call: `inventoryService.receive(productId, quantity, note, callerContext)`. All domain rules live in the service, not here.
-- **`@types`** — `InventoryLevel` is the type parameter on the success response, describing the shape of the updated stock record returned to the caller.
 - **`src/modules/inventory/routes.ts`** — Registers `postReceipt` as the handler for the `POST /inventory/receipts` route.
+- **`src/modules/inventory/services/index.ts`** — Source of `inventoryService`, whose `.receive()` method performs the actual stock-receipt logic.
+- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` helpers used for request validation, service-refusal handling, and error forwarding.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which extracts the authenticated admin's identity from the request for the audit trail.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, used to serialize the 200 reply.
+- **`src/types/index.ts`** — Source of the `InventoryLevel` type that shapes the response payload.
 
 ## Notes
-
-- The handler uses a `.then`/`.catch` promise chain rather than `async`/`await`; `catchAs` is the unified error sink for the whole module.
-- On success the HTTP status is **200**, not 201 — the receipt is treated as a state mutation on an existing inventory record rather than a resource creation.
-- The `note` field is optional in the schema but is passed through verbatim to the service; it exists purely for the audit trail.
+- The module JSDoc flags this as one of only two ways units can enter the shop and emphasizes the audit intent (which admin added how many). The audit context is passed implicitly via `callerContextOf(request)` rather than a request-body field.
+- On validation failure (`parseBody` returns `null`) or service refusal, the handler exits early without calling `.catch`; errors from the service promise are funnelled through `catchAs(response, 'postReceipt')`, which prefixes the error tag for logging.

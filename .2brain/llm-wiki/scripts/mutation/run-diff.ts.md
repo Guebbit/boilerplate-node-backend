@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/run-diff.ts
-sha256: 3aa06415ea10ee180a03b07be4759ac11b00a912d947652baacdf81475899569
-generated_at: 2026-09-27T13:56:57.098299+00:00
+sha256: 3c3667ed4fd2dd85e3f787b7bffb7f1406ba1f6a653667d5aff6837a555714a3
+generated_at: 2026-10-14T07:20:47.405095+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Runs Stryker mutation testing scoped to the files a branch changed (default base: `origin/main`), then grades the result against the per-file baseline ratchet. Exists to give reviewers a fast, actionable mutation score in minutes rather than waiting for the weekly full sweep.
+Runs Stryker mutation testing scoped to the files a branch changed (versus a base ref, default `origin/main`), then grades the result with the per-file ratchet. Exists to give reviewers a fast, actionable mutation score for their diff in minutes, as opposed to the weekly full sweep which takes longer.
 
 ## Key elements
 
-- **`changedFiles(baseCommit)`** — shells out to `git diff --name-only --diff-filter=ACMR <base>...HEAD` to list all added, copied, modified, or renamed files in the branch.
-- **`base`** — resolved from `--base=` CLI argument or defaults to `origin/main`.
-- **`baseCommit`** — obtained from `mergeBase(base, 'mutation-diff')`; if undefined the script exits 0 immediately.
-- **`files`** — the intersection of `changedFiles` and the project's mutable-file set (via `changedMutable`). If empty, the script prints a message and exits 0.
-- **`grade()`** — spawns `scripts/mutation/check-baseline.ts` (the per-file ratchet) and returns its exit code. Stryker's own non-zero exit (from `thresholds.break`) is deliberately discarded.
-- **Main execution block** — calls `runStryker` with `--mutate <files>` (whole-file scope) and `--force`; on completion exits with `1` if OOM-aborted, otherwise with `grade()`.
+- **`baseArgument` / `base`** — Parses `--base=<ref>` from `process.argv`; falls back to `origin/main`.
+- **`changedFiles(baseCommit)`** — Runs `git diff --name-only --diff-filter=ACMR` between the merge base and `HEAD`; returns every touched file (added, copied, modified, renamed).
+- **`baseCommit`** — Resolved via `mergeBase(base, 'mutation-diff')`. If `undefined`, the script exits `0` immediately.
+- **`files`** — Intersection of `changedFiles` with the project's mutable scope (via `changedMutable` / `mutableFiles`). If empty, exits `0`.
+- **`grade()`** — Spawns `npx tsx scripts/mutation/check-baseline.ts` (the per-file ratchet) and returns its exit code. Stryker's own non-zero exit is deliberately ignored.
+- **`runStryker(...)`** — Invoked with `--mutate <files joined by comma>` and `--force`. On completion, exits with `1` if OOM-aborted, otherwise with `grade()`.
 
 ## Relationships
 
-- **`scripts/git-base.ts`** — provides `REPO_ROOT` (used as `cwd` for git and child processes) and `mergeBase` (resolves the actual merge-base commit to diff against).
-- **`scripts/mutation/mutate-scope.ts`** — provides `mutableFiles()` (the canonical list of files eligible for mutation) and `changedMutable()` (filters the raw diff list down to those that are actually mutable).
-- **`scripts/mutation/stryker-run.ts`** — provides `runStryker`, the shared wrapper that sets per-worker heap caps and concurrency. The script routes through it rather than calling `npx stryker` directly to inherit those settings.
+- **`scripts/git-base.ts`** — Imports `REPO_ROOT` (used as `cwd` for git and Stryker child processes) and `mergeBase` (resolves the actual commit to diff against).
+- **`scripts/mutation/mutate-scope.ts`** — Imports `mutableFiles` (the set of files in mutation scope) and `changedMutable` (filters the raw diff list down to mutable files).
+- **`scripts/mutation/stryker-run.ts`** — Imports `runStryker`, the shared Stryker launcher that applies the project's per-worker heap cap and concurrency settings. The final grading step shells out to `scripts/mutation/check-baseline.ts` (not in the neighbor list) for the ratchet verdict.
 
 ## Notes
 
-- **Never records.** `--update` is intentionally not forwarded to Stryker; only the weekly full sweep owns `mutation-baseline.json`.
-- **Whole-file, not line-range.** Deliberate choice so scores remain comparable to what `mutation-baseline.json` stores.
-- **Stryker's `thresholds.break` is bypassed** at the grading step. The ratchet (per-file, baseline-relative) is the sole verdict.
-- **`--force`** is passed to Stryker to overwrite any prior report so the ratchet reads the correct data.
-- **Exit-code contract:** 0 = no mutable files changed, no base commit, or ratchet passed; 1 = OOM abort; non-zero = ratchet failed (a file's score dropped below its recorded baseline).
+- **Whole-file mutation, not line-range.** Stryker supports `--mutate '<path>.ts:10-40'`, but this script passes full paths so scores stay comparable to `mutation-baseline.json`. The design intent: touch a file, you own its mutation debt not regressing.
+- **Never records.** `--update` is never forwarded to Stryker, and `check-baseline.ts` independently refuses a partial baseline update. Only the weekly full sweep owns the baseline.
+- **Stryker's `thresholds.break` is bypassed on purpose.** A percentage over a handful of mutants is noise; the per-file ratchet is the sole verdict.
+- **Must go through `runStryker`.** A bare `npx stryker` invocation would skip the per-worker heap cap and concurrency settings (see `docs/tools/mutation-testing.md#worker-heap-cap`).

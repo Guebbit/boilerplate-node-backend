@@ -18,20 +18,20 @@ _Canonical 2brain context source for AI editors._
 - **"How do I run / build / test / deploy this?"** → `.2brain/EXECUTION.md`.
 - **Anything else, or you don't know which file** → `2brain query <repo-path> "question"`.
 
-Artifacts describe commit `6913ef751f7fbee168c861b3ee2e5e25daa5e145`. Before relying on a wiki page, check its source: `git diff --quiet 6913ef751f7fbee168c861b3ee2e5e25daa5e145 -- <file>` (and `git status` for uncommitted edits). Changed → prefer the source for that file and say so. Unchanged → trust the page.
+Artifacts describe commit `8d825ef948198a2ca744099be7a98020b96a509d`. Before relying on a wiki page, check its source: `git diff --quiet 8d825ef948198a2ca744099be7a98020b96a509d -- <file>` (and `git status` for uncommitted edits). Changed → prefer the source for that file and say so. Unchanged → trust the page.
 
 ## Most-used code
 Change these with care — widely depended on:
-- `t` (319 edges)
-- `catchAs()` (224 edges)
-- `successResponse()` (219 edges)
-- `setupTestDb()` (210 edges)
-- `generateReject()` (202 edges)
-- `createUser()` (195 edges)
-- `callerContextOf()` (178 edges)
-- `api()` (174 edges)
-- `createProduct()` (160 edges)
-- `refused()` (149 edges)
+- `t` (360 edges)
+- `createUser()` (264 edges)
+- `setupTestDb()` (264 edges)
+- `catchAs()` (248 edges)
+- `successResponse()` (238 edges)
+- `generateReject()` (232 edges)
+- `createProduct()` (221 edges)
+- `api()` (219 edges)
+- `callerContextOf()` (190 edges)
+- `asStub()` (171 edges)
 
 ## Cross-cutting flows
 - Contract Fragmentation → Bundle → Generate → Sync Pipeline
@@ -81,8 +81,8 @@ Change these with care — widely depended on:
 ## Index Metadata
 - Provider: `ollama`
 - Model: `qwen3.8:27b`
-- Index revision: `6e19fd950e10d530f15db64271e3099b5396935dfba0a358fe2837dc0ea46afa`
-- Indexed chunks: `8361`
+- Index revision: `46442cb9b1ed5973601eddaf6a679fca03e976cce98311a78c87bec29cfe7aa5`
+- Indexed chunks: `9255`
 - Memory entries: `0`
 
 ## Query

@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/demo-remove.ts
-sha256: db60d0a0c1890677f1b85aa1e1c709a6f16b6976e8edee892f9c1dad92f0096d
-generated_at: 2026-10-01T12:35:53.021841+00:00
+sha256: 715c9f78cf7829ecc1b034f3f178cb18aa0d297f7cf69fd997c6a1f7f59cdff8
+generated_at: 2026-10-14T07:22:57.814500+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry-point for `npm run demo:remove` (G-D2 step 3 / FE-D4). Performs the irreversible, in-place removal of every `group: shop` demo module from the current checkout: deletes the module folders, strips their references from central files, removes demo scenario/collection data, and edits the shared OpenAPI contract fragment. It is the "real command" (step 3), distinct from the measurement script that runs against a scratch copy.
+One-command destructive script (`npm run demo:remove`) that strips every `group: shop` and `group: example` module from the **current checkout**: deletes their folders, associated seed images, scenario data, and `docker/crontab`/`package.json` entries, then edits the central files (`src/modules.ts`, `scripts/contracts/client-collections-bundle.ts`, scenario indexes) so the repo still compiles. It is the "real" counterpart to the report-only `measure:demo-strip` twin.
 
 ## Key elements
 
-- **`REPO_ROOT`** — resolved once via `path.resolve(__dirname, '..', '..')`; passed to every removal helper.
-- **`report(notes: readonly RemovalNote[])`** — local helper that prints one `file — detail` line per note to stdout.
-- **`shopModuleNames`** — obtained at start via `readShopModuleNames(REPO_ROOT)`; drives the entire run.
-- **Execution sequence** (top-level, no wrapper function):
-  1. `removeModules` — deletes module folders and central registrations.
-  2. `removeGeneratedProductImages`, `removeShopOnlyScenarioFiles`, `stripShopModulesTable`, `stripScenarioIndex`, `stripSubjects`, `stripClientCollections`, `stripSeedImageGenerator` — clean up the demo catalogue, generated collections, and scenario index files.
-  3. `stripAccountExportSchema` — removes the shop-only fragment from `shared/contracts/openapi.root.yaml`.
-  4. Prints a two-step "Next" reminder (`npm run regenerate`, `npm run ts-check`).
+- **`REPO_ROOT`** — resolves the repository root two levels above `scripts/ops/`.
+- **`report(notes)`** — prints each `RemovalNote` as an indented `file — detail` line.
+- **`demoModuleNames`** — calls `readDemoModuleNames(REPO_ROOT)` to discover every module tagged `group: shop` or `group: example`.
+- **Step 1 — `removeModules(REPO_ROOT, demoModuleNames)`** — deletes the module folders and edits the central files that reference them.
+- **Step 2 — scenario & collection stripping** — calls `removeSeedImages`, `removeShopOnlyScenarioFiles`, then the five `strip*` helpers (`stripShopModulesTable`, `stripScenarioIndex`, `stripSubjects`, `stripDemoJobs`, `stripClientCollections`) to remove demo catalogue data and its generated collections.
+- **Post-run instructions** — prints a two-step checklist: `npm run regenerate` (rebuild contracts/docs) and `npm run ts-check` (fix residual string/table references by hand).
 
 ## Relationships
 
-- **`scripts/testing/shop-module-names.ts`** — imports `readShopModuleNames`; the sole source of the module list.
-- **`scripts/ops/demo-remove-modules.ts`** — imports `removeModules`; handles folder deletion and central-file edits.
-- **`scripts/ops/demo-remove-registry.ts`** — imports the `RemovalNote` type used as the uniform reporting shape.
-- **`scripts/ops/demo-remove-scenarios.ts`** — imports seven strip/remove functions for scenario data, generated images, subjects table, scenario index, client collections bundle, and seed-image generator.
-- **`scripts/ops/demo-remove-contract.ts`** — imports `stripAccountExportSchema` for the OpenAPI contract fragment.
+- **`scripts/testing/demo-module-names.ts`** — imports `readDemoModuleNames`; supplies the list of demo module folders to remove.
+- **`scripts/ops/demo-remove-modules.ts`** — imports `removeModules`; performs the folder deletion and central-file edits (step 1).
+- **`scripts/ops/demo-remove-registry.ts`** — imports the `RemovalNote` type used by `report` for structured output.
+- **`scripts/ops/demo-remove-scenarios.ts`** — imports all seven scenario/collection removal and stripping helpers (step 2).
 
 ## Notes
 
-- Runs **against the live checkout**, not a copy — the file's own doc comment flags this explicitly. There is no dry-run mode.
-- The doc comment references `demo-remove-tests.ts` (removing tests that import a removed module) and the promise documented in `docs/getting-started-new-project.md`; neither file is imported here, so that logic either lives inside `removeModules` or is handled by a separate step.
-- The script is a flat top-level sequence (no `main()` wrapper) — it relies on `tsx` to execute the `.ts` file directly via the shebang.
-- After running, `npm run ts-check` may still report residual string/table references; the script's own output instructs the operator to fix those by hand.
+- Runs against the **live checkout**, not a scratch copy. The doc comment explicitly warns this is the real command.
+- The script is **destructive and one-way**; there is no built-in rollback.
+- After execution the repo is expected to be in a *nearly* compiling state. Remaining references that live in strings or markdown tables (rather than imports) are not caught automatically and must be fixed by hand after `ts-check`.
+- The header comment references a sibling `demo-remove-tests.ts` (for tests importing removed modules) that is not imported here; it is a conceptual neighbor for the test-cleanup path.

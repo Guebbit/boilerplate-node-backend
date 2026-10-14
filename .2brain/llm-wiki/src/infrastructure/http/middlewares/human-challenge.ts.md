@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/human-challenge.ts
-sha256: cbadab166fd16bef794cb1c847d41ca7170f57e200ec0ea6312abd04b2cc047b
-generated_at: 2026-09-23T17:43:20.704923+00:00
+sha256: e2edb7f3f161ae43292ce591b0b8cfb728fa025d5fca3d7659ae170c01f8eec1
+generated_at: 2026-10-14T07:55:55.640979+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware gate mounted on `signup`, `reset`, and `contact` routes when a human-challenge provider is configured. It requires the caller to present a token (in a request header) that the active provider will verify; if verification fails or the token is absent, the request is refused with a standard 401 envelope. When no provider is selected (the default `none`), the gate is a near-zero-cost pass-through.
+Express middleware that acts as a gate on sensitive routes (signup, password reset, contact/feedback). It requires the caller to present a token that a human-challenge provider vouches for. When the provider is set to `none`, the gate is a no-op: one registry lookup and a `next()` call, with no header parsing or network I/O.
 
 ## Key elements
 
-- **`TOKEN_HEADER`** (`'x-antibot-challenge-token'`) — constant header name through which the provider-issued token is transported, keeping the gate agnostic to request shape.
-- **`refuse`** (local helper) — thin wrapper around `refuseAntibot` that emits a `401` with the `ANTIBOT_VERIFICATION_FAILED` code and a localized message.
-- **`humanChallengeGate`** (exported `RequestHandler`) — the middleware itself:
-    1. Short-circuits to `next()` if `isHumanChallengeEnabled()` is `false`.
-    2. Reads the token header; a missing token is an immediate refusal.
-    3. Calls `provider.verify(token, request.ip)`; an `'ok'` verdict proceeds, anything else refuses.
-    4. A provider that **throws** is treated as a refusal (never a pass).
+- **`TOKEN_HEADER`** — Constant (`'x-antibot-challenge-token'`) defining the single HTTP header through which the provider token is conveyed.
+- **`refuse`** — Internal helper that delegates to `refuseAntibot` (see `antibot-log.ts`) with a 401 status and the `ANTIBOT_VERIFICATION_FAILED` error code; also handles logging.
+- **`humanChallengeGate`** *(exported `RequestHandler`)* — The gate itself. Reads the token header, asks the active provider to `verify(token, ip)`, and either calls `next()` on an `'ok'` verdict or calls `refuse`. A missing header or a provider exception is always a refusal.
 
 ## Relationships
 
-- **`infrastructure/adapters/antibot-providers/index.ts`** — provides the port: `isHumanChallengeEnabled()` (feature flag check) and `resolveHumanChallengeProvider()` (returns the active provider instance with a `.verify` method). The gate is the _consumer_; the adapter package defines the contract.
-- **`infrastructure/http/middlewares/antibot-log.ts`** — supplies `refuseAntibot`, the shared helper that formats the error envelope, logs the refusal, and sends the HTTP response. All antibot rejections in the codebase funnel through it for consistent observability.
-- **`infrastructure/i18n/index.ts`** (and `context.ts`) — provides the `t()` function used to localize the `ANTIBOT_VERIFICATION_FAILED` message.
-- **`modules/account/routes.ts`**, **`modules/account/rate-limits.ts`**, **`modules/feedback/routes.ts`**, **`modules/payments/rate-limits.ts`** — route/rate-limit modules that mount `humanChallengeGate` on the endpoints it protects (signup, password-reset, contact/feedback).
-- **`tests/unit/infrastructure/http/middlewares/human-challenge.test.ts`** — unit tests covering the pass-through, missing-token, valid-token, invalid-token, and provider-throw paths.
+- **`infrastructure/adapters/antibot-providers/index.ts`** — Source of `isHumanChallengeEnabled` and `resolveHumanChallengeProvider`. The gate calls the provider's `verify` method returned by the resolver; the port/adapter boundary lives in that module.
+- **`infrastructure/http/middlewares/antibot-log.ts`** — Provides `refuseAntibot`, which builds the structured error envelope and emits the log entry on every refusal.
+- **`infrastructure/i18n`** — Supplies the `t()` translation function used to localise the error message string.
+- **`modules/account/routes.ts`** — Mounts `humanChallengeGate` on account endpoints (signup, password reset).
+- **`modules/feedback/routes.ts`** — Mounts `humanChallengeGate` on the contact/feedback endpoint.
+- **`modules/account/rate-limits.ts`**, **`modules/payments/rate-limits.ts`** — Co-residents in the same middleware chains; the gate and rate-limiter are composed together on the routes they protect.
+- **`tests/unit/infrastructure/http/middlewares/human-challenge.test.ts`** — Unit tests covering the gate's enabled/disabled paths, missing-token refusal, and provider-exception handling.
 
 ## Notes
 
-- The gate is **asynchronous** (`.then/.catch` on `provider.verify`) but is declared as a plain `RequestHandler`, not an async wrapper. If the provider's `verify` rejects, the `.catch` handler fires synchronously within the same tick—there is no unhandled-promise risk.
-- A **missing header is a refusal**, not a "skip." The rationale (per the module docblock) is that a stripped-down script will simply omit the header; treating absence as a pass would defeat the check.
-- The `none` provider (default) makes `isHumanChallengeEnabled()` return `false`, so the gate costs only that one boolean check—no header parsing, no network I/O.
-- The error code is always `ANTIBOT_VERIFICATION_FAILED` regardless of _why_ verification failed (bad token, provider error, etc.), intentionally not leaking which specific check tripped.
+- **Missing token = refusal.** The design treats the absence of the header as "no challenge solved," which is the same shape as a stripped-down script. There is no "pass when no token" fallback.
+- **Provider exceptions never pass.** The `.catch(() => refuse(...))` ensures a throwing or hung provider is treated as a rejection, not a silent pass-through.
+- **Header-based, not body/query.** Using a header lets the single gate work uniformly across GET, POST, and any other request shape without parsing payloads.
+- **`none` provider short-circuit.** When no real provider is configured the gate performs exactly one registry lookup (`isHumanChallengeEnabled`) and calls `next()`; no header is read and no network call is made.

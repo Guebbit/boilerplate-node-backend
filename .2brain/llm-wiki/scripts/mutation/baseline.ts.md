@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/baseline.ts
-sha256: 8f0d697eed60931e6819df74ea0c237c26c4db6d98311bc28d39788cc4ef4435
-generated_at: 2026-10-01T12:31:55.696216+00:00
+sha256: 755403961c764ae9ee6edb50bbb375dd9ce822eed07ae93ed88d5878be64fefb
+generated_at: 2026-10-14T07:19:26.170271+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements a per-file mutation-score ratchet that replaces Stryker's single global threshold. It reads Stryker JSON reports, computes a per-file percentage score, compares each file against a committed baseline (`mutation-baseline.json`), and enforces a one-way rule: scores may only move up. This prevents a strong file from masking a weak one and makes a regression in any single file visible and actionable.
+Implements the **per-file mutation ratchet**: it turns a Stryker JSON report into per-file mutation scores, compares them against a committed baseline (`mutation-baseline.json`), and enforces that scores only ever move up. Stryker's own thresholds are global, so this file exists to prevent one strong file from masking a weak one and to give each file an individually actionable regression gate.
 
 ## Key elements
 
-- **`REPORT_PATH` / `BASELINE_PATH`** — Fixed file paths: where Stryker's JSON reporter writes and where the committed baseline lives.
-- **`SCORE_TOLERANCE`** (1 point) — Absorbs the timeout/survivor race under machine load; not general slack.
-- **`scoresFromReport(report)`** — Converts a Stryker JSON report into a `Record<string, number>` of per-file scores (killed / scored, excluding non-viable mutants). Files with zero viable mutants score 100.
-- **`readReport(root?)`** — Reads and scores a single report at the fixed `REPORT_PATH`; throws a helpful error if missing.
-- **`readReportsUnder(directory)`** — Walks a directory tree (recursively), finds every `mutation.json`, and merges their scores. Used for sharded sweeps where each shard uploads its own report.
-- **`readBaseline(root?)` / `writeBaseline(baseline, root?)`** — Read/write the committed `MutationBaseline` JSON.
-- **`compareToBaseline(current, baseline?)`** — Full-scope comparison; returns a sorted `FileComparison[]` with verdicts: `new`, `removed`, `regressed`, `improved`, `held`. Used when a run covers the entire mutate scope.
-- **`compareMerged(current, baseline?)`** — Partial (sharded) comparison; omits the `removed` verdict because a missing file mid-sweep means "not yet measured," not "left scope."
-- **`mergeIntoBaseline(current, baseline?)`** — Builds the next baseline after a merged/partial run; preserves all existing entries and only touches files present in `current`, never lowering a score.
-- **`nextBaseline(current, baseline?)`** — Builds the next baseline after a full run; rebuilds the file set from `current`'s keys (dropping genuinely removed files) while still never lowering a score.
-- **`missingFromReport(current, baseline?)`** — Returns baseline files absent from a report; used to guard against accidentally recording a partial run as the new baseline.
-- **`formatRegressions(comparisons)`** — Human-readable multi-line summary of regressed files plus remediation guidance; returns `''` when nothing regressed.
-- **`KILLED` / `NOT_VIABLE`** (module-private) — Sets of Stryker statuses that count as detected vs. excluded from the denominator.
+- **`SCORE_TOLERANCE`** (= 1) — absorbs the timeout/survivor race so a gate doesn't fail randomly under load.
+- **`scoresFromReport`** — converts a Stryker JSON report into a `Record<string, number>` of per-file percentages. Files whose mutants are all non-viable score 100.
+- **`readReport` / `readReportsUnder`** — load a single fixed-path report or walk a directory tree of sharded reports and merge them.
+- **`readBaseline` / `writeBaseline`** — read/write `mutation-baseline.json` (indented JSON, trailing newline).
+- **`compareToBaseline`** — full-scope comparison; reports `new`, `removed`, `regressed`, `improved`, `held`.
+- **`compareMerged`** — partial-scope comparison (mid-sweep); omits the `removed` verdict because an absent file simply hasn't been measured yet.
+- **`nextBaseline`** — builds the next committed baseline from a full run's scores; existing scores only move up.
+- **`mergeIntoBaseline`** — builds the next baseline from a partial (sharded) run; preserves entries for files not in the current report.
+- **`missingFromReport`** — lists baseline files absent from a report, guarding against accidentally recording a partial run as the new baseline.
+- **`formatRegressions`** — human-readable summary of regressed files (empty string when none).
 
 ## Relationships
 
-- **`scripts/mutation/check-baseline.ts`** — Primary consumer; calls `readReport`, `readBaseline`, `compareToBaseline`, `missingFromReport`, and `nextBaseline` to implement the `--check` / `--update` CLI flow.
-- **`scripts/mutation/ci/cli.ts`** — CI merge-job entry point; calls `readReportsUnder`, `compareMerged`, and `mergeIntoBaseline` to grade a sharded sweep against the baseline.
-- **`scripts/mutation/run-shards.ts`** — Produces the per-shard `mutation.json` reports that `readReportsUnder` later walks and merges.
-- **`github/workflows/mutation.yml`** — Orchestrates the mutation run, shard upload, merge job, and baseline check steps that exercise this module.
-- **`tests/unit/scripts/mutation/baseline.test.ts`** — Unit tests covering scoring, comparison verdicts, ratchet never-lower behavior, and partial-run guards.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Tests the CI wave/merge logic that depends on `compareMerged` and `mergeIntoBaseline`.
+- **`scripts/mutation/check-baseline.ts`** — the CI gate that calls `compareToBaseline` / `compareMerged` and `formatRegressions` to decide pass/fail.
+- **`scripts/mutation/ci/cli.ts`** — orchestrates the full pipeline (run → read report → check → update) and selects between `nextBaseline` and `mergeIntoBaseline` depending on whether the run is full or sharded.
+- **`scripts/mutation/run-shards.ts`** — produces the per-shard `mutation.json` artifacts that `readReportsUnder` merges.
+- **`scripts/mutation/pull-baseline.ts`** — fetches/writes the baseline file in the CI context, relying on `readBaseline` / `writeBaseline`.
+- **`github/workflows/mutation.yml`** — the workflow that invokes the above scripts in sequence.
+- **`tests/unit/scripts/mutation/baseline.test.ts`** — unit tests covering score computation, verdict logic, ratchet asymmetry, and partial-vs-full comparison.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — exercises the wave-based sharding path that feeds `compareMerged` / `mergeIntoBaseline`.
 
 ## Notes
 
-- **Ratchet asymmetry is intentional.** `nextBaseline` and `mergeIntoBaseline` both use `Math.max(previous, current)`. A regression keeps the old (higher) value so the file stays failing until genuinely fixed. Lowering a baseline is a human decision made in a commit with a stated reason.
-- **`compareToBaseline` vs. `compareMerged`** differ only in how they treat files present in the baseline but absent from `current`: the former reports them as `removed`, the latter omits them. Choosing the wrong one mid-sweep either hides real removals or flags not-yet-measured files.
-- **Files with zero viable mutants score 100**, not 0, to avoid a permanent false alarm on the ratchet for files where every mutant is `RuntimeError`/`CompileError`/`Ignored`.
-- **`missingFromReport` is a guard, not a gate.** It surfaces files the baseline knows that a partial run didn't measure; the caller decides whether to block the write.
-- **The frontend keeps its own copy of this file** (same shape) per the header comment, so changes here have no automatic effect on that copy.
-- **`SCORE_TOLERANCE` is deliberately tiny (1).** It exists solely to absorb the timeout/survivor race under variable machine load, not to permit genuine weakening.
+- **Ratchet asymmetry is intentional.** `nextBaseline` and `mergeIntoBaseline` both use `Math.max(before, score)`; a regression keeps the old (higher) value so the file keeps failing until it is genuinely fixed. Lowering a baseline is a human decision made in a commit.
+- **`Timeout` counts as killed.** This follows Stryker's own convention (a hanging mutant was detected). `RuntimeError`, `CompileError`, and `Ignored` are excluded from the denominator entirely.
+- **`compareToBaseline` vs `compareMerged`** differ only in the `removed` verdict. Using the wrong one mid-sweep would either hide legitimate removals or flag unmeasured files as removed.
+- **`missingFromReport` is a safety check, not a verdict.** It exists so callers can refuse to run `nextBaseline` on a partial report before silently dropping the rest of the baseline.
+- The frontend carries its own copy of this module with the same shape (noted in the file header); changes here may need to be mirrored.

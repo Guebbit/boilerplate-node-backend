@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/serialize.ts
-sha256: d67983dc808dabd8b1d2d904cadfcf908832dde878a257e786eb3d12df178cba
-generated_at: 2026-09-27T14:14:41.796678+00:00
+sha256: 08192f7b0e76be9df9b2276a7eacf89acd22e728fc9b096fc785fda4abd6d2ff
+generated_at: 2026-10-14T08:11:55.707283+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises the "stored BSON document → API wire payload" transformation in one function. Handles the three mechanical steps (`_id` → `id`, drop `__v`, strip caller-named keys) plus an optional model-specific hook, and wires the same transform into Mongoose's `toJSON` so that both the hydrated-document path and the raw `.lean()`/`.aggregate()` path produce identical output.
+Single point where a stored Mongoose document is converted into its wire/API payload. Handles the `_id` → `id` rename, `__v` removal, Decimal128 revival, edit-revision stripping, and per-model customisations. One function serves both serialisation paths: Mongoose's `toJSON` (which partially does the work) and raw BSON from `.lean()` / `.aggregate()` (which needs all steps applied manually by `create-repository.ts`).
 
 ## Key elements
 
-- **`applySerialization(schema, options?)`** — The sole export. Builds the transform, sets it on `schema.set('toJSON', …)`, and **returns** the transform so the model can reuse it on the lean/aggregate path. One call per model, one line.
-- **`SerializeOptions`** — Per-model customisation passed to `applySerialization`:
-  - `dropId` — delete `_id` entirely instead of renaming (used only by `audit-logs`).
-  - `omit` — top-level keys to strip after the shared steps (secrets, fields absent from the contract).
-  - `after` — free-form hook for nested normalisation, derived fields, or format tweaks.
-  - `virtuals` — whether `toJSON` includes Mongoose virtuals (default `true`).
-- **`SerializeTransform`** — The function type `(serialized: Record<string, unknown>) => Record<string, unknown>` shared by both serialization paths.
-- **`SerializableSchema`** (private) — Minimal structural type so the file depends only on the `set('toJSON', …)` signature, avoiding a concrete `Schema<T>` generic that would pin it to one document type.
+- **`SerializeTransform`** (type) — signature of the transform: mutates a plain record into wire shape and returns it.
+- **`SerializeOptions`** (interface) — per-model knobs passed to `applySerialization`: `dropId` (delete `_id` entirely), `omit` (extra top-level keys to strip), `after` (arbitrary post-processing callback), `virtuals` (toggle Mongoose virtuals in `toJSON`).
+- **`SerializableSchema`** (interface, not exported) — minimal structural type (`set('toJSON', …)`) that avoids the generics problem of importing Mongoose's `Schema` type directly.
+- **`applySerialization`** (exported const) — builds the shared transform, wires it into the schema's `toJSON` option, and **returns** the transform so the caller can reuse it on the lean/aggregate path. One call gives both halves.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Imports the returned `SerializeTransform` and invokes it inside its `normalize` helper so that `.lean()` and `.aggregate()` results receive the same treatment as `toJSON` documents.
-- **All module model files** (`addresses`, `api-keys`, `audit-logs`, `cart`, `delivery`, `feedback`, `inventory`, `locales`, `orders`, `payments`, `products`, `users`, `webhooks`, `wishlist`) — Each calls `applySerialization` once during schema definition, passing model-specific `SerializeOptions`, and exports the returned transform for the repository's lean path.
+- **`create-repository.ts`** — calls the returned `SerializeTransform` inside its `normalize` helper for the `.lean()` / `.aggregate()` code path.
+- **`money-field.ts`** — provides `reviveDecimals`, invoked inside the transform to convert Decimal128 fields to plain numbers.
+- **`revision-plugin.ts`** — exports the `EDIT_REVISION` key constant; the transform deletes that key and re-reads the counter from the Mongoose document during `toJSON`.
+- **`versioning.ts`** — provides `carryVersion`, which moves the edit-revision counter out of the serialised object so controllers can still derive `ETag` headers.
+- **Module model files** (`account`, `addresses`, `api-keys`, `audit-logs`, `cart`, `delivery`, `example`, `feedback`, `inventory`, `locales`, `notifications`) — each calls `applySerialization` with its own `SerializeOptions` to wire its schema and export its serializer.
 
 ## Notes
 
-- **Not a Mongoose plugin by design.** A plugin's return value is discarded; `applySerialization` must return the transform so the model can export it. Calling it directly keeps both the `toJSON` wiring and the exported serializer on a single line.
-- **`virtuals` defaults to `true`.** A model must explicitly opt out (`virtuals: false`) if it has no Mongoose virtuals it wants on the wire.
-- **`dropId` exists solely for `audit-logs`.** Every other collection exposes a public `id`; dropping it elsewhere would break the contract.
-- The `as { toString(): string }` cast on `_id` is an eslint suppression to satisfy `no-base-to-string` — it does not change runtime behaviour.
+- `audit-logs` is the only model that sets `dropId: true` (no addressable endpoint; exposing an id would invite one to be built).
+- Deliberately **not** a Mongoose `schema.plugin()`: a plugin's return value is discarded, but the transform must be returned so the lean/aggregate path can use it. Calling `applySerialization` directly keeps both the `toJSON` wiring and the exported serializer on one line per model.
+- Inside the `toJSON` transform, `versionKey: false` already removes the revision counter from `serialized`; the code re-reads it from the Mongoose `document` argument and re-assigns it before the shared transform runs.
+- The `omit` loop uses `Reflect.deleteProperty` with an eslint-disable for `no-dynamic-delete` — the keys are caller-supplied, so static analysis can't verify them.

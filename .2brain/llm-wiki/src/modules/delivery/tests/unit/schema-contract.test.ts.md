@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/tests/unit/schema-contract.test.ts
-sha256: c4c76a50f667948679f2148247d5529d591da5025a838b0a765556d1694d2425
-generated_at: 2026-09-23T18:38:53.312192+00:00
+sha256: 70197340458a0b375fdb97a6a88da761ae54906a7657f3d7728c4f5a0bb4002b
+generated_at: 2026-10-14T15:40:03.009871+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that pins down the structural contract of `shipmentSchema`: which fields are required, the database-level uniqueness guarantee on `orderId`, the ObjectId reference to `Order`, the `ShipmentStatus` enum with its `shipped` default, and the intentional absence of a `deliveredAt` default. It exists so that schema changes that would break exactly-once dispatch semantics are caught immediately.
+Unit tests that pin the Mongoose schema contracts for `fulfillmentOrderSchema` and `shipmentSchema`. They verify that required fields, unique compound indexes, ObjectId references, enum boundaries, and defaults match the intended data model so that the database — not application logic — enforces invariants like "one fulfillment order per number per order" and "one shipment per number per order."
 
 ## Key elements
 
-- **`describe('shipmentSchema')`** — single block, six assertions covering:
-    - `requiredPaths` → only `orderId` is required (trackingCode/deliveredAt are intentionally optional).
-    - `indexOptionSpecs` → `orderId` has `unique=true` (DB-level exactly-once guarantee).
-    - `typeOf` / `refOf` → `orderId` is an `ObjectId` referencing the `Order` collection.
-    - `enumOf` / `defaultOf` → `status` matches `ShipmentStatus` values and defaults to `shipped`.
-    - `defaultOf('deliveredAt')` → `undefined` (absence means "in transit").
-    - `optionsOf(...).timestamps` → `true` (Mongoose auto-manages `createdAt`/`updatedAt`).
+- **`describe('fulfillmentOrderSchema', …)`** — asserts the six required paths (`kind`, `lines`, `number`, `orderId`, `revision`, `slips`), the `orderId_1_number_1` unique index, `orderId` → `Order` ObjectId ref, enum boundaries for `status`/`kind`/`holdReason`, default `status = open`, default `revision = 0`, and `timestamps: true`.
+- **`describe('shipmentSchema', …)`** — asserts the six required paths (`forced`, `fulfillmentOrderId`, `lines`, `number`, `orderId`, `shippedAt`), the `orderId_1_number_1` unique index (and explicitly *not* a bare `orderId` unique), ObjectId refs for `orderId` → `Order` and `fulfillmentOrderId` → `FulfillmentOrder`, enum boundary + default `status = shipped`, `forced` defaults to `false`, `deliveredAt` has no default, and `timestamps: true`.
+- **Schema-inspection helpers** (`requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `enumOf`, `defaultOf`, `optionsOf`) — pulled from `tests/support/schema.ts`; each extracts a specific facet of a Mongoose schema for assertion.
 
 ## Relationships
 
-- **`src/modules/delivery/model.ts`** — source of `shipmentSchema`, the object under test.
-- **`src/types/index.ts`** — source of the `ShipmentStatus` enum used to validate the `status` field's allowed values.
-- **`tests/support/schema.ts`** — provides the assertion helpers (`requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `enumOf`, `defaultOf`, `optionsOf`) that introspect Mongoose schema internals without spinning up a database.
+- **`src/modules/delivery/model.ts`** — source of `fulfillmentOrderSchema` and `shipmentSchema`; the sole subject under test here.
+- **`src/types/index.ts`** — provides the four enum types (`FulfillmentHoldReason`, `FulfillmentOrderKind`, `FulfillmentOrderStatus`, `ShipmentStatus`) whose values the tests compare against the schema's `enum` options.
+- **`tests/support/schema.ts`** — supplies the seven inspection helpers that let these tests read schema metadata without instantiating documents.
 
 ## Notes
 
-- The module docblock frames `unique: true` on `orderId` as the _same_ exactly-once mechanism the payment schema relies on — a shared invariant across modules, not just a delivery concern.
-- `trackingCode` is optional at the schema level; its requirement is a service-level rule keyed on shipping method. Do not "fix" this by making it required in the schema.
-- `deliveredAt` having **no** default is deliberate: its absence is the "in transit" signal. Adding a default (e.g., `null`) would break that semantic.
-- Tests assert on schema metadata (Mongoose options), not on database state, so they run without a live Mongo connection.
+- The file is a **`@module`** (side-effect only); it exports nothing.
+- Tests assert *schema metadata*, not runtime CRUD behaviour — a failing assertion means the model definition drifted, not that a code path is broken.
+- Inline comments document intentional omissions: `trackingCode` is optional (service-level rule, not schema), `deliveredAt` carries no default (absence *is* "in transit"), and shipment defaults to `shipped` because a "pending" parcel is a contradiction.
+- The unique-index assertions encode the core exactly-once guarantee: the database, not a lock or an optimistic check, is the final arbiter of duplicate `(orderId, number)` pairs.

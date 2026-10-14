@@ -1,7 +1,7 @@
 ---
 source: scenarios/flows/actions.ts
-sha256: 16b06640e415352b6c7a2bcb69c7091911537eea660250ea025e3b2492b60640
-generated_at: 2026-10-01T12:20:51.208359+00:00
+sha256: 61389e1e3dc3bbd6fba6c194fc8f79da40820ddc5e206a5454fb278c21d9c17e
+generated_at: 2026-10-14T06:57:02.376643+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP wrappers for every action a person takes in a shop-history scenario. Each function hits the same endpoint a browser would call so that audit entries, actor scope, and domain events are produced through the real middleware stack (authentication, caller context, rate limiters). A direct service call would create the order but none of its trail.
+Thin HTTP wrappers over the shop's REST endpoints that scenario flows call to perform buyer and staff actions (stock intake, checkout, payment, fulfillment). Every call travels the real middleware stack—authentication, caller context, rate limiters—so each operation produces its full audit trail, actor scope, and domain events. They deliberately avoid direct `service` calls, which would create the resource but none of that trail.
 
 ## Key elements
 
-- **`Line`** — `{ productId, quantity }`, the shape both the cart and callers use.
-- **`CARD`** — three fake-provider method refs (`visa` settles, `declined` → 409, `challenge` → `requires_action`).
-- **`receiveStock(owner, productId, quantity)`** — `POST /inventory/receipts` to seed opening stock.
-- **`checkout(caller, lines, options?)`** — fills the cart line-by-line, sets shipping method (defaults to `pickup`), then `POST /cart/checkout`; returns the new order id.
-- **`openPayment(caller, orderId)`** — `POST /payments/intent`; returns payment id.
-- **`submitCard(caller, paymentId, ref)`** — `POST /payments/:id/confirm` via `attempt()`; normalises 409 to the string `'declined'`, passes through other statuses, throws on anything else.
-- **`syncPayment(caller, paymentId)`** — `POST /payments/:id/sync`; resolves a `requires_action` (3-D Secure) payment.
-- **`checkoutAndPay(caller, lines)`** — convenience: checkout + `CARD.visa` in one call.
-- **`recordOfflinePayment(owner, orderId, method)`** — admin records cash/bank/other.
-- **`startProcessing` / `shipOrder` / `deliverOrder`** — move an order through `processing → shipped → delivered` via the delivery endpoints.
-- **`cancelOrder(caller, orderId, refund?)`** — cancels; `refund` is the operator's choice (customer self-cancels always refund).
-- **`softDeleteOrder(owner, orderId)`** — `DELETE /orders/:id` (sets `deletedAt`).
-- **`replaceProductImage(owner, productId)`** — `PATCH /products/:id` with a 1×1 PNG via multipart; the only way to change `imageUrl`.
-- **`hardDeleteProduct(owner, productId)`** — `DELETE /products/:id/hard`; row is gone, not hidden.
+- **`Line`** (interface) — `{ productId, quantity }`; the shared shape for a cart/order line.
+- **`CARD`** (const) — Fake-provider payment-method handles: `visa` (settles), `declined` (409, retryable), `challenge` (3-D Secure / `requires_action`).
+- **`receiveStock(owner, productId, quantity)`** — POSTs an inventory receipt to open a product's stock (catalogue seeds at `onHand: 0`).
+- **`checkout(caller, lines, options?)`** — Ensures a billing address, adds lines to the cart one by one, sets the shipping method (`pickup` by default), reads the cart summary, and POSTs `/cart/checkout`. Returns the new order's id.
+- **`openPayment(caller, orderId)`** — POSTs `/payments/intent`; returns the payment id.
+- **`submitCard(caller, paymentId, paymentMethodRef)`** — Confirms the payment. Returns the status string; maps a 409 response to `'declined'` so callers can branch on it.
+- **`syncPayment(caller, paymentId)`** — POSTs `/payments/{id}/sync` after a 3-D Secure challenge completes.
+- **`checkoutAndPay(caller, lines, options?)`** — Composite: `checkout` → `openPayment` → `submitCard` with `CARD.visa`. Returns the order id.
+- **`recordOfflinePayment(owner, orderId, method)`** — Admin-side: POSTs an offline payment (cash, bank transfer, etc.).
+- **`startProcessing(owner, orderId)`** — POSTs `/delivery/order/{id}/start` to move an order into `processing`.
+- **`shipOrder(owner, orderId, trackingCode?)`** — Ships every open physical fulfillment order in sequence.
+- **`shipPart(owner, orderId, productId, quantity)`** — Ships a partial quantity from the first fulfillment order (order stays `processing`).
+- **`holdOrder(owner, orderId, reason)`** — Puts the first fulfillment order on hold.
+- **`deliverOrder(owner, orderId)`** — Marks all `shipped` shipments as delivered in sequence.
+- **`cancelRemainder(caller, orderId)`** — Buyer-initiated cancellation of unshipped lines via `POST /returns`.
+- **`ensureAddress`, `readFulfillment`, `inSequence`** (private) — Internal helpers: address bootstrap, fulfillment-state read, sequential-iteration guard.
 
 ## Relationships
 
-- **`scenarios/flows/client.ts`** — source of the `Caller` type that every function takes as its first argument. `Caller.call()` performs the request; `Caller.attempt()` (used only by `submitCard`) tolerates non-2xx outcomes without throwing.
-- **`scenarios/flows/shop-history.ts`** — the consuming flow file; it calls these wrappers in sequence to build the order → payment → delivery history it then asserts against.
+- **`scenarios/flows/client.ts`** — Source of the `Caller` type used by every function in this file. All HTTP calls go through `caller.call()` or `caller.attempt()`.
+- **`scenarios/flows/shop-history.ts`** — The consumer of these actions. Each function here is one "verb" in the shop's written history; `shop-history.ts` orchestrates them to build the narrative rows (audit entries, domain events) that the scenario asserts.
 
 ## Notes
 
-- `submitCard` is the only function that uses `caller.attempt()` rather than `caller.call()`, because a 409 (declined) is a *valid* outcome two of the three payment rows expect, not an error.
-- `checkout` defaults `shippingMethodId` to `'pickup'` because not every seeded shopper has a delivery address; flows needing real shipment pass `'standard'`.
-- `TINY_PNG` is a genuine 1×1 PNG (base64-decoded) because the server digests every upload and rejects undecodable bytes.
-- `hardDeleteProduct` removes the row entirely (order lines resolve `current: null` afterwards), in contrast to `softDeleteOrder` which only stamps `deletedAt`.
-- All functions are fire-and-forget with respect to side effects they do *not* check (e.g. `startProcessing` does not verify the order actually transitioned); assertions live in the calling flow.
+- **Sequential by design.** `inSequence` exists because the app's per-order transaction rejects two concurrent writes; all multi-line / multi-shipment loops await each call before the next.
+- **`submitCard` does not assert a status.** Two of the three `CARD` handles intentionally produce a non-final outcome (409 decline, `requires_action`). The caller decides what is acceptable; the function only normalises 409 → `'declined'` and throws on anything else non-200.
+- **Shipping method is set before checkout, not in the checkout body.** `PUT /cart/shipping-method` is called separately, matching the current cart-checkout contract (`docs/modules/cart-checkout.md`).
+- **`checkout` defaults to `pickup`.** Every demo product is physical and `pickup` requires no shipping address, so it is the zero-friction default. Flows that demonstrate a real shipment pass `shippingMethodId: 'standard'` via options.
+- **`ensureAddress` is idempotent and best-effort.** It checks for existing addresses first and only creates one if the list is empty; it uses the caller's own email as the name.
+- **`shipPart` always targets `fulfillmentOrders[0]`.** It does not search for a specific fulfillment order; flows that need a particular one should use `shipOrder` or read fulfillment directly.

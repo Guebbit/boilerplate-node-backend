@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/items.ts
-sha256: db730532fa59ebc933cc6eaf9b33c3b2bb90b093d8fc09ed1da6f12763c8bf85
-generated_at: 2026-09-27T14:46:37.279142+00:00
+sha256: 65a8c89749ca07050ae67bf15b43fceb0f8477ca519c491951b02aed3675ad50
+generated_at: 2026-10-14T15:11:47.580664+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for reading and mutating cart contents: fetching lines, adding/setting/removing items, clearing the cart, and selecting a shipping method. Each mutating operation is a single write plus a priced join; operations that name a specific product return a response envelope because the product may not exist, while `cartRemove` cannot fail and returns the view directly.
+Service-layer functions that read and mutate a user's cart contents: add, set, remove, and clear product lines, plus selecting (or clearing) a shipping method. Sits between HTTP controllers and the repository, layering the catalogue gate, per-line quantity limits, response envelopes (200/201/404/422/409), analytics emission, and audit recording on top of raw repository calls.
 
 ## Key elements
 
-- **`cartGet`** – Returns `CartLine[]` (lines joined with product data) for a user.
-- **`cartGetForBadge` / `cartGetForView`** – Identical read (`cartViewOf`); the former is a passive badge poll (no analytics), the latter emits `CART_VIEWED`.
-- **`upsertCartItem`** (internal) – Shared add/set logic. Gates on `productService.findPublicById` (catalogue visibility, not stock). Returns 404 for unknown product, 422 for `QUANTITY_LIMIT` (only reachable in `'add'` mode).
-- **`cartItemSetById`** – Set quantity by product ID; no analytics (envelope is message-less by design).
-- **`cartItemAdd`** – `POST /cart`; wraps `cartItemSetById`, emits `CART_ITEM_ADDED`.
-- **`cartItemUpdateQuantity`** – `PUT /cart/{productId}`; wraps `cartItemSetById`, emits `CART_ITEM_UPDATED`.
-- **`cartItemAddById`** – Add to existing quantity (only caller that can hit `QUANTITY_LIMIT`).
-- **`cartItemRemoveById`** – Remove one line; 404 if cart or line missing (single query covers both). Records audit + emits `CART_ITEM_REMOVED`.
-- **`cartRemove`** – Clear all lines; idempotent (no cart doc → empty view). Emits `CART_CLEARED`.
-- **`cartShippingMethodSet`** – Set or clear (`null`) shipping method. Validates method existence (404), applicability (`needsShipping`), and weight range (`methodFitsWeight`) against current basket (409). Validation is a UX courtesy; checkout re-validates independently.
+- **`cartGet`** – Read all cart lines joined with their products.
+- **`cartGetForBadge` / `cartGetForView`** – Two aliases over the same read; the *view* variant emits `CART_VIEWED` analytics, the *badge* variant does not.
+- **`cartItemSetById`** (mode `'set'`) / **`cartItemAddById`** (mode `'add'`) – Core upsert; checks catalogue availability and per-line max, returns a `ResponseSuccess<CartView>` (201 created / 200 updated) or `ResponseReject`.
+- **`cartItemAdd` / `cartItemUpdateQuantity`** – Controller-facing wrappers that add the `CallerContext`-bound analytics emit (`CART_ITEM_ADDED` vs `CART_ITEM_UPDATED`) on top of the core upsert.
+- **`cartItemRemoveById`** – Delete one line; 404 if the line (or cart) is missing; emits `CART_ITEM_REMOVED` analytics and an audit record.
+- **`cartRemove`** – Clear all lines; idempotent; returns a bare `CartView` (no envelope) because an already-empty cart is a valid success.
+- **`cartShippingMethodSet`** – Persist or clear (`null`) a shipping method; validates the method exists (404), the basket needs shipping (409), and the method fits the basket weight (409).
+- **`upsertCartItem`** *(private)* – Shared add/set pipeline: catalogue gate → quantity-limit check → `cartRepository.upsertLine` → `toCartView` → envelope.
+- **`emitItemWritten`** *(private)* – Fire-and-return helper that maps the 201/200 status to the correct analytics event.
 
 ## Relationships
 
-- **`services/view.ts`** – Provides `readCartLines`, `toCartView`, `isJoined`, and the `CartLine`/`CartView` types used throughout.
-- **`repository.ts`** – All persistence: `findByUserId`, `upsertLine`, `removeLine`, `clearLines`, `setShippingMethod`; also exports `QUANTITY_LIMIT`.
-- **`domain/index.ts`** – `basketWeight` and `needsShipping` for shipping-method validation.
-- **`analytics.ts`** – `cartAnalyticsEvents` enum consumed by every analytics emission.
-- **`audit.ts`** – `cartAuditActions` for the `cartItemRemoveById` audit record.
-- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` / envelope types for all product-named operations.
-- **`@infrastructure/i18n`** – `t()` for user-facing error messages.
-- **`@infrastructure/observability/analytics`** – `emitAnalyticsEvent` / `buildAnalyticsBase` for event emission.
-- **`@infrastructure/observability/audit`** – `recordAudit` for the remove-by-id audit trail.
-- **`@modules/products`** – `productService.findPublicById` as the catalogue visibility gate.
-- **`@modules/delivery`** – `findShippingMethod`, `methodFitsWeight` for shipping validation.
-- **`module.ts` / `services/index.ts`** – Barrel re-exports.
-- **`tests/integration/service.test.ts`** – Exercises these functions end-to-end.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/cart/repository.ts` | All reads/writes go through `cartRepository` (`findByUserId`, `upsertLine`, `removeLine`, `clearLines`, `setShippingMethod`); `QUANTITY_LIMIT` sentinel is inspected from `upsertLine`. |
+| `src/modules/cart/services/view.ts` | `readCartLines`, `toCartView`, `isJoined` and the `CartLine` / `CartView` types are reused for every response shape. |
+| `src/modules/cart/config.ts` | `cartLineMax()` supplies the per-line quantity ceiling for `'set'` mode. |
+| `src/modules/cart/domain/index.ts` | `basketWeight` and `needsShipping` are used to validate shipping-method selection. |
+| `src/modules/cart/analytics.ts` | `cartAnalyticsEvents` provides the event-name constants (`CART_VIEWED`, `CART_ITEM_ADDED`, …). |
+| `src/modules/cart/audit.ts` | `cartAuditActions` provides the action constant for `CART_ITEM_REMOVED`. |
+| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` build every response envelope; `ResponseSuccess` / `ResponseReject` are the return types. |
+| `src/infrastructure/i18n/index.ts` | `t()` localises all user-facing error messages. |
+| `src/infrastructure/observability/analytics/index.ts` | `emitAnalyticsEvent` / `buildAnalyticsBase` fire every analytics event. |
+| `src/infrastructure/observability/audit.ts` | `recordAudit` writes the single audit record (on `cartItemRemoveById`). |
+| `@modules/products` *(external)* | `productService.findPublicById` enforces the catalogue gate inside `upsertCartItem`. |
+| `@modules/delivery` *(external)* | `findShippingMethod` and `methodFitsWeight` validate the chosen shipping method. |
 
 ## Notes
 
-- **Stock is deliberately not checked here.** It is enforced only at checkout, where units are actually held.
-- **`cartRemove` is the only export without a response envelope.** Clearing an already-empty cart is a valid success state, so there is no failure path to encode.
-- **`'set'` mode can never hit `QUANTITY_LIMIT`** (the request itself is bounded to `CART_LINE_MAX`); only `'add'` mode (wishlist move-to-cart) can exceed it.
-- **404 on `cartItemRemoveById` is intentional.** A client deleting a line it cannot see must learn its view is stale rather than receiving a silent no-op.
-- **Shipping-method validation is not the enforcement point.** `services/checkout.ts`'s `resolveShipping` re-validates from scratch at the point of payment; this function exists so a caller gets early feedback.
-- **`null` as a shipping-method ID means "clear the choice"** (module convention D17c) and always succeeds.
+- **No envelope on `cartRemove`.** The module doc explicitly states that clearing an already-empty cart is the state the caller asked for, so the function returns `Promise<CartView>` rather than a `ResponseSuccess | ResponseReject`.
+- **Badge vs. view split is analytics-only.** Both call the identical read; the distinction exists solely so a `cart_viewed` event fires once per human session, not per header poll.
+- **Stock is intentionally absent.** Availability is gated by `findPublicById`; unit-level stock is checked only at checkout.
+- **Two different 422 paths.** `'set'` mode checks `cartLineMax()` *before* writing; `'add'` mode relies on the repository returning the `QUANTITY_LIMIT` sentinel. Both map to the same `CART_QUANTITY_LIMIT` code.
+- **`null` clears shipping method.** Passing `null` to `cartShippingMethodSet` skips all validation and unconditionally succeeds (D17c "null clears" convention).
+- **Checkout re-validates shipping.** The validation here is a UX courtesy; `services/checkout.ts` re-runs its own `resolveShipping` independently.

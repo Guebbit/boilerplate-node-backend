@@ -1,7 +1,7 @@
 ---
 source: scripts/scaffold/apply.ts
-sha256: 23f1d164dcce409158ce613088209675ed9452c380cf8ca554490297bff491a9
-generated_at: 2026-10-01T12:38:29.339266+00:00
+sha256: bc69c83f524cac4d6e7e3c566d8a15ac3a1283edcc1a936af900792b59e638ee
+generated_at: 2026-10-14T07:30:45.191025+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The I/O half of the module scaffolder. It performs the only disk-touching work in the scaffold pipeline: checking whether a scaffold is already present (refusals), collecting schema names from existing `openapi.yaml` files, and writing the planned files plus central-edit patches. All pure logic (naming, planning, collision detection) lives in sibling modules; this file is kept thin so tests can redirect `root` to a scratch directory.
+The disk-writing half of the module scaffolder. It refuses to proceed when the target module already exists (directory, doc, registry entry, or schema-name clash), then writes the planned files and the central-file edits it computes. All decisions (what to create, what to name) live in the pure sibling modules; this file's only job is I/O under a caller-supplied `root` so tests can aim it at a scratch directory.
 
 ## Key elements
 
-- **`refusalsFor(root, plan)`** (exported) — Returns a list of human-readable refusal strings (existing directory, existing docs file, already-registered kebab name, colliding schema names). An empty list means the scaffold may proceed.
-- **`applyScaffold(root, options, formatText)`** (exported) — Main entry point. Plans the module, throws if any refusal exists, computes all central edits *before* writing anything (all-or-nothing), then writes planned files and edits. Returns the `ScaffoldPlan` that was written.
-- **`takenSchemaNames(root)`** (private) — Reads every `src/modules/*/openapi.yaml`, extracts `components.schemas` keys, and returns them as a `Set<string>` for collision checking.
-- **`writePlanned(root, relative, content, formatText)`** (private) — Creates parent directories, formats content via the injected `formatText`, and writes a single file.
-- **`FragmentShape`** — Minimal interface describing the slice of an OpenAPI YAML document this file cares about (only `components.schemas`).
-- **`REGISTRY`** — Constant `'src/modules.ts'`, the repo-relative path of the central registry.
+- **`applyScaffold(root, options, formatText)`** *(exported)* — Main entry point. Calls `planModule`, checks `refusalsFor`, computes central edits, then writes every planned file and every edited central file. Throws an `Error` listing all refusal reasons if any exist. Returns the `ScaffoldPlan` that was written.
+- **`refusalsFor(root, plan)`** *(exported)* — Returns an array of human-readable refusal strings: module directory already exists, doc file already exists, name already registered in `src/modules.ts`, and/or schema names collide with another module's contract fragment.
+- **`takenSchemaNames(root)`** *(private)* — Reads every `src/modules/<name>/openapi.yaml` and returns a `Set` of all declared schema names via `components.schemas`.
+- **`writePlanned(root, relative, content, formatText)`** *(private)* — Creates the parent directory and writes one formatted file.
+- **`FragmentShape`** — Minimal structural type (`components.schemas`) used to narrow the YAML parse result from `openapi.yaml` fragments.
+- **`REGISTRY`** — Constant `'src/modules.ts'`, the repo-relative path of the central registry file.
 
 ## Relationships
 
-- **`scripts/scaffold/plan.ts`** — Imports `planModule`, `collidingSchemas`, and the `ScaffoldPlan` type. `applyScaffold` calls `planModule` to produce the file list, and `refusalsFor` calls `collidingSchemas` against the taken-names set.
-- **`scripts/scaffold/options.ts`** — Imports the `ScaffoldOptions` type used as the options argument to `applyScaffold`.
-- **`scripts/scaffold/central-edits.ts`** — Imports `centralEdits`, which returns the list of file edits (registry line, module registration) computed from the planned names.
-- **`scripts/scaffold/format-text.ts`** — Imports the `FormatText` type. The formatter is injected into `applyScaffold` rather than loaded internally, keeping this file Prettier-free and testable with an identity function.
-- **`scripts/scaffold/registry.ts`** — Imports `isRegistered` to check whether a kebab-case name already appears in `src/modules.ts`.
-- **`tests/unit/scripts/scaffold/apply.test.ts`** — Unit-tests the two exported functions (`refusalsFor`, `applyScaffold`) against a scratch `root`.
+- **`./plan`** — Imports `planModule` (produces the `ScaffoldPlan` this file writes), `collidingSchemas` (used inside `refusalsFor` to detect name clashes), and the `ScaffoldPlan` type.
+- **`./central-edits`** — Imports `centralEdits`, which yields an array of edit descriptors (`{ path, apply }`). `applyScaffold` reads each target file, applies the edit function, formats the result, and writes it back.
+- **`./options`** — Imports the `ScaffoldOptions` type used as the configuration parameter.
+- **`./format-text`** — Imports the `FormatText` type. The formatter is injected as a parameter (never defaulted) so this module never loads Prettier itself; tests pass an identity function.
+- **`./registry`** — Imports `isRegistered` to check whether the kebab-case name is already present in `src/modules.ts`.
+- **`tests/unit/scripts/scaffold/apply.test.ts`** — Unit tests that exercise `applyScaffold` and `refusalsFor` against a scratch directory with an identity `formatText`, relying on the `root`-parameter design of this module.
 
 ## Notes
 
-- **All-or-nothing write order.** All central edits are computed and formatted *before* any `writePlanned` call, so a shape change mid-flight cannot leave the tree half-scaffolded.
-- **No Prettier import here.** `formatText` is a required parameter with no default; this file deliberately never loads a formatter itself. Tests pass an identity function.
-- **`root` is the single source of truth for paths.** Every file access is `path.join(root, …)`, which is what lets tests point at a temporary directory without touching the real repo.
-- **`takenSchemaNames` reads the disk on every call** (readdir + readFileSync per module). This is intentional: it reflects the live filesystem rather than a cached snapshot.
+- All central edits are computed **before** any file is written (`Promise.all` over `centralEdits`), so a failure leaves the tree untouched rather than half-scaffolded.
+- `formatText` is required, not optional — this file deliberately avoids importing a formatter, keeping its I/O dependency surface to `node:fs` only.
+- `takenSchemaNames` reads `openapi.yaml` via the `yaml` package's `parse`; an empty file yields `null`, which the code handles with `?? {}`.
+- The refusal for schema clashes suggests the `--entity` flag as the user-facing remedy; the flag itself is parsed in `./options`.

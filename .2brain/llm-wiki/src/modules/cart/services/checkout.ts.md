@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/checkout.ts
-sha256: ebf301798cece06fee0b93f3aef376ea9df67b139e32d7f237554e408d182795
-generated_at: 2026-09-27T14:45:56.596783+00:00
+sha256: 2e3521d8b50ba4c27329743c8c4189c8bd859cc4fac2a91f74bc2d129bd0d7f3
+generated_at: 2026-10-14T15:10:52.938645+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The cart module's sole write-to-another-module operation: it turns a basket into a placed order. It is the only cart service where a race can cost a customer money, so it front-loads all validation (payment method, shipping, stock) before any write, and sequences the order-write-before-cart-clear so a losing racer can retract rather than double-charge.
+Implements the cart checkout flow — the single cart operation that writes into another module's (orders) collection and where a race can cost the customer money. It resolves payment method, shipping, and billing addresses; validates stock and totals; then delegates the actual order write to `placeOrder`. All pre-flight checks refuse before anything is persisted.
 
 ## Key elements
 
-- **`toShippingAddress`** — Maps an `AddressItem` to the flat address snapshot embedded in an order document; explicitly excludes `_id`/`default`.
-- **`PreflightOutcome<T>`** — Discriminated union (`ok: true` payload | `ok: false` + `ResponseReject`) returned by every pre-flight resolver.
-- **`resolvePaymentMethod`** — Validates the chosen payment method against the deployment's live list; enforces the per-account open-bank-transfer cap. Returns 409 on both failures.
-- **`resolveShipping`** — Resolves the shipping method id and (when required) the address before any stock moves. Refuses a stray `addressId` for a no-address (pickup) method with 409; checks `shipToCountries`.
-- **`StockRefusal` / `buildStockRefusal`** — Normalises the two stock-related failure shapes (`insufficient-stock`, `unavailable`) into a single wire-format `ResponseReject`; status differs by caller (404 pre-flight vs 409 post-write).
-- **`runCheckout`** — The checkout body: loads user, runs both pre-flight resolvers, reads cart lines (capturing `__v`), evaluates domain rules, calls `placeOrder`, then conditionally clears the cart. Split from the public entry point so the `.catch` envelope and analytics emit live in one place.
-- **`orderConfirm`** *(implied public export)* — Wraps `runCheckout` with the `rejectDatabaseEnvelope` `.catch` and the analytics side-effects.
+- **`toOrderAddress`** – Maps an `AddressItem` to the address shape an order embeds. Spelled field-by-field so the entry's `_id`/`default` cannot leak into the order document.
+- **`CheckoutChoices`** (exported) – The buyer's optional checkout parameters: `addressId`, `billingAddressId`, `paymentMethod`, `notes`, `expectedTotal`.
+- **`PreflightOutcome<T>`** – Discriminated union: either `{ ok: true } & T` or `{ ok: false; reject: ResponseReject }`. Used by every pre-flight resolver.
+- **`resolvePaymentMethod`** – Validates the chosen method against `paymentService.listPaymentMethods()` and enforces `maxOpenUnpaidOrdersPerAccount`. Defaults to `'card'`.
+- **`resolveShipping`** – Resolves the shipping method and shipping address (or confirms neither is needed). Refuses an explicit `addressId` when nothing ships to an address.
+- **`resolveBilling`** – Resolves the billing address (named → same-as-shipping → default). Every order must carry one (EU VAT Art. 226).
+- **`StockRefusal` / `buildStockRefusal`** – Unified shape for stock-related refusals; produces the wire-level `ResponseReject` with appropriate 404 (pre-flight) or 409 (post-`placeOrder`) status.
+- **`runCheckout`** (referenced in docs, truncated) – The main orchestration entry point that sequences pre-flight, stock, and order-write steps.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `infrastructure/http/response.ts` | Builds every success/reject payload via `generateSuccess` / `generateReject`. |
-| `infrastructure/http/errors.ts` | Catches unexpected DB errors in `orderConfirm`'s `.catch` via `rejectDatabaseEnvelope`. |
-| `infrastructure/i18n/*` | All user-facing error messages go through `t()`; `getDefaultLocale` seeds the buyer locale fallback. |
-| `infrastructure/observability/analytics/index.ts` | `emitAnalyticsEvent` + `buildAnalyticsBase` fire on success and failure paths in the public entry point. |
-| `modules/addresses/*` | `addressForCheckout` resolves the shipping address; `AddressItem` is the input type for `toShippingAddress`. |
-| `modules/cart/analytics.ts` | Supplies the `cartAnalyticsEvents` event-name constants. |
-| `modules/cart/domain/*` | `evaluateCheckout`, `basketWeight`, `needsShipping`, `evaluateShippingRequirement` and their types drive the post-join validation. |
-| `modules/cart/repository.ts` | `cartRepository.findByUserId` reads the basket; `clearLinesIfUnchanged` performs the conditional write keyed on `__v`. |
-| `modules/cart/services/view.ts` | `isJoined` and `readCartLines` prepare the joined line data `runCheckout` consumes. |
-| `modules/cart/services/index.ts` | Re-exports the public checkout function for the route layer. |
+- **`@infrastructure/http/response`** – `generateSuccess` / `generateReject` build every HTTP response this file returns.
+- **`@infrastructure/http/errors`** – `rejectDatabaseEnvelope` formats unexpected database failures into the standard error shape.
+- **`@infrastructure/i18n`** – `t()` localises every user-facing error message; `getDefaultLocale` selects the catalog.
+- **`@infrastructure/observability/analytics`** – `emitAnalyticsEvent` / `buildAnalyticsBase` fire checkout analytics events.
+- **`../analytics`** – `cartAnalyticsEvents` supplies the event names/payloads for checkout-specific tracking.
+- **`../config`** – `cartLineMax` and `maxOpenUnpaidOrdersPerAccount()` provide the runtime limits enforced here.
+- **`../domain`** – `evaluateCheckout`, `evaluateShippingRequirement`, `needsShipping`, and the `CheckoutShortfall` / `UnavailableCartLine` types supply the business-rule verdicts.
+- **`../repository`** – `cartRepository` reads and clears the cart lines after a successful (or failed) checkout.
+- **`@modules/addresses`** – `addressForCheckout` resolves a book entry to an `AddressItem`; the `AddressItem` type is the address shape used throughout.
 
 ## Notes
 
-- **Concurrency contract:** Read cart → write order → clear cart is *not* a DB transaction. The cart clear uses `clearLinesIfUnchanged` (optimistic `__v` check) so exactly one of two racing checkouts succeeds; the loser must call `retractOrder` and return 409. The order is written *before* the cart is cleared so the loser has something to retract.
-- **`paymentMethod` default:** The parameter uses `= 'card'` (not `?? 'card'`) so a caller explicitly passing `undefined` — the route's "none chosen" spelling — still gets the card default.
-- **Stock refusal status split:** Pre-flight stock checks return **404** with per-line details; the `placeOrder`-side refusal returns **409** with no line detail. Both produce the same `CART_INSUFFICIENT_STOCK` / `CART_PRODUCT_UNAVAILABLE` codes so the client wording is identical.
-- **Locale is resolved once** from the user document and reused for both the per-line snapshot and the confirmation email, preventing a mid-checkout locale mismatch.
-- **Pickup + address conflict:** A method with `requiresAddress: false` that receives an explicit `addressId` is refused (409 `CART_ADDRESS_NOT_APPLICABLE`) rather than silently ignored.
+- The file is the *only* cart service that crosses a module boundary to write (into orders). Treat any change to its write-path ordering as a potential money-loss regression.
+- `expectedTotal` (minor units) acts as an optimistic lock on price: if the computed total differs from what the buyer saw, checkout is refused with `CART_TOTAL_CHANGED` before stock is held.
+- `resolvePaymentMethod` defaults `paymentMethod` to `'card'` via a parameter default (not `??`), so passing `undefined` from the route yields `'card'` without extra branching.
+- Stock refusals use *different* HTTP statuses depending on *where* the check fired (404 pre-flight vs 409 post-`placeOrder`) while keeping the same message shape — this is intentional and preserved across both call sites.
+- `toOrderAddress` is deliberately non-exhaustive: it picks only the fields the order needs, preventing `_id`, `default`, or future book-internal fields from leaking into the order snapshot.

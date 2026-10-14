@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/providers/google.ts
-sha256: f553d13971ecf80f7e929ee79579e8b47d2834a66a7e5ba3e7f15da1713f275f
-generated_at: 2026-09-23T18:06:39.170357+00:00
+sha256: d3ff5ffbfe53f3d350ece1b9bff1a36ca5fb2c7cea9f56eb8157b868e75bc207
+generated_at: 2026-10-14T08:43:43.996246+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the Google OAuth/OIDC provider behind the `OAuthProvider` port. Extracts user identity directly from the ID token claims returned during the token exchange, avoiding a second `userinfo` round-trip.
+Implements the Google OAuth/OIDC provider behind the shared `OAuthProvider` port. It builds the authorization URL, exchanges the authorization code for tokens, and extracts the user's identity directly from the verified ID-token claims — avoiding a separate `userinfo` round trip.
 
 ## Key elements
 
-- **`googleOAuthProvider`** (exported) — The `OAuthProvider` implementation. Provides `authorizeUrl` (builds the Google auth URL with PKCE S256) and `exchangeCode` (POSTs to Google's token endpoint, decodes the `id_token`, validates claims, returns an `OAuthIdentity`).
-- **`assertValidClaims`** — Checks `iss` against a known-issuer set, `aud` against the app's `client_id`, `exp` against current time, and ensures `sub` is a non-empty string. Deliberately does **not** verify the JWT signature (see Notes).
-- **`GoogleIdTokenClaims`** (interface) — The subset of ID token claims this app reads: `iss`, `aud`, `exp`, `sub`, `email`, `email_verified`, `name`, `picture`.
-- **`PROVIDER_NAME`** — `'google'`; used as the registry key and looked up in `getOAuthCredentials`.
-- **`VALID_ISSUERS`** — Set of two accepted `iss` values (with and without `https://` prefix).
+- **`googleOAuthProvider`** (exported) — The `OAuthProvider` object registered under the name `'google'`. Exposes `authorizeUrl` and `exchangeCode` conforming to the port interface.
+- **`SERVER`** (module-private) — Hardcoded `client.ServerMetadata` (issuer, auth/token endpoints, `authorization_response_iss_parameter_supported: true`). Not fetched at runtime; the `issuer` value is the exact string the library compares against the ID token's `iss` claim.
+- **`identityOf`** (module-private) — Validates that the ID token carries a non-empty `sub` and a string `email`, then maps claims (`name`, `picture`, `email_verified`) into the `OAuthIdentity` shape. Throws on missing `sub` or `email`.
+- **`PROVIDER_NAME`** (module-private) — The registry key `'google'`; also the value stored on `OAuthAccount.provider`.
 
 ## Relationships
 
-- **`./port`** — Consumes the `OAuthProvider` interface and `OAuthIdentity` type; `googleOAuthProvider` is a concrete implementation of that contract.
-- **`../config`** — Calls `getOAuthCredentials(PROVIDER_NAME)` to obtain `clientId`/`clientSecret`; uses `OAUTH_FETCH_TIMEOUT_MS` as the `AbortSignal.timeout` value for the token-exchange `fetch`.
-- **`providers/index.ts`** — Expected to register/export `googleOAuthProvider` alongside other providers (registry pattern).
-- **`tests/unit/oauth-google.test.ts`** — Unit tests exercising the authorize URL construction, code exchange, and claim-validation logic.
+- **`./port.ts`** — Imports the `OAuthIdentity` and `OAuthProvider` types that `googleOAuthProvider` must satisfy and that `identityOf` returns.
+- **`./client.ts`** — Imports `configurationFor`, `authorizationUrlFor`, and `redeemCode`, the three shared helpers every provider uses to talk to `openid-client`.
+- **`./index.ts`** — Re-exports `googleOAuthProvider` so the provider registry can discover it.
+- **`tests/unit/oauth-google.test.ts`** — Unit tests for this file's claim-mapping and validation logic.
 
 ## Notes
 
-- **Signature verification is intentionally omitted.** The rationale (documented in the `assertValidClaims` JSDoc): the token arrives over a server-to-server HTTPS call this app initiated, the same trust boundary that protects the `code` and `access_token`. Only `iss`, `aud`, `exp`, and `sub` presence are validated.
-- **`email_verified` is polymorphic.** Google may return `true`/`false` (boolean) or the string `'true'`. The code normalises both to a boolean.
-- **PKCE is always S256.** There is no `plain` fallback; the server is assumed capable of hashing.
-- **`decode` from `jsonwebtoken`** is used with `{ json: true }` and the result cast to `GoogleIdTokenClaims`. This is decode-only — no key material is involved.
-- **Issuer check tolerates both `accounts.google.com` and `https://accounts.google.com`**, matching what Google has historically emitted.
+- **No signature check, by design.** The ID token arrives from Google's token endpoint over TLS; OIDC Core §3.1.3.7 step 6 permits omitting the signature check in that trust boundary. The library still validates `iss`, `aud`, `exp`, and `iat`.
+- **`email_verified` accepts both boolean and the string `'true'`.** Google's tokens have historically sent the string form; `identityOf` normalises both to a boolean.
+- **`issuer` is `https://accounts.google.com`** (with `https` and a trailing dot-free host). The legacy bare `accounts.google.com` form that Google's docs mention is *not* accepted — the library will reject a token whose `iss` doesn't match exactly.
+- **`authorization_response_iss_parameter_supported: true`** forces `openid-client` to require and validate the `iss` parameter on the authorization response (RFC 9207), rather than treating it as optional.

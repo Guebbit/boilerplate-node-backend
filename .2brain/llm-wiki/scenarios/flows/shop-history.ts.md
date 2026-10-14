@@ -1,7 +1,7 @@
 ---
 source: scenarios/flows/shop-history.ts
-sha256: f052e575fa4b17f6e44effbe88dbe18b502d56865457b2d3300d3e7a2045e4ca
-generated_at: 2026-10-01T12:21:50.453353+00:00
+sha256: 9df836872720d471db21edc6dfbefdde4e679d9eee82eb9429820563864a1c2f
+generated_at: 2026-10-14T06:58:21.951822+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Drives the application's HTTP endpoints (checkout, payment, shipping, cancellation, deletion) to build a realistic order history for the demo dataset — rather than inserting rows directly. Because every order is placed, paid, and shipped through real application code, the resulting payments, stock movements, reservations, shipments, audit entries, and analytics events are internally consistent and survive code changes. Runs **once per process**; `src/app/demo.ts` caches the result in memory and replays it on every subsequent restore.
+Drives the "shop" scenario's full order book end-to-end through real HTTP calls (checkout → payment → ship → decline/refund/cancel/delete) so that every payment, stock movement, reservation, shipment, audit entry, and analytics event is produced by application code rather than hand-inserted rows. Runs **once per process**; the result is held in memory and replayed on every subsequent restore by `scenarios/support/demo.ts`.
 
 ## Key elements
 
-- **`ShopHistory`** (exported interface) — the shape returned by the flow: `subjects` (a `Record<string, string>` of guarantee-name → row-id, merged into `GET /__test/scenario`) and `ages` (order-id → days-back, used to backdate every row an order produced).
-- **`OLDEST_DAYS`** (const, 80) — maximum backdating, deliberately kept inside the 90-day `NODE_AUDIT_RETENTION_DAYS` window so the audit trail is not TTL-reaped out from under its own orders.
-- **`FillerOrder`** (interface) — `{ customer, lines: [productIndex, quantity][] }` for a single filler shopper.
-- **`FILLER_ORDERS`** (const array, 13 entries) — volume orders across 10 filler customers so analytics and order-list screens look like a shop.
-- **`CUSTOMER_ORDERS`** (const array, 3 entries) — larger, mixed named/filler orders for the primary `customer` account.
-- **`CARTS`** (const array, 4 entries) — baskets left in the shop after all flows complete; only 4 customers have one (absence = never shopped).
-- **`plannedDemand()`** — sums every line across all orders into a `Map<productId, quantity>` so `openEveryShelf` can stock enough inventory.
-- **`openEveryShelf(owner)`** — receives stock via `POST /inventory/receipts` for every product (except the intentionally out-of-stock one) before any order is placed.
-- **`signInCustomerBase(baseUrl)`** — signs in all filler shoppers concurrently (bcrypt cost-12 makes serial login the runner's dominant cost).
-- **`driveCatalogueEdits(owner)`** — patches a price and runs each module's `historyEdits()` step *after* all orders, so audit rows are dated after the orders they sit among.
-- **`banOneCustomer(owner)`** — `PATCH /users/:id` with `{ active: false }` for marcus; run last because he placed orders with that session.
-- **`signOutEveryone(callers)`** — `POST /account/logout-all` for every caller to avoid shipping phantom refresh tokens in the dataset.
+- **`ShopHistory`** (exported interface) — the shape this flow returns: `subjects` (a guarantee-name → row-id map merged into `GET /__test/scenario`) and `ages` (order-id → days-ago map used to backdate rows).
+- **`OLDEST_DAYS = 80`** — upper bound on backdating; kept inside the 90-day audit-retention window so the audit trail is not TTL-reaped while the order still exists.
+- **`FILLER_ORDERS`** — 13 orders across 10 named filler shoppers; pure volume for analytics and order-list screens.
+- **`CUSTOMER_ORDERS`** — 3 larger orders for the `customer` account mixing `SEED_PRODUCT_IDS` rows with filler products.
+- **`CARTS`** — 3 unfinished carts (marcus, harper, isla) added via `POST /cart` *after* all checkouts so they are not emptied.
+- **`plannedDemand()`** — aggregates every unit the flows will buy into a `Map<productId, qty>` so stock receipts cover it.
+- **`openEveryShelf(owner)`** — calls `POST /inventory/receipts` for every product (except the out-of-stock one) with `openingStockFor` + planned demand, so no checkout fails mid-run.
+- **`signInCustomerBase(baseUrl)`** — concurrent `signIn` for all filler shoppers (argon2id cost makes serial login the dominant runtime cost).
+- **`driveCatalogueEdits(owner)`** — a price `PATCH` on the dog-food product plus per-module edits from `shop-modules.ts`; runs after all orders so audit timestamps read naturally.
+- **`banOneCustomer(owner)`** — `PATCH /users/:id` to set `active: false` on marcus; uses PATCH (not PUT) to avoid clearing unrelated fields.
+- **`signOutEveryone(callers)`** — `POST /account/logout-all` for every caller, preventing phantom refresh-token sessions from leaking into the dataset.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/flows/actions.ts` | Imports every HTTP action primitive: `checkout`, `checkoutAndPay`, `shipOrder`, `deliverOrder`, `cancelOrder`, `startProcessing`, `submitCard`, `openPayment`, `syncPayment`, `recordOfflinePayment`, `receiveStock`, `softDeleteOrder`, `hardDeleteProduct`, `replaceProductImage`, plus the `CARD` fixture and `Line` type. |
-| `scenarios/flows/client.ts` | Imports `signIn` and the `Caller` type (the authenticated HTTP client used for every request in this flow). |
-| `scenarios/subjects.ts` | Imports `SEED_PRODUCT_IDS` to reference named catalogue products (dog food, dog bed, scratch post, etc.). |
-| `scenarios/products.ts` | Imports `productFixtures`, `fillerProductId`, and `openingStockFor` to enumerate the catalogue and compute stock quantities. |
-| `scenarios/users.ts` | Imports `SEED_CUSTOMER_EMAILS` and `SEED_CUSTOMER_IDS` for the filler shopper identities. |
-| `scenarios/accounts.ts` | Imports admin and customer credentials (`SEED_ADMIN_EMAIL/PASSWORD`, `SEED_USER_EMAIL/PASSWORD`). |
-| `scenarios/shop-modules.ts` | Imports `historyEdits()` — each shop module contributes its own catalogue edit step so deleting a module removes its audit step. |
-| `src/modules/users/factories.ts` | Imports `PLAIN_PASSWORD` (the password shared by all seeded users) for sign-in. |
-| `scenarios/index.ts` | Consumes this flow's result as part of the full scenario orchestration. |
+- **`scenarios/flows/actions.ts`** — provides every HTTP action used here (`checkout`, `checkoutAndPay`, `shipOrder`, `receiveStock`, `softDeleteOrder`, `cancelOrder`, `requestReturn`, `submitCard`, `syncPayment`, `hardDeleteProduct`, `replaceProductImage`, etc.).
+- **`scenarios/flows/client.ts`** — `signIn()` and the `Caller` type; every actor in this flow is a `Caller`.
+- **`scenarios/products.ts`** — `productFixtures` (iterates the full catalogue for stock receipts) and `openingStockFor`.
+- **`scenarios/products-filler.ts`** — `fillerProductId(index)` resolves a filler catalogue index to a real product id.
+- **`scenarios/subjects.ts`** — `SEED_PRODUCT_IDS` for the named products (dog food, dog bed, scratch post, etc.).
+- **`scenarios/users.ts`** — `SEED_CUSTOMER_IDS` and `SEED_CUSTOMER_EMAILS` for the filler customer base.
+- **`scenarios/accounts.ts`** — `SEED_ADMIN_*` and `SEED_USER_*` credentials for the owner/staff callers.
+- **`scenarios/shop-modules.ts`** — `historyEdits()` contributes module-specific audit-trail edits.
+- **`src/modules/orders/services/index.ts`** — `withdrawalPeriodDays` (referenced for return/refund timing logic).
+- **`src/modules/users/factories.ts`** — `PLAIN_PASSWORD` used in the concurrent sign-in batch.
 
 ## Notes
 
-- **Execution order is load-bearing.** Carts are filled *last* because checkout empties the source cart. The ban is last because marcus's session must still be active for his earlier orders. Sign-out is last to avoid shipping refresh tokens. Catalogue edits run after all orders so audit timestamps are not earlier than the orders they document.
-- **Serial vs. concurrent.** Only the initial sign-in fan-out is concurrent; every order, payment, and lifecycle step after that runs in sequence. The story's ordering is the point.
-- **Stock is overstated for named rows.** `plannedDemand` adds a flat 40 units of dog food and 30 of dog bed rather than counting exact lines, so a shelf is never one unit short mid-flow.
-- **`PATCH`, not `PUT`, for the ban.** A `PUT` would replace the entire user document and clear avatar, locale, phone, and website alongside the `active` flag.
-- **The out-of-stock product is never restocked.** `openEveryShelf` explicitly skips `SEED_PRODUCT_IDS.scratchPostOutOfStock`; that is the reason it exists in the catalogue.
-- **Runs once.** Do not call this module from multiple code paths in the same process; the result is designed to be produced once and replayed from memory by `src/app/demo.ts`.
+- **Runs once, replayed forever.** The file's docblock and `scenarios/support/demo.ts` contract mean the expensive work happens a single time; subsequent restores read the in-memory `ShopHistory`.
+- **Stock is deliberately overstated** for named-product rows (`50` dog food, `15` bed) so no checkout 404s three hundred requests into a boot.
+- **The out-of-stock product (`scratchPostOutOfStock`) receives no stock receipt by design** — its catalogue entry exists to demonstrate the OOS state.
+- **Carts are written last** because `checkout` empties the source cart; any cart created earlier would be gone.
+- **Sign-in is the only concurrent step**; every subsequent action is sequential so the audit/order timeline is deterministic.
+- **Backdating respects `NODE_AUDIT_RETENTION_DAYS` (90):** `OLDEST_DAYS` is 80 so an order's own audit rows are not TTL-reaped while the order itself still exists.

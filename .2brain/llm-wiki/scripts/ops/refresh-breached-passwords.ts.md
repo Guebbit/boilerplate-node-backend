@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/refresh-breached-passwords.ts
-sha256: 36a8adf9f9db31490dca76b7cfb2f5561fc4bf315ff964c0047a4b6de8d2df44
-generated_at: 2026-09-27T13:58:12.775575+00:00
+sha256: 8728ce52afe9d58227b54d0bbf67cc0d5fe3dd1a6d50fbc220577522329befdb
+generated_at: 2026-10-14T07:27:07.048598+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-One-shot maintenance script that rebuilds the committed breached-password blocklist. It downloads SecLists' 10 M-entry `Pwdb_top-10000000` corpus, filters it through the `PasswordNew` regex pattern read directly from the root `openapi.yaml` contract, deduplicates, sorts, and writes the small survivor set (~20 k entries, ~226 KB) to `src/infrastructure/security/breached-passwords/list.txt`. Run manually via `npm run refresh:breached-passwords`; there is no scheduler. Re-run whenever the `PasswordNew` pattern changes.
+A hand-run maintenance script (`npm run refresh:breached-passwords`) that rebuilds the committed breached-password blocklist. It downloads SecLists' 10 M-entry `Pwdb_top-10000000` corpus at a pinned commit, verifies its SHA-256, filters the lines through the `PasswordNew` regex pattern read directly from the root `openapi.yaml` contract, and writes the small survivor set (~20 k entries, ~226 KB) to the runtime list file. It exists so the blocklist and the password-shape rule in the contract never drift apart.
 
 ## Key elements
 
-- **`SOURCE_URL`** — SecLists raw-file URL for the 10 M breached-password corpus.
-- **`OUTPUT_PATH`** — resolved path to `src/infrastructure/security/breached-passwords/list.txt`, the file loaded into a `Set` at runtime.
-- **`ROOT_CONTRACT_PATH`** — resolved path to the committed root `openapi.yaml`.
-- **`passwordPatternFromContract()`** — parses `openapi.yaml`, extracts `components.schemas.PasswordNew.pattern`, and returns it as a `RegExp`. Throws if the schema or pattern is absent (prevents silent under-/over-filtering).
-- **`downloadCorpus()`** — `fetch`es `SOURCE_URL`; throws on any non-200 response; returns the body split into trimmed lines.
-- **`main()`** — orchestrates: reads the pattern, downloads the corpus, filters to non-empty lines matching the pattern, deduplicates via `Set`, sorts with `toSorted()`, writes the output file, and logs a summary.
-- **`runScript(undefined, main, () => Promise.resolve())`** — entry-point wrapper; first argument `undefined` signals "run by hand" (no docker/cron context), so no D9 job-health or metric tracking is registered. The recovery callback is a no-op.
+- **`SOURCE_COMMIT` / `SOURCE_URL` / `SOURCE_SHA256`** — pin the exact SecLists commit and its expected digest; any change to the commit requires re-computing the hash.
+- **`OUTPUT_PATH`** — resolves to `src/infrastructure/security/breached-passwords/list.txt`, the file loaded into a `Set` at application boot.
+- **`ROOT_CONTRACT_PATH`** — resolves to the repo-root `openapi.yaml`.
+- **`passwordPatternFromContract()`** — parses the OpenAPI document, extracts `components.schemas.PasswordNew.pattern`, and returns a `RegExp`. Throws if the schema or pattern is absent (no silent fallback).
+- **`downloadCorpus()`** — `fetch`es the corpus, checks HTTP status, passes the raw bytes to `assertCorpusDigest`, then returns trimmed lines. Fails loudly on any mismatch.
+- **`main()`** — orchestrates: read pattern → download → filter → deduplicate via `Set` → sort → write. Logs source/survivor counts.
+- **Top-level call** — `runScript(undefined, main, …)` with `undefined` for the schedule slot, signalling "no scheduler, no D9 job-health tracking."
 
 ## Relationships
 
-- **`scripts/run-script.ts`** — provides `runScript`, the shared script-execution wrapper. This file passes `undefined` as the scheduler context and a no-op recovery, distinguishing it from scheduled/cron-driven scripts.
-- **`src/infrastructure/adapters/logger.ts`** — provides the `logger` instance used for the two `info` calls (download start, completion summary with source/survivor counts and output path).
+- **`scripts/ops/corpus-digest.ts`** — provides `assertCorpusDigest`, which verifies the downloaded bytes against `SOURCE_SHA256` before any filtering occurs.
+- **`scripts/run-script.ts`** — provides `runScript`, the shared entry-point wrapper (error handling, logging, optional scheduling). This call passes `undefined` as the schedule, opting out of cron/D9 integration.
+- **`src/infrastructure/adapters/logger.ts`** — provides the structured `logger` used for the "Downloading" and "refreshed" info lines.
+- **`src/infrastructure/config/dotenv.ts`** — side-effect import at the top of the file; loads environment variables before the script body executes (required by `fetch`/`fetch`-adjacent env or logger config).
 
 ## Notes
 
-- The `PasswordNew` pattern is **always read from `openapi.yaml` at run time**, never hardcoded in this script. The docblock stresses this to prevent the two from drifting.
-- The script is intentionally **not scheduled**. The breach list changes on a multi-year cadence; a stale list silently under-blocks, so the re-run trigger is a pattern change, not a time interval.
-- `toSorted()` (immutable) is used rather than `sort()`, keeping the `Set` intact.
-- A non-200 HTTP response or a missing `pattern` field both **throw immediately** — the design philosophy is fail-loud rather than ship a partial or unfiltered list.
-- The trailing newline (`+ '\n'`) in the output write is intentional; the consuming code at boot expects a line-terminated file.
+- **No scheduler by design.** The docblock and the `runScript(undefined, …)` call both make explicit that this runs only by hand. The upstream list changes on the order of years, so a daily/weekly job would be noise.
+- **Contract is the single source of truth for the pattern.** The regex is *not* duplicated in this file; it is read from `openapi.yaml` at run time. If the contract shape changes, the script throws rather than guessing a fallback.
+- **Bumping the corpus commit is a two-step change:** update `SOURCE_COMMIT` *and* recompute `SOURCE_SHA256` (`curl -sL <url> | sha256sum`). The old hash will reject the new bytes.
+- **99.8 % of the corpus is rejected** by the composition rule, which is why the output is small enough to commit. If that ratio ever drops significantly, revisit the output size before committing.
+- The script is a `tsx` file (shebang `#!/usr/bin/env tsx`), not compiled separately.

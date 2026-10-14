@@ -1,7 +1,7 @@
 ---
 source: docker/observability/grafana.datasources.yaml
-sha256: a66dee6f7732cb0f8bbbb5eeceaa8c5dd6fe4b6061f1b7c81ea8691e28cb3bdd
-generated_at: 2026-09-23T17:13:09.720959+00:00
+sha256: 250bb3d4e3a9aefde826c0466d57aec2d003a2c8518d1e5e30b1385ea5913288
+generated_at: 2026-10-14T06:50:42.084180+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Grafana datasource provisioning file that auto-registers Tempo, Prometheus, and Loki as data sources on every container start, eliminating manual UI configuration and ensuring trace → log → metric cross-linking works out of the box.
+Grafana datasource provisioning file that auto-wires Grafana to the three backends (Tempo, Prometheus, Loki) on container start, eliminating the need for manual UI configuration on every restart.
 
 ## Key elements
 
-- **Tempo datasource** (`uid: tempo`, `isDefault: true`) — trace query endpoint at `http://tempo:3200`; configures `serviceMap` (reads service-graph series from Prometheus via the collector's servicegraph connector) and `tracesToLogsV2` (jumps from a trace span into Loki, filtered by trace ID, mapping the `service.name` span attribute to Loki's `service` stream label).
-- **Prometheus datasource** (`uid: prometheus`) — metrics endpoint at `http://prometheus:9090`; consumed by Tempo's service-graph feature and for direct metric dashboards.
-- **Loki datasource** (`uid: loki`) — log query endpoint at `http://loki:3100`; defines a `derivedFields` entry that turns `"trace_id":"(\w+)"` patterns in log lines into clickable Tempo trace links.
+- **Tempo datasource** (default, `uid: tempo`) — trace queries; enables `serviceMap` (service-graph links read from Prometheus) and `tracesToLogsV2` (jump from a span into Loki, filtered by trace ID, with a `service.name → service` tag mapping).
+- **Prometheus datasource** (`uid: prometheus`) — metrics and alert-rule visualizations; plain proxy to `http://prometheus:9090`.
+- **Loki datasource** (`uid: loki`) — structured log search; defines a `derivedFields` rule that turns `"trace_id":"…"` in log lines into a clickable Tempo link.
 
 ## Relationships
 
-- **otel-collector.config.yaml** — its `servicegraph` connector produces the Prometheus series that Tempo's `serviceMap` reads; the datasource file only declares _which_ Prometheus holds them.
-- **prometheus.config.yaml / tempo.config.yaml / loki.config.yaml** — these are the actual services the URLs in this file point to; they must be running and reachable by Docker-internal hostname for the datasources to resolve.
-- **grafana.dashboard-providers.yaml** — sibling provisioning file in the same Grafana provisioning path; dashboards it loads reference the `uid` values defined here (`tempo`, `prometheus`, `loki`).
+- **`prometheus.config.yaml`** — target of the Prometheus datasource URL; also the `datasourceUid` referenced by Tempo's `serviceMap` (the servicegraph connector output lives here).
+- **`tempo.config.yaml`** — target of the Tempo datasource URL; also the `datasourceUid` in Loki's `derivedFields` (the clickable trace link points here).
+- **`loki.config.yaml`** — target of the Loki datasource URL; the Loki instance Promtail/Alloy ship logs into, which the `tracesToLogsV2` tag query must match.
+- **`otel-collector.config.yaml`** — its `servicegraph` connector produces the metric series that Tempo's `serviceMap` reads from Prometheus; its log pipeline is what stamps the `service` label the tag mapping depends on.
+- **`grafana.dashboard-providers.yaml`** — dashboards provisioned alongside this file reference the UIDs defined here (`tempo`, `prometheus`, `loki`) to resolve their data panels.
 
 ## Notes
 
-- The `tags` entry in `tracesToLogsV2` is load-bearing. Omitting it does **not** mean "match everything": Grafana falls back to its own default labels (cluster, hostname, namespace, pod, `service.name`) and builds a query like `{service_name="api"}` against a Loki label this stack never sets, producing an empty panel with no error. The explicit mapping to the `service` label (the one Promtail promotes and Alloy attaches) is what makes the jump work for both backend and frontend spans.
-- `uid` values are stable identifiers; renaming a datasource in the UI would break cross-datasource references (`datasourceUid` fields) in both this file and any dashboards.
-- All URLs use Docker-internal hostnames (`tempo`, `prometheus`, `loki`), so this file is only valid inside the compose network, not from a browser on the host.
+- **`tags` is not optional in `tracesToLogsV2`.** Omitting it causes Grafana to fall back to default labels (`cluster`, `hostname`, `namespace`, `pod`, `service.name`) and build a query like `{service_name="api"}` that this stack never populates — the panel silently opens empty with no error.
+- The single `service.name → service` tag mapping covers both halves of a stitched trace because Promtail (Winston) and Alloy both attach the `service` stream label.
+- `trace_id` in the Loki `derivedFields` regex matches the OpenTelemetry Logs Data Model field name verbatim; the logger renames other fields but not this one.
+- Datasource UIDs (`tempo`, `proetheus`, `loki`) are the stable identifiers all cross-references and dashboard panels use — renaming one breaks the links.

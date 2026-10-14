@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-2fa-setup.ts
-sha256: 124f03b401c46227b062f919529781bb3f29eb98392574da5c1672968b07b9a3
-generated_at: 2026-09-27T14:24:07.907039+00:00
+sha256: 0c07c2e264de1997539da73305a0ca5a31abdc8b18cae9d1daefde0a29e9022d
+generated_at: 2026-10-14T08:33:28.830785+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /account/2fa/methods/{method}/setup`. Validates the URL parameter, delegates to `twoFactorService.setupTwoFactorMethod`, and formats the service result into a standard HTTP response. Exists to keep route wiring (in `routes.ts`) decoupled from business logic.
+HTTP controller for `POST /account/2fa/methods/{method}/setup`. It validates incoming params and an optional body, then delegates to `twoFactorService.setupTwoFactorMethod` to start (or restart) enrollment of a single 2FA method. Exists as a thin adapter between the Express route and the service layer.
 
 ## Key elements
 
-- **`post2faSetup(request, response)`** — the sole export. Reads `request.authContext!.id`, safe-parses `request.params` against `SetupTwoFactorMethodParams` (Zod), calls `twoFactorService.setupTwoFactorMethod`, then responds with `successResponse<TwoFactorSetup>` or `rejectResponse`. Failures are funneled through `catchAs(response, 'post2faSetup')`.
+- **`post2faSetup(request, response)`** — the sole export. Reads `id` from `request.authContext`, validates `request.params` against `SetupTwoFactorMethodParams` and `request.body` (optional) against `SetupTwoFactorMethodBody` via Zod `safeParse`, then calls `twoFactorService.setupTwoFactorMethod`. On success sends a `TwoFactorSetup` payload; on failure sends the service's status/errors; on unexpected throw falls through to `catchAs`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/http/response.ts` | Imports `successResponse` and `rejectResponse` to build the JSON reply. |
-| `src/infrastructure/http/controller.ts` | Imports `rejectValidation` (early-exit on bad params) and `catchAs` (unified error handler in the `.catch` branch). |
-| `src/infrastructure/http/request.ts` | Imports `callerContextOf` to extract IP/user-agent context passed to the service. |
-| `src/modules/account/services/index.ts` | Imports and calls `twoFactorService.setupTwoFactorMethod` — the actual enrollment/restart logic. |
-| `src/types/index.ts` | Imports `TwoFactorSetup` as the generic type for the success payload. |
-| `src/modules/account/routes.ts` | Registers this handler on the `/account/2fa/methods/:method/setup` path (the controller does not import the routes file; the coupling is one-directional). |
+- **`src/modules/account/routes.ts`** — registers `post2faSetup` on the `POST /account/2fa/methods/:method/setup` route and applies the "fresh critical auth" guard before this controller runs.
+- **`src/modules/account/services/index.ts`** — provides `twoFactorService`, whose `setupTwoFactorMethod` method performs the actual enrollment logic.
+- **`src/infrastructure/http/controller.ts`** — supplies `rejectValidation` and `catchAs` used for validation-failure and error-handling responses.
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, extracted from the request and forwarded to the service.
+- **`src/infrastructure/http/response.ts`** — supplies `successResponse` and `rejectResponse` for writing the JSON reply.
+- **`src/types/index.ts`** — exports the `TwoFactorSetup` type used to type the success response body.
 
 ## Notes
 
-- **Security guard assumption:** `request.authContext!` is non-null because the route (see `routes.ts`) enforces fresh critical-auth middleware upstream. Removing that guard silently breaks this handler.
-- **Param vs. body:** The `method` value is read from `request.params` (URL segment), not the request body. The Zod schema `SetupTwoFactorMethodParams` validates the *params* object.
-- **Restart semantics:** Per the doc comment, calling this on an already-enrolled method *disarms* the existing factor. That is intentional and is why the route requires elevated authentication.
-- **`catchAs` label:** The string `'post2faSetup'` is used as an error-log identifier; keep it in sync if you rename the export.
+- The request body is **optional**: the account's *first* 2FA factor sends none, so `request.body ?? {}` is passed to the Zod schema.
+- Security contract (documented in the JSDoc): once *any* factor is already armed, a valid code from one of them is required to add or restart another. This blocks an attacker with a stolen session from disarming an existing factor.
+- `request.authContext!` uses a non-null assertion — the route guard is expected to have populated it; if it hasn't, this will throw at runtime rather than fail gracefully.
+- The handler returns the promise chain (`.then/.catch`) rather than using `async/await`; callers (Express 4) rely on the returned promise being handled, not on response-send timing.

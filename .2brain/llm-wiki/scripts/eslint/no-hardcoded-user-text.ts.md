@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/no-hardcoded-user-text.ts
-sha256: 6e6c2d2fb2318599e8179459d3939c1b1c0d91f3d88067b4f5eff662ab4be42d
-generated_at: 2026-09-23T17:27:17.854212+00:00
+sha256: da676f32d95d46ce89f8c99014db9fef9e8060e66d0ddf133805d2d57cfde19b
+generated_at: 2026-10-14T07:18:50.876743+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Custom ESLint rule that enforces user-facing error copy must come from an i18n dictionary (`t(…)`) rather than a hardcoded string. It exists because `rejectResponse` and `generateReject` are the only code paths whose text reaches end-users, and passing a literal there bypasses translation.
+Custom ESLint rule that enforces user-facing error copy must originate from an i18n dictionary rather than being hardcoded at the call site. It specifically targets the `errors` argument of `rejectResponse` and `generateReject`, flagging string literals (and expression-free template literals) where a `t(…)` lookup is expected.
 
 ## Key elements
 
-- **`noHardcodedUserText`** (exported) — the rule itself, created via `ESLintUtils.RuleCreator.withoutDocs`. Takes no options; reports a single `literal` message.
-- **`CARRIERS`** — a `Set` of the two function names (`rejectResponse`, `generateReject`) whose `errors` argument is inspected. All other call sites are ignored.
-- **`isLiteralText`** — type-guard helper. Returns true for a `StringLiteral` or a `TemplateLiteral` with zero expressions (i.e., no interpolation). Template literals _with_ expressions pass through unflagged.
-- **`create(context)` → `CallExpression` visitor** — the core logic. Locates the `errors` argument (must be an `ArrayExpression`), then walks each element:
-    - Bare string/template literal element → report.
-    - Object element → check each property; if the key is `message` (Identifier or Literal) and the value is literal text → report.
-    - Properties named `code`, or any non-`message` key, are skipped.
+- **`CARRIERS`** – `Set(['rejectResponse', 'generateReject'])`; the only two functions whose `errors` argument is inspected.
+- **`isLiteralText(node)`** – Type-guard that returns `true` for `StringLiteral` nodes and for `TemplateLiteral` nodes with zero expressions.
+- **`noHardcodedUserText`** – The exported rule (created via `ESLintUtils.RuleCreator.withoutDocs`). On `CallExpression` it:
+  1. Checks the callee against `CARRIERS`.
+  2. Finds the `ArrayExpression` among the call's arguments.
+  3. Walks each element: reports bare literals directly, or descends into object properties and reports the `message:` value if it is a literal.
+- **`Options` / `MessageIds`** – Type parameters; the rule takes no options and reports a single message id `'literal'`.
 
 ## Relationships
 
-- **`scripts/eslint/index.ts`** — the barrel file for the project's custom ESLint rules; imports and re-exports `noHardcodedUserText` so it can be enabled in the project's ESLint config.
-- **`tests/unit/scripts/eslint/no-hardcoded-user-text.test.ts`** — unit tests that feed valid/invalid code samples through `noHardcodedUserText` via `RuleTester`, asserting which nodes are reported.
+- **`scripts/eslint/index.ts`** – The plugin entry point that aggregates and exports `noHardcodedUserText` so projects can enable it via `.eslintrc` / `eslint.config`.
+- **`tests/unit/scripts/eslint/no-hardcoded-user-text.test.ts`** – Unit tests exercising the rule's `RuleTester` cases (valid/invalid snippets).
 
 ## Notes
 
-- Only the `errors` argument is inspected; the `status` and `message` arguments of those functions are out of scope by design (the envelope `message` is derived internally by `resolveErrorMessage`).
-- Technician-facing strings (`code:` values, log calls, audit actions, span names, `throw new Error(…)`) are intentionally **not** flagged. The rule is narrow by convention, not oversight.
-- A template literal like `` `Error ${code}` `` is **not** flagged because it contains an expression — the rule treats interpolation as a signal the text is already dynamic/localised at the call site.
-- The `message` key match handles both shorthand (`{ message: 'x' }`) and quoted (`{ 'message': 'x' }`) property keys.
+- Only the **`errors`** argument is inspected. The envelope's `message` field (derived by `resolveErrorMessage`) is out of scope by design.
+- `code:` identifiers, log/audit strings, span names, and `throw new Error(…)` messages are **intentionally not flagged** — they are technician-facing by convention.
+- An expression-free template literal (`` `foo` ``) is treated the same as a string literal; a template *with* expressions (`` `Count: ${n}` ``) is allowed.
+- The rule uses `ESLintUtils.RuleCreator.withoutDocs`, so no `meta.docs.recommended` / `url` fields are present.

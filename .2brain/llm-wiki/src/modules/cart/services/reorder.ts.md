@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/services/reorder.ts
-sha256: 9f2e24a63a95c9836b6c7ffb664e67b92cc913d467de8bfa8d917f59fa2358cd
-generated_at: 2026-09-27T14:46:53.021901+00:00
+sha256: 0ed6c2eec01821834228bca94abedc056606359cc9f8dc6abd7a05e19ee2cc62
+generated_at: 2026-10-14T15:12:57.332835+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the "reorder" feature: copies the line items of a past order back into the caller's current cart. It lives in the **cart** module (not orders) because it *writes* to the cart while only *reading* the order, preserving the declared `cart → orders` dependency direction and avoiding a circular import.
+Implements the "reorder" feature: takes a past order's items, re-resolves them against the current product catalogue, and fills the caller's cart with whatever is still available. It lives in the **cart** module (not orders) because it *writes* to the cart and only *reads* the order — keeping the dependency direction `cart → orders` that the module manifests declare.
 
 ## Key elements
 
-- **`reorderIntoCart`** (exported) — orchestrates the full flow: fetch the order via `orderService.getById`, resolve lines against today's catalogue, add them to the cart, return a `CartView`, and emit audit + analytics events on success.
-- **`resolveReorderLines`** (private) — resolves each order line's product via `productService.findPublicById`; drops lines whose product is `null` (gone, inactive, or soft-deleted) so a single unavailable item doesn't block the rest.
-- **`addLinesToCart`** (private) — adds resolved lines to the caller's cart **sequentially** (to avoid a last-write-wins race on the shared cart document). Clamps each line to `CART_LINE_MAX` minus the existing quantity; skips a line if no room remains. Treats a `QUANTITY_LIMIT` upsert result (concurrent modification) as a skip, not a retry.
-- **`ReorderLine`** (internal interface) — a single order line paired with its resolved `ProductDocument | null`.
+- **`reorderIntoCart(authContext, orderId, context)`** — The sole export. Orchestrates the full flow: fetches the order (owner-scoped, non-deleted), resolves its lines, adds them to the cart, returns a `CartView`, and emits audit + analytics on success.
+- **`resolveReorderLines(order)`** (internal) — Maps each order item to a `ReorderLine` by calling `productService.findPublicById`. Filters out lines whose product is gone/inactive/soft-deleted. Returns only addable lines.
+- **`addLinesToCart(userId, lines)`** (internal) — Sequentially upserts each line into the user's cart via `cartRepository.upsertLine`, clamping quantity to remaining room under `cartLineMax()`. Tracks a local quantity map to avoid re-reading the cart per line.
+- **`ReorderLine`** (internal interface) — A single order line paired with its (possibly `null`) resolved product.
 
 ## Relationships
 
-- **`@modules/orders` / `@modules/orders/model.ts`** — reads an `OrderDocument` through `orderService.getById`; never writes to the orders module.
-- **`@modules/cart/repository.ts`** — reads the existing cart (`findByUserId`) and writes lines (`upsertLine`); consumes the `QUANTITY_LIMIT` sentinel.
-- **`@modules/cart/model.ts`** — uses `CART_LINE_MAX` for per-line quantity clamping.
-- **`@modules/cart/services/view.ts`** — converts the final cart document into a `CartView` for the response.
-- **`@modules/cart/analytics.ts` / `audit.ts`** — supplies `cartAnalyticsEvents.CART_REORDERED` and `cartAuditActions.USER_CART_REORDERED` for the success-path observability calls.
-- **`@infrastructure/observability/analytics/index.ts`** — `emitAnalyticsEvent` + `buildAnalyticsBase` for product analytics.
-- **`@infrastructure/observability/audit.ts`** — `recordAudit` for the audit trail.
-- **`@infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` envelope builders.
-- **`@infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` in the `.catch` handler.
-- **`@infrastructure/i18n/index.ts`** — `t()` for user-facing message strings.
-- **`@modules/cart/services/index.ts`** — barrel re-export surface for this module.
+- **`src/modules/orders/index.ts` / `model.ts`** — Reads an order via `orderService.getById` with `ownerScope`; consumes the `OrderDocument` type.
+- **`src/modules/cart/repository.ts`** — Primary write target (`upsertLine`, `findByUserId`) and source of the `QUANTITY_LIMIT` sentinel.
+- **`src/modules/cart/config.ts`** — Supplies `cartLineMax()` used to clamp per-line quantities.
+- **`src/modules/cart/services/view.ts`** — Transforms the final cart document into the `CartView` returned to the caller.
+- **`src/modules/cart/analytics.ts` / `audit.ts`** — Provide the named event/action constants (`CART_REORDERED`, `USER_CART_REORDERED`) logged on success.
+- **`src/infrastructure/observability/analytics/index.ts` / `audit.ts`** — `emitAnalyticsEvent` and `recordAudit` fire after a successful reorder.
+- **`src/infrastructure/http/response.ts` / `errors.ts`** — Shapes the success/reject envelopes; `rejectDatabaseEnvelope` handles unexpected DB errors.
+- **`src/infrastructure/i18n/index.ts`** — `t()` supplies user-facing messages for 404, 409, and success cases.
 
 ## Notes
 
-- **Scope guard:** the order lookup uses `orderService.ownerScope(userId)` **plus** an explicit `deletedAt: null` filter. `callerScope` is deliberately *not* used because it is role-based (an admin with `orders.any.read` could read any order) — the wrong boundary for "fill *my* cart from *my* history." `ownerScope` alone doesn't exclude soft-deleted orders, hence the extra predicate.
-- **Skip vs. refuse semantics:** an individual unavailable line is silently skipped; the request only fails (409 `REORDER_UNAVAILABLE`) when *every* line is unavailable. This contrasts with `./items`' `upsertCartItem`, which refuses per-line.
-- **Sequential writes are intentional:** `addLinesToCart` loops with `await` to prevent a last-write-wins race on the single cart document. Do not parallelise the loop.
-- **`QUANTITY_LIMIT` is best-effort:** if `upsertLine` returns it (meaning the cart changed concurrently), the line is skipped without retry — the in-memory `quantities` map is considered stale at that point.
+- **Scoping is deliberate and non-obvious.** The order is fetched with `ownerScope(userId)` **plus** `deletedAt: null`. `ownerScope` alone (unlike `callerScope`) does not exclude soft-deleted orders, and `callerScope` would be wrong here because it is a *role*-based read boundary — an admin with `orders.any.read` must not be able to reorder a stranger's purchase into their own cart.
+- **Sequential writes are required, not an optimisation.** Each `upsertLine` reads-and-rewrites the same cart document; parallel calls would hit a last-write-wins race. The local `quantities` Map exists precisely because the writes are serial.
+- **Unavailable ≠ refused.** A single vanished product is silently skipped. Only when *zero* lines survive does the handler return 409 `REORDER_UNAVAILABLE`. This contrasts with `./items`' `upsertCartItem`, which refuses the request.
+- **`QUANTITY_LIMIT` from `upsertLine` is treated as a concurrent-mutation signal.** The local quantity map is stale; the line is skipped (not retried) as best-effort.
+- **Quantity clamping is best-effort.** A line requesting more than `cartLineMax()` gets only the remaining room; if room is zero the line is skipped entirely — same treatment as an unavailable product, not an error.

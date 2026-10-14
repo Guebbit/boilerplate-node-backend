@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/idempotency.ts
-sha256: 00b884d2bbb3024408ca40567d43aafa05f3d463c807ea0a807ed41c3069ca3f
-generated_at: 2026-09-27T14:09:37.154306+00:00
+sha256: 2d51c050a2ecfb8d429b116025e389ae290c7eac45c0ac8af34bb963ef2635ed
+generated_at: 2026-10-14T07:56:41.936564+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express middleware that makes retried write requests safe by replaying a previously captured response instead of re-running the handler. It is mounted per-route (never globally) and is fully opt-in: a request without an `Idempotency-Key` header passes through untouched. Records are stored in Mongo (not Redis) because the production cache runs `allkeys-lru` eviction, which would silently turn a replay into a duplicate write under load.
+Express middleware that makes retried write requests safe by replaying a previously stored response instead of re-executing the handler. It is mounted per-route (not globally) and is opt-in via the `Idempotency-Key` request header: a client that omits the header gets neither protection nor refusal. The ledger lives in Mongo (TTL-expired) rather than Redis, because the cache's `allkeys-lru` eviction policy could silently discard a live record under load and turn a retry into a duplicate write.
 
 ## Key elements
 
-- **`KEY_PATTERN`** — Regex (`^[\w-]{1,200}$`) validating the key per the OpenAPI contract; does *not* enforce UUID format.
-- **`hasProtoKey(value)`** — Recursive check for an own `__proto__` key anywhere in the body. Bodies that carry one are rejected (422) because `canonicalize` (js-toolkit 2.2.0) silently drops them, producing identical fingerprints for different bodies.
-- **`fingerprintOf(request)`** — SHA-256 of `method + baseUrl + concrete path + canonicalized body`. Uses the concrete path (not the route template) so `/order/A/refund` and `/order/B/refund` don't collide.
-- **`callerKeyOf(request)`** — Resolves the caller scope: authenticated account id, or `ip:<address>` for public routes. Prevents cross-caller replay via key guessing.
-- **`IN_FLIGHT_LEASE_MS`** (5 min) / **`isAbandoned(existing)`** — An in-flight record older than this is considered dead (crashed process) and eligible for re-claim.
-- **`reclaimAbandoned(...)`** — Atomic `updateOne` pinned on the observed `updatedAt`; exactly one of N racing retries wins and runs the handler, the rest get 409.
-- **`armOutcomeCapture(response, key, caller)`** — Monkey-patches `response.json` so the handler's final body (success *or* handled error) is written back to Mongo as `state: 'done'`. Falls back to "let the record expire in-flight" if the write-back fails.
-- **`respondToCollision(response, existing, fingerprint)`** — Three outcomes for a duplicate key: 409 (in-flight), 422 (fingerprint mismatch → key reused for a different request), or verbatim replay with `Idempotent-Replay: true` header.
-- **`onDuplicateKey(...)`** — Handles E11000: reads the existing record, delegates to `respondToCollision` or `reclaimAbandoned`. If the record vanished (TTL race), retries the create once (`retriesLeft` guard) to avoid running the handler uncaptured.
-- **`claimIdempotencyKey(...)`** (truncated in listing) — Top-level claim: inserts a new `in-flight` record, then calls `armOutcomeCapture` + `next()` on success, or routes to `onDuplicateKey` on E11000.
+- **`fingerprintOf(request)`** – Builds a stable, order-independent fingerprint of `method + concrete path + canonicalized body` (via `@guebbit/js-toolkit`'s `canonicalize`), then passes it through `pseudonymise` as a keyed hash so plaintext secrets (e.g. a password in a signup body) are not stored in reversible form.
+- **`callerKeyOf(request)`** – Resolves the caller identity (authenticated account id or IP) used as the second component of the `(key, caller)` composite that the unique index enforces, preventing cross-user key guessing.
+- **`hasPrototypeKey(value)`** – Recursively scans `request.body` for an own `__proto__` property. If found, the request is refused because `canonicalize` silently drops such keys (setter invocation), which would cause two different bodies to hash identically.
+- **`armOutcomeCapture(response, key, caller)`** – Wraps `response.json` so that whichever outcome the guarded handler produces is written back to the Mongo record as `state: 'done'` with status, body, and optional `location`.
+- **`respondToCollision(response, existing, fingerprint)`** – Branches on the three collision states: in-flight → 409, fingerprint mismatch → 422, same request → replay the stored response with `Idempotent-Replay: true`.
+- **`reclaimAbandoned(raw, caller, existing, response, next)`** – Atomically takes over an in-flight record that outlived the 5-minute lease (`IN_FLIGHT_LEASE_MS`) using a pinned `updatedAt` filter, so only one of racing retries wins.
+- **`onDuplicateKey(...)`** – Handles the E11000 path: reads the existing record, delegates to `respondToCollision`, or retries the create once if the record vanished under TTL between the failed insert and the read.
+- **`IDEMPOTENCY_KEY_HEADER` / `KEY_PATTERN`** – Header name (lower-cased per Express) and the validation regex (`^[\w-]{1,200}$`), matching the OpenAPI contract parameter rather than enforcing UUID format.
 
 ## Relationships
 
-- **`idempotency-model.ts`** — Provides `idempotencyRecordModel` (Mongoose model) and the `IdempotencyRecordDocument` type; owns the collection schema and TTL index.
-- **`response.ts`** — Supplies `rejectResponse` used for all 409/422 error shapes.
-- **`mongo-errors.ts`** — `isDuplicateKey` detects E11000 to enter the collision branch.
-- **`@infrastructure/i18n` (`t`)** — Translated error messages for `IDEMPOTENCY_IN_FLIGHT` and `IDEMPOTENCY_KEY_MISMATCH`.
-- **`@infrastructure/adapters/logger`** — `logger.warn` for non-fatal write-back failures.
-- **`shared/contracts/openapi.root.yaml`** — Defines the `IdempotencyKeyHeader` parameter (length 1–200, `\w-` charset) that `KEY_PATTERN` mirrors.
-- **Route files (`orders`, `payments`, `cart`, `feedback`, `account`)** — Mount this middleware per individual write route; they never apply it globally.
-- **`tests/unit/.../idempotency.test.ts`** — Unit tests covering fingerprint, collision, reclaim, and proto-key rejection paths.
+- **`src/infrastructure/http/middlewares/idempotency-model.ts`** – Supplies `idempotencyRecordModel` (Mongoose model) and the `IdempotencyRecordDocument` type; this file is the sole consumer of that model.
+- **`src/infrastructure/http/response.ts`** – Provides `rejectResponse`, used for all error/409/422 replies.
+- **`src/infrastructure/persistence/mongo-errors.ts`** – Provides `isDuplicateKey` to detect the E11000 branch.
+- **`src/infrastructure/security/pseudonymise.ts`** – Provides the keyed-hash function used by `fingerprintOf` to avoid storing a bare SHA-256 of the body.
+- **`src/infrastructure/adapters/logger.ts`** – Provides `logger.warn` for the non-fatal path where the outcome capture write fails after the response has already been sent.
+- **`src/infrastructure/i18n/index.ts`** – Provides the `t` function for user-facing error messages.
+- **`shared/contracts/openapi.root.yaml`** – Defines `#/components/parameters/IdempotencyKeyHeader`; the `KEY_PATTERN` regex in this file mirrors that contract.
+- **Route modules (`account`, `cart`, `feedback`, `inventory`, `orders`, `payments` `/routes.ts`)** – Mount this middleware on their write endpoints (the file explicitly warns against global mounting and against applying it to routes already idempotent by domain design).
 
 ## Notes
 
-- **Concrete path, not template.** The fingerprint uses `request.path` (already substituted by Express), not `request.route.path`. Using the template would make `/order/A/refund` and `/order/B/refund` share a fingerprint and replay the wrong response.
-- **`__proto__` rejection is a workaround, not a validation choice.** Legitimate clients never send `__proto__` as a JSON body key; the rejection exists solely because the upstream `canonicalize` library silently drops it, producing a false "same body" fingerprint. Remove once the upstream fix ships.
-- **Write-back is fire-and-forget.** If Mongo is unavailable when the handler finishes, the record stays `in-flight` and expires on its TTL. The client sees the correct response either way; the cost is a 409 on retry until the TTL lapses.
-- **One retry on vanished record.** `onDuplicateKey` allows at most one re-create attempt (`retriesLeft` decrements to 0). A second pass means a genuine race and falls through to the ordinary collision path.
-- **Not a UUID check.** Despite the header name implying UUID, the contract only constrains length and character class. A caller can use any `\w-` string up to 200 chars.
+- The fingerprint uses the **concrete path** (`request.baseUrl + request.path`), not the route template. Using the template would cause `/order/A/refund` and `/order/B/refund` (both empty-body POSTs) to collide and replay the wrong response.
+- `armOutcomeCapture` hooks `response.json` rather than the `finish` event, for the same reason as `cache.ts`'s `armCacheWrite`: `json` already holds the parsed body.
+- If the outcome-capture `updateOne` fails after the response is sent, the record stays `in-flight` until its Mongo TTL expires; a retry in that window gets 409. This is an accepted trade-off (documented inline) rather than a bug.
+- The `__proto__` guard (`hasPrototypeKey`) is a known upstream limitation in `@guebbit/js-toolkit` 2.2.0; until fixed, any body containing an own `__proto__` key is refused outright.
+- `IN_FLIGHT_LEASE_MS` is 5 minutes—deliberately far above any real handler timeout—so a "stale" in-flight record is assumed to be a dead process, not a slow one.

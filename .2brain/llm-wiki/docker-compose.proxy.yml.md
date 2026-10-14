@@ -1,7 +1,7 @@
 ---
 source: docker-compose.proxy.yml
-sha256: edb0d06f25ab557c90689c0bed5a86abc9dd3885e470fec66579777cd2fe93e2
-generated_at: 2026-10-07T23:46:35.711500+00:00
+sha256: 93b4e0a2f90d85d5498942c7c3e85a5b9085c965fe0c3a001c72e4cedf0b2e1e
+generated_at: 2026-10-14T06:46:28.041551+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A Compose overlay that places a shared Traefik reverse proxy in front of a client stack, allowing many independent client deployments on one host to share a single proxy instance. It is purely routing: it defines no database, no data volume, and no seeding — only an external-facing entrypoint and a per-client route. It is applied as a second `-f` file on top of `docker-compose.production.yml`.
+A Compose overlay that adds a shared Traefik reverse proxy in front of a client stack. It is layered via a second `-f` on top of `docker-compose.production.yml` so that many client stacks on the same host share one proxy instance (one `traefik` container, one set of ACME certs) while each client keeps its own data, network, and project name. It defines routing, TLS termination, and trust-proxy configuration only — no database, volume seeding, or data-plane changes.
 
 ## Key elements
 
-- **`services.traefik`** — Traefik v3 (pinned by SHA-256 digest). Uses the **file provider** (`--providers.file.directory=/etc/traefik/dynamic`, `watch=true`) so routes hot-reload without restart. Listens on `:80` (redirect-only, HTTP→HTTPS) and `:443`. ACME certificates via HTTP challenge, stored in the `traefik-acme` named volume. Requires `NODE_PROXY_ACME_EMAIL` from the client's `.env`.
-- **`services.app` (override)** — Puts `app` on two networks simultaneously: the project's implicit `default` (reaches `database`/`cache`/`queue`) and the shared external `proxy` network. Assigns a per-client alias `${COMPOSE_PROJECT_NAME}-app` on `proxy` so Traefik routes to the correct instance. Resets `ports` to `[]` (YAML `!reset`) to avoid loopback collisions between clients sharing the same `NODE_PORT`. Sets `NODE_TRUST_PROXY_HOPS` to `1` (overridable) so the app trusts exactly one reverse-proxy hop for `request.ip`.
-- **`networks`** — Declares `default: {}` explicitly (needed because the base file omits a top-level `networks:` block; podman-compose 1.6 fails without it) and `proxy` as an **external** network that must be pre-created with `docker network create proxy`.
-- **`volumes.traefik-acme`** — Named volume holding `acme.json` for Let's Encrypt state.
+- **`traefik` service** – Single shared reverse proxy (pinned image). Configured with the **file provider** watching `/etc/traefik/dynamic/` (hot-reload on file change), entrypoints on :80 (HTTPS redirect + ACME HTTP-01) and :443, Let's Encrypt ACME resolver, and Prometheus metrics on the internal :8080 entrypoint (exposes `traefik_tls_certs_not_after` for monitoring).
+- **`app` service override** – Joins both `default` and `proxy` networks (explicitly, because Compose *replaces* `networks:` across files). Assigns a project-scoped alias (`${COMPOSE_PROJECT_NAME}-app`) so Traefik routes to the correct client. Resets `ports` to `[]` to free the loopback port and avoid collisions between clients. Defaults `NODE_TRUST_PROXY_HOPS` to `1` so the app sees the real client IP via `X-Forwarded-For`.
+- **`prometheus` service override** – Joins the `proxy` network and mounts a Traefik scrape job file so the client's Prometheus can monitor the shared proxy.
+- **`networks`** – Declares `default: {}` (preserves the implicit network; required for podman-compose compatibility) and `proxy` as `external: true` (created once on the host via `docker network create proxy`).
+- **`volumes`** – `traefik-acme` named volume for ACME storage.
 
 ## Relationships
 
-- **`docker-compose.production.yml`** — The base file this overlay layers onto. The overlay overrides `app`'s `networks`, `ports`, and `environment`. The base file is left untouched for single-stack deployments that use a standalone nginx, Caddy, or managed LB instead; no overlay is needed in that case.
+- **`docker-compose.production.yml`** – The base (lower) file this overlay layers onto. The base defines `app`, `database`, `cache`, `queue`, and publishes the API on loopback. This overlay does not modify those services beyond the `app` override above; it adds the `traefik` service, the `prometheus` network/volume additions, the top-level `networks` and `volumes` blocks, and the trust-proxy env var. They are always used together in a single `docker compose -f … -f …` invocation.
 
 ## Notes
 
-- **Pre-deploy steps (once per host):** `docker network create proxy`, then for each client add `NODE_PROXY_ACME_EMAIL` to its `.env` and drop a route file into `traefik/dynamic/`. Traefik reloads routes automatically.
-- **Traefik is started once per host**, not per client. Whichever client's `docker compose up` runs first starts the container; later `up`s with different `COMPOSE_PROJECT_NAME` values simply join the shared `proxy` network.
-- **File provider over Docker socket (deliberate):** Mounting `/var/run/docker.sock` (even `:ro`) exposes the full Docker API, including `Config.Env` of every container. The file provider reads only the small route files in `traefik/dynamic/`, which contain no secrets. See OWASP Docker Security Cheat Sheet, rule 1.
-- **Never mount `clients/`** into the Traefik container — that directory holds every client's secrets.
-- **`ports: !reset []`** is essential: without it, every client publishing to the same host port on loopback would collide.
-- **`default: {}`** in `networks` is a no-op declaration that satisfies podman-compose 1.6's requirement to see a named `default` network; omitting it causes a "missing networks: default" error.
-- The per-client alias on `proxy` prevents DNS round-robin across clients: a bare `app` name would resolve to *all* clients' `app` containers on the shared network.
+- **Pre-flight (one-time, host-level):** Create the shared network (`docker network create proxy`) and add `NODE_PROXY_ACME_EMAIL` to the client's `.env` before the first `up`.
+- **Per-client route:** Copy `traefik/client.example.yml` → `traefik/dynamic/<COMPOSE_PROJECT_NAME>.yml` and set the `Host` rule. Traefik's file provider hot-reloads; no container restart needed.
+- **Security rationale for file provider:** The Docker socket exposes `Config.Env` for every container (all client secrets). The file provider reads only route YAML, avoiding a privileged socket mount. Mount `./traefik/dynamic/` read-only; never mount `clients/`.
+- **Network naming is mandatory on both services:** Omitting `default` from `app`'s or `prometheus`'s `networks:` silently removes their access to the project's internal network (Compose replaces, not merges, across files).
+- **Named alias prevents cross-client round-robin:** A bare `app` name resolves on the shared `proxy` network to *every* client's `app` container; the `${COMPOSE_PROJECT_NAME}-app` alias scopes DNS to the correct one.
+- **`ports: !reset []`** is intentional: once Traefik fronts the stack the loopback publish is dead weight and would collide across clients sharing the same `NODE_PORT`.
+- **`default: {}` at top level** is a podman-compose 1.6 workaround; plain Docker Compose would accept the implicit network, but referencing it by name fails without the explicit declaration.

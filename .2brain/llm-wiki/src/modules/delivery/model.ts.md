@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/model.ts
-sha256: 781466cb2c56ebda15f89d14389c934be396793c05296d5a100023bf31eb9e96
-generated_at: 2026-09-23T18:36:28.152692+00:00
+sha256: 6202d527b21d53f272098c1aa6377f5cc2a289697ca43b4d719671c817be21a5
+generated_at: 2026-10-14T15:24:07.930131+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema and compiled model for the **Shipment** collection — one document per order, enforced by a `unique` index on `orderId`. It captures carrier-specific facts (tracking code, delivered timestamp) that the Order model does not carry, and provides the serialization transform used when the repository returns lean reads.
+Defines the two Mongoose schemas and compiled models that persist the delivery module's core records — **FulfillmentOrder** (a group of an order's lines that should ship together) and **Shipment** (what actually left, with one tracking code). All shape, indexing, and serialization concerns for these two records live here; business rules and queries are deliberately kept out.
 
 ## Key elements
 
-- **`ShipmentDocument`** – TypeScript interface extending `Document`; declares `orderId` (ObjectId → Order), `trackingCode?`, `status`, `deliveredAt?`, and Mongoose timestamps.
-- **`ShipmentModel`** – `Model<ShipmentDocument>` type alias; consumed by `repository.ts` and `service.ts`.
-- **`shipmentSchema`** – Mongoose `Schema` with `orderId` (unique, `ref: 'Order'`), `trackingCode` (optional string), `status` (enum from `ShipmentStatus`, default `shipped`), `deliveredAt` (optional Date). `timestamps: true` is enabled.
-- **`applyShipmentTransform`** – Wraps `applySerialization(shipmentSchema)` (from `@infrastructure/persistence/serialize`) to rename `_id` → `id` and strip `__v` on serialized output.
-- **`shipmentModel`** – The compiled Mongoose model, registered under the name `'Shipment'`.
+- **`FulfillmentOrderDocument` / `ShipmentDocument`** — TypeScript interfaces describing the full document shape (lines, status, hold/consent fields, timestamps).
+- **`FulfillmentOrderLine`** (re-export of `FulfillmentLine` from `./domain`) and **`ShipmentLineDocument`** — the embedded line types.
+- **`fulfillmentLineSchema` / `shipmentLineSchema`** — embedded sub-schemas (`_id: false`).
+- **`fulfillmentOrderSchema`** — main schema with enum validation, defaults, and five compound indexes (unique `orderId+number`, status/hold/product lookups, consent sweep, board ordering, product filter).
+- **`shipmentSchema`** — main schema with unique `orderId+number` index and a `fulfillmentOrderId` lookup index.
+- **`applyFulfillmentOrderTransform` / `applyShipmentTransform`** — serialization transforms (`_id`→`id`, drop `__v`) consumed by the repository factory's lean reads.
+- **`fulfillmentOrderModel` / `shipmentModel`** — the compiled Mongoose models, registered as `"FulfillmentOrder"` and `"Shipment"`.
+- **`FulfillmentOrderModel` / `ShipmentModel`** — `Model<T>` type aliases for use in repository/service signatures.
 
 ## Relationships
 
-- **`src/types/index.ts`** – Provides the `ShipmentStatus` enum used as the `status` field's `enum` values and default.
-- **`src/infrastructure/persistence/serialize.ts`** – Exports `applySerialization`, which this file calls to build `applyShipmentTransform`.
-- **`src/modules/delivery/repository.ts`** – Imports `shipmentModel` / `ShipmentModel` for data-access queries (per the file's own comment: "Queries live in `./repository`").
-- **`src/modules/delivery/service.ts`** – Imports the model for business-rule operations (per comment: "rules in `./service`").
-- **`src/modules/delivery/index.ts`** – Module barrel; re-exports the model's public surface.
-- **`src/modules/delivery/tests/unit/schema-contract.test.ts`** – Asserts the shape of `shipmentSchema` against the `ShipmentDocument` interface.
-- **`scenarios/flows/backdate.ts`** – Consumes the model/service in a backdating scenario flow.
+- **`@infrastructure/persistence/serialize`** — imports `applySerialization`, which builds the two transform functions used by lean reads.
+- **`./domain` (index / `fulfillment.ts`)** — provides the `FulfillmentLine` type that `FulfillmentOrderLine` re-exports; domain rules in `fulfillment.ts` read/write the `lines` array and derived `status`.
+- **`./repository.ts`** — performs all queries against `fulfillmentOrderModel` and `shipmentModel`; this file supplies the models and the serialization transforms.
+- **`./services/fulfill.ts`** — creates fulfillment orders when an order is paid.
+- **`./services/cut.ts`** — creates shipments and claims fulfillment-order lines via the `revision` counter.
+- **`./services/holds.ts`** — writes `holdReason`, `holdNote`, and derived `status`.
+- **`./services/announce.ts` / `./services/notice.ts`** — read/write the consent, deadline, `lastNoticeAt`, and `slips` fields for the daily preorder sweep.
+- **`./services/board.ts`** — queries the `expectedAt` and `lines.productId` indexes for the preorder board.
+- **`./services/deliver.ts`** — sets `deliveredAt` and updates `ShipmentStatus`.
+- **`./presenter.ts`** — maps document shapes into API/view models.
+- **`./index.ts`** — re-exports the models and types for the rest of the module.
+- **`scenarios/flows/backdate.ts`** — exercises these models in integration-style flow tests.
 
 ## Notes
 
-- `orderId` uniqueness is the **only** mechanism preventing duplicate shipments per order; there is no application-level guard. This mirrors the same discipline applied to the payment model.
-- `trackingCode` is intentionally optional — some delivery methods carry no tracking number.
-- `status` defaults to `ShipmentStatus.shipped` at insert time; the service layer is responsible for transitioning to subsequent states.
-- The serialized form (post `applyShipmentTransform`) exposes `id` instead of `_id` and omits `__v`; any code reading raw documents directly from the model (without going through the repository's lean reads) will see the un-serialized shape.
+- **`revision` is an optimistic-concurrency counter.** Both a shipment cut and a cancel claim a fulfillment order by matching the current `revision`; incrementing it atomically prevents two concurrent writes from landing on the same remainder.
+- **`status` is derived, not independent.** It is recomputed from `lines` + hold on every write (see `statusOfLines` in domain); treat the stored value as a cache for queries, not as a source of truth.
+- **`number` is 1-based and unique per `orderId`.** This is the idempotency key for "created once when the order is paid" (fulfillment orders) and "next shipment slot" (shipments).
+- **`forced: true` on a shipment** means staff recorded it manually or an override bypassed the normal cut flow.
+- **`slips` counts late-date notifications.** A second date slip always escalates to an explicit buyer consent ask rather than another passive notice.
+- **Indexes are intentionally compound and named.** Do not add overlapping single-field indexes; the five fulfillment-order indexes cover the known query patterns (idempotency, moved-date lookup, daily sweep, board order, product filter).

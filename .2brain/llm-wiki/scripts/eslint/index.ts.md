@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/index.ts
-sha256: 5331b84be438e08641781003d34f1a9957a94eebb1b75d1a3341c1713c96ac67
-generated_at: 2026-09-23T17:27:06.688267+00:00
+sha256: 4949050c3a04120167f8a7ca0b2af68cec1ad238c639abb07d4169e612703ca6
+generated_at: 2026-10-14T07:18:38.223564+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Barrel file that aggregates all project-local ESLint custom rules into a single default export. It exists so `eslint.config.ts` can import the entire rule set in one place, and so each rule's reason for not being a built-in or plugin rule is documented in one location.
+The default export of a local ESLint plugin: a flat map of rule-name strings to their rule implementations. It exists so that `eslint.config.ts` can register five project-specific rules (one per repo convention) as a single plugin object, keeping each rule in its own file for isolated `RuleTester` unit tests.
 
 ## Key elements
 
-- **`default` export (object)** — Maps the five custom rule names (`barrel-allowed-sources`, `comment-links`, `controller-chain-must-catch`, `no-hardcoded-user-text`, `no-persistence-imports`) to their respective rule implementations imported from sibling files.
-- **Import statements** — One per rule, pulling each implementation from its dedicated sibling module (e.g. `./controller-chain-must-catch`).
+- **`export default`** — an object whose keys are the rule names used in `eslint.config.ts` and whose values are the imported rule implementations.
+- **Imports** — one per rule, each from a sibling file in `scripts/eslint/`:
+  - `barrelAllowedSources` → `./barrel-allowed-sources`
+  - `commentLinks` → `./comment-links`
+  - `controllerChainMustCatch` → `./controller-chain-must-catch`
+  - `noHardcodedUserText` → `./no-hardcoded-user-text`
+  - `noPersistenceImports` → `./no-persistence-imports`
 
 ## Relationships
 
-- **`eslint.config.ts`** — Consumes the default export of this file to register the custom rules in the flat-config rule set.
-- **`scripts/eslint/barrel-allowed-sources.ts`** — Imported and re-exported as the `barrel-allowed-sources` rule.
-- **`scripts/eslint/comment-links.ts`** — Imported and re-exported as the `comment-links` rule.
-- **`scripts/eslint/controller-chain-must-catch.ts`** — Imported and re-exported as the `controller-chain-must-catch` rule.
-- **`scripts/eslint/no-hardcoded-user-text.ts`** — Imported and re-exported as the `no-hardcoded-user-text` rule.
-- **`scripts/eslint/no-persistence-imports.ts`** — Imported and re-exported as the `no-persistence-imports` rule.
+- **`eslint.config.ts`** — the sole consumer; references the plugin by the rule names defined here (e.g. `'barrel-allowed-sources'`) to wire each rule into the lint pipeline.
+- **`scripts/eslint/barrel-allowed-sources.ts`**, **`comment-links.ts`**, **`controller-chain-must-catch.ts`**, **`no-hardcoded-user-text.ts`**, **`no-persistence-imports.ts`** — imported here; each file exports one ESLint rule implementation that this file re-exports under its string key.
 
 ## Notes
 
-- One file per rule is intentional so each can be unit-tested in isolation with `RuleTester` (see `tests/unit/scripts/eslint/`).
-- The rules live in this repo rather than a published plugin package because they encode single-repo conventions with exactly one consumer.
-- `controller-chain-must-catch` and `no-hardcoded-user-text` are custom specifically because they inspect AST structure (not text), avoiding false positives from template literals, comments, or quoted strings that a grep-based check would produce.
-- `no-persistence-imports` is custom because `no-restricted-imports` only sees the module specifier, not the imported binding name, so barrel imports would hide violations.
-- `barrel-allowed-sources` is custom because `eslint-plugin-boundaries` governs file-to-file import edges, whereas this rule governs which _exports_ a module's own `index.ts` is allowed to re-publish.
+- The file is intentionally a one-file-per-rule barrel rather than a published plugin package: the rules encode *this* repo's conventions and have exactly one consumer.
+- Rule implementations operate on the parsed AST, not on raw source text. The header comment explains why (avoids tokenizer edge-cases like parens inside template literals or `.catch(` appearing in comments).
+- `no-persistence-imports` and `barrel-allowed-sources` cannot be expressed with built-in ESLint features (`no-restricted-imports`, `eslint-plugin-boundaries`) because they must inspect the *imported name* or the barrel's own `export` declarations, not just module specifiers or cross-module import edges.
+- Unit tests live under `tests/unit/scripts/eslint/` and use `RuleTester`; add a new rule by creating a sibling file, importing it here, and adding its key to the default export.

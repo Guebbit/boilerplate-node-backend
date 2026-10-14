@@ -1,7 +1,7 @@
 ---
 source: scenarios/support/no-human-challenge.ts
-sha256: c2d27525ab3df880ee18a93fea4a040538c75c81f1aeccb83c4881ba8ece5d4c
-generated_at: 2026-10-01T12:24:19.183756+00:00
+sha256: feb4592c7ed37cdf0de4bf86e32b5e8f01937c4c69bbc9dc341430871f907373
+generated_at: 2026-10-14T07:05:42.173959+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Provides a scoped context manager (`withoutHumanChallenge`) that temporarily sets `NODE_ANTIBOT_PROVIDER` to `none` so that a flow-runner scenario can sign in and pay over real HTTP without the antibot provider refusing the first login. The provider is read per-request, so the build can be driven under "no challenge" and the original value restored afterwards.
+Provides a scoped context manager that disables the antibot (human-challenge) provider for the duration of a shop build, so the flow runner can complete a real-HTTP login and payment without being refused on the first challenge. The provider is restored to its original state (including an unset value) when the build finishes.
 
 ## Key elements
 
-- **`PROVIDER_VARIABLE`** (private constant) — the env-var name (`NODE_ANTIBOT_PROVIDER`) used to select the antibot provider.
-- **`withoutHumanChallenge<T>(work: () => Promise<T>): Promise<T>`** (exported) — Saves the current value of the env var, sets it to `'none'`, awaits `work()`, then restores the original value (or deletes the key if it was previously unset). Rejections from `work` still trigger the restore via `.finally`.
+- **`PROVIDER_VARIABLE`** – Module-private constant (`'NODE_ANTIBOT_PROVIDER'`) naming the environment variable the config store reads to select the antibot provider.
+- **`withoutHumanChallenge(work)`** – The sole export. A generic async wrapper (`<T>(work: () => Promise<T>) => Promise<T>`) that calls `overrideEnvironment` to set the provider to `'none'`, executes `work`, and runs the returned `restore` in a `.finally` clause, guaranteeing cleanup even on rejection.
 
 ## Relationships
 
-- **`scenarios/index.ts`** — Consumes `withoutHumanChallenge` to wrap scenario builds that must run with the challenge provider off.
-- **`tests/unit/scenarios/no-human-challenge.test.ts`** — Unit-tests the set/restore behavior, including the edge case where the variable was previously unset.
+- **`src/infrastructure/config/store.ts`** – Supplies `overrideEnvironment`, the mechanism this module uses to swap the provider variable without mutating `process.env` directly. The config store reads the process environment once, so a raw env write would not take effect; the override is the correct channel.
+- **`scenarios/index.ts`** – Aggregates scenario helpers; this module is the "provider off" building block that scenario scripts compose around the build.
+- **`tests/unit/scenarios/no-human-challenge.test.ts`** – Unit tests that exercise `withoutHumanChallenge`'s happy path and rejection-pass-through-then-restore behavior.
 
 ## Notes
 
-- Restoring an *absent* variable requires `delete process.env[PROVIDER_VARIABLE]`, not assignment to `undefined` (which would store the literal string `"undefined"`). This is why the restore logic has two branches.
-- The helper is intentionally synchronous to read the env var and asynchronous to execute the callback; it does not spawn or signal any process. A process that boots with the provider already on (e.g., a paired antibot suite) is unaffected because the build completes before that process starts listening.
-- See `docs/modules/antibot.md` for the broader provider-selection contract.
+- The override is applied **before** the build starts and restored **after** it ends (`.finally`). A process that boots with the provider on (e.g., the paired antibot suite) still serves challenges on its listening phase because the build completes before the server begins accepting connections.
+- Do not replace `overrideEnvironment` with a direct `process.env` assignment; the config store caches the initial environment read, so a late env mutation is invisible to it.
+- The generic signature means callers get their resolved value typed; a thrown/rejected `work` still triggers the restore before the rejection propagates.

@@ -1,7 +1,7 @@
 ---
 source: docker/observability/prometheus.config.yaml
-sha256: eb72f1929315358ccb1c263eccc2522571744d3efa4f52265e236eb33be9d64d
-generated_at: 2026-09-27T13:47:52.178865+00:00
+sha256: 479d95a5ac8365e0807c2de09a303a9151a2b7d19e68b10dcdffeb7ac3d26c67
+generated_at: 2026-10-14T06:51:28.819131+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Prometheus server configuration that defines scrape targets, alert-rule loading, and alert routing. It exists because Prometheus requires an explicit list of metrics endpoints to pull from and a destination for firing alerts before it can do any useful work in the local observability stack.
+Prometheus's main runtime configuration. It declares which targets to scrape, how often to evaluate rules, where to send firing alerts, and which rule files to load. Without it Prometheus starts with no targets, no alert routing, and no rule evaluation.
 
 ## Key elements
 
-- **`global`** — Sets `scrape_interval` and `evaluation_interval` to 15 s each.
-- **`rule_files`** — Globs `/etc/prometheus/rules/*.yml`, the mount point for alert/recording rules.
-- **`alerting.alertmanagers`** — Static target `alertmanager:9093` for forwarded alert results.
-- **`scrape_configs`** — Three jobs:
-  - `api` — Pulls `app:3000/observability/metrics`. Authenticates with a Bearer token read from `/etc/prometheus/secrets/metrics-token` (a file, not an inline string). Relabels `__address__` to a stable `instance: api` label.
-  - `otel-collector` — Pulls `otel-collector:8888/metrics` for collector self-observability (queue depth, exporter health, etc.).
-  - `otel-collector-spanmetrics` — Pulls `otel-collector:8889/metrics` for trace-derived `traces_service_graph_request_*` series produced by the collector's servicegraph connector.
+- **global** – Sets `scrape_interval` and `evaluation_interval` to 15 s.
+- **rule_files** – Loads all `*.yml` under `/etc/prometheus/rules/` (the mounted alert/recording rules).
+- **alerting.alertmanagers** – Static target `alertmanager:9093`; every firing alert is pushed here.
+- **scrape_configs / job `api`** – Pulls `/observability/metrics` from `app:3000`. Authenticates with a Bearer token read from `/etc/prometheus/secrets/metrics-token` (a file, not an env var). Relabels the target to a stable `instance=api` label.
+- **scrape_configs / job `otel-collector`** – Pulls `/metrics` from `otel-collector:8888` (collector self-observability: queue depth, exporter health, etc.).
+- **scrape_configs / job `otel-collector-spanmetrics`** – Pulls `/metrics` from `otel-collector:8889` (the `traces_service_graph_request_*` family derived by the collector's servicegraph connector).
+- **scrape_configs / job `prometheus`** – Self-scrape on `localhost:9090`.
+- **scrape_configs / job `alertmanager`** – Scrapes `alertmanager:9093` so its own health/alerting metrics are queryable.
 
 ## Relationships
 
-- **`prometheus.alert-rules.yaml`** — Mounted into the container and loaded via the `rule_files` glob. Prometheus evaluates the rules here on every `evaluation_interval` and routes any firing alert to Alertmanager.
-- **`alertmanager.config.yaml`** — The `alerting` block in this file points at `alertmanager:9093`; Alertmanager's own config (routers, receivers, silences) lives in its dedicated file.
-- **`otel-collector.config.yaml`** — Defines the two internal ports Prometheus scrapes: 8888 (self-metrics) and 8889 (spanmetrics / servicegraph). If either listener is removed from the collector config, the corresponding scrape job goes DOWN.
-- **`grafana.datasources.yaml`** — The `otel-collector-spanmetrics` job feeds the series that Grafana's Tempo datasource `serviceMap` panel queries for the Service Graph view.
+- **`prometheus.alert-rules.yaml`** – Consumed via the `rule_files` glob; its alert and recording rules are evaluated on the 15 s cycle defined here.
+- **`alertmanager.config.yaml`** – Receiving endpoint for all firing alerts (`alertmanager:9093`); also scraped as a `scrape_configs` target.
+- **`otel-collector.config.yaml`** – Source of the two collector scrape targets (ports 8888 and 8889).
+- **`grafana.datasources.yaml`** – Downstream consumer: Grafana dashboards query the metrics produced by these scrape jobs; the `otel-collector-spanmetrics` job specifically feeds the Tempo Service Graph view.
 
 ## Notes
 
-- **Port is a literal.** `app:3000` is hardcoded because Prometheus performs no variable substitution and has no access to `.env`. Changing `NODE_PORT` without updating this target produces a scrape DOWN that looks like the API is down rather than a stale config.
-- **Token rotation is file-based.** `credentials_file` is re-read on every scrape, so rotating the API's `NODE_METRICS_TOKEN` (written by `npm run setup` into the mounted file) requires no Prometheus restart.
-- **The `/observability/metrics` endpoint is intentionally non-public.** It exposes request volumes, error rates, latency percentiles, and login success/failure counters — a behavioral fingerprint of the service. The Bearer token is the sole gate.
+- **Token via file, not env.** Prometheus has no `.env` access and no variable substitution, so the Bearer token is read from `credentials_file`. The file is re-read on every scrape, so rotating `NODE_METRICS_TOKEN` requires no Prometheus restart.
+- **Hardcoded port.** `app:3000` is a literal; it must be kept in sync with `NODE_PORT`. There is no interpolation — changing `NODE_PORT` alone causes a silent `DOWN` state that looks like an application outage.
+- **Two collector ports, two jobs.** 8888 reports collector health; 8889 reports derived trace metrics. They are intentionally separate jobs so a failure on one doesn't mask the other in dashboards.
+- **`/observability/metrics` is not public.** It exposes operational detail (error rates, login counters, latency percentiles). The Bearer token is the sole gate; there is no OAuth/JWT flow because Prometheus cannot maintain a session.

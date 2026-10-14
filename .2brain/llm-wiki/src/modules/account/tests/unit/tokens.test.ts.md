@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/tokens.test.ts
-sha256: b002fa77622936fb30f7cedabf981b1a0be1af6b877f0628248663315c2d5160
-generated_at: 2026-09-23T18:17:37.547569+00:00
+sha256: 9cf329613da4244171fc2a658986b1d91f89d28005005173283aea84bc7c3a14
+generated_at: 2026-10-14T14:46:52.101264+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the token-configuration module (`session/config.ts`). They verify that every env-var-backed setting—JWT lifetimes, signing-secret rings, and the grace/reuse-window boot check—parses correctly, falls back to safe defaults, and never yields `NaN` or `undefined` in a way that would silently produce broken sessions.
+Unit tests for the token/session configuration module (`session/config.ts`). Every value under test controls a JWT lifetime, signing secret, or cookie max-age — misreads produce silently too-long (security) or too-short (support) sessions with no runtime error. The tests pin the documented contract: per-tier env-var routing, fallback defaults, ring parsing, mode selection, and the boot-gate rules.
 
 ## Key elements
 
-- **`TOKEN_ENV_KEYS`** — exhaustive list of the eight env vars the config module reads; used to wipe/restore the environment around each test.
-- **`beforeEach` / `afterEach`** — snapshot and delete all token env vars before a test; restore (or re-delete) them after, so ambient or setup-file values can never leak into assertions.
-- **`describe('getExpiryTime')`** — asserts per-tier env-var routing (SHORT/MEDIUM/LONG), the no-arg fallback to `NODE_TOKEN_ACCESS_TIME`, per-tier numeric defaults, empty-string → default (not `NaN`), and base-10 parsing.
-- **`describe('getExpiryTimeMilliseconds')`** — confirms the ×1000 scaling, same tier routing, and a finite number when unset.
-- **`describe('token signing rings')`** — single-secret → `['secret']`, comma-split → ordered array (newest first), unset → `['']` (never `undefined`).
-- **`describe('the access-token TTL')`** — access token reads only `NODE_TOKEN_ACCESS_TIME`, defaults to 600 s, and never inherits a refresh-tier variable.
-- **`describe('invalidTokenWindows')`** — boot-check: reuse window must strictly exceed grace window; equal or shorter produces a specific error string.
+- **`TOKEN_ENV_KEYS`** — const array of every env var the module reads; passed to `withoutEnvironmentInThisFile` so each test starts with a clean slate.
+- **`setEnvironment`** / **`withoutEnvironmentInThisFile`** — test helpers (from `tests/support/environment`) that set or clear process env vars per test.
+- **`windowProblems(grace?, reuse?)`** — local helper that calls `sessionConfig.slice.inspect` with a production-shaped object to exercise the grace-vs-reuse boot check and return the list of problem messages.
+- **`placeholders`** (inside the boot-gate `describe`) — a production-shaped config object with deliberately placeholder secrets, used to assert that `assertConfigIn` rejects them in `jwt` mode but accepts their absence in `cookie` mode.
+- **`describe` blocks** — one per exported function/behaviour: `getExpiryTime`, `getExpiryTimeMilliseconds`, signing rings, access-token TTL, `getCookieMaxAgeMilliseconds`, `toRememberTier`, the token-windows check, `getSessionMode`, and the boot gate for signing rings.
 
 ## Relationships
 
-- **`src/modules/account/session/config.ts`** — sole SUT. This file imports `RefreshTokenExpiryTime`, `getExpiryTime`, `getExpiryTimeMilliseconds`, `getAccessTokenRing`, `getRefreshTokenRing`, and `invalidTokenWindows`, and exercises each under controlled env-var conditions.
+- **`src/modules/account/session/config.ts`** — the module under test. All SUT imports (`getExpiryTime`, `getAccessTokenRing`, `sessionConfig`, etc.) come from here.
+- **`src/infrastructure/config/define.ts`** — supplies `assertConfigIn`, used in the boot-gate tests to verify that `sessionConfig.slice` rejects placeholder secrets or missing required keys.
+- **`tests/support/environment.ts`** — supplies `setEnvironment` and `withoutEnvironmentInThisFile`, the env-var isolation utilities every test in this file depends on.
 
 ## Notes
 
-- Tier tests intentionally assign **distinct** numeric values (3600 / 86400 / 2592000) so a swapped map entry would be caught; identical values would mask the bug.
-- The empty-string signing-ring default (`['']`) is asserted explicitly because `jsonwebtoken` throws on `undefined` but accepts `''`—the test pins the documented shape.
-- `Number.parseInt('')` → `NaN` is the specific hazard the "empty variable" test guards against; the same concern applies to the millisecond variant (a `NaN` `maxAge` on a cookie is silently dropped by Express).
-- The `invalidTokenWindows` equal-case test documents _why_ strict inequality is required: a token superseded exactly `grace` ms ago is already expired, so no replay can ever be distinguished.
+- Every test sets **distinct** numeric values per tier so that a swapped mapping (e.g. SHORT and MEDIUM both reading the same var) cannot be masked by identical assertions.
+- Empty-string and unset env vars are tested separately; both must resolve to the tier default, never `NaN` (a `NaN` max-age would be silently dropped by Express, producing an unintended session cookie).
+- The boot-gate tests set `NODE_ENV: 'production'` explicitly to exercise the production enforcement path (the gate skips enforcement in test mode).
+- `cookie` mode exempts the signing-ring requirement and the reuse-window check entirely — a non-obvious coupling between `NODE_SESSION_MODE` and which keys are mandatory.
+- The `getSessionMode` test uses `it.each` with a whitespace-padded value (`'  Cookie '`) to lock in the trim-and-lowercase behaviour.

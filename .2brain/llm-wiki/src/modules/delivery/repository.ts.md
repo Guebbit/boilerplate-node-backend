@@ -1,35 +1,46 @@
 ---
 source: src/modules/delivery/repository.ts
-sha256: 21f1cfd1893062e487bf69d86ab0af8248891bb31126fb4341cff592c9781d2e
-generated_at: 2026-09-27T14:50:40.014575+00:00
+sha256: aed3800754559730b6027d22bf8c3d863e7c630bfa5d48aa4e2f7f3e2d18c93c
+generated_at: 2026-10-14T15:25:16.751068+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/delivery/repository.ts
 
 ## Purpose
-
-Defines the shipment repository: standard CRUD (delegated to the shared factory) plus the domain-specific lookups the carrier service performs — single/batch retrieval by order, idempotent shipment creation, and an atomic conditional status transition. It is the persistence boundary for the delivery module.
+The persistence layer for the delivery module. It wraps the two Mongoose collections (fulfillment orders and shipments) behind a typed repository object, exposing the conditional reads and optimistic-concurrency writes that every delivery "act" (fulfill, cut, hold, notice, board) drives through. Return types are written out explicitly to sidestep Mongoose generics that TypeScript cannot serialize at an export boundary (TS7056).
 
 ## Key elements
-
-- **`shipmentRepository`** (exported const) — the sole export. An object that spreads the factory-generated CRUD surface (`createRepository`) and adds four methods:
-  - `findByOrderId(orderId)` — returns the single `ShipmentDocument` for an order, or `null` if none exists yet.
-  - `findByOrderIds(orderIds)` — batch `find` via `$in`; used by the account data-export path so one request issues one query.
-  - `upsertForOrder(orderId, trackingCode?)` — `findOneAndUpdate` with `upsert` + `$setOnInsert`; idempotent under concurrent first-ship races (loser's `trackingCode` is silently discarded).
-  - `updateStatusIfIn(orderId, from[], to, extra?)` — atomic status transition guarded by a `$in` filter on `status`; returns `null` when the guard doesn't match, preventing double-stamp races.
+- **`BoardFilters`** (interface) — the filter shape the preorder board accepts: `preorder`, `state`, `productId`, `late`, `dueWithin`, `orderIds`.
+- **`ProductSummaryRow`** (interface) — one aggregated row per product: paid, waiting, awaiting-yes, allocated, shipped, cancelled, late counts.
+- **`FulfillmentOrderPatch`** (type) — the subset of document fields an act may mutate, plus an optional `unset` array for fields to remove (hold reason, consent deadline, etc.).
+- **`fulfillmentOrderRepository`** (const) — the main export. Spreads `createRepository` (generic CRUD) and adds domain-specific methods:
+  - `findByOrderId` / `findByOrderIds` / `findInSession` — scoped reads, optionally bound to a Mongoose `ClientSession`.
+  - `insertIfAbsent` — idempotent upsert keyed on `{ orderId, number }`; returns `true` only when it created the document.
+  - `claim` — optimistic-concurrency write: matches on `_id` **and** the caller's `revision`, applies `$set`/`$unset`/`$inc revision`, returns the updated doc or `null` on conflict.
+  - `scrubHoldNotesBefore` — bulk-delete stale hold notes older than a cutoff.
+  - `findWaitingForProduct` — all on-hold/awaiting-stock orders for a given product line (served by a composite index).
+  - `findDatePassed` / `findWaitsExpired` — the two sweep queries for overdue dates and expired consent waits.
+  - `searchBoard` — paginated board read honouring `BoardFilters` ANDed together.
+  - `summarizeProducts` — paginated aggregation producing `ProductSummaryRow[]`.
+- **`stateCondition`** (private) — maps a `PreorderFulfillmentState` to its Mongo `QueryFilter`; kept in manual sync with `boardStateOf` in `./domain`.
+- **`boardWhere`** (private) — assembles the `$and` array from `BoardFilters` + a `now` timestamp.
+- **`DAY_MS`** (private const) — 86 400 000, used by `dueWithin`.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, the `toObjectId` helper, and the `Repository` / `Wire` type aliases. The CRUD portion of `shipmentRepository` is produced here.
-- **`src/modules/delivery/model.ts`** — provides `shipmentModel` (the Mongoose model all queries hit) and `applyShipmentTransform` (passed as the factory's `transform` option). Also the source of the `ShipmentDocument` type.
-- **`src/types/index.ts`** (`@types`) — source of the `ShipmentStatus` union used in `updateStatusIfIn`'s signature.
-- **`src/modules/delivery/service.ts`** — primary consumer; calls the repository methods listed above to implement carrier-state transitions and lookups.
-- **`src/modules/delivery/tests/integration/service.test.ts`** — integration tests that exercise this repository indirectly through the service.
+- **`create-repository.ts`** — supplies the `createRepository` factory (generic find/insert/update/delete), the `toObjectId` helper, and the `Repository` / `Wire` types that this file extends.
+- **`./model`** — provides `fulfillmentOrderModel`, `shipmentModel`, the two `apply…Transform` functions, and the `FulfillmentOrderDocument` / `ShipmentDocument` types used throughout.
+- **`./domain` (`domain/index.ts`, `domain/fulfillment.ts`)** — source of the `FulfillmentOrderDraft` type consumed by `insertIfAbsent`, and the `PreorderFulfillmentState` / `FulfillmentOrderStatus` / `FulfillmentHoldReason` / `FulfillmentConsent` enums used in query filters.
+- **`services/ensure.ts`** — calls `insertIfAbsent` to make "create on payment" idempotent.
+- **`services/fulfill.ts`, `services/cut.ts`, `services/cancel-remainder.ts`, `services/confirm-wait.ts`, `services/holds.ts`** — each reads via `findInSession` / `findByOrderId` then writes via `claim` inside a transaction.
+- **`services/notice.ts`** — uses `findDatePassed` and `findWaitsExpired` for its sweep loop.
+- **`services/board.ts`** — calls `searchBoard` and `summarizeProducts` for the preorder board view.
+- **`services/override-sync.ts`** — queries `findWaitingForProduct` to locate orders affected by a release-date change.
+- **`presenter.ts`** — consumes the repository's typed results to shape API responses.
 
 ## Notes
-
-- The explicit return-type annotation on `shipmentRepository` (instead of `as const` / inference) exists to work around **TS7056**: Mongoose generics are too large for TypeScript to serialize an inferred type at an export boundary.
-- All lookups key on `orderId` (not `_id`) because the model carries a `unique` index on `orderId`, making it a practical application-level key.
-- `updateStatusIfIn` deliberately places the status guard **in the filter**, not in application logic; this is the same atomicity pattern used by `orderRepository` and `paymentRepository`. A read-then-write approach would allow two concurrent ticks to both stamp the target status.
-- `upsertForOrder` sets `status: 'shipped'` and an optional `trackingCode` **only** via `$setOnInsert`; an existing document is never modified by this call.
+- **Optimistic concurrency is the only write path for mutations.** Every mutating act reads a `revision`, then calls `claim` with that revision. Two racing acts on the same fulfillment order cannot both succeed; the loser receives `null` and must re-read.
+- **`stateCondition` and `boardStateOf` (in `./domain`) must stay in sync by hand.** The preorder board's integration suite asserts they agree; there is no shared constant between them.
+- **`insertIfAbsent` uses `$setOnInsert` with upsert**, so it never overwrites an existing document. The boolean return lets a caller narrate a "birth" exactly once across retries.
+- **Session handling is per-call.** Reads and writes accept an optional `ClientSession`; callers that participate in a transaction must pass it explicitly. `findByOrderIds` is the one read that does *not* accept a session (it is used outside a transaction for account export).
+- **`FulfillmentOrderPatch.unset`** is a fixed union (`'holdReason' | 'holdNote' | 'consentDeadline'`); adding a new removable field requires updating both the type and the `$unset` logic in `claim`.

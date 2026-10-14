@@ -1,7 +1,7 @@
 ---
 source: scripts/pairing/spec-identity.ts
-sha256: 11097f3136cf8442b44e65a6782bd9942dedfba06cbf1125568119f4c0f9c33a
-generated_at: 2026-10-01T12:37:39.603033+00:00
+sha256: fc60b0054a38040c0cc51311683b3e36194dee33b369b5d5fdd9aae6cd80cfef
+generated_at: 2026-10-14T07:29:38.251988+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines and executes the cross-repo contract identity check: a byte-for-byte SHA-256 comparison of a small, curated set of spec files that must exist in both the backend and the paired frontend checkout. It exists because a one-line edit in either repo silently forks what both sides believe they share, and neither CI pipeline catches it on its own.
+Defines and performs the cross-repo byte-identity check between this backend and its paired frontend. A small set of spec files (OpenAPI, async contract, authorization keys, TLS certs) must be byte-for-byte identical in both checkouts; a one-line edit in either side silently forks what both codebases believe they share, and neither CI detects it because a forked spec is still a *valid* spec. This module provides the file list, the comparison logic, and the human-readable failure message.
 
 ## Key elements
 
-- **`THIS_REPO`** — constant set to `'backend'`; the single value that differs from the frontend's copy of this file.
-- **`SHARED_FILES`** — the authoritative list of `SharedFile` pairs (`openapi.yaml`, `asyncapi.public.yaml` → `asyncapi.yaml`, `shared/authorization-keys.yaml` → `contracts/authorization-keys.yaml`). Membership rule: the file must be *produced* in the backend and *copied* to the frontend; convenience-identical files and regenerable outputs are excluded.
-- **`siblingRole(role)`** — flips `'backend'` ↔ `'frontend'`.
-- **`hashFile(filePath)`** — returns the SHA-256 hex digest of a file's contents.
-- **`compareSharedFiles(siblingRoot, here?, role?)`** — walks `SHARED_FILES`, returns a `SpecComparison[]` with status `'match' | 'drift' | 'missing-here' | 'missing-there'`. Never throws on missing files.
-- **`sharedFileProblems(comparisons)`** — filters to entries whose status is not `'match'`.
-- **`formatSharedFileProblems(comparisons, siblingRoot)`** — renders a human-readable diagnostic (with repair steps) or returns `''` when everything matches.
+- **`RepoRole`** / **`THIS_REPO`** / **`siblingRole()`** — Identifies which side of the pair this checkout is (hardcoded to `'backend'` here; the frontend's copy differs only in this constant) and flips it.
+- **`SharedFile`** — A pair of paths (`backend`, `frontend`) for one shared file. Two paths because the same logical file can live at different locations in each repo (e.g. `asyncapi.public.yaml` → `asyncapi.yaml`).
+- **`SHARED_FILES`** — The authoritative list of 6 file pairs that must be byte-identical. Membership rule is necessity only: every entry is *produced* in this repo and copied out, so a fork has a single correct answer. Convenience-identical files (Spectral ruleset, `.prettierrc`, favicons, etc.) are deliberately excluded.
+- **`SpecComparison` / `SpecComparisonStatus`** — Result of comparing one file: `match`, `drift`, `missing-here`, or `missing-there`, with sha256 hashes on both sides when available.
+- **`hashFile()`** — sha256 of a file's contents (chosen over md5 to avoid the "deprecated digest" question in issue trackers).
+- **`compareSharedFiles(siblingRoot, here?, role?)`** — Iterates `SHARED_FILES`, hashes both sides, and returns one `SpecComparison` per entry. Never throws on a missing file; absence is reported as a status.
+- **`sharedFileProblems()`** — Filters comparisons to non-`match` entries.
+- **`formatSharedFileProblems(comparisons, siblingRoot)`** — Renders a human-readable diagnostic with the forked paths, hashes, and the exact `npm run` commands to rebuild and re-sync. Returns `''` when clean so callers can branch on truthiness.
 
 ## Relationships
 
-- **`scripts/pairing/check-spec-identity.ts`** — the CLI entry point that calls `compareSharedFiles` and `formatSharedFileProblems` to produce pass/fail output for CI or local runs.
-- **`scripts/pairing/sync-to-frontend.ts`** — the `sync:frontend` script referenced in the diagnostic message; it is the remediation step that re-copies the backend-produced specs into the frontend checkout.
-- **`tests/unit/scripts/pairing/spec-identity.test.ts`** — unit tests for the comparison, filtering, and formatting functions exported here.
-- **`tests/cross-cutting/contract-bundles.test.ts`** — exercises the `asyncapi.public.yaml` ↔ `asyncapi.yaml` pair in the context of the bundle-generation pipeline that produces it.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — verifies that the check participates correctly in the CI wave ordering (i.e., runs after the sibling checkout is available).
+- **`scripts/pairing/check-spec-identity.ts`** — Same-directory consumer in the pairing folder; the CI entry point that calls `compareSharedFiles` and `formatSharedFileProblems` to gate the pipeline.
+- **`scripts/pairing/sync-to-frontend.ts`** — The `sync:frontend` script referenced in the formatted failure message; it is the remediation step that copies the backend's canonical files across to the frontend checkout.
+- **`tests/unit/scripts/pairing/spec-identity.test.ts`** — Unit tests for the comparison, hashing, and formatting logic in this module.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — Exercises the async-contract pairing relationship (`asyncapi.public.yaml` ↔ `asyncapi.yaml`) that this file's `SHARED_FILES` entry guards.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI mutation-testing wave that verifies the pairing check surfaces as expected under fault injection.
 
 ## Notes
 
-- The comparison is deliberately **identity**, not semantic equivalence. Reordered keys count as drift.
-- The two paths in a `SharedFile` entry can differ (e.g. `asyncapi.public.yaml` vs. `asyncapi.yaml`); the `describe` helper renders both only when they differ.
-- The frontend's copy of this file exports an additional `fingerprint` function not present here; the two files are *siblings*, not the same file.
-- `formatSharedFileProblems` returns `''` (not `null`/`undefined`) when there are no problems, so callers branch on string truthiness.
-- The file is intentionally not a semantic diff; it is the cheapest possible guard that a silent fork has not occurred.
+- **Identity, not equivalence.** The comparison is a raw byte hash, not a semantic diff. Two specs that mean the same thing but differ in key order are treated as a fork. This is deliberate: semantic equality is the frontend's and backend's problem to solve individually.
+- **One-way authority.** Every entry in `SHARED_FILES` is *produced* in this repo (backend) and *copied* to the frontend. The frontend's copy is an output. The failure message encodes this: there is no "which side is right?" decision to make.
+- **Deliberate absences are load-bearing.** `src/types/asyncapi.generated.ts` (gitignored, regenerated on every install/pre-commit) and the `contract.<tool>.*` collections (generated from `openapi.yaml`, which *is* compared) are explicitly excluded. Adding them would cost a manual step per contract change with no additional safety.
+- **The `describe()` helper** (module-private) prints a single path when both sides agree on the name, or `file ↔ siblingFile` when they differ — used only in the formatted output.

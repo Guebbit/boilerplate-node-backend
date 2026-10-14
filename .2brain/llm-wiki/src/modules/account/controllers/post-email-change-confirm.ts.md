@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-email-change-confirm.ts
-sha256: 7dc7f5e171887aa7523e6e1b207ef472320a53419c69390d9b712334b28d3c97
-generated_at: 2026-09-27T14:24:21.086906+00:00
+sha256: 1e5e4eb9b5a239271c3468267a2b71cc2251d2c086b22acf60dd1641efccb1d4
+generated_at: 2026-10-14T08:34:01.870946+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `POST /account/email-change-confirm`. It validates a one-time `email-change` token in the body, spends it via `accountService.redeemLiveToken`, and then commits the pending email to the user's `email` field via `accountService.completeEmailChange`. The endpoint is deliberately public: the token itself is the credential, not an authenticated session.
+HTTP controller for `POST /account/email-change-confirm`. It validates a one-time `email-change` token supplied in the request body, then delegates to the account service to spend that token and promote the caller's `pendingEmail` into the live `email` field. The endpoint is intentionally public (no session auth) because the token itself is the credential.
 
 ## Key elements
 
-- **`postEmailChangeConfirm`** (exported const) — the sole controller. Accepts `Request<unknown, unknown, VerifyEmailConfirmRequest>` / `Response`, parses the body with `ConfirmEmailChangeBody.safeParse`, then chains `redeemLiveToken` → `completeEmailChange`, emitting `authEmailChangeConfirmTotal` metrics (`success` / `failure`) at each terminal path.
-- **`ConfirmEmailChangeBody`** (imported from `@api/schemas.zod`) — Zod schema for `{ token }`. Shared with the verify-confirm endpoint; the request *type* is therefore the shared `VerifyEmailConfirmRequest`, not a separate one.
-- **`EMAIL_CHANGE_TOKEN_TYPE`** (imported from `../services`) — the token-type discriminator passed to `redeemLiveToken`. A `verify`-type token will never match this filter, so the two confirm endpoints cannot cross-contaminate.
+- **`postEmailChangeConfirm`** (exported function) — The sole export. Accepts Express `Request`/`Response`, runs Zod validation (`ConfirmEmailChangeBody`) on the body, then calls `accountService.redeemLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token)`. On success it calls `accountService.completeEmailChange`; on a 409-class error (address already claimed) it still surfaces a structured rejection rather than a generic 500.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — supplies `rejectValidation` (400 on Zod failure) and `catchAs` (error-dispatching helper that logs and maps errors to the correct HTTP status).
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf(request)`, forwarded into `completeEmailChange` so the service can record the acting identity.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` and `rejectResponse` for the 200 / 422 paths.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — supplies the `t()` translator used for all user-facing messages (`account.email-change.token-not-found`, `account.email-change.success`).
-- **`src/modules/account/metrics.ts`** — supplies `authEmailChangeConfirmTotal`, an OpenMetrics counter incremented on every terminal outcome.
-- **`src/modules/account/services/index.ts`** — supplies `accountService` (the domain service performing the actual token redemption and email swap) and the `EMAIL_CHANGE_TOKEN_TYPE` constant.
-- **`src/modules/account/routes.ts`** — wires this controller to the `POST /account/email-change-confirm` path.
-- **`src/types/index.ts`** — source of the `VerifyEmailConfirmRequest` type (the shared body shape).
+- **`@infrastructure/http/controller`** — Provides `rejectValidation` (Zod-failure short-circuit) and `catchAs` (typed error classification: 409 vs. 500, with logging).
+- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` shape the JSON envelope and HTTP status.
+- **`@infrastructure/http/request`** — `callerContextOf(request)` extracts an audit/trace context passed to the service and to `recordOneTimeTokenRejected`.
+- **`@infrastructure/i18n`** — `t()` resolves user-facing message keys (`account.email-change.*`).
+- **`@types`** — `VerifyEmailConfirmRequest` is the shared body type (also used by `verify-confirm`); the Zod schema is shared for the same reason, noted in an inline comment.
+- **`../services`** — `accountService.redeemLiveToken`, `accountService.completeEmailChange`, `accountService.recordOneTimeTokenRejected`, and the `EMAIL_CHANGE_TOKEN_TYPE` constant all live here.
+- **`../metrics`** — `authEmailChangeConfirmTotal` Prometheus counter is incremented on every code path (success / validation failure / token not found / thrown error).
+- **`routes.ts`** (upstream) — Wires this controller to the `POST /account/email-change-confirm` route.
+- **`@infrastructure/adapters/logger`** (transitive, via `catchAs`) — `catchAs` logs the classified error (409 vs. 500) before writing the response, so the logger is exercised on the failure path without a direct import here.
 
 ## Notes
 
-- **Public by design.** No auth middleware; the body token *is* the credential. Do not add a session/auth guard.
-- **Shared schema, shared type.** `ConfirmEmailChangeBody` and `VerifyEmailConfirmRequest` are also used by the verify-confirm controller. Changing the schema here affects that endpoint too.
-- **Race-safety pattern.** `redeemLiveToken` does find-then-spend atomically (see `services/tokens.ts`). Do not split it into a separate SELECT + UPDATE in this controller.
-- **Error mapping is not a blanket 500.** `catchAs` distinguishes a unique-index rejection (409, e.g. the new address was claimed by another account between the request and the confirm) from a true server error (500) and logs accordingly. Avoid replacing `catchAs` with a generic `.catch` that hard-codes 500.
-- **Metric label is binary.** Only `'success'` and `'failure'` are used; there is no `'invalid'` label. A Zod parse failure and a token-not-found both increment `'failure'`.
+- The token type filter is strict: a `verify` token will be rejected because `redeemLiveToken` matches on `EMAIL_CHANGE_TOKEN_TYPE`. The two token kinds prove different addresses and must not be interchangeable.
+- "Find then spend" ordering mirrors `postVerifyConfirm` to handle the token-redeemed-race; the rationale is documented in `services/tokens.ts`.
+- The 409 path (new address claimed by another account between token issuance and confirmation) is explicitly distinguished from a server error by `catchAs`; do not collapse it into a blanket 500.
+- `ConfirmEmailChangeBody` (Zod) is imported from `@api/schemas.zod`, which is *not* a listed graph neighbor here but is the runtime schema counterpart to the shared `VerifyEmailConfirmRequest` type.

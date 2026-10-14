@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/oauth-state.test.ts
-sha256: 83c08982cd2df1362e63f168734da2b76254ba1c9cd40e705fd215cfa8cf4fac
-generated_at: 2026-09-27T14:36:38.898792+00:00
+sha256: 7bde7cfa9a3aaab5d77ec776917261f90ccb3ec7b0be77b3f36c7262804222a3
+generated_at: 2026-10-14T09:21:53.496013+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the pure-function layer of the OAuth state module (`oauth/state.ts`). It verifies the CSRF state token, the PKCE code verifier / code challenge pair, and the `continue`-path guard. Cookie and HTTP plumbing is deliberately left to integration/contract suites; this file exercises only the comparisons and token shapes.
+Unit tests for the pure-function OAuth security helpers in `oauth/state.ts`. Covers the CSRF state comparison, PKCE verifier/challenge generation, the `continue` redirect-path guard, and locale-tag validation. Cookie/session plumbing is intentionally excluded here (covered by integration/contract suites); this file isolates the comparison logic and token-shape guarantees.
 
 ## Key elements
 
-- **`generateOAuthState` (tests)** — Asserts the return value is a 32-char lowercase hex string (128 bits of entropy) and that two consecutive calls never produce the same value.
-- **`stateMatches` (tests)** — Covers the happy path, mismatch, `undefined` on either side, an Express-style array (repeated query param), and the empty-string edge case (`''` vs `''` must be rejected).
-- **`generateCodeVerifier` (tests)** — Asserts a 43-char base64url string (256 bits of entropy) and uniqueness across calls.
-- **`codeChallengeOf` (tests)** — Verifies determinism, distinctness for different verifiers, and conformance to the RFC 7636 §B worked example.
-- **`isSameOriginPath` (tests)** — Confirms acceptance of a single leading slash and rejection of protocol-relative (`//`), absolute URLs, slash-less paths, `undefined`, arrays, and non-string values.
+- **`describe('generateOAuthState')`** — Asserts output is a 32-char lowercase-hex string (128 bits) and that successive calls differ.
+- **`describe('stateMatches')`** — Verifies the CSRF state comparison: equal non-empty strings pass; mismatches, `undefined`, empty strings, and Express array values (repeated query params) are all rejected.
+- **`describe('generateCodeVerifier')`** — Asserts a 43-char base64url string (256 bits) and uniqueness across calls.
+- **`describe('codeChallengeOf')`** — Confirms determinism (same verifier → same challenge), uniqueness for different verifiers, and correctness against the RFC 7636 §B worked example.
+- **`describe('isSameOriginPath')`** — Guards the `continue` redirect parameter: accepts a single leading slash; rejects protocol-relative URLs, backslash/whitespace tricks, absolute URLs, missing leading slash, and non-string inputs (arrays, numbers, `undefined`).
+- **`describe('isLocaleTag')`** — Table-driven tests for locale-tag validation: accepts BCP-47 forms (`it`, `pt-BR`, `zh-Hant-TW`); rejects empty strings, single letters, URLs, paths, markup, CRLF injection, underscore form, excessive subtags, arrays, and `undefined`.
 
 ## Relationships
 
-- **`src/modules/account/oauth/state.ts`** — Sole import target. Every `describe` block exercises a named export from that module. No other files are imported or referenced.
+- **`src/modules/account/oauth/state.ts`** — The sole import target. All six functions under test (`generateOAuthState`, `stateMatches`, `generateCodeVerifier`, `codeChallengeOf`, `isSameOriginPath`, `isLocaleTag`) are imported directly from this module. This test file is the only unit-level consumer; integration/contract suites cover the surrounding cookie and request plumbing.
 
 ## Notes
 
-- No mocks or spies are used; the tests call the functions directly.
-- The "repeated query param" guard (Express returns an array for `?state=a&state=a`) is tested in **both** `stateMatches` and `isSameOriginPath`, reflecting that Express's array-injection can hit either guard.
-- The PKCE test includes a literal RFC 7636 Appendix B vector as a regression anchor; if the implementation changes hash algorithm, this line will fail intentionally.
+- The Express "repeated query param → array" edge case is tested in *both* `stateMatches` and `isSameOriginPath` because Express decodes `?state=a&state=b` into an array before either function sees it.
+- `isSameOriginPath` treats backslash and tab as path-separator equivalents (browsers normalise `/\` and `/\t` to `//`), so both are explicitly rejected.
+- The PKCE challenge test hard-codes the RFC 7636 appendix-B vector (`dBjftJeZ…` → `E9Melhoa…`) as a regression anchor for the SHA-256 + base64url pipeline.
+- All tested functions are pure; there is no mocking, fixture setup, or async/await in this file.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/tests/integration/access.test.ts
-sha256: ccc892e80aeb96fa057522911383d110a29a49b4170c7e346095eb33de6e0b25
-generated_at: 2026-09-27T14:21:35.723315+00:00
+sha256: 24d18c7028ef7a573318344764a51a7637ac94b5da532c4ae8a279e21f1ccf6e
+generated_at: 2026-10-14T08:27:25.113276+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the access module's **membership storage layer** (write, edit, refuse) against an in-memory MongoDB wired up by `setupTestDb`. It verifies that the collection from which authorization decisions are *read* can be correctly written to, edited, and rejected — distinct from `tests/cross-cutting/authorization-conformance.test.ts`, which proves two backends decide identically.
+Integration tests for the authorization model's **storage layer** — membership rows in an in-memory Mongo (wired by `setupTestDb`). Proves the service writers (`service.ts`, `repository.ts`) can create, replace, and refuse memberships correctly, and that every invariant is enforced at write time. Complements `tests/cross-cutting/authorization-conformance.test.ts` (which proves both backends decide identically) and `tests/integration/access.test.ts` (which seeds the full demo model).
 
 ## Key elements
 
-- **`describe('the preset roles')`** — asserts `permissionsOfRole` resolves from `shared/authorization-roles.yaml` with zero database involvement.
-- **`describe('membership across tenants')`** — verifies one person can hold different roles in different tenants, one-role-per-tenant uniqueness (reassignment replaces, not appends), and platform/tenant scope separation.
-- **`describe('the invariants')`** — the core refusal battery: undeclared role names throw `AccessInvariantError`; privilege-escalation grants are refused; a granter can hand over exactly what they hold; revoking the last admin is permitted; a failing `deleteById` propagates to the caller rather than vanishing as an unhandled rejection.
-- **`describe('bootstrapAccessModel')`** — creates the deployment tenant with no accounts; confirms idempotency (second call keeps the first `_id`, ignores the new name).
-- **`describe('a role lives in exactly one place, the membership row')`** — no membership → `null` roles (not a guess); `assignDefaultRole` can only ever grant `unverified` (type-level guard, no role-name parameter); undeclared role names rejected.
-- **`describe('auditing a role change')`** — asserts `emitAuditEvent` fires with the correct `action`, `outcome`, `actor_user_id`, `target_id`, and `metadata` for successful grants, refused escalations, and revocations.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — full module replacement (not a spy): swaps `emitAuditEvent` for a `jest.fn()` and manually reroutes `recordAudit` through that fn, because `recordAudit` closes over its own module-scoped `emitAuditEvent`.
+- **`jest.mock('@infrastructure/observability/audit')`** — Replaces `emitAuditEvent` with a spy and re-routes `recordAudit` (which closes over its own module's reference) through the replacement so both call paths are observable.
+- **`describe('the preset roles')`** — Confirms `permissionsOfRole` resolves purely from `shared/authorization-roles.yaml` with no database involvement.
+- **`describe('membership across tenants')`** — Verifies per-tenant role isolation, one-role-per-person-per-tenant (reassignment replaces), and `tenant`/`platform` scope separation.
+- **`describe('the invariants')`** — Refusal of undeclared roles, privilege-escalation rejection, last-admin revocation, and that a rejected `deleteById` surfaces to the caller (not lost as an unhandled rejection).
+- **`describe('bootstrapAccessModel')`** — Idempotent shop creation; no accounts seeded; name from first insert wins.
+- **`describe('a role lives in exactly one place')`** — No-membership resolves to `null`; `assignDefaultRole` can only ever grant `unverified` (type guard: no role-name parameter); unknown role names throw `AccessInvariantError`.
+- **`describe('auditing a role change')`** — Asserts `emitAuditEvent` is called with correct `action`, `outcome` (success/failure), `actorUserId`, `targetId`, and `metadata.role` for grants, refusals, and revokes.
 
 ## Relationships
 
-- **`src/modules/access/service.ts`** — primary SUT; all assign/revoke/bootstrap/resolve functions are imported from here.
-- **`src/modules/access/repository.ts`** — `membershipRepository.deleteById` is spied on to simulate a storage failure.
-- **`src/modules/access/audit.ts`** — provides `accessAuditActions` constants used in audit assertions.
-- **`src/kernel/permissions.ts`** — `permissionsOfRole` is called to resolve preset permissions and to build the granter's key set in escalation tests.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` is imported (used alongside the service's `DEPLOYMENT_TENANT_SLUG`).
-- **`src/infrastructure/observability/audit.ts`** — the module under mock; `emitAuditEvent` is replaced, `recordAudit` is rerouted.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory Mongo before all suites.
-- **`tests/support/ports.ts`** — `observePort` wraps the mocked `emitAuditEvent` for assertion.
-- **`tests/support/callers.ts`** — `testCallerContext` and `callerContextAs` build caller identities for audit-related tests.
+- **`src/modules/access/service.ts`** — Primary subject under test; imports `assignRole`, `revokeRole`, `ensureTenant`, `membershipsOf`, `rolesOf`, `bootstrapAccessModel`, `assignDefaultRole`, `AccessInvariantError`, and friends.
+- **`src/modules/access/repository.ts`** — `membershipRepository.deleteById` is spied on to simulate a Mongo failure.
+- **`src/modules/access/audit.ts`** — `accessAuditActions` constants used in audit-event assertions.
+- **`src/kernel/permissions.ts`** — `permissionsOfRole` called to confirm YAML-based resolution and to derive a granter's key set.
+- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` constant referenced.
+- **`src/infrastructure/observability/audit.ts`** — Mocked; `emitAuditEvent` and `recordAudit` replaced with spy-compatible versions.
+- **`src/infrastructure/runtime/database.ts`** — `withTransaction` imported (available for transactional test scenarios).
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` boots the in-memory Mongo fixture for every test.
+- **`tests/support/ports.ts`** — `observePort` wraps the mocked `emitAuditEvent` spy for assertions.
+- **`tests/support/callers.ts`** — `testCallerContext` and `callerContextAs` build synthetic actor contexts for audit tests.
 
 ## Notes
 
-- **Audit mock is a replacement, not a spy.** `recordAudit` internally calls the *original* `emitAuditEvent` via closure, so a plain `jest.spyOn` would not intercept it. The factory manually re-exports a `recordAudit` that calls the mocked `emitAuditEvent`. See `tests/support/ports.ts` for the convention.
-- **`afterEach(() => jest.restoreAllMocks())`** runs globally in this file; individual spies (e.g. `deleteById`) must also be restored explicitly if you add scoped mocks.
-- **Preset roles are YAML-only.** There is no database row to seed, edit, or delete for a role definition. `permissionsOfRole` is a pure file lookup at import time. Tests that previously exercised `deleteRole` have been removed.
-- **`assignDefaultRole` is structurally limited to `unverified`** — the function signature has no role-name parameter, so the test merely confirms the runtime value rather than guarding against a caller mistake.
-- The file's own docblock explicitly positions it as the *storage* test; the *decision* test lives in `tests/cross-cutting/authorization-conformance.test.ts`, and the *system-level* demo-seeding test is in `tests/integration/access.test.ts` (this file's sibling in the integration directory).
+- **Audit mock is a replacement, not a spy.** `recordAudit` closes over its module-local `emitAuditEvent`, so a plain `jest.spyOn` would miss calls routed through it. The mock factory re-wires `recordAudit` to call the replacement `emitAuditEvent` directly. See `tests/support/ports.ts` for the convention.
+- **Preset roles have no DB row.** They live solely in `shared/authorization-roles.yaml` and are read at import time via `kernel/permissions.ts`. There is no seed, no edit, no delete at runtime — the old `deleteRole` path is gone.
+- **`assignDefaultRole` is safe by type, not by check.** Its signature accepts no role-name parameter, so a caller literally cannot express "grant admin" through it.
+- **The "rejecting delete" test documents a past bug** where `membershipRepository.deleteById` was fired with `void` (unawaited), turning a Mongo failure into a silent unhandled rejection. The current code awaits and re-throws.
+- **`afterEach(() => jest.restoreAllMocks())`** ensures the audit replacement and any inline spies do not leak between tests.

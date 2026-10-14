@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/model.ts
-sha256: 1bf6173d702e254ca5da0fc2aa766b001d2998ac397530261bbfd27bcd472bd1
-generated_at: 2026-09-23T18:40:04.886033+00:00
+sha256: 572cf2b3d1ef9c468eb6d8298264db486a17ae961259e348465341fbe994156b
+generated_at: 2026-10-14T15:49:49.279302+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Mongoose schema, document type, and model for the `FeedbackRequest` collection. It bridges the API-generated `FeedbackRequest` type (ISO-string dates) with Mongoose's native `Date` fields, wires up the indexes the feedback admin UI relies on, and exposes a serialization transform so lean query results can be shaped the same as hydrated documents.
+Defines the Mongoose schema, model, and serialization transform for the `FeedbackRequest` collection. It is the single persistence-layer entry point for feedback tickets: field definitions, index creation, TTL expiry, and the `_id`/`__v` normalization that turns stored documents into wire-shaped API objects.
 
 ## Key elements
 
-- **`FeedbackRequestDocument`** – Interface extending `Omit<FeedbackRequest, …> & Document`; overrides `respondedAt`, `createdAt`, `updatedAt` from `string` to `Date`.
+- **`FeedbackRequestDocument`** – Mongoose document interface; overrides `respondedAt`/`createdAt`/`updatedAt` from `string` (API type) to `Date` (Mongoose-native).
 - **`FeedbackRequestModel`** – Type alias for `Model<FeedbackRequestDocument>`.
-- **`feedbackRequestSchema`** – Mongoose `Schema` with fields `name`, `email`, `subject`, `message`, `status` (enum from `FeedbackRequestStatus`), `adminNotes`, `respondedAt`, plus `timestamps: true`. Two indexes are attached:
-    - `{ status: 1, createdAt: -1 }` – compound index for the admin list's status filter + newest-first sort.
-    - `{ createdAt: 1 }` with `expireAfterSeconds` – TTL index that auto-deletes tickets past the retention window.
-- **`retentionDays`** – Module-level `const` read from `NODE_FEEDBACK_RETENTION_DAYS` (default 730). Evaluated once at import time because the TTL index is created at boot.
-- **`applyFeedbackRequestTransform`** – Serialization helper (built via `applySerialization`) that maps `_id` → `id` and drops `__v`. Exported so lean results in `service.ts#search()` can reuse it.
-- **`feedbackRequestModel`** – The Mongoose model instance registered under the `'FeedbackRequest'` collection name.
+- **`feedbackRequestSchema`** – Schema with fields `name`, `email`, `subject`, `message`, `status` (enum, default `new`), `adminNotes`, `respondedAt`; `timestamps: true` for auto-managed `createdAt`/`updatedAt`.
+- **Compound index** `{ status: 1, createdAt: -1 }` – Serves the admin list's "filter by status, sort newest-first" query.
+- **TTL index** `{ createdAt: 1 }` with `expireAfterSeconds` derived from `NODE_FEEDBACK_RETENTION_DAYS` (default 730 / 24 months).
+- **`applyFeedbackRequestTransform`** – Serialization function (via `applySerialization`) that maps `_id → id` and strips `__v`. Exported so lean query results (which skip `toJSON`) can be normalized in `./service`.
+- **`feedbackRequestModel`** – The registered Mongoose model (`model('FeedbackRequest', …)`).
 
 ## Relationships
 
-- **`src/types/index.ts`** – Source of the `FeedbackRequest` type and `FeedbackRequestStatus` enum consumed here.
-- **`src/infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, which this file calls to build `applyFeedbackRequestTransform`.
-- **`src/infrastructure/runtime/environment.ts`** – Provides `environmentNumber`, used to read the retention-days setting.
-- **`src/modules/feedback/index.ts`** – Module barrel; re-exports the symbols defined here.
-- **`src/modules/feedback/service.ts`** – Consumes `feedbackRequestModel` and `applyFeedbackRequestTransform` (lean-query path).
-- **`src/modules/feedback/repository.ts`** – Persists/queries through `feedbackRequestModel`.
-- **`src/modules/feedback/tests/unit/schema-contract.test.ts`** – Asserts the schema's shape, required fields, and enum values.
+- **`src/types/index.ts`** – Imports the `FeedbackRequestStatus` enum and `FeedbackRequest` interface used to type the schema and document.
+- **`src/infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, which this file calls to produce `applyFeedbackRequestTransform`.
+- **`src/modules/feedback/config.ts`** – Provides `feedbackConfig()` to read `NODE_FEEDBACK_RETENTION_DAYS` at import time for the TTL index.
+- **`src/modules/feedback/service.ts`** – Consumes `applyFeedbackRequestTransform` to normalize lean query results (see `search()`).
+- **`src/modules/feedback/repository.ts`** – Consumes `feedbackRequestModel` for CRUD operations.
+- **`src/modules/feedback/presenter.ts`** – Consumes the document/model types for shaping responses.
+- **`src/modules/feedback/index.ts`** – Barrel file that re-exports this module's public API.
+- **`src/modules/feedback/tests/unit/schema-contract.test.ts`** – Validates the schema's field types, required constraints, and enum values.
 
 ## Notes
 
-- **TTL index is immutably bound at boot.** Changing `NODE_FEEDBACK_RETENTION_DAYS` and simply restarting will fail the Mongoose `autoIndex` step because Mongo refuses to alter an existing TTL index's `expireAfterSeconds` in place. Run `npm run db:sync` to drop and rebuild the index. The same caveat applies to the analogous TTL index in `audit-logs/model.ts`.
-- **No index on `email` is intentional.** The only email query is a case-insensitive, unanchored match; a B-tree index cannot serve it, so omitting it avoids write overhead for no read benefit.
-- **Date fields are `Date` in Mongo, `string` on the wire.** The generated API type says `string`; this file narrows to `Date` for Mongoose, and `applySerialization` (via `applyFeedbackRequestTransform`) converts back to ISO strings at the boundary. Lean query results bypass `toJSON`, so callers must explicitly apply the transform.
-- **`retentionDays` is a module-level `const`.** It is not re-evaluated per request; the value is fixed for the lifetime of the process.
+- **No index on `email` is intentional.** The only email query is case-insensitive and unanchored; a B-tree index cannot serve it, so an index would add write cost with no read benefit.
+- **TTL index is a separate single-field ascending index.** Mongoose/Mongo only honours `expireAfterSeconds` on a single-field ascending index; attaching it to the compound `{ status: 1, createdAt: -1 }` would silently never expire documents.
+- **Changing `NODE_FEEDBACK_RETENTION_DAYS` does not take effect on a plain restart.** Mongo refuses to modify an existing TTL index's `expireAfterSeconds` in place, so boot fails with `autoIndex`. Run `npm run db:sync` to drop and rebuild the index. The same caveat applies to `audit-logs/model.ts`.
+- **Date fields are `Date` in Mongo, `string` on the wire.** The API-generated `FeedbackRequest` type uses ISO strings; this module overrides them to `Date` for Mongoose, and `applyFeedbackRequestTransform` (or `toJSON`) narrows them back.

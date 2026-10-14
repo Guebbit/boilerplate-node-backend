@@ -1,39 +1,42 @@
 ---
 source: src/infrastructure/http/middlewares/cache.ts
-sha256: b3aa65e28c43bd8dea785bc741dd3e7da0423ac20559c958e2fe9997e254396f
-generated_at: 2026-09-27T14:09:16.667533+00:00
+sha256: 0f12c404c5a989fdfc16f1508290c9b758ea05beb30cedd142a1ecc9828c15d9
+generated_at: 2026-10-14T07:55:14.200796+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/infrastructure/http/middlewares/cache.ts
 
 ## Purpose
-Defines the HTTP response-caching layer: the `CachedResponse` envelope, the TTL resolution policy (including a development-time clamp), and a per-entry size gate. It sits between route handlers and the opaque `adapters/cache` store, owning everything specific to caching a *response* (JSON shape, `stale-while-revalidate` timing, byte budget) so that a non-HTTP consumer of the adapter inherits none of it.
+
+HTTP response-caching middleware for Express routes. It defines the JSON envelope stored in Redis, the TTL policy (including a development-time clamp and refresh-ahead stale window), the per-entry size gate, and the key-derivation logic that maps a request's declared parameters to a stable cache key. All of this lives here rather than in the cache adapter because it is specific to caching HTTP responses; a different consumer of the same adapter would not need the envelope, the TTL clamp, or the byte limit.
 
 ## Key elements
-- **`resolveCacheTtl(seconds)`** (exported) — Clamps a route's declared TTL to a development ceiling (`NODE_REDIS_CACHE_DEV_TTL_MAX`, default 30 s); returns the value unchanged in production or when the cap is `0`.
-- **`CachedResponse`** (interface) — The stored envelope: `{ status, body, staleAt }`. `staleAt` marks the soft-expiry point before Redis' own TTL expires.
-- **`CacheOptions`** (interface) — Per-route configuration: `tags`, `keyParameters`, `keyAs`, `browserRevalidate`, and the required `scopeKey` predicate that gates whether a key is built at all.
-- **`STALE_WHILE_REVALIDATE_SECONDS`** (const, 60) — Grace window for serving a stale entry while one refresh is in flight; shared with edge caches via the `Cache-Control` header.
-- **`STALE_IF_ERROR_SECONDS`** (const, 300) — Advertised `stale-if-error` value for edge caches; not enforced server-side.
-- **`DEFAULT_MAX_CACHED_BYTES`** (const, 256 KiB) — Per-entry size limit; configurable via `NODE_REDIS_CACHE_MAX_BYTES`.
-- **`getCacheKey(request, sortedKeyParameters, keyAs?)`** (internal) — Builds the deterministic key from identity + sorted parameter values + literal `guest` scope + locale.
-- **`serializeCachedResponse` / `parseCachedResponse` / `isCachedResponse`** (internal) — Serialize, size-check, and shape-validate the envelope; a corrupt or oversized entry degrades to a cache miss, never a 500.
+
+- **`CachedResponse`** — interface: `{ status, body, staleAt }`. The shape stored in Redis; `staleAt` marks the refresh-ahead soft expiry (strictly before the Redis TTL).
+- **`CacheOptions`** — options object passed by route consumers. Carries `keyParameters`, `keyValues`, `orderedKeyParameters`, `keyAs`, `browserRevalidate`, `tags`, and the required `scopeKey` guard.
+- **`resolveCacheTtl(seconds)`** — clamps a route's declared TTL to `NODE_REDIS_CACHE_DEV_TTL_MAX` outside production; production is never clamped.
+- **`serializeCachedResponse(key, value)`** — serialises the envelope to a JSON string and rejects it (returns `undefined`) if it exceeds `NODE_REDIS_CACHE_MAX_BYTES`, logging a warning.
+- **`isCachedResponse` / `parseCachedResponse`** — shape guard + safe parse so a corrupt or outdated entry degrades to a cache miss rather than a 500.
+- **`keySpelling` / `keySegments`** — build the deterministic key segments from request body/query values; only scalars or flat arrays of scalars qualify; array elements are sorted unless flagged as ordered.
+- **`STALE_WHILE_REVALIDATE_SECONDS` (60) / `STALE_IF_ERROR_SECONDS` (300)** — RFC 5861 constants advertised in `Cache-Control` headers; the first is also used server-side to set `staleAt`.
+- **`setCache` / `invalidateCache`** (referenced in comments, defined in the truncated portion) — the two middlewares/routes-consumers actually call: one arms a cache write on response, the other invalidates by tag on writes.
 
 ## Relationships
-- **`src/infrastructure/adapters/cache.ts`** — The underlying store. This module calls `getCacheValue`, `setCacheValue`, `claimCacheRefresh`, and `invalidateCacheTagsLogged`; it adds the response-specific envelope, TTL clamp, and size gate on top.
-- **`src/infrastructure/http/request.ts`** — Provides `bodyRecordOf`, used by `getCacheKey` to read JSON-body parameters (e.g. POST search) so the key matches what the controller actually reads.
-- **`src/infrastructure/observability/metrics-cache.ts`** — Source of the `cacheRequestsTotal` counter; this middleware records hit/miss/stale outcomes against it.
-- **`src/infrastructure/runtime/environment.ts`** — Supplies `environmentNumber`, the typed env-var reader used for both the dev-TTL cap and the max-bytes limit.
-- **`src/infrastructure/adapters/logger.ts`** — Emits a `warn` when a response is skipped for exceeding the size gate.
-- **Route files** (`account`, `addresses`, `cart`, `feedback`, `locales`, `orders`, `products`, `users`) — Consumers that declare a `CacheOptions` object per endpoint and receive the `setCache` / `serveOrArm` middleware behavior described in this module.
-- **`tests/support/routes.ts`** — Test harness that exercises the cache middleware path.
-- **`scripts/docs/generate-role-matrix.ts`** — Documentation tooling that references this module's scope/role conventions.
+
+- **`src/infrastructure/adapters/cache.ts`** — supplies the four low-level operations: `getCacheValue`, `setCacheValue`, `claimCacheRefresh`, `invalidateCacheTagsLogged`. This file adds the response-specific envelope, TTL policy, and size gate on top.
+- **`src/infrastructure/http/config.ts`** — provides `responseCacheConfig()` which exposes `NODE_REDIS_CACHE_DEV_TTL_MAX` and `NODE_REDIS_CACHE_MAX_BYTES`.
+- **`src/infrastructure/runtime/config.ts`** — provides `isRelaxedEnvironment()` to decide whether the dev TTL clamp applies.
+- **`src/infrastructure/http/request.ts`** — provides `bodyRecordOf()` to safely read the parsed body for key construction.
+- **`src/infrastructure/adapters/logger.ts`** — used to warn when a response is skipped due to the byte limit.
+- **`src/infrastructure/observability/metrics-cache.ts`** — `cacheRequestsTotal` counter incremented on hit/miss/skip.
+- **Module routes** (`account`, `addresses`, `cart`, `example`, `feedback`, `locales`, `orders`, `payments`) — consumers that import `setCache` and `invalidateCache` to opt their endpoints into the cache and to tag entries for invalidation on writes.
 
 ## Notes
-- The key is built from **sorted** `keyParameters` (by name and, for arrays, by value) — raw query-string order is never part of the key, so `?a=1&b=2` and `?b=2&a=1` share one entry.
-- `scopeKey` is a *gate*, not a discriminator: it returns `false` to bypass Redis entirely; the key always carries the literal `guest` segment. This means a wider-visibility caller never produces a distinct key.
-- `keyAs` replaces **both** the method and path in the default identity, not just one half, so two different HTTP spellings of the same logical question (`GET /products?text=x` vs `POST /products/search`) collapse to one entry.
-- The size gate is checked on the *serialized* bytes (`JSON.stringify`), not an estimate; exceeding it is a `warn` log + skip, not an error.
-- `Object.hasOwn` (not `in`) is used when checking parameter presence to avoid prototype-chain false positives (e.g. a parameter named `toString`).
-- The dev TTL clamp is applied at the `setCache` middleware entry point (where the TTL enters the system), not at write time, so the `Cache-Control: max-age` header always matches the actual server-side lifetime.
+
+- `keyParameters` is **required** in `CacheOptions`; omitting it is a correctness bug (wrong requests sharing an entry), not a missed optimisation.
+- `scopeKey` is also required. A route whose answer depends on the caller's role **must** return `false` for non-guest callers; those requests bypass Redis entirely. The guard is backed by `kernel/access/query.ts#hasAnonymousReadScope`.
+- The dev TTL clamp (`NODE_REDIS_CACHE_DEV_TTL_MAX`) is applied at the middleware entry point, not at write time, so the `Cache-Control: max-age` header and the actual server-side lifetime stay in agreement.
+- Key construction prefers body over query (matching the `search` surface's own precedence) and uses `Object.hasOwn` rather than `in` to avoid prototype-chain false positives.
+- `keyValues` lets a route supply pre-parsed values so that semantically equivalent spellings (e.g. `"0e0"` vs `0`) land on the same key; returning `undefined` from the callback skips caching for that request.
+- `keyAs` lets two different routes (e.g. `GET /products?text=x` and `POST /products/search`) share one cache entry when they reach the same controller.

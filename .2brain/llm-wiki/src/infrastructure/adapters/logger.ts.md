@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/logger.ts
-sha256: 2bff8131f8148ad0cfc4d1a26e2ae3353f196ffbbbb6d7fc28cce7f0a4f1ae8d
-generated_at: 2026-10-01T12:49:12.094440+00:00
+sha256: c68107d558d4748d7263be1c4bd1f7ed1de9d0612cdbce15c82c82e69ce87a28
+generated_at: 2026-10-14T07:45:45.927506+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Structured logging adapter built on Winston. Exposes a narrow `Logger` port so the rest of the codebase never imports Winston directly, and bakes in two redaction policies (credential replacement and personal-data pseudonymisation) plus error serialisation before any record reaches a transport.
+Structured logging adapter that wraps Winston behind a narrow `Logger` port, applies two-layer data sanitisation (credential redaction + personal-data pseudonymisation) to every log record, and exposes a recursive `redactSensitiveFields` utility safe for arbitrary object graphs. It exists so that no other tier in the codebase imports Winston directly, and so log output is compliant with data-minimisation policy by default.
 
 ## Key elements
 
-- **`LogFields`** — `Record<string, unknown>`; the shape of a structured log call's context object.
-- **`Logger` interface** — the port (SK-04). Five methods (`debug`, `info`, `warn`, `error`, `log`) with a uniform `(input, meta?)` signature. Swapping the underlying library only requires satisfying this, not Winston's full `Logger`.
-- **`SENSITIVE_FIELDS`** (`Set`) — field names that are always replaced with `[REDACTED]`. Exported for exhaustive unit testing.
-- **`normalizeKey` / `SENSITIVE_KEYS`** — lowercase + strip `_-` so one entry catches camelCase, kebab-case, and snake_case spellings.
-- **`PERSONAL_FIELDS`** (`Set`) — email, ip, phone, etc. Handled by a *separate* policy (hash / redact / plain) rather than blanket redaction, preserving trace correlation.
-- **`resolvePersonalFieldMode`** — reads `NODE_LOG_PERSONAL_FIELDS`; defaults to `hash`.
-- **`applyPersonalFieldMode`** — produces `hmac:<12-hex>` (keyed via `pseudonymise('log', …)`), `[REDACTED]`, or the raw value depending on mode.
-- **`redactSensitiveFields`** — recursively walks objects/arrays, applies both policies, handles `Error` instances, cycles (`[Circular]`), and returns *copies*. Exported for testing.
-- **`serializeError`** — converts a thrown `Error` (non-enumerable fields) into a plain object; omits `stack` outside relaxed environments.
-- **`redactFormat`** — Winston `format` factory that runs serialisation + redaction on every record before transport. Exported so wiring itself is testable.
+- **`Logger`** (interface) — the port every other tier depends on. Methods: `debug`, `info`, `warn`, `error` (each accept `string | LogFields` + optional meta), and `log(level, message, meta?)` for dynamic-level calls (used by `audit.ts`).
+- **`LogFields`** (type) — `Record<string, unknown>`; the shape of a structured log's context object.
+- **`SENSITIVE_FIELDS`** (Set, exported) — exact key names (normalised) that are always replaced with `[REDACTED]`. Includes passwords, tokens, API keys, cookies, IBAN, CVV, etc.
+- **`SENSITIVE_KEY_FRAGMENTS`** (array, exported) — substrings (`password`, `secret`, `token`, `signature`, `otpauth`, `backupcode`) that flag any key containing them as sensitive.
+- **`PERSONAL_FIELDS`** (Set, exported) — keys (`email`, `ip`, `phone`, `street`, etc.) treated per the configurable `PersonalFieldMode` rather than always redacted.
+- **`resolvePersonalFieldMode()`** — reads `NODE_LOG_PERSONAL_FIELDS` via `loggingConfig()`; defaults to `hash`.
+- **`redactSensitiveFields(input, ancestors?)`** (exported) — recursively walks objects/arrays, redacting sensitive keys, applying personal-field mode, and handling circular references via a `WeakSet`. Returns copies, never mutates.
+- **`serializeError(error)`** (exported) — converts `Error` (and unknown thrown values) into plain objects; includes `stack` only in relaxed (dev/CI) environments.
+- **`normalizeKey(key)`** (private) — lowercases and strips `_`/`-` so one entry catches `x-api-key`, `xApiKey`, `x_api_key`.
+- **`applyPersonalFieldMode(value)`** (private) — in `hash` mode produces `hmac:<12-hex>` via `pseudonymise('log', …)`; in `redact` mode returns `[REDACTED]`; in `plain` mode returns the value unchanged.
 
 ## Relationships
 
-- **`scenarios/support/ephemeral-mongo.ts`** — sits on this file's import chain via `global-setup.ts`; the file deliberately uses a relative import (not the `@infrastructure` alias) so Jest's `globalSetup` runtime can resolve it.
-- **`../runtime/config`** — supplies `isRelaxedEnvironment` (stack-trace gating) and `loggingConfig` (personal-field mode).
-- **`../security/pseudonymise`** — provides the keyed hash used for personal-data pseudonymisation.
-- **`scenarios/apply.ts`, `scenarios/run-server.ts`, `scripts/*`** — depend on the `Logger` port (or a concrete instance satisfying it) for their log calls; they never import Winston directly.
+- **`scenarios/support/ephemeral-mongo.ts`** — sits on this file's import chain via `global-setup.ts`; this is why the import of `../runtime/config` is relative rather than the `@infrastructure` alias (alias fails under jest's `globalSetup` runtime).
+- **`scenarios/apply.ts`, `scenarios/run-server.ts`, `scenarios/support/demo.ts`, `scenarios/support/doubles/payments/fake.ts`, `scenarios/support/ephemeral-mongod.ts`** — consume the `Logger` port or call `redactSensitiveFields` during scenario/test execution.
+- **`scripts/db/bootstrap-access.ts`, `scripts/db/cache-clear.ts`, `scripts/db/sync-indexes.ts`, `scripts/contracts/openapi-bundle.ts`** — import this module for structured logging in operational/DB scripts.
+- **`scripts/ops/reap-account-exports.ts`, `scripts/ops/reap-inactive-accounts.ts`, `scripts/ops/reap-invoice-pdfs.ts`, `scripts/ops/reap-mail-spool.ts`, `scripts/ops/reap-orphaned-images.ts`** — import this module for structured logging in reaping/ops scripts.
+- **`../runtime/config`** — source of `isRelaxedEnvironment`, `loggingConfig`, and `PERSONAL_FIELD_MODES` (drives personal-field mode and stack-trace visibility).
+- **`../security/pseudonymise`** — provides the keyed-hash function used for GDPR pseudonymisation in `hash` mode.
+- **`./semantic-names`** — provides `toSemanticNames` (used in this file's format pipeline).
 
 ## Notes
 
-- The relative import of `../runtime/config` is **intentional**, not an oversight: the `@infrastructure` alias resolves under `tsc`/`eslint` but fails under Jest's `globalSetup` module loader.
-- `redactSensitiveFields` returns new objects; it never mutates the caller's request/domain objects.
-- `SENSITIVE_FIELDS` takes priority over `PERSONAL_FIELDS` if a key appeared in both — a credential is always replaced, never hashed-and-kept.
-- `serializeError` omits `stack` in production to avoid leaking absolute paths into aggregated logs.
-- The `hmac:` prefix on hashed personal data signals to log parsers that the digest is keyed (reversible only with the key), distinguishing it from a bare `sha256:` digest.
+- **Relative import is intentional.** The `@infrastructure` alias resolves under `tsc`/`eslint` but breaks at jest `globalSetup` runtime. Do not "fix" it to the alias.
+- **`SENSITIVE_FIELDS` uses exact matching; `SENSITIVE_KEY_FRAGMENTS` uses substring matching.** The split is deliberate: `key` as an exact entry won't eat `idempotencyKey`, but the fragment `token` will catch `refreshToken`, `resetToken`, etc.
+- **Credential redaction always wins over personal-field handling.** If a key appears on both lists (unlikely), it is `[REDACTED]`, not hashed.
+- **`hash` mode is a keyed HMAC, not a bare SHA-256.** Truncated to 12 hex chars (48 bits) for correlation only; prefixed `hmac:` so downstream parsers can distinguish it from an unkeyed digest.
+- **`redactSensitiveFields` returns copies.** Passing live request/domain objects is safe; the original is never mutated.
+- **`serializeError` omits `stack` in production.** Use `isRelaxedEnvironment()` to gate stack-trace leakage in aggregated logs.
+- **`SENSITIVE_FIELDS`, `SENSITIVE_KEY_FRAGMENTS`, and `PERSONAL_FIELDS` are all exported** so the policy unit test (`logger.test.ts`) can assert every entry individually rather than sampling.

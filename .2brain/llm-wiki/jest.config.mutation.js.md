@@ -1,7 +1,7 @@
 ---
 source: jest.config.mutation.js
-sha256: 98b9d3ead04fe5f89464762bdf563e70c1ed82aa9b76133461a40ede2d132cea
-generated_at: 2026-09-27T13:48:38.668682+00:00
+sha256: 409eab11c551a9d2f7acdedb2ed91701c045fd890b579ff0826e252c9f2209af
+generated_at: 2026-10-14T06:53:46.596420+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Jest configuration used **only** during Stryker mutation-test runs (`npm run mutation`, `npm run mutation:full`). It overrides the base `jest.config.js` to swap ts-jest for transpile-only `@swc/jest` and collapse the worker pool to one, preventing the LanguageService cache from growing per-mutant until the worker is OOM-killed. Type-checking is delegated to the separate `npm run ts-check` script.
+A Jest configuration dedicated to Stryker mutation testing (`npm run mutation`, `npm run mutation:full`). It exists because the default `jest.config.js` uses ts-jest, whose LanguageService cache grows with every mutant until the worker is OOM-killed. This file swaps ts-jest for the transpile-only `@swc/jest` (type-checking is already covered by `npm run ts-check`) and collapses the worker pool to one to avoid multiplicative resource exhaustion under Stryker's own concurrency.
 
 ## Key elements
 
-- **`module.exports`** — the config object; spreads `baseConfig` first, then overrides specific keys.
-- **`preset: undefined`** — removes the ts-jest preset inherited from the base config so it no longer injects the ts-jest transform.
-- **`testEnvironment`** — absolute path (`path.join(__dirname, 'tests/support/test-environment.ts')`) instead of the `<rootDir>/…` token; Stryker's jest-runner reads this via `readInitialOptions` which does **not** expand `<rootDir>`.
-- **`maxWorkers: 1`** — Stryker already runs `concurrency` Jest processes in parallel; the base config's `CPUs − 2` would multiply rather than reuse.
-- **`transform['^.+\\.tsx?$']`** — `@swc/jest` with `target: es2022`, `module: commonjs`, `parser: typescript`. Transpiles only; no type-check.
-- **`transform` spread order** — `...baseConfig.transform` is spread first so the base config's `.js` (babel-jest) entry for ESM-only packages (`@scure`, `@noble`) is preserved.
+- **`module.exports`** — a single config object that spreads `./jest.config` and overrides:
+  - `preset: undefined` — explicitly removes the ts-jest preset so it doesn't re-install the transform being replaced.
+  - `testEnvironment` — absolute path to `tests/support/test-environment.ts`. Stryker's jest-runner reads this field via `readInitialOptions` (no `<rootDir>` expansion), so the token form in the base config is unresolvable there.
+  - `maxWorkers: 1` — Stryker already runs `concurrency` Jest instances in parallel; the base config's `CPUs - 2` would multiply rather than share.
+  - `testTimeout: 120_000` — 4× the base 30 s. Instrumented code runs slower and a single timeout fails the whole Stryker shard.
+  - `transform` — spreads the base transform (preserving the babel-jest entry for `.js`), then replaces the `^.+\\.tsx?$` entry with `@swc/jest` configured for `es2022` target and CommonJS output.
 
 ## Relationships
 
-- **`jest.config.js`** — imported via `require('./jest.config')` and spread as the base. Every key the base config sets (`preset`, `maxWorkers`, `transform`, `testEnvironment`) is intentionally overridden here. This file exists solely as a mutation-test-specific delta on top of that base.
+- **`jest.config.js`** — required via `require('./jest.config')` as `baseConfig`. All non-overridden settings (testMatch, moduleNameMapper, coverage thresholds, the babel-jest `.js` transform, etc.) are inherited from it. The only field explicitly nullified from the base is `preset`.
 
 ## Notes
 
-- Never used by regular `jest` / `npm test` runs; only Stryker references it.
-- The `<rootDir>` workaround is a Stryker jest-runner quirk (`readInitialOptions` skips `normalize()`), not a Jest limitation per se.
-- `STRYKER_CONCURRENCY` in `.env` is the single knob controlling how many Jest processes Stryker spawns concurrently.
-- Full rationale and pool-multiplication math live in `docs/tools/mutation-testing.md`.
+- Do not add type-dependent logic to test files run under this config; `@swc/jest` skips type-checking entirely.
+- The `testEnvironment` override is a workaround for a Stryker jest-runner limitation (see linked issue in the file comment), not a general Jest best practice. Reverting to the `<rootDir>` token will break Stryker runs.
+- `STRYKER_CONCURRENCY` in `.env` is the single knob controlling total parallelism; changing `maxWorkers` here should stay at `1`.
+- A hanging mutant is still killed by Stryker's own `timeoutMS`, independent of `testTimeout` here.

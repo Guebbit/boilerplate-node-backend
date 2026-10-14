@@ -1,7 +1,7 @@
 ---
 source: scenarios/subjects.ts
-sha256: b54abafe8bc9e4cf1b1fd9249a12e77755e770234ca3c33e2bcd7bf396b4b840
-generated_at: 2026-09-27T13:51:19.029697+00:00
+sha256: 0fa947dccbda9d4c00cb803cc60070ff9f7c6f2d4bae5e8a74d1a69cf2c303e9
+generated_at: 2026-10-14T07:01:53.987215+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds the pinned (hardcoded) IDs and credentials for seeded database rows so that consumers that **cannot import module code** — specifically `scripts/contracts/client-collections-bundle.ts`, which runs before `api/` exists — can still reference a specific row. It is import-free by construction: it must not transitively pull in anything that imports the generated `@api/` client.
+Provides the pinned (statically known) row IDs and credentials that consumers unable to import app code — e.g. generated API-client collections — still need to target a specific seeded row. It also serves as the declarative "answer" to the scenario manifest: exactly one product ID per guarantee a `shop` module declares in its `module.ts`, verified in both directions by the integration suite.
 
 ## Key elements
 
-- **`SEED_PRODUCT_IDS`** — `as const` map of seven product row IDs, each named for the catalogue branch it exercises (standard, softDeleted, outOfStock, premium, bundleInactive, barebones, digital).
-- **`SHOP_SUBJECTS`** — `Readonly<Record<string, string>>` that maps each scenario-guarantee key (e.g. `product.softDeleted`) to the corresponding pinned product ID. Only `product.*` entries appear; every other guarantee names a row produced at runtime by flows.
-- **`SUBJECTS`** — `as const` object bundling admin credentials, user credentials, and three representative product row IDs. Credential values are re-exported from `@scenarios/accounts` rather than duplicated.
+- **`SEED_PRODUCT_IDS`** (`as const`) — Named MongoDB hex IDs for the product catalogue rows each scenario branch needs (soft-deleted, out-of-stock, digital, heavy, low-stock, no-withdrawal, off-sale, barebones, premium, standard, inactive-bundle). Consumed by `products.ts`, `wishlist.ts`, and `flows/shop-history.ts` so no file repeats a raw hex string.
+- **`SHOP_SUBJECTS`** (`Readonly<Record<string, string>>`) — Maps each `shop` scenario guarantee key (e.g. `product.softDeleted`, `product.digital`) to the corresponding `SEED_PRODUCT_IDS` value. Only `product.*` keys appear; every other guarantee references a row the flows produce at runtime.
+- **`SUBJECTS`** (`as const`) — The admin and user credentials (id, email, password) re-exported from `@scenarios/accounts`, plus a representative `product` block (one standard, one soft-deleted, one inactive ID) that generated examples draw from for a working request.
 
 ## Relationships
 
-- **`scenarios/accounts.ts`** — source of the six `SEED_*` credential constants that `SUBJECTS` re-exports.
-- **`scenarios/products.ts`**, **`scenarios/wishlist.ts`**, **`scenarios/flows/shop-history.ts`** — consume `SEED_PRODUCT_IDS` instead of repeating raw hex strings.
-- **`scenarios/index.ts`** — `buildScenario` merges the pinned subjects exported here with flow-minted IDs into a single map returned by `GET /__test/scenario`.
-- **`scripts/contracts/client-collections-bundle.ts`** — reads this file's exports during `npm run contracts:bundle`; the import-free constraint on this file exists specifically for this consumer.
+- **`scenarios/accounts.ts`** — Sole import source; provides `SEED_ADMIN_*` and `SEED_USER_*` credentials.
+- **`scenarios/products.ts`**, **`scenarios/wishlist.ts`**, **`scenarios/flows/shop-history.ts`** — Read `SEED_PRODUCT_IDS` instead of duplicating hex literals.
+- **`scenarios/index.ts`** — `buildScenario` merges this file's pinned subjects with the IDs minted by running the flows into a single map served at `GET /__test/scenario`.
+- **`scripts/contracts/client-collections-bundle.ts`** — The bundler that loads the generated collections consuming this file; guarded by `.dependency-cruiser.bootstrap.cjs` so it never transitively imports from `api/`.
 
 ## Notes
 
-- **Only pinned rows live here.** Orders, payments, and shipments are produced by driving the app (`scenarios/flows/`); their IDs are minted at boot and recorded by the runner. A consumer that needs an order ID must call `GET /__test/scenario` or chain a list request — it cannot be a literal in this file.
-- **Bidirectional enforcement.** `tests/integration/scenarios/shop.test.ts` asserts that `SHOP_SUBJECTS` keys equal the guarantees declared in each module's `module.ts` in both directions: an orphan guarantee or a leftover subject key fails the suite.
-- **Credential single-source-of-truth.** Credentials are re-exported from `@scenarios/accounts` so they stay in lockstep with the paired frontend's `.env` copy. Do not duplicate them here.
-- **The import-free constraint is load-bearing.** Adding an import that transitively reaches the generated `@api/` client will break `npm ci` the same way the cycle documented in `scripts/contracts/openapi-bundle.ts` did.
+- **Only pinned rows live here.** Orders, payments, and shipments are produced by driving the app through `scenarios/flows/`; their IDs are minted at boot and recorded by the runner. A consumer wanting an order ID must call `GET /__test/scenario` or chain a list request — it cannot be a literal in this file.
+- **Bidirectional test lock.** `tests/integration/scenarios/shop.test.ts` asserts `SHOP_SUBJECTS` equals the set of guarantees declared in the `shop` module's `module.ts` in both directions: a declared-but-unpinned guarantee fails the suite, and a subject with no matching declaration also fails.
+- **Credentials are intentionally re-exported, not duplicated.** `@scenarios/accounts` is the single place admin/user credentials must stay fixed against the paired frontend's own `.env` copy.

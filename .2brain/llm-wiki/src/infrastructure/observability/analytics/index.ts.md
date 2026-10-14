@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/analytics/index.ts
-sha256: 11baf8a8e5c07d9131aebf1c55b5409f3fe57a53da6074188d235ab6e4a8d237
-generated_at: 2026-09-23T17:47:47.235839+00:00
+sha256: 31a0aa7c4685c4b925559ab0500b6fcb89a0f99b45b3f655b917821b977697e5
+generated_at: 2026-10-14T08:04:18.375595+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the analytics **port** (`AnalyticsProvider` interface), the **event taxonomy** (declaration-merging `AnalyticsEventMap`), the **payload schema**, and the **registry** that resolves which of three shipped implementations (`umami`, `posthog`, `none`) handles events at runtime. It exists so modules emit product analytics through a single consent-gated choke point without importing any specific backend.
+Defines the **product analytics port** — the interface, event schema, provider registry, and emit helpers that every module uses to record product-behaviour events (distinct from operational metrics/tracing). The active backend (`umami`, `posthog`, or `none`) is selected at deploy time via `NODE_ANALYTICS_PROVIDER`, keeping the port stable regardless of which collector is wired in.
 
 ## Key elements
 
-- **`AnalyticsEventMap`** — empty interface, augmented per-module via declaration merging (e.g. `modules/cart/analytics.ts`) so infrastructure never imports from a module.
-- **`AnalyticsEventName`** — union of all event names the build can emit; shared 1:1 with the frontend namespace.
-- **`AnalyticsEvent`** — the wire payload: `distinctId`, `event`, optional `timestamp`, `traceId`, `properties`, `clientIp`, `userAgent`, `hostname`.
-- **`AnalyticsEventInput`** — `AnalyticsEvent & { analyticsConsent: boolean }`; consent is a gate input, never stored in the captured event.
-- **`AnalyticsProvider`** — the port: `name`, `capture(event): void`, `configured(): boolean`, `shutdown(): Promise<void>`. Capture is fire-and-forget by contract.
-- **`PROVIDERS`** (internal) — `{ umami, posthog, none }` map; `undefined` values make a typo'd env name a real runtime error.
-- **`resolveAnalyticsProvider()`** — memoised lookup driven by `NODE_ANALYTICS_PROVIDER` (default `umami`); throws on unknown name.
-- **`resetAnalyticsProvider()`** — test seam to clear the memoised handle.
-- **`buildAnalyticsBase(context: CallerContext)`** — fills `distinctId`, `traceId` (from ambient OTel context), `clientIp`, `userAgent`, `hostname`, `analyticsConsent` in one call.
-- **`emitAnalyticsEvent(event)`** — the sole public emit path; gates on `NODE_ANALYTICS_REQUIRE_CONSENT` (default `true`, opt-in) then delegates to `provider.capture`.
-- **`shutdownAnalytics()`** — flushes and releases the provider; no-ops if the provider was never resolved.
+- **`AnalyticsEventMap`** – Deliberately empty interface; each module augments it via declaration merging so `infrastructure` never imports a module.
+- **`AnalyticsEventName`** – Union of all declared event names across enabled modules.
+- **`AnalyticsEvent`** – Core event shape: `distinctId`, `event`, optional `timestamp`, `traceId`, `properties`, `clientIp`, `userAgent`, `hostname`.
+- **`AnalyticsEventInput`** – `AnalyticsEvent` plus the required `analyticsConsent: boolean` gate.
+- **`AnalyticsProvider`** – The port: `name`, `capture(event)`, `configured()`, `shutdown()`.
+- **`registry` / `registerAnalyticsProvider`** – Provider registry seeded with `umami`, `posthog`, `none`; extensible at runtime without editing this file.
+- **`resolveAnalyticsProvider()`** – Lazy, memoised lookup keyed on `NODE_ANALYTICS_PROVIDER`; throws on an unknown name.
+- **`resetAnalyticsProvider()`** – Test seam to clear the memoised handle.
+- **`buildAnalyticsBase(context)`** – Fills the six common fields from a `CallerContext` (distinctId, traceId, clientIp, userAgent, hostname, consent).
+- **`emitAnalyticsEvent(event)`** – Single choke point: applies the consent gate (`NODE_ANALYTICS_REQUIRE_CONSENT`) then calls `capture`. Fire-and-forget.
+- **`shutdownAnalytics()`** – Flushes the provider and clears the handle; no-op if never resolved.
+- **`analyticsProviderProbe`** – Boot-time shape check so a typo'd provider name fails before the first request.
 
 ## Relationships
 
-- **`umami.ts` / `posthog.ts` / `none.ts`** — the three `AnalyticsProvider` implementations registered in `PROVIDERS`.
-- **`tracer.ts`** — provides `getActiveSpanContext()` used by `buildAnalyticsBase` to stamp `traceId` without per-call-site plumbing.
-- **`environment.ts`** — supplies `environmentChoice` (provider selection) and `environmentFlag` (consent gate).
-- **`required-config.ts`** — calls `resolveAnalyticsProvider()` once at boot so a typo'd `NODE_ANALYTICS_PROVIDER` fails fast before the first request.
-- **`server-lifecycle.ts`** — calls `shutdownAnalytics()` as the last step in the shutdown chain.
-- **`login-observability.ts`**, **`checkout.ts`**, **`authentication.ts`**, **`oauth.ts`**, **`profile.ts`** — module call sites that build events via `buildAnalyticsBase` + `emitAnalyticsEvent`.
-- **Integration tests** (`oauth-link.test.ts`, `self-service.test.ts`, `service.test.ts`) — use `resetAnalyticsProvider()` to isolate per-test provider state.
+- **`./umami.ts`, `./posthog.ts`, `./none.ts`** – Provides the three `AnalyticsProvider` implementations registered at module load.
+- **`@infrastructure/observability/tracer`** – Supplies `getActiveSpanContext()` so `buildAnalyticsBase` can stamp the OTel trace ID without call-site plumbing.
+- **`@infrastructure/runtime/provider-registry`** – Provides `createProviderRegistry` and `requireProvider` used to build and resolve the registry.
+- **`@infrastructure/config/define`** – Provides `defineConfig` and `probe` for the boot-time `analyticsProviderProbe`.
+- **`@infrastructure/observability/config`** – Supplies `analyticsConfig()` (consent requirement, default provider name).
+- **`src/app/config.ts`** – Wires `analyticsProviderProbe` into the application boot sequence (referenced in JSDoc).
+- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls `shutdownAnalytics()` last in the shutdown chain to flush buffered events.
+- **Module services** (`account/services/signup.ts`, `logout.ts`, `oauth.ts`, `profile.ts`, `self-delete.ts`, etc.) – Consume `buildAnalyticsBase` + `emitAnalyticsEvent` to record their product events; each also declares its events by augmenting `AnalyticsEventMap`.
 
 ## Notes
 
-- **Declaration merging is the extension mechanism.** Modules add events by augmenting `AnalyticsEventMap` in their own file; `infrastructure` never imports from a module. Forgetting the augmentation makes the event name a compile error.
-- **Consent is opt-in by default** (`NODE_ANALYTICS_REQUIRE_CONSENT` defaults to `true`). A deployment can set it to `false` if its legal review concludes server-side, non-cookie analytics need no gate.
-- **Unauthenticated traffic** all gets `distinctId: 'anonymous'`. Under Umami the `clientIp` + `userAgent` hash still separates visitors; under PostHog it does not.
-- **Umami discards events missing `userAgent`** — see `umami.ts` for details.
-- **`timestamp` is PostHog-only.** Umami stamps ingest time, so a replayed/backfilled event lands under the wrong date there.
-- **`shutdownAnalytics` clears the memoised handle** after flushing; a restarted app (or test) gets a fresh client rather than a shut-down one whose `capture()` would silently no-op.
+- **`timestamp` is PostHog-only.** Umami (pinned v2.14.0) stamps ingest time, so replayed/backfilled events land on the wrong date there.
+- **Umami discards events lacking `userAgent`.** The field is optional on the type but effectively required when the active provider is Umami.
+- **Anonymous collapse.** Unauthenticated callers all map to `distinctId: 'anonymous'`. Umami still differentiates via IP+UA hash; PostHog does not.
+- **Consent is opt-in.** `NODE_ANALYTICS_REQUIRE_CONSENT` defaults to `true`; a `false` consent (or "never asked") drops the event. There is no partial-capture path.
+- **`capture` is fire-and-forget by contract.** It returns `void`; a failing provider warns once then silently discards. Call sites must never `await` or `try/catch` it.
+- **`shutdownAnalytics` is a no-op if the provider was never resolved**, so a typo'd `NODE_ANALYTICS_PROVIDER` won't crash the process during teardown.

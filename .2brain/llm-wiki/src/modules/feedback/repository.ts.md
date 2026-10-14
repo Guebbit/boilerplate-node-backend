@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/repository.ts
-sha256: 4cd5d1c787d32f10907f8b1c55a830fee417c7a9ee0f1f79485dda3cfa9ac18d
-generated_at: 2026-09-27T14:53:13.539582+00:00
+sha256: bf8e0026009551f45ed0508da99b4698eb9e531bfd17d92057e39d25e650cb8b
+generated_at: 2026-10-14T15:50:30.575113+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares `feedbackRequestRepository`, the CRUD access layer for feedback requests. It is a thin instantiation of the shared `createRepository` factory, wired to the feedback domain model and a search spec. The file exists so the service layer can query and persist feedback documents without touching the persistence infrastructure directly.
+Defines the data-access layer for feedback requests. It wires the Mongoose model, the document→domain transform, and a declarative search spec into the shared repository factory so that the service layer can query, sort, and retrieve `FeedbackRequest` records without touching ODM specifics directly.
 
 ## Key elements
 
-- **`feedbackRequestRepository`** (exported const) — The repository instance created by `createRepository<FeedbackRequestDocument, FeedbackRequest>`. Accepts the model, a document→domain transform, and a search spec.
-- **Search spec** — Defines three query strategies: `objectIds` (maps `id` → `_id`), `regex` (on `email`), and `text` (across `name`, `email`, `subject`, `message`).
-- **`transform`** — `applyFeedbackRequestTransform` from `./model`; converts a raw document into the `FeedbackRequest` domain type on read.
+- **`feedbackRequestRepository`** (exported const) — the sole public export. A fully-typed repository instance (`FeedbackRequestDocument` ↔ `FeedbackRequest`) created via `createRepository`. It carries:
+  - **`transform: applyFeedbackRequestTransform`** — maps a raw Mongo document to the domain shape on read.
+  - **`searchable.objectIds`** — allows filtering by `id` (mapped to `_id`).
+  - **`searchable.regex`** — allows regex matching on `email`.
+  - **`searchable.text`** — full-text / substring search across `name`, `email`, `subject`, `message`.
+  - **`searchable.sortable`** — permitted sort keys: `createdAt`, `status`, `email`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Supplies the `createRepository` factory that produces the repository instance.
-- **`src/modules/feedback/model.ts`** — Provides `feedbackRequestModel` (schema/CRUD definition), `applyFeedbackRequestTransform`, and the `FeedbackRequestDocument` type.
-- **`src/modules/feedback/service.ts`** — The consumer of `feedbackRequestRepository`; makes domain-level decisions (e.g., status scoping) before calling the repository.
-- **`src/types/index.ts`** — Source of the `FeedbackRequest` domain type used as the repository's output type.
-- **`src/modules/feedback/tests/integration/service.test.ts`** — Exercises the service→repository path end-to-end.
+- **`src/infrastructure/persistence/create-repository.ts`** — supplies the generic `createRepository` factory that this file calls to assemble the repository.
+- **`src/modules/feedback/model.ts`** — provides `feedbackRequestModel` (Mongoose model), `applyFeedbackRequestTransform` (document→domain mapper), and the `FeedbackRequestDocument` type.
+- **`src/modules/feedback/service.ts`** — primary consumer; receives the repository to perform CRUD and apply domain-level filtering (e.g. the `status` scope).
+- **`src/types/index.ts`** — source of the `FeedbackRequest` domain type used as the repository's output generic.
+- **`src/modules/feedback/tests/integration/*.test.ts`** — integration tests exercise the service (and by extension this repository) against a live database; `schema-contract.test.ts` validates the model/schema alignment this repository depends on.
 
 ## Notes
 
-- `status` is intentionally **absent** from the search spec. It is a closed enum; mapping a raw string to it is a service-layer decision, not a repository concern. Do not add it to `searchable` here.
-- The repository is created once at module load (no per-call instantiation). Import the named export rather than calling `createRepository` again.
-- The module JSDoc points to `docs/modules/feedback.md` for broader module context.
+- `status` is **intentionally excluded** from the `searchable` spec. It is a closed enum; the service layer decides how a raw string maps to an enum value and passes it down as a scope. Do not add `status` to `text` or `regex` here — that mapping is a domain decision, not a persistence concern.
+- The file is a thin, single-export module. All query semantics live in the `searchable` object and the `transform` function (both defined in `model.ts` or supplied by the factory). There is no custom query logic in this file.

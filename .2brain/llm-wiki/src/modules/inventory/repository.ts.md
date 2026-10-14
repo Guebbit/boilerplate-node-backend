@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/repository.ts
-sha256: af856099e1a5e3860a91e2d3d1176338ac7c2a7a310365f9056f5e7407181797
-generated_at: 2026-09-27T14:56:04.945925+00:00
+sha256: 4ad0c73b98b770a8bf75c289308a58b88617dd717c232a5e8f463b0492abfb3a
+generated_at: 2026-10-14T15:56:07.778719+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,42 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Persistence layer for the inventory module. It exposes three typed repositories (stock levels, stock movements, reservations) that translate the service layer's domain operations into conditional Mongoose writes. All guard logic for counter transitions lives here so the service never touches raw Mongo filters.
+Repository layer for the inventory module's three MongoDB collections (stock levels, stock movements, reservations). It exposes typed, session-aware query/mutation methods so that the service layer can request state transitions without ever touching raw Mongoose models or constructing Mongo filters directly. All conditional writes (e.g. "only decrement if `available >= qty`") are defined here, keeping `QueryFilter` a repository-internal concern.
 
 ## Key elements
 
-- **`conditionFor(reason, quantity)`** — Maps a `StockMovementReason` + quantity to a `QueryFilter` that `applyDelta` must match before counters move. Each reason encodes the invariant it protects (e.g. `commit` requires both `onHand ≥ q` and `reserved ≥ q`; `adjust` uses `$expr` to ensure `onHand + q ≥ reserved`).
-- **`StockLevelRow`** — Exported interface for one row of the stock board: `productId`, `onHand`, `reserved`, `available`. Deliberately carries no product fields.
-- **`toReservationItems(lines)`** — Converts string `productId` values to `Types.ObjectId` for reservation document storage.
-- **`stockLevelRepository`** — The primary repository. Extends the generic `Repository` (create/update/find/delete) with:
-  - `ensure(productId)` — upserts a zeroed row; safe under redelivery thanks to the unique index.
-  - `findByProductId` / `deleteByProductId` — direct lookup and hard-delete cascade (never called on soft-delete).
-  - `applyDelta(productId, reason, quantity, delta)` — the module's single write primitive; applies a conditional `$inc` to `onHand`, `reserved`, and `available` atomically; returns `boolean` for whether the guard matched.
-  - `stockBoard({ skip, limit, maxAvailable })` — paginated, scarcity-sorted page + total count.
-  - `lowAvailabilityProductIds(threshold)` — product IDs at or below a given `available` count.
-  - `sumReserved()` — aggregate total of all reserved units.
-- **`stockMovementRepository`** — Append-only ledger typed as `AppendOnlyLedger` (exposes `create` + `search` only; `deleteOne` is a compile-time error). Search supports exact-match on `reason` and ObjectId lookup on `productId`.
+- **`conditionFor(reason, quantity, kind)`** (private) — Maps a `StockMovementReason` + quantity + `HoldKind` to a Mongo `QueryFilter<StockLevelDocument>`. Each branch encodes the invariant the transition must satisfy (e.g. `ship` guards both `onHand` and `reserved`; `preorder` uses `$expr`/`$ifNull` to handle documents predating the preorder fields).
+- **`stockLevelRepository`** (exported) — The main repository object. Spreads the generic `createRepository` base, then adds domain-specific methods:
+  - `ensure` / `insertIfAbsent` — Idempotent row creation at zero counters; `insertIfAbsent` returns whether *this* call created the row (used to book opening stock exactly once on redelivered `PRODUCT_CREATED`).
+  - `applyDelta` — Conditional counter update driven by `conditionFor` + a `CounterDelta`; returns a boolean for success/failure.
+  - `setPreorderLimit`, `preorderBoard`, `stockBoard` — Admin/board reads with pagination; `preorderBoard` composes `orderedByProduct` (ledger aggregate) and `outstandingByProduct` (reservation aggregate).
+  - `lowAvailabilityProductIds`, `sumReserved` — Quick aggregate helpers for metrics/alerting.
+  - `findManyByProductIds`, `findByProductId`, `deleteByProductId` — Standard CRUD reads/writes.
+- **`StockLevelRow`** (exported interface) — One product's counters as displayed on the stock board; deliberately excludes product fields (title, etc.).
+- **`PreorderLevelRow`** (exported interface) — Preorder counters plus the `held`/`paid` split of outstanding units.
+- **`toReservationItems`** (private) — Converts service-carried string product IDs to `Types.ObjectId` lines with a default `kind: 'stock'`.
+- **`orderedByProduct`** (private) — Aggregates lifetime `preorder` deltas from the stock-movement ledger.
+- **`outstandingByProduct`** (private) — Aggregates active `held`/`committed` reservation items split by payment state.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — Provides the generic `createRepository` factory, `toObjectId` helper, and the `Repository` / `AppendOnlyLedger` / `Wire` / `Lean` types that shape every export in this file.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — Supplies `isDuplicateKey`, used to distinguish duplicate-key rejections (e.g. double-reservation) from other Mongo errors.
-- **`src/modules/inventory/model.ts`** — Source of the three Mongoose models, their `apply*Transform` functions, and the document/status types this file imports.
-- **`src/modules/inventory/domain/index.ts`** — Exports `CounterDelta` (the `{ onHandDelta, reservedDelta }` pair) that `applyDelta` consumes.
-- **`src/modules/inventory/domain/transitions.ts`** — Defines `counterDeltaFor`; `conditionFor` in this file is the hand-kept Mongo-side counterpart to that table.
-- **`src/modules/inventory/service.ts`** — The sole consumer. Calls `ensure`, `applyDelta`, `stockBoard`, `lowAvailabilityProductIds`, `sumReserved`, and the reservation/ledger methods; composes product-name lookups from its own service (no DB join).
-- **`src/modules/inventory/metrics.ts`** — Reads counters (e.g. `sumReserved`, stock-board data) for monitoring/alerting.
-- **`src/types/index.ts`** — Defines `StockMovementReason` and `StockMovement` used throughout.
-- **`tests/integration/product-removal-protects-orders.test.ts`** — Verifies that `deleteByProductId` respects the cascade contract (level row removed, ledger preserved).
-- **`src/modules/inventory/tests/integration/repository.test.ts`** — Direct integration tests for every exported method.
-- **`src/modules/inventory/tests/integration/ledger.property.test.ts`** — Property-based tests confirming append-only semantics.
-- **`src/modules/inventory/tests/integration/service.test.ts`** — Exercises this file indirectly through the service layer.
+- **`src/infrastructure/persistence/create-repository.ts`** — Supplies the generic `createRepository` factory, `toObjectId` helper, and the `Repository` / `Wire` / `Lean` / `AppendOnlyLedger` types that shape this file's exported interfaces.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — Provides `isDuplicateKey`, used to distinguish unique-index violations from other write failures.
+- **`src/modules/inventory/model.ts`** — Source of all three Mongoose models (`stockLevelModel`, `stockMovementModel`, `reservationModel`), their document types, and the `apply*Transform` functions passed to `createRepository`.
+- **`src/modules/inventory/domain/index.ts`** — Exports `CounterDelta` and `HoldKind`, the domain-level types this repository interprets when building filters and deltas.
+- **`src/modules/inventory/domain/transitions.ts`** — Defines `counterDeltaFor` (reason → per-field deltas). `conditionFor` must stay manually in step with that table; there is no automated cross-check.
+- **`src/modules/inventory/services/levels.ts`** — Calls `stockBoard` / `preorderBoard` and then enriches the returned rows with product names via the products service (API composition, not a DB join).
+- **`src/modules/inventory/services/reserve.ts`**, **`allocate.ts`**, **`sweep.ts`**, **`transition.ts`**, **`holds.ts`**, **`admin.ts`** — Service callers that invoke `applyDelta`, `setPreorderLimit`, reservation CRUD, and board queries through `stockLevelRepository`.
+- **`src/modules/inventory/tests/integration/hold-crash-window.test.ts`** — Exercises the `ensure` / `insertIfAbsent` idempotency path and `applyDelta` conditional writes under simulated crash/retry scenarios.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Integration-level test that drives the `ship` transition path through this repository.
 
 ## Notes
 
-- `conditionFor` and `counterDeltaFor` (in `domain/`) are kept in step **by hand**. No automated test asserts that the Mongo guard and the delta table agree; a mismatch would silently allow an over-commit or block a valid correction.
-- `available` is maintained inside the same `$inc` as `onHand`/`reserved` (`delta.onHandDelta − delta.reservedDelta`), never recomputed in a second query — this is what makes `applyDelta` a single round-trip.
-- `stockBoard` sorts by `available` then `_id`. Product names are fetched *after* paging via `productService.findManyByIds`; you cannot sort by name at this layer.
-- `stockMovementRepository` is intentionally typed `AppendOnlyLedger`, not `Repository`, so any accidental `.deleteOne()` call fails at compile time.
-- Mongoose's generics are too large for TypeScript to infer across an export boundary (TS7056); all exported types are therefore written out explicitly rather than left to inference.
-- `deleteByProductId` removes only the `stocklevels` row. The `stockmovements` ledger is never touched — history must survive product deletion.
+- **Manual invariant between `conditionFor` and `counterDeltaFor`:** There is no test that verifies the two stay consistent. If you add a new `StockMovementReason`, you must update *both* `conditionFor` (the filter) and the `counterDeltaFor` table (the deltas) in lockstep.
+- **`$ifNull` on preorder fields:** Documents written before preorders existed lack `preordered` and `preorderLimit`. The `preorder` and `adjust` filter branches use `$ifNull` to treat missing fields as `0`.
+- **`available` is derived, not stored independently:** The repository keeps `available = onHand − reserved` in sync on every `applyDelta`. Reads that need `available` should trust the stored value; do not recompute it in a service.
+- **TS7056 workaround:** All exported types are written out explicitly (see `StockLevelRow`, `PreorderLevelRow`, the `stockLevelRepository` type annotation) because Mongoose's generics produce inferred types too large for TypeScript to emit at an export boundary. Do not "simplify" to `ReturnType<…>` or inferred generics.
+- **No product fields in rows:** This repository intentionally returns counters only. Product names/dates are joined at the service or API layer, keeping the module boundary clean.

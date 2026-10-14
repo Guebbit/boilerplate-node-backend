@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/persistence/search.ts
-sha256: de6823e184b3e12a39791550adaa1f099c2bcbc236b48b6bd2ce94d94948d9dc
-generated_at: 2026-09-23T17:50:48.000825+00:00
+sha256: d17664dfede110a691700494a2d29c8d231307cc2d9e13b40adfaacc01a66ae7
+generated_at: 2026-10-14T08:11:38.111464+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Shared pagination and text-search helpers for Mongoose-based repositories. Centralises the coercion of raw request values into safe `skip`/`limit` pairs, the construction of `$regex`-based filters, and the "read every page" loop so that individual services don't reimplement (and subtly diverge in) the same logic.
+Shared pagination, search-pattern, and sort helpers for all Mongoose-backed repositories. Extracted so that filter conventions (regex escaping, control-character stripping, pagination defaults, stable sort) live in one place, satisfying OCP: a new search or sort rule changes here once rather than in every module's service.
 
 ## Key elements
 
-- **`PaginationInput` / `PaginationResult` / `PaginatedMeta`** – Typed shapes for raw input, normalised output (`page`, `pageSize`, `skip`), and the envelope returned alongside a result page (`totalItems`, `totalPages`).
-- **`FALLBACK_PAGE_SIZE` (10)** – Default page size when neither the caller nor the environment specifies one.
-- **`MAX_CONFIGURED_PAGE_SIZE` (100)** – Hard ceiling on the env-configured default; mirrors the OpenAPI `PageSize.maximum` schema but is kept here because this code path is never validated by the edge schema.
-- **`normalizePagination(input?)`** – Single authority for page/size defaults and `skip` derivation. Does **not** clamp out-of-range caller values (that's the HTTP schema's job); only guards against non-numeric / sub-1 inputs that would yield a negative or `NaN` skip.
-- **`buildPaginatedMeta(pagination, totalItems)`** – Computes `totalPages` and assembles the response meta object.
-- **`readAll<TItem>(fetchPage, pageSize)`** – Recursively pages until a short page signals the end; returns every collected item. Used by personal-data export paths where a truncated answer is unacceptable.
-- **`escapeRegex(value)`** – Escapes all regex metacharacters so user text is matched literally (prevents ReDoS against public search endpoints).
-- **`toSearchPattern(value)`** – Strips C0 control chars + DEL (a NUL would cause a 500 on a public endpoint), trims, escapes, and returns `undefined` when nothing searchable remains (an empty `$regex` would match _everything_).
-- **`addTextFilter(where, text, fields)`** – Mutates a Mongoose filter with a case-insensitive `$or` across the given fields.
-- **`addRegexFilter(where, field, value)`** – Mutates a Mongoose filter with a case-insensitive single-field `$regex`.
-- **`DEFAULT_SORT`** – `{ createdAt: -1, _id: -1 }`. The `_id` tie-breaker makes pagination stable when concurrent creates share a `createdAt` millisecond, since count and page are separate queries.
+- **`PaginationInput` / `PaginationResult` / `PaginatedMeta`** — interfaces for raw request pagination, the normalised `{ page, pageSize, skip }` triple, and the response meta block.
+- **`MAX_CONFIGURED_PAGE_SIZE`** (100) — ceiling for the deployment-configured default page size; mirrors `openapi.yaml` `PageSize.maximum`.
+- **`normalizePagination(input?)`** — coerces raw `page`/`pageSize` (typed `unknown`) into a numeric, defaulted result with a derived Mongo `skip`. Does **not** clamp out-of-range values (the HTTP schema does that with a 422).
+- **`buildPaginatedMeta(pagination, totalItems)`** — computes `totalPages` from a total count for the response envelope.
+- **`readAll<TItem>(fetchPage, pageSize)`** — iterates pages until `fetchPage` returns fewer than `pageSize` items; returns every item. Used by personal-data exports where a truncated result would be misleading.
+- **`escapeRegex(value)`** — escapes all regex metacharacters so user text is matched literally (prevents regex DoS on public endpoints).
+- **`toSearchPattern(value)`** — strips C0/DEL control characters, trims, escapes; returns `undefined` when nothing searchable remains (an empty `$regex` would match *every* document).
+- **`addTextFilter(where, text, fields)`** — sets `where.$or` with a case-insensitive `$regex` across the given fields.
+- **`addRegexFilter(where, field, value)`** — same, for a single field.
+- **`DEFAULT_SORT`** — `{ createdAt: -1, _id: -1 }`; `_id` breaks ties for stable pagination.
+- **`SORT_COLLATION`** — `{ locale: 'en', strength: 2 }` for case-insensitive, accent-tolerant ordering.
+- **`resolveSort(tokens, sortable)`** — maps wire-field tokens (`-` prefix = desc) through a per-collection whitelist, drops unknown fields, appends `_id: -1` for stability. Returns `undefined` when no token survives.
+- **`sortOf(filters, sortable)`** — convenience wrapper that reads `.sort` off an untyped filter bag and delegates to `resolveSort`.
 
 ## Relationships
 
-- **`src/infrastructure/runtime/environment.ts`** – Imports `environmentNumber` to read `NODE_SETTINGS_PAGINATION_PAGE_SIZE` at call time.
-- **`src/infrastructure/persistence/create-repository.ts`** – Consumes `normalizePagination`, `buildPaginatedMeta`, `DEFAULT_SORT`, and the filter helpers when generating repository query methods.
-- **Module services** (`api-keys/module.ts`, `audit-logs/module.ts`, `feedback/service.ts`, `inventory/service.ts`, `locales/services/entries.ts`, `orders/module.ts`, `orders/repository.ts`, `orders/services/crud.ts`, `payments/services/retention.ts`, `products/service.ts`, `users/service.ts`, `users/controllers/get-users.ts`) – Import these helpers to apply pagination, text search, or `readAll` in their respective query paths, keeping filter conventions in one place (OCP).
-- **`src/modules/orders/tests/integration/repository.test.ts`** – Exercises the pagination and filter behaviour end-to-end through the orders repository.
+- **`src/infrastructure/persistence/config.ts`** — imports `persistenceConfig` to read `NODE_SETTINGS_PAGINATION_PAGE_SIZE` (the default page-size fallback in `normalizePagination`).
+- **`src/infrastructure/persistence/create-repository.ts`** — the generic repository factory that wires these helpers into concrete repository implementations.
+- **Module repositories & services** (orders, payments, api-keys, delivery/board, feedback, inventory/levels, locales/entries, example/crud, example/personal-data) — each calls `normalizePagination`, `buildPaginatedMeta`, `addTextFilter` / `addRegexFilter`, `resolveSort` / `sortOf`, and `DEFAULT_SORT` / `SORT_COLLATION` when building Mongo queries.
+- **`src/modules/orders/tests/integration/repository.test.ts`** — integration tests that exercise the pagination and sort behaviour end-to-end.
 
 ## Notes
 
-- `normalizePagination` intentionally does **not** cap the caller's `pageSize`; out-of-range values are rejected with a 422 upstream by `@infrastructure/http/schemas`. Clamping here would advertise a limit the API never actually enforced.
-- `toSearchPattern` returning `undefined` (not `''`) is load-bearing: `$regex: ''` matches every document, so a term that vanishes under stripping would silently invert the filter into "return everything."
-- `escapeRegex` handles metacharacters only; C0/DEL stripping is a separate concern in `toSearchPattern`. The two must be used together via `toSearchPattern` — calling `escapeRegex` alone on raw user input leaves NUL bytes that will 500 a public endpoint.
-- `readAll` assumes `fetchPage` always requests the same fixed `pageSize`; a short page is the sole termination signal. If a caller passes a variable page size, the loop will never terminate.
+- `normalizePagination` intentionally does **not** clamp `pageSize`; out-of-range values are rejected at the HTTP edge. Clamping here would advertise a limit the API never actually enforces.
+- `toSearchPattern` returns `undefined` (not `''`) when the cleaned value is empty — `$regex: ''` matches every document in MongoDB, which would invert the filter.
+- `escapeRegex` covers metacharacters only; the separate `CONTROL_CHARACTERS` regex strips `\u0000`–`\u001F` and `\u007F`. A NUL byte causes MongoDB to reject the pattern server-side (500 on a public endpoint); it is not a metacharacter, so `escapeRegex` never catches it.
+- `resolveSort` uses `Object.hasOwn` to prevent prototype-chain lookup (a token like `constructor` must not resolve).
+- `DEFAULT_SORT` includes `_id: -1` because `createdAt` is not unique (concurrent creates share a millisecond) and MongoDB does not guarantee stable ordering of ties between the separate count and page queries.
+- `MAX_CONFIGURED_PAGE_SIZE` is deliberately repeated rather than imported from the OpenAPI spec: the env-var path never passes through a request schema, so a typo would silently disable paging rather than surface a 422.

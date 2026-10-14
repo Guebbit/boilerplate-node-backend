@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/controllers/post-feedback-contact.ts
-sha256: 22959053a15e826ff4aad666b20c39f5b52958f0a0ebcdb71127f76a45b4294e
-generated_at: 2026-09-23T18:39:28.356951+00:00
+sha256: 382a945bfdc1fef7e5e809d5bd8d6f3bbb6e1eb7fbe8fa34ec0f6fa47b068367
+generated_at: 2026-10-14T15:48:57.483628+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the sole public write endpoint in the feedback module — `POST /feedback/contact` — which creates a feedback ticket and (via the service) sends a support notification email. Mounted above the admin gate in `../routes` rather than exempted from it.
+Controller for `POST /feedback/contact`, the single public write endpoint in the feedback module. It validates and trims the incoming body, delegates ticket creation (and the resulting support email) to the service layer, and returns a `201` with the created resource.
 
 ## Key elements
 
-- **`createFeedbackSchema`** (module-level const, not exported) — Zod validation schema built by `.extend()`-ing the orval-generated `CreateFeedbackRequestBody`. Adds `.trim()`, `.min(1)`, and restates `.max()` limits (pulled from generated constants, not literal numbers). `name` is optional; `email`, `subject`, `message` are required.
-- **`postFeedbackContact`** (exported) — Express handler. Validates the body with `parseBody`, delegates to `feedbackRequestService.create()`, responds `201` with the created record via `successResponse`. Errors funnel through `catchAs`.
+- **`createFeedbackSchema`** — A Zod schema built by extending the generated `CreateFeedbackRequestBody` with `trimmedInto` on `name`, `email`, `subject`, and `message`. Trimming ensures whitespace-only values are treated as empty. No bounds are restated locally; all limits come from the generated shape.
+- **`postFeedbackContact(request, response)`** — The exported Express handler. Calls `parseBody` with `createFeedbackSchema`; on failure returns early. On success, calls `feedbackRequestService.create(body)`, maps the result through `presentFeedbackRequest`, and sends a `createdResponse` (201) with a `Location` header of `/feedback/:id`. Errors are funneled to `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — supplies `parseBody` (Zod parse + 400 on failure) and `catchAs` (maps thrown errors to a JSON error response, tagged with the handler name).
-- **`@infrastructure/http/response`** — supplies `successResponse` for the well-formed `201` envelope.
-- **`../routes`** — mounts `postFeedbackContact` on `POST /feedback/contact`, placed above the admin-gate middleware.
-- **`../service`** — `feedbackRequestService.create(body)` performs the actual ticket creation and email notification; the controller only validates input and formats output.
-- **`@types`** — provides the `CreateFeedbackRequest` (typed body) and `FeedbackRequest` (wire response shape) used in the handler signature and response cast.
+- **`../routes.ts`** — Mounts this controller above the admin gate (not exempted from it).
+- **`../service.ts`** — `feedbackRequestService.create` performs the actual persistence *and* sends the support-notification email; the controller does not handle notification logic.
+- **`../presenter.ts`** — `presentFeedbackRequest` shapes the domain entity into the API response contract.
+- **`@infrastructure/http/controller.ts`** — Supplies `parseBody` (schema validation + early-exit) and `catchAs` (uniform error mapping).
+- **`@infrastructure/http/response.ts`** — Supplies `createdResponse` for the 201 + `Location` reply.
+- **`@infrastructure/http/schemas.ts`** — Supplies `trimmedInto`, the per-field transform used to build `createFeedbackSchema`.
+- **`@types/index.ts`** — Source of the `CreateFeedbackRequest` and `FeedbackRequest` type aliases used in the handler signature and response generic.
 
 ## Notes
 
-- `ZodSchema.extend()` **replaces** a field's schema; it does not merge. That's why each `.max()` limit is restated alongside `.trim()`/`.min(1)` — omitting the limit silently drops it.
-- Length limits reference the generated constants (`createFeedbackRequestBodyNameMax`, etc.) so they stay in lockstep with `openapi.yaml` without hand-maintained magic numbers.
-- The returned document is cast via `.toJSON()` because the stored Mongoose shape (`_id`, native dates) differs from the `FeedbackRequest` wire type (`id`, ISO strings). The cast is necessary but untyped.
-- Email-recipient and language logic lives entirely in the service; the controller is deliberately agnostic about who gets notified.
+- The `.then()/.catch()` chain is deliberate: the notification is explicitly the service's concern, not the controller's. The comment in-file reinforces that "who gets told, and in which language" belongs to the ticket, not the request.
+- `parseBody` returns `undefined` on failure and the handler returns immediately—there is no `throw` or `next(err)` path from validation.
+- Because the schema is *extended* from the generated type, regenerating `CreateFeedbackRequestBody` automatically propagates new/removed fields; only the `trimmedInto` wrappers are hand-maintained.

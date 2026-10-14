@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/get-account.ts
-sha256: f0727e3acd71102ce9a2dc1603ee1765b59e533a9ed38bc934ae9e98d3291769
-generated_at: 2026-09-23T17:59:49.991264+00:00
+sha256: 594da0927d87cf30986ae0f8ea7c96dc4bdebdcc7daabb721011c82a234d37b1
+generated_at: 2026-10-14T08:30:32.592222+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for `GET /account`. Returns the authenticated user's full profile by reading fresh from the users collection, rather than echoing the (intentionally minimal) JWT claims, so fields like `verifiedAt` and `locale` are always present for the client's verify banner and saved-language flows.
+Thin HTTP adapter that serves `GET /account`: returns the authenticated user's **full** profile read fresh from the users collection, rather than echoing the (narrower) JWT claims. This exists because the JWT only carries `id`, `email`, `username`, and `admin`, which would silently drop fields the client depends on (`verifiedAt`, `locale`).
 
 ## Key elements
 
-- **`getAccount(request, response)`** — The sole export. Validates `request.authContext`, calls `accountService.getOwnProfile(id, callerContextOf(request))`, then maps the result through `userService.toUser(user, authContext.roles.tenant)` and sends a `successResponse<User>`. Returns 401 when the auth context is missing or when the user row no longer exists (dead session). Errors are delegated to `catchAs(response, 'getAccount')`.
+- **`getAccount(request, response): void`** — the sole export. The Express controller for `GET /account`.
+  1. Short-circuits with `401` if `request.authContext` is absent.
+  2. Calls `accountService.getOwnProfile(authContext.id, callerContextOf(request))`.
+  3. If the returned user is `null` (row deleted), responds `401` (dead session, not a server error).
+  4. Sets an ETag on the raw user (`setEtag`) so the client can echo it as `If-Match` on subsequent profile edits.
+  5. Maps the internal user to the API shape via `userService.toUser(user, authContext.roles.tenant)` and sends `200` with `successResponse<User>`.
+  6. Catches any thrown error through `catchAs(response, 'getAccount')`.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — Source of `accountService.getOwnProfile`, the primary data-fetch call.
-- **`src/modules/users/service.ts` / `src/modules/users/index.ts`** — `userService.toUser` reshapes the raw account document into the public `User` DTO, injecting tenant roles from the pre-resolved auth context.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts per-request caller metadata passed into the service.
-- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` standardize the JSON envelope.
-- **`src/infrastructure/http/controller.ts`** — `catchAs` centralises async-error logging and HTTP error shaping.
-- **`src/modules/account/routes.ts`** — Registers `getAccount` on the `GET /account` route.
-- **`src/types/index.ts`** — Supplies the `User` type used as the generic on `successResponse<User>`.
+| Neighbor | Interaction |
+|---|---|
+| `src/infrastructure/http/response.ts` | Uses `successResponse` and `rejectResponse` for all responses. |
+| `src/infrastructure/http/request.ts` | Calls `callerContextOf(request)` to extract tenant/audit context for the service call. |
+| `src/infrastructure/http/controller.ts` | Wraps the error path with `catchAs(response, 'getAccount')`. |
+| `src/infrastructure/http/preconditions.ts` | Calls `setEtag(response, user)` to set the `ETag` header. |
+| `src/modules/account/services/index.ts` | Imports `accountService`; calls its `getOwnProfile` method. |
+| `src/modules/users/index.ts` | Imports `userService`; calls `toUser` to shape the response payload. |
+| `src/modules/users/services/index.ts` | Indirect dependency — `userService` is re-exported through the `@modules/users` barrel. |
+| `src/types/index.ts` | Imports the `User` type used as the generic on `successResponse<User>`. |
+| `src/modules/account/routes.ts` | Consumes `getAccount` as the handler registered for the `GET /account` route. |
 
 ## Notes
 
-- The controller deliberately does **not** trust the JWT payload for profile fields. The token carries only `id / email / username / admin`; echoing it would silently omit `verifiedAt` and `locale`.
-- Role information is read from `authContext.roles.tenant` (populated at token-verification time) rather than performing a second membership lookup.
-- A `null`/`undefined` return from `getOwnProfile` is treated as a 401 (dead session), not a 404 or 500 — the intent is to signal "your token is no longer valid" to the client.
+- **401 vs. 404:** A valid token whose database row has been deleted returns `401`, not `404`. The code comment frames this as a "dead session, not a server fault." Avoid changing this to `404` without confirming client expectations.
+- **ETag is set on the raw user, before `toUser` mapping.** The version string is derived from the internal representation; the response body uses the mapped shape.
+- **`authContext.roles.tenant`** is passed to `toUser`, meaning the role/tenant information resolved at token-verification time is reused here — no second membership lookup is made.
+- **`callerContextOf(request)`** is forwarded to the service; it likely carries request-level metadata (IP, tenant, etc.) for auditing inside `getOwnProfile`.

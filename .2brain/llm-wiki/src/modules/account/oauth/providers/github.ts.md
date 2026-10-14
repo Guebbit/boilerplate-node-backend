@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/providers/github.ts
-sha256: c5120aa2bab6dbaf30366d45accf6df90cb9fbf4bcf5040c0357bb59cdfa6d37
-generated_at: 2026-09-23T18:06:29.820738+00:00
+sha256: fb17bd55a1b52880b6b5c618625978b069329283ef852890ec749cdc73b48007
+generated_at: 2026-10-14T08:43:31.999803+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the GitHub OAuth2 provider adapter. After the authorization-code exchange, it fetches the user's identity from **two** REST endpoints (`/user` for profile fields, `/user/emails` for the verified primary address) because GitHub can hide the primary email behind a "private" flag, making it absent from `/user`.
+Implements the `OAuthProvider` port for GitHub's plain OAuth 2.0 flow. Because GitHub publishes no issuer metadata and requires two separate API calls to reconstruct a full identity (`/user` + `/user/emails`), this file hard-codes the server endpoints, performs the code exchange via the shared `client` helpers, and maps the results into the canonical `OAuthIdentity` shape.
 
 ## Key elements
 
-- **`githubOAuthProvider`** (export) — the sole public export; an `OAuthProvider` object with `name`, `authorizeUrl`, and `exchangeCode`.
-- **`PROVIDER_NAME`** (`'github'`) — the registry key that lands on `OAuthAccount.provider`; used to look up credentials in config.
-- **`githubApiGet<T>(path, accessToken)`** (module-private) — thin `fetch` wrapper for the GitHub REST API; sets the bearer token, the `application/vnd.github+json` Accept header, and an `AbortSignal.timeout`; throws on non-2xx.
-- **`GithubUser`** / **`GithubEmail`** (local interfaces) — shape the expected JSON from the two profile endpoints; no runtime validation, type annotations only.
+- **`PROVIDER_NAME`** (`'github'`) — the string key used in the provider registry and in `OAuthAccount.provider`.
+- **`SERVER`** (`client.ServerMetadata`) — static, hand-written endpoint map (authorize / token). GitHub does not expose discovery; `issuer` is a label only.
+- **`GithubUser` / `GithubEmail`** — minimal response shapes for `GET /user` and `GET /user/emails`.
+- **`githubApiGet<T>(path, accessToken)`** — authenticated `fetch` wrapper for the GitHub REST API. Sets the `Accept: application/vnd.github+json` header, enforces a timeout via `AbortSignal.timeout`, rejects redirects, and parses the body through `readCappedJson`.
+- **`identityOf(user, emails)`** — maps the two API responses to `OAuthIdentity`. Validates that `user.id` is a number and that a primary email exists; falls back to `login` when `name` is absent.
+- **`githubOAuthProvider`** (export) — the `OAuthProvider` object wired into the registry. Exposes `authorizeUrl` (PKCE) and `exchangeCode` (token redemption → parallel profile/emails fetch → `identityOf`).
 
 ## Relationships
 
-- **`../config`** — imports `getOAuthCredentials` (client id/secret) and `OAUTH_FETCH_TIMEOUT_MS` (abort signal duration).
-- **`./port`** — imports the `OAuthProvider` and `OAuthIdentity` types; this file is a concrete implementation of that port.
-- **`./index`** — re-exports `githubOAuthProvider` so callers can obtain it from the barrel rather than this path directly.
-- **`../../tests/unit/oauth-github.test.ts`** — unit-tests the `authorizeUrl` URL shape and the `exchangeCode` happy/error paths by mocking `fetch`.
+- **`../config.ts`** — reads `OAUTH_FETCH_TIMEOUT_MS` for the `AbortSignal.timeout` on every API call.
+- **`./client.ts`** — uses `configurationFor`, `authorizationUrlFor`, and `redeemCode` for all `openid-client` plumbing (server config, PKCE authorize URL, token redemption including GitHub's HTTP-200-with-error-body quirk).
+- **`./port.ts`** — supplies the `OAuthProvider` and `OAuthIdentity` types this file implements / produces.
+- **`./index.ts`** — the registry that registers `githubOAuthProvider` under the key `'github'`.
+- **`@infrastructure/http/read-capped-body`** — provides `readCappedJson` and `DEFAULT_BODY_CAP_BYTES` to safely parse API responses with a byte cap.
+- **`tests/unit/oauth-github.test.ts`** — unit tests covering the identity mapping and exchange logic.
 
 ## Notes
 
-- **PKCE is S256-only.** GitHub does not support `plain`; the `code_challenge_method` is hard-coded.
-- **Token exchange expects JSON, not form-encoded.** GitHub's default response is `application/x-www-form-urlencoded`; the `Accept: application/json` header is required to get a JSON body.
-- **`githubApiGet`'s generic `<T>` is not a runtime check.** A malformed `/user` response could yield `user.id === undefined`, which `String(undefined)` would turn into the literal `"undefined"` and collide multiple accounts onto one identity row. The `typeof user.id !== 'number'` guard exists specifically to prevent that.
-- **Email selection:** only the entry with `primary: true` is used. A verified non-primary address is deliberately excluded — the port's `emailVerified` field reflects _that_ primary entry's `verified` flag, not the existence of any verified address.
-- **Abort signals** are applied to both the token-exchange POST and every `githubApiGet` call to prevent a hung GitHub response from holding an OAuth callback open.
+- `openid-client` is imported **type-only** (`import type * as client`); no runtime dependency on the library's values in this file.
+- GitHub's identity requires **two sequential API calls** after the code exchange because `/user` omits the email when it is marked private. A non-primary verified email is deliberately *not* used as the identity email (see `port.ts` docs on `emailVerified`).
+- `identityOf` performs a **runtime check** on `user.id` rather than an unconditional `String()` cast, preventing the literal string `"undefined"` from becoming a providerId that would collapse multiple accounts onto one row.
+- All outbound `fetch` calls use `redirect: 'error'` — an OAuth callback must never silently follow a redirect to an unchosen host.
+- GitHub API versioning is done via the `Accept` header (`application/vnd.github+json`), not a URL path segment.
+- PKCE (RFC 7636) is passed through `codeChallenge` in `authorizeUrl`; GitHub has supported it since July 2025.

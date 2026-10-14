@@ -1,7 +1,7 @@
 ---
 source: src/kernel/permissions.ts
-sha256: 440266bb88dfd3dbd9aa9ad30da0fd8ec19d3937fa05d56d475c7009230ad8be
-generated_at: 2026-09-27T14:19:25.820043+00:00
+sha256: 42961e9824d4140df2ea0b42ad4a091501fa1c20744882210c965846eb9ba138
+generated_at: 2026-10-14T08:23:59.636681+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,46 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the permission-key and preset-role model for the entire authorization system by reading and validating two shared YAML artefacts (`shared/authorization-keys.yaml`, `shared/authorization-roles.yaml`) once at import time. It exposes the parsed, immutable data (keys, roles, anonymous role) plus small lookup utilities so that no deployment can invent a permission key at runtime and no request ever re-parses YAML on the hot path.
+Declares the static set of permission keys and preset roles that the Node.js service enforces. Both are loaded from two shared YAML artefacts (`shared/authorization-keys.yaml` and `shared/authorization-roles.yaml`) that the PHP twin reads byte-for-byte identically. The file parses and validates those files once at import (boot), not per request, so that a malformed file fails immediately rather than on the first authorization check.
 
 ## Key elements
 
-- **`PERMISSION_ACTIONS` / `PermissionAction`** – Closed set of eight actions (`read`, `create`, `update`, `delete`, `checkout`, `sweep`, `override`, `start`). No wildcard/`manage` exists by design.
-- **`scopeOfKey(key)`** – Returns `'platform'` or `'tenant'` purely from the `platform.` prefix on the key string.
-- **`PermissionKey`** (interface) – One declared key: `key`, `module`, `subject`, `action`, `scope`, `description`, optional `stepUp` tier, optional ABAC `conditions`, optional `deniedCode`.
-- **`PresetRole`** (interface) – A named role with `scope`, `title`, `description`, and a fixed `permissions` list.
-- **`keysDocumentSchema` / `rolesDocumentSchema`** – Exported Zod schemas for the full YAML documents; used by `readShared` and by unit tests that assert on malformed fixtures without touching the filesystem.
-- **`readShared(file, schema)`** – Reads a file under `shared/`, parses YAML, validates against the schema; throws a descriptive error at boot on any shape mismatch.
-- **`PERMISSION_KEYS`** – The validated `PermissionKey[]` from the keys YAML.
-- **`PRESET_ROLES`** – The validated `PresetRole[]` from the roles YAML.
-- **`ANONYMOUS_ROLE`** – The unauthenticated role (a `RoleLookup` value, not `null`).
-- **`PERMISSION_SUBJECTS`** – Deduplicated, sorted list of all CASL subject types named by declared keys; published for client-side typing.
-- **`permissionModelVersion(keys)`** – SHA-256 over sorted key names, truncated to a 32-bit unsigned int; used as a cache-busting token on `GET /account/abilities`.
-- **`findRole(name)`** – O(1) lookup by role name; returns `undefined` on miss (callers decide the error message).
-- **`permissionsOfRole(name)`** – Returns the key list for a role; throws if the name is not declared.
-- **`RoleLookup`** (type) – `Pick<PresetRole, 'name' | 'scope' | 'permissions'>`; the true shared shape since the `anonymous` entry lacks `title`/`description`.
+- **`scopeOfKey(key)`** — Derives `'platform'` or `'tenant'` from a key's spelling (presence of the `platform.` prefix). No lookup table needed.
+- **`PermissionKey`** (interface) — Shape of one declared key: `key`, `module`, `subject`, `action`, `scope`, `description`, optional `stepUp` tier, `conditions` (ABAC filter fragment), `deniedCode` (error code for a specific refusal), and `shopperOnly` flag.
+- **`PresetRole`** (interface) — Shape of one preset role: `name`, `scope`, `title`, `description`, `permissions[]`, `level` (`admin`/`staff`/`user`), optional `signupDefault` and `promotesTo`.
+- **`PERMISSION_KEYS`** — The validated array of all declared keys, in the order listed in the shared YAML.
+- **`PRESET_ROLES`** — The validated array of all preset roles.
+- **`PERMISSION_SUBJECTS`** — Deduplicated, sorted list of CASL subject types named by the keys; published on `GET /account/abilities` so clients can type their `meta.can` rules.
+- **`permissionModelVersion(keys)`** — Returns a 32-bit integer (first 4 bytes of a SHA-256 over the sorted key names) used as a cache-bust `version` on `GET /account/abilities`. Changes when the *set* of keys changes, not when they are merely reordered.
+- **`keysDocumentSchema` / `rolesDocumentSchema`** (exported Zod schemas) — Full document-level validators; exported so unit tests can assert on malformed fixtures without hitting the filesystem.
+- **`readShared<T>(file, schema)`** (private) — Reads a file under `shared/`, parses YAML, validates against the given Zod schema, and throws a descriptive error on mismatch.
+- **`PLATFORM_PREFIX`** — The string `'platform.'`; the sole discriminator between platform-scope and tenant-scope keys.
+- **`StepUpTier`** — Union type `'critical' | 'sensitive'` for the step-up authentication requirement attached to a key.
 
 ## Relationships
 
-- **`src/kernel/access/tenant.ts`** – Imports `DEPLOYMENT_TENANT_ID`, the sentinel tenant identifier used to distinguish platform-scope callers.
-- **`src/kernel/ability.ts`** – Source of the `AuthContext`, `AuthorizationScope`, `Caller`, `CallerContext`, `PlatformCaller`, `TenantCaller` types that this module's interfaces and the authorization middleware consume.
-- **`src/modules/access/service.ts`** – Calls `findRole` and throws a scope-aware error on miss (`validateGrant`); a primary consumer of the role lookup surface.
-- **`src/kernel/middlewares/authorizations.ts`** – The per-request enforcement layer that resolves a caller's role and checks keys against `PERMISSION_KEYS` / `findRole` / `permissionsOfRole`.
-- **`src/modules/account/controllers/get-my-abilities.ts`** – Consumes `PERMISSION_KEYS`, `PERMISSION_SUBJECTS`, and `permissionModelVersion` to build the `GET /account/abilities` response and its cache-busting `version` header.
-- **`src/modules/account/roles.ts`** – Seed/management layer that creates roles from `PRESET_ROLES` data.
-- **`src/kernel/access/query.ts`** – Spreads a `PermissionKey`'s `conditions` object into repository queries (the ABAC half of the model).
-- **`src/modules/api-keys/services/api-keys.ts` / `resolver.ts`** – Resolve caller context and check permission keys when authorizing API-key-scoped requests.
-- **`src/modules/inventory/service.ts`** – Checks declared keys (e.g. `checkout`, `sweep`) when performing inventory mutations.
-- **`scripts/docs/generate-role-matrix.ts`** – Reads `PRESET_ROLES` and `PERMISSION_KEYS` to render the human-readable role→permission matrix for docs.
-- **`scripts/ops/reap-inactive-accounts.ts`** – Requires the appropriate permission key before performing the destructive sweep action.
+- **`src/kernel/access/tenant.ts`** — Provides `DEPLOYMENT_TENANT_ID`, imported here for tenant-scope resolution.
+- **`src/kernel/ability.ts`** — Consumes `PERMISSION_KEYS` and `PRESET_ROLES` to build the CASL ability that is evaluated per-request.
+- **`src/kernel/access/query.ts`** — Uses the `conditions` field on `PermissionKey` when translating a key check into a data-filter query.
+- **`src/kernel/middlewares/authorizations.ts`** — Middleware layer that calls into the ability/permission machinery defined here.
+- **`src/modules/account/controllers/get-my-abilities.ts`** — Exposes `PERMISSION_KEYS`, `PERMISSION_SUBJECTS`, and `permissionModelVersion` to the client.
+- **`src/modules/account/roles.ts`** — Role assignment logic built on top of `PRESET_ROLES` (e.g. `signupDefault`, `promotesTo`).
+- **`src/modules/access/service.ts`** — Access-control service that references declared keys and roles.
+- **`src/modules/api-keys/services/api-keys.ts`** — API-key service that scopes keys against `PERMISSION_KEYS`.
+- **`scripts/docs/generate-role-matrix.ts`** — Reads `PRESET_ROLES` and `PERMISSION_KEYS` to generate the documentation role-matrix.
+- **`scripts/ops/reap-inactive-accounts.ts`** — Ops script that relies on the declared role/key data for account cleanup decisions.
+- **`src/modules/access/tests/*`** and **`src/modules/account/tests/*`** — Integration and unit tests that exercise the declared keys, roles, and ability construction.
 
 ## Notes
 
-- **Read-once-at-import contract.** The YAML is parsed a single time at module load. A malformed file throws at boot (same stance as `required-config.ts`), never on the first authorization request. Do not add lazy or per-request parsing.
-- **Scope is spelling, not a field.** The only way a key is platform- or tenant-scoped is the `platform.` prefix on its name. There is no separate lookup table; `scopeOfKey` is a string check.
-- **No wildcard action exists.** `manage` is deliberately excluded from `PERMISSION_ACTIONS`. Any code that expects a catch-all action is a bug.
-- **`stepUp` lives on the key, not the route.** The "how recently must the session have been re-proved" tier is a property of the action itself, so a second route reaching the same key inherits the requirement automatically.
-- **`deniedCode` is the exception, not the rule.** Most keys return a generic `FORBIDDEN`; a key sets `deniedCode` only when the caller *has* a role but lacks this specific key and the correct next-step is something other than "fix your roles" (e.g. "confirm your email").
-- **`permissionModelVersion` is order-insensitive.** Keys are sorted before hashing, so a YAML re-order without additions/removals does not bump the version. It is not collision-proof; it only needs to change-or-not.
-- **`findRole` returns `undefined`, it does not throw.** This is intentional: `permissionsOfRole` and `access/service.ts` need different error messages. Do not change it to throw without updating both callers.
-- **The two YAML files are the single source of truth** and are shared byte-for-byte with the PHP twin. Adding a key or role means editing the YAML, not this TypeScript file.
+- **Boot-time parse, not request-time.** The YAML is read once at import. A malformed file throws at process start, not on the first authorization call. This mirrors the stance in `src/kernel/config.ts`.
+- **Roles are data, permissions are code.** The set of keys and their mapping to roles is fixed by the two shared YAML files. A deployment cannot invent a new key; `assertDeclared` (referenced in the docblock, likely in a sibling module) enforces this at runtime.
+- **Scope is derived from spelling.** There is no separate scope lookup; the `platform.` prefix is the sole signal. This guarantees a bare key can never be satisfied by a platform caller and vice-versa.
+- **`deniedCode` is deliberately typed as `string`, not the generated error-code enum.** This avoids a circular import: the error-code catalogue (`@api/error-codes`) is produced *after* this module is loaded (during `contracts:bundle`), so a typed reference would break boot ordering. Cross-checking is done in `tests/cross-cutting/authorization-keys.test.ts`.
+- **`shopperOnly` flag.** Keys marked this way are held only by shopper roles and are excluded from the "holds every declared key" completeness check, so `admin` (which does not shop) remains unrestricted.
+- **No wildcard `manage` action exists.** The action vocabulary is a closed set generated from `shared/authorization-keys.yaml`; there is deliberately no catch-all.

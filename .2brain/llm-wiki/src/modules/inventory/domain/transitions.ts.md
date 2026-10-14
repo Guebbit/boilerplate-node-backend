@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/domain/transitions.ts
-sha256: d4357b9218462521ae9e2387d9bfcaea08f4ad4427187334b9592233e86c5c31
-generated_at: 2026-09-27T14:55:16.486391+00:00
+sha256: 599c643ffff3a96f6c46dc27fc43a25ba19fba31101dcafd8dba460ddf552468
+generated_at: 2026-10-14T15:54:21.070941+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single source of truth for the seven inventory transitions: given a `StockMovementReason` and a quantity, it returns the signed deltas to apply to the `onHand` and `reserved` counters. The file is deliberately pure (no DB, no status codes, no i18n) so the ledger can be replayed deterministically.
+Pure domain rule that maps each of the nine inventory transitions (reserve, ship, release, expire, preorder, allocate, receive, restock, adjust) to its effect on the three stock counters (`onHand`, `reserved`, `preordered`). Exists as a single, total decision point so that adding a tenth transition requires one entry here plus one enum value in `openapi.yaml`, and so that the ledger remains replayable regardless of which service or hold-line produced the movement.
 
 ## Key elements
 
-- **`CounterDelta`** (interface) — the shape of a transition's effect: `{ onHandDelta: number; reservedDelta: number }`. Both fields are signed; either may be zero. Recorded on every ledger row to keep the ledger replayable.
-- **`counterDeltaFor(reason, quantity)`** (exported function) — total map from `StockMovementReason` to a `CounterDelta`. The seven cases:
-  - `reserve` — hold units (increment `reserved`, `onHand` unchanged).
-  - `commit` — sale completes (decrement both `onHand` and `reserved` by the same amount).
-  - `release` / `expire` — undo a hold (decrement `reserved` only); same arithmetic, kept as separate reasons so the ledger records the story.
-  - `receive` — delivery creates units (increment `onHand` only).
-  - `restock` — post-`commit` return (increment `onHand` only; `reserved` already zeroed by `commit`).
-  - `adjust` — signed `quantity` handles both directions (shrinkage vs. correction) without a second reason code.
+- **`HoldKind`** (`'stock' | 'preorder'`) — distinguishes whether a hold's units exist on the shelf or are only a claim against `preorderLimit`. Only relevant to the `release`/`expire` cases.
+- **`CounterDelta`** — the three signed deltas (`onHandDelta`, `reservedDelta`, `preorderedDelta`) that a single transition produces. Every column is always present (zero if untouched) to keep ledger rows self-contained.
+- **`counterDeltaFor(reason, quantity, kind)`** — the sole exported function. Takes a `StockMovementReason`, a unit count, and an optional `HoldKind`, and returns the `CounterDelta` implied by that transition. No I/O, no error throwing; an invalid reason is a type-level impossibility (the switch is exhaustive over the enum).
 
 ## Relationships
 
-- **`src/modules/inventory/domain/index.ts`** — barrel file that re-exports `counterDeltaFor` and `CounterDelta` for consumers.
-- **`src/modules/inventory/service.ts`** — calls `counterDeltaFor` to compute the deltas before persisting.
-- **`src/modules/inventory/repository.ts`** — applies the returned `CounterDelta` to the stored `onHand`/`reserved` columns.
-- **`src/modules/inventory/tests/unit/transitions.test.ts`** — unit-tests every branch of `counterDeltaFor`.
-- **`src/types/index.ts`** — provides the `StockMovementReason` enum used as the switch discriminant.
+- **`src/types/index.ts`** — provides `StockMovementReason`, the enum that drives the switch.
+- **`src/modules/inventory/services/transition.ts`** — the service-layer caller; invokes `counterDeltaFor` and persists the resulting deltas via the repository.
+- **`src/modules/inventory/services/types.ts`** — likely re-exports or references `HoldKind` / `CounterDelta` in its public service signatures.
+- **`src/modules/inventory/domain/hold-lines.ts`** — sibling domain module in the same inventory domain; both are consumed by the transition service when building a ledger row.
+- **`src/modules/inventory/domain/index.ts`** — barrel file that re-exports this module's types and function for external import.
+- **`src/modules/inventory/model.ts`** — defines the persistent inventory record whose fields (`onHand`, `reserved`, `preordered`) the deltas are applied to.
+- **`src/modules/inventory/repository.ts`** — applies the computed deltas to the model and writes the ledger entry.
+- **`src/modules/inventory/tests/unit/transitions.test.ts`** — unit tests covering every `StockMovementReason` × `HoldKind` combination.
 
 ## Notes
 
-- `adjust` is the **only** case where `quantity` is signed (e.g. `-3` for shrinkage). Do not wrap it in `Math.abs`; the sign is intentional and lets one reason cover both directions.
-- `release` and `expire` are arithmetically identical (`reservedDelta: -quantity`). They are kept as separate enum values purely for ledger readability—don't merge them.
-- Adding an eighth transition means adding one `case` here plus one enum value in `openapi.yaml` (per the module doc-comment). No other code changes are expected in the domain layer.
-- Availability math (`onHand - reserved`) lives in `@modules/products/domain/stock.ts`, not here. This file only says what each transition *does* to the counters.
+- `adjust` is the **only** transition where `quantity` is signed (e.g. `-3` for shrinkage, `+5` for a correction). All other transitions expect a positive quantity. Do not call `Math.abs` on it — the sign is intentional.
+- `release` and `expire` produce identical arithmetic but are kept as separate enum values so the ledger can record *why* units were freed (customer cancellation vs. timeout).
+- The `kind` parameter defaults to `'stock'`; passing `'preorder'` only changes the outcome for `release`/`expire` (decrements `preordered` instead of `reserved`). For all other transitions the `kind` argument is ignored.
+- This module deliberately does **not** compute customer-facing `availableStock`; that logic lives in `src/modules/products/domain/stock.ts`.

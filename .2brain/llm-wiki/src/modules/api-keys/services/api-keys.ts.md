@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/services/api-keys.ts
-sha256: 4cf97f790c29d3445bb9082625408e20810e935149ef0d7286acc6cdad203a2a
-generated_at: 2026-09-27T14:41:27.221382+00:00
+sha256: b763ffc9772aab60fdc6acc3d5ec5deafefbc291e5253723036e5e679fd65fdd
+generated_at: 2026-10-14T15:00:59.941822+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the credential CRUD operations (list, mint, revoke) for the API-keys module. Every function is tenant-scoped through `context.caller.tenantId`, validates permissions against the caller's current ability set, and records audit events on state-changing actions. This file is the service layer that the module's route handlers call into.
+Service layer for tenant-scoped API-key credential CRUD: listing, minting (with permission-subset validation and audit), revocation (idempotent soft-revoke), bulk revocation on account events, and data-export reads. All operations are narrowed to `context.caller.tenantId`; no key in this family carries a secret after the single `mint` response.
 
 ## Key elements
 
-- **`isMintable`** (internal) — Returns `true` only if a permission key is declared, scoped to `tenant`, and currently held by the caller. Used as the gate in `mint`.
-- **`findOwnApiKeys(userId)`** — Unpaginated full export of one user's credentials (metadata only, secrets stripped by the model transform). Intended for the `personalData.export` DDD hook.
-- **`apiKeysDeleteByUserId(userId, session)`** — Hard-deletes all credentials for a user within the caller's Mongoose session. Intended for the `personalData.erase` DDD hook.
-- **`list(context, filters)`** — Paginated, tenant-scoped listing of credentials, newest first. Returns `PaginatedResult<ApiKey>`; secrets are omitted by the model transform.
-- **`mint(body, context)`** — Validates that `body.permissions` is a non-empty subset of the minter's current tenant-scoped keys (422 with offending keys otherwise), mints a plaintext/hash pair via `mintApiKey()`, persists it, audits, and returns the one-time plaintext secret in the 201 body.
-- **`revoke(id, context)`** — Soft-deletes a credential (sets `revokedAt`). Idempotent: revoking an already-revoked key returns a no-op success rather than a 404. Audits on actual revocation.
+- **`isMintable(key, caller)`** — Private guard. Returns `true` only if the key is declared, `scope: 'tenant'`, has no `stepUp` tier, and is in `heldKeys(caller)`. Prevents a minter from granting permissions they don't hold or that are step-up-gated.
+- **`latestExpiry(now?)`** — Computes the maximum allowed `expiresAt`: one calendar year ahead of `now` (uses `setFullYear`, not a day-count).
+- **`notifyMinted(minterId, apiKey)`** — Fire-and-forget email to the minter. Resolves the user fresh, formats the expiry with `Intl.DateTimeFormat` in the user's locale, and enqueues via `enqueueEmail`. Failures are logged, never thrown.
+- **`findOwnApiKeys(userId)`** — Unpaginated read-all of a user's keys (metadata only) for the account's data-export hook. Uses `readAll` from the persistence layer.
+- **`apiKeysDeleteByUserId(userId, session)`** — Hard-delete hook (`personalData.erase`). Joins the caller's Mongoose transaction.
+- **`list(context, filters)`** — Paginated, newest-first listing scoped to the caller's tenant. Never exposes the hash.
+- **`mint(body, context)`** — Validates expiry ≤ 1 year and that every requested permission passes `isMintable`. Mints via `mintApiKey()`, persists, fires `notifyMinted`, records an audit entry, and returns the one-time plaintext secret (201).
+- **`revoke(id, context)`** — Soft-revokes a single key (sets `revokedAt`). Idempotent: already-revoked returns 200. Tenant-mismatch returns 404. Not outranked — any tenant admin may revoke any key in the tenant.
+- **`notifyRevoked(userId, reason, revoked)`** — Fire-and-forget email listing the revoked keys and the reason (e.g. "password reset"). Same pattern as `notifyMinted`.
+- **`revokeAllMintedBy(userId, reason)`** — Bulk-revokes every live key a user minted. Used by the account module when sessions are ended wholesale. Audited as a system act, then `notifyRevoked` is called.
 
 ## Relationships
 
-- **`../repository` (`apiKeyRepository`)** — All persistence (search, create, findById, save, deleteByUserId) goes through this repository instance.
-- **`../credentials` (`mintApiKey`, `displayIdOf`)** — `mintApiKey()` generates the plaintext/publicPrefix/hash triple; `displayIdOf` formats the prefix for audit metadata.
-- **`../audit` (`apiKeysAuditActions`)** — Provides the action constants (`ADMIN_API_KEY_MINTED`, `ADMIN_API_KEY_REVOKED`) passed to `recordAudit`.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape every HTTP response returned by this service.
-- **`@infrastructure/observability/audit` (`recordAudit`)** — Called after successful mint and revoke to emit an audit event.
-- **`@infrastructure/persistence/search` (`readAll`, `MAX_CONFIGURED_PAGE_SIZE`)** — `readAll` drives the unpaginated loop in `findOwnApiKeys`; `MAX_CONFIGURED_PAGE_SIZE` bounds each page fetch.
-- **`@kernel/ability` (`holdsKey`)** and **`@kernel/permissions` (`findKey`)** — Together form the `isMintable` check: `findKey` confirms the key is declared and tenant-scoped; `holdsKey` confirms the caller currently holds it.
-- **`@infrastructure/i18n` (`t`)** — Localizes the 422 validation message and the 404 not-found message.
-- **`@types` (`TenantCallerContext`, `Caller`)** — Type-level contract for the auth context passed into every exported function.
-- **`../module.ts`** — Wires these exports to HTTP routes and provides the `CredentialResolver` that re-checks permissions at request time.
-- **`../services/index.ts`** — Barrel re-export making these functions available to the module's route layer.
+- **`@infrastructure/http/response`** — All exported endpoints return `ResponseSuccess` / `ResponseReject` built by `generateSuccess` / `generateReject`.
+- **`@infrastructure/i18n`** — Error messages go through `t()`; user-facing email locale comes from `getDefaultLocale()`.
+- **`@infrastructure/observability/audit`** — `recordAudit` is called on successful mint and revoke.
+- **`@infrastructure/adapters/mailer`** — `enqueueEmail` is the transport for both mint and revoke notifications.
+- **`@infrastructure/adapters/logger`** — `.warn` is the only side-effect when email delivery fails.
+- **`@infrastructure/persistence/search`** — `readAll` and `MAX_CONFIGURED_PAGE_SIZE` power the unpaginated export read.
+- **`@kernel/ability`** — `heldKeys(caller)` provides the set of keys the caller currently holds, the basis of the mintable check.
+- **`@kernel/permissions`** — `findKey(key)` looks up a key's declared scope and step-up tier.
+- **`@modules/account`** — `SessionsRevokedReason` (type import) and the account module's session-termination flow are the callers of `revokeAllMintedBy`.
+- **`@modules/api-keys/credentials`** — `mintApiKey()` (generates plaintext + hash + public prefix) and `displayIdOf` (human-readable key identifier) are consumed here.
+- **`@modules/api-keys/audit`** — `apiKeysAuditActions` provides the stable action strings for audit records.
 
 ## Notes
 
-- **Non-null assertion on `caller.id`**: In `mint`, `context.caller.id!` is safe because the route is behind `getAuth` + `isAuth` middleware, which guarantees a live session (and thus a real user id). The `Caller` type allows `id: null` for platform-scope callers, but that case is unreachable here.
-- **`.toJSON()` in `mint`**: The returned `ApiKeyCreated` object is built from `apiKey.toJSON()`, which triggers the Mongoose schema transform (`applyApiKeyTransform`) that renames `_id` → `id` and omits the hash. The cast `as ApiKeyCreated` bridges the stored-document type to the wire shape.
-- **Idempotent revoke**: Check `apiKey.revokedAt` *before* saving; a second call returns `generateSuccess(undefined)` with no audit record. This prevents duplicate audit noise.
-- **404 vs 422 semantics**: A cross-tenant or non-existent id in `revoke` yields 404; an invalid permission set in `mint` yields 422 with the specific offending keys in `details.permissions`.
-- **`findOwnApiKeys` is deliberately unpaginated**: It uses `readAll` with the max configured page size to drain all results. This is for a one-time data-export call, not a client-paginated listing.
+- **Tenant scoping is assumed, not optional.** Every query filters on `context.caller.tenantId`; there is no platform-scope path in this file.
+- **Idempotent revoke.** Revoking an already-revoked key returns 200, not 404. Callers (e.g. `revokeAllMintedBy`) rely on this.
+- **No outrank on revoke.** Deliberately absent — any tenant admin can revoke a fellow admin's key. The gate is the tenant check only.
+- **Fire-and-forget emails.** Both `notifyMinted` and `notifyRevoked` swallow errors after a `logger.warn`. A down mailer queue must not turn a successful mint/revoke into an HTTP error.
+- **`createdByUserId` is non-null by construction.** The router middleware guarantees a live session before any of these routes execute, so the `!` on `context.caller.id` is safe.
+- **Export is unpaginated on purpose.** `findOwnApiKeys` is a one-time full answer for data export, not a paginated listing.

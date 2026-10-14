@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-update-controller.ts
-sha256: 97dd173cf0f4e29b2d86f24edb7d9cb46f367b8da79b93b7e307a0b4cacd7f1a
-generated_at: 2026-09-27T14:17:38.750228+00:00
+sha256: 309eb2d036d522a0653cc4b43db9c0de17e34808195cb906c7c9d4d94a288d06
+generated_at: 2026-10-14T08:19:41.013040+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A shared factory that produces a pair of Express handlers — `replace` (PUT) and `update` (PATCH) — for any resource. Both verbs funnel through a single pipeline; the only differences are which Zod schema validates the body and whether omitted clearable fields are back-filled with `null` (PUT) or left absent (PATCH). Each module supplies its own schema, `update` service call, and row projection; this file owns the HTTP ceremony around them.
+Shared factory that builds a PUT (replace) and PATCH (merge) Express handler pair for any resource. Both verbs run through a single pipeline — resolve id, parse body, fill omitted clearable fields (PUT only), optionally run `completeReplace`, apply optimistic-concurrency fencing, and shape the response — differing only in which Zod schema validates the body and which fields get filled with `null`.
 
 ## Key elements
 
-- **`UpdateControllerSpec`** — the per-entity configuration object: `entity` name, `replaceSchema`, `patchSchema`, optional `input` declaration, the module's `update` service call, a `present` row-shaping function, and an optional `idFrom` override.
-- **`clearableFields(schema)`** — inspects a Zod schema at controller-build time and returns the names of fields whose schema accepts `null`. Used once per controller, not per request.
-- **`fillOmittedWithNull(body, fields)`** — returns a shallow copy of `body` with every name in `fields` set to `null` if not already present. Implements RFC 9110 §9.3.4 "PUT replaces" semantics by converting omissions into explicit nulls.
-- **`createUpdateController(spec)`** — the main export. Closes over `clearableFields(replaceSchema)` once, then returns two named Express handlers: `replace` (validates with `replaceSchema`, fills omissions) and `update` (validates with `patchSchema`, no filling). Both resolve the id, parse the body via `readInput`/`parseBody`, delegate to `spec.update`, shape the result with `spec.present`, and send a `200` or an error envelope.
+- **`createUpdateController(spec)`** — The main factory. Takes a `UpdateControllerSpec` and returns `{ replace, update }`, two named Express handlers wired to the shared `run` pipeline.
+- **`UpdateControllerSpec`** — Per-entity configuration: `entity` name, `versioned` flag, `replaceSchema` / `patchSchema`, optional `input`, the module's `update` function, `present` projection, optional `completeReplace`, optional `keptWhenOmitted`.
+- **`UpdateIdSource`** — Union type: either a path-param id (`notFoundKey` + optional `idParam`) or a computed id (`idFrom: (req) => string`).
+- **`clearableFields(schema)`** — Returns the names of fields in a Zod schema that accept `null`, i.e. the fields a PUT clears by omission.
+- **`fillOmittedWithNull(body, fields)`** — Returns a copy of `body` with every field in `fields` set to `null` if absent.
+- **`idOf`** (module-private) — Resolves the row id from the source declaration; sends the not-found response and returns `undefined` on failure.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — supplies the HTTP primitives this file composes: `namedHandler`, `operationName`, `parseBody`, `refused`, `catchAs`, and the `ServiceResult` type.
-- **`src/infrastructure/http/request.ts`** — supplies `extractAndValidateId`, `readInput`, and the `RequestInputDeclaration` type for multipart/form input.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` used to send the 200 body.
-- **Module update controllers** (`update-account.ts`, `update-address.ts`, `update-feedback-status.ts`, `update-locale.ts`, `update-order.ts`, `update-product.ts`, `update-user.ts`, `update-subscription.ts`) — each calls `createUpdateController` with its own spec and registers the returned `replace`/`update` handlers on the router.
-- **`scripts/docs/generate-role-matrix.ts`** — reads registered controllers to build the role/permission documentation matrix.
-- **`tests/unit/infrastructure/surfaces/create-update-controller.test.ts`** — unit-tests the factory, `clearableFields`, and `fillOmittedWithNull`.
+- **Consumed by** every module-level update controller: `update-account`, `update-address`, `update-example`, `update-feedback-status`, `update-locale`, `update-order`, `update-product`, `update-user`, `update-subscription`. Each passes its own spec and mounts the returned `replace`/`update` handlers on its routes.
+- **Imports** core HTTP infrastructure: `successResponse` (response), `setEtag` / `withIfMatch` (preconditions), `readInput` / `RequestInputDeclaration` (request), `requireId` (ids), and `catchAs` / `namedHandler` / `operationName` / `parseBody` / `refused` / `ServiceResult` (controller).
+- **`scripts/docs/generate-role-matrix.ts`** — Reads the operation names produced by `operationName('replace'|'update', entity)` to build documentation.
 
 ## Notes
 
-- `clearableFields` is computed **once** at controller-build time (the schema is static), not per request.
-- A field is "clearable" only if its Zod schema actually passes `null` through `safeParse`. Non-nullable fields (e.g. a required password) are left untouched when omitted from a PUT body — they are not zeroed.
-- The `update` service call is responsible for translating `null` → `$unset` in the database write; this file only guarantees that `null` appears in the `changes` object.
-- `readInput` is called with `surface: 'create'` to avoid merging a path-param `id` into the body object, which would violate a strict body schema.
-- The `as TPatch['_output']` cast on the filled PUT body is safe because every added field is one the PUT schema itself accepts `null` for, making it structurally compatible with the patch schema's output type.
+- `replaceFills` is computed **once** at controller-build time (not per request) by calling `clearableFields` and filtering out `keptWhenOmitted` entries.
+- `keptWhenOmitted` fields (e.g. an uploaded `imageUrl`) are **excluded** from the PUT fill: omitting them keeps the stored value, while an explicit `null` still clears them.
+- `completeReplace` runs **only on PUT**, after filling, and is the mechanism for clearing stored keys of a keyed map (e.g. product `translations`) that the body left out.
+- When `versioned` is `false`, the `If-Match` header is ignored entirely and no `412` is ever returned — the route's contract must not declare it.
+- `parseBody` is called with `readInput(..., { surface: 'create' })` so that path params merged into the input object do not trip the body's strict schema.

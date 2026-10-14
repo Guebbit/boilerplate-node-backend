@@ -1,7 +1,7 @@
 ---
 source: docker/observability/promtail.podman.config.yaml
-sha256: 0979c6a74bedca6716da99f3799d57fd9335a58329d63e9cc9566239addd6166
-generated_at: 2026-09-23T17:14:11.752171+00:00
+sha256: b0a8db388df5b317e111fb51c8cd31b5eb0fb1fdb86a568c3594b4e4af777de2
+generated_at: 2026-10-14T06:52:01.607689+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Promtail scrape configuration for environments using rootless Podman with the `k8s-file` log driver. It exists because Podman stores container logs under a different path layout and writes them in CRI format (rather than Docker's JSON-line format), so a separate parse pipeline and glob pattern are required. It is the Podman counterpart to `promtail.config.yaml` (the Docker default) and is selected via `PROMTAIL_CONFIG=promtail.podman.config.yaml` in `.env`.
+Promtail scrape configuration for environments using **rootless Podman** instead of Docker. Podman's `k8s-file` log driver writes CRI-formatted logs to a different path layout than Docker's JSON driver, so a separate Promtail config is required. It is selected at runtime via `PROMTAIL_CONFIG=promtail.podman.config.yaml` in `.env`.
 
 ## Key elements
 
-- **`server`** — Exposes the Promtail HTTP debug/metrics endpoint on port 9080; gRPC is disabled (`grpc_listen_port: 0`).
-- **`positions`** — Persists read offsets to `/tmp/positions.yaml` so restarts resume from the last processed line.
-- **`clients`** — Push target: `http://loki:3100/loki/api/v1/push`.
-- **`scrape_configs[0]` (`podman-containers`)** — Tails `/var/log/host-containers/*/userdata/*.log`, the layout produced by Podman's `k8s-file` driver (one `<container-id>.log` per container under `overlay-containers/<id>/userdata/`).
-- **Pipeline stages:**
-    - `cri` — Strips the CRI envelope (`<RFC3339Nano> <stream> <flag> <message>`) to extract timestamp, stream, and body.
-    - `json` — Extracts `level`, `service`, `trace_id` from the Winston JSON payload.
-    - `labels` — Promotes `stream`, `level`, `service` to Loki labels for LogQL filtering.
+- **`server`** – HTTP debug/metrics endpoint on port 9080; gRPC disabled (`grpc_listen_port: 0`).
+- **`positions`** – Persisted read-offset file at `/tmp/positions.yaml` so restarts resume from the last consumed line.
+- **`clients`** – Single Loki push target: `http://loki:3100/loki/api/v1/push`.
+- **`scrape_configs[0]`** (`job: podman-containers`) – Tails all Podman container log files via the glob `/var/log/host-containers/*/userdata/*.log` (one `<container-id>.log` per container under the `overlay-containers` layout).
+- **`pipeline_stages`** – Three-stage pipeline:
+  1. `cri` – strips the CRI envelope (`<RFC3339Nano> <stream> <flag> <message>`) to extract timestamp, stream, and body.
+  2. `json` – parses the app-level JSON payload (Winston fields: `level`, `service.name`, `trace_id`).
+  3. `labels` – promotes `stream`, `level`, and `service` to Loki labels for LogQL filtering.
 
 ## Relationships
 
-- **`docker/observability/promtail.config.yaml`** — Docker-format equivalent. Both configs are mounted at `/var/log/host-containers` inside the Promtail container; the only differences are the glob pattern and the parser stage (this file uses `cri`, the Docker file uses Docker-JSON parsing). Selection is controlled by the `PROMTAIL_CONFIG` environment variable.
-- **`docker/observability/loki.config.yaml`** — Loki's own config. This file's `clients` block points at the Loki instance (`loki:3100`) that is defined and served by that config. Loki receives the pushed log entries and applies its own retention/ingestion rules.
+- **`docker/observability/promtail.config.yaml`** – The Docker-engine equivalent of this file. They are mutually exclusive alternatives; only one is active depending on the `PROMTAIL_CONFIG` value. The only substantive differences are the `__path__` glob and the use of the `cri` stage here versus Docker's native JSON log format there.
+- **`docker/observability/loki.config.yaml`** – The Loki instance that receives log entries pushed by this Promtail (`clients[0].url`). Loki's storage and retention settings defined there determine what is available for querying.
 
 ## Notes
 
-- Podman's **default** log driver is `journald`, which produces no file for Promtail to tail. The stack must explicitly set `CONTAINER_LOG_DRIVER=k8s-file` (see `.env-example`) or no log files will exist at the glob path.
-- The glob `/var/log/host-containers/*/userdata/*.log` is engine-specific; swapping to `promtail.config.yaml` without also changing `CONTAINER_LOGS_PATH` and the driver will result in zero logs scraped.
-- `positions` lives in `/tmp`, so it is ephemeral across container rebuilds — Promtail will re-tail from the beginning of the log file on a fresh container.
+- Podman defaults to the **journald** log driver, which produces no tailable file. The stack must set `CONTAINER_LOG_DRIVER=k8s-file` (see `.env-example`) for this config to find any logs at all.
+- Both this file and `promtail.config.yaml` are bind-mounted at `/var/log/host-containers` regardless of engine, so the host-side mount path is identical; only the glob and parser differ.
+- In the `json` stage, the OpenTelemetry key `service.name` contains a dot, so it must be JMESPath-quoted (`'"service.name"'`)—a common source of silent parse failures if the quoting is removed.
+- `positions.filename` lives in `/tmp/`, which is ephemeral in most container runtimes; restarting the Podman container resets offsets and may cause a small re-read.

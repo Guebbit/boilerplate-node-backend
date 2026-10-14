@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/model.ts
-sha256: abfff1ce79f52cf2958bdaaf8e28b38e385d5a7057bb7cadff4dc55199780420
-generated_at: 2026-09-27T14:55:34.116838+00:00
+sha256: 77aacafb9fb4a1fcc96495347d7e22f771113a38a272b08d929b8835f8c68830
+generated_at: 2026-10-14T15:55:11.435141+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the three Mongoose schemas, document interfaces, and models that the inventory module persists: the append-only stock-movement ledger, the per-product stock-level counters, and the per-order reservation (hold). This file is the single source of truth for document shape, indexes, and serialization transforms; it contains no query logic and no business rules.
+Defines the three Mongoose schemas, document interfaces, and registered models that the inventory module owns: **StockMovement** (append-only ledger), **StockLevel** (per-product stock counters), and **Reservation** (order holds). This is the single source of truth for collection shapes, indexes, and the serialization transforms used by the repository layer.
 
 ## Key elements
 
-- **`MOVEMENT_REASONS`** — `Object.values(StockMovementReason)` from the contract; feeds the schema's `enum:` so it cannot drift from the wire type.
-- **`StockMovementDocument` / `stockMovementSchema` / `stockMovementModel`** — the ledger. Append-only; stores `onHandDelta` + `reservedDelta` as a pair (not one signed number) so summing columns reproduces the counter. Indexes: `{productId, createdAt:-1}` and `{createdAt:-1}`.
-- **`StockLevelDocument` / `stockLevelSchema` / `stockLevelModel`** — one row per product holding `onHand`, `reserved`, and a stored `available` column. Unique index on `productId` makes the `ensureLevel` upsert idempotent. Index: `{available, _id}` for the stock-board query.
-- **`ReservationDocument` / `reservationSchema` / `reservationModel`** — one row per order. Embeds `items` (productId + quantity) rather than referencing the order. `status` is a four-state machine (`held → committed | released | restocked`); every transition is a conditional move off `held` for exactly-once semantics. Unique index on `orderId`. Index: `{status, expiresAt}` for the expiry sweep.
-- **`applyStockMovementTransform` / `applyStockLevelTransform` / `applyReservationTransform`** — serialization normalizers (`_id`→`id`, date handling) built via `applySerialization`, consumed by the repository factory for lean reads.
-- **`ReservationItem`**, **`ReservationStatus`** — local types; `ReservationDocument` is deliberately *not* derived from a contract type because reservations are never serialized to a client.
+- **`MOVEMENT_REASONS`** – Array derived from the `StockMovementReason` enum at runtime; feeds the schema's `enum:` so it cannot drift from the contract.
+- **`StockMovementDocument` / `stockMovementSchema` / `stockMovementModel`** – Ledger row with `productId`, `reason`, three delta columns (`onHandDelta`, `reservedDelta`, `preorderedDelta`), optional `reference`/`note`, and timestamps. Two indexes: per-product chronological and global chronological.
+- **`applyStockMovementTransform`** – Built via `applySerialization`; maps `_id → id` and drops `__v` for lean reads.
+- **`StockLevelDocument` / `stockLevelSchema` / `stockLevelModel`** – One document per product holding `onHand`, `reserved`, `available`, `preorderLimit`, `preordered`. Three indexes: `available` ascending (stock board), `preorderLimit` and `preordered` descending (preorder board).
+- **`applyStockLevelTransform`** – Same serialization normalization pattern.
+- **`ReservationItem`** – Embedded line on a hold: `productId`, `quantity`, optional `kind` (`stock` | `preorder`).
+- **`RESERVATION_STATUSES` / `ReservationStatus`** – Four-state tuple: `held → committed → shipped | released`. Not exported from a contract type because reservations are never serialized to a client.
+- **`ReservationDocument` / `reservationSchema` / `reservationModel`** – One document per order. `orderId` is unique (exactly-once gate). `items` is an embedded array. `status` drives all conditional transitions. `committedAt` stores the payment timestamp locally so `inventory` doesn't need to read the order document. `expiresAt` has **no** TTL index.
 
 ## Relationships
 
-- **`src/types/index.ts`** — imports `StockMovementReason` and `StockMovement`; the ledger's `enum` and `StockMovementDocument` shape are derived from these, so the schema tracks the contract automatically.
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, which produces the three `apply*Transform` exports.
-- **`src/modules/inventory/repository.ts`** — owns all queries against these models (the schema file defers to it).
-- **`src/modules/inventory/service.ts`** — owns business rules (transitions, guards); writes to `StockLevel` via `$inc` and moves `Reservation` status conditionally.
-- **`src/modules/inventory/index.ts`** — barrel re-export; consumers import the models through this path.
-- **`src/modules/inventory/tests/unit/schema-contract.test.ts`** — asserts schema fields stay aligned with the `@types` contract.
-- **`src/modules/inventory/tests/integration/ledger.property.test.ts`** — property-tests that summing `onHandDelta`/`reservedDelta` reproduces the `StockLevel` counters.
-- **`src/modules/inventory/tests/integration/repository.test.ts`** / **`service.test.ts`** — integration tests exercising the models through repository and service.
-- **`tests/integration/concurrency/payment-races.test.ts`** — verifies that concurrent status transitions on a `Reservation` document are exactly-once (second mover loses the conditional match).
-- **`scenarios/flows/backdate.ts`** — scenario that exercises stock-level and reservation reads/writes under backdated timestamps.
+- **`src/infrastructure/persistence/serialize.ts`** – Provides `applySerialization`, which this module calls to build `applyStockMovementTransform` and `applyStockLevelTransform`.
+- **`src/modules/inventory/domain/index.ts`** – Source of the `HoldKind` type imported for `ReservationItem.kind`.
+- **`src/modules/inventory/repository.ts`** – Owns all queries and writes (`applyDelta`, `openLevel`, conditional status moves) against these three models.
+- **`src/modules/inventory/services/allocate.ts`**, **`holds.ts`**, **`reserve.ts`** – Call into the repository; their guard logic and state transitions are what the schema fields (`status`, `committedAt`, delta columns) are shaped to support.
+- **`src/modules/inventory/domain/transitions.ts`** – Defines the transition rules that determine which delta columns and status moves a given operation performs.
+- **`src/modules/inventory/index.ts`** – Re-exports the public surface of this file.
+- **`src/modules/inventory/tests/integration/*`** – Exercise these models end-to-end (repository CRUD, service state machines, property-based ledger invariants, crash-window recovery).
+- **`scenarios/flows/backdate.ts`** – Uses the models in flow-scenario setup/teardown.
 
 ## Notes
 
-- **`available` is stored, not derived.** It is kept in lockstep by `$inc` in the service; the guard conditions in `reserve`/`adjust` guarantee it never goes negative. Storing it (rather than computing `onHand - reserved` at read time) lets the stock-board index narrow the result set before an in-memory tie-break sort.
-- **No Mongo TTL index on reservations.** Deletion would lose the units that still need giving back. Expiry is handled by a sweep (`runReservationSweep`) that reads `{status:'held', expiresAt: …}` and transitions the document.
-- **Reservation `items` are embedded, not referenced.** This avoids an inventory → orders → inventory cycle and records what was actually taken (not what the order says today).
-- **Products carries a synced copy of stock counters** for join-free catalogue reads, but this module never writes to or reads from that copy.
-- **Index names are explicit** (e.g. `stockmovements_productId_createdAt`) because Mongo identifies indexes by name; a name mismatch causes a startup failure rather than a silent no-op.
+- **No `min: 0` on stock counters** (`onHand`, `reserved`, `available`, `preordered`). Mongoose `$inc` bypasses schema validators, so a `min` there would be dead code. The real floor is the `$gte` guard in `repository.ts#applyDelta`'s update filter.
+- **`available` is stored, not computed.** It is kept in lockstep by the same `$inc` that writes `onHand`/`reserved`, enabling an indexed scan for the stock board's `maxAvailable` filter instead of a collection-wide derive.
+- **`orderId` uniqueness on Reservation** is the exactly-once guarantee for reserving: a retried checkout's second insert simply fails; no read-then-write race.
+- **`items` is embedded, not referenced.** Releasing a hold must return what was *taken*, not what the order says today, and embedding avoids an `inventory → orders → inventory` dependency cycle.
+- **No TTL index on `expiresAt`.** Expiry is handled by a sweep that releases units and flips status to `released`; a TTL index would delete the document and lose the units.
+- **Index names are explicit.** Mongo identifies an index by name as well as key; a name mismatch would fail at startup rather than silently no-op.
+- **`StockLevel.productId` is unique**, making the `openLevel` upsert (fired by `PRODUCT_CREATED`) idempotent under event retries.

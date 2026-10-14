@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/controller-chain-must-catch.ts
-sha256: 8f98d6b2a3569b1cca642cc151aa58cabbda670457f1bec9aba8aacdca51c875
-generated_at: 2026-09-23T17:26:59.234401+00:00
+sha256: 9d19c3720059eb89f6bc7c50418720a9e118bce0448828ac6e9e81387ab47a9e
+generated_at: 2026-10-14T07:18:26.822194+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A custom ESLint rule that requires promise chains started in exported controller handlers to end in `.catch()`. It exists because the global error handler in `app.ts` can only return a generic status code—it cannot clean up orphaned resources (e.g., failed uploads) or record domain-specific metrics (e.g., failed-checkout counters) that a local `.catch()` would handle.
+A custom ESLint rule that enforces promise chains in controller functions must terminate with `.catch()`. It exists because the global error handler in `app.ts` returns a client-shaped 500 for unhandled rejections, masking what should be a 400 (or a domain-specific response), and preventing cleanup (e.g., deleting an orphaned upload) and domain metrics (e.g., a failed-checkout counter).
 
 ## Key elements
 
-- **`controllerChainMustCatch`** (exported) — The ESLint rule created via `RuleCreator.withoutDocs`. Reports `messageId: 'missing'` on the outermost `CallExpression` of a chain that contains `.then` but no `.catch`, is inside an exported function, and is not already governed by an outer handler.
-- **`chainMethods(call)`** — Walks a call expression inward (outermost → innermost) and returns the array of method names (e.g. `['then','catch']`).
-- **`HANDLER_METHODS`** — `Set(['then','catch','finally'])`; identifies which calls constitute a promise handler callback.
-- **`isPromiseCallbackFunction(node)`** — Type guard: `ArrowFunctionExpression` or `FunctionExpression` that could be a `.then`/`.catch` callback.
-- **`insidePromiseHandler(node, parentOf)`** — Walks ancestors to detect whether the chain is written _inside_ another chain's handler (e.g. a cleanup call in `.catch(err => …)`), meaning it already inherits a `.catch`.
-- **`isEnclosingFunction(node)`** — Type guard covering all three function shapes (arrow, expression, declaration).
-- **`grandparentOf(node, parentOf)`** — Utility: returns the node two levels above `node` (used for `VariableDeclaration` → `ExportNamedDeclaration` lookup).
-- **`insideExportedFunction(node, parentOf)`** — Finds the outermost enclosing function and checks whether its owner is an `ExportNamedDeclaration` or `ExportDefaultDeclaration`; only those are Express handlers.
-- **`ParentOf`** (type) — Signature for the per-call parent-lookup function built from `context.sourceCode.getAncestors()`, compensating for TSESTree's untyped `.parent` link.
+- **`controllerChainMustCatch`** (exported) — The ESLint rule. On each `CallExpression`, it checks: is this the outermost call of a chain containing `.then` but no `.catch`, sitting in an exported function, and not already inside another promise handler callback? If so, reports `missing`.
+- **`chainMethods(call)`** — Walks a call expression inward (outermost → innermost) collecting member-access method names, e.g. `["then", "then"]` for `a.then(...).then(...)`.
+- **`insidePromiseHandler(node, parentOf)`** — Returns true if the chain is written inside a `.then`/`.catch`/`.finally` callback, meaning an outer chain's `.catch` already governs it.
+- **`insideExportedFunction(node, parentOf)`** — Returns true only if the nearest enclosing function is the module's named or default export (i.e., the actual Express handler). Private helpers that return chains are exempt because they delegate to the caller's `.catch`.
+- **`ParentOf`** — A `(node) => Node | undefined` lookup built per-visit from `context.sourceCode.getAncestors()`, substituting for TSESTree's untyped `.parent` link.
+- **`HANDLER_METHODS`** — `Set(['then', 'catch', 'finally'])`; the method names that identify a promise-handler call site.
 
 ## Relationships
 
-- **`scripts/eslint/index.ts`** — Imports and registers `controllerChainMustCatch` so it is available as a plugin rule in the project's ESLint config.
-- **`tests/unit/scripts/eslint/controller-chain-must-catch.test.ts`** — Unit tests that exercise the rule against fixture code (valid/invalid chains, nested handlers, exported vs. private functions).
+- **`scripts/eslint/index.ts`** — Registers this rule in the local ESLint plugin's rule set, making it available to the project's lint config.
+- **`tests/unit/scripts/eslint/controller-chain-must-catch.test.ts`** — Unit-tests the rule via ESLint's `RuleTester`, covering positive (missing `.catch`) and negative (already caught, inside a handler, non-exported helper) cases.
 
 ## Notes
 
-- The rule fires only on the **outermost** call of a chain. An inner `.then` whose parent `MemberExpression.object` is the current node is skipped, preventing duplicate reports.
-- A chain that contains `.catch` anywhere is considered compliant, even if a later `.then` follows it.
-- Private helper functions (non-exported) are **exempt** by design: their caller is expected to attach the `.catch()`.
-- The parent map is rebuilt per visited `CallExpression` via `getAncestors`; this is intentional because TSESTree does not expose a typed `.parent` pointer on nodes.
-- The rule uses `RuleCreator.withoutDocs`—it carries no `recommended` or `docs.recommended` flag, so it must be enabled explicitly in the ESLint config.
+- The rule intentionally fires **only** on the outermost call of a chain. Inner `.then` links in the same expression are skipped to avoid duplicate reports.
+- The "exported function" check means a private helper like `post-reset-request.ts` that returns a chain is **not** flagged; the caller's `.catch` is the designated swallow point.
+- `ParentOf` is rebuilt on every `CallExpression` visit from `getAncestors()`. This is per-node overhead but keeps the logic local and avoids a global AST pass.
+- The rule type is `'problem'` (not `'suggestion'`), reflecting that a missing `.catch` in a controller is a correctness bug, not a style preference.

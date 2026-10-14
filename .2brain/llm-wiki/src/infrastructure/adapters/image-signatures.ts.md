@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/image-signatures.ts
-sha256: e733d3ec6b416ed69c40ae765eefa2e318acfd1be393520723427b70ad0ff123
-generated_at: 2026-09-23T17:39:08.686844+00:00
+sha256: c827244acc6da2a566afa79792136cfacc7a1bece35afdfa321b948b0100d84c
+generated_at: 2026-10-14T07:44:08.072286+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Identifies the actual image format of an upload by matching its leading bytes against known signatures, rather than trusting the client-supplied `Content-Type` header. This exists because the MIME type is determined after upload (for storage naming, security review, and correct serving), and a spoofed or misspelled header must not dictate what the system believes the file is.
+Identifies uploaded images by their leading bytes (magic-number signatures) rather than trusting the client-supplied `Content-Type` header. It exists because a spoofable header would let an attacker store a script or executable under an image extension, and the project deliberately avoids a third-party sniffing dependency (`file-type`) so the three accepted signatures remain auditable inline.
 
 ## Key elements
 
-- **`ImageFormat`** (interface) — Describes one accepted format: canonical MIME, optional aliases, byte offset, signature bytes, and storage extension.
-- **`SUPPORTED_IMAGE_FORMATS`** — The three accepted raster formats (PNG, JPEG, WebP) with their exact byte signatures. SVG is deliberately excluded (XSS risk).
-- **`ACCEPTED_UPLOAD_MIMETYPES`** (exported `Set`) — Every MIME spelling (canonical + aliases) a client may declare. Single source of truth for "what does this API accept."
-- **`identifyImage(header: Buffer)`** (exported) — Returns the MIME type whose signature matches the buffer's leading bytes, or `undefined`.
-- **`identifyImageFile(filePath: string)`** (exported) — Reads only the header from disk (bounded by `HEADER_LENGTH`) and delegates to `identifyImage`. Returns `undefined` on any read failure.
-- **`extensionForImage(mime)`** (exported) — Maps a canonical MIME type back to its storage extension. Returns `undefined` for unrecognised types.
-- **`normaliseDeclaredImageMime(declared)`** (exported) — Folds non-IANA aliases (e.g. `image/jpg`) into their canonical form so declared and sniffed types compare as equals.
+- **`SUPPORTED_IMAGE_FORMATS`** (internal) — The single source of truth for accepted formats. Each entry (`ImageFormat`) carries the canonical MIME, client aliases, byte offset, signature bytes, optional secondary markers (`alsoRequires`), and the storage extension. Currently: PNG, JPEG, WebP. No SVG.
+- **`ACCEPTED_UPLOAD_MIMETYPES`** (exported, `Set<string>`) — Every MIME spelling (canonical + aliases) across all supported formats. Consumed by the upload middleware to validate `Content-Type` before sniffing.
+- **`identifyImage(header: Buffer): string | undefined`** (exported) — Synchronous magic-byte check against a buffer; returns the canonical MIME or `undefined`.
+- **`identifyImageFile(filePath: string): Promise<string | undefined>`** (exported) — Reads only the header-length prefix from a file on disk, delegates to `identifyImage`. Returns `undefined` for unreadable paths or non-matching bytes.
+- **`extensionForImage(mime: string | undefined): string | undefined`** (exported) — Maps a canonical MIME back to the storage extension. Rejects anything not in `SUPPORTED_IMAGE_FORMATS`.
+- **`normaliseDeclaredImageMime(declared: string | undefined): string | undefined`** (exported) — Folds non-IANA aliases (e.g. `image/jpg`) to their canonical MIME so declared and sniffed types are comparable.
+- **`hasMarker`** (internal) — Checks whether a buffer contains a given byte sequence at a given offset.
+- **`HEADER_LENGTH`** (internal) — Computed as the maximum `offset + bytes.length` across all markers, ensuring one read covers the longest signature.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/upload.ts`** — Imports `ACCEPTED_UPLOAD_MIMETYPES` to validate inbound `Content-Type` headers before the file is written. Adding a format here requires no change in that middleware.
-- **`src/infrastructure/adapters/image.worker.ts`** — Consumes `identifyImageFile` (or `identifyImage`) in the worker process to sniff uploaded files and produce the canonical type for downstream storage.
-- **`tests/unit/infrastructure/adapters/image-signatures.test.ts`** — Unit-tests the signature matching, alias normalisation, and edge cases (short buffers, unrecognised bytes).
-- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — Exercises the worker path, which calls into this module's identification functions.
+- **`src/infrastructure/http/middlewares/upload.ts`** — Imports `ACCEPTED_UPLOAD_MIMETYPES` to gate incoming multipart parts by declared MIME before the file hits disk.
+- **`src/infrastructure/adapters/image.worker.ts`** — Calls `identifyImageFile` (and likely `extensionForImage`) to determine the actual format of a stored upload and choose the correct extension.
+- **`tests/unit/infrastructure/adapters/image-signatures.test.ts`** — Unit-tests the public exports with crafted byte buffers.
+- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — Exercises the worker path that depends on this module's identification functions.
 
 ## Notes
 
-- The PNG signature includes all 8 bytes (`\x89PNG\r\n\x1a\n`) specifically to catch line-ending corruption in transit; matching only the first 4 would be less safe.
-- JPEG matching is limited to 3 bytes (`FF D8 FF`) because what follows the SOI marker varies by encoder (JFIF, Exif, raw).
-- WebP's `"WEBP"` tag sits at offset 8 inside a RIFF container; matching at offset 0 would also accept WAV/AVI.
-- `identifyImageFile` allocates a fixed-size buffer (`HEADER_LENGTH`) and reads at most that many bytes — it never loads the full file into memory.
-- The `finally` block in `identifyImageFile` guards against the `handle` being `undefined` when `open` itself throws; the eslint-disable comment documents this intent.
-- Extension is derived exclusively from the sniffed type, never from the client's `originalname`, to prevent stored-XSS via a misleading file extension on a static server.
+- Only **raster** formats are accepted; SVG is explicitly excluded because it is executable XML.
+- JPEG matching is intentionally limited to three bytes (`FF D8 FF`) — the fourth byte varies by encoder (JFIF, Exif, raw).
+- WebP requires **two** markers: `RIFF` at offset 0 *and* `WEBP` at offset 8, to avoid false-matching WAV/AVI.
+- The PNG signature includes all 8 bytes (through the `\x0a` line-ending guard), not just the first 4.
+- `identifyImageFile` deliberately does not load the full file into memory; it reads only `HEADER_LENGTH` bytes.
+- `CANONICAL_MIME_BY_ALIAS` and `ACCEPTED_UPLOAD_MIMETYPES` are both derived from `SUPPORTED_IMAGE_FORMATS` at module load; adding a new format means adding one entry to that array.

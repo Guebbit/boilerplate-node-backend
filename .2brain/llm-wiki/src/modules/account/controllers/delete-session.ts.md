@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/delete-session.ts
-sha256: 392fbcdd6c0a646bd1962c4f7b622e448ba03e37b26c33b7fbda34b59b5fcbff
-generated_at: 2026-09-23T17:59:32.916331+00:00
+sha256: eeae787a3286c642bd86f0a2d8977fed9aeae10009c8d2b31fc91b7ff5fbbf9a
+generated_at: 2026-10-14T14:35:22.611215+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter that exposes `DELETE /account/sessions/:sessionId`, allowing an authenticated user to revoke one of their own refresh-token sessions ("log out that device"). It delegates all business logic to `accountService.sessionRevoke` and maps the result to a success or 404 JSON response.
+Thin HTTP adapter for `DELETE /account/sessions/:sessionId`. Translates an authenticated request into a call to `accountService.sessionRevoke`, then shapes the JSON response (200 on success, 404 when the session is not the caller's or the ID is malformed). Exists so that revoking a specific device from "active sessions" is a first-class endpoint rather than a side-effect of a generic logout.
 
 ## Key elements
 
-- **`deleteSession`** (exported) — Express route handler. Reads `request.authContext.id` and `request.params.sessionId`, calls `accountService.sessionRevoke(id, sessionId, callerContextOf(request))`, then returns 200 with a localized "revoked" message or 404 with a localized "not-found" message when `modifiedCount` is 0. Errors are funneled to `catchAs(response, 'deleteSession')`.
+- **`deleteSession(request, response)`** — The sole export. Express handler that:
+  1. Reads the authenticated user ID from `request.authContext` (guaranteed by upstream `isAuth` middleware).
+  2. Validates the `:sessionId` param via `requireId`; short-circuits with a 404 if malformed.
+  3. Calls `accountService.sessionRevoke(id, sessionId, sessionCredentialOf(request), callerContextOf(request))`.
+  4. On success: if the revoked session is the *current* one, destroys the session and "logged-in" cookies on the response; then returns a 200 with an i18n'd message.
+  5. On failure (not found): returns 404 with a generic `account.sessions.not-found` message.
+  6. Catches unexpected errors via `catchAs`.
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** — registers this handler for the `DELETE /account/sessions/:sessionId` route (upstream caller in the request lifecycle).
-- **`src/modules/account/services/index.ts`** — source of `accountService.sessionRevoke`, the sole business-logic call this controller makes.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` / `rejectResponse` used to shape the JSON reply.
-- **`src/infrastructure/http/controller.ts`** — provides `catchAs`, the standardized error-to-response mapper used in the `.catch` branch.
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf`, which extracts IP/UA context forwarded to the service for audit or rate-limiting purposes.
-- **`src/infrastructure/i18n/index.ts`** — provides the `t` translation function for user-facing messages.
+- **`@infrastructure/http/controller`** — `catchAs` provides the uniform error-to-HTTP mapping.
+- **`@infrastructure/http/ids`** — `requireId` validates and extracts the `sessionId` path param, returning `undefined` (and writing a 404) when invalid.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts the caller's context (IP, UA, etc.) passed to the service.
+- **`@infrastructure/http/response`** — `successResponse` / `rejectResponse` shape the JSON envelope.
+- **`@infrastructure/i18n`** — `t()` localizes the success and not-found messages.
+- **`../services`** — `accountService.sessionRevoke` performs the actual revocation; the controller is pure transport.
+- **`../session/cookies`** — `destroySessionCookie` / `destroyLoggedCookie` are called only when the *current* session is revoked, clearing the caller's own cookies.
+- **`../session/session`** — `sessionCredentialOf` pulls the current session token from the request to identify "current" vs. "another device."
+- **`routes.ts`** — Registers this handler on the `DELETE /account/sessions/:sessionId` route (graph-adjacent).
 
 ## Notes
 
-- `request.authContext!` uses a non-null assertion; the file relies on an `isAuth` middleware guaranteeing authentication before this handler runs. No local auth check is performed.
-- Revoking the caller's _current_ session is explicitly allowed and behaves like `POST /account/logout` except it does **not** clear cookies (this endpoint is meant to target a different client's session).
-- The service filters to the caller's document and `type: 'refresh'`, so foreign session IDs, pending reset/verify tokens, and malformed ObjectIds all surface as 404 or 422 without any extra logic here.
+- **No info-leak on bad IDs.** A foreign session ID, a pending reset/verify token ID, or a malformed ID all produce the identical 404 body — the controller and service deliberately conflate these cases.
+- **Current-session revocation = logout.** When `current` is true, the controller clears the session and logged-in cookies in addition to returning 200. Revoking *another* device's session clears no cookies (they live in that other browser).
+- **Auth is not applied here.** `request.authContext` is accessed with a non-null assertion; the `isAuth` middleware (defined in `routes.ts`) is responsible for populating it before this handler runs.
+- **No request body expected.** The operation is fully determined by the path param and the authenticated identity.

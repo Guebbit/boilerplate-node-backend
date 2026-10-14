@@ -1,7 +1,7 @@
 ---
 source: scenarios/addresses.ts
-sha256: b22287d03c835ba9e0e4bc158776e27a4b52136dddb57aee79c15bed9715453f
-generated_at: 2026-09-23T17:16:37.785151+00:00
+sha256: 5ab911143640600cbc91a2cba01a3d804b38889381dc71032d78948c1a906c04
+generated_at: 2026-10-14T06:55:12.934979+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Seeds the demo address-book collection with two owner-scoped fixtures: a two-entry book for the admin (to make the "set as default" flow observable) and a single-entry book for the ordinary customer (to exercise the optional-`phone` path). Also exposes the seed function that `seedShop` walks.
+Defines the seed fixtures for the address-book collection and the function that inserts them. Three persona-specific books are provided so that demo flows (default-address selection, order snapshotting, two-shopper journeys) have realistic, non-uniform data to operate against.
 
 ## Key elements
 
-- **`addressBookFixtures`** — Array of two `AddressBook` objects built via `makeAddressBook`. The admin's book has a default ("home") and a non-default ("office") entry; the customer's book has one default entry with `phone` intentionally omitted.
-- **`seedAddressBooksCollection()`** — `Promise<SeedOutcome[]>`. Inserts each fixture through `insertIfAbsentForOwner(addressBookRepository, book)`. Registered in `scenarios/index.ts` under `shopModules` so `seedShop` picks it up.
+- **`addressBookFixtures`** (exported `const` array) — Three `makeAddressBook` results: admin (2 entries, one default), ordinary customer (1 entry, `phone` omitted), second shopper (1 entry, default). Entry IDs are minted via `new Types.ObjectId()` at module-evaluation time.
+- **`seedAddressBooksCollection`** (exported function) — Maps each fixture through `insertIfAbsentForOwner(addressBookRepository, book)` and returns `Promise<SeedOutcome[]>`. Keyed on `userId` for idempotency.
 
 ## Relationships
 
-- **`scenarios/accounts.ts`** — Source of `SEED_ADMIN_ID` and `SEED_USER_ID`, which set each book's `userId`.
-- **`scenarios/seed.ts`** — Provides the `SeedOutcome` type and `insertIfAbsentForOwner` helper used for idempotent insertion keyed on `userId`.
-- **`scenarios/index.ts`** — Declares `seedAddressBooksCollection` in its `shopModules` list; `seedShop` iterates that list and invokes the function.
-- **`src/modules/addresses/factories.ts`** — `makeAddressBook` constructs the typed book objects from the inline entry data.
-- **`src/modules/addresses/repository.ts`** — `addressBookRepository` is passed to `insertIfAbsentForOwner` as the write target.
+- **`scenarios/accounts.ts`** — Source of the three persona IDs (`SEED_ADMIN_ID`, `SEED_USER_ID`, `SEED_SECOND_SHOPPER_ID`) that identify the book owners.
+- **`scenarios/seed.ts`** — Provides the `SeedOutcome` type and the `insertIfAbsentForOwner` helper that makes the seed idempotent per owner.
+- **`scenarios/shop-modules.ts`** — Registers `seedAddressBooksCollection` as one of the shop modules walked by `seedShop`.
+- **`src/modules/addresses/factories.ts`** — Supplies `makeAddressBook`, the shape-constructor used to build each fixture.
+- **`src/modules/addresses/repository.ts`** — Supplies `addressBookRepository`, the persistence interface passed to `insertIfAbsentForOwner`.
 
 ## Notes
 
-- Idempotency is keyed on **`userId`** (via `insertIfAbsentForOwner`), not on the book's `_id`. Pinned entry `_id`s are minted with `new Types.ObjectId()` and are required by the contract but never looked up by value; the book-level `_id` is left to the repository.
-- The admin's two entries exist so a "set as default" demo can flip the flag onto the second entry while the first (already snapshotted into a seeded order's `shippingAddress`) remains unchanged—demonstrating that an order's address is a **snapshot**, not a reference.
-- The customer's single entry omits `phone` entirely (not an empty string) to represent the field's optionality in the contract.
+- Idempotency is guaranteed by the `userId` unique column, not by a pinned book `_id`; entry-level IDs are fresh each run because no downstream lookup depends on them.
+- The admin's two-entry book is intentional: it makes "exactly one default" and "move the default flag" observable in demos.
+- The ordinary customer deliberately omits `phone` so the dataset exercises the optional-field path.
+- No staff persona carries an address (staff do not shop); the second-shopper persona covers the "second buyer" role in two-shopper journeys.

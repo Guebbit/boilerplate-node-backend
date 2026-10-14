@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/contract/api.contract.test.ts
-sha256: 7f85970808963fb20e723cf38d98c7e1175bc9baaa2c8a6978af01f78b7e9fde
-generated_at: 2026-09-27T14:47:28.246669+00:00
+sha256: be5bc8a235a3f8d3bdca6525047edac1dcfcf4de77a733bd1daf2c3bdb5defa0
+generated_at: 2026-10-14T15:14:13.538595+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for all six `/cart` endpoints. Each test verifies that a real API response (success or error) satisfies the declared OpenAPI spec via `toSatisfyApiSpec()`. The cart is built exclusively through API calls—never through a fixture builder—because `CartResponse` is a computed view, not a direct serialization of a stored document, so a hand-written fixture would assert a shape the application never produces.
+Contract (shape) tests for every `/cart` endpoint. They assert the response envelope, status codes, and error structures that the API must produce, without re-testing business rules (those live in the service suites). The file exists because `CartResponse` is a computed view rather than a document serialization, so a hand-written fixture could not stand in for the real output.
 
 ## Key elements
 
-- **`authenticateWithCart(quantity?)`** — Local helper: authenticates a user, creates a product, adds it to the cart via `POST /cart`, and returns `{ bearer, product }`. Used by most test cases to establish a non-empty cart.
-- **`describe('GET /cart')`** — Two cases: empty cart and cart with one item; both must return 200 and satisfy the spec.
-- **`describe('POST /cart')`** — Add item (200), non-existent product (404), and inactive product (404 via SCOPE).
-- **`describe('DELETE /cart')`** — Body-based single-item removal (200, remaining items intact), missing body (422), product not in cart (404).
-- **`describe('DELETE /cart/all')`** — Full cart clear (200, zero items).
-- **`describe('PUT /cart/{productId}')`** — Set quantity (200), invalid quantity 0 (422), non-existent product (404), inactive product (404).
-- **`describe('PUT /cart/shipping-method')`** — Set method (200), clear with `null` (200, `shippingMethodId` undefined), unknown method (404), digital-only basket (409), over-weight basket (409), malformed body (422).
-- **`describe('DELETE /cart/{productId}')`** — Path-param removal (200) and its error branches.
+- **`authenticateWithCart(quantity?)`** — Logs in a `user` role, seeds an address and a product, adds the product to the cart via `POST /cart`, and returns `{ bearer, product }`. All cart setup goes through the API, not a fixture builder.
+- **`GET /cart` suite** — Verifies 200 + empty `items`, 200 + one line, and the `availability: 'insufficient_stock'` flag when quantity exceeds `onHand`.
+- **`POST /cart` suite** — Covers 201 (new line, `Location` header), 200 (growing an existing line, no `Location`), 422 `CART_QUANTITY_LIMIT` (per-line ceiling via `NODE_CART_LINE_MAX`), and 404 for missing or inactive products.
+- **`POST /cart — who may shop` suite** — Parameterized over six staff roles expecting 403 `FORBIDDEN`, and over `customer`/`unverified` expecting 201.
+- **`POST /cart/merge` suite** — Asserts per-line result objects (`requested`, `resulting`, `reason`, `availability`) in request order, idempotency-key passthrough, and the `cart.items` snapshot in the response.
+- **`mergeOnce(bearer, key, quantity, id)`** — Small helper that builds a `POST /cart/merge` request, optionally setting `Idempotency-Key`.
+- **`heldOf(bearer, id)`** — Reads back the quantity of a product from the cart via `GET /cart`; the single `as` cast is the only place the untyped supertest body is shaped.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — Side-effect import (`@tests/contract`) that registers the `toSatisfyApiSpec()` matcher used by every assertion.
-- **`tests/support/http.ts`** — Provides `api()` (supertest-style request builder) and `authenticateAs('user')` (returns a bearer token).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs once at module level to provision a clean test database.
-- **`tests/support/ids.ts`** — Exports `MISSING_ID`, a well-formed but non-existent identifier used to trigger 404 "not found" branches.
-- **`tests/support/environment.ts`** — Exports `withEnvironment` / `withoutEnvironment` (imported for environment-scoped test setup; visible in the import list).
-- **`src/modules/products/tests/factories.ts`** — `createProduct()` seeds catalogue rows (active, inactive, digital-only, heavy-weight variants) used as cart contents.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` (imported; likely used in truncated portion or reserved for order-related cart assertions).
-- **`src/modules/users/tests/factories.ts`** — `createUser` (imported; user seeding for authentication).
+- **`tests/support/contract.ts`** — Imported as a side-effect (`import '@tests/contract'`); likely registers shared `expect` matchers or global setup for contract assertions.
+- **`tests/support/http.ts`** — Provides `api()`, `authenticateAs()`, `authenticateAsRole()` used for every request and auth setup.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to seed/clean the test database.
+- **`tests/support/environment.ts`** — `withEnvironment('NODE_CART_LINE_MAX', …)` / `withoutEnvironment` scope the quantity-limit tests to a temporary env var.
+- **`tests/support/checkout-as.ts`** — `checkoutAs` and `shownTotal` are imported for checkout-flow assertions (visible in the truncated tail).
+- **`tests/support/ids.ts`** — `MISSING_ID` supplies a well-formed but non-existent ObjectId for 404 tests.
+- **`src/modules/addresses/tests/factories.ts`** — `giveAddress(user.id)` seeds the billing address required by checkout.
+- **`src/modules/products/tests/factories.ts`** — `createProduct()` builds the product document referenced in cart lines.
+- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` are available for order-related assertions further in the file.
+- **`src/modules/users/tests/factories.ts`** — `createUser` is used where a specific user document is needed.
+- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t` is imported for localized assertion strings or error-message checks.
 
 ## Notes
 
-- **Three distinct removal routes:** `DELETE /cart` (body-based, single item), `DELETE /cart/{productId}` (path-based, single item), and `DELETE /cart/all` (clear everything). The tests deliberately use a two-line cart to distinguish "removed one" from "cleared all."
-- **404 disambiguation:** A `MISSING_ID` 404 proves the id matched nothing; an `active: false` product 404 proves the SCOPE layer refused a valid id. The code comments call this out explicitly.
-- **Shipping-method edge cases:** `null` clears the choice (response field is `undefined`, not `null`); `requiresShipping: false` products trigger 409; a product exceeding the method's weight ceiling (express: 5000 g) also triggers 409.
-- **No behavioural assertions beyond shape:** These tests check status codes and minimal field values only. Business-rule correctness (e.g., quantity cap, discount logic) belongs in the service-level suites.
-- **`setupTestDb()` is module-level**, not inside a `beforeAll`/`beforeEach`, so the database is provisioned once for the entire file.
+- The module doc states explicitly that these tests are *not* behavioural: they exist to ensure each contract branch (status, envelope shape, error code) is actually hit. Service-level suites own the "what happens" logic.
+- `POST /cart` is intentionally **additive** (Shopify / commercetools convention): re-adding a product *grows* the existing line and returns **200** with no `Location`; only a brand-new line returns **201**. Tests assert both cases to pin this distinction.
+- The `insufficient_stock` availability flag does **not** clamp the quantity to what is on hand — the line keeps the requested quantity and the flag is the only signal. The merge tests confirm this ("Short, and kept at what was asked").
+- `heldOf` is the one place in the file that casts the supertest body (`as { productId; quantity }[]`); it is the contract's type guarantee, not a runtime check.

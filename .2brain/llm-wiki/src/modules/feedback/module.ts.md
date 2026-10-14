@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/module.ts
-sha256: 53d2d57f347e28653b413c8ad2d787e7236b13c8aae3c3aba67d78f3864ee78f
-generated_at: 2026-09-27T14:52:49.929641+00:00
+sha256: f22269e1c5504cf476f97286c52dc17afce151a1003ae5987a70ef7874b64b67
+generated_at: 2026-10-14T15:50:05.615049+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest for the **feedback** (contact-form) module. It registers the module's routes, permissions, rate-limit budgets, personal-data export hook, and locale path into the app's `AppModule` contract. The form is deliberately open to people with no account, so records store an email address rather than a user ID.
+Module manifest for the feedback (contact-form) feature. It assembles the router, rate limits, config, and personal-data exporter into a single `AppModule` object that the kernel registry consumes to mount routes, register budgets, and wire GDPR export under the `feedback.*` key.
 
 ## Key elements
 
-- **Default export** — an `AppModule` object satisfying the `@kernel/registry` type. Fields: `name: 'feedback'`, `basePath: '/feedback'`, `permissions`, `routes`, `rateLimits`, `personalData`, `locales`.
-- **`permissions`** — `['feedback.any.read', 'feedback.any.update', 'feedback.any.delete']`. Enforced by a cross-cutting test (`tests/cross-cutting/module-permissions.test.ts`) that rejects keys orphaned from or unclaimed by this module.
-- **`routes`** — re-exported from `./routes` (`router`).
-- **`rateLimits`** — re-exported from `./rate-limits` (`feedbackRateLimits`).
-- **`personalData[0].collect`** — gated behind the `NODE_EXPORT_INCLUDE_FEEDBACK` env flag (default `false`). When on, calls `findOwnTicketsForExport(subject.email)` from `./service`; when off, resolves to `undefined` so the downstream `account` assembly omits the `feedback` key entirely.
-- **`locales`** — resolved via `path.join(__dirname, 'locales')`.
+- **`default` (export)** — An object satisfying `AppModule` with:
+  - `name: 'feedback'`, `basePath: '/feedback'`
+  - `routes` — the Express/Fastify router from `./routes`
+  - `config` — `feedbackConfig.slice`, making the module's config keys namespaced as `feedback.*`
+  - `rateLimits` — `feedbackRateLimits` (contact-form submission budgets)
+  - `personalData[0].collect` — Returns the subject's feedback tickets for data export, gated on **both** `NODE_EXPORT_INCLUDE_FEEDBACK` and `subject.emailVerified`. Returns `Promise<undefined>` (not an empty array) when either condition is unmet, causing the `account` assembler to omit the key entirely.
+  - `locales` / `templates` — Resolved to `__dirname`-relative paths for i18n strings and view templates.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — supplies the `AppModule` type this manifest must `satisfy`.
-- **`src/infrastructure/runtime/environment.ts`** — provides `environmentFlag`, used to gate the personal-data export.
-- **`src/modules.ts`** — top-level module aggregator that includes this module.
-- **`src/modules/feedback/routes.ts`** — defines the `router` mounted under `/feedback`.
-- **`src/modules/feedback/rate-limits.ts`** — defines `feedbackRateLimits` consumed here.
-- **`src/modules/feedback/service.ts`** — defines `findOwnTicketsForExport` used by the `collect` callback.
-- **`src/modules/feedback/openapi.yaml`** — OpenAPI spec describing this module's public API surface.
+- **`src/kernel/registry.ts`** — Supplies the `AppModule` type the manifest must satisfy; the registry reads this manifest to mount the module.
+- **`src/modules.ts`** — Top-level module barrel that imports and aggregates this manifest.
+- **`src/modules/feedback/routes.ts`** — Source of the `router` attached to the manifest.
+- **`src/modules/feedback/rate-limits.ts`** — Source of `feedbackRateLimits` (per-IP / per-email budgets for the public form).
+- **`src/modules/feedback/config.ts`** — Source of `feedbackConfig` (runtime config including `NODE_EXPORT_INCLUDE_FEEDBACK`).
+- **`src/modules/feedback/service.ts`** — Source of `findOwnTicketsForExport`, used by the `personalData.collect` callback.
+- **`src/modules/feedback/openapi.yaml`** — OpenAPI contract for the endpoints mounted by `routes.ts`.
+- **`src/modules/feedback/tests/integration/export.test.ts`** — Integration tests exercising the export path defined in `personalData.collect`.
 
 ## Notes
 
-- `collect` returns `undefined` (not `[]`) when the flag is off. This is intentional: the `feedback` key is *optional* in the export contract, and most exports carry no feedback data. Returning an empty array would still emit the key.
-- Because the form stores email (not user ID), deleting a user account does **not** cascade-delete their feedback records. The doc comment labels this module "a leaf in both directions" — no other module imports from it, and it imports no other module's services.
-- The `satisfies AppModule` check is compile-time only; the object shape must also align with runtime expectations in the registry.
+- The feedback module is intentionally **account-less**: records are keyed by email, not user ID. Deleting a user account does **not** cascade-delete their feedback.
+- `collect` returns `undefined` (not `[]`) to signal "omit this section" to the account-export assembler — an empty array would incorrectly include an empty `feedback: []` key in the contract.
+- The `emailVerified` check exists because the form is open to anyone; without it, an attacker could sign up with a victim's email and trigger export of that email's tickets.
+- The module is a **leaf** in the dependency graph: it references no other module's domain objects.

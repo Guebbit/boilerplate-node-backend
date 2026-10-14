@@ -1,7 +1,7 @@
 ---
 source: src/globals.d.ts
-sha256: b3dea02dcc34b5400f30e2a706874eda935034cf744bea5dc8b73f438a96c9d5
-generated_at: 2026-09-27T14:03:50.447427+00:00
+sha256: eb66f062eb8ff734031ef5bba2fc61f2956160e08b4f9f11b144bd26a1e48109
+generated_at: 2026-10-14T07:40:11.878641+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Ambient module augmentation that extends Express's `Request` interface with every field the app's middleware chain attaches. Handlers and services can read these fields with full type safety in every file without a per-site import.
+Ambient module augmentation of Express's `Request` interface (via `express-serve-static-core`) so that every route handler sees the fields attached by middleware—auth context, request IDs, locale, uploaded-image metadata—without needing an explicit import at each call site.
 
 ## Key elements
 
-- **`authContext?: AuthContext`** — Transport-safe auth DTO, present after the auth middleware runs.
-- **`caller?: Caller`** — Tenant-scoped authorization identity, resolved once by the auth guard. Always set together with (or absent together with) `authContext`.
-- **`credentialId?: string`** — API-key id for the CREDENTIAL (`sk_…`) auth path. Mutually exclusive with `authContext`; feeds the audit trail and `apiKeyLimiter` budgeting.
-- **`requestId?: string`** — Correlation id assigned per request.
-- **`storedImageUrls?: string[]` / `storedThumbnailUrls?: string[]`** — Image URLs when the upload pipeline ran inline (no broker). Always read via the `readUploadedImage` helper.
-- **`quarantinedImageKeys?: string[]`** — Quarantine keys when a broker is configured and digesting is deferred to a worker. Mutually exclusive with `storedImageUrls`; also read via `readUploadedImage`.
-- **`rawBody?: Buffer`** — Exact incoming bytes, set only for routes whose callers sign the payload (configured in `app/security.ts`).
-- **`locale?: string`** — Locale negotiated from `Accept-Language` by the locale middleware.
-- **`t?: TFunction`** — i18next function bound to `request.locale`; equivalent to the ambient `t` exported by `@infrastructure/i18n`.
+- **`authContext?: AuthContext`** – Transport-safe auth DTO, set after the auth middleware runs.
+- **`caller?: Caller`** – TENANT-scoped caller identity resolved once by the auth guard; set alongside `authContext`.
+- **`credentialId?: string`** – API-key id for the CREDENTIAL auth path; mutually exclusive with `authContext`. Used by `apiKeyLimiter` for budgeting.
+- **`sessionVia?: 'bearer' | 'cookie'`** – Which credential carried the human session; absent for anonymous, API-key, and SSE-cookie requests.
+- **`requestId?: string`** / **`clientRequestId?: string`** – Server-generated id and the caller's `x-request-id` (for correlation only).
+- **`storedImageUrls?: string[]`** / **`storedThumbnailUrls?: string[]`** – Inline-pipeline upload results (no broker). Read via `readUploadedImage`.
+- **`quarantinedImageKeys?: string[]`** – Broker-pipeline upload keys for async digest. Read via `readUploadedImage`.
+- **`uploadClaimed?: boolean`** – Set by `claimUpload`; unclaimed uploads are deleted on 4xx/5xx close.
+- **`rawBody?: Buffer`** – Exact request bytes for signature verification; set by the `verify` hook in `app/security.ts` for specific paths.
+- **`locale?: string`** / **`t?: TFunction`** – Negotiated locale and the bound translate function from i18next.
 
 ## Relationships
 
-- **`src/types/auth-context.ts`** — Source of the `AuthContext` and `Caller` types consumed by the `authContext` and `caller` fields.
-- **`@infrastructure/http/middlewares/rate-limit`** (`apiKeyLimiter`) — Reads `credentialId` to key its per-credential budget.
-- **`@infrastructure/i18n`** — The ambient `t` it exports resolves to the same binding as `request.t`.
-- **`app/security.ts`** — JSON-parser `verify` hook that populates `rawBody` for the signed-path allowlist.
+- **`src/types/auth-context.ts`** – Source of the `AuthContext` and `Caller` types used by the `authContext` and `caller` fields. This file is purely a type-level dependency (no runtime import).
+- **`i18next`** – Provides the `TFunction` type for the `t` field.
 
 ## Notes
 
-- `authContext` and `credentialId` are **mutually exclusive** (session vs. credential auth paths). Code must not assume both are present.
-- `caller` is always **tenant-scoped**; platform-scope decisions are resolved inside the guard and never persisted on the request.
-- `storedImageUrls` and `quarantinedImageKeys` are **mutually exclusive** (inline pipeline vs. broker/worker path). Both are accessed through `readUploadedImage`, never directly, to abstract local-path vs. CDN-url distinction.
-- `rawBody` exists only on a subset of routes; treat it as absent by default.
+- `authContext` and `credentialId` are **mutually exclusive**—they correspond to two different `getAuth` branches (session vs. `sk_...` API key). Code should not expect both to be present.
+- `storedImageUrls` vs. `quarantinedImageKeys` are also mutually exclusive (inline pipeline vs. broker pipeline); both are accessed through `readUploadedImage` to keep local-path vs. CDN-url distinction opaque to controllers.
+- `rawBody` is only populated for a whitelist of paths defined in `app/security.ts`; do not assume it exists on every request.
+- All fields are optional—the interface only declares *possibility*, not presence. Middleware decides when each is set.

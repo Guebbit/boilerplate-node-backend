@@ -1,7 +1,7 @@
 ---
 source: shared/contracts/spectral.asyncapi.modules.yaml
-sha256: f05544535cbde86a5a91bbb5791fd3ca3d2105cec96187d35b5ea891c5709767
-generated_at: 2026-09-23T17:34:15.422825+00:00
+sha256: 6529c3d6ec1fe8a0cfd160c6d54265b0ca5f3b26ad258c2c021fe3497212277d
+generated_at: 2026-10-14T07:36:23.642523+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A Spectral ruleset that lets individual AsyncAPI module sections (e.g. `src/modules/<name>/asyncapi.yaml`, `asyncapi.workers.yaml`) be linted in isolation. It relaxes the rules that demand service-wide fields—tags, contact, licence—which are declared once in the root contract rather than restated per section. Invoked via `npm run lint:asyncapi:modules`.
+Spectral ruleset for linting **individual** AsyncAPI section files (`src/modules/<name>/asyncapi.yaml`, `shared/contracts/asyncapi.workers.yaml`) in isolation via `npm run lint:asyncapi:modules`. It selectively disables rules that check service-wide facts already declared once in the root contract, so each section can be validated as a standalone document without being penalised for not restating the full service identity.
 
 ## Key elements
 
-- **`extends: [[spectral:asyncapi, recommended]]`** — inherits the full recommended AsyncAPI rule set as a baseline.
-- **`asyncapi-3-tags: off`** — the tag list is a service-level fact owned by the root; a section need not repeat it.
-- **`asyncapi-info-contact: off`** — the `info.contact` block in a section exists only to satisfy document validity; the real contact lives in the deployment root.
-- **`asyncapi-info-license: off`** — same rationale for licence metadata.
-- **Server rules (`asyncapi-servers`, `asyncapi-channel-servers`) are deliberately NOT disabled.** Each section declares the server its channels bind to, so a channel referencing an undeclared server is a real defect even in isolation.
+- **`extends: [[spectral:asyncapi, recommended]]`** — base ruleset; all listed rules are exceptions to it.
+- **`asyncapi-3-tags: off`** — the tag list is a service-level grouping declared in the root; a section need not repeat it.
+- **`asyncapi-info-contact: off` / `asyncapi-info-license: off`** — a section's `info` block exists only to satisfy the AsyncAPI document schema; real identity lives in the root.
+- **Deliberately NOT disabled:** `asyncapi-servers`, `asyncapi-channel-servers` — each section owns the server its channels bind to, so binding to an undeclared server is a genuine defect even in a section.
+- **Override for `src/modules/webhooks/asyncapi.yaml`:** turns off `asyncapi-unused-components-schema` because the section references `WebhookHeaders` only after the bundler merges in the per-module webhook fragments; standalone the component looks unused.
+- **`id` / `defaultContentType` are absent on purpose:** `spectral:asyncapi` has no rule for either; those checks come from `@asyncapi/parser`'s own ruleset at bundle-lint time, where they are properly scoped.
 
 ## Relationships
 
-- **`shared/contracts/asyncapi.root.yaml`** — the single source of the service-wide facts (tags, `id`, `defaultContentType`, `info` prose) that this ruleset assumes are absent from a section. The bundle lint still enforces their presence against the assembled root.
-- **`shared/contracts/asyncapi.workers.yaml`** — one of the complete AsyncAPI documents that `npm run lint:asyncapi:modules` lints against this ruleset.
-- **`shared/contracts/spectral.modules.yaml`** — the synchronous (OpenAPI) counterpart; this file is explicitly described as "the async twin" of that ruleset, created for the same reason.
+- **`shared/contracts/spectral.modules.yaml`** — the REST/OpenAPI twin; this file mirrors its purpose and structure for the AsyncAPI side of the contract.
+- **`shared/contracts/asyncapi.root.yaml`** — declares the service-wide facts (tag list, `id`, `info` prose) that the disabled rules would otherwise demand each section restate.
+- **`shared/contracts/asyncapi.workers.yaml`** — one of the section files this ruleset lints in isolation.
 
 ## Notes
 
-- The ruleset uses `spectral:asyncapi` rather than `@asyncapi/parser`'s built-in ruleset because the parser reports a missing root-level `id` or `defaultContentType` as an **ERROR** that cannot be waived per-section. Spectral rules are all waivable, which is what makes per-section linting possible.
-- The full bundle lint (`npm run lint:asyncapi`) still runs the parser's own ruleset against `asyncapi.yaml` and `asyncapi.public.yaml`, where an undeclared content type or missing root field is a genuine defect. This file only governs the per-section pass.
-- Adding a section (or dropping one, as in `asyncapi.public.yaml`) never requires touching a central server list—servers travel with their section, which is the design property the comments emphasize.
+- The choice of `spectral:asyncapi` (a Spectral plugin) over the `@asyncapi/parser`-bundled ruleset is deliberate: the parser's ruleset emits **ERROR**-level findings for missing `id`/`defaultContentType` that cannot be waived per section, whereas Spectral rules can be toggled off selectively.
+- Because servers stay ON, `asyncapi.public.yaml` can drop the broker simply by omitting the relevant section — no separate server list needs to stay in sync.
+- The webhooks override is the only `overrides:` entry; it is file-specific, not a general rule change.

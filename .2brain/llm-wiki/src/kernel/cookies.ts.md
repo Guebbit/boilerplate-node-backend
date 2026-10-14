@@ -1,30 +1,32 @@
 ---
 source: src/kernel/cookies.ts
-sha256: f049aa5e76809f1dae01dfb666b3546a11cfeda031656252ea7f367656db0db6
-generated_at: 2026-09-27T14:18:22.103651+00:00
+sha256: cce2d463b7e282a7221fda8620bc2b93b2119fa360c2b92f812ba278753d41c2
+generated_at: 2026-10-14T08:21:52.049757+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/kernel/cookies.ts
 
 ## Purpose
-Provides a thin, single-purpose helper for reading one named cookie from an Express `Request`. It centralises the refresh-token cookie name and a generic accessor so that the handful of call-sites across modules (auth middleware, account controllers, observability) share one definition instead of each spelling out `request.cookies['jwt']`.
+
+Defines the single session-cookie name (`__Host-session`) and a minimal reader for it. This is the canonical credential cookie for the account module: every site that needs to *read* the session cookie goes through this file, keeping the cookie name in one place regardless of whether the underlying value is a refresh token (jwt mode) or a session id (cookie mode).
 
 ## Key elements
-- **`REFRESH_COOKIE`** — exported constant; the canonical cookie name (`'jwt'`) for the refresh-token credential.
-- **`cookieOf(request, name)`** — generic accessor that returns the value of `request.cookies[name]` or `undefined` if the cookie is absent.
-- **`readRefreshCookie(request)`** — convenience wrapper around `cookieOf` that always uses `REFRESH_COOKIE`; the primary entry-point most callers import.
+
+- **`SESSION_COOKIE`** – Exported constant equal to `'__Host-session'`. The `__Host-` prefix causes browsers to reject the cookie unless it is `Secure`, has `Path=/`, and carries no `Domain`, preventing sibling-subdomain tampering.
+- **`readSessionCookie(request)`** – Returns the session cookie value (or `undefined`) from an Express request. Accepts only `Pick<Request, 'cookies'>` so callers don't need a full `Request` object. Delegates to `cookieOf` from the HTTP infrastructure layer.
 
 ## Relationships
-- **`middlewares/authorizations.ts`** — the SSE-only auth path reads the refresh cookie via `readRefreshCookie` to authenticate streaming connections.
-- **`account/controllers/get-refresh-token.ts`** — reads (and likely re-issues) the refresh cookie when minting a new token.
-- **`account/controllers/get-oauth-callback.ts`** — reads the refresh cookie during the OAuth callback to associate the completed auth flow with the existing session.
-- **`account/controllers/get-sessions.ts`** — reads the refresh cookie to identify which session to list or inspect.
-- **`account/controllers/post-logout.ts`** — reads the refresh cookie to locate and invalidate the session being logged out.
-- **`account/oauth/mfa-redirect.ts`** — reads the refresh cookie to preserve the credential across the MFA redirect round-trip.
-- **`observability/controllers/get-observability-events.ts`** — reads the refresh cookie to authenticate the SSE events stream.
+
+- **`src/infrastructure/http/cookies.ts`** — Provides the generic `cookieOf` helper that `readSessionCookie` calls. That file handles arbitrary cookie access; this file pins it to the one cookie the kernel cares about.
+- **`src/kernel/middlewares/authorizations.ts`** — The SSE-only auth path consumes `readSessionCookie` to authenticate server-sent-events connections that carry no `Authorization` header.
+- **`src/modules/account/session/cookies.ts`, `cookie-strategy.ts`, `jwt-strategy.ts`** — Import `SESSION_COOKIE` to *set* or *clear* the cookie; this file is read-only by design.
+- **`src/modules/account/controllers/get-refresh-token.ts`** — Reads the cookie (via `readSessionCookie`) to locate the stored refresh token.
+- **`src/modules/account/tests/factories.ts`** — Test fixtures set the `SESSION_COOKIE` name so that request factories produce the expected header/cookie pair.
+- **`src/modules/notifications/controllers/get-notifications-stream.ts`**, **`src/modules/observability/controllers/get-observability-events.ts`** — SSE endpoints that rely on the cookie-auth path in `authorizations.ts` and therefore transitively depend on this constant.
 
 ## Notes
-- This file is deliberately minimal: it never *sets* or *deletes* cookies, only reads them. Writing/clearing the refresh cookie is handled by the calling modules.
-- `request.cookies` is cast to `Record<string, string | undefined>` internally; callers receive `string | undefined` and are expected to handle the absent case.
-- The cookie name is the bare string `'jwt'` (not namespaced or prefixed). Any change to `REFRESH_COOKIE` must be coordinated with the issuing side (likely `get-refresh-token.ts`) and any downstream cookie-clearing logic.
+
+- This module is **read-only** for the cookie. All *writes* (setting, clearing, expiry) live in the account session module. Keep it that way.
+- Because the cookie name is the contract between writer and every reader, renaming it here silently breaks every consumer listed above. Treat `SESSION_COOKIE` as an API surface, not an internal detail.
+- `readSessionCookie` intentionally takes a minimal `Pick<Request, 'cookies'>` so it can be called from non-Express contexts (tests, SSE upgrade handlers) without importing or constructing a full Express `Request`.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/config.ts
-sha256: 225a4d3c14130616fa3ff46253e0dbea0ff7bb370ea32681c558e7b2a207849c
-generated_at: 2026-09-27T14:21:57.221590+00:00
+sha256: ea62db2a4b4bb254b25d59a63929851c13fd6664715267c0bb0594598c88de14
+generated_at: 2026-10-14T08:28:38.171501+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the four token-bearing link kinds that `account` confirmation emails can carry (verify, reset, delete, email-change) and resolves each into a frontend URL. It centralises the env-var overrides and default route templates so that `infrastructure/http/frontend-link.ts` stays module-agnostic — it only formats a template into a URL and never learns about account-specific kinds.
+Centralises the account module's frontend-link templates, token lifetimes, and export-retention defaults into a single typed config (`accountConfig`), and exposes small helpers that resolve those values into concrete frontend URLs. It exists so that the account module owns *which* links it uses and their defaults, while the generic `infrastructure/http/frontend-link.ts` stays unaware of account-specific kinds (layering rule: infrastructure must not name a module).
 
 ## Key elements
 
-- **`AccountLinkKind`** (type export) — union of `'verify' | 'reset' | 'delete' | 'email-change'`; the exhaustive set of token-bearing links this module supports.
-- **`LINK_ENV_VAR`** (const, not exported) — maps each kind to its `NODE_FRONTEND_LINK_*` environment variable name.
-- **`LINK_DEFAULT_TEMPLATE`** (const, not exported) — maps each kind to the default frontend route with a `{token}` placeholder (e.g. `'password-reset/confirm?token={token}'`).
-- **`accountFrontendLink`** (function export) — resolves a link for a given kind by looking up the env override (falling back to the default template), then delegates to `frontendLink` with the locale and token as parameters.
+- **`AccountLinkKind`** — union type of the five token-bearing link kinds: `'verify' | 'reset' | 'delete' | 'email-change' | 'email-undo'`.
+- **`accountConfig`** — the `defineConfig` shape. Fields include five `NODE_FRONTEND_LINK_*` text templates (each defaulting to a route path with `#token={token}`), `NODE_FRONTEND_LINK_EXPORT`, `NODE_PASSWORD_RESET_TTL_MS`, `NODE_EMAIL_VERIFY_TTL_MS`, `NODE_INACTIVE_ACCOUNT_DAYS`, `NODE_INACTIVE_MINIMISE_DAYS`, and `NODE_ACCOUNT_EXPORT_TTL_DAYS`.
+- **`accountFrontendLink(kind, { locale, token })`** — resolves the correct env-var template for `kind` and delegates to `frontendLink` to produce the final URL with the token embedded.
+- **`accountExportLink(locale, exportId)`** — resolves the export-download link (carries an `id`, not a token). Excluded from `AccountLinkKind` because it requires a signed-in session.
+- **`exportRetentionMs()`** — converts `NODE_ACCOUNT_EXPORT_TTL_DAYS` into milliseconds; read at call-site so config changes take effect on the next export build or reaper run.
+- **`LINK_ENV_VAR`** (module-private) — maps each `AccountLinkKind` to its corresponding `NODE_FRONTEND_LINK_*` env-var name; satisfies `Record<AccountLinkKind, string>`.
 
 ## Relationships
 
-- **`src/infrastructure/http/frontend-link.ts`** — provides `frontendLink`, imported and called by `accountFrontendLink`. This file is the *caller*; the infrastructure layer performs the actual template interpolation and URL assembly without knowing which module initiated the request.
-- **`src/modules/account/emails.ts`** — sibling in the same module; consumes `accountFrontendLink` (and `AccountLinkKind`) to embed the resolved URL in email body copy.
-- **`src/modules/account/tests/unit/config.test.ts`** — unit-tests `accountFrontendLink` output (template resolution, env-var fallback, token interpolation).
-- **`src/modules/account/tests/unit/emails.test.ts`** — exercises `emails.ts`, which in turn calls into this file's exported function.
+- **`src/infrastructure/config/define.ts`** — provides `defineConfig`, which turns the shape object into a typed, env-overridable config accessor.
+- **`src/infrastructure/config/fields.ts`** — provides `text` and `int` field builders with defaults and constraints.
+- **`src/infrastructure/http/frontend-link.ts`** — provides `frontendLink`, which substitutes `{token}`/`{id}` placeholders and prefixes the locale; this file supplies the template string.
+- **`src/modules/account/emails.ts`** — consumes `accountFrontendLink` / `accountExportLink` to build the URLs embedded in confirmation and export-ready emails.
+- **`src/modules/account/services/password-reset-request.ts`** — reads `NODE_PASSWORD_RESET_TTL_MS` via `accountConfig()` when creating a reset token.
+- **`src/modules/account/services/verification.ts`** — reads `NODE_EMAIL_VERIFY_TTL_MS` via `accountConfig()`.
+- **`src/modules/account/services/export.ts`** / **`export-job.ts`** / **`export-rows.ts`** — read `NODE_ACCOUNT_EXPORT_TTL_DAYS` (via `exportRetentionMs()`) for cleanup scheduling and the download link.
+- **`src/modules/account/module.ts`** — imports this config for module-level wiring (reaper thresholds, email template selection).
+- **`scripts/ops/reap-inactive-accounts.ts`** — reads `NODE_INACTIVE_ACCOUNT_DAYS` and `NODE_INACTIVE_MINIMISE_DAYS` to decide which accounts to deactivate.
+- **`src/modules/account/tests/unit/config.test.ts`** — unit-tests the defaults and `accountFrontendLink` output.
+- **`src/modules/account/tests/unit/emails.test.ts`** — exercises link generation through the email templates.
 
 ## Notes
 
-- The `{token}` placeholder is always substituted by `frontendLink` server-side; the frontend never parses a raw token out of a path.
-- Env-var names follow the `NODE_FRONTEND_LINK_<KIND>` convention (KIND uppercased); defaults are documented in `.env-example`.
-- The default routes correspond to the paired frontend's own `src/modules/account/routes.ts`; if those routes move, the templates here must be updated in lockstep.
-- Per `docs/theory/layers.md`, infrastructure must not reference module names — this file exists precisely to keep that boundary intact.
+- Tokens ride in the **URL fragment** (`#token=…`), never in the path or query. Browsers do not send fragments to servers, so they never appear in access logs, proxy logs, or `Referer` headers (RFC 3986 §3.5). Do not change templates to use `?token=`.
+- `NODE_INACTIVE_ACCOUNT_DAYS` defaults to **0**, which means "no inactivity-based deactivation" unless explicitly set; the minimum is 0, not 1.
+- `NODE_INACTIVE_MINIMISE_DAYS` defaults to **1095** (3 years) — a much longer window than the deactivation window.
+- The export link (`NODE_FRONTEND_LINK_EXPORT`) is intentionally **not** part of `AccountLinkKind`; it uses `{id}` instead of `{token}` and requires an authenticated session on the frontend side.
+- All config values are read **at call time** (via `accountConfig()`), not captured at import, so `.env` changes take effect without a restart.

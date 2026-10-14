@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-logout-everywhere.ts
-sha256: 9f6387a647ba564393c8c15ce7daf29f309f2ddfe657ae31bbed6680d6e8dedc
-generated_at: 2026-09-23T18:02:41.732480+00:00
+sha256: c3b3ae456a608f6d952c2f795835fe4f7bcaea7ab2f8fd2a2a8818139971d127
+generated_at: 2026-10-14T14:36:40.125184+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for the `POST /account/logout-all` endpoint. It delegates the actual token-removal logic to `accountService.tokenRemoveAll`, then clears the session cookies on the response and returns a 200.
+HTTP adapter for `POST /account/logout-all`. It revokes every refresh token in the database, advances the session epoch (invalidating already-issued access tokens), and destroys the caller's own cookies — a full sign-out from all devices with no re-mint.
 
 ## Key elements
 
-- **`postLogoutEverywhere(request, response)`** — The sole export. Calls `accountService.tokenRemoveAll(authId, TokenType.REFRESH, callerContext)` to delete all refresh tokens for the user, then destroys both the refresh cookie and the logged-in cookie via `destroyRefreshCookie` / `destroyLoggedCookie`, and finally sends `successResponse(…, 200, 'Logged out from all devices')`. Errors are funnelled through `catchAs(response, 'postLogoutEverywhere')`.
+- **`postLogoutEverywhere(request, response)`** — The sole export. Calls `accountService.logoutEverywhere(userId, callerContext)`. On success, destroys the session and logged cookies and returns a `200` with an i18n-ized message. On a failed revocation result, returns the error status and messages via `rejectResponse` instead of a success. Unhandled exceptions are delegated to `catchAs`.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs`, the shared error-capture helper used in the `.catch` branch.
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf(request)` to extract caller metadata passed into the service call.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` for the final 200 reply.
-- **`src/modules/account/services/index.ts`** — provides `accountService.tokenRemoveAll`, the business-logic method this controller wraps.
-- **`src/modules/account/session/cookies.ts`** — provides `destroyRefreshCookie` and `destroyLoggedCookie` used to clear cookies on the response.
-- **`src/modules/users/index.ts`** → **`src/modules/users/model.ts`** — provides the `TokenType` enum; this file imports `TokenType.REFRESH` to scope the removal to refresh tokens only.
-- **`src/modules/account/routes.ts`** — registers this handler as the route handler for `POST /account/logout-all`.
+- **`src/modules/account/services/index.ts`** — Source of `accountService.logoutEverywhere`, the actual business logic (token revocation, epoch bump).
+- **`src/modules/account/session/cookies.ts`** — Supplies `destroySessionCookie` and `destroyLoggedCookie`, which clear the cookies on the response.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse` and `rejectResponse` for shaped JSON replies.
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)` to extract IP/user-agent for the service call.
+- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the standard async error-catcher wrapper.
+- **`src/infrastructure/i18n/index.ts`** (and `context.ts`) — Supplies the `t()` function used for the localized success message.
+- **`src/modules/account/routes.ts`** — The route table that wires this handler to the `POST /account/logout-all` path.
 
 ## Notes
 
-- `request.authContext!.id` uses a non-null assertion — the endpoint is expected to sit behind an auth middleware that populates `authContext`; there is no explicit guard in this file.
-- Uses promise `.then/.catch` rather than `async/await`, consistent with the project's controller style.
-- Only refresh tokens are removed (`TokenType.REFRESH`); any other token types issued by the same user are left untouched.
+- `request.authContext!.id` uses a non-null assertion; the route is expected to be behind an auth middleware that populates `authContext`.
+- The code deliberately treats a *failed* revocation as an error response rather than a success, so a client never believes all devices are logged out while a stolen refresh token remains valid.
+- No new access token or cookie is issued — the caller is signed out and must re-authenticate.

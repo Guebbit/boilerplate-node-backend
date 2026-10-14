@@ -1,7 +1,7 @@
 ---
 source: docker-compose.yml
-sha256: 9abd31b4327c2b961f0838da0f6ec33bfd3f71416b0a6551771c8d872cfea23e
-generated_at: 2026-10-07T23:47:12.817009+00:00
+sha256: e26edc9b92e1013e4bc4f39bf10fefb6575bd8e47a0967ceb11f2c375e3722af
+generated_at: 2026-10-14T06:46:53.898246+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the full local development stack (Node API, MongoDB, Redis instances, RabbitMQ, and observability/analytics services) as a single `docker compose up` invocation. It wires runtime configuration—rate limits, clustering, OTel, analytics, health-integration URLs—directly into the `app` container so that a fresh clone boots a populated, browsable system without manual seeding.
+Orchestrates the local development stack: a single Node.js `app` service (API + seed data), its backing stores (`database`, `redis`, `limits`, `rabbitmq`), and optional observability/analytics services. All runtime configuration (ports, rate limits, worker count, analytics provider) is surfaced as `${VAR:-default}` overrides so that a live E2E run can tune values from the shell without editing `.env`.
 
 ## Key elements
 
-- **`x-logging` (YAML anchor)** — Sets the container log driver (`json-file` or `k8s-file`) via `CONTAINER_LOG_DRIVER` env var. Applied to every service so Promtail can tail the log file and feed Loki. Without it, Podman's default `journald` driver leaves no file and Loki/Grafana show nothing.
-- **`app` service** — The Node.js API container.
-  - **`build`** — Context `.`, Dockerfile at `docker/Dockerfile`.
-  - **`command`** — Runs `npm run db:bootstrap` (idempotent `db:sync` + seeder that skips if data exists and refuses when `NODE_ENV=production`), then starts `dev:docker` or `dev:docker:cluster` based on `NODE_ENABLE_CLUSTERING`.
-  - **`environment`** — Declares runtime-tunable knobs (cluster workers, rate-limit budgets, OTel endpoint, analytics provider, Umami ingest host, Loki/Umami/Faro host URLs for `/observability/health`). Defaults match `.env` so an ordinary `up` is unchanged; shell overrides enable E2E runs without editing files.
-  - **`volumes`** — Bind-mount `.` to `/app` (hot reload, `:Z` for SELinux); anonymous volume at `/app/node_modules` to isolate installs.
-  - **`depends_on`** — `database` (healthy), `redis`, `limits`, `rabbitmq` (started).
-  - **`healthcheck`** — `node -e fetch('.../livez')` every 2 min, 3 retries, 30 s start period. Uses Node's built-in `fetch` because the alpine image has no `curl`.
-- **`database` service** (truncated) — MongoDB; the seeder populates its volume on first boot.
-- **`redis` / `limits` services** — Two separate Redis instances: general cache/session vs. rate-limit counters (never evicted).
-- **`rabbitmq` service** — Message broker for the app.
-- **Scheduler service** (truncated) — External cron equivalent; same image as `app`.
-- **`observability` / `analytics` profiles** — Opt-in groups for OTel Collector, Loki, Alloy/Faro, Umami, and PostHog.
+- **`x-logging` (YAML anchor / alias)** – Sets the container log driver to `${CONTAINER_LOG_DRIVER:-json-file}`. Anchored once so every service writes log *files* that Promtail can tail; podman's default `journald` driver writes no file and silently breaks the Loki pipeline.
+- **`services.app`** – The main Node.js container.
+  - `build` – Builds from `docker/Dockerfile` with the repo root as context.
+  - `ports` – Binds `${NODE_HOST:-127.0.0.1}:${NODE_PORT:-3000}` so the app is loopback-only unless explicitly exposed.
+  - `environment` – Injects connection strings (Mongo, Redis ×2, RabbitMQ), clustering toggle, per-bucket rate limits, OTel endpoint, Loki/Umami/Faro host URLs (host-facing), and the analytics provider + Umami ingest host (service-name-facing). Every value has a shell-overridable default matching `.env`.
+  - `volumes` – Bind-mounts the repo into `/app:Z` (hot reload); anonymous volume at `/app/node_modules` keeps installs host-independent.
+  - `command` – Runs `npm run db:bootstrap` (schema sync + idempotent seeder) then either `dev:docker:cluster` or `dev:docker` depending on `NODE_ENABLE_CLUSTERING`.
+  - `depends_on` – Waits for `database` to be **healthy** (not just started) before bootstrapping; `redis`, `limits`, and `rabbitmq` only need `service_started`.
+  - `healthcheck` – Uses `node -e "fetch(...)"` against `/livez` because the alpine image lacks `curl`.
+- **`services.scheduler`** (supercronic) – External cron runner sharing the `app` image; executes `scripts/ops/*` entry points. Keeps schedules as deployment config rather than compiled-in.
+- **Truncated services** – `database`, `redis`, `limits`, `rabbitmq`, and observability/analytics containers are referenced by `depends_on` and env vars; their full definitions follow in the file.
 
 ## Relationships
 
-- **`github/workflows/ci.yml`** — The CI workflow invokes this compose file (via `npm run compose:*` scripts) to spin up the stack for integration/E2E test runs. Rate-limit and cluster-worker env vars are overridden in the CI shell for the same reason described in the inline comments (a single-address E2E suite would otherwise trip 429s). The CI job depends on the same `db:bootstrap` flow to get a populated database.
+- **`github/workflows/ci.yml`** – The CI pipeline starts this compose stack for integration and E2E test runs. The file's shell-overridable env vars (rate limits, `NODE_CLUSTER_WORKERS`) exist specifically so CI (or a local E2E session) can raise budgets via `NODE_RATE_LIMIT_MAX=… npm run compose:restart` without mutating `.env`. The `app` service is the unit under test; the backing services (`database`, `redis`, `limits`, `rabbitmq`) are its fixtures.
 
 ## Notes
 
-- **Podman vs. Docker log driver:** If `CONTAINER_LOG_DRIVER` is unset, Docker's `json-file` works, but Podman defaults to `journald` (no file on disk). Always export `CONTAINER_LOG_DRIVER=k8s-file` on Podman hosts, or Loki will be silently empty with no error.
-- **Rate-limit vars are a deliberate pair:** `NODE_AUTH_RATE_LIMIT_MAX` and `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX` must be raised together during E2E runs; raising only one just moves which bucket trips first.
-- **`NODE_UMAMI_HOST` vs. `NODE_UMAMI_INGEST_HOST`:** The former is a host-facing URL reported by the health endpoint (what a browser sees); the latter is the service-name URL the API dials from inside the compose network. Confusing them is a common mistake.
-- **Seeder is not idempotent:** It drives real checkouts to build order history. It skips if the DB already contains data and exits 0. Use `scenario:apply:reset` to force a rebuild.
-- **`.env` shadowing:** Any variable redeclared in the `environment` block overrides `.env`. Mongo connection is intentionally *not* declared here so an external `NODE_DB_URI` can be set without editing compose.
+- **Log driver is the #1 silent-failure trap.** On podman, omitting the `logging` key (or dropping the anchor) falls back to `journald`, which produces *no log file*. Promtail's glob then matches nothing, Loki is empty, and Grafana panels are blank with zero errors. Every service must carry the `*container-logging` alias.
+- **Env-shadowing rule.** Anything listed in `environment` shadows `.env` for that key. Connection strings are intentionally *not* redeclared here (e.g., `NODE_MONGODB_HOST`) so an external URI can still be set via `.env`.
+- **Seeder is not idempotent.** `db:bootstrap` skips seeding when the database is non-empty and exits 0. `scenario:apply:reset` is the deliberate reset path. The seeder also refuses `NODE_ENV=production`.
+- **Two different "localhost" semantics.** `NODE_LOKI_HOST` / `NODE_UMAMI_HOST` / `NODE_FARO_COLLECTOR_URL` are *declarative* browser-facing URLs (use `localhost`). `NODE_UMAMI_INGEST_HOST` is *dialled* by the API inside the compose network (use the service name `umami`).
+- **Healthcheck uses Node, not curl.** The `node:*-alpine` image has no `curl`; a curl-based check exits non-zero and parks the container on `unhealthy` while the API is fine.
+- **Rate-limit buckets are a deliberate pair.** `NODE_AUTH_RATE_LIMIT_MAX` (per-account) and `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX` (per-IP) must be raised together for a live E2E run; raising only one just moves which bucket trips. Never raise these in a deployed environment.

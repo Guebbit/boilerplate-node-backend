@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/module.ts
-sha256: 450be03e1056e78201c1146faa5df5187d8ca9574f0d66ddc6f5ea04deb1f2fc
-generated_at: 2026-09-27T14:50:09.552172+00:00
+sha256: e2abf2f62809deb879fc4e693e7cc8bf8891c95cdb979f3237d3a1f50ed47b05
+generated_at: 2026-10-14T15:24:27.746106+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Module manifest (entry point) for the **delivery** module. It declares the module's identity, HTTP routes, permission keys, personal-data collection entry, and locale path, then exports the whole thing as an `AppModule` so the kernel can register it. The file is a wiring file — no business logic lives here.
+Module entry point for **delivery** (shipping rates, fulfillment orders, shipments). Wires the module into the kernel by declaring its routes, public webhook events, event subscriptions, personal-data export sections, locales, and config. It is the single `AppModule` manifest that `kernel/registry.ts` and `src/modules.ts` consume.
 
 ## Key elements
 
-- **Default export** — an object `satisfies AppModule` with:
-  - `name: 'delivery'`, `basePath: '/delivery'`
-  - `permissions` — the three keys this module owns (`delivery.any.read`, `delivery.any.update`, `delivery.any.start`). Removing the module removes these keys (enforced by a cross-cutting test).
-  - `routes` — re-exported `router` from `./routes`.
-  - `personalData` — a single `shipments` section whose `collect` closure calls `ownOrderIds(userId)` then `findShipmentsForOrders(orderIds)`.
-  - `locales` — resolved path to `./locales`.
-- **`ownOrderIds`** (imported from `@modules/orders`) — used inside `personalData.collect` to resolve the caller's own order IDs before fetching shipments, avoiding a full-document page-through of orders.
+- **`default` export (`AppModule`)** — the full module manifest: `name`, `basePath` (`/delivery`), `routes`, `config` (delivery `slice`), `publicEvents`, `personalData`, `subscribe`, `locales`, `templates`.
+- **`shipmentData(payload)`** — shared projector that shapes the common fields (`orderId`, `shipmentId`, `fulfillmentOrderId`, `lines`) for both `shipment.*` webhook payloads.
+- **`publicEvents`** — maps `SHIPMENT_SHIPPED` / `SHIPMENT_DELIVERED` domain events to public webhook objects (`shipment.shipped`, `shipment.delivered`). Resolved by `webhooks` via `resolvePublicEvents` in the kernel registry; no direct import of this module by name.
+- **`subscribe()`** — registers five `onDomainEvent` handlers:
+  - `ORDER_STATUS_CHANGED` → `ensureFulfillmentOrders` (only when `to === paid`)
+  - `ORDER_CANCELLED` → `cancelAllForOrder`
+  - `ORDER_STATUS_OVERRIDDEN` → `syncWithOverride`
+  - `PREORDER_ALLOCATED` (from inventory) → `releaseAllocated`
+  - `PRODUCT_RELEASE_DATE_CHANGED` (from products) → `onReleaseDateChanged`
+- **`personalData`** — two export sections (`shipments`, `fulfillmentOrders`) that resolve the caller's order IDs via `ownOrderIds` then project through `presentExportShipment` / `presentExportFulfillmentOrder`.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — provides the `AppModule` type that the default export satisfies; the registry consumes this manifest to mount routes and permissions.
-- **`src/modules/orders/index.ts`** — exports `ownOrderIds`, which this file calls to obtain the subject's order IDs without reading full order documents.
-- **`src/modules/delivery/routes.ts`** — exports `router`, wired into the manifest's `routes` field.
-- **`src/modules/delivery/service.ts`** — exports `findShipmentsForOrders`, called inside the `personalData.collect` closure.
-- **`src/modules.ts`** — imports this file's default export as one of the registered app modules.
+- **`src/kernel/events.ts`** — provides `onDomainEvent` and `DomainEventMap` used in `subscribe()` and the `publicEvents` handlers.
+- **`src/kernel/registry.ts`** — provides `AppModule` / `PublicEventTarget` types that shape this file's export; `resolvePublicEvents` consumes the `publicEvents` map at runtime.
+- **`src/modules.ts`** — aggregates this module's default export into the app's module list.
+- **`src/modules/delivery/config.ts`** — supplies `deliveryConfig.slice` (the DB schema section) included in the manifest.
+- **`src/modules/delivery/events.ts`** — source of `SHIPMENT_DELIVERED`, `SHIPMENT_SHIPPED`, and `ShipmentEventPayload`. Imported directly (not via barrel) per the module-barrel rule.
+- **`src/modules/delivery/presenter.ts`** — `presentExportFulfillmentOrder` / `presentExportShipment` used in the personal-data collectors.
+- **`src/modules/delivery/routes.ts`** — `router` mounted at `/delivery`.
+- **`src/modules/delivery/services/*`** — all event-handler business logic (`ensureFulfillmentOrders`, `cancelAllForOrder`, `syncWithOverride`, `releaseAllocated`, `onReleaseDateChanged`, `findShipmentsForOrders`, `findFulfillmentOrdersForOrders`) lives here; this file only wires them to events.
+- **`src/modules.ts` → `@modules/orders`** — re-exports `ORDER_CANCELLED`, `ORDER_STATUS_CHANGED`, `ORDER_STATUS_OVERRIDDEN`, `ownOrderIds` consumed by this file.
+- **`@modules/inventory`** — `PREORDER_ALLOCATED` event constant.
+- **`@modules/products`** — `PRODUCT_RELEASE_DATE_CHANGED` event constant.
+- **`src/modules/delivery/openapi.yaml`** — static API spec for the routes declared here (not imported at runtime).
 
 ## Notes
 
-- The design docblock states that shipping-rate logic lives in `./domain` as **pure functions** so the cart/checkout flow can price a method without invoking this module's HTTP layer. Shipping is intentionally *not* an aggregate.
-- The `personalData.collect` closure deliberately uses `ownOrderIds` (a thin ID-only query) rather than navigating order `.search()` results, which the inline comment notes has an `_id`/`id` normalization pitfall.
-- Permission keys are contractually tied to module existence: `tests/cross-cutting/module-permissions.test.ts` fails if a key is left in the shared file after its module is deleted, or if a module claims a key the file does not attribute to it.
+- The `./events` import is deliberately **direct**, never through `./services/index` or another barrel. The file's own comment cites the CLAUDE.md module-barrel rule.
+- Event handlers are intentionally **fire-and-forget**: `emitDomainEvent` logs failures and the outbox retries. A missed `paid` is self-healed by the next read or `start` call.
+- `personalData` collectors use `ownOrderIds` (from `@modules/orders`) to fetch IDs without paging full order documents, avoiding the `_id`/`id` normalization issue in `.search()`.
+- Shipping is described in the docblock as shop-specific operational logic that does **not** warrant a full aggregate — the domain rules live in `./domain` as pure functions so cart checkout can price methods without importing this module's HTTP surface.

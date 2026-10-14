@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/module.ts
-sha256: b759a1802c4e8338d5e427d4cb1d1064e76fc619c4de841ad84c8e4db6f58d04
-generated_at: 2026-09-27T14:38:47.431976+00:00
+sha256: 22e7342bd26805e6756137916ba7ef1ad70f98981ad2b29bee9cd216535b1ef6
+generated_at: 2026-10-14T14:52:09.618433+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Registers the **addresses** module with the application kernel: declares its HTTP routes, personal-data lifecycle hooks, and locale path. It exists as a standalone module so that `cart` (the only sibling consumer) and `users` (via the `personalData.erase` hook) never need to import `account` to reach address data.
+Entry-point manifest for the **addresses** module. It assembles the module's route table, config slice, and `personalData` lifecycle hooks (collect / erase / minimise) into a single `AppModule` object so the kernel can register the module without the addresses code being imported directly by `users` or any other sibling.
 
 ## Key elements
 
-- **`default export`** — an object typed `satisfies AppModule` (from `@kernel/registry`) that the kernel discovers at bootstrap.
-  - `name: 'addresses'`
-  - `basePath: '/account'` — shared URL prefix with the `account` module.
-  - `routes` — the Express/Router instance imported from `./routes`.
-  - `personalData` — a single section (`'addresses'`) providing:
-    - `collect(subject)` — calls `addressesGet` and returns the user's address list.
-    - `erase` — `addressesDeleteByUserId` from `./service`; runs inside the same transaction as the account deletion (DDD-D6).
-  - `locales` — filesystem path to `./locales` for i18n strings.
+- **`export default { … } satisfies AppModule`** — the sole export; a manifest object with:
+  - `name: 'addresses'`, `basePath: '/account'`
+  - `routes` — the Hono router from `./routes`
+  - `config` — `addressesConfig.slice` from `./config`
+  - `personalData[0]` — the hook set the `users` module invokes:
+    - `collect` — returns the user's address list via `addressesGet`
+    - `erase` — `addressesDeleteByUserId`; runs inside the same transaction as account destruction
+    - `minimise` — `addressesMinimise`; drops the book for an idle account
+  - `locales` — path to the `locales/` directory relative to this file
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — supplies the `AppModule` type this file satisfies; the kernel consumes the default export to wire routes and hooks.
-- **`src/modules.ts`** — aggregates module exports (this file is one of the entries it re-exports).
-- **`src/modules/account/module.yaml`** — sibling module that shares the `/account` prefix; no import dependency between the two.
-- **`src/modules/addresses/routes.ts`** — provides the `router` object mounted under `basePath`.
-- **`src/modules/addresses/service.ts`** — provides `addressesGet` and `addressesDeleteByUserId` used by the `personalData` hooks.
+- **`src/kernel/registry.ts`** — provides the `AppModule` type this file `satisfies`.
+- **`src/modules/addresses/service.ts`** — source of the three functions wired into `personalData` (`addressesGet`, `addressesDeleteByUserId`, `addressesMinimise`).
+- **`src/modules/addresses/routes.ts`** — source of the `router` attached to the manifest.
+- **`src/modules/addresses/config.ts`** — source of `addressesConfig`, whose `.slice` is exposed as the module's config.
+- **`src/modules/account/module.yaml`** — co-occupant of the `/account` URL prefix; the two routers resolve through a single `getAuth` pass (see `kernel/middlewares/authorizations.ts` early-return).
+- **`src/modules/users/tests/integration/minimise.test.ts`** — integration test that exercises the `minimise` hook declared here.
 
 ## Notes
 
-- **Shared prefix, single auth pass:** Both `addresses` and `account` mount under `/account`. The doc comment and `kernel/middlewares/authorizations.ts` (`getAuth` early-return) ensure mounting two routers there resolves auth once, not twice.
-- **No import of `account`:** `users` erases addresses exclusively through the `personalData.erase` hook declared here; there is no direct module-to-module import. The same "hook-not-import" pattern is used by `cart`, `wishlist`, `payments`, and `orders`.
-- **DDD-D6:** The `erase` function is documented as transactional with the parent account deletion — do not call `addressesDeleteByUserId` outside that flow without ensuring the same guarantee.
+- `users` never imports this module directly; it reaches address data only through the `personalData.erase` / `minimise` / `collect` hooks. This keeps the dependency graph acyclic.
+- The module deliberately re-uses the `/account` basePath alongside the `account` module. Mounting both routers under that prefix costs one auth resolution, not two, thanks to an early return in `getAuth`.
+- `personalData` is an **array** (currently one entry) — the kernel iterates it, so additional sections can be appended without changing the registration shape.

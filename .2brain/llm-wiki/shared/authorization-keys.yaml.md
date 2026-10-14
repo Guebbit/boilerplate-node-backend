@@ -1,35 +1,35 @@
 ---
 source: shared/authorization-keys.yaml
-sha256: 076ca9827751293b637b7d60d4737e7bd3aa90802f31b6e09e036546e3ab4235
-generated_at: 2026-10-01T12:42:27.354977+00:00
+sha256: df5fbd87bf2e669bf29bcab80d8a4c59f8494167b45f5232c130868c1a6565d3
+generated_at: 2026-10-14T07:34:42.219850+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # shared/authorization-keys.yaml
 
 ## Purpose
-The single source of truth for every permission key, the action vocabulary, the two scopes, and the ABAC condition grammar shared by both backends. It is **generated** by `npm run authorization:bundle` (spliced from per-module `authorization.yaml` fragments plus a root residual) and committed byte-identically in `boilerplate-node-backend` and `boilerplate-php-laravel-backend`. A deployment may create roles at runtime but may never invent a key; assignment validates against this file, not against a free-form string.
+
+The generated, canonical registry of every authorization permission key, the action vocabulary, the scope definitions, and per-key metadata (conditions, step-up tier, `shopperOnly` flag) for the platform. It is produced by `npm run authorization:bundle` by splicing one fragment per owning module (`src/modules/<name>/authorization.yaml`) together with the root-level `core` keys. No key may be introduced here directly; the `--check` flag (wired into the `complete` script) fails the build if this bundle drifts from the fragments.
 
 ## Key elements
 
-- **`actions`** — Closed list of verbs (`read`, `create`, `update`, `delete`, `checkout`, `sweep`, `override`, `start`, `receive`). `write` and `manage` are deliberately absent. This list is the one home of the vocabulary; `npm run gen:api` compiles it into `api/permission-actions.ts` for both frontends.
-- **`scopes`** — Exactly two: `tenant` (bare keys) and `platform` (`platform.`-prefixed keys). A caller resolves to one or the other; they are never both and never derived from a flag.
-- **Key entries (`keys`)** — Each declares `key`, `module`, `subject` (CASL type), `action`, `scope`, `description`, optional `conditions`, `stepUp`, and `deniedCode`. Shape is always `<family>.<breadth>.<action>`; breadth (`self` / `any`) is mandatory.
-- **`conditions`** — Optional ABAC filter (same shape CASL takes as its third argument). Placeholder grammar is `$caller.<field>` only; no expression language. Field names are the domain model's, not either storage's.
-- **`stepUp`** — Optional `critical` | `sensitive` tier on a key that triggers re-authentication via the existing `REAUTH_TIME_*` tiers. Declared on the key, not the route, so every path that reaches the action inherits the challenge.
-- **`deniedCode`** — Optional i18n key (e.g. `EMAIL_NOT_VERIFIED`) that overrides the generic 403 message for a specific key.
+- **`actions`** — The complete, closed vocabulary of verbs a key may use. Contains CASL's `read`, `create`, `update`, `delete` plus seven domain-specific additions (`checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export`). `write` and `manage` are deliberately absent. This list is the single source from which `npm run gen:api` emits `api/permission-actions.ts` for both backends and the frontend.
+- **`scopes`** — Defines the two exclusive scopes: `tenant` (bare keys) and `platform` (keys prefixed `platform.`). A caller resolves to exactly one; a bare key is never satisfied by a platform caller and vice versa.
+- **`keys`** (array) — Each entry declares: `key`, `module`, `subject` (singular CASL type), `action`, `scope`, `description`, and optionally `conditions`, `stepUp` (`critical` | `sensitive`), and `shopperOnly`. Key shape is always `<family>.<breadth>.<action>` with breadth (`self`/`any`) always explicit. No wildcards exist.
+- **`conditions`** (per key) — ABAC filter fragments compiled into the read query. Use `$caller.<field>` substitution; field names are model-level, not storage-level. Tenancy (`tenantId`) is injected by the resolver and never written here.
+- **`stepUp`** (per key) — Marks actions that require re-authentication within a time window (`NODE_REAUTH_TIME_CRITICAL` / `NODE_REAUTH_TIME_SENSITIVE`). Declared on the key, not the route.
+- **`shopperOnly`** (per key) — Excludes a key from the "holds every declared key" set so that `admin` remains unrestricted while the key is restricted to customer accounts.
 
 ## Relationships
 
-- **`shared/authorization-roles.yaml`** — Roles reference keys defined here. Assignment validates against this file's key set, so a role can never grant a key that does not exist.
-- **`shared/authorization-conformance.yaml`** — The `--check` flag (wired into `complete`) uses conformance rules to fail the build if the bundled keys drift from the per-module fragments, enforcing that this file is always the faithful splice.
+- **`shared/authorization-roles.yaml`** — Defines roles (sets of keys assignable at runtime). Role assignment validates membership against the keys declared here; a key not present in this file cannot be granted. This file is the "permissions are code" side; the roles file is the "roles are data" side.
+- **`shared/authorization-conformance.yaml`** — Declares conformance rules (e.g. every tenant-scope key has a `platform.` counterpart where applicable, breadth consistency across a family, condition symmetry between `self` and `any` reads). It references the keys and actions defined here to validate structural invariants.
 
 ## Notes
 
-- **Do not edit by hand.** A key is introduced in its owning module fragment (`src/modules/<name>/authorization.yaml`), never in this bundle directly.
-- **No wildcards of any kind** — not per-family, not scope-wide. `manage` names nothing because there is nothing for it to collapse.
-- **Tenancy is injected, not written.** Every tenant-scope rule gets `tenantId: $caller.tenantId` from the resolver; no key carries it and no request parameter can supply it.
-- **`deletedAt: null` asymmetry is intentional.** It appears only on `self`-breadth reads of subjects that have soft-delete (`Product`, `Locale`, `Order`). The `any`-breadth reads intentionally see soft-deleted rows. Matching `null` covers both "column absent" and "column set to nothing."
-- **`cart` is nearly keyless.** Its single exception, `cart.self.checkout`, is a fact about the account (address verified), not the basket contents.
-- **Formatters excluded.** `.prettierignore` / `dprint.json` exclude this file (same rationale as `spectral.yaml`): two formatters over one shared artefact causes a silent fork between the two repos.
-- **`subject` vs. key family.** The first segment of the key is the resource *family* (plural, matches the module folder); `subject` is the singular CASL type. They differ on purpose.
+- **Generated file — do not edit by hand.** Introduce or change keys in the owning module's `src/modules/<name>/authorization.yaml`, then re-run `npm run authorization:bundle`.
+- **Committed byte-identical** in `boilerplate-node-backend` and `boilerplate-php-laravel-backend`. Both repos exclude it from their formatters (`.prettierignore` / `dprint.json`) to prevent silent divergence.
+- **Breadth is mandatory in the key name.** There is no implicit default: an omitted `self`/`any` is treated as a bug.
+- **`deletedAt: null`** appears only on `self`-breadth reads of families that use soft-delete (Product, Order). It is intentionally absent on `any`-breadth reads (staff see soft-deleted rows) and on families with no soft-delete column (e.g. Payment).
+- **`manage` is not an action.** Without wildcards, a "manage everything in this family" grant has no single key to bind to; it must be expressed as the explicit set of keys.
+- **`write` was rejected** because it collapses create/update/delete, which the domain requires to be separable (e.g. a support agent may `update` a user but not `delete` one).

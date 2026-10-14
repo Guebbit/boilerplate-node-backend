@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/update-account.ts
-sha256: 53eea789632dfb47bccac66478c1a0fa04c5bf768af6d1f7947517a5327eaaff
-generated_at: 2026-09-27T14:26:49.246614+00:00
+sha256: 525a21c5e32a4a60fa4ccea884e561a719a51a199ff9d89445d62741604818a8
+generated_at: 2026-10-14T08:38:10.776066+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the `PUT /account` (replace) and `PATCH /account` (merge) handlers for the caller's own account record. Both delegate to `accountService.updateProfile` via the shared `createUpdateController` factory, so this file is purely wiring—no business logic lives here.
+Defines the `PUT /account` (full replace) and `PATCH /account` (partial merge) handlers. Both operate exclusively on the authenticated caller's own account record—there is no entity ID in the request body. The file is a thin wiring layer: it configures the shared `createUpdateController` factory with schemas, input-parsing rules, and the service call, then delegates the actual profile mutation (including the email pending-change flow and audit logging) to `accountService.updateProfile`.
 
 ## Key elements
 
-- **`replaceAccount`** – handler for `PUT /account`; accepts a full `ReplaceAccountBody` and replaces the caller's profile fields.
-- **`updateAccount`** – handler for `PATCH /account`; accepts a partial `UpdateAccountBody` and merges changes into the caller's profile.
-- Both are destructured from a single `createUpdateController({ … })` call; the factory wires up schema validation, id resolution, and the update/present callbacks.
+- **`replaceAccount`** – `PUT /account` handler. Full replacement of the account record using `ReplaceAccountBody`.
+- **`updateAccount`** – `PATCH /account` handler. Partial merge using `UpdateAccountBody`.
+- Both are produced in a single `createUpdateController` call with:
+  - `versioned: true` — response envelope carries a version token.
+  - `input.booleans: ['analyticsConsent']` — the only boolean field sent as a string over multipart.
+  - `keptWhenOmitted: ['imageUrl']` — a PUT that omits `imageUrl` preserves the existing avatar (clients cannot echo it back).
+  - `idFrom` — always resolves to `request.authContext!.id` (guaranteed by the `isAuth` middleware upstream).
+  - `update` — wraps the service call in `writeWithUploadedImage`, passing the resolved image data and `callerContextOf(request)` to `accountService.updateProfile`.
+  - `present` — shapes the response via `userService.toUser(user, request.authContext!.roles.tenant)`, reusing the already-resolved tenant role from auth context (no extra lookup).
 
 ## Relationships
 
-- **`createUpdateController`** (infrastructure/surfaces) – factory that produces the `replace`/`update` pair; this file supplies the entity name, schemas, `idFrom`, `update`, and `present` callbacks.
-- **`accountService`** (modules/account/services) – invoked inside the `update` callback to perform the actual profile mutation (including the `pendingEmail` flow and audit logging).
-- **`userService`** (modules/users) – used in the `present` callback to shape the response via `toUser`, passing the caller's tenant role from the auth context.
-- **`callerContextOf`** (infrastructure/http/request) – extracts a caller-context object from the request, forwarded to `accountService.updateProfile`.
-- **`writeWithUploadedImage`** (infrastructure/http/uploads) – wraps the update call to persist an optional multipart avatar upload (`changes.imageUrl`) and merge the resulting image data into the changes object.
-- **`routes.ts`** (modules/account) – mounts these two handlers; the non-null assertion on `authContext!` is safe only because routes guarantee the `isAuth` middleware runs first.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — provides the `createUpdateController` factory that this file configures; the factory enforces the replace/patch pair, input coercion, and the `idFrom` → `update` → `present` pipeline.
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, used to forward the caller's context into the service layer.
+- **`src/infrastructure/http/uploads.ts`** — supplies `writeWithUploadedImage`, which handles the multipart avatar write and resolves the final image reference before calling the service.
+- **`src/modules/account/services/index.ts`** — source of `accountService.updateProfile`, the actual business-logic method (field merge, email pending flow, audit).
+- **`src/modules/users/index.ts`** / **`src/modules/users/services/index.ts`** — source of `userService.toUser`, which projects the account row into the public user shape for the response body.
+- **`src/modules/account/routes.ts`** — mounts `replaceAccount` and `updateAccount` onto the `PUT`/`PATCH /account` endpoints behind the `isAuth` guard.
 
 ## Notes
 
-- **No id in the request body.** The target account is always `request.authContext.id`; there is no user-supplied identifier.
-- **`analyticsConsent` is the sole string-encoded boolean.** It arrives as `"true"`/`"false"` in multipart (avatar) uploads, hence the explicit `input.booleans` declaration.
-- **Email side-effects are not this controller's concern.** The pending-change notice and verification link are triggered inside `accountService.updateProfile` (see `docs/modules/account.md#proving-an-address`).
-- **Role is read-only here.** It is taken from the already-resolved `authContext.roles.tenant`; a profile edit never mutates it, so no second service lookup occurs.
+- The email-change side effects (pending-change notice, new verification link) are owned by `accountService.updateProfile`, not this controller. Do not add email logic here.
+- `request.authContext` is asserted non-null (`!`) in both `idFrom` and `present`; this is safe only because the routes file always places `isAuth` before these handlers. If routes change, the assertion breaks silently at runtime.
+- The `imageUrl` field is deliberately excluded from `keptWhenOmitted` semantics on PATCH (where omission already means "no change") but is listed for PUT, where omission would otherwise clear the avatar.

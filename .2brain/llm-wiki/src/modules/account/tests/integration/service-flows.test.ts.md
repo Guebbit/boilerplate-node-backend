@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/service-flows.test.ts
-sha256: f767eb511fce5b9ab1b60d6a4ac89cba5a44ac438917fd650c6e27bbeeabac2b
-generated_at: 2026-09-27T14:35:35.595358+00:00
+sha256: 485cf8c77332cf3486c0ce83411ce4772cbbd3df2ffe0a532666d33bbd314ae7
+generated_at: 2026-10-14T09:14:11.743103+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests that exercise the "ordinary" (happy-path and argument-rejection) flows of `accountService` — signup, login, tokenAdd, passwordChange, and refresh-token exchange — against a real database. The sibling `service.test.ts` owns the security invariants; this file exists so the normal request/response contract is verified end-to-end without mocking the data layer.
+Integration tests for the ordinary (non-security) paths of `accountService`: signup, login, one-time token issuance, and password change. Drives a real database via `setupTestDb` and asserts the happy-path responses plus argument-level rejections (422, 401, 409). Sits alongside `service.test.ts`, which owns the security invariants, and lives under `account` rather than `users` because the code under test is account's.
 
 ## Key elements
 
-- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces (not spies on) the audit module so that `emitAuditEvent` is a `jest.fn()` and `recordAudit` is rewired to call that replacement. Avoids the non-configurable-getter problem under SWC/Stryker.
-- **`setupTestDb()`** — Provisions and tears down a real database for the suite.
-- **`describe('accountService.signup')`** — Verifies success, password-mismatch rejection, 409 duplicate email, 422 invalid email, 422 short password, and 422 breached-password rejection.
-- **`describe('accountService.login')`** — Verifies success, 401 wrong password, 401 unknown email, and 401 for soft-deleted users.
-- **`describe('accountService.tokenAdd')`** — Verifies token creation (32-char string), DB persistence, and expiration-date setting.
-- **`describe('accountService.passwordChange')`** — Verifies success, 422 mismatch, 422 too-short, and that the new password actually unlocks login.
-- **`issueRefreshToken()` / refresh-access-token block** — Drives `createRefreshToken` + `verifyAccessToken` against a real signed JWT to test the three refresh-cookie outcomes (file is truncated here).
+- **`describe('accountService.signup')`** — verifies user creation, password-match rejection, duplicate-email 409, invalid-email 422, short-password 422, and breached-password 422.
+- **`describe('accountService.login')`** — verifies successful login, wrong-password 401, unknown-email 401, and soft-deleted-user 401.
+- **`describe('accountService.issueToken')`** — verifies plaintext return (32 chars), digest-only persistence with `hashToken`, expiry timing, and one-live vs. many-live link replacement semantics.
+- **`describe('accountService.passwordChange')`** — verifies successful change, mismatch 422, short-password 422, and that the new password actually works for subsequent login.
+- **`issueRefreshToken`** — helper that creates a user and calls `startSession`, returning the real JWT (the stored row holds only a `hashToken` digest).
+- **`jest.mock('@infrastructure/observability/audit')`** — replaces the audit port (see Notes).
+- **`setupTestDb()`** — bootstraps a real database for the whole file.
 
 ## Relationships
 
-- **`@modules/account/services` (index.ts)** — The code under test; every `describe` block calls a method on `accountService`.
-- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb` so all assertions hit a real database rather than mocks.
-- **`@modules/users/tests/factories.ts`** — Supplies `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, and `userRepository` for seeding and post-condition checks.
-- **`@modules/account/session/jwt.ts`** — `createRefreshToken` and `verifyAccessToken` are used in the refresh-token flow to produce and verify real signed JWTs.
-- **`@infrastructure/observability/audit.ts`** — Fully replaced via `jest.mock`; the test asserts audit events are emitted without exercising the real transport.
-- **`src/modules/account/audit.ts`** — `accountAuditActions` is imported (likely used in the truncated refresh section).
-- **`@infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types shape every assertion on the service return value.
-- **`tests/support/callers.ts`** — Provides `testCallerContext` for service calls that require a caller identity.
-- **`tests/support/ports.ts`** — Referenced in the mock-strategy comment; the file documents *why* replacement is used instead of `jest.spyOn`.
-- **`@modules/users` (index / model / repository)** — `UserDocument` type and `userRepository` for persistence assertions.
+- **`src/modules/account/services/index.ts`** — the `accountService` under test; every `describe` block calls its methods.
+- **`src/modules/account/session/jwt.ts`** — `startSession` (via `issueRefreshToken`) and `verifyAccessToken` are imported for refresh-token flow tests.
+- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types shape every assertion on service return values.
+- **`src/infrastructure/security/hash-token.ts`** — `hashToken` used to assert that only the digest is persisted for one-time tokens.
+- **`src/infrastructure/observability/audit.ts`** — fully replaced by `jest.mock`; `observePort` from `tests/support/ports.ts` is the intended observation mechanism.
+- **`src/modules/account/audit.ts`** — `accountAuditActions` imported (likely for audit-event assertions in refresh tests).
+- **`src/modules/account/metrics.ts`** — `authRefreshReuseTotal` imported for Prometheus metric assertions.
+- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, `userRepository`.
+- **`src/modules/account/tests/factories.ts`** — `tokenRowsOf`, `dropSessionOf` for token-row inspection and cleanup.
+- **`tests/support/callers.ts`** — `testCallerContext` passed to every service call.
+- **`tests/support/environment.ts`** — `setEnvironment` for environment-dependent setup.
+- **`tests/support/ports.ts`** — `observePort` and the documented reasoning behind the audit-port replacement pattern.
 
 ## Notes
 
-- Validation failures (bad email, short password, breached password) all return **422**, not 400 — this matches `openapi.yaml`, which never declares a 400.
-- `PLAIN_PASSWORD` is intentionally a breached-list entry (`Password1!`) so the "breached password" test case has a composition-valid fixture.
-- The audit mock is a **module replacement**, not a spy. `jest.spyOn` cannot override the non-configurable getter produced by a CommonJS namespace import under the SWC transform or Stryker's sandbox. See `tests/support/ports.ts` for the full rationale.
-- The file lives under `account/tests` (not `users/tests`) because the code under test belongs to the `account` module, even though user records are created via the `users` factory.
+- **Audit port is *replaced*, not spied on.** `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes; this breaks under the SWC transform in `jest.config.mutation.js` and inside Stryker's sandbox. The mock also re-routes `recordAudit` (which closes over its own `emitAuditEvent`) through the replacement spy so every call is visible. See `tests/support/ports.ts` for full reasoning.
+- **422, not 400, for all validation failures.** `openapi.yaml` declares 422 for auth/validation errors and never declares 400.
+- **`PLAIN_PASSWORD` is intentionally a breached password.** It is listed in `breached-passwords/list.txt` so the signup breach-rejection test can prove `assertPasswordNotBreached` is actually invoked in the flow.
+- **Token assertions use the stored row, not the return value.** The DB row holds a `hashToken` digest; the plaintext JWT only exists in the service's return value (or `startSession`'s return). Never re-read the JWT from storage.

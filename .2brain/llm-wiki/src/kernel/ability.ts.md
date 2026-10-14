@@ -1,7 +1,7 @@
 ---
 source: src/kernel/ability.ts
-sha256: 219ffb62f0fe742ae20395d169e01898379bd4be0aa62654395e260792a25fc3
-generated_at: 2026-09-23T17:54:17.436093+00:00
+sha256: da3da38fd93a87c5f715fc19e178c5903a9d15ccda7a75530d64521764da5b2d
+generated_at: 2026-10-14T08:20:10.956222+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Builds a per-request CASL `MongoAbility` from a caller's declared permission keys and their scope. This is the single object every authorization question in the system is asked of — route guards, row-level reads, and key-enumeration endpoints all consume it or its helpers.
+Builds a per-request CASL `MongoAbility` from a caller's declared permission keys and their attached conditions. It is the single object every authorization question in the codebase is asked of, and it is designed so that the same rules can compile into a database read filter and be shipped to the browser for client-side gating.
 
 ## Key elements
 
-- **`Ability`** (type alias for `MongoAbility`) — the concrete rule set a caller holds.
-- **`resolveConditions(conditions, caller)`** (internal) — substitutes `$caller.<field>` placeholders in a key's condition map. Returns `undefined` if _any_ placeholder resolves to a missing/null/empty value, causing the caller to drop that rule entirely (fail-closed).
-- **`effectiveKeys(caller)`** (internal) — intersects the caller's `permissions` list against the declared-key registry, keeping only keys whose `scope` matches the caller's scope.
-- **`buildAbility(caller)`** (export) — the main factory. For each effective key it resolves conditions (or uses `{}` for unrestricted callers), injects `tenantId` for tenant-scope callers, and emits a single `can(action, subject, filter)` rule. Returns the built ability.
-- **`holdsKey(caller, key)`** (export) — boolean "does this caller hold this key?" for route guards. Checks action + subject only (not a specific row), so it collapses breadth variants (`orders.self.read` / `orders.any.read`).
-- **`heldKeys(caller)`** (export) — returns the literal `Set<string>` of key names the caller holds. Does **not** collapse shared action/subject pairs; used when enumeration fidelity matters (e.g. the role-matrix docs generator).
+- **`Ability`** (type) — alias for `MongoAbility`; the shape every guard, query, and controller receives.
+- **`buildAbility(caller)`** — main entry point. Filters the caller's keys to their scope, resolves `$caller.<field>` placeholders in conditions, injects `tenantId` from the caller (never from the key), and emits one `can(action, subject, conditions)` per effective key. Unrestricted callers get zero conditions.
+- **`holdsKey(caller, key)`** — route-guard check: does the caller's ability permit the key's action on its subject? Intentionally collapses keys that share action + subject (e.g. `orders.self.read` vs `orders.any.read`).
+- **`heldKeys(caller)`** — returns the literal set of declared key names the caller holds, with no action/subject collapsing. Exists specifically so consumers (e.g. the role-matrix docs generator) can distinguish breadth variants.
+- **`resolveConditions`** (internal) — substitutes `$caller.<field>` placeholders; returns `undefined` (rule dropped) if any placeholder is empty — fail-closed.
+- **`effectiveKeys`** (internal) — intersects `caller.permissions` with declared keys whose `scope` matches the caller's scope; a key in the wrong scope is inert.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — direct import: `findKey`, `isUnrestricted`, and the `PermissionKey` type are the declared-key registry this file reads from.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — source of the `Caller` type that every function here accepts.
-- **`src/kernel/access/query.ts`** — the read-side companion: the rules this file emits are what `query.ts` compiles into Mongo filters. Fail-closed semantics (empty filter ⇒ denied, not widened) are coordinated between the two.
-- **`src/kernel/middlewares/authorizations.ts`** — route-guard middleware that calls `holdsKey` (or `buildAbility` + `.can`) before a handler runs.
-- **`src/modules/account/controllers/get-my-abilities.ts`** — consumer that calls `heldKeys` to enumerate a caller's literal keys.
-- **`scripts/docs/generate-role-matrix.ts`** — the role-matrix docs generator referenced in `heldKeys`'s doc comment as the reason that non-collapsing export exists.
-- **`tests/contract/authorization-contract.test.ts`**, **`tests/cross-cutting/authorization-conformance.test.ts`** — test suites that exercise the ability-building and key-holding behavior defined here.
+- **`src/kernel/permissions.ts`** — imports `findKey`, `isUnrestricted`, and the `PermissionKey` type; the declared-key registry this file resolves against.
+- **`src/kernel/access/query.ts`** — design-coupled: conditions built here are intended to compile into a Mongo read filter; the fail-closed "empty → deny" convention is shared between the two.
+- **`src/kernel/middlewares/authorizations.ts`** — consumes `holdsKey` as a route guard (action/subject level check before any data is fetched).
+- **`scripts/docs/generate-role-matrix.ts`** — consumes `heldKeys` to enumerate exact key names per role (the stated reason `heldKeys` exists).
+- **Module services & controllers** (`orders`, `delivery`, `payments`, `api-keys`, `account`) — consumers of `buildAbility` to get the per-request `Ability` object they pass into queries or checks.
 
 ## Notes
 
-- **No `manage` action is ever emitted.** `can('manage', …)` always answers _false_ because no declared key uses `manage` as its own action; in CASL it would mean "any action," which this model deliberately forbids. Even `admin` cannot act on a subject that declares no `manage` key (e.g. `AuditLog`).
-- **`tenantId` is sourced exclusively from the resolved caller**, never from request parameters or the keys file. A cross-tenant read is structurally inexpressible rather than merely guarded.
-- **Unrestricted callers get `{}` conditions**, computed once. This is load-bearing: `SYSTEM_ACTOR`'s id is the literal string `'system'`; running a `self`-key condition against it would bake that string into a Mongo filter as a bogus ObjectId.
-- **`holdsKey` ≠ `heldKeys`.** `holdsKey` answers a guard question (action + subject); `heldKeys` answers an enumeration question (exact key names). Do not use `holdsKey` to list which keys a role holds.
-- The shared keys file (`shared/authorization-keys.yaml`) is read byte-for-byte by a PHP twin; changes to the placeholder format (`$caller.<field>`) are a cross-language contract.
+- **Fail-closed is load-bearing.** `resolveConditions` returning `undefined` (dropping the rule) rather than emitting `{ field: null }` prevents an unowned-row wildcard. The same invariant is enforced independently in `access/query.ts`.
+- **Unrestricted ≠ just empty conditions.** `SYSTEM_ACTOR` has `id: 'system'` (a string, not an ObjectId). Skipping condition resolution entirely for unrestricted callers avoids baking that string into a Mongo filter.
+- **`tenantId` injection is structural.** It comes from the resolved caller, not from the key definition, so no key can accidentally omit it.
+- **No `manage` action exists.** CASL treats an unknown action as "any action"; the model deliberately never emits it so that a `can('manage', …)` check always answers `false`. `AuditLog` has a read key only — even `admin` cannot write it.
+- **Shared keys file.** `shared/authorization-keys.yaml` is the single source of truth for key definitions and is read byte-for-byte identically by a PHP twin; this file is the Node-side consumer.

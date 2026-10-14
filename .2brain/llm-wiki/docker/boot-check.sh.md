@@ -1,7 +1,7 @@
 ---
 source: docker/boot-check.sh
-sha256: b9252c47e5ac643c3356f011a1d3928daa3e804781ad5b59fa53c5eabb9f8f4b
-generated_at: 2026-10-07T23:47:26.303187+00:00
+sha256: 88fe571b4e5913b9f531e184235b0892ebd55246836c5c8cb63e11176bdc9935
+generated_at: 2026-10-14T06:49:31.294801+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration smoke-test that boots the production image against a real MongoDB 8 instance and verifies two invariants a unit test cannot: the container starts fail-closed (config included) and answers `/livez`, and the runtime `node` user cannot write under `/app/src`. Run identically by the CI `boot` job and by developers so the proof cannot drift.
+Integration smoke-test that boots a production Docker image against a real MongoDB container and proves two things unit tests cannot: the image starts with fail-closed config and answers `/livez`, and the runtime `node` user cannot write under `/app/src/`. Used by both CI (`boot` job) and local development so the proof cannot drift between environments.
 
 ## Key elements
 
-- **`cleanup()`** (trap `EXIT`) — force-removes the app and Mongo containers, the isolated Docker network, and the temp secrets directory, regardless of how the script exited.
-- **Secrets generation loop** — creates seven random 48-byte base64 files (`token_access`, `token_refresh`, `totp`, `pii`, `webhook`, `pseudonym`, `metrics`) in a `mktemp -d` dir, mounted read-only at `/run/secrets`.
-- **`docker network create`** — isolated network scoped by PID suffix to avoid collisions with concurrent runs.
-- **Mongo container** — `mongo:8` pinned by SHA-256 digest; single dependency for the liveness check.
-- **App container** — runs the target image with full production env (`NODE_ENV=production`, shop fields, VAT rates, all `NODE_*_FILE` pointers to the secrets dir). Binds port `3000` to `127.0.0.1:${BOOT_CHECK_PORT:-3999}` only.
-- **Liveness poll** — up to 45 × 2 s = 90 s calling `curl /livez`; on failure dumps `docker logs` and exits 1.
-- **Write check** — `docker exec … touch /app/src/.boot-check-write`; succeeds → the script fails the run.
+- **`cleanup()`** (trapped on `EXIT`) — removes the app container, Mongo container, the dedicated Docker network, and the temp secrets directory.
+- **Secret generation loop** — creates one random 48-byte base64 file per `NODE_*_FILE` variable the app expects (`token_access`, `token_refresh`, `totp`, `pii`, `webhook`, `pseudonym`, `metrics`).
+- **MongoDB container** — `docker.io/library/mongo:8` pinned to a specific `sha256` digest, on an isolated network.
+- **App container** — the image under test, started with `NODE_ENV=production`, full shop/secret env vars, and a read-only bind-mount of the secrets dir to `/run/secrets`.
+- **Liveness poll** — up to 45 × 2 s (≈ 90 s) retrying `curl /livez`; dumps `docker logs` on failure.
+- **Write-ownership check** — `docker exec … touch /app/src/.boot-check-write`; exits 1 if the `node` user succeeds.
 
 ## Relationships
 
-No graph neighbors are recorded for this file. It is a standalone entry point invoked by CI (`ci.yml` → `boot` job) and ad-hoc by developers.
+No graph neighbors. This is a standalone script; it does not import or source other repo files and is not imported by any.
 
 ## Notes
 
-- `--read-only` is **deliberately omitted** (unlike the production compose file). Adding it would make the write check pass trivially; the check is about *ownership*, not mount flags.
-- Secrets are `chmod 755`/`644` on purpose: the container's `node` user runs as a different UID than the host runner, so "world-readable" does not leak to the wrong user. The files are ephemeral (deleted by `cleanup`).
-- Queue and Redis/cache are **not** wired in. `/livez` never touches them, and they are expected to degrade gracefully—testing them here would conflate concerns.
-- The script is strict-mode (`set -euo pipefail`) and requires exactly one positional argument (the image reference); it exits with a usage error otherwise.
-- `$$` is used as the suffix for resource names; parallel invocations in the same shell would collide (unlikely in practice).
+- Deliberately **no `--read-only`** on the app container (production compose uses it). Adding it would make the write check pass trivially; the check is about file *ownership*, not mount flags.
+- Secrets are `chmod 644` on purpose: the container's `node` user has a different UID than the host runner, and the files are throwaway.
+- Queue (BullMQ) and Redis/cache are **intentionally absent** — they degrade gracefully and `/livez` never touches them.
+- Resource names are suffixed with `$$` so parallel invocations don't collide.
+- Port is `127.0.0.1:3999` by default; override with `BOOT_CHECK_PORT`.
+- The script exits non-zero on *either* check failure, making it directly usable as a CI gate.

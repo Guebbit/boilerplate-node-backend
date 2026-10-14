@@ -1,34 +1,38 @@
 ---
 source: src/cluster.ts
-sha256: 27c010540748493181bfde711024f41636b835c8918e92f255d98189b918d72f
-generated_at: 2026-10-01T12:45:56.232523+00:00
+sha256: 80157a2dca012708927d3f5e238f77197dfa1d99abc0266f0a5a0139a4309007
+generated_at: 2026-10-14T07:39:58.286085+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/cluster.ts
 
 ## Purpose
-Production entry point (per `package.json`) that enables Node.js clustering across CPU cores. It guarantees `.env` is loaded and OTel tracing is started **before** any application module is imported, then forks and supervises worker processes on the primary.
+
+The production entry point of the repository (referenced by `package.json`). It establishes the correct import order (dotenv → mongoose-boot → OTel) before any application module loads, then branches: the **primary** process forks and supervises worker processes, while each **worker** (or a single-process run) dynamically imports `./serve` to build and start the Express app.
 
 ## Key elements
-- **`startTracing()` call (module scope)** — Invoked immediately after importing `@infrastructure/runtime/otel-sdk`; must precede all app-module imports.
-- **`CLUSTER_ENABLED`** — Boolean gate from `clusterConfig().NODE_ENABLE_CLUSTERING`; when false, the file falls through to the worker branch directly.
-- **`supervise()`** — All primary-process logic: forks `workerTarget()` workers, listens for `cluster.on('exit')`, decides respawn vs. give-up via `crashVerdict()`, and handles coordinated shutdown.
-- **`shouldRespawn()`** (inner) — Returns false for clean exits (code 0), intentional signals (SIGTERM/SIGINT), and post-disconnect exits.
-- **`scheduleRespawn()`** (inner) — Sets an unref'd `setTimeout` that forks a replacement after the backoff delay returned by `crashVerdict`.
-- **`startPrimaryShutdown()`** (inner) — Sends SIGTERM to all live workers, then SIGKILL after `shutdownTimeoutMs`; sets `process.exitCode = 1` on timeout.
-- **Primary branch** — `void import('@app/config')` validates config once, then calls `supervise()`.
-- **Worker branch** — `void import('./serve')` builds and starts the HTTP server (side-effect only).
+
+- **`CLUSTER_ENABLED`** – Read once at import time from `clusterConfig().NODE_ENABLE_CLUSTERING`; decides whether this process acts as primary or worker. Deliberately not overridable after import.
+- **`supervise()`** – The primary's entire responsibility: forks `workerTarget` workers, listens for `'exit'` events, applies crash-loop backoff via `crashVerdict`, schedules respawns, and runs a coordinated shutdown (SIGTERM → timeout → SIGKILL) on SIGTERM/SIGINT.
+- **`startPrimaryShutdown(signal)`** – Kills all workers with SIGTERM, sets a force-kill timer (SIGKILL) if they don't exit within `NODE_CLUSTER_SHUTDOWN_TIMEOUT_MS`, and preserves a previously set `process.exitCode`.
+- **`shouldRespawn(code, signal, exitedAfterDisconnect)`** – Returns `false` for clean exits (code 0), graceful signals (SIGTERM/SIGINT), or post-disconnect exits; `true` otherwise.
+- **`scheduleRespawn(delayMs)` / `forkWorker()`** – Delayed respawn with `unref()`'d timers so they don't hold the event loop open; no-op during shutdown.
+- **Entry fork** – `cluster.isPrimary && CLUSTER_ENABLED` → lazy `import('@app/config')` (config validation) then `supervise()`; otherwise `void import('./serve')` (side-effect only, builds and starts the app in the worker).
 
 ## Relationships
-- **`src/infrastructure/adapters/logger.ts`** — `logger` is used for every fork, exit, shutdown, and crash-respawn log line.
-- **`src/infrastructure/runtime/cluster-policy.ts`** — `workerTarget()` resolves the actual worker count from config + `os.availableParallelism()`; `crashVerdict()` computes backoff delay or a "give-up" verdict based on the crash window and limits.
-- **`src/infrastructure/runtime/config.ts`** — `clusterConfig()` reads all `NODE_CLUSTER_*` env vars and returns a typed object consumed by both the primary and policy functions.
-- **`src/infrastructure/runtime/otel-sdk.ts`** — `startTracing()` is called at module top-level; the dynamic-import pattern below it exists specifically so this runs first.
+
+- **`src/infrastructure/config/dotenv.ts`** – Static-imported first; loads `.env` into `process.env` before any other module reads configuration.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** – Static-imported second; sets Mongoose connection defaults at schema-build time, before any model is loaded.
+- **`src/infrastructure/runtime/otel-sdk.ts`** – `startTracing()` is invoked before any application module loads so the OTel SDK can patch `http`, Express, and Mongoose.
+- **`src/infrastructure/runtime/config.ts`** – `clusterConfig()` supplies every cluster-related environment variable (worker count, crash window, backoff, shutdown timeout, crash limit).
+- **`src/infrastructure/runtime/cluster-policy.ts`** – `workerTarget()` resolves the effective worker count; `crashVerdict()` computes backoff delay or a `give-up` verdict from the crash history.
+- **`src/infrastructure/adapters/logger.ts`** – All structured log output from the primary and worker paths.
 
 ## Notes
-- **Import order is load-bearing.** `dotenv/config` → `startTracing()` → `void import('./serve')`. A static `import` of the app would be hoisted above the `startTracing()` call and silently skip instrumentation.
-- **Config is validated on the primary only.** `assertProcessConfig()` runs before any worker is forked, so a bad env var produces one clean error rather than N workers crash-looping.
-- **`process.exitCode ??= 0`** on clean shutdown uses nullish-assignment so a prior failure code (crash-loop give-up, forced timeout) is never overwritten.
-- **All timers are `.unref()`'d** (respawn timers, force-shutdown timer) so they don't keep the event loop alive.
-- **`crashHistory` is reset and repopulated** from `verdict.recentCrashes` after each crash, so the window is always the trimmed list the policy function expects on the next call.
+
+- **Import order is load-bearing.** Static imports are hoisted above any statement, so `dotenv`, `mongoose-boot`, and `startTracing()` must be static imports at the top. The application code (`@app/config`, `./serve`) is loaded via dynamic `import()` to run *after* those setup steps.
+- **`CLUSTER_ENABLED` is intentionally read once at import time.** No test harness or `createApp({ env })` call can change it after this module has been evaluated; the primary/worker split is final per process.
+- **`process.exitCode ??= 0`** in the all-workers-exited branch: uses nullish assignment so a previously recorded failure code (from a crash loop or forced shutdown) is never overwritten by a success.
+- **`// Stryker disable` comments** suppress mutation testing for log-only lines that have no observable side-effect beyond logging.
+- **Respawn and force-shutdown timers are `unref()`'d** so the process can exit even if a pending timer has not fired.

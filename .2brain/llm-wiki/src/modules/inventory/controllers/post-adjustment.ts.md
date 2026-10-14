@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/controllers/post-adjustment.ts
-sha256: 9d34ebe5b6ba4632fed89518c9ec01b2257a2e2e5920a4d5b117c838d72e8fd0
-generated_at: 2026-09-23T18:43:52.956548+00:00
+sha256: a8c157e8b3e59bf2a055ef0aafa013549ded5f669f880d154f0c8d3978e8865a
+generated_at: 2026-10-14T15:53:19.416422+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express controller for `POST /inventory/adjustments`. Handles a stocktake correction — the module's primary audited endpoint, recording the admin identity, a signed quantity delta, and a typed reason for the change.
+Handles `POST /inventory/adjustments`, the audited stocktake-correction endpoint. Each row records the acting admin, the signed quantity delta, and a free-text reason, because an unexplained stock correction is indistinguishable from shrinkage. This file is the HTTP boundary that validates the request, blocks no-op adjustments, and delegates to the service layer.
 
 ## Key elements
 
-- **`postAdjustment`** _(exported function)_ — The sole export and route handler. Validates the body against `AdjustStockBody`, rejects zero-delta requests with 422, then delegates to `inventoryService.adjust()` and formats the response.
+- **`postAdjustment(request, response)`** — the sole export. Parses the body against the `AdjustStockBody` Zod schema, rejects a zero `delta` with a `422` and a localized message (`inventory.adjust-zero`), then calls `inventoryService.adjust(productId, delta, note, callerContext)`. On success it returns `200` with the resulting `InventoryLevel`; on service-level refusal it short-circuits via `refused()`; on thrown errors it delegates to `catchAs`.
 
 ## Relationships
 
-- **`../service`** (`src/modules/inventory/service.ts`) — Calls `inventoryService.adjust(productId, delta, note, callerContext)`; all business logic lives there.
-- **`@infrastructure/http/controller`** (`src/infrastructure/http/controller.ts`) — Provides `parseBody` (Zod validation gate), `refused` (service-level rejection check), and `catchAs` (error→response mapping).
-- **`@infrastructure/http/response`** (`src/infrastructure/http/response.ts`) — Emits the final JSON via `successResponse` / `rejectResponse`.
-- **`@infrastructure/http/request`** (`src/infrastructure/http/request.ts`) — `callerContextOf(request)` extracts the authenticated admin context forwarded to the service.
-- **`@infrastructure/i18n`** (`src/infrastructure/i18n/index.ts`, `context.ts`) — `t()` supplies the localized error message for the zero-delta rejection.
-- **`src/modules/inventory/routes.ts`** — Registers `postAdjustment` on the `POST /inventory/adjustments` route.
-- **`@types`** (`src/types/index.ts`) — `InventoryLevel` is the declared shape of the 200 response body.
+- **`@infrastructure/http/controller`** — imports `parseBody`, `refused`, and `catchAs` for schema validation, service-refusal short-circuiting, and unified error serialization.
+- **`@infrastructure/http/request`** — imports `callerContextOf` to extract the authenticated admin identity from the request and pass it into the service call (the audit trail).
+- **`@infrastructure/http/response`** — imports `successResponse` and `rejectResponse` for consistent JSON envelope output.
+- **`@infrastructure/i18n`** — imports `t` for the localized "delta must not be zero" message.
+- **`../services`** (`src/modules/inventory/services/index.ts`) — calls `inventoryService.adjust`, which performs the actual ledger write.
+- **`src/modules/inventory/routes.ts`** — registers `postAdjustment` as the handler for the `POST /inventory/adjustments` route.
+- **`@types`** — imports the `InventoryLevel` type used in the success-response generic.
 
 ## Notes
 
-- The zero-delta guard (`delta === 0`) is a **controller-level check**, not a schema constraint. The inline comment states zero "can't be expressed as a schema constraint," so it is refused here with **422** rather than a 400 to signal "processable shape, invalid value" and to avoid writing a meaningless ledger row.
-- The function is `async`-ish: it returns a `Promise` in every code path (the early-return branches use `return` or `return Promise.resolve()`), so the caller (routes) can `await` it uniformly.
-- The service call receives `callerContextOf(request)` as its fourth argument — the admin identity is injected here, not inside the service.
+- The zero-delta check is intentional and lives **in the controller**, not the schema, because `delta: 0` is a valid number type. A `422` is returned rather than silently accepting a no-op, since that would create a meaningless ledger row.
+- The function returns `Promise.resolve()` after the early-reject branches so the caller (Express) always sees a thenable, avoiding unhandled-rejection surprises.
+- The doc comment explicitly positions this as the primary audit surface for the inventory module; the `note` field and `callerContext` are the two pieces that make a row forensically useful.

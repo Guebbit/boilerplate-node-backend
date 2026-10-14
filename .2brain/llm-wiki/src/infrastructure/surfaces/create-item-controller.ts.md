@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-item-controller.ts
-sha256: 2d91095be3682831f30a6a56231b2db74837f3a6713c04dd95f596819e8163b2
-generated_at: 2026-09-27T14:17:12.744436+00:00
+sha256: a6416d516c585b167db9b0f234aa5fc8104b702195cdfc190f7dbd0924de30a1
+generated_at: 2026-10-14T08:18:49.823752+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Factory that builds a standard "read-one" Express handler for any entity. It centralizes the API contract that a malformed path id is a 404 (not a 500), that a missing row yields the module's own i18n key, and that the operation name is derived consistently for logs, stack traces, and generated docs. Modules supply only the fetch call, entity name, and 404 key; everything else is handled here.
+A factory that builds the "read-one" (fetch-by-path-id) Express handler for any entity. It centralises the API contract decision that a malformed or missing id returns the module's own 404 (not a 500), so that behaviour has a single landing site rather than being repeated inline in every module.
 
 ## Key elements
 
-- **`ItemControllerSpec`** (interface) — The four per-entity inputs: `entity` (singular name, e.g. `'product'`), `fetch` (callback receiving id and request, returning `Promise<unknown>`), `notFoundKey` (i18n key for the 404 body), and optional `handlerSuffix` to disambiguate multiple read-ones on the same entity.
-- **`createItemController`** (exported function) — Accepts an `ItemControllerSpec`, derives the operation name via `operationName('get', entity, handlerSuffix ?? 'Item')`, and returns a `namedHandler` that calls `fetch`, sends `successResponse` on a truthy result, `rejectResponse(404)` on a falsy result, and delegates errors to `catchAsNotFound` (which maps CastError → 404, other DB errors → 500 via `rejectDatabaseError`).
+- **`ItemControllerSpec`** (interface) — The four per-entity parameters: `entity` (lowercase singular name used to build the operation name), `fetch` (async callback that receives the id *and* the request, returns `unknown`; `null`/`undefined`/`void` means "not found"), `notFoundKey` (i18n key for the 404 body), and optional `handlerSuffix` (replaces the default `'Item'` in the generated name, e.g. `'Admin'` → `getProductAdmin`).
+- **`createItemController`** (function, default export pattern) — Takes an `ItemControllerSpec` and returns a named Express handler. Handler flow: `requireId` → early-return on bad id → `fetch` → 404 if falsy result, otherwise `setEtag` + `successResponse` → `.catch(catchAs)` for unexpected errors.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — Imports `operationName` (builds the `get<Entity><Suffix>` identifier), `namedHandler` (attaches the name to the handler for logging), and `catchAsNotFound` (the error-catch strategy).
-- **`@infrastructure/http/response`** — Imports `successResponse` (serializes the found row) and `rejectResponse` (sends the 404 with the i18n-translated key).
-- **`@infrastructure/i18n`** — Imports `t` to translate `notFoundKey` at request time.
-- **Consumers** (`get-product-item.ts`, `get-product-admin.ts`, `get-user-item.ts`) — Each calls `createItemController` with its own spec; `get-product-admin.ts` passes `handlerSuffix: 'Admin'` so the operation name becomes `getProductAdmin`.
-- **`create-item-controller.test.ts`** — Unit tests covering the 404 paths (falsy result, CastError) and the success path.
+- **`@infrastructure/http/controller`** — Provides `namedHandler` (wraps the handler with a name for logging/stack traces), `operationName` (builds `get<Entity><Suffix>`), and `catchAs` (error-to-response mapping scoped to the operation name).
+- **`@infrastructure/http/ids`** — `requireId` validates the path parameter *before* any database call; returns `null` and writes the 404 itself when the id is malformed.
+- **`@infrastructure/http/response`** — `successResponse` (200 with body) and `rejectResponse` (404 with i18n message).
+- **`@infrastructure/http/preconditions`** — `setEtag` computes and sets the `ETag` header from the fetched row so clients can `If-Match` it on subsequent edits.
+- **`@infrastructure/i18n`** — `t` translates `notFoundKey` into the 404 response body.
+- **Consumers** (module controllers): `get-example.ts`, `get-product-item.ts`, `get-product-admin.ts`, `get-user-item.ts` each call `createItemController` with their own spec, providing the entity-specific `fetch` closure (which may scope by caller role, permission, etc.).
+- **`tests/unit/infrastructure/surfaces/create-item-controller.test.ts`** — Unit-tests the factory in isolation.
 
 ## Notes
 
-- Despite the filename saying "create-item," the handler it builds is a **GET** (read-one) operation. The word "create" refers to *creating the controller function*, not to a POST/PUT action.
-- The `fetch` callback returns `unknown` on purpose: the controller never inspects the payload shape. A "miss" is any falsy value (`null`, `undefined`, `void`); everything truthy is serialized as-is.
-- `handlerSuffix` exists solely to avoid operation-name collisions when an entity needs more than one read-one (e.g., `getProductItem` vs. `getProductAdmin`). Without it the default suffix is `'Item'`.
-- The `request` is passed into `fetch` because visibility filtering (scope, permission) is a caller-side concern; this controller stays agnostic of which entity it serves.
+- The `fetch` callback is deliberately typed to return `unknown`; the controller never inspects the row's shape. A "miss" is any falsy value the service returns — the controller does not distinguish `null` from `void`.
+- `handlerSuffix` exists to disambiguate a second read-one on the same entity (e.g. `getProductAdmin` vs `getProductItem`). Without it, both would generate the same operation name.
+- The `fetch` function receives the full `Request` object so that visibility rules (caller scope, permission checks) live in the module's service call, not in this shared controller.

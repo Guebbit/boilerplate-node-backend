@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/routes.ts
-sha256: 706fe7f3d7b7f863628b1bcf795dffcd54348e0a2d7baaebe0b5197d955ca9d4
-generated_at: 2026-09-23T18:25:05.832990+00:00
+sha256: 0870999b839e588a7420ae259041fee285ff159eed5431429cc491575ccd1e9a
+generated_at: 2026-10-14T15:00:24.185411+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express router for the `/api-keys` admin surface. It wires three CRUD-adjacent routes (list, mint, revoke) to their respective controllers and enforces that every request is session-authenticated by a human with the appropriate `apikeys.any.*` permission.
+Defines the Express router for the `/api-keys` admin surface. It wires three routes—list, mint, and revoke—behind session-only authentication and granular permission checks, ensuring that the act of issuing or revoking API keys is always a human, session-authenticated operation.
 
 ## Key elements
 
-- **`router`** (exported) — the Express `Router` instance that `module.ts` mounts. All three routes are attached here.
-- **Route table**
-    - `GET /` → `listApiKeys` (perm: `apikeys.any.read`)
-    - `POST /` → `mintApiKey` (perm: `apikeys.any.create`)
-    - `DELETE /:id` → `revokeApiKey` (perm: `apikeys.any.delete`)
-- **Auth middleware chain** — `getAuth` + `isAuth` applied router-wide; `requirePermission` applied per-route.
+- **`router`** (exported) — The Express `Router` instance for the `/api-keys` prefix. Registered into the app by `module.ts`.
+- **Route-level middleware** — `getAuth` → `isAuth` is applied to the entire router via `router.use`, then each route additionally layers a `requirePermission('apikeys.any.*')` guard.
+- **`GET /`** — Lists API keys (secrets are never returned). Permission: `apikeys.any.read`.
+- **`POST /`** — Mints a new API key. Permission: `apikeys.any.create`.
+- **`DELETE /:id`** — Revokes an existing key by ID. Permission: `apikeys.any.delete`.
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, and `requirePermission`; the only auth primitives this file uses.
-- **`src/modules/api-keys/controllers/list-api-keys.ts`** — handler for `GET /`.
-- **`src/modules/api-keys/controllers/mint-api-key.ts`** — handler for `POST /`.
-- **`src/modules/api-keys/controllers/revoke-api-key.ts`** — handler for `DELETE /:id`.
-- **`src/modules/api-keys/module.ts`** — parent module that mounts this `router` onto the application.
-- **`tests/support/routed-modules.ts`** — test harness that registers routed modules (including this one) for integration tests.
+- **`src/kernel/middlewares/authorizations.ts`** — Provides `getAuth`, `isAuth`, and `requirePermission`, which form the auth/permission chain on every route.
+- **`src/modules/api-keys/controllers/list-api-keys.ts`** — Handler for `GET /`.
+- **`src/modules/api-keys/controllers/mint-api-key.ts`** — Handler for `POST /`.
+- **`src/modules/api-keys/controllers/revoke-api-key.ts`** — Handler for `DELETE /:id`.
+- **`src/modules/api-keys/module.ts`** — Registers this router into the application's route tree.
 
 ## Notes
 
-- The router deliberately uses `isAuth` (session-only) **not** `isAuthOrCredential`. The inline comment makes explicit this is a security decision, not a mechanical side-effect: a credential that can mint or revoke credentials would eliminate the need to ever rotate it. Issuing and revoking API keys is restricted to human, session-authenticated actors.
-- The API keys produced by `mintApiKey` are intended to be presented to _other_ routes in the system; they are never accepted as credentials on this router's own routes.
+- **`isAuth` is a deliberate choice, not a mechanical one.** The inline comment states that no handler here reads `authContext`, so `isAuthOrCredential` would pass a mechanical audit. It is rejected because allowing a credential to mint or revoke credentials means that credential never has to be rotated. Key management stays strictly human-session.
+- The module-level docblock makes explicit that the credentials this module *mints* are presented to **other** routes in the system; they are never accepted on these routes themselves.

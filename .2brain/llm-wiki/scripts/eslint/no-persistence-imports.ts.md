@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/no-persistence-imports.ts
-sha256: 727ff26cac2db01da6f7b0fa70ce835756eb5ae8bca1ad391fce4a81579b2262
-generated_at: 2026-09-23T17:27:29.042999+00:00
+sha256: 531bc0ba0a6c8999b96ba994e8ce21ed095752e9e23f995a14d501572d098d8b
+generated_at: 2026-10-14T07:19:05.478331+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Custom ESLint rule that enforces a single-door persistence boundary: outside its own repository file, no module may import a repository/model handle by name _or_ import directly from a `model`/`repository` file. It exists so that schema coupling (mongoose document shapes, query builders) stays isolated behind `repository.ts`, preventing field renames from cascading and keeping services/controllers ignorant of storage layout.
+A custom ESLint rule that enforces the "single door" boundary for persistence: only `repository.ts` may touch a collection's model or repository. It flags any `ImportDeclaration` in other files that reaches a persistence handle by name suffix (e.g. `userModel`, `userRepository`) or by module path (e.g. `../model`, `@modules/users/repository`), preventing schema coupling from leaking into services, controllers, or utilities.
 
 ## Key elements
 
-- **`RuleOptions`** — interface accepting `bindings?: string[]` (name suffixes to flag) and `paths?: boolean` (toggle the path check).
-- **`DEFAULT_BINDINGS`** — `['Repository', 'Model']`; used when the rule is enabled without options.
-- **`PERSISTENCE_PATH`** — `/(^|\/)(model|repository)$/`; regex that matches the _last_ path segment, deliberately anchored so `base-repository` is not flagged.
-- **`specifierNames(specifier)`** — returns both the local and the imported identifier for an import specifier, so `userModel as Users` is caught on either name.
-- **`noPersistenceImports`** (exported) — the rule itself, built with `ESLintUtils.RuleCreator.withoutDocs`. On each `ImportDeclaration` it first tests the source against `PERSISTENCE_PATH`; if that matches it reports once on the source node and returns. Otherwise it walks specifiers and reports any whose name ends with a configured suffix.
+- **`RuleOptions`** – the single config object: `bindings` (list of name suffixes to flag, default `['Repository', 'Model']`) and `paths` (whether the path-based check runs, default `true`).
+- **`PERSISTENCE_PATH`** – regex `/(^|\/)(model|repository)$/` that matches specifiers whose last path segment is exactly `model` or `repository`, anchored on a `/` or start-of-string boundary.
+- **`specifierNames`** – helper that returns both the local binding name *and* the original imported name from an `ImportSpecifier`, so aliased imports (`userModel as Users`) are still caught.
+- **`noPersistenceImports`** – the exported rule (via `ESLintUtils.RuleCreator.withoutDocs`). Visits `ImportDeclaration` nodes, runs the path check first (reporting once on the source node and short-circuiting), then falls through to the per-specifier binding-suffix check.
 
 ## Relationships
 
-- **`scripts/eslint/index.ts`** — registers `noPersistenceImports` in the project's shared ESLint plugin / rule collection, making it available to other packages' configs.
-- **`tests/unit/scripts/eslint/no-persistence-imports.test.ts`** — unit-test suite that exercises both the binding and path message paths, including the `import type` case and the `as`-rename case.
+- **`scripts/eslint/index.ts`** – registers / re-exports `noPersistenceImports` so it is available as a plugin rule in the project's ESLint config.
+- **`tests/unit/scripts/eslint/no-persistence-imports.test.ts`** – unit tests exercising the rule's path check, binding check, alias handling, `import type` inclusion, and config variations.
 
 ## Notes
 
-- `import type` is **not** exempted. The file's header explains the rationale: the type _is_ the schema, so the coupling survives erasure and the rule would be gamed away if type imports were allowed.
-- When the path check fires, the rule **returns immediately** after reporting, skipping the name check. This guarantees exactly one report per offending `import` line, reducing the temptation to disable the rule.
-- Both the local binding and the imported name are checked, so `import { userModel as Users }` is still flagged via `Users`-independent matching on `userModel`.
-- Defaults are the **strict** reading (`paths: true`, both suffixes active). A config that simply enables the rule without options is never implicitly lax.
+- **`import type` is not exempted.** The rule treats type-only imports as violations because the type *is* the schema; the coupling survives erasure.
+- **Path check short-circuits the binding check.** A single `import { userModel } from './model'` produces one `path` report, not two — avoiding duplicate diagnostics on the same line.
+- **The regex anchors on a segment boundary** so that shared helpers like `@infrastructure/persistence/base-repository` are *not* flagged; a bare `endsWith('repository')` would false-positive on them.
+- **Defaults are the strict reading.** Turning the rule on with no options enables both checks with `['Repository', 'Model']`; a layer that needs a looser policy must opt in explicitly via `bindings` or `paths`.

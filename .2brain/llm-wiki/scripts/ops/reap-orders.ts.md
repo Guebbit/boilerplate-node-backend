@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/reap-orders.ts
-sha256: a895cb512aade1c8a4bc161cadcf370705e1651450c4564d96b6d69f1b32a3bf
-generated_at: 2026-09-27T13:57:42.931916+00:00
+sha256: ec669e57f10dcf0f21b2284e75b159939daaaad20b5f862f7a3709a2771f7354
+generated_at: 2026-10-14T07:24:52.709683+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Periodic operational script (`npm run reap:orders`) that anonymizes order PII once its retention window has elapsed. It never deletes a row — an order is treated as an invoice and kept whole under Art. 17(3)(b)/(e). It complements the `personalData.erase` hook in the orders module (which unsets `userId` and stamps `anonymizeAfter`); this script performs the second step of replacing remaining PII fields with placeholders.
+Periodic cron script (`npm run reap:orders`) that scrubs PII from order documents once they pass their retention window. It never deletes an order row — the order survives as a revenue record — but replaces the customer email, unsets addresses and notes, and separately scrubs staff-written timeline text that has aged past its own clock.
 
 ## Key elements
 
-- **`main`** – Top-level promise chain: `start()` → `orderService.anonymizeDueOrders()` → resolves `void`. No result is returned to the caller.
-- **`runScript('reap:orders', main, stopDatabase)`** – Registers the script under its npm label and wires `stopDatabase` as the teardown/cleanup callback. The `void` keyword discards the returned promise (fire-and-forget entry point).
-- **`orderService.anonymizeDueOrders()`** (imported from `@modules/orders`) – The single business call; replaces email, shipping name/phone/street, and notes with placeholders while preserving amounts, line items, dates, city, and country.
+- **`main`** — chains `startJob()` → `orderService.anonymizeDueOrders()` → `orderService.scrubTimelineText()`, resolving to `void`.
+- **Entry-point call** — `void runScript('reap:orders', main, stopDatabase)` wires the script into the shared observability/health reporting and guarantees DB cleanup on both success and failure paths.
 
 ## Relationships
 
-- **`scripts/run-script.ts`** — Provides the `runScript` helper that binds a script name, the main function, and a cleanup callback into the project's standard CLI lifecycle.
-- **`src/infrastructure/runtime/database.ts`** — Supplies `start()` (connection bootstrap) and `stopDatabase` (graceful teardown), giving this script DB access without owning a connection pool.
-- **`src/modules/orders/index.ts`** — Re-exports `orderService`, the service through which this script reaches order-domain logic.
-- **`src/modules/orders/services/index.ts`** — Origin of the `anonymizeDueOrders` method actually executed here.
+- **`scripts/run-script.ts`** — provides `runScript`, which runs `main`, records the outcome under the `reap:orders` health key, and invokes `stopDatabase` on completion.
+- **`src/infrastructure/config/dotenv.ts`** — imported first; populates `NODE_ORDER_PII_RETENTION_DAYS` and `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` before any model is built.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — imported second (before any Mongoose model loads) to set connection-level defaults that are read at schema-build time.
+- **`src/infrastructure/runtime/database.ts`** — supplies `startJob` (connection setup) and `stopDatabase` (teardown passed to `runScript`).
+- **`src/modules/orders/index.ts`** — re-exports `orderService`, the entry point the script calls.
+- **`src/modules/orders/services/index.ts`** — where `anonymizeDueOrders()` and `scrubTimelineText()` are actually implemented.
 
 ## Notes
 
-- **Never deletes rows.** The script only overwrites PII columns; the order record persists. This is a deliberate legal design (invoice retention), not an oversight.
-- **Retention clock starts at account-erase time, not order-creation time.** The `anonymizeAfter` date is computed as `max(now, createdAt + NODE_ORDER_PII_RETENTION_DAYS)` by the erase hook. If the order was already past its own window at erase time, `anonymizeDueOrders` will pick it up almost immediately.
-- **Runs in the cron container** alongside other `reap:*` scripts. It must not be invoked on application boot.
-- **Removal ownership:** If the orders module is removed, delete this file, the `reap:orders` npm script, and its `docker/crontab` line together.
+- **Import order matters:** `dotenv` must load before `mongoose-boot`, and `mongoose-boot` before any model, because Mongoose connection options are captured at schema-build time.
+- **Paired with a reactive hook:** the `personalData.erase` hook in `orders/module.ts` stamps `anonymizeAfter` the moment an account is erased. This script is the *sweep* half; the hook is the *trigger* half. An order already past its window is due almost immediately — the hook does not grant a fresh retention period.
+- **Two independent clocks:** order PII uses `anonymizeAfter` (set at erasure); timeline text uses its own row timestamp, so a live (non-erased) customer's timeline text still gets scrubbed once it ages past `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`.
+- **Cron, not boot:** intended to run in the same cron container as other `reap:*` scripts, never on every service start.
+- **Removal is coupled:** deleting this script also requires removing the `reap:orders` npm script entry and its `docker/crontab` line, since all three are owned by the `orders` module.

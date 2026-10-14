@@ -1,7 +1,7 @@
 ---
 source: src/modules/audit-logs/tests/unit/retention.test.ts
-sha256: fc904671480b2d4482e7ceb459022b54353488280cec1533bfd291b688a8f611
-generated_at: 2026-09-23T18:28:12.867064+00:00
+sha256: a1c65b22ff67fd8c08b89d791e3a8d37f1d3f24109cbb01aebef4b315f051368
+generated_at: 2026-10-14T15:07:01.777167+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that verifies the audit-log collection's TTL index is configured with the correct `expireAfterSeconds` value derived from the `NODE_AUDIT_RETENTION_DAYS` environment variable, including the 90-day default used when the variable is unset.
+Unit test that verifies the TTL index declared on the audit log collection resolves to the correct `expireAfterSeconds` value, both for the default (90 days) and a caller-supplied retention period. Because the TTL is baked in at module-load time from an environment variable, the tests must force a fresh import to exercise different values.
 
 ## Key elements
 
-- **`loadSchema`** – Resets the Jest module registry and dynamically re-imports `@modules/audit-logs/model`, returning `auditLogSchema`. Because `model.ts` reads the env variable _at import time_, re-importing is the only way to re-evaluate it per test.
-- **`ttlSeconds`** – Extracts the `expireAfterSeconds` value from whichever index in the schema's `indexes()` array declares one.
-- **`describe('audit log retention')`** – Contains two cases: default (90 days) and explicit override (`'30'`). An `afterEach` hook restores the original env state and resets modules between tests.
+- **`loadSchema`** — Calls `jest.resetModules()` then dynamically imports `@modules/audit-logs/model` so the import-time env read re-executes. Returns the `auditLogSchema`.
+- **`ttlSeconds`** — Extracts the first non-undefined `expireAfterSeconds` from the schema's `indexes()` declarations.
+- **`'defaults to 90 days when the variable is unset'`** — Asserts the index TTL equals `90 * 86400` when `NODE_AUDIT_RETENTION_DAYS` is not set.
+- **`'honours a configured retention'`** — Asserts the index TTL equals `30 * 86400` when the variable is set to `'30'`.
 
 ## Relationships
 
-- **`src/modules/audit-logs/model.ts`** – The sole import under test. The test exercises the import-time side-effect in that module where `NODE_AUDIT_RETENTION_DAYS` is read and used to declare a TTL index on `auditLogSchema`. No other runtime interaction exists.
+- **`src/modules/audit-logs/model.ts`** — The unit under test. The test reads `auditLogSchema.indexes()` to inspect the declared TTL index without a live database.
+- **`tests/support/environment.ts`** — Provides `setEnvironment`, used to set/clear `NODE_AUDIT_RETENTION_DAYS` before each schema re-import.
 
 ## Notes
 
-- The env variable is read once at module load (import time), not lazily. This is why `loadSchema` must call `jest.resetModules()` before each dynamic `import()`; a plain static import would cache the first evaluation and make the second test see the first test's value.
-- The 90-day default is the _production_ path (i.e., every deployment that does not set the variable), so the "default" test is arguably the more critical one.
-- `ttlSeconds` walks `schema.indexes()` and picks the first entry with a defined `expireAfterSeconds`; it does not validate that the value belongs to a TTL index specifically.
+- The entire test strategy hinges on the fact that `model.ts` reads the env var **once at import time**. Without `jest.resetModules()` the second test case would see the value captured during the first import. This is why `loadSchema` exists as a dedicated helper rather than a plain static import.
+- No database or network is required; assertions are made purely against the Mongoose schema object's index metadata.

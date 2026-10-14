@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/email.worker.ts
-sha256: c8efc02a28ba573bbd26c0c9622126ca9ec93d38cb29bfd8961f1863e604d97d
-generated_at: 2026-09-27T14:05:25.706470+00:00
+sha256: 9a9ed67a29e505174dc67fb471cb9be7e8d2d32095cd7b49d7c6a3e39273b1e1
+generated_at: 2026-10-14T07:43:06.407321+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Consumer-side handler that drains a single queued email job: validates the payload, renders the EJS template, and sends it over SMTP. It is the counterpart to `enqueueEmail` in `mailer.ts` and is wired into the worker loop by `consumeFromQueue` when a broker is configured. It performs no locale resolution — all strings are already final copy at the time the job was published.
+Consumer-side handler that drains one queued email job: it validates the payload, renders the EJS template via `sendTemplatedEmail`, and discards spooled attachments. It is the worker counterpart to `enqueueEmail` in `adapters/mailer.ts` and is wired in by `consumeFromQueue` when a broker is configured. All i18n resolution happens upstream in the producer; this file only interpolates and sends.
 
 ## Key elements
 
-- **`handleEmailJob(job: Partial<EmailJobPayload>): Promise<boolean>`** — Exports the core handler. Returns `true` on successful send, `false` on a permanent refusal (missing `to` or `templateName`, i.e. dead-letter), and *throws* on transient SMTP failure so `consumeFromQueue` can route the job to its TTL retry queue.
-- **`discardJobAttachments(attachments?)`** — Internal helper. Deletes every spooled attachment file referenced by the job. Called only on final outcomes (success or permanent refusal), never before a retry attempt.
-- **`EMAIL_QUEUE`** — Re-exported from `adapters/queue.ts` so the worker registry (`src/app/workers.ts`) can reference the queue name without importing the adapter directly.
+- **`handleEmailJob(job: Partial<EmailJobPayload>): Promise<boolean>`** — Main export. Returns `true` on successful send, `false` on permanent refusal (missing `to` or `templateName`), and *throws* on transient SMTP/network faults so `consumeFromQueue` can apply its TTL retry.
+- **`discardJobAttachments(attachments?)`** (module-private) — Fans out `discardSpooled(key)` for every attachment key. Called only on FINAL outcomes (success or permanent refusal); deliberately skipped on rethrow so a retry still has its file.
+- **`EMAIL_QUEUE`** — Re-exported from `adapters/queue.ts` for the worker registry; the queue name is owned by the adapter layer.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** — Imports `sendTemplatedEmail`, the actual render-and-send routine this worker delegates to.
-- **`src/infrastructure/adapters/mail-spool.ts`** — Imports `discardSpooled` to clean up temporary attachment files after a job reaches a terminal state.
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` for warn/error logging on invalid payloads and send failures.
-- **`src/infrastructure/adapters/queue.ts`** — Source of the re-exported `EMAIL_QUEUE` constant.
-- **`src/types/index.ts`** — Provides the `EmailJobPayload` type used throughout.
-- **`src/app/workers.ts`** — Consumes `handleEmailJob` and `EMAIL_QUEUE` to register this handler in the worker loop.
-- **`shared/contracts/asyncapi.workers.yaml`** — Documents the queue contract (message shape, topic) that this worker fulfills.
-- **`tests/unit/infrastructure/adapters/email.worker.test.ts`** — Unit tests for `handleEmailJob` and attachment-discard behavior.
+- **`adapters/mailer.ts`** — Calls `sendTemplatedEmail(job.request, job.templateName, job.data)` to render + send.
+- **`adapters/mail-spool.ts`** — Calls `discardSpooled(key)` to remove attachment files from disk.
+- **`adapters/logger.ts`** — Logs a `warn` on permanent refusal and an `error` on transient failure.
+- **`adapters/queue.ts`** — Source of the `EMAIL_QUEUE` constant re-exported here.
+- **`src/types/index.ts`** — Provides the `EmailJobPayload` type used for the job parameter.
+- **`src/app/workers.ts`** — Registers `handleEmailJob` as the consumer for `EMAIL_QUEUE`.
+- **`shared/contracts/asyncapi.workers.yaml`** — Defines the queue/message contract this worker fulfils.
+- **`tests/unit/infrastructure/adapters/email.worker.test.ts`** — Unit tests covering the success, permanent-refusal, and transient-failure paths.
 
 ## Notes
 
-- **Return-value semantics are load-bearing.** `true` = done, `false` = dead-letter (irrecoverable), `throw` = retry. `consumeFromQueue` branches on all three; a mistaken `false` where a `throw` was intended will permanently lose the email.
-- **`Partial<EmailJobPayload>` is deliberate.** The broker delivers whatever bytes were published; every field is treated as untrusted until the guard at the top of `handleEmailJob` narrows it. ESLint `no-unnecessary-condition` is suppressed accordingly.
-- **Attachments survive retries on purpose.** `discardJobAttachments` is never called in the `.catch` path — the next attempt still needs the file on disk.
-- **No locale context.** The job may execute in a different process long after the originating request ended; all user-facing strings are resolved before the job is enqueued.
+- **`false` vs. throw is the retry contract.** `false` means the job is dead (no recipient, no template) and should be dead-lettered. A thrown error means "try again later" and is picked up by the TTL retry queue. Conflating the two will either drop valid emails or poison the dead-letter queue.
+- **`Partial<EmailJobPayload>` is intentional, not laziness.** The broker delivers an opaque payload; every field is a claim until the guard at the top proves it present. Do not "tighten" the parameter type.
+- **Attachment cleanup is asymmetric by design.** On success and on permanent refusal the spooled files are discarded; on a transient failure they are left in place so the next retry attempt can still resolve them.
+- **No locale/i18n code lives here.** This worker may execute in a separate process long after the originating request, so there is no locale store to restore. All user-facing strings are pre-resolved by the producer before the job is published.

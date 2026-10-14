@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/resolver.ts
-sha256: e938fc19682cb76516292f5fff46a5aca713aa401275ed57bf487d1e97b69fd9
-generated_at: 2026-09-27T14:32:43.270263+00:00
+sha256: 455151b4fedd41e3712b953cdb670933756a9366fcf356725eace6fad93b4664
+generated_at: 2026-10-14T14:39:42.452238+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the kernel's `AuthResolver` port for this deployment. Given a raw token string it verifies the JWT, loads the authenticatable user, resolves role memberships, and assembles the `AuthContext` object that downstream guards consume. Registered at import time by `module.ts`.
+Adapts the kernel's `AuthResolver` port to the account module's active session strategy. It is the single registration point that turns a presented credential (bearer token or cookie) into an `AuthContext` for guard checks, keeping the kernel strategy-agnostic.
 
 ## Key elements
 
-- **`resolve`** (private) — Curried factory: takes a verifier function (`(token) => Promise<TokenData>`) and returns a `(token) => Promise<AuthContext | undefined>` pipeline. The pipeline chains: verify → `findAuthenticatableById` → `rolesOf` → final `AuthContext` projection.
-- **`accountAuthResolver`** (exported) — The concrete `AuthResolver` object wiring `resolve(verifyAccessToken)` and `resolve(verifyRefreshToken)` into `fromAccessToken` / `fromRefreshToken`.
+- **`accountAuthResolver: AuthResolver`** — The sole export. A plain object with three members, each a one-line delegation to `activeStrategy()` from `./strategy`:
+  - `fromBearer(token)` → `activeStrategy().resolveBearer(token)`
+  - `fromCookie(token)` → `activeStrategy().resolveCookie(token)`
+  - `cookieAuthenticates()` → `activeStrategy().cookieAuthenticates` (note: property access, not a call)
 
 ## Relationships
 
-- **`./jwt`** (`src/modules/account/session/jwt.ts`) — Supplies `verifyAccessToken`, `verifyRefreshToken`, and the `TokenData` type; the sole source of token verification logic consumed here.
-- **`@modules/users`** (`src/modules/users/index.ts`, `src/modules/users/service.ts`) — `userService.findAuthenticatableById` is called for every resolved token; determines whether the account still exists and is active.
-- **`@modules/access`** (`src/modules/access/index.ts`, `src/modules/access/service.ts`) — `rolesOf(userId, tenantId)` fetches the membership rows that are the single source of truth for role assignment.
-- **`@kernel/authentication`** (`src/kernel/authentication.ts`) — Provides the `AuthResolver` type this file fulfils.
-- **`@kernel/access/tenant`** (`src/kernel/access/tenant.ts`) — Supplies `DEPLOYMENT_TENANT_ID`, the fixed tenant constant stamped onto every `AuthContext`.
-- **`@types`** (`src/types/auth-context.ts`) — Defines the `AuthContext` shape that the final projection must match.
-- **`src/modules/account/module.ts`** — Calls `registerAuthResolver(accountAuthResolver)` at import time to install this resolver into the kernel.
+- **`src/kernel/authentication.ts`** — Supplies the `AuthResolver` type that this object must satisfy.
+- **`src/modules/account/session/strategy.ts`** — Source of `activeStrategy()`, the runtime strategy every call in this file delegates to.
+- **`src/modules/account/module.ts`** — Registers `accountAuthResolver` with the kernel via `registerAuthResolver` inside its `onRegistered` lifecycle hook.
+- **`src/modules/account/tests/unit/session-strategy.test.ts`** — Exercises the strategy layer this resolver fronts; it does not import this file directly.
 
 ## Notes
 
-- Uses `findAuthenticatableById` (not `findById`) so a deactivated or soft-deleted account is rejected on its very next request, not only at re-login.
-- MFA login challenges never reach this pipeline; they are not JWTs and fail inside `verify()` before user lookup is attempted.
-- `analyticsConsent` is read fresh from the user document on every request (so a consent withdrawal takes effect immediately), whereas `authTime`/`amr` are carried in the token claims and never re-read.
-- `rolesOf` returns `null` for a scope where no membership row exists; `kernel/permissions.ts` (`keysInScope`) maps that `null` to the correct baseline. There is no fallback role in this file.
-- `tenantId` is always the compile-time `DEPLOYMENT_TENANT_ID` constant — it is never derived from the request or the token.
-- The final projection explicitly picks only the fields the `AuthContext` port declares so the kernel never sees the full user document shape.
+- **Three distinct failure outcomes, two visible to the caller:** a bad credential resolves a *miss*, a valid credential for a deleted user resolves `undefined`, and an outage *rejects*. The guard maps the first two to the same `401` so account existence is never leaked; the internal distinction is preserved only in the miss reason the guard counts and audits.
+- **Registration timing:** `accountAuthResolver` is wired up in `onRegistered`, not at import time—deliberately deferred so the strategy can be activated before the resolver is reachable.
+- **`cookieAuthenticates` is a getter delegation** (no parentheses), unlike the other two members which are function calls.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/repository.ts
-sha256: 41963330f0428bc4b5578ef9239a806c83d5a082e94710e577f47cc4ef3ae7fb
-generated_at: 2026-09-27T14:45:26.489041+00:00
+sha256: 7dc23649a1b2aab70e0f016de8aae9eaee7ba68ad5d0c325761f239eddd28e44
+generated_at: 2026-10-14T15:10:02.631248+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,43 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cart repository that extends the shared `createRepository` factory with the six cart-specific write operations (upsert line, remove line, clear all, version-guarded clear, set shipping method, and the two cleanup deletes). All writes are keyed by `userId` alone, since the schema's unique index makes that a complete document address. Every mutating write bumps `__v` so the checkout version guard (`clearLinesIfUnchanged`) sees each change.
+Cart persistence layer. Wraps `cartModel` with the six writes a cart actually takes (upsert/remove/clear a line, version-guarded clear, shipping-method set, product/user deletion) on top of the shared CRUD factory. All line-level writes handle concurrency inline—conditions live in the MongoDB filter, not in a preceding read—so two simultaneous requests cannot both conclude "absent" and both append.
 
 ## Key elements
 
-- **`cartRepository`** — the exported repository object. Spreads `createRepository(cartModel, { transform: applyCartTransform })` for standard CRUD, then adds the cart-specific methods. Explicitly typed (not inferred) because Mongoose's generics are too large for TS inference at this boundary (TS7056).
-- **`CartLineMode`** (`'set' | 'add'`) — controls whether `upsertLine` overwrites or increments a line's quantity.
-- **`QUANTITY_LIMIT`** — sentinel string returned by `upsertLine` in `'add'` mode when the increment would exceed `CART_LINE_MAX`.
-- **`upsertLine(userId, productId, quantity, mode)`** — sets or increments one line; creates the cart if absent. Uses an atomic `findOneAndUpdate` with conditions in the filter (not a preceding read) to prevent duplicate-line races. Retries on duplicate-key errors (up to 3 attempts). In `'add'` mode, a second filter check (`quantity <= CART_LINE_MAX - quantity`) makes the cap enforcement atomic.
-- **`pushNewLine`** (internal) — `$push`es a new line with `upsert: true`, creating the cart document if needed.
-- **`removeLine(userId, productId)`** — `$pull`s one line; resolves `null` if cart or line is absent (lets callers return 404 without a separate read).
-- **`clearLines(userId)`** — empties `items`; does **not** upsert (a missing cart is already empty).
-- **`clearLinesIfUnchanged(userId, version)`** — empties `items` **only if** `__v` still matches the caller's read. The losing half of the checkout race; uses `timestamps: false` so an untouched cart isn't stamped as "recently edited."
-- **`setShippingMethod(userId, shippingMethodId)`** — sets or clears (`$unset`) the shipping method; uses `upsert: true` since it may be set before any lines exist.
-- **`deleteByUserId(userId, session?)`** — hard-deletes the cart document; accepts an optional `ClientSession` for transactional cleanup.
-- **`removeProductFromAll(productId)`** — removes a product's lines from every cart (product-deletion cleanup).
+- **`CartLineMode`** — `'set' | 'add'`; controls whether `upsertLine` replaces or increments a line's quantity.
+- **`LineWrite`** — `{ cart, created }`; the result shape returned by line writes (`created: true` means a new line was inserted).
+- **`QUANTITY_LIMIT`** — sentinel string (`'quantity-limit'`) returned (not thrown) when an `'add'` would push a line past `cartLineMax()`.
+- **`upsertLine`** (internal, exposed via the repository) — set or increment one line; retries on duplicate-key up to 3 times; in `'add'` mode enforces the quantity ceiling atomically inside the filter.
+- **`pushNewLine`** (internal) — `$push`es a new line, upserts the cart document, bumps `__v`.
+- **`unchangedOrPushed`** (internal) — `'set'` no-op path: if the line already holds the exact quantity, returns it untouched; otherwise delegates to `pushNewLine`.
+- **`cartRepository`** (exported) — the public object:
+  - `findByUserId` — read; `null` means the user has no cart (no placeholder docs are ever created).
+  - `upsertLine` / `removeLine` / `clearLines` — the three basic line writes.
+  - `clearLinesIfUnchanged(userId, version, session?)` — conditional empty used by checkout as the race guard (only one of two parallel checkouts wins).
+  - `setShippingMethod` — replaces or clears the shipping method.
+  - `deleteByUserId` / `removeProductFromAll` — cleanup writes owed to user/product deletion.
+  - Standard CRUD methods from `createRepository`.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository`, `toObjectId`, `Repository`, and `Wire`. `cartRepository` spreads the factory's CRUD and calls `toObjectId` in every filter.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — `isDuplicateKey` is the guard in `upsertLine`'s `.catch` to decide whether to retry a contended upsert.
-- **`src/modules/cart/model.ts`** — source of `cartModel`, `applyCartTransform`, `CART_LINE_MAX`, and the `CartDocument` type used throughout.
-- **`src/modules/cart/services/checkout.ts`** — calls `clearLinesIfUnchanged` as the conditional-write step that resolves the parallel-checkout race (only one checkout wins the version guard).
-- **`src/modules/cart/services/items.ts`** — primary consumer of `upsertLine`, `removeLine`, and `clearLines` for the cart item endpoints.
-- **`src/modules/cart/services/reorder.ts`** — calls repository write methods when re-adding a previously purchased set of items.
-- **`src/modules/cart/services/cleanup.ts`** — calls `deleteByUserId` (user deletion) and `removeProductFromAll` (product deletion).
-- **Test files** (`checkout-version.test.ts`, `schema-contract.test.ts`, `service.test.ts`, `stock.test.ts`, `order-snapshot-locale.test.ts`, `product-removal-protects-orders.test.ts`) — integration suites exercising the version guard, cap enforcement, schema shape, and cleanup paths.
+- **`src/modules/cart/model.ts`** — provides `cartModel`, `applyCartTransform`, and the `CartDocument` type used throughout.
+- **`src/modules/cart/config.ts`** — provides `cartLineMax()`, the per-line quantity ceiling read once per `upsertLine` call.
+- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository` (standard CRUD), `toObjectId`, and the `Repository`/`Wire` types that shape the export.
+- **`src/infrastructure/persistence/mongo-errors.ts`** — provides `isDuplicateKey`, used to detect and retry contended upserts.
+- **`src/modules/cart/services/checkout.ts`** — consumes `clearLinesIfUnchanged` as the conditional-write half of checkout.
+- **`src/modules/cart/services/items.ts`** — consumes `upsertLine`, `removeLine`, `clearLines`, `findByUserId`.
+- **`src/modules/cart/services/cleanup.ts`** — consumes `deleteByUserId`, `removeProductFromAll`.
+- **`src/modules/cart/services/merge.ts` / `reorder.ts`** — consume `findByUserId` and the standard CRUD writes.
+- **Integration tests** (`checkout-version`, `line-availability`, `merge`, `merge-effects`, `preorder`) — exercise the repository's concurrency and quantity-limit paths end-to-end.
 
 ## Notes
 
-- **`$elemMatch` is mandatory in `'add'` mode.** Two separate `'items.x'` filter conditions can each match a *different* array element; only `$elemMatch` guarantees `items.$` binds to the single element that matched both conditions. Using the flat form silently writes the quantity to the wrong product.
-- **`__v` bump is non-negotiable on every write.** The checkout version guard reads `__v` once and later empties conditionally on it. Any write that skips `$inc: { __v: 1 }` is invisible to that guard and would let a concurrent mutation be silently dropped.
-- **`upsertLine` retry cap is 3.** `attemptsLeft` only bounds a pathological loop; the duplicate-key path converges on the next pass by design (MongoDB's contended-upsert guidance).
-- **`clearLinesIfUnchanged` uses `timestamps: false`** while `clearLines` does not: the former is checkout's side effect, not a shopper action, and should not bump `updatedAt`.
-- **`findByUserId` returning `null` ≡ empty cart.** No code path creates a placeholder cart document; callers must treat `null` and `{ items: [] }` as equivalent.
-- **Explicit generic on the `.then` callback** in `upsertLine` is load-bearing: without it, TS infers the callback's return from the outer function signature and drops the `QUANTITY_LIMIT` branch.
+- **`__v` is the concurrency currency.** Every mutating write bumps `__v`. Skipping the bump (e.g., a line added mid-checkout) makes the write invisible to `clearLinesIfUnchanged`'s guard, silently dropping the line instead of failing the checkout.
+- **`$elemMatch` is load-bearing.** Two separate top-level `items.x` conditions can each match *different* array elements, causing the positional `$` operator to update the wrong line. The code uses `$elemMatch` to guarantee a single-element match.
+- **`'set'` mode matches only lines whose quantity *differs*.** An identical PUT must not bump `__v`, or repeating it mid-checkout would fail with `CART_CHANGED` (violates idempotency per RFC 9110 §9.2.2).
+- **`QUANTITY_LIMIT` is a resolved value, not a rejection.** Callers must check the sentinel rather than catching an error.
+- **`attemptsLeft` defaults to 3** and bounds both the duplicate-key retry and the contended `'add'` re-read loop. Exhausting it throws a plain `Error`.
+- **`clearLines` deliberately does not upsert.** A user with no cart already satisfies "empty"; `null` is the correct answer, and no placeholder document is created.
+- **Explicit type annotation on `cartRepository`** is required (TS7056) because Mongoose's generics are too large for the compiler to infer at the export boundary.
+- **No upsert on `findByUserId`**: `null` is a meaningful state equivalent to an empty cart.

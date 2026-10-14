@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/runtime/otel-sdk.ts
-sha256: f224c14441dcdd29ccdbaca7b568d5f1402cbaf13bc09691bdea8112b76601b4
-generated_at: 2026-09-27T14:15:22.974282+00:00
+sha256: 97b34f9a892b400dfa814979734d015cfd5c7bf40b93a70b5acd4d8785563469
+generated_at: 2026-10-14T08:14:18.814430+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Bootstraps the OpenTelemetry SDK for this Node process. It wires up resource identity, a batch OTLP span export pipeline, and auto-instrumentations for the four libraries the app uses (HTTP, Express, Mongoose, Redis). Because the instrumentation packages monkey-patch their target modules at `sdk.start()` time, this module **must** be imported before any of those libraries begin handling traffic; otherwise already-loaded code paths stay un-patched and produce no spans.
+Bootstraps the OpenTelemetry Node SDK with auto-instrumentation (HTTP, Express, Mongoose, Redis), OTLP span export, and trace-context propagation. It must be imported *before* any instrumented library handles traffic, because instrumentation patches global modules at `sdk.start()` time. The module also enforces two security properties: sensitive query parameters are redacted from span URLs, and public endpoints never adopt an inbound trace id (to prevent trace hijacking and forced sampling).
 
 ## Key elements
 
-- **`redactUrlSecrets(target)`** – Exported pure helper. Replaces the values of `code` and `state` query params with `REDACTED` so OAuth secrets never appear in span URL attributes.
-- **`redactIncomingUrl(span, request)`** – Internal. Called via `HttpInstrumentation`'s `requestHook`; overwrites both `http.target`/`http.url` (v1) and `url.query` (v2) span attributes when the query carries a secret.
-- **`buildProcessors()`** – Exported. Returns `[BatchSpanProcessor + OTLPTraceExporter]` when `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` (or the generic endpoint) is set, otherwise `[NoopSpanProcessor]` so the SDK still registers a tracer provider and spans carry a trace id for log/audit correlation. Exported separately so tests can build the real processor without triggering global monkey-patching.
-- **`startTracing()`** – Exported, idempotent. Creates the `NodeSDK` with resource, processors, and the four instrumentations, then calls `sdk.start()`. A module-level `started` flag prevents double-registration in cluster workers (each gets its own process-local flag).
-- **`shutdownTracing()`** – Exported. Calls `sdk.shutdown()` to flush the `BatchSpanProcessor`'s in-memory queue. Intended to run last in the shutdown chain so teardown work is still traced.
-- **`sdk` / `started`** – Module-scope singletons. `sdk` holds the live `NodeSDK` instance; `started` is the idempotency guard.
+- **`startTracing()`** – Idempotent entry point. Builds the `NodeSDK` with resource attributes, span processors, propagator, and four auto-instrumentations, then calls `sdk.start()`. A module-level `started` flag prevents double-patching.
+- **`buildProcessors()`** – Returns a `BatchSpanProcessor` (OTLP HTTP exporter) when an OTLP endpoint is configured, or a `NoopSpanProcessor` otherwise. Exported so tests can construct the real processor without triggering `sdk.start()`.
+- **`publicEndpointPropagator()`** – Returns a `TextMapPropagator` that *injects* `traceparent` on outgoing calls but *never* extracts an inbound one, preventing callers from controlling this service's trace id or baggage.
+- **`trustedIngressPropagator()`** (private) – Standard W3C Trace Context + Baggage composite, used when `NODE_TRUSTED_INGRESS` is set so the caller's trace continues as parent.
+- **`linkInboundTrace()`** – Extracts a valid span context from an inbound `traceparent` header and adds it as a *span link* (correlation without adoption).
+- **`redactUrlSecrets()`** – Replaces the values of query params listed in `QUERY_SECRETS` (`code`, `state`) with `REDACTED`.
+- **`onIncomingRequest()`** (private) – The `requestHook` passed to `HttpInstrumentation`; redacts URL secrets on the span, then links the caller's trace unless a trusted ingress already made it the parent.
+- **`QUERY_SECRETS`** – `['code', 'state']`, the OAuth callback params that must never appear in clear in span attributes.
+- **`sdk`** – Module-scoped singleton holding the running `NodeSDK` instance, accessible to `shutdownTracing()` for clean flush.
 
 ## Relationships
 
-- **`src/app.ts`** – Imports `startTracing` (and possibly `redactUrlSecrets`) before Express/mongoose/redis start serving, ensuring the patches are in place before the first request.
-- **`src/cluster.ts`** – Spawns worker processes; each worker independently imports this module and calls `startTracing()`, relying on the per-process `started` flag to stay idempotent.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls `shutdownTracing()` as the final step in the graceful-shutdown sequence so the last batch of spans is flushed before the process exits.
-- **`tests/unit/infrastructure/runtime/otel-sdk.test.ts`** – Exercises `redactUrlSecrets` and `buildProcessors` (and potentially the redaction hook) without calling `startTracing`, since that would monkey-patch globals inside a shared Jest worker.
+- **`src/infrastructure/runtime/config.ts`** – Imports `loggingConfig` (service name) and `tracingConfig` (service version, OTLP endpoint, `NODE_TRUSTED_INGRESS`, `npm_package_version`). Relative import used because this file loads before path-alias resolution is available.
+- **`src/app.ts`** – Imports `startTracing` to bootstrap instrumentation before the Express app begins serving requests.
+- **`src/cluster.ts`** – Each cluster worker process imports and calls `startTracing` independently; the `started` guard is per-process by design.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls the shutdown path (flush + `sdk.shutdown()`) during graceful process exit.
+- **`tests/unit/infrastructure/runtime/otel-sdk.test.ts`** – Exercises `redactUrlSecrets`, `buildProcessors`, and propagator behavior without invoking the full `sdk.start()` monkey-patch.
 
 ## Notes
 
-- Import **order matters**: this file must be the first thing imported in the process before any of express, mongoose, or redis are loaded. A late import silently produces no spans for those libraries.
-- `buildProcessors` reads the endpoint and headers from the standard `OTEL_EXPORTER_OTLP_*` env vars (the exporter handles header parsing/percent-decoding per the OTLP spec); there is no manual URL or header construction here.
-- The `NoopSpanProcessor` fallback is deliberate: an empty `spanProcessors` array would cause the SDK to skip registering a TracerProvider entirely, turning all spans into no-ops and losing the trace-id correlation that logs and audit rows depend on.
-- Only the four instrumentations the app actually uses are loaded, rather than the `@opentelemetry/auto-instrumentations-node` bundle, to keep startup cost lower.
-- `QUERY_SECRETS` is hardcoded to `['code', 'state']`; adding a new OAuth flow param requires updating this list.
+- **Import order matters.** This module must be the first thing imported in any entry point that will serve traffic; anything already loaded runs un-patched and emits no spans.
+- **`redactedQueryParams` is not used.** The HTTP instrumentation's built-in `redactedQueryParams` option only covers *outgoing* requests; incoming secrets are handled via the `requestHook` (`onIncomingRequest`) instead.
+- **No-endpoint fallback is intentional.** When no OTLP endpoint is set, spans are created (so log/audit correlation still works) but dropped by `NoopSpanProcessor` rather than failing to export.
+- **Semantic-convention attribute keys** (`ATTR_SERVICE_NAME`, `ATTR_SERVICE_VERSION`) are used instead of raw strings to stay aligned with the OTel spec that tracing backends rely on for grouping.
+- **`@opentelemetry/sdk-trace`** (not `-node`) is the source for `BatchSpanProcessor`/`NoopSpanProcessor`; the `-node` package now only re-exports it.

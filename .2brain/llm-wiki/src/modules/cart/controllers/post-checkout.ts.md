@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/controllers/post-checkout.ts
-sha256: a577ba04800a71ffe186c79d8312e3d7a9fd4b76d271e21bb7de1d085be3c316
-generated_at: 2026-09-27T14:43:58.524253+00:00
+sha256: b6768cb112e305e0481505a05bd795beff9c1ec5d264f0ed4532f9edef0e9217
+generated_at: 2026-10-14T15:08:25.319355+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-HTTP adapter for `POST /cart/checkout`. It validates the request body, delegates to `cartService.orderConfirm` to convert the cart into an order, records the `cart_checkout_total` metric on every outcome (success, business-rejection, or thrown error), and shapes the success response via `orderService.withActions`.
+HTTP controller for `POST /cart/checkout`. It validates the request body, delegates to `cartService.orderConfirm`, records the `cart_checkout_total` metric on every outcome, transforms the resulting order through `orderService.withActions` into its wire shape, and returns a `201` with the created order. Exists to keep the HTTP/response concerns out of the cart service layer.
 
 ## Key elements
 
-- **`postCheckout`** (exported) — The sole export. Reads `request.authContext!.id`, parses the body against the `CheckoutBody` Zod schema, then chains:
-  1. `cartService.orderConfirm(userId, callerContext, addressId, paymentMethod, notes)`
-  2. On resolution: increments `cartCheckoutTotal`, returns early via `refused()` if the result is a business rejection; otherwise calls `orderService.withActions` to produce the wire-shaped `CheckoutResponse` and sends a **201** via `successResponse`.
-  3. On rejection (`.catch`): increments `cartCheckoutTotal` with `status: 'failure'`, then delegates to `catchAs(response, 'postCheckout')`.
+- **`postCheckout(request, response)`** — The single exported handler. Parses the body against the `CheckoutBody` Zod schema, calls `cartService.orderConfirm(userId, callerContext, body)`, and either responds `201` (with the order serialized via `orderService.withActions`) or delegates the failure to `catchAs`.
+
+- **Metric recording** — `cartCheckoutTotal.inc({ status })` fires in three places: the success branch, the `refused()` branch (implicit — the metric line precedes the `refused` guard), and the `.catch` branch. A checkout that throws is still counted as a `failure` observation.
+
+- **`orderService.withActions(result.data, request.authContext)`** — Converts the `OrderDocument` into the response wire shape, resolving each line item's live `current` picture. A plain `.toJSON()` would omit that field.
+
+- **`createdResponse<Order>(…)`** — Sends `201`, the serialized order body, a `Location` header of `/orders/:id`, and the i18n `orders.creation-success` string as the envelope message.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — provides `parseBody`, `refused`, and `catchAs` (body validation, rejection short-circuit, error serialization).
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to extract the authenticated caller context for the service call.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` to send the 201 payload.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — provides the `t()` translation function for the success message (`orders.creation-success`).
-- **`src/modules/cart/services/index.ts`** — source of `cartService.orderConfirm`, the actual cart→order business logic.
-- **`src/modules/cart/metrics.ts`** — source of the `cartCheckoutTotal` Prometheus counter.
-- **`src/modules/orders/index.ts` / `services/index.ts`** — source of `orderService.withActions`, which resolves the `OrderDocument` into its API wire shape.
-- **`src/types/index.ts`** — source of the `CheckoutResponse` type used in the success payload.
-- **`src/modules/cart/routes.ts`** — registers this handler on the `POST /cart/checkout` route.
+- **`src/modules/cart/services/index.ts`** — Provides `cartService.orderConfirm`, the core business call.
+- **`src/modules/cart/metrics.ts`** — Provides the `cartCheckoutTotal` Prometheus counter incremented on every outcome.
+- **`src/modules/orders/index.ts`** — Provides `orderService.withActions`, which shapes the order for the HTTP response.
+- **`src/infrastructure/http/controller.ts`** — Provides `parseBody`, `refused`, and `catchAs` (the shared validation/error-refusal helpers).
+- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to extract the authenticated user's context for the service call.
+- **`src/infrastructure/http/response.ts`** — Provides `createdResponse` (the 201 envelope helper).
+- **`src/infrastructure/i18n/index.ts`** — Provides the `t()` translator used for the success message.
+- **`src/types/index.ts`** — Supplies the `Order` type used as the generic parameter on `createdResponse`.
+- **`src/modules/cart/routes.ts`** — Imports `postCheckout` to register it on the `POST /cart/checkout` route.
 
 ## Notes
 
-- **Body fallback:** `request.body ?? {}` is required because Express 5 leaves `body` as `undefined` when the client sends no body; a checkout with an empty body is legal.
-- **Metric timing:** `cartCheckoutTotal.inc` fires *before* `refused()` on the business-rejection path and *before* `catchAs` on the error path, guaranteeing exactly one increment per call regardless of outcome.
-- **`withActions` vs `.toJSON()`:** The comment notes that `withActions` is the single point where an `OrderDocument` becomes the wire shape and resolves each line's live `current` picture; calling `.toJSON()` directly would omit that data from the response.
-- **Non-null assertion:** `request.authContext!` assumes the auth middleware has already populated the context; no guard exists in this file.
+- The metric increment happens **before** the `refused()` guard in the success path, so a business-level refusal (e.g., cart total mismatch) is recorded as `failure`, not skipped. The `.catch` handler also increments `failure` independently — a thrown error is a second failure path.
+- `request.authContext!.id` uses a non-null assertion; the route is assumed to be behind an auth middleware that always populates `authContext`.
+- The body is intentionally required: omitting it causes `parseBody` to receive `undefined`, which fails the `CheckoutBody` schema and returns `422` — same treatment as any malformed body.
+- The i18n key `orders.creation-success` lives in the *orders* namespace, not the *cart* namespace, because the response describes the created order resource.

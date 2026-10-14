@@ -1,7 +1,7 @@
 ---
 source: src/kernel/access/query.ts
-sha256: 64ba86bb88435cf3111b9963c39dff2491888c7da22ad56e5a89d646fd705f42
-generated_at: 2026-09-27T14:17:58.611204+00:00
+sha256: 79e4445839a5588249216923ed4a902392b5e7b70b4d2d0747553e7ecb3687bd
+generated_at: 2026-10-14T08:20:36.609152+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Compiles a caller's CASL permission rules into a ready-to-spread MongoDB filter fragment, so that "the restriction rides in the read" is a library guarantee rather than a per-module convention. It centralizes the translation (rule → query) in one place, eliminating the silent drift that arises when each module maintains its own filter fragment alongside the rules.
+Compiles a caller's CASL rules into a MongoDB filter so that the authorization restriction is embedded in the read query itself, rather than being a convention each module must independently remember. This is the kernel's sole store-specific authorization file (the other is `outbox.ts`), and it guarantees fail-closed behaviour: when no rule matches, the result is CASL's `EMPTY_RESULT_QUERY` (matches nothing), never an absent filter that downstream code would interpret as "unrestricted."
 
 ## Key elements
 
-- **`accessibleFilter(context, subject, action?)`** — Primary export. Resolves the caller, builds the ability, compiles it via `@casl/mongoose`'s `accessibleBy`, rewrites the result for storage, and collapses degenerate `$or` shapes. Returns a **filter fragment** (spread into the query), not a full query.
-- **`hasAnonymousReadScope(scopeOf, context)`** — Exported helper for cache-key logic. Returns `true` when a caller's compiled filter is identical (by JSON equality) to the anonymous filter for the same subject, making cache-sharing safe by construction.
-- **`UNSTORED_FIELDS`** — Set of rule fields that don't exist in this deployment's collections (currently only `tenantId`). Stripped during the rewrite so they don't produce a no-match filter.
-- **`coerce`** — Per-field value transformers applied during the rewrite (e.g., `userId` string → `Types.ObjectId`).
-- **`toStorage(query)`** — Recursive rewrite of a compiled condition: drops unstored fields, coerces values, recurses into `$or`/`$and` arrays.
-- **`collapse(filter)`** — Post-rewrite simplification: if any `$or` branch is `{}`, the whole filter becomes `{}`; a single-branch `$or` is unwrapped.
-- **`matchesEverything(branch)`** — Internal check for an empty-object branch.
+- **`accessibleFilter(context, subject, action?)`** — Primary export. Takes a resolved `AuthContext` (or `undefined` for anonymous), resolves the caller via `callerForSubject`, and returns a MongoDB filter fragment. Intended to be **spread** into a query, not used as a standalone query.
+- **`accessibleFilterFor(caller, subject, action?)`** — Same as above but accepts an already-resolved `Caller` directly (used by routes reachable by both sessions and API keys).
+- **`hasAnonymousReadScope(scopeOf, who)`** — Returns `true` when a caller's compiled filter is identical to the anonymous filter, by JSON-comparing the outputs of a module-supplied `scopeOf` function. Designed for cache-key logic so that a role change that widens visibility automatically invalidates sharing.
+- **`UNSTORED_FIELDS`** (private) — Set of rule fields that have no corresponding column in this deployment's collections (currently `tenantId`). `toStorage` strips them before the query hits Mongo.
+- **`coerce`** (private) — Per-field value coercion applied during query construction (currently `userId` string → `Types.ObjectId`).
+- **`toStorage`** (private) — Recursively rewrites a CASL-compiled query object: strips `UNSTORED_FIELDS`, applies `coerce`, and descends into `$or`/`$and` arrays.
+- **`collapse`** (private) — Simplifies degenerate `$or` expressions produced after stripping un-stored fields (e.g. a single-branch `$or` or an `$or` containing a match-everything `{}` branch).
 
 ## Relationships
 
-- **`src/kernel/ability.ts`** — Imports `buildAbility`; provides the ability instance that `accessibleBy` compiles.
-- **`src/kernel/permissions.ts`** — Imports `anonymousCaller` and `callerForSubject` to resolve the caller from the auth context.
-- **`src/types/index.ts`** (via `@types`) — Supplies the `AuthContext` type used in both exports' signatures.
-- **`src/modules/products/routes.ts`**, **`src/modules/products/service.ts`** — Consume `accessibleFilter` to scope product reads.
-- **`src/modules/locales/routes.ts`**, **`src/modules/locales/services/capabilities.ts`** — Consume `accessibleFilter` and/or `hasAnonymousReadScope` for locale/capability reads.
-- **`src/modules/orders/services/scope.ts`**, **`src/modules/payments/services/scope.ts`** — Provide module-specific `scopeOf` functions passed into `hasAnonymousReadScope` for cache-key scoping.
-- **`tests/unit/kernel/access-query.test.ts`** — Unit tests covering the compile, rewrite, collapse, and anonymous-scope-comparison paths.
+- **`src/kernel/ability.ts`** — Provides `buildAbility`, which this file calls to obtain the CASL `IAbility` instance that `accessibleBy` compiles.
+- **`src/kernel/permissions.ts`** — Provides `anonymousCaller` (the fallback identity) and `callerForSubject` (resolves an `AuthContext` into a `Caller` for a given subject).
+- **`src/types/auth-context.ts` / `src/types/index.ts`** — Source of the `AuthContext` and `Caller` types consumed by the public API.
+- **`src/modules/products/services/read.ts`, `src/modules/orders/services/scope.ts`, `src/modules/payments/services/scope.ts`, `src/modules/example/services/crud.ts`** — Module-level read/scope services that spread `accessibleFilter` into their collection queries.
+- **`src/modules/products/routes.ts`, `src/modules/locales/routes.ts`** — Route handlers (reachable by both session and API key) that call `accessibleFilterFor` with `request.caller`.
+- **`src/modules/locales/services/capabilities.ts`, `src/modules/example/services/cover.ts`** — Consumers of `hasAnonymousReadScope` for cache-key or capability checks.
+- **`tests/unit/kernel/access-query.test.ts`** — Unit tests covering `toStorage`, `collapse`, coercion, and the public exports.
+- **`src/modules/products/tests/integration/api-key-reads.test.ts`** — Integration test exercising the `accessibleFilterFor` (API-key) path end-to-end.
 
 ## Notes
 
-- **Spread, don't assign.** `accessibleFilter` returns a fragment (`{}` for unrestricted, a condition object for scoped). Callers must spread it: `{ ...accessibleFilter(ctx, 'Order'), status: 'paid' }`. It is deliberately never `undefined`—`{}` and a missing filter are distinct states.
-- **Fails closed.** A caller with no matching rule compiles to CASL's `EMPTY_RESULT_QUERY` (matches zero rows), not to a missing filter that downstream code might interpret as "unrestricted."
-- **`UNSTORED_FIELDS` is not the tenancy switch.** Removing `tenantId` from the set scopes only the reads that go through this function. Most collections carry no organisation column and most modules never compile a scoped filter; emptying this set leaves the majority of reads unrestricted. Full tenancy pooling is documented in `docs/theory/tenancy.md §10`.
-- **`hasAnonymousReadScope` compares by filter equality, not row probing.** A role change that widens visibility makes the two JSON-serialized filters unequal on its own, so no separate cache-invalidation step is needed.
-- **`coerce` is intentionally minimal.** Currently only `userId` (string → `ObjectId`). Add a new coercion here if a rule field's type differs from the storage type; do not handle it per-module.
+- The filter returned by `accessibleFilter`/`accessibleFilterFor` is a **fragment**, not a complete query. An unrestricted caller gets `{}` (empty object), deliberately distinct from `undefined`, so "no conditions" and "no rules" are not conflated by callers.
+- `UNSTORED_FIELDS` is **not** the tenancy switch. Emptying the set would only remove the `tenantId` condition from a minority of queries; most collections carry no organisation column and most modules never compile a scoped filter at all. True pooled tenancy requires the full list in `docs/theory/tenancy.md §10`.
+- The `coerce` map exists because a string `userId` in a Mongo filter silently matches nothing (the collection stores ObjectIds). Without coercion the failure is "everything hidden," which is the opposite disguise of the missing-restriction bug.
+- This file is explicitly Mongo-specific. It should not be imported from non-Mongo storage layers.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/self-service.test.ts
-sha256: aa3289199827da04496b6d2dc1e56c493c2527d4a232d792f8d6499170e43f57
-generated_at: 2026-09-27T14:35:21.167679+00:00
+sha256: 2cdf01b484878c76a48a51db6767671eee88d09b281577d1e4528d224879f866
+generated_at: 2026-10-14T14:40:54.081767+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,34 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for the self-service account surface — profile update, password change, session revocation, and email verification — exercised at the service/repository layer. Each test group defends a specific invariant (e.g. profile update cannot touch role/state/password; a wrong current password yields 422, never 401; at most one verification link is valid, always the newest).
+Integration tests for the self-service account surface (profile update, password change, session revocation, email verification) at the service/repository layer. Each test group defends a specific invariant: profile updates cannot mutate role/state/password, a wrong current password yields 422 (not 401), and at most one verification link is valid (always the newest).
 
 ## Key elements
 
-- **Port mocks (audit, analytics, access)** — `jest.mock` factory replacements for `emitAuditEvent`, `recordAudit`, `emitAnalyticsEvent`, and `rolesOf`. Replaced rather than spied because CommonJS namespace-import getters are non-configurable (breaks `jest.spyOn` under swc/Stryker). `recordAudit` is manually rerouted to call through to the mocked `emitAuditEvent`.
-- **`readTokens(userId)`** — helper that fetches a user's stored tokens via `userRepository.findByIdWithCredentials`.
-- **`describe('updateProfile', …)`** — covers: owned-field updates, invalid-email 422, deleted-account 401 (not 404), role/active/password escalation rejection, pending-email staging vs. immediate change, case-insensitive no-op restatement, 409 collision on both `email` and `pendingEmail` of other users.
-- **`describe('cancelPendingEmailChange', …)`** — covers: explicit cancel, no-op when nothing pending, revocation of the live `EMAIL_CHANGE_TOKEN_TYPE` token, and conditional `AUTH_EMAIL_CHANGE_CANCELLED` audit emission.
-- **Additional service imports** — `passwordChangeWithCurrent`, `sendVerificationEmail`, `completeEmailChange`, `VERIFY_RESEND_SECONDS`, `EMAIL_VERIFY_TOKEN_TYPE`, `EMAIL_CHANGE_TOKEN_TYPE` (file is truncated after the cancel block).
+- **`readTokens`** — alias for `tokenRowsOf`; reads the stored one-time-token rows for an account.
+- **`sessionIdOfRow`** — extracts a revocation session id from a lookup result (may be undefined).
+- **`describe('updateProfile')`** — the largest block; covers field mutation, avatar unset + file deletion, invalid-email 422, deleted-account 401, privilege-escalation rejection, pending-email flow (new address, restatement no-op, case-insensitivity, collision 409, pending-vs-pending collision).
+- **`describe('cancelPendingEmailChange')`** — verifies explicit clearing of a pending email change.
+- **Mock blocks** (`jest.mock` for `@infrastructure/observability/audit`, `@infrastructure/observability/analytics`, `@modules/access`) — replace the ports rather than spy on them (see Notes).
+- **`setupTestDb()` / `afterEach(jest.restoreAllMocks)`** — lifecycle setup for an in-memory DB and mock cleanup.
 
 ## Relationships
 
-- **`src/modules/account/services/index.ts`** — primary SUT; all service functions under test are imported from here.
-- **`src/modules/users/tests/factories.ts`** — provides `createUser`, password fixtures (`LEGACY_PASSWORD`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`), and the `userRepository` handle used for assertions and deletion.
-- **`src/modules/users/index.ts`** — exports `TokenType` and `hashToken` used in token assertions.
-- **`src/modules/users/repository.ts`** — underlying data access exercised through the factories' repository handle.
-- **`src/modules/access/index.ts`** — `rolesOf` is mocked (call-through by default) to verify that profile update cannot alter membership; `DEPLOYMENT_TENANT_ID` from **`src/kernel/access/tenant.ts`** is passed as the tenant scope.
-- **`src/modules/account/audit.ts`** — `accountAuditActions` enum values are the expected audit `action` strings in assertions.
-- **`src/modules/account/analytics.ts`** — `accountAnalyticsEvents` values used in analytics assertions.
-- **`src/infrastructure/observability/audit.ts`** / **`src/infrastructure/observability/analytics/index.ts`** — the actual port modules, replaced wholesale by the `jest.mock` factories.
-- **`src/infrastructure/adapters/logger.ts`** — imported (likely for log-output assertions or suppression in specific cases).
+- **`src/modules/account/services/index.ts`** — imports `accountService`, `updateProfile`, `passwordChangeWithCurrent`, `sendVerificationEmail`, `completeEmailChange`, and the token-type / rate-limit constants under test.
+- **`src/modules/account/tests/factories.ts`** — provides `ageTokenSend`, `plantSession`, `plantToken`, `sessionRowsOf`, `tokenRowsOf` used to seed and inspect stored rows.
+- **`src/modules/account/audit.ts`** — imports `accountAuditActions` (audit action identifiers asserted on the replaced audit port).
+- **`src/modules/account/analytics.ts`** — imports `accountAnalyticsEvents` (analytics event identifiers asserted on the replaced analytics port).
+- **`src/modules/access/index.ts`** — imports `rolesOf` and the `accessPort` namespace; the mock wraps `rolesOf` in a `jest.fn` that calls through to the real implementation by default.
+- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID` for role-lookup assertions.
+- **`src/infrastructure/adapters/image-store.ts`** — spied (`imageStore.remove`) to verify file deletion after avatar unset.
+- **`src/infrastructure/adapters/logger.ts`** — imported (likely for log-assertion or suppression in later blocks).
+- **`src/infrastructure/security/hash-token.ts`** — imports `hashToken` for token-hashing helpers in test setup.
+- **`src/infrastructure/observability/audit.ts`** & **`src/infrastructure/observability/analytics/index.ts`** — both fully mocked; the test asserts on the replaced `emitAuditEvent` / `emitAnalyticsEvent` fns.
 
 ## Notes
 
-- **Why `jest.mock` factory instead of `jest.spyOn`**: the non-configurable getter on CJS namespace imports makes `spyOn` fail under the `swc` transform used by `jest.config.mutation.js` and inside Stryker's sandbox. The full rationale lives in `tests/support/ports.ts`.
-- **`recordAudit` indirection**: the real `recordAudit` closes over its own module's `emitAuditEvent`; the mock factory re-implements it to call the *mocked* `emitAuditEvent`, so a spy on `emitAuditEvent` sees both direct and `recordAudit`-originated events.
-- **401 ≠ 404 for deleted accounts**: `openapi.yaml` declares no 404 on `PUT/PATCH /account`; a verified token referencing a deleted user is treated as unauthenticated (401) consistently with `isAuth` elsewhere.
-- **Strict schema rejection**: `zodProfileSchema` is `.strict()` — sending `role`/`active`/`password` in the body causes the *entire* request to be rejected (422) rather than silently dropping those fields.
-- **Case-insensitive email restatement (B5)**: `SAME@Example.com` vs `same@example.com` is a no-op that preserves `verifiedAt` and does not create a `pendingEmail`.
-- **`rolesOf` mock is call-through**: every test that needs a real membership lookup gets it; only the one escalation test overrides with `mockRejectedValueOnce`.
+- **Ports are replaced, not spied.** `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes; this fails under the SWC transform used by `jest.config.mutation.js` and inside Stryker's sandbox. The `audit` mock additionally reroutes `recordAudit` through the replaced `emitAuditEvent` because `recordAudit` closes over its own module's real function.
+- **401 vs 404 for deleted accounts.** A verified token for a deleted account returns 401 (unauthenticated), not 404. This matches `openapi.yaml` (no 404 declared on `PUT/PATCH /account`) and the `isAuth` middleware convention.
+- **Strict schema rejection.** `zodProfileSchema` is strict: including `role`, `active`, or `password` in the body causes the entire request to be rejected with 422 rather than silently dropping those fields.
+- **Case-insensitive email restatement.** Submitting the current or pending address in a different case is treated as a no-op; the already-mailed verification link remains valid.
+- **Avatar deletion is a single call.** The image store derives the thumbnail path from the main URL, so one `remove` call covers both files.

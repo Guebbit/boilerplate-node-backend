@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/session/config.ts
-sha256: 85a6b3cf7a324a5bd2bded5e3bb8d611185bb45dbe96dfd71e87cc5477dc1681
-generated_at: 2026-09-23T18:10:57.167276+00:00
+sha256: bd9476fda59507eceb36751966852a70346f121522d63653ba8ff886a0c64d9a
+generated_at: 2026-10-14T08:58:30.185286+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,48 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises all token-related environment-variable reads into named, typed accessors. It holds no token and issues none; it simply resolves how long each expiry tier lives, which key rings are active, and what the rotation/reuse detection windows are. Every other session file imports from here rather than touching `process.env` directly, so there is exactly one place to look for a token setting.
+Declares the environment-driven session policy for the account module: which mode is active (`jwt` or `cookie`), the TTL for each "remember me" tier, the JWT signing key rings, the TOTP encryption ring, the device-cookie HMAC secret, and the two rotation windows. It holds no tokens and issues none — it reads config that `./jwt-strategy` signs against, `./cookie-strategy` stores against, and `./device-cookie` sets `maxAge` from.
 
 ## Key elements
 
-- **`RefreshTokenExpiryTime`** — enum (`SHORT` | `MEDIUM` | `LONG`) identifying the three "remember-me" tiers for refresh tokens.
-- **`getExpiryTime(remember?)`** — returns the expiry in **seconds** for a tier, or the default access-token lifetime (600 s) when no tier is given. Reads via `environmentNumber` with a per-tier fallback.
-- **`getExpiryTimeMilliseconds(remember?)`** — same value × 1000; used wherever a `maxAge` or TTL is expected in ms.
-- **`getAccessTokenRing()`** — splits `NODE_TOKEN_ACCESS` on commas; newest key first. Consumed by `./jwt` for signing (`ring[0]`) and verification (by `kid`).
-- **`getRefreshTokenRing()`** — same shape for `NODE_TOKEN_REFRESH`.
-- **`getTotpEncryptionKeyRing()`** — parses `NODE_TOTP_ENCRYPTION_KEY` into `VersionedKey[]` via `parseVersionedKeyRing`; used by `two-factor/totp.ts` and `two-factor/delivered-codes.ts` to encrypt/decrypt stored 2FA material.
-- **`getRotationGraceMilliseconds()`** — how long a just-rotated refresh token is still accepted (default 10 s). Covers benign same-page-load races.
-- **`getReuseDetectionWindowMilliseconds()`** — how long a rotated-away refresh token stays "recognised as stolen" (default 24 h). Distinct from the grace window.
-- **`invalidTokenWindows()`** — boot-time invariant check: reuse window must exceed grace window. Returns an array of human-readable error strings (empty when valid).
+- **`RefreshTokenExpiryTime`** — enum with three tiers: `SHORT`, `MEDIUM`, `LONG`.
+- **`toRememberTier(wire?)`** — maps a wire literal (`'short' | 'medium' | 'long'` or `undefined`) to the enum; returns `undefined` when the "remember me" box was unticked.
+- **`sessionConfig`** — the `defineConfig` block (`account-sessions`). Contains all env vars, their types/defaults, boot-time presence rules, and a cross-field `check` enforcing `REUSE_WINDOW_MS > GRACE_MS` (skipped in cookie mode).
+- **`getSessionMode()`** — returns the active `SessionMode` (`'jwt'` or `'cookie'`).
+- **`getExpiryTime(remember?)`** — session lifetime in seconds for a tier; falls back to `SHORT` when no tier is given.
+- **`getExpiryTimeMilliseconds(remember?)`** — same, in ms.
+- **`getAccessExpiryTime()`** — access-token lifetime in seconds (deliberately independent of the session tier).
+- **`getCookieMaxAgeMilliseconds(remember?)`** — `Max-Age` in ms for a persistent session cookie; `undefined` for a browser-session cookie.
+- **`getAccessTokenRing()` / `getRefreshTokenRing()`** — ordered key rings (newest first) for JWT signing/verification.
+- **`getTotpEncryptionKeyRing()`** — returns `VersionedKey[]`; entries carry a version prefix so ciphertexts can be decrypted under the key that encrypted them.
+- **`getRotationGraceMilliseconds()`** — how long a just-rotated refresh token is still honoured (default 10 s).
+- **`getReuseDetectionWindowMilliseconds()`** — how long a rotated-away token is remembered for replay detection (default 24 h).
 
 ## Relationships
 
-- **`infrastructure/runtime/environment.ts`** — provides `environmentNumber(key, fallback)` used by every numeric getter in this file.
-- **`infrastructure/security/versioned-secret.ts`** — provides `parseVersionedKeyRing` and the `VersionedKey` type for `getTotpEncryptionKeyRing`.
-- **`session/jwt.ts`** — calls `getAccessTokenRing` to sign/verify access tokens and `getExpiryTime` for the `exp` claim.
-- **`session/cookies.ts`** — calls `getExpiryTimeMilliseconds` to set the `maxAge` on session cookies.
-- **`session/session.ts`** — consumes expiry and ring values when issuing/rotating refresh tokens.
-- **`controllers/post-login.ts`** — reads the tier chosen at login and passes it to the token-issuing path.
-- **`module.ts`** — calls `invalidTokenWindows()` during manifest/boot validation to fail-fast on misordered windows.
-- **`services/token-cleanup.ts`** — uses `getReuseDetectionWindowMilliseconds` to prune stale rotated-token entries.
-- **`two-factor/totp.ts`** / **`two-factor/delivered-codes.ts`** — call `getTotpEncryptionKeyRing` to encrypt device secrets and HMAC delivered codes.
-- **Tests** (`cookies.test.ts`, `tokens.test.ts`, `jwt.test.ts`, `api.contract.test.ts`) — exercise the exported getters to confirm env-var parsing and fallback behaviour.
+- **`../session-mode.ts`** — supplies the `SESSION_MODES` array and `SessionMode` type consumed by `choice(SESSION_MODES, …)` and `getSessionMode()`.
+- **`@infrastructure/config/define.ts`** — provides `defineConfig`, the declarative config builder used for `sessionConfig`.
+- **`@infrastructure/config/fields.ts`** — provides `choice`, `int`, `keyRing`, `secret`, `versionedKeyRing` field constructors.
+- **`@infrastructure/config/store.ts`** — provides the `Environment` type used by the internal `selectsCookieMode` predicate.
+- **`@infrastructure/security/versioned-secret.ts`** — provides the `VersionedKey` return type of `getTotpEncryptionKeyRing`.
+- **`./jwt-strategy.ts`** — signs with `ring[0]` of `getAccessTokenRing`/`getRefreshTokenRing` and verifies against the member named by `kid`; reads `getAccessExpiryTime` and `getExpiryTime` for token lifetimes.
+- **`./cookie-strategy.ts`** — stores session rows whose lifetime comes from `getExpiryTime`.
+- **`./device-cookie.ts`** — uses `NODE_DEVICE_COOKIE_SECRET` (via the config store) to HMAC the familiar-device cookie; unset on dev means the cookie is never set.
+- **`../services/reencrypt.ts`** — calls `getTotpEncryptionKeyRing` to re-encrypt 2FA material under a rotated key.
+- **`../services/sessions.ts`** — reads tier TTLs and mode to manage session rows.
+- **`../controllers/post-login.ts`** — calls `getExpiryTime`, `getCookieMaxAgeMilliseconds`, `getAccessTokenRing`, etc. to issue the login response.
+- **`../controllers/post-login-2fa.ts`** — consumes the TOTP encryption ring and session tiers during 2FA login.
+- **`../controllers/get-refresh-token.ts`** — reads `getRotationGraceMilliseconds` and `getReuseDetectionWindowMilliseconds` during token rotation.
+- **`../controllers/get-session-config.ts`** — exposes the relevant subset of `sessionConfig` to the client.
+- **`../module.ts`** — registers this module in the account module's dependency graph.
 
 ## Notes
 
-- The name is `config.ts` deliberately (not `tokens.ts`) to signal that it _reads_ settings and never touches token material.
-- `TOKEN_EXPIRY` is a **private** constant; consumers should go through the exported getters so the fallback logic lives in one place.
-- `invalidTokenWindows` is checked **at boot**, not per-request, because a silent misconfiguration (all replays return a clean 401) is the exact failure it guards against.
-- Key rings are ordered newest-first; `ring[0]` is always the current signing key. A single-entry ring is just the raw value with no comma.
-- The TOTP ring entries are **versioned** (`VersionedKey[]`), unlike the JWT rings (plain `string[]`), so that ciphertexts can be decrypted against whichever key was active when they were written.
+- **Access vs. session TTL are separate.** `getAccessExpiryTime` must never be conflated with `getExpiryTime`; an access token is short-lived regardless of the "remember me" tier.
+- **Zero-TTL guard.** Every TTL field has a `default` and `min: 1` so an unset variable can never produce a token that expires instantly.
+- **Boot check is silent-failure prevention.** The `check` callback enforces `REUSE_WINDOW_MS > GRACE_MS` at boot; without it, a misconfigured pair would let every replayed token answer a clean 401 with the defence silently absent. The check is skipped in cookie mode.
+- **`skipWhen: selectsCookieMode`.** The two JWT signing rings are not required at boot in a cookie-mode deployment.
+- **Key-ring min length is 16 chars / 32 bytes** — a floor to reject empty or placeholder values, not a claim of cryptographic strength.
+- **Reuse window default (24 h) is capacity-bounded.** An active client rotates ~every 600 s, so 24 h ≈ 144 retained entries per session; a full 1-year tier would hit ~52 500 entries, approaching Mongo's 16 MB document ceiling.
+- **`NODE_DEVICE_COOKIE_SECRET` is `productionOnly`.** Unset on a dev machine is valid (no cookie is set); unset or placeholder in production refuses to boot.
+- **`getTotpEncryptionKeyRing` returns `VersionedKey[]`, not `string[]`.** Each entry carries a version so the 2FA module can decrypt old rows under the correct key without a bulk migration.

@@ -1,7 +1,7 @@
 ---
 source: src/kernel/registry.ts
-sha256: 440bcde2c41be5eaced80db551d6742776359983f27f4e081c627543dd2906ea
-generated_at: 2026-09-27T14:19:47.412912+00:00
+sha256: 48c2bcbdf33ebffd7fff95179eb4802465196a9e7b63b6eaea8209b6c0a3ffaa
+generated_at: 2026-10-14T08:24:29.524376+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the typed manifest contract (`AppModule`) and all supporting interfaces that a module uses to declare its runtime needs (config, image writeback, queue consumers, translation targets, public events, personal-data sections) to the application tier. It exists so that infrastructure adapters and sibling modules never need to import `src/modules/*` directly; instead the app tier collects every module's declarations and wires them up, preserving the one-directional dependency boundary enforced by ESLint.
+Defines the typed interfaces a module uses to declare cross-cutting needs (image writeback, queue consumption, translation hooks, webhook projections, analytics forwarding, personal-data export) without requiring direct imports from infrastructure or other modules. It is the contract layer that lets `src/modules.ts` remain a statically-typed list and lets infrastructure resolve module capabilities by string key instead of by import.
 
 ## Key elements
 
-- **`RequiredConfig`** — one env-var requirement (key, minLength, optional placeholder, optional productionOnly). Modules list their needs here so `registerModules` can report every missing variable in a single boot failure.
-- **`ImageTarget`** — a `writeback(documentId, key, urls)` callback a module registers so the image-digest worker can persist `imageUrl`/`thumbnailUrl` without importing the module's repository. The guard on `pendingImageKey` makes stale/duplicate redeliveries no-ops.
-- **`ModuleConsumer`** — a queue-name + `handler` + optional `schema`/`prefetch` declaration. `app/workers.ts` collects these and calls `consumeFromQueue`; the module never invokes the broker itself. `handler` is a method (not a property) so each module keeps its own generated payload type.
-- **`TranslatableTarget`** — `collection`, `exists`, `fields`, `cacheTag`, and `writeDerived`. Lets the translation resolver validate, cache-invalidate, and write a derived column without resolving the target's Mongoose model by collection name.
-- **`PublicEventProjection` / `PublicEventTarget`** — maps a domain event payload (typed `never` for registry storage) to a public webhook event name + data, or `undefined` to suppress. `webhooks/services/publish.ts` subscribes generically via the collected list.
-- **`PersonalDataSubject` / `PersonalDataSection`** — GDPR Art. 15/20: each module declares a `section` key, a `collect` function, and an optional `erase` (must accept a `ClientSession` for transactional deletes). The account module assembles the export from all sections.
-- **`AppModule`** — the top-level manifest interface a module exports from its `module.ts`. Carries `name`, router-mount info, and the keyed sub-interfaces above (`imageTargets`, `consumers`, `translatables`, `publicEvents`, personal-data sections, `requiredConfig`, `rateLimitBudget`, etc.). The file is truncated; not every field is visible here.
+- **`ImageTarget`** — A `writeback` callback the image-digest worker calls to persist `imageUrl`/`thumbnailUrl` on a module's collection. Guarded by a `pendingImageKey` check so stale/duplicate deliveries are no-ops.
+- **`ModuleConsumer`** — A queue-consumption declaration (`queue`, `handler`, `schema`, `prefetch?`) that `app/workers.ts` collects and feeds to `consumeFromQueue`. `handler` returns `true` to ack, `false` to park, or throws to retry.
+- **`TranslatableTarget`** — Declares a collection as translation-writable: `exists`, `fields`, `cacheTag`, `writeDerived`, `markEdited`, and optional `checkFields`. Supplied by the owning module so the `locales` module never resolves a Mongoose model by name.
+- **`TranslationFieldIssue`** — A single `{ field, message }` pair returned by `checkFields` for a rejected value.
+- **`PublicEventProjection`** / **`PublicEventTarget`** — Maps one domain event to a public webhook event (`eventType` + `data`) or `undefined`. `toPublicEvent` is typed `(payload: never) → …` so the registry stays payload-agnostic while the owning module retains full type safety.
+- **`BrowserEventReport`** / **`BrowserEventTarget`** — Lets a module declare that the browser may report an event the server cannot observe (cache-hidden reads). `toReport(body: never)` produces the `{ event, properties }` pair forwarded to the analytics port.
+- **`PersonalDataSubject`** — Identifies the data subject (`userId`, `email`) for data-subject export; `email` accommodates modules that match rows by address rather than account id.
 
 ## Relationships
 
-- **`src/modules.ts`** — the explicit, statically-typed list of `AppModule` values. This registry is the type system that turns that list into a running application.
-- **`src/app.ts`** — calls `registerModules`, collects every module's declarations, and mounts routers / wires callbacks. The app tier is the only place that may refuse boot.
-- **`src/app/workers.ts`** — iterates the `consumers` field on each `AppModule` and calls `consumeFromQueue` for each, after deciding whether the broker is enabled.
-- **`src/kernel/required-config.ts`** — provides `assertRequiredConfig` and the `NonModuleChecks` type imported here; the kernel-level config assertion that runs before any module's `RequiredConfig` list is checked.
-- **`src/app/required-config.ts`** — app-tier config; complements the per-module `RequiredConfig` entries.
-- **`scripts/setup/required-keys.ts`** — setup script that likely validates the union of all modules' `RequiredConfig` entries against a `.env` file.
-- **`scripts/docs/generate-rate-limit-budgets.ts`** — consumes the `RateLimitBudget` field (imported from `@types`) on each module's manifest to generate documentation.
-- **`scripts/ops/reap-inactive-accounts.ts`, `sweep-order-effects.ts`, `sweep-reservations.ts`** — ops scripts that resolve a specific module by name from the registry to reach its services for bulk maintenance.
-- **`src/modules/account/module.ts`** — a concrete module whose manifest exercises `PersonalDataSection`, `RequiredConfig`, and other fields defined here.
-- **`src/modules/account/services/personal-data-registry.ts`** — implements the `PersonalDataSection` shape for the account domain.
-- **`src/modules/account/services/two-factor.ts` / `two-factor/registry.ts`** — module-internal registries that build on the same "declare, don't import" pattern.
-- **`src/modules/access/module.ts`** — another module consuming this registry contract.
+- **`src/modules.ts`** — The explicit module list this registry turns into a running application; each module's manifest is validated against these interfaces.
+- **`src/kernel/events.ts`** — Provides `markDomainEventsWired` (imported here) and shares the `never`-payload typing pattern used by `PublicEventTarget`.
+- **`src/kernel/module-config.ts`** — Provides `assertModuleConfig`, used to validate a module's config slice at registration time.
+- **`src/infrastructure/config/define.ts`** — Source of the `ConfigSlice` type that modules declare per-domain configuration with.
+- **`src/infrastructure/observability/analytics/index.ts`** — Source of `AnalyticsEventInput`, from which `BrowserEventReport` is `Pick`-ed.
+- **`src/app/workers.ts`** — The consumer of `ModuleConsumer` entries; it iterates collected consumers and calls `consumeFromQueue` for each.
+- **`src/app.ts`** — The application assembly point that imports this registry's contracts when wiring modules together.
 
 ## Notes
 
-- The file is a **type-only module** for most of its surface: every export shown is an `interface`. The sole runtime import is `assertRequiredConfig` from `@kernel/required-config`, used inside `registerModules` (below the truncation point).
-- **`never` as a payload parameter** (`PublicEventTarget.toPublicEvent`, and by extension any per-event handler map) is a deliberate assignability trick: a function typed to a concrete payload is assignable into a `(payload: never) => …` slot, so the registry stays generic while the owning module keeps full type safety at its own call site.
-- **`handler` as a method, not a property**, on `ModuleConsumer`: required so each module's distinct generated job-payload type is preserved; a property function type would collapse all handlers to `unknown`.
-- **`PersonalDataSection.erase` is optional** while `collect` is not: a module whose data lives in the same collection as its owner skips `erase` entirely; `resolvePersonalDataErasers` skips missing entries rather than calling a no-op.
-- The docblock states the guiding rule explicitly: *"a field only one module ever fills belongs behind that module's own barrel, and a field nothing reads at runtime is a comment with extra syntax."* When adding a field to `AppModule`, verify at least two modules use it and something in the app/infrastructure tier reads it.
+- **Architectural wall:** Every interface in this file exists because of an ESLF-enforced import boundary (`eslint.config.ts` → `boundaries/dependencies`). Infrastructure (image worker, queue adapter, translation resolver, webhooks publisher, analytics) must not import `src/modules/*`. These indirection callbacks are the *only* sanctioned channel.
+- **`never`-payload pattern:** `PublicEventTarget.toPublicEvent` and `BrowserEventTarget.toReport` accept `never` so a single registry slot can be called with any concrete payload type. A function typed for a specific payload is assignable to `(payload: never) => …`, giving the owning module full type safety at the call site.
+- **Idempotency guard:** `ImageTarget.writeback` must check `pendingImageKey` before writing; a mismatched key means the document was superseded or deleted, and the callback must return `false` (no-op) rather than throwing.
+- **`ModuleConsumer.handler` is a method, not a property:** Deliberate — each module's job payload is a distinct generated type, and only a method member preserves the per-module generic. A property function type would collapse all handlers to `unknown`.
+- **Modules are typed values, not folder conventions.** Enabling a domain is a one-line edit to `src/modules.ts`; no filesystem discovery is involved.

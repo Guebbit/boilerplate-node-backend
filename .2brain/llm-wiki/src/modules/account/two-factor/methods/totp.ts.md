@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/two-factor/methods/totp.ts
-sha256: 380fb684df90d1b1cb6253b03115b439fb5eff8b02091205c8f3ea1ff9ea5c21
-generated_at: 2026-09-23T18:18:51.562870+00:00
+sha256: 495b3d001fa0e2d4f4c910dc08b2f2f61664bdda3577733fb80bcd9af0f448eb
+generated_at: 2026-10-14T14:49:51.747705+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Registry adapter for the TOTP two-factor method. It translates the raw crypto helpers from `../totp.ts` into the `TwoFactorMethodHandler` contract the account registry expects: mint an encrypted secret at enrollment and validate a six-digit code at verification. All actual HMAC / time-step logic lives elsewhere; this file is purely the glue.
+Registry adapter that exposes TOTP (authenticator-app) as a two-factor method. All cryptographic logic lives in the sibling `../totp.ts`; this file only wires the `setup` and `verify` lifecycle steps to the `TwoFactorMethodHandler` contract, adds per-enrollment secret encryption, and enforces single-use via a conditional step claim.
 
 ## Key elements
 
-- **`totpMethod`** (exported const, type `TwoFactorMethodHandler`)
-    - `name: 'totp'` — registry key.
-    - `delivers: false` — device-bound method; no push/SMS channel.
-    - `available()` / `eligibility()` — always `true`; TOTP has no account or channel prerequisites.
-    - `target()` — returns `undefined` (no delivery target needed).
-    - `setup(user, entry)` — generates a fresh base32 secret via `otplib`, encrypts it into `entry.secret`, clears `entry.lastUsedStep`, and returns `{ secret, otpauthUri }` for the client to scan.
-    - `verify(_user, entry, code)` — decrypts the stored secret, delegates to `verifyTotpCode`, and advances `entry.lastUsedStep` on success to enforce replay protection.
+- **`totpMethod`** (exported `TwoFactorMethodHandler`) — the sole export.
+  - `available` / `eligibility` — always true; no channel or property gate.
+  - `target` — returns `undefined` (no delivery target; user reads the secret directly).
+  - `setup` — mints a base32 secret via `otplib.generateSecret`, encrypts it keyed to the entry `_id`, clears `lastUsedStep`, and returns the plaintext secret plus an `otpauthUri`.
+  - `verify` — decrypts the stored secret, delegates code validation to `verifyTotpCode`, then calls `userService.claimTotpStep` to atomically advance the high-water mark before reporting success.
 
 ## Relationships
 
-- **`src/modules/account/two-factor/registry.ts`** — supplies the `TwoFactorMethodHandler` type that `totpMethod` implements; the registry consumes this export to route setup/verify calls.
-- **`src/modules/account/two-factor/totp.ts`** — provides the four crypto helpers imported here (`buildOtpauthUri`, `decryptTotpSecret`, `encryptTotpSecret`, `verifyTotpCode`). All secret generation, encryption, and code validation logic lives in that file.
+- **`../registry.ts`** — provides the `TwoFactorMethodHandler` type that `totpMethod` implements.
+- **`../totp.ts`** (sibling crypto module) — supplies `buildOtpauthUri`, `encryptTotpSecret`, `decryptTotpSecret`, and `verifyTotpCode`.
+- **`@modules/users`** (`src/modules/users/index.ts`) — source of `userService`.
+- **`src/modules/users/services/index.ts`** — implementation behind `userService.claimTotpStep`, the conditional-write primitive that guarantees a code can pass verification at most once.
 
 ## Notes
 
-- `entry.lastUsedStep` is explicitly reset to `undefined` inside `setup`. A new secret invalidates any prior time-step window; preserving the old value would cause the first legitimate code to be rejected as a replay.
-- The raw `secret` is never persisted in plaintext — it is encrypted via `encryptTotpSecret` before being written to `entry`, and decrypted only for the duration of a `verify` call.
-- `setup` returns the plaintext `secret` and `otpauthUri` to the caller (for QR/provisioning) but does not retain them in the entry.
+- The secret is encrypted at rest with the entry `_id` as the key; the plaintext secret is returned only during `setup` so the user can scan it into their app.
+- `entry.lastUsedStep` is intentionally reset on every new enrollment; carrying a stale mark forward would reject the first valid code under the new secret.
+- Replay protection relies on `claimTotpStep` being a conditional (compare-and-swap) write: only a *later* time-step wins, so two concurrent requests carrying the same code cannot both succeed.
+- The `result.timeStep` is asserted non-undefined via a runtime check even though the `otplib` type does not guarantee it co-occurs with `valid`.

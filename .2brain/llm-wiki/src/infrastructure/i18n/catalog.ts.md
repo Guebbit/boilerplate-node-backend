@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/i18n/catalog.ts
-sha256: 13c6a15e1f371bb86bd2ca54640627d456e29dd2c5fd497c074f9620f9267592
-generated_at: 2026-09-23T17:46:47.635488+00:00
+sha256: 0923218eae4bcae397739881a08c40e4a333d6828febbc8dfe3452290e9ac126
+generated_at: 2026-10-14T08:02:46.395582+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,35 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single source of truth for where translation dictionaries come from and how they are assembled. It discovers supported locales (env var or directory listing), deep-merges the shared dictionary with each registered module's contribution, and produces the `Resource` object handed to `i18next.init()` at boot. A project that relocates its dictionaries edits only this file.
+The single source of truth for where translation dictionaries physically live and how they are assembled. It discovers locale JSON files from the shared `locales/` directory and any registered per-module directories, deep-merges them per locale, and produces the `i18next.Resource` object that `i18next.init()` consumes at boot. A project that relocates or restructures its dictionaries edits this file and nothing else.
 
 ## Key elements
 
-- **`LOCALES_DIRECTORY`** – Resolved relative to `__dirname` (→ `src/locales/`), independent of `process.cwd()`, so the same path works under a cluster entry point, a Jest worker, or a migration.
-- **`getDefaultLocale()` / `getFallbackLocale()`** – Lazy readers for `NODE_DEFAULT_LOCALE` and `NODE_FALLBACK_LOCALE` (both default to `'en'`). Read at call-time so tests can mutate `process.env` after import.
-- **`localeCandidatesFor(locale)`** – Pure helper that builds the resolution chain `[exact, base, fallback]`, deduplicated. Deliberately kept here (not in `kernel/translation.ts`) because it is stateless with no module to answer.
-- **`listSupportedLocales()`** – Memoised: returns `NODE_SUPPORTED_LOCALES` (comma-separated) if set, otherwise the sorted `.json` filenames in `LOCALES_DIRECTORY`. Cached after first call because `i18next.init()` reads it once.
-- **`resetSupportedLocales()`** – Clears the memoisation cache; intended for tests that change the env var between runs.
-- **`registerLocaleDirectories(directories)`** – Replacement setter for the list of module directories that contribute extra dictionary files. Must be called **before** `i18next.init()`. Follows the same inversion pattern as `registerAuditSink`: infrastructure cannot import modules, so paths are injected at boot.
-- **`readLocaleDictionary(locale)`** – Loads the shared `<locale>.json`, then deep-merges each registered module's file on top. Exported so `GET /locales/:locale` sees the same merged result.
-- **`loadLocaleResources()`** – Iterates `listSupportedLocales()`, calls `readLocaleDictionary` for each, and returns the i18next `Resource` shape (`{ locale: { translation: … } }`).
-- **`deepMerge` / `isPlainObject`** (internal) – Recursive merge that descends into plain objects; arrays and scalars are replaced wholesale. Prevents last-loaded module from erasing a sibling's keys in a shared namespace.
+- **`LOCALES_DIRECTORY`** — Resolved from `__dirname` (not `process.cwd()`), so the same path works whether the entry point is a server, a Jest worker, or a migration.
+- **`getDefaultLocale()` / `getFallbackLocale()`** — Lazy reads of `NODE_DEFAULT_LOCALE` and `NODE_FALLBACK_LOCALE` from `localeConfig()`, so tests can mutate env after import.
+- **`localeCandidatesFor(locale)`** — Pure function that builds the resolution chain (exact tag → base language → fallback), deduplicated. Lives here rather than in the `kernel/translation.ts` port because it is stateless and has no module to answer.
+- **`listSupportedLocales()`** — Returns `NODE_SUPPORTED_LOCALES` if set, otherwise the `.json` filenames in `LOCALES_DIRECTORY`. Cached after the first call so the list is stable for the lifetime of the process.
+- **`resetSupportedLocales()`** — Clears the locale and dictionary caches; intended for tests that change `NODE_SUPPORTED_LOCALES` mid-run.
+- **`registerLocaleDirectories(directories)`** — Declares which module directories contribute additional dictionaries. Must be called **before** `i18next.init()` because `loadLocaleResources()` resolves through it.
+- **`readLocaleDictionary(locale)`** — Deep-merges the shared dictionary with every registered module's contribution (registration order wins on collision). Returns a `structuredClone` so each caller gets an independent copy.
+- **`loadLocaleResources()`** — Builds the full `i18next.Resource` map (`{ locale: { translation: … } }`) for all supported locales; the object `i18next.init()` receives.
 
 ## Relationships
 
-- **`src/app.ts`** – Calls `registerLocaleDirectories` with the enabled modules' locale paths, then `loadLocaleResources()` to seed `i18next.init()`.
-- **`src/infrastructure/i18n/overrides.ts`** – The database-driven overlay. It layers on top of what this file produces; the dependency is strictly one-directional (overrides → catalog), never reversed.
-- **`src/infrastructure/i18n/context.ts`** – Consumes `getDefaultLocale` / `getFallbackLocale` and `localeCandidatesFor` when building the per-request locale context.
-- **`src/infrastructure/i18n/index.ts`** – Barrel re-export of this module's public API.
-- **`src/kernel/translation.ts`** – Defines the translation port. `localeCandidatesFor` intentionally lives here (catalog) rather than beside that port, per the repo's own precedent in `kernel/authentication.ts`.
-- **`scenarios/locales.ts`** – Endpoint handler for `GET /locales/:locale`; uses `listSupportedLocales` and `readLocaleDictionary` to serve the merged dictionary.
-- **`src/infrastructure/http/middlewares/locale.ts`** – Resolves the incoming request's locale tag, falling back through `getDefaultLocale` / `getFallbackLocale`.
-- **`src/modules/account/tests/integration/persisted-locale.test.ts`** – Calls `resetSupportedLocales` between test cases to re-read a changed `NODE_SUPPORTED_LOCALES`.
+- **`src/infrastructure/i18n/config.ts`** — Source of `localeConfig()`; supplies `NODE_DEFAULT_LOCALE`, `NODE_FALLBACK_LOCALE`, and `NODE_SUPPORTED_LOCALES`.
+- **`src/infrastructure/object-guards.ts`** — Provides `isPlainObject`, used by the internal `deepMerge` to decide whether to recurse or overwrite.
+- **`src/infrastructure/i18n/boot.ts`** — Calls `registerLocaleDirectories` (with each enabled module's locale paths) and then `loadLocaleResources` to feed `i18next.init()`.
+- **`src/infrastructure/i18n/overrides.ts`** — Layers database-stored overrides **on top of** the merged dictionary this file produces; strictly one-directional, never written back.
+- **`src/infrastructure/i18n/context.ts`** — Consumes `getDefaultLocale`, `getFallbackLocale`, and `localeCandidatesFor` to resolve per-request locale chains.
+- **`src/kernel/translation.ts`** — Defines the translation port; `localeCandidatesFor` deliberately stays in this file (stateless helper, no port needed), consistent with the repo's `kernel/authentication.ts` precedent.
+- **`src/infrastructure/i18n/index.ts`** — Barrel re-export; external modules import the public API through it.
+- **`src/infrastructure/http/middlewares/locale.ts`** — Reads the locale from the request and calls `localeCandidatesFor` to build the lookup chain.
+- **`src/modules/account/tests/integration/persisted-locale.test.ts`** — Integration test that exercises the full catalog → override → resolution path with a persisted user locale.
 
 ## Notes
 
-- **Module shadowing is permitted but tested against.** A module _can_ overwrite a shared key (last-registered wins). The cross-cutting test `tests/cross-cutting/locale-namespaces.test.ts` fails if any module actually collides with the shared dictionary.
-- **`listSupportedLocales` is cached for the lifetime of the process.** Adding a locale file at runtime has no effect until the process restarts and `i18next.init()` runs again. `resetSupportedLocales` exists only for tests.
-- **`registerLocaleDirectories` replaces, not appends.** Calling it twice means only the second set is active.
-- **`deepMerge` treats arrays as leaves** – a module that ships an array under the same key as the shared dictionary will replace it entirely, not concatenate.
+- **Cache is process-lifetime.** `listSupportedLocales` and `dictionaryCache` are never invalidated in production. A locale file added after boot is invisible until a restart; `resetSupportedLocales` exists solely for test harnesses.
+- **`structuredClone` on every read.** `readLocaleDictionary` always returns a fresh copy. This is what allows `overrides.ts` to mutate the dictionary in place without poisoning the shared cache.
+- **Deep merge, not shallow.** Two modules can contribute different sub-keys under the same top-level namespace (e.g., `account` and `users` both writing under `shared.*`). A shallow assign would let the last-registered module erase the other's keys.
+- **Module shadowing is legal but policed.** A module dictionary *can* override a shared key by construction, but `tests/cross-cutting/locale-namespaces.test.ts` fails if any collision actually occurs in the repo.
+- **`localeCandidatesFor` is pure locale arithmetic.** No I/O, no port, no registration. This is why it is exported from this file rather than tucked into the kernel port.

@@ -1,7 +1,7 @@
 ---
 source: scripts/run-script.ts
-sha256: a6ef23abc326ba1990429a79eb2a068c99e98f5119e0b84e48edaeab64002dd2
-generated_at: 2026-10-01T12:38:10.511545+00:00
+sha256: 50bcbb703734a8d4e32200f652418b58e98bec165c732e1abdad7b4d1b200b29
+generated_at: 2026-10-14T07:30:16.595496+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Entry-point wrapper for every one-shot script under `scripts/db/` and `scripts/ops/`. It guarantees four things a bare promise chain does not: a deterministic non-zero exit code on failure, connection cleanup on the failure path, a structured error log, and a job-outcome record visible to `GET /observability/health` and `job_last_success_timestamp_seconds`.
+Entry-point wrapper for all one-shot scripts under `scripts/db/` and `scripts/ops/`. It adds four things a bare promise chain does not provide: a non-zero exit code on failure, guaranteed cleanup of open handles (Mongo, Redis) on the error path, a readable log line through the shared logger, and a job-outcome record that `GET /observability/health` and `job_last_success_timestamp_seconds` can read.
 
 ## Key elements
 
-- **`runScript`** (exported) — The single function every script calls. Lazily imports `src/app/config`, calls `assertProcessConfig()`, then delegates to either `runChecked` (config OK) or `refuseToRun` (config invalid). Always resolves; failure is signalled via `process.exitCode` only.
-- **`runChecked`** (module-private) — `try { main() } catch { … } finally { cleanup() }`. Records a successful or failed job outcome via `recordJobOutcome` when a job name is provided. A cleanup failure is logged as a warning but does **not** alter the exit code.
-- **`refuseToRun`** (module-private) — Called when `assertProcessConfig` throws. Logs the validation error, sets `exitCode = 1`, runs the caller's cleanup, and records **no** job outcome (the job never ran; the DB it would need may be misconfigured).
+- **`runScript`** (exported) — The public API. Lazily imports `src/app/config` and calls `assertProcessConfig()` first so a bad environment names itself before any work begins. On valid config delegates to `runChecked`; on validation failure calls `refuseToRun`. Returns a promise that always resolves; failure is signalled solely via `process.exitCode`.
+- **`runChecked`** (internal) — Executes `main()`, records a successful or failed job outcome via `recordJobOutcome`, and runs `cleanup()` in a `finally` block. A cleanup failure is logged as a warning and never overrides the already-set exit code.
+- **`refuseToRun`** (internal) — Handles the config-validation failure path: logs the error, sets `exitCode = 1`, runs the caller's `cleanup`, and does **not** record a job outcome (the DB the job would need may be the misconfigured one).
 
 ## Relationships
 
-- **`scripts/db/bootstrap-access.ts`, `scripts/db/cache-clear.ts`, `scripts/db/grant-access.ts`, `scripts/db/sync-indexes.ts`** and **all `scripts/ops/*` reap/sweep/clean scripts** are direct consumers: each calls `runScript(name, main, cleanup)` as its sole entry point.
-- **`scenarios/apply.ts`** — graph neighbour; also invokes `runScript` (or depends on the same config/assertion path) as part of the apply workflow.
-- **`@infrastructure/persistence/lease`** (`recordJobOutcome`) — called on both success and failure paths to stamp the job's last-run timestamp in the lease document.
-- **`src/app/config`** (`assertProcessConfig`) — dynamically imported before `main` runs so a misconfigured environment fails fast without loading the script's dependencies.
-- **`@infrastructure/adapters/logger`** — all error/warn output in this file goes through the shared logger.
+- **Callers (all `scripts/ops/reap-*` and `scripts/db/*` files)** — Each script in the graph neighbors list calls `runScript(name, main, cleanup)`, passing its npm-script name (e.g. `"reap:orders"`) as the job identity. `reap:inactive-accounts` is the one exception: it passes `undefined` for the name and records its own outcome through its `withLease` document. `db:cache:clear` also passes `undefined` because it never opens Mongo.
+- **`@infrastructure/persistence/lease`** — Provides `recordJobOutcome`, which writes the success/failure row that health checks and alerting read.
+- **`@infrastructure/adapters/logger`** — Shared structured logger used for all error/warning output.
+- **`../src/app/config`** — Source of `assertProcessConfig`, the environment validation gate.
+- **`@guebbit/js-toolkit`** — Supplies `extractErrorMessage` for readable error strings.
 
 ## Notes
 
-- Uses `process.exitCode = 1` rather than `process.exit()` so Node can drain stdout and finish pending handles before the process actually exits.
-- `reap:inactive-accounts` is the one script that passes `undefined` as the job name; it records its outcome through its own `withLease` document instead.
-- `db:cache:clear` passes `undefined` for the same reason it has no scheduled interval *and* because it never opens a Mongo connection, so a lease row could not be written.
-- The `cleanup` parameter is required (no default). Every script here opens a connection; a silent no-op default would let one of them quietly stop closing it.
-- Config validation uses a dynamic `import()` so a script whose environment is invalid never loads its `main` body.
+- Uses `process.exitCode = 1` rather than `process.exit()` so that Node can drain stdout and flush in-flight log writes before the process terminates.
+- `cleanup` is a required parameter with no default: every script in this set opens a connection, and a silent no-op default would let one stop closing its handle without a type error.
+- Config validation is a lazy `import()`, so a script that fails validation never loads (or side-effects) the modules it would have run.
+- The returned promise always resolves; callers should not attach `.catch` and should rely on the process exit code for CI/shell-chaining.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/routes.ts
-sha256: ccb4f3e8e9f5cc204dde570bef374187c10abdf04bbe741d5dc86013dde64a77
-generated_at: 2026-09-27T14:50:54.017435+00:00
+sha256: c32521f1e84907a701a3735b6c4e58827cee17da61427ac6384b85fdc4605a39
+generated_at: 2026-10-14T15:25:42.004894+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,40 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express route table for the delivery module. Each endpoint is wired to a controller handler and given a per-route authorization chain, distinguishing public pre-purchase lookups, caller-scoped reads, and staff-only write transitions (start, ship, deliver, fulfill).
+Defines the Express `Router` for the delivery module, mapping every delivery endpoint to its controller and attaching the correct authorization guard per route. Guards range from fully public (shipping-methods lookup) through buyer-scoped reads to staff-permission writes, with two routes that additionally require a step-up re-authentication when the `forced` override flag is present.
 
 ## Key elements
 
-- **`router`** (exported) — the `express.Router` instance that `module.ts` mounts into the application.
-- **`isForcedRequest`** (module-local) — reads `request.body.forced === true`; used as the predicate for the step-up guard on ship and deliver.
-- **`GET /delivery/methods`** → `getShippingMethods` — public, no auth.
-- **`GET /delivery/order/:orderId`** → `getShipmentByOrder` — requires `getAuth` + `isAuth`.
-- **`POST /delivery/order/:orderId/start`** → `postStartOrder` — `delivery.any.start` permission; no step-up guard.
-- **`POST /delivery/order/:orderId/ship`** → `postShipOrder` — `delivery.any.update` + `requireFreshAuthWhen(isForcedRequest, REAUTH_TIME_CRITICAL)`.
-- **`POST /delivery/order/:orderId/deliver`** → `postDeliverOrder` — same guard chain as ship.
-- **`POST /delivery/order/:orderId/fulfill`** → `postFulfillOrder` — `delivery.any.update`; no step-up guard.
+- **`router`** (exported `Router`) — the single public entry point; `module.ts` mounts it.
+- **`isForcedRequest(request)`** (local helper) — returns `true` when `request.body.forced === true`. Passed as the predicate to `requireFreshAuthWhen` on the ship and deliver routes.
+- **Route definitions** (12 total):
+
+  | Path & Method | Controller | Guard level |
+  |---|---|---|
+  | `GET /methods` | `getShippingMethods` | public |
+  | `GET /order/:orderId` | `getOrderFulfillment` | `getAuth` + `isAuth` |
+  | `GET /fulfillment-orders` | `getPreorderFulfillmentOrders` | + `requirePermission('orders.any.read')` |
+  | `GET /fulfillment-orders/summary` | `getPreorderSummary` | + `requirePermission('orders.any.read')` |
+  | `POST /order/:orderId/start` | `postStartOrder` | + `requirePermission('delivery.any.start')` |
+  | `POST /fulfillment-orders/:id/shipments` | `postShipFulfillmentOrder` | + `requirePermission('delivery.any.update')` + `requireFreshAuthWhen(isForcedRequest, 'critical')` |
+  | `POST /fulfillment-orders/:id/fulfill` | `postFulfillFulfillmentOrder` | + `requirePermission('delivery.any.update')` |
+  | `POST /fulfillment-orders/:id/hold` / `/release` | `postHoldFulfillmentOrder` / `postReleaseFulfillmentOrder` | + `requirePermission('delivery.any.update')` |
+  | `POST /fulfillment-orders/:id/confirm-wait` | `postConfirmWait` | `getAuth` + `isAuth` only |
+  | `PATCH /shipments/:id` | `patchShipment` | + `requirePermission('delivery.any.update')` |
+  | `POST /shipments/:id/deliver` | `postDeliverShipment` | + `requirePermission('delivery.any.update')` + `requireFreshAuthWhen(isForcedRequest, 'critical')` |
 
 ## Relationships
 
-- **`src/kernel/middlewares/authorizations.ts`** — supplies `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuthWhen`, and the `REAUTH_TIME_CRITICAL` tier constant; these are composed into each route's middleware chain.
-- **`src/modules/delivery/controllers/*.ts`** (six files) — each route's terminal handler; this file is the sole import source that pairs them with their guards.
-- **`src/modules/delivery/module.ts`** — imports `router` and mounts it in the app.
+- **`src/kernel/middlewares/authorizations.ts`** — supplies all four guard functions (`getAuth`, `isAuth`, `requirePermission`, `requireFreshAuthWhen`) that are composed onto each route.
+- **Controllers (10 files)** — each imported function is the terminal handler for exactly one (or two, for hold/release) route. This file contains no business logic; it is pure wiring.
+- **`src/modules/delivery/module.ts`** — consumer of the exported `router`; mounts it into the application's middleware chain.
 - **`src/modules/delivery/tests/unit/routes.test.ts`** — unit-tests the route table (paths, methods, guard ordering).
-- **`tests/cross-cutting/step-up-auth-routes.test.ts`** — integration-level test for the `forced` step-up challenge on ship/deliver.
-- **`tests/support/routed-modules.ts`** — test-harness helper that registers this router for cross-cutting test setups.
+- **`tests/cross-cutting/step-up-auth-routes.test.ts`** — verifies the `requireFreshAuthWhen` + `isForcedRequest` interaction on the ship and deliver routes.
 
 ## Notes
 
-- The step-up guard (`requireFreshAuthWhen`) is applied **only** to `ship` and `deliver`. `start` has no `forced` variant, and `fulfill` is a digital-only path with no override gate to bypass, so neither carries the guard.
-- `isForcedRequest` inspects `request.body`, not a query parameter or header. A caller who omits `forced: true` will never be prompted for step-up reauth.
-- The code comments make explicit that `service.ts`'s own `orders.any.override` permission check *cannot* trigger a step-up challenge; only a route-mounted guard runs before the controller, which is why this concern lives here rather than in the service layer.
-- Guard ordering matters: `getAuth → isAuth → requirePermission → (optional step-up) → controller`. The step-up guard is always last before the handler.
+- **Step-up auth is route-mounted, not service-mounted.** `requireFreshAuthWhen` must sit on the route because the service's internal `orders.any.override` check (`refuseUnearnedForce` in `service.ts`) can reject a request but cannot *challenge* the client for a re-auth before the controller runs. The two `forced` routes (ship, deliver) are the only ones that carry this guard.
+- **`isForcedRequest` reads `request.body.forced`**, not a query parameter or header. A caller who omits the field (or sends `false`) never triggers the step-up prompt.
+- **`confirm-wait` is the sole write route without `requirePermission`.** It is buyer-scoped by design; ownership enforcement lives in the service layer, not the route guard.
+- **`/fulfill` (digital) has no `forced` variant** — there is no `processing`-only gate to bypass, and a physical fulfillment order cannot use this endpoint at all. Adding a step-up guard there would be dead code.
+- **`PATCH /shipments/:id` follows RFC 7396 (JSON Merge Patch)** semantics for correcting a tracking code; it is not a full-replace `PUT`.

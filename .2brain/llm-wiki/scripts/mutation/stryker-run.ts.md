@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/stryker-run.ts
-sha256: e42f096b0c2df1b1d1508292e7041449253e9d81b2301304edf462f0cddb0bb0
-generated_at: 2026-09-23T17:29:23.171787+00:00
+sha256: f628922f976e8af30e52942606f001a90208c975197177d6534b4e9cc3de8cf5
+generated_at: 2026-10-14T07:21:06.381297+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single-invocation wrapper around `npx stryker run` that sizes concurrency and heap for the current machine, clears the test scratch directory before each run, and aborts the process if an OOM-restart loop is detected. Both mutation entry points (`run-diff`, `run-shards`) call into this module so they share one implementation of the machine-aware settings.
+Centralises everything both mutation entry points (`run-diff`, `run-shards`) share in a single Stryker invocation: machine-derived worker concurrency, per-worker V8 heap cap, pre-run scratch-directory sweep, and an OOM-restart abort guard. Exists so that neither entry point calls `npx stryker` directly — a bare invocation silently runs without the heap cap, which is the one setting a run on a high-RAM machine cannot do without.
 
 ## Key elements
 
-- **`REPO_ROOT`** — resolved repo root; used as `cwd` for every spawned Stryker process.
-- **`resolveConcurrency()`** — returns worker count. Honors `STRYKER_CONCURRENCY` env if set; otherwise takes the min of (logical CPUs − 1) and (available RAM − 4096 MB reserve) ÷ 2900 MB per-worker peak, floored at 1.
-- **`StrykerOutcome`** — interface with `code: number` and `abortedForOom: boolean`, returned by `runStryker`.
-- **`runStryker({ args, label })`** — the main export. Resolves concurrency, builds the child environment (injects `NODE_TEST_TMP_BASE`, optionally appends `--max-old-space-size`), deletes `tmp/test/` recursively, spawns `npx stryker run`, pipes stdout through an OOM-restart counter (6 restarts in 10 min → `SIGTERM`), and resolves with the outcome.
-- **Constants** — `STRYKER_WORKER_PEAK_MB` (2900), `STRYKER_OS_RESERVE_MB` (4096), `TEST_TMP_BASE` (`tmp/test/`), `OOM_LIMIT` (6), `OOM_WINDOW_MS` (10 min).
+- **`REPO_ROOT`** — Resolved repo root; used as `cwd` for every spawned Stryker/jest process.
+- **`resolveConcurrency(): number`** — Returns `STRYKER_CONCURRENCY` if set; otherwise the minimum of `logical CPUs − 1` and `(free RAM − 4096 MB) / 2900 MB`, floored at 1. RAM is the binding constraint, not cores.
+- **`StrykerOutcome`** — `{ code: number; abortedForOom: boolean }`, the shape both entry points inspect to decide how to report the run.
+- **`runStryker({ args, label? }): Promise<StrykerOutcome>`** — Spawns `npx stryker run …` with:
+  - `--concurrency` injected unless the caller already passed it,
+  - `NODE_OPTIONS` extended with `--expose-gc` and an optional `--max-old-space-size`,
+  - `NODE_TEST_TMP_BASE` pointing at `tmp/test/`,
+  - `tmp/test/` deleted (recursively, forced) *before* the child starts,
+  - stdout piped so the OOM guard can count "ran out of memory" lines while still forwarding output to the terminal,
+  - abort (`SIGTERM`) if ≥ 6 restarts occur within the first 10 minutes.
 
 ## Relationships
 
-- **`scripts/testing/machine-budget.ts`** — provides `availableMemoryMb` (reads `MemAvailable`) and `environmentKnob` (typed env-var reader). Both are imported at the top and used inside `resolveConcurrency` and `runStryker`.
-- **`scripts/mutation/run-diff.ts`** — entry point that calls `runStryker` with a diff-scoped mutate list.
-- **`scripts/mutation/run-shards.ts`** — entry point that calls `runStryker` per shard.
+- **`scripts/mutation/run-diff.ts`** — Entry point for diff-based mutation runs; calls `runStryker` with its own `--mutate` scope and reads the returned `StrykerOutcome`.
+- **`scripts/mutation/run-shards.ts`** — Entry point for shard-based runs; same contract via `runStryker`.
+- **`scripts/testing/machine-budget.ts`** — Supplies `availableMemoryMb()` (reads `MemAvailable`) and `environmentKnob()` (typed env-var access) used by `resolveConcurrency` and the heap-cap knob.
 
 ## Notes
 
-- Concurrency is RAM-bounded, not CPU-bounded, unlike Jest's heuristic. The 4096 MB OS reserve is deliberately double the 2048 MB used in `machine-budget.ts` because the Stryker orchestrator process is an additional consumer.
-- `--max-old-space-size` raises V8's heap cap but does **not** bound native/buffer memory (e.g. `bson`); a worker can still OOM outside the heap.
-- The scratch sweep (`rm` on `tmp/test/`) happens **before** the run, not after, because Stryker kills workers and a killed Jest never reaches its own teardown.
-- `.env` is deliberately **not** merged into the child environment; only `process.env` is spread, so test-setup overrides in `tests/support/setup.ts` still take effect.
-- If the caller already passes `--concurrency` in `args`, the computed value is not appended (the caller's flag wins).
-- OOM detection is a string count of `"ran out of memory"` on stdout; it is not a signal-based check.
+- The OS reserve here is **4096 MB**, double `machine-budget.ts`'s own 2048, because the Stryker orchestrator process is an extra consumer a plain jest run never has.
+- `--max-old-space-size` is a **flat** ~4.2 GB V8 default, not a share of machine RAM. It does not bound non-heap memory (e.g. `bson` buffers). Override with `STRYKER_WORKER_HEAP_MB`.
+- The scratch sweep clears **only `tmp/test/`**, not all of `tmp/`, so `tmp/reports/` (incremental Stryker cache) survives.
+- `.env` is deliberately **not** merged into the child environment; only `process.env` is forwarded. This prevents real Redis URLs from reaching jest before `tests/support/setup-environment.ts` can override them.
+- The OOM guard counts the literal string `"ran out of memory"` on stdout chunks. A single restart is tolerated; the 6-in-10-minutes threshold is a hard stop.
+- `--concurrency` is only injected when the caller has **not** already passed it in `args`, so callers can override the computed value on a per-invocation basis.

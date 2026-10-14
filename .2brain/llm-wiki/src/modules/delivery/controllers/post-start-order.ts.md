@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/controllers/post-start-order.ts
-sha256: 820cc35577dd87439f4612135c2326128fb947e87bca86b3b5d161890a0da564
-generated_at: 2026-09-27T14:49:30.409523+00:00
+sha256: 71621964fe3eb146a0bcc730801d18b7818ecc59150523d80b28c01caf10cff7
+generated_at: 2026-10-14T15:22:01.451686+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP controller for `POST /delivery/order/:orderId/start`. It is the single entry point that transitions an order from `paid` to `processing` before any parcel record exists. All domain logic is delegated to the delivery service; this file only wires the request context through and shapes the response.
+Controller handler for `POST /delivery/order/:orderId/start`. It is the single endpoint that transitions a paid delivery order into the `processing` state (fulfilment start), called by staff before any parcel is yet recorded.
 
 ## Key elements
 
-- **`postStartOrder`** (exported const) – Accepts an Express `Request<{ orderId?: string }>` and `Response`. Calls `deliveryService.startFulfilment(orderId, authContext, callerContext)`, then either short-circuits via `refused` or returns the `Order` payload through `successResponse`. Errors are funnelled into `catchAs(response, 'postStartOrder')`.
+- **`postStartOrder`** (exported) – Express route handler. Validates `orderId` from the URL param, delegates to `deliveryService.startFulfilment`, then either writes a success body or a refusal based on the service result.
+- **Validation gate** – `requireId` extracts and checks the `orderId` param; on failure it sends a 404 and the handler returns early (`Promise.resolve()`).
+- **Service call** – `deliveryService.startFulfilment(orderId, request.authContext, callerContextOf(request))` performs the actual state transition.
+- **Response shaping** – `refused` short-circuits on a rejection; `successResponse<Order>` serialises the happy path; `catchAs` wraps the `.catch` with a named error label.
 
 ## Relationships
 
-- **`src/modules/delivery/service.ts`** – Calls `deliveryService.startFulfilment`; the actual state-transition logic lives there.
-- **`src/modules/delivery/routes.ts`** – Expected to register `postStartOrder` on the `POST /delivery/order/:orderId/start` path.
-- **`src/infrastructure/http/controller.ts`** – Supplies the `catchAs` and `refused` helpers used for uniform error/refusal handling.
-- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf`, which extracts the authenticated caller's context from the request.
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse`, the standard JSON success envelope.
-- **`src/types/index.ts`** – Provides the `Order` type used as the generic parameter of `successResponse`.
+- **`src/modules/delivery/routes.ts`** – registers `postStartOrder` as the handler for the `POST /delivery/order/:orderId/start` route.
+- **`src/modules/delivery/services/index.ts`** – provides `deliveryService.startFulfilment`, the business logic this controller delegates to.
+- **`src/infrastructure/http/controller.ts`** – supplies `catchAs` (unified error catcher) and `refused` (rejection responder).
+- **`src/infrastructure/http/ids.ts`** – supplies `requireId` for safe URL-param extraction.
+- **`src/infrastructure/http/request.ts`** – supplies `callerContextOf` to derive an audit/caller context from the request.
+- **`src/infrastructure/http/response.ts`** – supplies `successResponse` for consistent 200 envelopes.
+- **`src/types/index.ts`** – provides the `Order` type used as the response payload generic.
 
 ## Notes
 
-- The route param is typed as optional (`orderId?: string`) yet is coerced with `String(request.params.orderId)` before being passed onward — the controller assumes the value is always present at runtime.
-- `request.authContext` is accessed directly (not via a helper), implying an Express type augmentation lives elsewhere.
-- The function uses a `.then()/.catch()` promise chain rather than `async/await`, matching the project's controller convention.
+- `request.authContext` is accessed as a direct property (set upstream by middleware), while the caller context is derived via the `callerContextOf` helper — the two are distinct and both passed to the service.
+- The Express generic on `request` marks `orderId` as optional (`orderId?: string`); actual presence is enforced at runtime by `requireId`, so TypeScript does not guarantee its existence inside the handler.
+- The early `return Promise.resolve()` after a failed `requireId` call is the pattern used to signal "response already sent, stop processing" without an explicit `throw`.

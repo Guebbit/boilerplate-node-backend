@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/metrics-registry.ts
-sha256: 28a17f7b477f334d6232a952d801e44fbfc9df004caf6af8d061ec28a286c78d
-generated_at: 2026-09-27T14:13:16.740682+00:00
+sha256: 189f04149497be6f31660c341121a32719e36adba9f50d9dd595b24153954d2a
+generated_at: 2026-10-14T08:07:08.184913+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Holds the single shared prom-client registry instance and the process-wide metrics that describe the runtime itself (default Node.js collectors, uptime, heap ceiling, crontab job outcomes). It exists so that every domain module's `metrics.ts` registers against one known instance, and so the `/metrics` scrape endpoint and the observability overview controller can reach all domain counters through a single, name-addressable registry rather than importing each module individually.
+Holds the single shared `prom-client` registry instance and the process-level gauges that describe the runtime itself (uptime, heap ceiling, crontab job outcomes). Every other module's `metrics.ts` imports `metricsRegistry` from here so all metrics land on the same global registry that `GET /metrics` serializes. Split out of `metrics-http.ts` to give the registry a name that isn't misleading for non-HTTP consumers.
 
 ## Key elements
 
-- **`metricsRegistry`** — Re-export of prom-client's default global `register`. The canonical instance every module's `metrics.ts` registers onto; also what `GET /observability/metrics/overview` queries by metric name.
-- **`collectDefaultMetrics({ register })`** — One-time call (module scope) that installs prom-client's built-in Node.js collectors (CPU, memory, event-loop lag, GC, etc.).
-- **`process_uptime_seconds` (Gauge)** — Fills a gap prom-client does not ship; `collect()` returns `process.uptime()` at scrape time.
-- **`nodejs_heap_size_limit_bytes` (Gauge)** — Exposes `getHeapStatistics().heap_size_limit`, the fixed V8 ceiling. Intended for the `used / limit` OOM alert ratio (as opposed to `used / total`, which is near 1 on a healthy process).
-- **`job_last_success_timestamp_seconds` (Gauge, labeled `job`)** — Reads `listLeaseSummaries()` at scrape time to report each crontab job's last success epoch. Skips the query when Mongo is disconnected. Jobs with no recorded success are left unset (not zero) to avoid false staleness alerts on fresh deploys.
-- **`getPrometheusMetrics()`** — Returns `registry.metrics()`, the Promise<string> body served by the `/metrics` scrape endpoint. Runs every registered `collect()` hook and renders the full registry in Prometheus text format.
+- **`metricsRegistry`** – Re-export of `prom-client`'s default `register`. The canonical registry every module registers gauges/counters onto.
+- **`collectDefaultMetrics({ register })`** – One-time call (module side effect) that installs prom-client's bundled Node.js collectors (CPU, memory, event-loop lag, GC, etc.).
+- **`_processUptimeGauge`** – `process_uptime_seconds`; prom-client omits this, so it is added manually via `process.uptime()`.
+- **`_heapSizeLimitGauge`** – `nodejs_heap_size_limit_bytes`; reads `getHeapStatistics().heap_size_limit` at scrape time. Provides a stable denominator for OOM-style alert rules (vs. the growing `total` heap).
+- **`collectJobGauge(gauge, pick)`** – Shared helper: resets the gauge, then (if Mongo is connected) queries `listLeaseSummaries()` and sets a per-`task` label with the chosen date as Unix seconds. Returns early without querying when the connection is not ready to avoid mongoose buffering delays during a scrape.
+- **`_jobLastSuccessGauge`** – `job_last_success_timestamp_seconds{task}`; reports each crontab job's last success from lease rows.
+- **`_jobLastRunGauge`** – `job_last_run_timestamp_seconds{task}`; reports each crontab job's last run regardless of outcome. Together with the success gauge, distinguishes "ran but never succeeded" from "never ran."
+- **`getPrometheusMetrics()`** – Returns `registry.metrics()`, the full Prometheus text-format body served by the `/metrics` endpoint.
 
 ## Relationships
 
-- **`src/infrastructure/persistence/lease.ts`** — Imports `listLeaseSummaries` for the `job_last_success_timestamp_seconds` gauge's `collect()` hook.
-- **`src/infrastructure/runtime/database.ts`** — Imports `connection` to gate the lease query on Mongo readiness before a scrape.
-- **`src/infrastructure/observability/metrics-http.ts`** — This file was extracted from `metrics-http.ts`; the HTTP endpoint now calls `getPrometheusMetrics()` here rather than holding the registry itself.
-- **Domain `metrics.ts` files** (`account`, `audit-logs`, `cart`, `inventory`, `orders`, `persistence`) — Each imports `metricsRegistry` and registers its own counters/gauges/histograms onto it.
-- **`src/modules/observability/controllers/get-observability-metrics-overview.ts`** — Queries domain counters by metric name off `metricsRegistry` rather than importing the owning module.
-- **`src/modules/observability/controllers/get-observability-metrics.ts`** — Serves the `/metrics` endpoint using `getPrometheusMetrics()`.
-- **`src/modules/observability/tests/unit/get-observability-metrics.test.ts`** and **`metrics-overview.test.ts`** — Unit-test the serialization and overview endpoints backed by this registry.
+- **`lease.ts`** – Direct dependency: imports `listLeaseSummaries` and the `LeaseSummary` type to feed the two job gauges.
+- **`metrics-http.ts`** – This file was extracted from it; `metrics-http.ts` now registers HTTP-specific metrics onto the same `metricsRegistry` rather than owning it.
+- **Module `metrics.ts` files** (`account`, `audit-logs`, `cart`, `example`, `inventory`) – Each imports `metricsRegistry` and registers its domain counters/gauges onto it. They do not import each other; they all converge on this file.
+- **`metrics-cache.ts`, `metrics-queue.ts`, `metrics-rate-limit.ts`, `metrics-outbox.ts`, `metrics-process.ts`, `security-events.ts`, `command-metrics.ts`** – Sibling metric definitions that register onto the same shared registry instance.
+- **`two-factor.test.ts`** – Test file that (transitively) depends on the registry for metric assertions or to verify counter increments.
 
 ## Notes
 
-- The three underscore-prefixed gauge variables (`_processUptimeGauge`, `_heapSizeLimitGauge`, `_jobLastSuccessGauge`) are assigned to satisfy lint no-unused-vars; the constructor side-effect (self-registration) is the actual purpose.
-- `job_last_success_timestamp_seconds` is the only gauge whose `collect()` performs I/O. It intentionally swallows errors (`.catch(() => undefined)`) so a lease-collection failure never delays or fails a scrape.
-- `collect()` methods are non-arrow functions so that `this` refers to the gauge instance (required by prom-client's `Gauge` API).
-- The module doc points to `docs/tools/opentelemetry.md` for broader context on how this registry fits into the project's observability stack.
+- The underscore-prefixed `_` variable names on the process gauges are deliberate: the gauge's constructor side-effect (self-registration) is the point; the variable exists only to satisfy lint's "no unused expressions" rule.
+- `collectJobGauge` guards on `mongoose.connection.readyState` before querying. An unconnected Mongoose model would queue the command and wait out the driver's buffering timeout, which would stall a scrape. The two gauges above it need no such guard because they read in-memory values.
+- The label on job gauges is `task`, not `job`, because Prometheus adds its own `job` label at scrape time; a collision would be silently renamed to `exported_job`, breaking alert rules.
+- `collect()` on the job gauges performs I/O (a Mongo query) at scrape time, unlike the uptime/heap gauges which read in-memory values. Scrape handlers must therefore tolerate a slow Mongo response without timing out the entire `/metrics` request.
+- A job with no lease row is left *unset* (no series) rather than `0`, so a fresh deployment's first scrape does not fire a false staleness alert.

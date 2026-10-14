@@ -1,7 +1,7 @@
 ---
 source: src/modules/antibot/controllers/get-antibot-challenge.ts
-sha256: ad20f99272c993d688dd66450899a038c7c9037b7f530b5b1a78a24265aa9a47
-generated_at: 2026-09-23T18:22:19.073053+00:00
+sha256: 8f468a35d203577aff0ec528429af8ebcbb0c7a54a33d9f83f98807138330fc0
+generated_at: 2026-10-14T14:56:42.168687+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,23 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Controller for `GET /antibot/challenge`. It is the endpoint a self-hosted antibot provider's widget calls to fetch a challenge. Vendor-hosted providers obtain their challenge from the vendor and never reach this route.
+Express route handler for `GET /antibot/challenge`. It asks the active human-challenge adapter whether it can issue a self-hosted challenge; if so, it returns the challenge object, otherwise it returns a 404. This endpoint is only meaningful for self-hosted (non-vendor) providers—vendor-hosted widgets fetch their challenge from the vendor and never hit this route.
 
 ## Key elements
 
-- **`getAntibotChallenge`** (exported) — Express route handler. Resolves the active human-challenge provider, then either returns a `404` (code `ANTIBOT_NO_CHALLENGE`) if the provider has no `issueChallenge` method, or calls `issueChallenge()` and returns the resulting `AntibotChallenge` object in a success envelope.
+- **`getAntibotChallenge`** (exported) — Synchronous signature `(Request, Response) => Promise<void>`. Resolves the active provider via `resolveHumanChallengeProvider()`. If the provider lacks an `issueChallenge` method, sends a 404 with `ERROR_CODES.ANTIBOT_NO_CHALLENGE`. Otherwise calls `provider.issueChallenge()` and wraps the result in `successResponse<AntibotChallenge>`. All rejections are funnelled through `catchAs(response, 'getAntibotChallenge')`.
 
 ## Relationships
 
-- **`@infrastructure/adapters/antibot-providers`** — calls `resolveHumanChallengeProvider()` to obtain the currently configured provider instance.
-- **`@infrastructure/http/response`** — uses `successResponse` to wrap the challenge payload and `rejectResponse` for the 404 case.
-- **`@infrastructure/http/controller`** — uses `catchAs` to attach a standardized error handler to the promise chain.
-- **`@infrastructure/i18n`** — calls `t('generic.error-antibot-no-challenge')` for the localized error message.
-- **`@types`** — imports the `AntibotChallenge` type used as the generic on `successResponse`.
-- **`src/modules/antibot/routes.ts`** — registers `getAntibotChallenge` as the handler for `GET /antibot/challenge`.
+- **`@infrastructure/adapters/antibot-providers`** — Imports `resolveHumanChallengeProvider`, the factory that returns the currently configured provider instance (or one without `issueChallenge`).
+- **`@infrastructure/http/response`** — Imports `rejectResponse` (404 path) and `successResponse` (200 path).
+- **`@infrastructure/http/controller`** — Imports `catchAs` for uniform error shaping.
+- **`@infrastructure/i18n`** — Imports `t` to localise the 404 message string.
+- **`@types`** — Imports the `AntibotChallenge` shape used as the success-response generic.
+- **`src/modules/antibot/routes.ts`** — Registers this handler on the `GET /antibot/challenge` route.
 
 ## Notes
 
-- The `404` when the provider has no challenge is **by design**, not an error. It is a truthful response indicating this deployment has no self-hosted challenge to issue (e.g. provider is `none` or vendor-hosted).
-- The request parameter is intentionally unused (prefixed `_request`); the handler only needs the response object.
-- The async flow uses `.then`/`.catch` on a `Promise.resolve()` chain rather than `async/await`, consistent with the `catchAs` pattern used elsewhere in the codebase.
+- A 404 here is **semantic, not an error**: it truthfully reports "no self-hosted challenge exists for this deployment." Clients (or monitoring) should treat it as a valid state, not a fault.
+- The `Request` parameter is intentionally unused (prefixed `_`); the handler needs no query/body/input.
+- The handler uses a `Promise.resolve().then()` chain rather than `async/await`; the `catchAs` call is the terminal `.catch`.
+- `resolveHumanChallengeProvider` may return a provider object that simply omits the `issueChallenge` key (e.g. `none` or a vendor adapter). The handler does not throw in that case—it short-circuits with the 404.

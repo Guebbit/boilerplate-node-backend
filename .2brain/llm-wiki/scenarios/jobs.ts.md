@@ -1,7 +1,7 @@
 ---
 source: scenarios/jobs.ts
-sha256: 23c484edaa32e13c030cd164836a1175620b0c71f3c79d0ef720f2b27cf44ce5
-generated_at: 2026-10-01T12:22:12.380850+00:00
+sha256: 0fa10df806650d3a2fb7ebc775975a223be3eff4815da0627c8bbb6262ec5a7f
+generated_at: 2026-10-14T06:58:57.236811+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the set of background jobs the demo profile can trigger on demand via a test endpoint. Each entry wraps the same production service call that the corresponding `scripts/ops/` script makes, so the demo lever exercises the real sweep logic rather than a mock copy.
+Defines the on-demand background jobs available to the demo test profile. A time journey first advances the test clock, then invokes the job whose trigger condition became true. Each job delegates to the same `orderService` function used by production ops scripts, so the test exercises the real sweep logic.
 
 ## Key elements
 
-- **`DEMO_JOBS`** (`ReadonlyMap<string, () => Promise<number>>`) — The registry of all triggerable jobs, keyed by their URL-segment name. Each value is a zero-arg async function that invokes a service and returns the number of records the sweep affected, so a spec can assert the job actually did work. Currently contains one entry:
-  - `reap-orders` → calls `orderService.anonymizeDueOrders()` (scrubs PII on orders past their retention window).
+- **`DEMO_JOBS`** (`ReadonlyMap<string, () => Promise<number>>`) — the registry of runnable jobs keyed by URL segment name. Currently contains a single entry:
+  - `reap-orders` → calls `orderService.anonymizeDueOrders()` (PII scrub of orders past retention). Returns the count of rows affected so a spec can assert the sweep actually did work.
 
 ## Relationships
 
-- **`src/app/demo.ts`** — Consumes `DEMO_JOBS` to wire the `POST /__test/jobs/:name` route; the URL segment becomes the lookup key in the map.
-- **`src/modules/orders/index.ts`** — Imported as `@modules/orders`; re-exports `orderService`, which `DEMO_JOBS` calls.
-- **`src/modules/orders/services/index.ts`** — Underlying implementation of `orderService.anonymizeDueOrders()` that the `reap-orders` entry delegates to.
+- **`scenarios/support/demo.ts`** — the HTTP handler for `POST /__test/jobs/:name` looks up the requested job name in `DEMO_JOBS` and invokes it. This file is the data source that route consumes.
+- **`src/modules/orders/index.ts`** — barrel re-export consumed as `@modules/orders`; provides the `orderService` instance used here.
+- **`src/modules/orders/services/index.ts`** — implements `orderService.anonymizeDueOrders()`, the actual sweep logic that `reap-orders` delegates to.
 
 ## Notes
 
-- A `Map` is used deliberately instead of a plain object: the lookup key is an arbitrary URL segment, and a `Map` prevents accidental hits on inherited properties like `constructor` or `__proto__`.
-- Job names are hyphenated URL slugs (`reap-orders`), not dotted identifiers, because they travel as path segments.
-- The return type is `Promise<number>` (a count), not `void`, so assertions can verify the sweep was non-empty.
+- A `Map` is used deliberately instead of a plain object: job names are raw URL segments, and `Map.get()` avoids accidental hits on inherited properties like `constructor` that a bracket-notation lookup on a plain object could trigger.
+- The `() => Promise<number>` return contract is intentional — it lets test specs assert a non-zero count rather than merely "no exception was thrown."
+- To add a new job, append an entry to the `Map` constructor array. No other wiring is needed; the route in `demo.ts` already handles arbitrary keys generically.

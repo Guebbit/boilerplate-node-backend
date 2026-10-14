@@ -1,7 +1,7 @@
 ---
 source: scenarios/run-server.ts
-sha256: 1926895d1a934681469da308178a284106349d4913801d1f996b34397cdcf4cb
-generated_at: 2026-10-01T12:23:32.701548+00:00
+sha256: fc3ff8cefc58aa9ef2017c32653504eb2b8544e4dcc3fef7b2c4e66b486adc0c
+generated_at: 2026-10-14T07:00:57.405177+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,35 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Entry point for the **demo profile** (`npm run demo`): boots the real application against an in-memory MongoDB, seeds it with the `shop` scenario, and serves on `NODE_PORT` (default 3000). No Docker, Redis, or message broker — cache and queue run disabled. This is the server the paired frontend dev-server and e2e suite target instead of a hand-written mock.
+Entry point for the **demo profile** (`npm run demo`): boots the real application against a self-contained in-memory MongoDB, seeds it from the `shop` scenario, and listens on `NODE_PORT`. No Docker, Redis, or message broker is required — cache and queue run in `disabled` mode. The paired frontend dev server and e2e suite run against this instead of a hand-written mock.
 
 ## Key elements
 
-- **`corsOriginFromDotenv()`** — reads *only* `NODE_CORS_ORIGIN` from `.env` via `dotenv.parse` (no `process.env` write), so a lane's custom frontend port is respected without pulling in the file's real secrets.
-- **`REQUIRED_DEFAULTS`** — env map filled when a key is absent or blank: hard-coded demo secrets (token, PII, TOTP, webhook), shop config (`NODE_SHOP_COUNTRY`, VAT rates), `SCRIPTED_RATE_LIMITS`, `DEMO_BANK_TRANSFER`, and the CORS fallback (`8080,8085`).
-- **`FORCED_ABSENT`** — array of Redis/RabbitMQ env vars set to `''` (not deleted) to blank them out against `dotenv/config` re-injection.
-- **`FORCED_MAIL_TRANSPORT`** — unconditionally sets `NODE_MAIL_TRANSPORT=outbox` so the e2e suite's `GET /__test/emails` endpoint always has data, regardless of `.env`.
-- **`waitUntilListening(port)`** — polls `GET /` (60 s timeout) as a readiness gate; valid because `createApp().start()` seeds *before* listening.
-- **Main IIFE** — orchestrates: `startEphemeralMongo` → SIGTERM/SIGINT cleanup handler → env shaping → `enableDemoProfile()` → `registerDemoClock(installDemoClock())` → `registerOAuthProvider('fake', …)` → **dynamic** `import('../src/app')` → `createApp().start()` → `waitUntilListening`.
+- **`dotenvValues()`** — Reads `.env` into a plain object via `dotenv.parse` + `readFileSync` *without* writing to `process.env`. Returns `{}` when the file is absent.
+- **`shellValue(key)`** — Returns the shell-set value of a key, or `undefined`. A value equal to the `.env` file's own value is treated as the file's, not the shell's.
+- **`REQUIRED_DEFAULTS`** — Fallback env vars (loopback host, throwaway token/PII/TOTP/webhook secrets, shop address, CORS origins) so a bare checkout with no `.env` can boot.
+- **`FORCED_ABSENT`** — List of Redis/RabbitMQ env vars blanked to `''` to disable those services (empty string, not deletion, so a later `dotenv/config` load in `src/app.ts` cannot resurrect them).
+- **`FORCED_MAIL_TRANSPORT`** — Unconditionally sets `NODE_MAIL_TRANSPORT` to `'outbox'` so the e2e suite can read mail via `GET /__test/emails`.
+- **`waitUntilListening(port)`** — Polls `GET /` (up to 60 s) as a readiness signal; because `createApp().start()` seeds before listening, a 200 implies the DB is already populated.
+- **Top-level boot sequence** — `startEphemeralMongo({ startInProcess: startInProcessMongod })` → SIGTERM/SIGINT cleanup handlers → `installEnvironment` with merged defaults → forces DB name to `/demo` → derives `NODE_URL` from the actual port → (truncated) app creation and `listen`.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/rate-limits.ts` | Imports `SCRIPTED_RATE_LIMITS` (disables rate limits for e2e) and `DEMO_BANK_TRANSFER`. |
-| `scenarios/support/demo-clock.ts` | Imports `installDemoClock()` to create the movable `Date` shim behind `/__test/clock`. |
-| `scenarios/support/ephemeral-mongo.ts` | Imports `startEphemeralMongo` — returns a handle with `uri` and `stop()`. |
-| `scenarios/support/ephemeral-mongod.ts` | Imports `startInProcessMongod`, passed as the `startInProcess` strategy. |
-| `src/infrastructure/runtime/demo-profile.ts` | Imports `enableDemoProfile()` — mounts the `src/app/demo.ts` control surface (sole call site in the codebase). |
-| `src/infrastructure/runtime/demo-clock.ts` | Imports `registerDemoClock` to wire the fake clock into the app's clock registry. |
-| `src/modules/account/oauth/providers/index.ts` | Imports `registerOAuthProvider` to add the `'fake'` provider to the registry. |
-| `src/modules/account/oauth/providers/fake.ts` | Imports `fakeOAuthProvider` so Cypress specs can complete the OAuth flow. |
+- **`scenarios/rate-limits.ts`** — Imports `DEMO_BANK_TRANSFER` (merged into `REQUIRED_DEFAULTS`) and `SCRIPTED_RATE_LIMITS` (applied via `installEnvironment`, overridable only by a true shell value).
+- **`scenarios/support/demo-clock.ts`** — Imports `installDemoClock` and `registerDemoClock` to deterministically control time for the scenario seed.
+- **`scenarios/support/ephemeral-mongo.ts`** — Imports `startEphemeralMongo`, which returns a handle with `.uri` and `.stop()`; the Mongo URI is then rewritten to `/demo`.
+- **`scenarios/support/ephemeral-mongod.ts`** — Imports `startInProcessMongod`, passed as the `startInProcess` option to `startEphemeralMongo` so the mongod runs in-process.
+- **`src/infrastructure/config/store.ts`** — Imports `installEnvironment` (writes the merged config before app code reads it) and `currentEnvironment`.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import *before* any model loads, to set Mongoose defaults at schema-build time.
 
 ## Notes
 
-- **Empty-string, not deletion.** `FORCED_ABSENT` sets keys to `''` rather than `delete process.env[key]` because `src/app.ts` imports `dotenv/config`, which would re-inject `.env` values for any key the shell didn't already set. An empty string is treated as "unset" by every consumer.
-- **Dynamic `import` is load-bearing.** `import('../src/app')` must execute *after* all `process.env` mutations. Static imports would let `src/app.ts` read the pre-shaped environment.
-- **`NODE_URL` is always derived**, never defaulted-when-unset: `http://localhost:${NODE_PORT}/`. A stale checked-in `.env` value would break OAuth redirect URIs and email links on non-default ports.
-- **Database name is always `demo`**, regardless of whether Mongo is in-process or external (`NODE_TEST_MONGO_URI`). This lets an external instance persist across restarts; in-process instances never shared data.
-- **Multi-instance caveat.** Several in-memory instances can run in parallel (each owns its own mongod, ~200 MB temp dir). Pointing several at the *same* external Mongo via `NODE_TEST_MONGO_URI` means they share one database — do not combine the two paths unintentionally.
-- **SIGTERM/SIGINT handler** calls `mongo.stop()` to remove the temp data directory before exiting; without it, ~200 MB of orphaned files accumulate per boot.
+- **`dotenv/config` is deliberately *not* imported here.** `src/app.ts` imports it later; this file only uses `dotenv.parse` to read values in isolation. Confusing the two breaks the override logic.
+- **Blank ≠ delete for `FORCED_ABSENT`.** `dotenv` never overrides a key already present in `process.env` (empty string included), so `''` is the only reliable way to neutralise a value that `.env` would otherwise supply after `src/app.ts` loads.
+- **Multiple instances** can run side-by-side on different ports, each with its own in-memory Mongo. Setting `NODE_TEST_MONGO_URI` switches to a shared external Mongo where data persists across restarts — do not mix the two casually.
+- **`NODE_URL` is always derived** from the actual `NODE_PORT`, never read from `.env`, to keep OAuth redirect URIs and emailed links pointing at the correct instance.
+- **~200 MB temp data directory** is left behind on every in-memory Mongo boot if SIGTERM/SIGINT cleanup fails; the handler logs but still exits.
+- The file is the executable entry point (`#!/usr/bin/env tsx`); it has no named exports.

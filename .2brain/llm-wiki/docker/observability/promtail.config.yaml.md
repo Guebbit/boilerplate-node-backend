@@ -1,7 +1,7 @@
 ---
 source: docker/observability/promtail.config.yaml
-sha256: 9ebbcadb6f4f23fc2c5fce96351316b89b29cb188ca122aeea9666ec0fe2e940
-generated_at: 2026-09-23T17:14:02.922293+00:00
+sha256: 5c4811300f99cd15dd51180cc68b2a09c0405044ffd286b185e7759da0c03631
+generated_at: 2026-10-14T06:51:44.695854+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Promtail configuration that scrapes Docker container `json-file` logs from a host bind mount, parses the nested JSON envelopes into structured fields, promotes key fields to LogQL-filterable labels, and pushes the result to a local Loki instance.
+Promtail scrape and pipeline configuration that reads Docker `json-file` container logs from a host bind mount, parses both the Docker envelope and the inner Winston/OTel JSON payload, promotes key fields to labels, and pushes structured logs to Loki. It is the default Promtail config selected by the Compose stack.
 
 ## Key elements
 
-- **`server`** – HTTP endpoint on port 9080 for Promtail's own metrics/debug; gRPC disabled (`grpc_listen_port: 0`).
-- **`positions`** – Offset state written to `/tmp/positions.yaml` so a restarted container resumes from the last read line.
-- **`clients`** – Single push target: `http://loki:3100/loki/api/v1/push`.
-- **`scrape_configs[0]`** (`job: docker`) – Glob `__path__`: `/var/log/host-containers/*/*-json.log`; targets `localhost`.
-- **`pipeline_stages`** (4 stages):
-    1. `json` – Unwrap Docker's outer envelope (`log`, `stream`, `time`).
-    2. `output` – Replace the line with the inner `log` payload.
-    3. `json` – Parse the application-level JSON (Winston fields: `level`, `service`, `trace_id`).
-    4. `labels` – Promote `stream`, `level`, `service` to LogQL labels.
+- **server** — HTTP debug/metrics endpoint on `:9080`; gRPC disabled (`grpc_listen_port: 0`).
+- **positions** — Read-offset tracking at `/tmp/positions.yaml` (ephemeral; survives only for the container's lifetime).
+- **clients** — Single push endpoint: `http://loki:3100/loki/api/v1/push`.
+- **scrape_configs → docker-containers** — Static target `localhost` with `__path__: /var/log/host-containers/*/*-json.log` and fixed `job: docker` label.
+- **pipeline_stages** (ordered):
+  1. `json` — extract `log`, `stream`, `time` from the Docker envelope.
+  2. `output` — replace the raw line with the inner `log` payload.
+  3. `json` — extract `level`, `service` (from `service.name`), `trace_id` from the app payload.
+  4. `labels` — promote `stream`, `level`, `service` into LogQL-queryable labels.
 
 ## Relationships
 
-- **`docker/observability/loki.config.yaml`** – Loki is the ingestion target; its `auth_enabled` / route config determines whether this push succeeds. The `http://loki:3100` URL in this file must match Loki's listen address.
-- **`docker/observability/promtail.podman.config.yaml`** – Sibling variant selected when the `PROMTAIL_CONFIG` env var points to it (Podman log layout differs). This file is the default when no override is set.
+- **→ `docker/observability/loki.config.yaml`** — This file is the *producer*; Loki's config is the *consumer*. The `clients.url` here must match the listen address/port in Loki's `server` block.
+- **⇄ `docker/observability/promtail.podman.config.yaml`** — Sibling variant for Podman. Compose mounts *this* file by default; the podman variant is selected only when the `PROMTAIL_CONFIG` env var explicitly names it. Both share the same `/var/log/host-containers` mount path.
 
 ## Notes
 
-- The `__path__` glob is **fixed** in the container; the host-side directory is controlled solely by `CONTAINER_LOGS_PATH` in `.env`. Changing that variable does not require editing this file.
-- `trace_id` is extracted in stage 3 but **not** promoted to a label in stage 4 — it is available as a structured field in the log line but not directly filterable via LogQL label matchers.
-- The positions file lives in `/tmp`; without a named volume on that path, a container restart resets read offsets and may re-ingest recent lines.
-- Pipeline assumes a Winston-style JSON payload. Non-JSON application logs will pass through stage 2 as-is (raw string) and simply lack the `level`/`service` labels.
+- The glob path `/var/log/host-containers/*/*-json.log` is **fixed** in this config. The host-side source directory is controlled by `CONTAINER_LOGS_PATH` in `.env` (a Compose volume mapping), not here.
+- Stage 3 uses JMESPath quoting (`'"service.name"'`) because the OpenTelemetry key contains a dot; without the quotes it would be parsed as a nested path and fail.
+- `trace_id` is extracted but **not** promoted to a label in Stage 4 — it remains in the structured log payload, queryable via LogQL's `line_format` or `| json` but not filterable by label matcher.
+- Positions live in `/tmp`; if the Promtail container is recreated (e.g., `docker compose up --force-recreate`), offset tracking resets and earlier lines may be re-ingested.

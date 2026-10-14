@@ -1,7 +1,7 @@
 ---
 source: src/modules/antibot/tests/contract/api.contract.test.ts
-sha256: 158619d2550d01f427eb42da96237a32c1c334fe428438909de477b87bdc300b
-generated_at: 2026-09-27T14:40:37.473082+00:00
+sha256: 8eb54584179dcbe54db1299d1edc20d7e78b6872d1c1480e43fff88d7976495d
+generated_at: 2026-10-14T14:57:16.459949+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the two public `/antibot` endpoints (`/challenge`, `/config`) and an end-to-end proof that a selected provider actually gates a real guarded route (`/feedback/contact`). This file lives in the antibot module rather than the feedback module because antibot is the only place that understands both halves of the handshake—what the client is told to render and what counts as a valid token—without importing the routes it guards.
+Contract tests for the `/antibot/challenge` and `/antibot/config` endpoints, verifying they respond correctly under different provider and email-policy configurations. Also contains the end-to-end proof that a selected provider actually gates a real guarded route (`POST /feedback/contact`) with a 401 when no token is present. The e2e portion lives here (not in `feedback`'s own suite) because `antibot` is the only module that understands both sides of the handshake—what the client is told to render and what counts as a valid token—without importing the routes it guards.
 
 ## Key elements
 
-- **`setupTestDb()`** – called at module top-level to give each test an isolated database.
-- **Env-var save/restore (`ORIGINAL_PROVIDER`, `ORIGINAL_EMAIL_POLICY`, `ORIGINAL_ALTCHA_SECRET`)** – captured before tests run and restored in `afterEach` so other suites see their own configuration.
-- **`describe('GET /antibot/challenge')`** – asserts 200 + valid contract for a self-hosted (altcha) provider, 404 when no provider is set (default), and 404 for a vendor-hosted provider (turnstile) that issues its own challenges.
-- **`describe('GET /antibot/config')`** – asserts the shape of the published config (provider name, public parameters, rung postures) and that unknown provider/policy values fail closed with 500 instead of silently defaulting.
-- **`describe('the gate it guards, end to end on one guarded route')`** – POSTs a fixed `CONTACT_PAYLOAD` to `/feedback/contact` and verifies 201 with no provider selected vs. 401 with a provider active but no token supplied.
-- **`toSatisfyApiSpec()`** – a custom matcher (from the contract support module) that validates status, headers, and body shape against the shared API contract for every assertion.
+- **`describe('GET /antibot/challenge')`** — Verifies the endpoint returns 200 for a self-hosted provider (`altcha`), and 404 when no provider is set (default) or when a vendor-hosted provider (`turnstile`) is selected (vendor issues its own challenges).
+- **`describe('GET /antibot/config')`** — Verifies the published config shape: default (provider `none`, empty parameters, rungs `identityBudgets: true`, `emailPolicy: 'off'`), provider + site-key publication, email-policy rung reporting, and 500 responses for unknown provider/policy values rather than a silent fallback.
+- **`describe('the gate it guards, end to end…')`** — Posts a fixed `CONTACT_PAYLOAD` to `/feedback/contact`; expects 201 with no provider, 401 with `turnstile` selected and no token.
+- **`setupTestDb()`** — Called once at module scope to prepare the test database.
+- **`setEnvironment`** calls — Each test sets `NODE_ANTIBOT_PROVIDER`, `NODE_ANTIBOT_ALTCHA_SECRET`, `NODE_ANTIBOT_EMAIL_POLICY`, or `NODE_ANTIBOT_TURNSTILE_SITE_KEY` to isolate the configuration under test.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** – imported as `@tests/contract`; registers the `toSatisfyApiSpec()` matcher and any global contract-test setup that all contract suites rely on.
-- **`tests/support/http.ts`** – imported as `@tests/http`; supplies the `api()` helper used to issue requests against the running server under test.
-- **`tests/support/setup-test-db.ts`** – imported as `@tests/setup-test-db`; provides `setupTestDb()` to create/tear down an isolated database per test run.
+- **`tests/support/contract.ts`** — Imported as a side-effect (`import '@tests/contract'`); sets up global contract-test infrastructure (likely shared matchers or harness).
+- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb`, invoked at the top of the file to create an isolated database for the suite.
+- **`tests/support/http.ts`** — Provides the `api()` helper used to issue all HTTP requests against the application under test.
+- **`tests/support/environment.ts`** — Provides `setEnvironment`, which sets (and presumably restores) environment variables so each test controls provider/policy state independently.
 
 ## Notes
 
-- Env vars are the sole configuration surface for these tests; there is no DI or config-object injection. Always restore them in `afterEach` (including deleting the key if it was absent) to avoid cross-suite leakage.
-- The file intentionally exercises `/feedback/contact`, a route owned by a different module. This is deliberate: it proves the gate works end-to-end without duplicating the handshake knowledge that only antibot holds.
-- 404 from `/antibot/challenge` for vendor-hosted providers (e.g. turnstile) is the *expected* response, not an error—those providers issue challenges from their own CDN.
-- Unknown provider or policy names are a 500 by design (fail-closed); the tests assert this rather than a 404 or fallback, so a regression to "just default to none" will be caught here.
+- "Rungs" refer to anti-bot layers: rung 2 = email policy, rung 3 = provider. `GET /antibot/config` reports both, which is why both env vars are set in the config tests.
+- The file intentionally asserts **500** (not 400/fallback) when an unknown provider or policy value is configured—the contract is "fail loudly, never silently degrade."
+- Comments in the source mark places where state is expected to be restored for other suites ("Saved so…"), but no explicit cleanup code is visible; isolation is delegated to the test framework / `setEnvironment` contract.

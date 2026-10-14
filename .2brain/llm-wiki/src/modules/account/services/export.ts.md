@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/export.ts
-sha256: d4b0908989df7abb0daf546ba22f609b531a34f8daf39c1bed7d56a768470a36
-generated_at: 2026-09-27T14:29:16.326715+00:00
+sha256: 854f5e7741b615e93cb0b4801b86847214c5804fc3d647693b931d006c3cf273
+generated_at: 2026-10-14T08:48:27.789506+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,42 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the `POST /account/export` service (GDPR Art. 15/20): assembles the caller's personal data from every registered `PersonalDataSection` into a single JSON envelope. It deliberately has no data reads of its own—each section's shape is produced by the owning module's `collect`, keeping this file decoupled from sibling modules.
+Implements the account data-export lifecycle (GDPR Art. 15/20) as an asynchronous job: a `POST` request records a `building` row and enqueues (or runs inline) a background build; a `GET` returns the finished file for download. Enforces the one-export-per-account rule, a 30-minute build staleness ceiling, and mailbox-budget accounting before a new build replaces an old one.
 
 ## Key elements
 
-- **`exportOwnData(userId, email, context)`** — the sole export. Runs all registered sections concurrently via `Promise.all`, checks that the mandatory `profile` section is present (404 if not), drops sections that resolved `undefined` (opt-out pattern), records an audit event, and wraps the result in `generateSuccess` with an `exportedAt` timestamp. Returns a `Promise` of `ResponseSuccess<AccountExportPayload> | ResponseReject`.
-- **`AccountExportPayload`** (local type) — `Record<string, unknown> & { exportedAt: string }`. Intentionally *not* the OpenAPI contract type; the envelope is validated against the contract downstream, since this file cannot statically know every contributing module's schema.
-- **`PROFILE_SECTION`** (const) — the string `'profile'`, the key the profile module must register under. Used for the 404 guard.
+- **`EXPORT_BUILD_LIMIT_MS`** (30 min) — a `building` row older than this is treated as `failed`, freeing the account's single slot.
+- **`AccountExportRequestResult`** — the `202` body: `{ id, status }`.
+- **`inlineBuilds`** (module-private `Set<Promise>`) — tracks builds running in-process because no broker accepted the job.
+- **`settleInlineExports(timeoutMs)`** — awaits all inline builds; used at graceful shutdown and in tests.
+- **`requestExport(userId, email, context)`** — the `POST /account/export` handler: validates the user, reuses a non-stale `building` row, charges the mail budget, inserts a new row (deduping via unique index), dispatches the job, records audit, and returns `202`.
+- **`openOwnExport(userId, exportId, context)`** — the `GET /account/export/{id}` handler: fetches the row scoped to the owner, checks `ready` + not expired, streams the file from the export store, records the download audit event.
+- **`eraseExports(userId, session)`** — the module's `AfterErase` hook: deletes the row inside the erasure transaction; returns a post-commit callback that removes the file (files can't roll back).
+- **`dispatch(job)`** (private) — publishes to the broker queue; if the broker is unavailable, runs `runExportJob` inline and tracks the promise in `inlineBuilds`.
+- **`rowOrRefusal`** (private) — resolves the existing-or-new row, enforcing the one-export rule and the mailbox budget *before* deleting the old row.
+- **`insertRow`** (private) — inserts a `building` row; on duplicate-key error (race), returns the winner's row.
 
 ## Relationships
 
-- **`./personal-data-registry.ts`** — provides `personalDataSections()`, the registry of all contributing sections. This file never imports individual sibling modules.
-- **`../audit.ts`** — provides `accountAuditActions.AUTH_DATA_EXPORTED`, the action identifier passed to `recordAudit`.
-- **`@infrastructure/http/response`** — supplies `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types used in the return signature.
-- **`@infrastructure/observability/audit`** — supplies `recordAudit`, called once on the success path.
-- **`@infrastructure/i18n`** (index + context) — supplies the `t` translation function used for the 404 error message.
-- **`@types`** (index / auth-context) — supplies the `CallerContext` type used as the third parameter.
-- **`../controllers/post-account-export.ts`** — the route handler that invokes `exportOwnData` after authentication (`requireFreshAuth`) and passes the caller's `userId`, `email`, and request context.
+- **`@infrastructure/adapters/export-store.ts`** — `openExport` streams the finished JSON file; `removeExport` deletes it on replacement or erasure.
+- **`@infrastructure/adapters/queue.ts`** — `publishToQueue` hands the `ACCOUNT_EXPORT` job to the broker; the return value (`published`) decides whether to fall back to an inline run.
+- **`@infrastructure/adapters/logger.ts`** — logs inline-build failures.
+- **`@infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` build the HTTP response envelopes.
+- **`@infrastructure/i18n/index.ts`** — `t()` localizes user-facing messages (`account.export.requested`, `users.not-found`).
+- **`@infrastructure/observability/audit.ts`** — `recordAudit` emits the `AUTH_DATA_EXPORT_REQUESTED` and `AUTH_DATA_EXPORT_DOWNLOADED` events.
+- **`@infrastructure/persistence/mongo-errors.ts`** — `isDuplicateKey` distinguishes the expected race-condition error in `insertRow`.
+- **`@infrastructure/runtime/settle.ts`** — `settleWithin` is the primitive behind `settleInlineExports`.
+- **`src/kernel/registry.ts`** — provides the `AfterErase` type for `eraseExports` and the `PersonalDataSection` contract that lets this module collect data via owning modules' `collect` methods rather than importing sibling repositories.
+- **`src/modules/account/config.ts`** — `exportRetentionMs()` supplies the TTL stamped onto each row's `expiresAt`.
+- **`src/modules/account/audit.ts`** — `accountAuditActions` constants used in audit records.
+- **`src/modules/account/emails.ts`** — `recipientLocale` resolves the locale for the mail notification.
+- **`src/modules/account/controllers/post-account-export.ts`** — HTTP controller that calls `requestExport`.
+- **`src/modules/account/controllers/get-account-export.ts`** — HTTP controller that calls `openOwnExport`.
 
 ## Notes
 
-- A section resolving `undefined` is **silently omitted** from the payload (the `feedback` module's opt-out mechanism). A section that **rejects** instead fails the entire request. Do not conflate the two.
-- The 404 check is only for the `profile` section. All other sections are optional; their absence is a valid, partial export.
-- This file performs **no reads and no writes** to any database or repository. All data access lives in each owning module's `collect` implementation.
-- The OpenAPI contract for the response (`AccountExportResponse`) lives in `shared/contracts/openapi.root.yaml` and is assembled from each module's own schema fragment—this file is not the source of that type.
+- **Inline builds outlive the response.** When the broker is down, `dispatch` fires `runExportJob` without awaiting it. The promise is tracked in `inlineBuilds` so shutdown and tests can wait, but the HTTP reply is already sent. A late-finishing build will find its row deleted (past the staleness window) and cleans up its own file.
+- **Mail budget is checked before deletion.** If the budget refuses a new build, the previously `ready` export remains downloadable — the caller is not penalized.
+- **The staleness limit does not kill the build.** It only changes what `rowOrRefusal` reports to the next requester. The actual build promise runs to completion regardless.
+- **`eraseExports` is two-phase.** The row deletion joins the caller's transaction (rollable); the file deletion runs in the returned `AfterErase` callback, which executes only after commit because file deletion is irreversible.
+- **One slot, one winner.** The unique index on `userId` is the sole concurrency guard; no application-level lock is taken. The losing racer reads back the winner's row.

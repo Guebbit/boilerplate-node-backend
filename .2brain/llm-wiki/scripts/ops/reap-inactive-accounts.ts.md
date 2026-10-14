@@ -1,43 +1,49 @@
 ---
 source: scripts/ops/reap-inactive-accounts.ts
-sha256: e1baf023e9ce58ecb99a302ec5d04b9f9c8fd6e17d5fd51fb11546057a0adbb6
-generated_at: 2026-10-01T12:36:12.344462+00:00
+sha256: 33a73ac89d3e63edb4fdb771442e69f779a74b05d98937949e730a2f378f256b
+generated_at: 2026-10-14T07:24:03.675664+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scripts/ops/reap-inactive-accounts.ts
 
 ## Purpose
-A three-stage inactivity reaper (run via `npm run reap:inactive-accounts`) that progressively warns, soft-deletes, and hard-deletes accounts that have had no token exchange for a configurable threshold. It exists to satisfy the data-minimisation requirement in Art. 5(1)(e) for accounts whose purpose has lapsed. Disabled by default (`NODE_INACTIVE_ACCOUNT_DAYS=0`).
+
+GDPR Art. 5(1)(e) data-lifecycle script: minimises or deletes personal data for accounts that have been idle beyond a configurable threshold. Exposes two dials — `NODE_INACTIVE_MINIMISE_DAYS` (default 1095, on) for a destructive-but-reversible minimise pass, and `NODE_INACTIVE_ACCOUNT_DAYS` (default 0, off) for a staged warn → soft-delete → hard-delete path. Run periodically via `npm run reap:inactive-accounts`, never at boot.
 
 ## Key elements
-- **`GRACE_DAYS`** (const, 30) — fixed pause between each stage; intentionally not configurable so the script has a single day-count dial.
-- **`LEASE_TTL_MS`** (const, 15 min) — TTL passed to `withLease`; sized to survive a slow night but release a crashed holder within a week.
-- **`daysAgo(days)`** — helper returning a `Date` offset from now.
-- **`initI18n()`** — calls `bootI18n(enabledModuleLocales())` so translated email copy renders outside the HTTP process.
-- **`warn(user)`** — stage 1: builds the inactivity-warning email via `inactivityWarningEmail`, enqueues it through the mailer, then stamps `inactivityWarnedAt` via `userService.markInactivityWarned`.
-- **`main`** — reads the day threshold from `accountConfig()`, early-returns if ≤ 0. Otherwise runs all three stages inside `withLease('reap:inactive-accounts', …)`: warn un-warned inactive users → soft-delete warned users still past grace → hard-delete soft-deleted users past a second grace period. Logs per-stage counts.
-- **`runScript(undefined, main, teardown)`** — entry-point wrapper; teardown stops the database and queue.
+
+- **`main()`** — Top-level orchestrator. Reads config from `accountConfig()`, acquires a Mongo-backed lease, registers module hooks, then runs the minimise stage and/or deletion stages in order. Skips cleanly if the lease is already held.
+- **`minimiseStage(minimiseDays)`** — Stage 0. Calls `userService.minimiseInactiveBefore(daysAgo(minimiseDays))`, which invokes every module's `personalData.minimise` hook and stamps `inactivityMinimisedAt`. Runs even when deletion is disabled.
+- **`deletionStages(inactiveDays)`** — Stages 1–3. Boots i18n, then sequentially: finds and warns unwarned accounts, soft-deletes warned-but-still-inactive accounts past grace, hard-deletes reaper-soft-deleted accounts past a second grace. Uses `systemCallerContext('User')` for audit since no HTTP request is present.
+- **`warn(user)`** — Renders a translated warning email (via `inactivityWarningEmail` + `greetableName`) and enqueues it through `enqueueEmail`, then stamps `inactivityWarnedAt`.
+- **`initI18n()`** — Calls `bootI18n` with the enabled modules' locale directories so email copy renders outside the HTTP process.
+- **`GRACE_DAYS`** (const, 30) — Fixed pause between warn→soft-delete and soft-delete→hard-delete. Deliberately not configurable.
+- **`LEASE_TTL_MS`** (const, 15 min) — How long the lease blocks a second runner. Reference implementation for `withLease`.
+- **`daysAgo(n)`** — Simple `Date` helper.
+- **Entry point** — `runScript(undefined, main, cleanup)`; `undefined` as the name prevents `runScript` from recording a second outcome that would overwrite the lease's own record.
 
 ## Relationships
-- **`scripts/run-script.ts`** — provides `runScript`, which wraps `main` with process lifecycle (stdin signals, graceful shutdown). Called with `undefined` for the name so it does not re-record a lease outcome that `withLease` already wrote.
-- **`src/infrastructure/adapters/logger.ts`** — `logger` used for info-level messages at disable, skip, and completion points.
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` is the transport for the stage-1 warning email.
-- **`src/infrastructure/adapters/queue.ts`** — `stopQueue()` called in the teardown callback.
-- **`src/infrastructure/i18n/boot.ts`** — `bootI18n` initialises the i18n runtime for email rendering.
-- **`src/infrastructure/i18n/index.ts`** — re-exports `getDefaultLocale`, used as the fallback locale in `warn`.
-- **`src/infrastructure/persistence/lease.ts`** — `withLease` guards against concurrent runs; the script is the sole current consumer of this primitive.
-- **`src/infrastructure/runtime/database.ts`** — `start()` boots Mongo; `stopDatabase()` in teardown.
-- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` supplies the audit context for both delete stages (no HTTP request behind the call).
-- **`src/kernel/registry.ts`** — `registerModules(enabledModules)` wires module registrations needed by `userService`.
-- **`src/modules.ts`** — `enabledModules` and `enabledModuleLocales()` feed registration and i18n boot.
-- **`src/modules/account/config.ts`** — `accountConfig().NODE_INACTIVE_ACCOUNT_DAYS` is the single runtime knob.
-- **`src/modules/account/index.ts`** — exports `inactivityWarningEmail`, the template builder for the stage-1 email.
-- **`src/modules/account/emails.ts`** — implementation of `inactivityWarningEmail` (subject, template, data).
+
+- **`scripts/run-script.ts`** — Wraps `main` with structured error handling and a final `stopDatabase()` + `stopQueue()` teardown.
+- **`src/infrastructure/persistence/lease.ts`** — Provides `withLease`; this script is the sole caller and the documented reference for the primitive.
+- **`src/infrastructure/runtime/database.ts`** — `startJob()` opens the Mongo connection before the lease is acquired; `stopDatabase()` runs in the cleanup callback.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import that sets Mongoose defaults before any schema is built.
+- **`src/infrastructure/config/dotenv.ts`** — Side-effect import that loads `.env` before any config is read.
+- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` delivers the stage-1 warning.
+- **`src/infrastructure/adapters/queue.ts`** — `stopQueue` in the shutdown path.
+- **`src/infrastructure/i18n/boot.ts` / `catalog.ts` / `index.ts`** — `bootI18n` initialises translation; `getDefaultLocale` provides a fallback locale for accounts with no stored preference.
+- **`src/kernel/registry.ts`** — `registerModules` activates all module hooks (including `personalData.minimise` and `personalData.erase`) before any stage runs.
+- **`src/modules.ts`** — Supplies `enabledModules` and `enabledModuleDirectories('locales')`.
+- **`src/modules/account/config.ts`** — `accountConfig()` reads the two `NODE_INACTIVE_*` dials and returns them as numbers.
+- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` fabricates an audit context for deletions that have no HTTP request.
 
 ## Notes
-- **Disabled by default.** `NODE_INACTIVE_ACCOUNT_DAYS` must be set > 0; the script logs and exits if it is 0 or negative. This is a deliberate safety default — a boilerplate that ships it enabled would delete live accounts.
-- **Lease + runScript interaction.** `main` resolves normally even when the lease is already held (skip path). Because `withLease` internally records the outcome under its own name, `runScript` is passed `undefined` for the name to avoid overwriting a genuine success with a skip.
-- **Returning-user gap.** If a user signs back in (resetting `LAST_ACTIVE_EXPR`) and later goes inactive again, the stale `inactivityWarnedAt` means they skip the warning email and go straight to soft delete after one grace period. Accepted as a known limitation of the disabled-by-default safety net.
-- **`GRACE_DAYS` is hardcoded.** Not exposed as an env var to keep the operator-facing surface to a single threshold.
-- **Runs in the same cron container** as `reap:quarantine` and `reap:orders`; never on app boot.
+
+- **Deletion ships off.** `NODE_INACTIVE_ACCOUNT_DAYS` defaults to `0`; a deployment must explicitly opt in. Minimise ships on (1095 days) because it only removes re-enterable data.
+- **Grace runs from the warning, not from last activity.** This guarantees a single cron run can never warn and soft-delete the same account.
+- **`deletedBy: 'reaper'`** is the marker that lets stage 3 distinguish its own soft deletes from a staff member's; it never hard-deletes the latter.
+- **`lastActiveAt` is stamped at most once per day** (on sign-in or API-key use). Sessions are *not* consulted — an account that logged out looks identical to one never used.
+- **Disabled accounts** (`active: false`) are excluded from every stage.
+- **Lease-skip is a success path.** When `withLease` returns `undefined` (another holder active), `main` resolves normally and `runScript` records no failure. The `undefined` name argument to `runScript` exists specifically so this path doesn't get mis-recorded as an error.
+- **Per-account failure isolation.** Stage 0 logs and continues on individual failures; the next nightly run retries. Deletion stages are sequential `for…await` loops, so one bad account halts the remaining batch.

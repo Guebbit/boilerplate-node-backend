@@ -1,7 +1,7 @@
 ---
 source: scenarios/index.ts
-sha256: be49602dfffd22c2e43e3e55d80ecbd5cffdd52dd5b19e2efdcf8186e35b2efd
-generated_at: 2026-10-01T12:22:04.318446+00:00
+sha256: 856d6923aefd4d12a5ff5aa8cc617e9fcda606947bfb5ce6dc9ff396160c3b8b
+generated_at: 2026-10-14T06:58:45.636743+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,41 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-The scenario registry: the single file that defines every named, whole-database seed state this repo can build, exposes the unified `buildScenario` entry point, and re-exports the `shopModules` table. It exists so that adding a new scenario touches exactly one place, and so that `src/app/demo.ts` and `scenarios/apply.ts` can index scenarios without hand-rolled conditionals.
+Central registry of all named, whole-database scenarios this repo can seed. It defines the `Scenario` shape (seed → drive → subjects), exposes a single `buildScenario` entry point, and lets callers (`apply.ts`, `support/demo.ts`) index one table instead of hand-rolling per-scenario conditionals. Every file in the `scenarios/` folder imports its own dependencies directly so a production image can drop the entire folder without anything under `src/` noticing.
 
 ## Key elements
 
-- **`seedShop`** (internal) — Seeds the shop's starting rows: the access model first, then all `shopModules` entries in the fewest sequential waves their `after` graph permits. Products start at `onHand: 0`; delivery arrives via the flow run.
-- **`Scenario`** (interface) — Shape each registry entry must satisfy: `seed()` (requires an empty DB), optional `drive(baseUrl)` (HTTP flows that produce a `ShopHistory`), and `subjects` (pinned name→row-id map).
-- **`SCENARIOS`** — The registry object (`shop`, `blank`), constrained with `satisfies Record<string, Scenario>`.
-- **`ScenarioName`** — `keyof typeof SCENARIOS`; the closed set of valid names.
-- **`DEFAULT_SCENARIO`** — `'shop'`; the fallback when a caller names no scenario.
-- **`isScenarioName(name)`** — Type guard narrowing an arbitrary string to `ScenarioName`, so callers never need an `as` cast.
-- **`buildScenario(name, app?)`** — The public entry point. Seeds the scenario, optionally drives its HTTP flows against a throwaway loopback listener (with the human-challenge provider disabled), then backdates any produced history. Returns the merged subject map (pinned + flow-produced). Throws if a driving scenario is given without an Express app.
-- **`shopModules`** — Re-exported from `./shop-modules` for consumers that need the per-module fixture table directly.
+- **`SCENARIOS`** – `Record<string, Scenario>` table mapping `"shop"` and `"blank"` to their `{ seed, drive?, subjects }`. The single place a new scenario is registered.
+- **`ScenarioName`** – `keyof typeof SCENARIOS`; the closed set of valid names.
+- **`DEFAULT_SCENARIO`** – `"shop"`; the fallback when no name is supplied.
+- **`isScenarioName(name)`** – type-guard narrowing an unvalidated string to `ScenarioName`, so callers avoid a manual `as` cast.
+- **`buildScenario(name, app?)`** – the one-call lifecycle: seed → drive (against a loopback listener, human-challenge disabled) → backdate. Returns merged subject ids (pinned + flow-produced). Throws if a drive-capable scenario is given without an Express app.
+- **`seedShop`** (internal) – seeds the access model first, then all `shopModules` entries via `runInWaves(asWaveEntries(shopModules))`, guaranteeing `products` waits for `locales`.
+- **`shopModules`** – re-exported from `./shop-modules` so external consumers import it from here.
 
 ## Relationships
 
-- **Imports from** `./shop-modules`, `./waves`, `./blank`, `./accounts`, `./subjects`, `./flows/loopback`, `./support/no-human-challenge`, `./flows/shop-history`, `./flows/backdate`, and `@scenarios/seed` (type only).
-- **Walked by** `src/app/demo.ts` and `scenarios/apply.ts` — neither imports any other module in this folder for a different reason.
-- **Compile-time twin in** `scenarios/check.ts` — that file cross-validates `shopModules` names against `enabledModules` in `src/modules.ts`, a check this file cannot perform because eslint boundaries restrict access to `src/modules.ts` to `apply.ts`, `run-server.ts`, and `check.ts` only.
-- **Consumed by** `tests/integration/access.test.ts` and `tests/integration/scenarios/shop.test.ts`.
+| Neighbor | Interaction |
+|---|---|
+| `scenarios/shop-modules.ts` | Supplies `shopModules` (fixture table) and `asWaveEntries` (wave graph). |
+| `scenarios/waves.ts` | Supplies `runInWaves`, the sequential-wave executor. |
+| `scenarios/accounts.ts` | Supplies `seedAccessModel`, the first step of `seedShop`. |
+| `scenarios/blank.ts` | Supplies `seedBlank` for the `blank` scenario. |
+| `scenarios/subjects.ts` | Supplies `SHOP_SUBJECTS` (pinned name→id map). |
+| `scenarios/flows/loopback.ts` | Supplies `withLoopbackServer`, the temporary HTTP listener for drive. |
+| `scenarios/support/no-human-challenge.ts` | Supplies `withoutHumanChallenge`, disabling the challenge provider during drive. |
+| `scenarios/flows/shop-history.ts` | Supplies `driveShopHistory` and the `ShopHistory` type. |
+| `scenarios/flows/backdate.ts` | Supplies `backdateHistory`, moving orders into the past after drive. |
+| `scenarios/seed.ts` | Supplies the `SeedOutcome` type used in signatures. |
+| `scenarios/check.ts` | Compile-time twin: validates every `shopModules` key against `enabledModules` in `src/modules.ts`. `index.ts` cannot perform this check itself due to eslint boundary rules. |
+| `scenarios/apply.ts` | Primary consumer; indexes `SCENARIOS` and calls `buildScenario`. |
+| `scenarios/support/demo.ts` | Consumes `SCENARIOS` to walk and display scenario metadata. |
+| `tests/integration/access.test.ts` | Exercises seeded access-model rows via `buildScenario`. |
+| `tests/integration/scenarios/shop.test.ts` | Drives the full shop scenario end-to-end. |
 
 ## Notes
 
-- Dependency direction is strict: every file in `scenarios/` imports from `src/`, never the reverse. A production Docker image can exclude the entire `scenarios/` folder with zero impact on `src/`.
-- `seed()` assumes an already-empty database; the caller is responsible for truncation.
-- `buildScenario`'s three-step order (seed → drive → backdate) is the only legitimate sequence and is deliberately fused into one function rather than exported as three steps.
-- The `app` parameter is optional precisely so `blank` (which has no `drive`) can be built by callers that have not yet assembled an Express instance.
+- **Dependency boundary:** only `apply.ts`, `run-server.ts`, and `check.ts` may import `src/modules.ts`. That is why the `shopModules` ↔ `enabledModules` name-consistency check lives in `check.ts`, not here.
+- **`blank` has no `drive`**, so `buildScenario("blank")` works without an Express app—pass `app` as `undefined`.
+- **Products start at `onHand: 0`.** A seeded-but-undriven shop has an empty catalogue; inventory only appears after the drive/backdate cycle in `buildScenario`.
+- **Caller owns the empty database.** `seed` assumes a clean slate; `buildScenario` does not drop tables itself.

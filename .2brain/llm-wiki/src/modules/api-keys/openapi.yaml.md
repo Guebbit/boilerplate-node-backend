@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/openapi.yaml
-sha256: 3f697def407089949cfb1cc9a32b1afc9ce2b062e4dcbaea55b0187d2c73d6d4
-generated_at: 2026-09-23T18:24:48.734885+00:00
+sha256: b5199031ac0d6a9f327338f5513a07727a2af991ec2b3f7c26a3ecd094756c11
+generated_at: 2026-10-14T14:59:31.785430+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-OpenAPI 3.0.3 contract for the api-keys module. Defines the three machine-to-machine credential endpoints (list, mint, revoke), their request/response schemas, and the envelope wrappers that the module's runtime must produce.
+OpenAPI 3.1.0 contract for the `api-keys` module. It defines the three machine-to-machine credential operations (list, mint, revoke), the request/response schemas for each, and the `x-personal-data` extension that a bundler folds into the account data export. It exists as the single source of truth for the module's external API shape.
 
 ## Key elements
 
-- **`GET /api-keys` (`listApiKeys`)** — paginated list of a shop's credentials. Never returns a secret; only the `publicPrefix` identifier.
-- **`POST /api-keys` (`mintApiKey`)** — creates a credential and returns the plaintext `sk_<prefix>_<secret>` exactly once (201).
-- **`DELETE /api-keys/{id}` (`revokeApiKey`)** — soft-revokes by stamping `revokedAt`; row and audit history remain readable.
-- **`ApiKey`** — the credential shape as it appears in list/detail (no secret field).
-- **`ApiKeyCreated`** — superset of `ApiKey` with the one-time `secret` field. Declared flat (not `allOf`) to avoid an ajv `additionalProperties: false` collision.
-- **`MintApiKeyRequest`** — body for mint: `name`, `permissions` (non-empty, must be ⊆ caller's current permissions), optional `expiresAt`.
-- **`ApiKeysResponse` / `ApiKeysResponseEnvelope`** — paginated list payload and its `success/status/message/data` envelope.
-- **`ApiKeyCreatedEnvelope`** — 201 response envelope wrapping `ApiKeyCreated`.
+- **`GET /api-keys`** (`listApiKeys`) — Paginated listing of a shop's credentials. Never returns a secret; only `publicPrefix` and metadata.
+- **`POST /api-keys`** (`mintApiKey`) — Creates a `sk_<prefix>_<secret>` credential. Returns the plaintext secret exactly once in the `201` response. Requires a critically fresh session, a non-empty `permissions` subset of the caller's own, and an `expiresAt` ≤ 1 year.
+- **`DELETE /api-keys/{id}`** (`revokeApiKey`) — Soft-revokes by stamping `revokedAt`; the row and audit history remain readable. Immediate, no grace window.
+- **`ApiKey`** — Core credential record (id, name, publicPrefix, permissions, timestamps). No secret field.
+- **`ApiKeyCreated`** — Flat superset of `ApiKey` that adds the one-time `secret` field. Deliberately not composed via `allOf` (see Notes).
+- **`MintApiKeyRequest`** — Request body: `name`, `permissions` (non-empty), `expiresAt`.
+- **`ApiKeysResponse` / `ApiKeysResponseEnvelope`** — Paginated list + standard envelope.
+- **`ApiKeyCreatedEnvelope`** — Standard envelope wrapping `ApiKeyCreated`.
+- **`x-personal-data`** extension — Declares the `apiKeys` array (metadata only, no hash) that the bundler injects into `AccountExportResponse` for `POST /account/export`.
 
 ## Relationships
 
-- **`shared/contracts/openapi.root.yaml`** — the primary dependency. Every common parameter (`PageParam`, `PageSizeParam`, `IdPathParam`), standard error response (`Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `Success`, `NotFound`), and primitive schema (`Id`, `PaginationMeta`, `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`) is `$ref`-ed from this file. This file never redefines those.
-- **`src/modules/api-keys/module.ts`** — the runtime module that implements the paths and schemas defined here; this spec is its external contract.
+- **`shared/contracts/openapi.root.yaml`** — Referenced throughout for shared parameters (`PageParam`, `PageSizeParam`, `IdPathParam`), standard error/success responses (`Unauthorized`, `Forbidden`, `ValidationError`, `InternalError`, `NotFound`, `Success`), the `Location` header, and common schemas (`Id`, `PaginationMeta`, `EnvelopeSuccess`, `EnvelopeStatus`, `EnvelopeMessage`). All `$ref` paths are relative (`../../../shared/contracts/openapi.root.yaml#…`).
+- **`src/modules/api-keys/module.ts`** — The runtime implementation this spec describes; the module registers handlers for the three `operationId`s and the `x-personal-data` export section.
 
 ## Notes
 
-- **Flat `ApiKeyCreated` is intentional.** The comment explicitly warns that `allOf: [ApiKey, {secret}]` with two `additionalProperties: false` branches causes ajv to reject valid payloads. Do not "clean up" to `allOf` without re-testing validation.
-- **Secret is single-use in the API surface.** The description on `POST` and the `ApiKeyCreated.secret` field make clear the secret appears in exactly one HTTP response; every other endpoint omits it.
-- **Permission floor is enforced at request time, not just mint time.** The `ApiKey.permissions` description and the `POST` description both state the floor is re-checked against the minter's _current_ permissions on every subsequent request.
-- **Revoke ≠ delete.** `DELETE /api-keys/{id}` is a state transition (`revokedAt` stamp), not a row removal. The 200 response is the shared `Success` envelope, not a body containing the credential.
-- All schemas set `additionalProperties: false`; any new field added to the API must update the schema here before implementation.
+- **`ApiKeyCreated` is intentionally flat.** The in-file comment explains that composing it as `allOf: [ApiKey, {secret}]` with both branches declaring `additionalProperties: false` is an ajv validation trap: each branch is validated independently, so fields owned by the *other* branch are treated as additional properties and the document fails. The schema restates all fields rather than composing.
+- **Secret visibility rule.** The `secret` field appears only in `ApiKeyCreated` (the `201` mint response). The list endpoint and `ApiKey` schema never carry it.
+- **Permission re-flooring.** The `permissions` array on `ApiKey` is a snapshot at mint time; the runtime re-checks it against the minter's *current* tenant permissions on every authenticated request, not just at mint. The spec's descriptions document this but the enforcement lives in `module.ts` / middleware.
+- **`x-personal-data` is bundler-driven.** This key is not standard OpenAPI; it is a convention the project's export bundler reads. Removing this module removes the corresponding section from the export response.

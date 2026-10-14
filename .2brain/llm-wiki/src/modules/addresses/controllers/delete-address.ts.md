@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/controllers/delete-address.ts
-sha256: 109ad7c89dd1d3abd47e14f7c39c79d2346389d4c1ef890098f3aa8e84dfea1b
-generated_at: 2026-09-23T18:19:28.140928+00:00
+sha256: e5be4a057ae1992822b79a49f20d90fee00e093951f28541e00d7bad423e7c2e
+generated_at: 2026-10-14T14:50:56.102781+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `DELETE /account/addresses/:addressId`. Extracts the authenticated user ID and target address ID from the request, delegates all business logic to the `addressRemove` service, and translates the result into an Express response.
+Thin HTTP adapter for the `DELETE /account/addresses/:addressId` endpoint. It validates the URL parameter, delegates the actual removal to the domain service (`addressRemove`), and translates the service result into a well-formed HTTP response. It contains no business logic of its own.
 
 ## Key elements
 
-- **`deleteAddress`** – The sole export. An Express handler that:
-    - Reads `id` from `request.authContext` and `addressId` from `request.params`.
-    - Calls `addressRemove(id, addressId)` and inspects the returned result.
-    - If the result is "refused," short-circuits via the `refused` helper.
-    - Otherwise sends a `200` with the full `AddressesResponse` body (the complete list, not a bare deletion ack).
-    - Catches any thrown error through the `catchAs(response, 'deleteAddress')` wrapper.
+- **`deleteAddress(request, response)`** — The sole export. Reads the authenticated user's `id` from `request.authContext`, extracts and validates the `addressId` path param, calls `addressRemove`, then sends a `200` success (or short-circuits on refusal) with the full updated address list.
 
 ## Relationships
 
-- **`src/modules/addresses/service.ts`** – Provides `addressRemove`, the single business-logic call this controller makes.
-- **`src/infrastructure/http/controller.ts`** – Supplies the `refused` guard and the `catchAs` error-wrapper used in the then/catch chain.
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse`, which serializes the payload with status code and optional message.
-- **`src/types/index.ts`** – Provides the `AddressesResponse` type that parameterizes `successResponse`.
-- **`src/modules/addresses/routes.ts`** – The route file that registers this handler on the `DELETE /account/addresses/:addressId` path (this controller is the endpoint it dispatches to).
+- **`src/modules/addresses/routes.ts`** — Registers this handler on the `DELETE /account/addresses/:addressId` route (implied by the JSDoc contract).
+- **`src/modules/addresses/service.ts`** — Source of the `addressRemove(id, addressId)` domain call this controller delegates to.
+- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which parses and validates the `addressId` route param, short-circuiting with a 404 if absent.
+- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, used to emit the final `200` with the `AddressesResponse` body.
+- **`src/infrastructure/http/controller.ts`** — Provides `refused` (checks whether the service result is a refusal and sends the appropriate error) and `catchAs` (catches unexpected errors and maps them to a 500).
+- **`src/types/index.ts`** — Supplies the `AddressesResponse` type that constrains the response payload.
 
 ## Notes
 
-- The response intentionally returns the **full address list** (200 + body) rather than a 204, so the client can observe where the `default` flag landed after a default address is removed (promotion logic lives in `repository.ts`, not here).
-- `request.authContext!` uses a non-null assertion; the file assumes an upstream `isAuth` middleware has already populated it. There is no defensive check in this handler.
-- Error handling is delegated entirely to `catchAs`; no custom status codes or message shaping happens in this file beyond what that helper provides.
+- Auth is **not** checked here; it is guaranteed by an upstream `isAuth` middleware. The non-null assertion on `request.authContext!` relies on that invariant.
+- The response always returns the **full** address list (not just the deleted entry), so the client can see which entry, if any, received the `default` flag after removal.
+- The service owns the "promote oldest to default" rule; this controller never touches that logic.
+- Error handling is split: domain-level refusals go through `refused`, and unexpected throws fall into `catchAs(response, 'deleteAddress')`, which logs under that tag.

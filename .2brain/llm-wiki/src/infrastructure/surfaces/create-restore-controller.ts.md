@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-restore-controller.ts
-sha256: ad2b7f5990e8c8e9821fbd9b8795d2af48eb15e0c315f77ba9d3a5cd7731400a
-generated_at: 2026-09-27T14:17:25.122823+00:00
+sha256: 6f28f9278172a424100a584b4dac31ee5e4525448b961188d434c0fa262ecfcd
+generated_at: 2026-10-14T08:19:06.046822+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Factory that builds a `POST /x/:id/restore` Express handler for any module that soft-deletes via `DELETE /x/:id`. It exists as a separate verb because DELETE must remain safe to repeat (RFC 9110 §9.2.2), so the undo operation needs its own idempotent endpoint.
+Generic factory that builds a `POST /x/:id/restore` Express handler for any module whose `DELETE /x/:id` soft-deletes a record. It exists as a separate verb because HTTP DELETE must be safe to repeat (RFC 9110 §9.2.2), so a retried DELETE can never accidentally restore a record.
 
 ## Key elements
 
-- **`RestoreControllerSpec<TRow>`** (exported interface) — per-entity configuration: `entity` (singular noun, used in audit/logs), `restore` (service call returning `ServiceResult<TRow>`), `present` (shapes the row into the entity's read projection), `auditAction`, and `notFoundKey` (i18n key for a well-formed-but-unknown id).
-- **`createRestoreController`** (exported const) — takes a `RestoreControllerSpec<TRow>` and returns a named Express handler (`restoreOrder`, `restoreProduct`, etc.). Internally it extracts and validates `:id`, delegates to the service, records audit on success, calls `present` to shape the response, and sends a 200 envelope.
+- **`RestoreControllerSpec<TRow>`** — interface of the three things that differ per entity: `entity` (lower-case singular name for logging/operation naming), `restore` (service call returning `ServiceResult<TRow>`; takes the raw `Request` so the module can build its own `CallerContext`), and `present` (projection that shapes the restored row into the entity's read contract). Also carries `notFoundKey` for the i18n error message.
+- **`createRestoreController<TRow>(spec)`** — returns a `namedHandler` (operation name `restore{Entity}`, e.g. `restoreOrder`). Flow: extract `:id` via `requireId` → call `spec.restore(id, request)` → on refusal send the error envelope (404 / 409) and stop → otherwise pass `result.data` through `spec.present` and reply with `successResponse` (200). Unhandled rejections are forwarded to `catchAs`.
 
 ## Relationships
 
-- **`@infrastructure/http/controller`** — consumes `namedHandler`, `operationName`, `refused`, `catchAsNotFound`, and the `ServiceResult` type to structure the handler, handle 404/409, and catch unexpected errors.
-- **`@infrastructure/http/request`** — calls `extractAndValidateId` for the path parameter and `callerContextOf` for the audit record.
-- **`@infrastructure/http/response`** — uses `successResponse` to emit the final 200 body.
-- **`@infrastructure/observability/audit`** — calls `recordAudit` with the module's `AuditAction` on successful restore.
-- **`src/modules/orders/controllers/restore-orders.ts`**, **`restore-products.ts`**, **`restore-users.ts`** — each supplies an entity-specific `RestoreControllerSpec` and wires the returned handler to its route.
+- **`src/infrastructure/http/controller.ts`** — source of `catchAs`, `namedHandler`, `operationName`, `refused`, and the `ServiceResult` type used to interpret the service call's outcome.
+- **`src/infrastructure/http/ids.ts`** — provides `requireId`, which extracts and validates `:id` from the route params, short-circuiting with the entity's `notFoundKey` if absent/malformed.
+- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the 200 reply.
+- **`src/modules/orders/controllers/restore-orders.ts`**, **`src/modules/products/controllers/restore-products.ts`**, **`src/modules/users/controllers/restore-users.ts`** — consumers; each supplies a `RestoreControllerSpec` (entity name, its service-level `restore` call, its read projection, its i18n key) to get a ready-to-mount Express handler.
 
 ## Notes
 
-- The `present` function is the critical extension point: it must produce the same shape the entity's own `GET /x/:id` returns, so a restore never exposes fields a read would not.
-- 409 (record not soft-deleted) and 404 (absent) are signalled by the *service* via `ServiceResult`; this controller only inspects the result through `refused` and `catchAsNotFound`.
-- The handler is named `restore<Entity>` (e.g. `restoreOrder`) via `operationName`, which feeds logging and the audit trail.
-- Lives under `surfaces/` rather than `http/` because it composes multiple infrastructure pieces into a module-facing unit.
+- A malformed or missing `:id` is answered as *not found* (404), not 400 — intentionally indistinguishable from a genuinely absent record.
+- `spec.present` must return the same shape the entity's own reads return; restore must never expose fields a read would hide.
+- The `restore` callback receives the raw `Request` (not a pre-built context) so the owning module controls how it assembles its `CallerContext` for audit logging, matching the pattern used by `createUpdateController`'s `update`.
+- A 409 is returned when the id exists but the record is **not** soft-deleted (i.e., there is nothing to restore).

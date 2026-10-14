@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-verify-confirm.ts
-sha256: 2a165227f4018003dd245ea5b688ba617dc72430ccc3607f25e02d3bc3c8b494
-generated_at: 2026-09-27T14:26:39.386462+00:00
+sha256: 565f22c2c301de21f6666d56b869dc5522811a963b38f20639a7e2cfd1aa6101
+generated_at: 2026-10-14T08:37:54.674022+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Handles `POST /account/verify-confirm`: validates a one-time email-verification token submitted in the request body, redeems it, and marks the account's email as verified. The endpoint is intentionally public (no auth middleware) — the token in the body *is* the credential, following the same convention as `reset-confirm` and `delete-confirm`.
+Handler for `POST /account/verify-confirm`. Receives a one-time email-verification token in the request body, validates it, atomically redeems it, and marks the account's email as verified. It is deliberately public (no auth middleware) because the token itself is the credential—same pattern as `reset-confirm` and `delete-confirm`.
 
 ## Key elements
 
-- **`postVerifyConfirm(request, response)`** — The sole export. A handler bound to the POST route that:
-  1. Parses the body against `ConfirmEmailVerificationBody` (Zod schema from `@api/schemas.zod`); rejects with 422 on failure.
-  2. Calls `accountService.redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token)` to atomically spend the token; a `null` return means the token was invalid or already consumed → 422.
-  3. Calls `accountService.completeEmailVerification(user, callerContextOf(request))` to persist the verified flag, then responds 200.
-  4. Increments the `authEmailVerifyTotal` Prometheus counter on every path (`status: 'success'` | `'failure'`).
-  5. Routes unexpected exceptions through `catchAs(response, 'postVerifyConfirm')`.
+- **`postVerifyConfirm(request, response)`** – The sole export. Validates the body with the `ConfirmEmailVerificationBody` Zod schema, calls `accountService.redeemLiveToken` to atomically spend the token, then calls `accountService.completeEmailVerification` on success. Emits `authEmailVerifyTotal` metrics (`success` / `failure`) on every path.
+- **Find-then-spend pattern** – The "find" (read) step allows two simultaneous clicks to both pass; the atomic "spend" step picks a winner. The loser receives the same 422 "token not found" response as an invented token. This logic lives in `services/tokens.ts`.
+- **`EMAIL_VERIFY_TOKEN_TYPE`** – Constant imported from `services/index` that scopes `redeemLiveToken` to email-verification tokens specifically.
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Provides `rejectValidation` (Zod error → 422) and `catchAs` (generic error → 500 logging/response) used in the validation and catch paths.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts client metadata (IP, user-agent, etc.) passed to `completeEmailVerification` for audit logging.
-- **`src/infrastructure/http/response.ts`** — `successResponse` and `rejectResponse` shape the JSON envelope for 200/422 replies.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — `t()` resolves user-facing messages (`account.verify.token-not-found`, `account.verify.success`) per the requester's locale.
-- **`src/modules/account/services/index.ts`** — Exports `accountService` (token redemption + email verification) and the `EMAIL_VERIFY_TOKEN_TYPE` constant used to scope the token lookup.
-- **`src/modules/account/metrics.ts`** — `authEmailVerifyTotal` counter; incremented on success and every failure branch.
-- **`src/modules/account/routes.ts`** — Registers `postVerifyConfirm` on the `POST /account/verify-confirm` route (no auth guard).
-- **`src/types/index.ts`** — Defines `VerifyEmailConfirmRequest` used as the typed body generic on the Express `Request`.
+- **`src/modules/account/services/index.ts`** – Provides `accountService` (both `redeemLiveToken` and `completeEmailVerification` calls) and the `EMAIL_VERIFY_TOKEN_TYPE` constant.
+- **`src/modules/account/metrics.ts`** – Provides `authEmailVerifyTotal`, a Prometheus counter incremented on every success/failure outcome.
+- **`src/infrastructure/http/controller.ts`** – Provides `rejectValidation` (Zod failure → 400) and `catchAs` (catches unexpected errors, logs, and returns 500).
+- **`src/infrastructure/http/response.ts`** – Provides `successResponse` and `rejectResponse` for consistent response shaping.
+- **`src/infrastructure/http/request.ts`** – Provides `callerContextOf(request)`, passed to `recordOneTimeTokenRejected` and `completeEmailVerification` for audit/telemetry context.
+- **`src/infrastructure/i18n/index.ts`** – Provides `t()` for all user-facing messages (token-not-found, success).
+- **`src/types/index.ts`** – Provides the `VerifyEmailConfirmRequest` type used to shape the Express `Request` generic.
+- **`src/modules/account/routes.ts`** – Registers this handler on the `POST /account/verify-confirm` route (no auth guard).
 
 ## Notes
 
-- **Race safety by design.** Two simultaneous clicks both pass the token *lookup* (a read), but only one wins the atomic *spend*; the loser receives the same 422 "token not found" as a fabricated token. The find-and-spend logic lives in `services/tokens.ts`, not in this controller.
-- **No auth middleware.** Do not add an auth guard here. The token in the body is the only credential, and the route is registered without one in `routes.ts`.
-- **Metric is incremented in every branch** (validation failure, token-not-found, service success, unexpected throw). When adding new early-exit paths, keep the counter increment to avoid skewing the success-rate gauge.
+- **Public by design.** There is intentionally no session/JWT check; the token in the body *is* the authentication. Do not add an auth guard here.
+- **Race safety is delegated.** The controller does not implement idempotency or locking. The "spend" atomicity is owned by `services/tokens.ts`; the controller simply propagates the `null` return as a 422.
+- **`recordOneTimeTokenRejected` is called only in the "token not found" branch**, not in the validation-failure or catch branches—meaning a malformed body or an unexpected server error will *not* trigger that audit event.
+- **Zod parse failure short-circuits before any service call**, so a bad request never touches the token store.

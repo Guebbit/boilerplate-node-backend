@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/providers/port.ts
-sha256: 7dffac377e21e761b1dee5df1cb0dd4683b4fc357710b485d12b47b75d6540fc
-generated_at: 2026-09-23T18:06:58.747142+00:00
+sha256: 5398ad4cd954ba56b04abe5196eb7a54b39ab075c78d850b7320cd43ae4c5ec7
+generated_at: 2026-10-14T08:44:18.868534+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the **port** (interface contract) for OAuth/OIDC identity providers in hexagonal architecture. Concrete providers (GitHub, Google, a fake for tests) implement `OAuthProvider`; the OAuth service consumes it. Unlike the payments domain, multiple providers can be enabled simultaneously, so selection is delegated to the sibling `index.ts` registry rather than a single environment switch.
+Defines the OAuth/OIDC provider **port** — the structural contract that concrete identity providers (Google, GitHub) implement. Unlike the analogous `PaymentProvider` port in `payments/providers/index.ts`, more than one OAuth provider may be enabled simultaneously, so selection is delegated to the registry in `./index` rather than a single environment switch.
 
 ## Key elements
 
-- **`OAuthIdentity`** (interface) — The result of a successful token exchange. Carries `providerId` (the stable subject ID used as the app's identity key), `email`, `emailVerified` (provider's own claim; the OAuth service refuses to link unverified emails to existing password accounts), and optional `name` / `imageUrl`.
-- **`OAuthProvider`** (interface) — The contract every provider adapter must satisfy:
-    - `name: string` — persisted on `OAuthAccount.provider` and surfaced by `enabledProviders()`.
-    - `authorizeUrl(state, redirectUri, codeChallenge): string` — Builds the consent URL. `state` is the CSRF token from `../state.ts`; `redirectUri` is always server-derived (never from the request); `codeChallenge` is the S256 hash of the PKCE verifier (RFC 7636).
-    - `exchangeCode(code, redirectUri, codeVerifier): Promise<OAuthIdentity>` — Redeems the authorization code. `redirectUri` must match the one passed to `authorizeUrl` (some providers validate this). `codeVerifier` is the PKCE secret; the provider hashes it and rejects the exchange on mismatch. Throws on failure or unparseable response.
+- **`OAuthIdentity`** — The payload a successful `exchangeCode` must return. `providerId` is the stable subject the service layer persists as the identity key (never `email`). `emailVerified` is the provider's own attestation and gates whether an unverified email may be linked to an existing password account. `name` and `imageUrl` are optional display fields.
+- **`OAuthExpectation`** — Carries the per-attempt `state` (CSRF token) and `codeVerifier` (PKCE secret). The `exchangeCode` implementation must validate the callback against both.
+- **`OAuthProvider`** — The port interface itself. Exposes:
+  - `name` — persisted on `OAuthAccount.provider`; used by `enabledProviders()`.
+  - `authorizeUrl(state, redirectUri, codeChallenge)` — builds the consent URL the browser is sent to. `codeChallenge` is the S256 hash of the PKCE verifier (RFC 7636). `redirectUri` must be server-derived, never request-supplied.
+  - `exchangeCode(callbackUrl, expected)` — exchanges the authorization code for an `OAuthIdentity`. Throws on state mismatch, malformed response, foreign `iss`, or failed token exchange. `callbackUrl` must be the real callback URL with the provider's actual query string intact.
 
 ## Relationships
 
-- **`providers/google.ts`**, **`providers/github.ts`** — Concrete implementations of `OAuthProvider`; each supplies a real `authorizeUrl` and `exchangeCode`.
-- **`providers/fake.ts`** — A stub implementation used in tests; satisfies the same two methods without network calls.
-- **`providers/index.ts`** — The registry that enumerates enabled providers and exposes `enabledProviders()`; this file's `name` field is what the registry keys on.
-- **`services/oauth.ts`** — The application service that calls `authorizeUrl` to redirect the user and `exchangeCode` on the callback, then stores `providerId` (not `email`) as the link key.
-- **`tests/integration/oauth-link.test.ts`** — Exercises the full authorize → callback → link flow, typically against `fake.ts`.
+- **`providers/google.ts`, `providers/github.ts`** — Concrete implementations of `OAuthProvider`.
+- **`providers/index.ts`** — Registry that discovers and selects among enabled `OAuthProvider` implementations at runtime.
+- **`providers/client.ts`** — Shared OAuth client infrastructure (token endpoint, etc.) consumed by the concrete providers.
+- **`services/oauth.ts`** — The service layer that calls `authorizeUrl` / `exchangeCode`, validates `OAuthExpectation`, stores `OAuthIdentity.providerId`, and enforces the `emailVerified` security rule.
+- **`scenarios/support/doubles/oauth-fake.ts`** — Test double implementing this port for integration and unit tests.
+- **`tests/integration/oauth-link.test.ts`** — Integration tests that exercise the port through the service layer with real or faked providers.
 
 ## Notes
 
-- `providerId` is deliberately the identity key, **not** `email`. Email can change across providers or be reused; `providerId` (the provider's `sub` claim) is stable. See `services/oauth.ts` for the full rationale.
-- `emailVerified` is a **provider-issued** claim. The service treats `false` as "do not auto-link to an existing password account"—this is a security boundary, not a display concern.
-- `redirectUri` is always derived server-side (`../config.ts`). It is never taken from the incoming request to prevent open-redirect abuse.
-- PKCE is mandatory: `authorizeUrl` must embed `code_challenge` + `code_challenge_method=S256`, and `exchangeCode` must send the matching `code_verifier`. The two are paired per-attempt via `../state.ts`.
+- **Identity key is `providerId`, not `email`.** The service layer (`services/oauth.ts`) stores `providerId` as the link key; `email` is secondary.
+- **`emailVerified` is a security gate.** The service refuses to link an unverified email to an existing password account. This flag comes from the provider's own claim, not from local heuristics.
+- **`callbackUrl` must preserve the real query string.** The OIDC library validates the full response; rebuilding or dropping parameters (e.g. `iss`) will cause a spurious failure.
+- **PKCE is mandatory.** `authorizeUrl` always receives a `codeChallenge`; the corresponding `codeVerifier` lives in `OAuthExpectation` and is checked during `exchangeCode`. There is no implicit "trust the server" path.
+- **Multiple providers coexist.** Do not introduce a `NODE_OAUTH_PROVIDER`-style single-provider switch; the registry in `index.ts` handles selection.

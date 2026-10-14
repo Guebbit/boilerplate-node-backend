@@ -1,7 +1,7 @@
 ---
 source: src/kernel/access/tenant.ts
-sha256: 6707c66d2980c4676790e6304923d1b57c559c6b669baada83c3806802daf514
-generated_at: 2026-09-23T17:54:41.655311+00:00
+sha256: 745981cc18505672ae9e872d335dede8538abb8d04e776ddad26ea9b93c26529
+generated_at: 2026-10-14T08:20:55.170931+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Exports the single, fixed `_id` for the deployment's tenant (shop). It lives in its own file rather than in `src/modules/access/service.ts` to break a circular import: `src/kernel/permissions.ts` needs the constant (for `anonymousCaller`, `SYSTEM_ACTOR`), and `access/service.ts` already imports from `permissions.ts`.
+Single-constant module that pins the deployment's shop `_id` to one import location. It exists as its own file (rather than living inside `access/service.ts`) to break a circular import: `permissions.ts` needs the constant, and `access/service.ts` already imports from `permissions.ts`.
 
 ## Key elements
 
-- **`DEPLOYMENT_TENANT_ID`** (`string`) — the one-shop `_id`, pinned at build time. Every caller that needs the tenant id imports this constant instead of looking it up at boot.
+- **`DEPLOYMENT_TENANT_ID`** (`string`) — the fixed shop `_id` (`'65dd20000000000000000001'`). Every deployment reads this directly instead of resolving a shop at boot (Django `SITE_ID` pattern). Same id format and vintage as the ids in `@scenarios/accounts`.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — imports `DEPLOYMENT_TENANT_ID` (used by `anonymousCaller`, `SYSTEM_ACTOR`). This file's existence as a separate module is what prevents a circular import between `permissions.ts` and `access/service.ts`.
-- **`src/modules/access/service.ts`** — the historical home of this constant; imports it from here now. Its `ensureTenant` sets the id only on INSERT.
-- **`scripts/db/access-grant.ts`** (and the sibling `bootstrap-access.ts`) — both ship in the production image and address the shop via this constant.
+- **`src/kernel/permissions.ts`** — Consumes `DEPLOYMENT_TENANT_ID` (for `anonymousCaller`, `SYSTEM_ACTOR`). The circular-import avoidance is the reason this file is split out.
+- **`src/modules/access/service.ts`** — Contains `ensureTenant`, which writes the id on INSERT only. This file keeps the constant out of `service.ts` so `service.ts → permissions.ts` remains one-directional.
+- **`scenarios/users.ts`, `scenarios/webhooks.ts`** — Their fixture ids share the same format and vintage as `DEPLOYMENT_TENANT_ID` (the comment explicitly cross-references `@scenarios/accounts` ids).
+- **`src/modules/account/…` (roles, oauth, signup, verification, session)** and **`src/modules/api-keys/…`** tests — Import the constant as the canonical shop identifier in their integration scenarios.
 
 ## Notes
 
-- Named `DEPLOYMENT_` (not `DEMO_`) because the DB scripts that consume it run in production, where the demo scenario is absent.
-- The id is stable across reseeds: `emptyDatabase()` does not `dropDatabase()`, so the row persists; even a from-empty reseed recreates this same id rather than generating a new one (Django `SITE_ID` pattern).
-- The id's format and vintage match the ids used by `scenarios/accounts`.
+- Named for the **deployment**, not the demo. `scripts/db/bootstrap-access.ts` ships in the production image and addresses the shop through this constant; a `DEMO_` prefix would be misleading there.
+- The id survives reseeds: `ensureTenant` only sets it on INSERT, and `emptyDatabase()` (never `dropDatabase()`) leaves the row in place. A from-empty reseed recreates the same id rather than minting a new one.
+- Because the id is fixed at build time, there is no runtime lookup to cache or configure.

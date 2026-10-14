@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/routes.ts
-sha256: 5d15511e9ba29dd537ed1ab00962820cc113587738dbbcd3c8952f9a14042cdb
-generated_at: 2026-09-27T14:53:29.719861+00:00
+sha256: cf327c0620a0c3ee6192e6cee6d88783f29a35b651c450279538eb46ef3045e0
+generated_at: 2026-10-14T15:50:50.405363+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the Express route table for the feedback/contact module. It exposes exactly one public endpoint (the visitor contact form) and a set of admin-only endpoints for reading, updating, and deleting submitted feedback. Security is enforced positionally: the public route is mounted above a shared auth gate, so everything below it is automatically admin-gated without per-route repetition.
+Express router that defines the HTTP route table for the feedback module: one public visitor contact-form endpoint and a set of admin-only endpoints for reading, updating, and deleting submitted feedback entries. The single exported `router` is what `module.ts` mounts into the application.
 
 ## Key elements
 
-- **`router`** (exported) — The single Express `Router` instance; the module's entry point for mounting.
-- **`POST /contact`** — Public contact form. Middleware chain: `contactLimiters` → `humanChallengeGate` → `idempotencyKey` → `postFeedbackContact`. No auth; protected instead by rate limits and the anti-bot challenge.
-- **`router.use(getAuth, isAuthOrCredential)`** — Positional auth gate. Every route registered after this line requires an authenticated session or API credential.
-- **`POST /search`** — Admin feedback search with filters. Uses POST (not GET) because the request body carries filter params; `GET` bodies have no defined semantics. Per-route permission: `feedback.any.read`.
-- **`GET /`** — Admin list/view feedback. Permission: `feedback.any.read`. Cached with `privateNoCache`.
-- **`PUT /:id`** — Full replacement of a feedback's status (`replaceFeedbackStatus`). Permission: `feedback.any.update`.
-- **`PATCH /:id`** — Partial merge of a feedback's status (`updateFeedbackStatus`). Permission: `feedback.any.update`.
-- **`DELETE /:id`** — Remove a feedback entry. Permission: `feedback.any.delete`.
+- **`router`** (exported) — the sole export; an `express.Router()` with five handler registrations.
+- **`POST /contact`** — the only public route. Middleware chain: `contactLimiters` → `humanChallengeGate` → `idempotencyKey` → `postFeedbackContact` controller.
+- **`router.use(getAuth, isAuthOrCredential)`** — positional auth gate; every route defined *after* this line is admin-only. The public route above it is unaffected.
+- **`POST /search`** — filtered feedback listing (uses POST body for query params because GET has no defined body semantics). Gated by `feedback.any.read`, tagged `noStore`.
+- **`GET /`** — unfiltered feedback listing. Gated by `feedback.any.read`, tagged `privateNoCache`.
+- **`PUT /:id`** — replace status via `replaceFeedbackStatus`. Gated by `feedback.any.update`.
+- **`PATCH /:id`** — merge status fields via `updateFeedbackStatus`. Gated by `feedback.any.update`.
+- **`DELETE /:id`** — remove entry via `deleteFeedback`. Gated by `feedback.any.delete`.
 
 ## Relationships
 
-- **`@kernel/middlewares/authorizations`** — Provides `getAuth`, `isAuthOrCredential`, and `requirePermission` used in the route chain and per-route permission checks.
-- **`./controllers/*`** — Each route delegates to a dedicated controller (`postFeedbackContact`, `getFeedback`, `replaceFeedbackStatus`, `updateFeedbackStatus`, `deleteFeedback`); this file contains no business logic.
-- **`./rate-limits`** — Supplies `contactLimiters` (three dimensions: address, submitted email, address block) applied to the public contact route before any write.
-- **`@infrastructure/http/middlewares/cache`** — `noStore` on the POST endpoints (search, contact); `privateNoCache` on `GET /`.
-- **`@infrastructure/http/middlewares/human-challenge`** — `humanChallengeGate` (rung-3 anti-bot, disabled unless `NODE_ANTIBOT_PROVIDER` is set) on `POST /contact`.
-- **`@infrastructure/http/middlewares/idempotency`** — `idempotencyKey` on `POST /contact` to deduplicate repeated submissions.
-- **`./module.ts`** — Consumes the exported `router` to register these routes in the application.
-- **`tests/unit/routes.test.ts`** — Unit-tests the route definitions and middleware ordering in this file.
-- **`tests/support/routed-modules.ts`** — Test-harness helper that mounts this router for cross-cutting and integration tests.
+- **`src/modules/feedback/controllers/post-feedback-contact.ts`** — handler for the public `POST /contact` route.
+- **`src/modules/feedback/controllers/get-feedback.ts`** — shared handler for both `POST /search` and `GET /`.
+- **`src/modules/feedback/controllers/update-feedback-status.ts`** — exports `replaceFeedbackStatus` (PUT) and `updateFeedbackStatus` (PATCH).
+- **`src/modules/feedback/controllers/delete-feedback.ts`** — handler for `DELETE /:id`.
+- **`src/modules/feedback/rate-limits.ts`** — provides `contactLimiters`, applied before the contact-form handler.
+- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential` (positional gate), and `requirePermission` (per-route key check).
+- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore` (POST responses) and `privateNoCache` (GET /).
+- **`src/infrastructure/http/middlewares/human-challenge.ts`** — provides `humanChallengeGate`, applied on the public contact route.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `idempotencyKey`, applied on the public contact route.
+- **`src/modules/feedback/module.ts`** — consumer; mounts this `router` into the app.
+- **`src/modules/feedback/tests/unit/routes.test.ts`** — unit tests for route definitions and middleware ordering.
 
 ## Notes
 
-- **Positional security model.** The auth gate is a `router.use` call, not a per-route middleware. A route appended *above* the gate is public; one *below* it is admin-only. There is no explicit "public" flag. `tests/cross-cutting/authenticated-controllers.test.ts` is the safety net that catches a route accidentally placed in the wrong half.
-- **`POST /search` is a semantic workaround, not a design choice.** It exists solely to carry a filter body; the comment explicitly notes it is mounted before any `/:id` route so the literal string `"search"` cannot be shadowed as an id.
-- **PUT vs PATCH.** `PUT /:id` replaces the status wholesale (`replaceFeedbackStatus`); `PATCH /:id` merges partial fields (`updateFeedbackStatus`). Both require `feedback.any.update`.
-- **Cache policy is asymmetric by design.** Write endpoints (all POSTs, PUT, PATCH, DELETE) get `noStore`; the admin `GET /` gets `privateNoCache` (browser may retain a copy but must revalidate). The rationale cited is RFC 9111 §3.5 — a shared/immutable cache must never hold an admin-only queue.
+- **Positional auth boundary is the critical invariant.** The `router.use(getAuth, isAuthOrCredential)` line separates public from admin routes purely by its position. Appending a public route *after* it silently makes it admin-only, and moving it above the public route would break the contact form. The comment and `tests/cross-cutting/authenticated-controllers.test.ts` (cross-cutting, not in this file) are the safety nets.
+- **`POST /search` is intentional.** It exists because the team decided against a GET with a body; it is mounted before any `/:id` GET route to avoid path-segment ambiguity.
+- **Cache headers are route-specific, not global.** `noStore` on every POST response (RFC 9111 §3.5 — shared caches must not hold admin queue data); `privateNoCache` on `GET /` so the browser may cache locally but must revalidate.
+- **`humanChallengeGate` is off by default** — it activates only when `NODE_ANTIBOT_PROVIDER` is set.

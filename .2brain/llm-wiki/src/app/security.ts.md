@@ -1,7 +1,7 @@
 ---
 source: src/app/security.ts
-sha256: 530a1c709462255c038815ce98490cb306783baf35b1ba6c36aad2f3ecdc6b8a
-generated_at: 2026-10-01T12:45:17.433094+00:00
+sha256: 8995198f95a40da91dbea3b592fa10bb4cdddc1b0131296f38a17b444d1a70db
+generated_at: 2026-10-14T07:39:18.578078+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,33 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Centralises all transport-level protections (secure headers, CORS, rate limiting, body parsing, server timeouts) in one file because their relative order is load-bearing and non-obvious. It is split into two install functions (`installSecurity`, `installRequestParsing`) so that `src/app.ts` can mount static-file serving between them, letting page assets bypass the caller's request budget.
+Transport-level security and body-parsing middleware for the Express app. Exists as a single file because **installation order is load-bearing** (trust-proxy → rate limiter → body parsers → content-type check) and the ordering rationale is non-obvious. Splits into two exported install functions so `src/app.ts` can mount static-file serving between them.
 
 ## Key elements
 
-- **`applyServerTimeouts(server: Server)`** – Sets `headersTimeout`, `requestTimeout`, and `keepAliveTimeout` on the listening server. Bounds only the *receiving* side (how long a client may take to send), never the handler. Guards against Slowloris / slow-POST that the rate limiter (which counts requests) would not see.
-- **`installSecurity(app: Express)`** – Sets strong ETags, `trust proxy` (as a hop *count*, not a boolean), mounts `helmet()`, and configures strict CORS. CORS denial uses `callback(null, false)` (omit the header) rather than an error, so the browser's same-origin policy does the refusing and no spurious 500 is produced.
-- **`installRequestParsing(app: Express)`** – Mounts, in order: `rateLimiter` → `express.urlencoded` → `express.json` (with a `verify` hook that stashes `rawBody` for webhook HMAC verification) → `cookieParser` → `requireDeclaredContentType`. A throttled request is refused before any parsing cost.
-- **`RAW_BODY_PATHS` / `isRawBodyPath`** – Built once at import from `enabledModules`. Segment-boundary match (`/payments/webhook` does not match `/payments/webhook-test`).
-- **`allowedOrigins`** – A `Set` parsed from `NODE_CORS_ORIGIN` (comma-separated), defaulting to `http://localhost:8080`.
-- **`JSON_BODY_LIMIT`** – Read from `appConfig().NODE_JSON_BODY_LIMIT`, making the 100 kb Express default explicit and configurable.
+- **`applyServerTimeouts(server: Server)`** — Sets `headersTimeout`, `requestTimeout`, and `keepAliveTimeout` on the Node `http.Server` instance. Protects against Slowloris / slow-POST by capping how long a client may spend *sending* a request. Values come from `appConfig()`.
+- **`installSecurity(app: Express)`** — Installs: strong ETags, `trust proxy` (hops from config, `false` when 0), `helmet`, a `Vary: Origin` middleware, and strict CORS (origin allow-list via `isAllowedOrigin`, explicit allowed/exposed header lists).
+- **`installRequestParsing(app: Express)`** — Installs, in order: `rateLimiter` → `express.json` (with configurable limit, merge-patch content type, and a `verify` hook that stashes `rawBody` on webhook paths) → `limitJsonDepth` → `cookieParser` → `requireDeclaredContentType`.
+- **`RAW_BODY_PATHS`** / **`isRawBodyPath(url)`** — Precomputed list (built once at import from `enabledModules`' `rawBodyPaths`) and a segment-boundary matcher used by the JSON `verify` hook to preserve the exact request buffer for HMAC-signed webhooks.
+- **`jsonBodyLimit()`** — Returns `appConfig().NODE_JSON_BODY_LIMIT` as the explicit `express.json` limit.
 
 ## Relationships
 
-- **`src/app.ts`** – Calls `applyServerTimeouts`, `installSecurity`, static-file mount, then `installRequestParsing`, in that order. This file is the single place that decides *which* middleware the app installs and *where*.
-- **`src/app/config.ts`** – Supplies `appConfig()` for body limits, HTTP timeout values, and `NODE_TRUST_PROXY_HOPS`.
-- **`src/infrastructure/http/config.ts`** – Supplies `siteConfig().NODE_CORS_ORIGIN` for the allowed-origin set.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** – Provides the `rateLimiter` handler installed first in `installRequestParsing`.
-- **`src/infrastructure/http/middlewares/content-type.ts`** – Provides `requireDeclaredContentType`, the final gate after all parsers.
-- **`src/infrastructure/runtime/config.ts`** – `isRelaxedEnvironment()` gates the trust-proxy warning so dev/test don't log it.
-- **`src/infrastructure/adapters/logger.ts`** – Emits the `NODE_TRUST_PROXY_HOPS=0` production warning.
-- **`src/modules.ts`** – `enabledModules` registry; each module's `rawBodyPaths` and `basePath` are flattened into `RAW_BODY_PATHS` at import time.
-- **`tests/unit/app/server-timeouts.test.ts`** – Unit-tests the three timeout setters.
-- **`tests/unit/app/trust-proxy-warning.test.ts`** – Asserts the warn fires in prod and is suppressed in relaxed envs.
-- **`tests/integration/app/demo-routes.test.ts`** – Integration-level exercise of the full middleware stack.
+- **`src/app.ts`** — Imports and calls `installSecurity` and `installRequestParsing` in sequence, with static-file middleware mounted between them.
+- **`src/app/config.ts`** — Source of all tunable values: `NODE_TRUST_PROXY_HOPS`, `NODE_JSON_BODY_LIMIT`, `NODE_HTTP_HEADERS_TIMEOUT_MS`, `NODE_HTTP_REQUEST_TIMEOUT_MS`, `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`.
+- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Supplies the `rateLimiter` handler; reads `trust proxy` setting to decide whether to warn on uncounted proxies.
+- **`src/infrastructure/http/middlewares/content-type.ts`** — Supplies `requireDeclaredContentType`, the final gate refusing bodies no parser understood.
+- **`src/infrastructure/http/middlewares/json-depth.ts`** — Supplies `limitJsonDepth`, preventing stack overflow on deeply nested JSON.
+- **`src/infrastructure/http/origins.ts`** — Supplies `isAllowedOrigin`, the single source of truth for CORS origin validation.
+- **`src/modules.ts`** — Supplies `enabledModules`, from which `RAW_BODY_PATHS` is derived (each module declares its own `rawBodyPaths` and `basePath`).
+- **`tests/unit/app/server-timeouts.test.ts`** — Verifies `applyServerTimeouts` sets the three timeout properties.
+- **`tests/unit/app/trust-proxy.test.ts`** — Verifies the `trust proxy` value Express receives for various hop configs.
+- **`tests/integration/scenarios/demo-routes.test.ts`** — Exercises the full middleware chain end-to-end.
 
 ## Notes
 
-- **Order is a contract.** Trust-proxy → rate limiter → body parsers → content-type check. Reordering any pair changes security semantics (e.g. parsing before rate-limiting lets a flood spend CPU on JSON parsing).
-- **`trust proxy` is a number, never `true`.** A count makes Express peel exactly that many hops from `X-Forwarded-For`; `true` trusts the whole header. `0` is valid for a direct-published container and triggers a startup warning outside relaxed environments.
-- **CORS uses `false`, not an `Error`.** Throwing into the Express error chain would turn a denied cross-origin call into a generic 500 before the route runs; `false` simply omits `Access-Control-Allow-Origin` and lets the browser's policy reject the response.
-- **Raw-body preservation is a per-path opt-in**, not a blanket copy. The `verify` hook checks `isRawBodyPath` before allocating the buffer, so the majority of JSON requests pay nothing extra.
-- **`keepAliveTimeout` is exposed, not changed, from Node's 5 s default.** It must be set *above* the upstream proxy's idle timeout to avoid 502s on half-closed sockets.
-- **`express.json` also accepts `application/merge-patch+json`** so RFC 7396 PATCH bodies parse without a client workaround.
+- The CORS `origin` callback returns `callback(null, false)` for disallowed origins, **never** an `Error`. An error would short-circuit into Express's error handler and produce a 500; `false` simply omits `Access-Control-Allow-Origin` and lets the browser's same-origin policy enforce the denial.
+- `trust proxy` is set to `false` (boolean) when hops are 0, not `0`. `express-rate-limit` detects "trust proxy is off" via `=== false`, and only then logs a warning if an `X-Forwarded-For` header arrives from an uncounted proxy.
+- `keepAliveTimeout` should be **raised** above the upstream TLS-terminating proxy's idle timeout to avoid 502s on stale-socket reuse.
+- The `Vary: Origin` header is added unconditionally (separate middleware) because `cors` only adds it when reflecting an allowed origin; without it, a shared cache could serve the header-less variant to a legitimate frontend.
+- `RAW_BODY_PATHS` is computed once at module import time, not per request, to avoid a `flatMap` on every JSON body.

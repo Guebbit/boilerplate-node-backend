@@ -1,7 +1,7 @@
 ---
 source: scenarios/check.ts
-sha256: e48ae4c2325e1f3c86aaf86d19a9f407519c26f73e5fc07c8e0f2c8ef88e477b
-generated_at: 2026-09-23T17:17:10.407672+00:00
+sha256: 72d6b7a88938031d6b690e4215fe149ce9d9ac54e78805f9ae6b20f066ac75a0
+generated_at: 2026-10-14T06:56:03.055173+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Verifies that a scenario's declared guarantees (each module's `AppModule.scenario` entries) exactly match the subjects the scenario actually seeds (the id map from `buildScenario`). Checks both directions: a guarantee with no seeded row, and a subject no enabled module declares. Runs at test time as a tripwire and at compile time for module mounting.
+Validates that a scenario's declared guarantees (each module's `AppModule.scenario` entries) exactly match the subjects the scenario actually builds. Catches both orphaned guarantees (declared but no row seeded) and orphaned subjects (row seeded but no module declares it). It is the only guard for this invariant.
 
 ## Key elements
 
-- **`ShopModulesAreMounted`** (type, internal) — compile-time constraint: `keyof typeof shopModules` must be assignable to `ModuleName`. A `never` result produces a build error naming the offending key.
-- **`shopModulesAreMounted`** (const, internal) — assigns `true` to the type above to force TypeScript to evaluate it. Never read at runtime; exists solely to trigger the check.
-- **`findUnmetGuarantees(scenarioName, subjects)`** (exported) — compares the union of `enabledModules[*].scenario[scenarioName]` against the keys of `subjects`. Returns an array of human-readable problem strings (empty when they agree).
-- **`assertScenarioGuarantees(scenarioName, subjects)`** (exported) — calls `findUnmetGuarantees`; throws a single `Error` listing every mismatch if any exist. The shape `shop.test.ts` expects.
+- **`ShopModulesAreMounted`** (type) — compile-time assertion that every key in `shopModules` is a valid `ModuleName`; a `never` result produces a build error naming the offending key.
+- **`shopModulesAreMounted`** (const) — never-read assignment of `true` to the type above, forcing the compiler to evaluate it.
+- **`findUnmetGuarantees(scenarioName, subjects)`** (exported function) — pure comparison of two lists; returns a string array (one line per problem) of guarantees declared by enabled modules but absent from `subjects`, plus subjects present in `subjects` that no enabled module declares. Takes `subjects` as a parameter so it can be tested against hand-made data.
+- **`assertScenarioGuarantees(scenarioName, subjects)`** (exported function) — wraps `findUnmetGuarantees`; throws a single `Error` listing all mismatches, or does nothing if clean.
 
 ## Relationships
 
-- **`src/modules.ts`** — imports `enabledModules` and `ModuleName`. This file is one of three (alongside `apply.ts` and `run-server.ts`) permitted by the eslint boundaries to reach this module.
-- **`scenarios/index.ts`** — imports `shopModules` (type-only) for the compile-time check. At runtime the test passes in the `subjects` map that `buildScenario` (defined there) produces.
-- **`tests/integration/scenarios/shop.test.ts`** — calls `assertScenarioGuarantees` immediately after building the shop scenario to fail fast on any drift.
-- **`tests/unit/scenarios/check.test.ts`** — unit-tests `findUnmetGuarantees` against hand-crafted subject maps to prove it catches both mismatch directions.
+- **`src/modules.ts`** — imports `enabledModules` (iterates their `.scenario` maps at runtime) and the `ModuleName` type (used in the compile-time check).
+- **`scenarios/index.ts`** — imports the `shopModules` type for the compile-time check; at runtime, `buildScenario` (from that file) produces the `subjects` record passed into both exported functions.
+- **`tests/integration/scenarios/shop.test.ts`** — calls `assertScenarioGuarantees` immediately after building the shop scenario; failure aborts the test.
+- **`tests/unit/scenarios/check.test.ts`** — unit-tests `findUnmetGuarantees` against hand-crafted `subjects` objects to prove it detects both mismatch directions.
 
 ## Notes
 
-- `findUnmetGuarantees` deliberately takes `subjects` as a parameter rather than building the scenario itself, so the checker can be validated against arbitrary maps (e.g. in unit tests).
-- The compile-time type check lives here (not in `scenarios/index.ts`) because the eslint boundary rule forbids `index.ts` from importing `src/modules.ts`.
-- `shopModulesAreMounted` carries an `eslint-disable` for `no-unused-vars`; it is intentionally never read.
+- The compile-time check lives in this file (not in `scenarios/index.ts`) because the ESLint boundary config only permits `check.ts`, `apply.ts`, and `run-server.ts` to import from `src/modules.ts`.
+- `findUnmetGuarantees` deliberately does **not** build or seed a scenario itself — it is a pure list-comparison so tests can feed it arbitrary `subjects` without a database.
+- The check is bidirectional: a guarantee with no row means the backend cannot keep a promise; a subject with no declaring module means a name was left behind after its owning module was removed.

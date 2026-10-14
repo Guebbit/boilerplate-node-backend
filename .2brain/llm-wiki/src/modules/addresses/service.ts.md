@@ -1,7 +1,7 @@
 ---
 source: src/modules/addresses/service.ts
-sha256: 2f3832a9f18be597ae7f73173b48f8525081af4cd748ae9bc118b257b20b7018
-generated_at: 2026-09-27T14:39:55.818108+00:00
+sha256: 1df4be44890c409d71e654c1a0665afeb4d4645d01ff8e948fcd8667d993c1ee
+generated_at: 2026-10-14T14:53:46.126705+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,38 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for the address book. It translates controller intents into repository calls, maps stored documents to the public `AddressesView` wire format, and wraps results in standardized success/reject responses. All endpoints answer the whole book (never a single entry) because the "exactly one default" invariant is a property of the list.
+Service layer for the address-book module. It wraps repository calls in HTTP-shaped results (success/reject), applies presenters, and exposes the six domain operations (get, add, update, set-default, remove, checkout-lookup) plus two lifecycle hooks that controllers and the module manifest invoke.
 
 ## Key elements
 
-- **`AddressesView`** — exported interface; the wire contract `{ addresses: Address[] }` matching `openapi.yaml`.
-- **`toAddress` / `toView`** — internal mappers. Convert `_id → id`, omit `label`/`phone` keys when undefined (not set to `undefined`). `toView` treats `null` book the same as empty items.
-- **`addressesGet(userId)`** — returns the full book as a view. Absence and emptiness are identical: `{ addresses: [] }`, never a 404.
-- **`addressAdd(userId, entry)`** — delegates to `addressBookRepository.addEntry`; returns 200 with the updated book.
-- **`addressUpdate(userId, addressId, changes)`** — updates one entry; 404 + localized message if the id isn't in the caller's book.
-- **`addressRemove(userId, addressId)`** — removes one entry; same 404 semantics. Repository is responsible for maintaining the one-default invariant.
-- **`addressForCheckout(userId, addressId?)`** — resolves the shipping address for checkout. Returns `AddressItem | null | undefined` (see Notes).
-- **`addressesDeleteByUserId(userId, session)`** — hard-delete hook (DDD-D6 `personalData.erase`); joins the caller's Mongoose transaction via the `ClientSession` parameter.
+- **`addressesGet`** – Returns the user's full book as an `AddressesView`; absence and emptiness both yield an empty view (never 404).
+- **`addressAdd`** – Calls `addEntry`; on the `ADDRESS_BOOK_FULL` sentinel returns 409, otherwise returns 201 with the last item in the array as the newly created entry.
+- **`addressUpdate`** – Calls `updateEntry`; 404 if the entry isn't found, 200 with the updated entry otherwise.
+- **`addressSetDefault`** – Calls `setDefault`; 404 or 200 with the now-default entry. The demoted sibling is a different row, so clients should refetch the book.
+- **`addressRemove`** – Calls `removeEntry`; returns the **whole book** (not just the removed entry) because the one-default invariant may have shifted to another row.
+- **`addressForCheckout`** – Resolves the shipping address for a given `addressId` or the default. Tri-state return: `AddressItem` (found), `null` (id supplied but not found / not owned → checkout must refuse), `undefined` (no id supplied, no default → shipping optional). Collapsing `null`/`undefined` would let a stale id silently downgrade to "no address".
+- **`addressesDeleteByUserId`** – Hard-delete hook (`personalData.erase`); joins the caller's Mongoose `ClientSession` transaction.
+- **`addressesMinimise`** – Inactive-account hook (`personalData.minimise`); same repository call without a transaction. Idempotent.
+- **`reencryptAddressBooks`** – Re-exported from `./reencrypt` so callers can import it from the service barrel.
 
 ## Relationships
 
-- **`repository.ts`** — sole data-access dependency; every function calls a method on `addressBookRepository`.
-- **`model.ts`** — imports `AddressBookDocument` and `AddressItem` types used in mapping and checkout resolution.
-- **`@infrastructure/http/response`** — imports `generateSuccess`, `generateReject`, and the two response union types for all write operations.
-- **`@infrastructure/i18n`** — imports `t` for localized success/error messages.
-- **`@types`** — imports `Address`, `AddressInput`, `UpdateAddressRequest` as the shared contract types.
-- **Controllers (`get/post/update/delete-address.ts`)** — thin HTTP handlers that call the exported service functions and send the resulting response.
-- **`module.ts`** — registers `addressesDeleteByUserId` as the `personalData.erase` hook in the module manifest.
-- **`cart/services/checkout.ts`** — calls `addressForCheckout` to resolve the shipping address before completing an order.
-- **`addresses.test.ts` / `cart/tests/integration/service.test.ts`** — integration tests exercising the exported functions.
+| Neighbor | Interaction |
+|---|---|
+| `repository.ts` | All persistence goes through `addressBookRepository`; the `ADDRESS_BOOK_FULL` sentinel is the only non-data return the service checks. |
+| `presenter.ts` | Transforms raw repository items into `Address` / `AddressesView` DTOs before they reach the response helpers. |
+| `model.ts` | Supplies the `AddressItem` type used in `addressForCheckout`. |
+| `@infrastructure/http/response` | `generateSuccess` / `generateReject` shape every return value; `ResponseSuccess` / `ResponseReject` types annotate signatures. |
+| `@infrastructure/i18n` | `t('addresses.*')` provides the human-readable message strings in each response. |
+| Controllers (`post-address`, `update-address`, `put-address-default`, `get-addresses`, `delete-address`) | Each controller delegates to exactly one exported service function; the service owns the response construction. |
+| `module.ts` | Registers `addressesDeleteByUserId` and `addressesMinimise` in the `personalData` hook manifest. |
+| `reencrypt.ts` | Re-exported through this file so external importers can reach `reencryptAddressBooks` via the service barrel. |
+| `index.ts` | Barrel that re-exports everything from this file for module-level consumers. |
+| `tests/factories.ts` | Provides test fixtures for exercising the service functions in unit/integration tests. |
 
 ## Notes
 
-- **`addressForCheckout` tri-state:** `undefined` means the user has no addresses (checkout may proceed without one); `null` means the caller named an id that doesn't belong to them or doesn't exist (checkout **must refuse**). Collapsing `null` to `undefined` would let a stale id silently downgrade to "no address."
-- **Omitted keys vs. `undefined`:** `toAddress` conditionally spreads optional fields so the JSON payload omits `label`/`phone` entirely when absent, rather than emitting `"label": null` or `"label": undefined`.
-- **All writes return the full book:** callers never receive a single address; the response shape is always `AddressesView`.
+- **Response contract (module doc):** single-entry writes (add, update, set-default) return *the entry*; list-level writes (remove) return *the whole book* because "exactly one default" is a list property. Clients showing the book should refetch after `addressSetDefault` or `addressRemove`.
+- **`addressAdd` last-item assumption:** the 201 path grabs `book.items.at(-1)!` on the basis that `addEntry` appends. If the repository ever reorders, this breaks silently.
+- **Tri-state in `addressForCheckout`:** `null` ≠ `undefined`. Callers (e.g. checkout) must distinguish "explicitly chosen but invalid" from "nothing chosen" and must not conflate them.
+- **No direct DB access:** the service never imports Mongoose models or performs queries itself; `ClientSession` is only threaded through to the repository for the erase hook.

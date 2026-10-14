@@ -1,36 +1,36 @@
 ---
 source: src/modules/account/two-factor/registry.ts
-sha256: 546fe9e0e6194b67f9a6b73ad7019eae280bf90a6e4d9fb30585d1e7d83831cf
-generated_at: 2026-09-23T18:19:05.851975+00:00
+sha256: 76b2716785782e957f566f35b83ab8194ed7700ad2adce842d3eb19e2e2f5803
+generated_at: 2026-10-14T14:50:23.487139+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/two-factor/registry.ts
 
 ## Purpose
-
-Defines the handler contract for two-factor authentication methods and registers the concrete handlers this deployment ships (TOTP, email). Upper layers (services, controllers) reference methods only by a wire-name string and look the handler up here, so adding a new channel means adding a handler in this file rather than branching the login flow.
+Central registry of the second-factor methods this deployment supports. It defines the `TwoFactorMethodHandler` contract, registers the concrete handlers (TOTP, email), and provides lookup and ordering utilities so that services and the login flow address a method by wire-name string rather than branching on a specific channel. Adding a new 2FA channel means adding a handler here, not touching the login flow.
 
 ## Key elements
-
-- **`TwoFactorMethodHandler`** (interface) — the contract every method handler must satisfy: `name`, `delivers`, `available()`, `eligibility()`, `target()`, `setup()`, `verify()`, and optional `send()`. Handlers mutate the `TwoFactorMethodRecord` they receive but never persist; the calling service performs the single save.
-- **`MethodEligibility`** (interface) — `{ enrollable, reason? }` returned by `eligibility()` to gate per-account enrollment.
-- **`HANDLERS`** (module-private constant) — ordered array `[totpMethod, emailMethod]`. Order is the order a client should offer methods (cheapest/round-trip-free first); the first armed method becomes `defaultMethod` on a login challenge.
+- **`MethodEligibility`** — interface: `enrollable: boolean` plus an optional translated `reason` shown to the user when enrollment is refused.
+- **`TwoFactorMethodHandler`** — the per-method contract. Key members: `name` (wire string), `delivers` (server-push vs. device-read), `available()`, `eligibility(user)`, `target(user)`, `setup()`, `verify()`, and optional `send()` (present only when `delivers` is true). Handlers mutate the `TwoFactorMethodRecord` entry they are handed; they never touch the database.
+- **`HANDLERS`** — module-level `readonly` array `[totpMethod, emailMethod]`. Order is the client-offer order and determines the `defaultMethod` on a login challenge (TOTP first, because it is device-based and costs no round-trip).
 - **`availableTwoFactorMethods()`** — filters `HANDLERS` to those whose `available()` returns true.
-- **`twoFactorMethod(name)`** — looks up a single handler by wire name among available handlers; returns `undefined` for both unknown _and_ unavailable names (deliberate: no information leak about disabled channels).
-- **`orderedEntries(entries)`** — re-orders a user's stored `TwoFactorMethodRecord[]` to match `HANDLERS` order, pairing each with its handler and dropping entries with no matching handler.
+- **`twoFactorMethod(name)`** — looks up a single handler by wire name; returns `undefined` for both unknown *and* unavailable names by design.
+- **`orderedEntries(entries)`** — re-orders a user's stored `TwoFactorMethodRecord[]` into `HANDLERS` order, pairing each with its handler; entries with no matching handler are silently dropped.
+- **Module-level side effect** — pre-seeds `authTwoFactorDisableTotal` (Prometheus counter) to zero for every method name plus `'all'` and both `'success'`/`'failure'` statuses, so the first real failure after a restart is alertable.
 
 ## Relationships
-
-- **`./methods/totp.ts` / `./methods/email.ts`** — the two concrete handlers imported and placed in `HANDLERS`. This file is their sole registration point.
-- **`src/types/index.ts` / `src/types/auth-context.ts`** — provides `CallerContext`, `TwoFactorDelivery`, `TwoFactorSetup` used in the handler signatures.
-- **`src/modules/users/index.ts` / `src/modules/users/model.ts`** — provides `TwoFactorMethodRecord` and `UserDocument`, the data shapes every handler method receives.
-- **`src/modules/account/two-factor/index.ts`** — barrel file that re-exports this module's public surface to the rest of the codebase.
-- **`src/modules/account/services/two-factor.ts`** — the consuming service that calls `twoFactorMethod()`, `orderedEntries()`, and the handler methods (`setup`, `verify`, `send`) and then persists the mutated entry.
+- **`./methods/totp.ts`**, **`./methods/email.ts`** — imports the two concrete handlers and registers them in `HANDLERS`.
+- **`../metrics.ts`** — imports `authTwoFactorDisableTotal`; the registry pre-seeds it at load time.
+- **`@modules/users`** (`src/modules/users/index.ts`) — imports `UserDocument` and `TwoFactorMethodRecord` types used throughout the handler interface and ordering utility.
+- **`./index.ts`** — barrel re-exports the public API of this module to the rest of the account feature.
+- **`services/two-factor-enrollment.ts`**, **`services/two-factor-lockout.ts`**, **`services/two-factor-outcomes.ts`**, **`services/reauth.ts`** — consume `twoFactorMethod()`, `availableTwoFactorMethods()`, and `orderedEntries()` to resolve a handler and delegate `setup`/`verify`/`send` calls.
+- **`tests/unit/two-factor.test.ts`** — unit-tests the registry's lookup and ordering behaviour.
 
 ## Notes
-
-- Handlers **never write to the database**. They mutate the `TwoFactorMethodRecord` in place; the calling service performs one combined save covering the factor, backup codes, and the account flag.
-- `twoFactorMethod` intentionally conflates "unknown method" with "method exists but is unavailable" — both return `undefined` so a caller cannot probe which channels are configured.
-- `send` is optional on the handler and is present **exactly** when `delivers` is `true`. Device methods (e.g. TOTP) do not implement it.
-- The order in `HANDLERS` is load-bearing for UX (offer order, default method selection) and for `orderedEntries`.
+- **Order is semantic.** The position in `HANDLERS` controls client offer order and the login `defaultMethod`. Inserting a new handler is an ordering decision, not just an addition.
+- **`twoFactorMethod()` hides availability.** An unknown name and an unavailable name both return `undefined`; a caller cannot distinguish "this channel doesn't exist" from "it exists but is off." This is intentional.
+- **Handlers are stateless w.r.t. persistence.** They mutate the in-memory `TwoFactorMethodRecord` they receive; the calling service owns the single save that writes the method entry, backup codes, and the account flag atomically.
+- **`send` is optional on the interface.** It is only present when `delivers` is true. Device methods (TOTP) omit it.
+- **Importing this module has a side effect.** The `for` loop that seeds Prometheus counters executes at module load, so any import (including the barrel `./index.ts`) triggers it.
+- **`orderedEntries` can silently drop a user's method.** If a stored entry's `method` string matches no available handler (e.g. the channel was disabled post-deployment), that entry is excluded from the result with no error or log.

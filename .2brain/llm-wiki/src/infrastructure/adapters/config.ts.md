@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/config.ts
-sha256: 6406f0c30242019f484fd5c4a139829516737c945c65444f371aff05dba638c4
-generated_at: 2026-10-01T12:47:32.916938+00:00
+sha256: c662c8e08c4b0fd91b7897590b8fdd62cd09db8d2e6a3d35ceee7667b47f0ff7
+generated_at: 2026-10-14T07:42:31.023390+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the full environment-variable surface for every infrastructure adapter (mail, queue, Redis, images, PDF, anti-abuse). Each adapter gets its own named `defineConfig` block so a misconfiguration names the adapter it belongs to. Validation rules (cross-field checks, environment-specific guards) live inline in each block's `check` callback, meaning a bad value is caught at boot rather than at first use.
+Centralises every environment-variable slice that the infrastructure adapters read. Each slice is a `defineConfig` block with a typed shape, sensible defaults, and a `check` function that surfaces missing or contradictory values at boot time. The file exists so that a misconfigured value can be attributed to a single adapter (mail, Redis, images, anti-abuse, etc.) rather than to a flat bag of `NODE_*` variables.
 
 ## Key elements
 
-- **`MAIL_TRANSPORTS`** — readonly `['smtp', 'log', 'outbox']`; the only valid values for `NODE_MAIL_TRANSPORT`.
-- **`mailConfig`** — SMTP host/port/credentials, sender address, and the `NODE_E2E_RUN` safety flag. `check` enforces: all three SMTP credentials present when a host is set; e2e runs may only dial local sinks; transport must be explicitly set in non-relaxed envs; `outbox` is blocked outside dev/test.
-- **`mailFilesConfig`** — spool directory, spool retention hours, and the EJS template override directory.
-- **`queueConfig`** — RabbitMQ connection (full URL or host/port/user/pass fragments), `NODE_RABBITMQ_ENABLED` kill switch, and the retry policy (`NODE_QUEUE_MAX_ATTEMPTS`, `NODE_QUEUE_RETRY_DELAY_SECONDS`) inherited by every queue.
-- **`redisConfig`** — Redis connection (URL or host/port), `NODE_REDIS_CACHE_PREFIX`, and `NODE_REDIS_CACHE_ENABLED` kill switch.
-- **`imageConfig`** — pixel ceiling, max/thumbnail dimensions, public output dir, quarantine path and retention hours.
-- **`pdfConfig`** — `PUPPETEER_EXECUTABLE_PATH` pointing to the system Chromium binary.
-- **`antibotConfig`** — provider selector (`none`/`altcha`/`turnstile`), email policy + allow/deny lists, and per-provider credentials. `check` verifies that the chosen provider's secret/key fields are present and, for altcha, that the secret is ≥ 16 chars.
+- **`mailConfig`** – Transport selection (`smtp`/`log`) plus the SMTP account (host, port, user, pass, sender). `check` flags an SMTP host that lacks its companion credentials and blocks e2e runs aimed at a non-local host.
+- **`MailConfig`** (type) – `ReturnType<typeof mailConfig>`; the parsed shape a transport consumes.
+- **`mailFilesConfig`** – Spool directory and retention hours for queued mail attachments.
+- **`queueConfig`** – RabbitMQ connection (URL, host, port, credentials, enabled flag) and the shared retry policy (max attempts, delay).
+- **`redisConfig`** – Redis connection, cache prefix, and the cache enable switch. Shared by the cache adapter and the rate limiter.
+- **`imageConfig`** – Upload pixel/dimension caps, thumbnail size, public asset path, and quarantine path + retention.
+- **`outboundConfig`** – `NODE_OUTBOUND_ALLOWED_PORTS` CSV; `check` rejects non-numeric or out-of-range entries.
+- **`pdfConfig`** – Puppeteer/Chromium executable path and the document-store directory.
+- **`exportStoreConfig`** – Directory where built personal-data exports wait for download.
+- **`ALTCHA_SECRET_MIN_LENGTH`** (constant, `16`) – Enforced minimum secret length for ALTCHA challenges.
+- **`antibotConfig`** – Provider selector (`none`/`altcha`/`turnstile`), email policy (allow/deny lists, disposable/MX check), and per-provider credentials. `check` ensures the selected provider has the secrets it needs.
+- **`E2E_LOCAL_SMTP_HOSTS`**, **`SMTP_COMPANIONS`** – Module-private constants used only by `mailConfig.check`.
 
 ## Relationships
 
-- **`src/app/config.ts`** — calls into the antibot provider registry at boot to validate `NODE_ANTIBOT_PROVIDER` against the registry's known names; this file is the value source the registry imports.
-- **`src/infrastructure/adapters/antibot-providers/index.ts`** — the provider registry; imports `antibotConfig` to read provider name and credentials, and owns the set of valid provider names (the "selector" mentioned in the module doc).
-- **`src/infrastructure/adapters/antibot-providers/altcha.ts`** / **`turnstile.ts`** — each reads its credential fields (`NODE_ANTIBOT_ALTCHA_SECRET`, `NODE_ANTIBOT_TURNSTILE_SITE_KEY`, etc.) from `antibotConfig`.
-- **`src/infrastructure/adapters/antibot.ts`** — consumes `antibotConfig` for the email policy, allow/deny lists, and provider dispatch.
-- **`src/infrastructure/adapters/mailer.ts`** — builds its transport from `mailConfig`.
-- **`src/infrastructure/adapters/mail-spool.ts`** — reads `NODE_MAIL_SPOOL_PATH` from `mailFilesConfig`.
-- **`src/infrastructure/adapters/queue.ts`** — connects via `queueConfig`; applies the retry policy.
-- **`src/infrastructure/adapters/cache.ts`** — connects via `redisConfig`; honours `NODE_REDIS_CACHE_ENABLED` and the key prefix.
-- **`src/infrastructure/adapters/image.ts`** / **`image-store.ts`** — enforce limits from `imageConfig`; write to `NODE_QUARANTINE_PATH` / `NODE_PUBLIC_PATH`.
-- **`src/infrastructure/adapters/pdf.ts`** — launches the binary named by `pdfConfig.PUPPETEER_EXECUTABLE_PATH`.
-- **`src/app/static-assets.ts`** — serves from `NODE_PUBLIC_PATH` defined in `imageConfig`.
-- **`scripts/ops/reap-mail-spool.ts`** — reads `NODE_MAIL_SPOOL_RETENTION_HOURS` and `NODE_MAIL_SPOOL_PATH` from `mailFilesConfig`.
-- **`scripts/ops/reap-quarantine.ts`** — reads `NODE_QUARANTINE_RETENTION_HOURS` and `NODE_QUARANTINE_PATH` from `imageConfig`.
+- **`src/app/config.ts`** – Probes every slice exported here at application boot; unknown anti-bot provider names are rejected via the provider registry's resolver.
+- **`src/infrastructure/adapters/antibot.ts`** – Reads `antibotConfig` to dispatch to the chosen provider.
+- **`src/infrastructure/adapters/antibot-providers/index.ts`** – The provider registry whose valid names constrain `NODE_ANTIBOT_PROVIDER`; imports this file for the resolver.
+- **`src/infrastructure/adapters/antibot-providers/altcha.ts`** – Consumes `NODE_ANTIBOT_ALTCHA_SECRET` / `NODE_ANTIBOT_ALTCHA_COST`.
+- **`src/infrastructure/adapters/antibot-providers/turnstile.ts`** – Consumes `NODE_ANTIBOT_TURNSTILE_SITE_KEY` / `NODE_ANTIBOT_TURNSTILE_SECRET`.
+- **`src/infrastructure/adapters/mail-transports.ts`** – Reads `mailConfig` (transport, SMTP account) to build the active transport.
+- **`src/infrastructure/adapters/mail-spool.ts`** – Reads `mailFilesConfig` for spool path and retention.
+- **`src/infrastructure/adapters/cache.ts`** – Reads `redisConfig` for connection and cache switches.
+- **`src/infrastructure/adapters/image.ts`** / **`image-store.ts`** – Read `imageConfig` for dimension caps and storage paths.
+- **`src/infrastructure/adapters/document-store.ts`** – Reads `pdfConfig` for the Chromium path and storage directory.
+- **`src/infrastructure/adapters/export-store.ts`** – Reads `exportStoreConfig` for the export directory.
+- **`src/app/static-assets.ts`** – Reads `imageConfig` for `NODE_PUBLIC_PATH`.
+- **`scripts/ops/reap-mail-spool.ts`** – Reads `mailFilesConfig` to locate and prune the spool.
+- **`scripts/ops/reap-quarantine.ts`** – Reads `imageConfig` for the quarantine path and retention window.
 
 ## Notes
 
-- `NODE_RABBITMQ_URL` and `NODE_REDIS_URL` are full connection strings that **override** the host/port/user/pass fragments; setting both is redundant but the URL wins.
-- `NODE_RABBITMQ_PORT` and `NODE_REDIS_PORT` act as presence signals: unset (and no URL) means the adapter is off entirely.
-- `NODE_REDIS_CACHE_PREFIX` must differ between staging and production to avoid key collisions on a shared Redis instance.
-- The antibot provider name (`NODE_ANTIBOT_PROVIDER`) is stored as plain text here; the set of valid values is defined in the provider registry, not in this file. An unknown name is rejected by the registry's resolver, not by this file's `check`.
-- `NODE_E2E_RUN` is set by the `e2e:serve` script; when true, the SMTP host is restricted to `localhost`, `127.0.0.1`, `::1`, or `mailpit` so a test suite can never mail a real recipient.
-- In non-relaxed environments (`isRelaxedIn` is false), `NODE_MAIL_TRANSPORT` must be explicitly set and `outbox` is rejected. In relaxed (dev/test) environments both requirements are skipped.
-- All `int` fields enforce `min: 1`; the port fields additionally cap at `65_535`.
+- `NODE_ANTIBOT_PROVIDER` is stored as plain text here; the *set* of valid values lives in the anti-bot provider registry (`antibot-providers/index.ts`), which imports this file. The registry's resolver rejects unknown names, and `app/config.ts` probes it at boot.
+- The `check` functions return arrays of human-readable error strings (or field-name strings for the antibot case). They run at boot, not per-request, so a bad value causes a startup failure rather than a silent runtime error.
+- `sensitive: true` on a field marks it for redaction in logs/diagnostics; the value is still stored in the config object itself.
+- `csv()` fields are split on commas and trimmed; `outboundConfig.check` then validates each entry is a 1–65 535 integer.
+- E2E guard: when `NODE_E2E_RUN` is true and transport is `smtp`, the host must be one of `localhost`, `127.0.0.1`, `::1`, or `mailpit`; otherwise boot fails with an explicit hint to use `NODE_MAIL_TRANSPORT=log`.

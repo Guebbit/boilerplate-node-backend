@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/runtime/server-lifecycle.ts
-sha256: f1a7110f4f9c175fe7b371619c81b017ec803b5f2a8b42be0da4f1162547c8c6
-generated_at: 2026-09-27T14:15:51.461173+00:00
+sha256: 7fe8f63c5d7ab5f11270736c354f3a855507f088c8b22272f2976e342e6ed13e
+generated_at: 2026-10-14T08:15:21.785746+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,38 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Sequences the full server lifecycle beyond startup: binding the HTTP listener, handling a failed boot, and orchestrating graceful shutdown of the server and every infrastructure adapter in a fixed order under a configurable deadline. It is transport-agnostic — it calls each adapter's own `stop`/`shutdown` function without knowing its internals.
+Orchestrates the full server lifecycle: binding an Express app to a port, and — on shutdown — draining in-flight connections and tearing down infrastructure adapters in a fixed, safe order. All timers are `unref`'d so none independently hold the event loop open, and every step carries a hard deadline (default 15 s) so a stuck teardown cannot hang the process past the orchestrator's SIGKILL window.
 
 ## Key elements
 
-- **`getShutdownTimeoutMs()`** – Reads `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` (min 1 ms) via `environmentNumber`, falling back to 15 000 ms. Must stay below the orchestrator's `terminationGracePeriodSeconds`.
-- **`listenOn(app, port, host?)`** – Promisified `app.listen` that correctly rejects on bind errors (Express 5 passes the error to the success callback). Resolves with the `http.Server` instance.
-- **`failBoot(error, stopFunction)`** – Logs the error, runs the partial teardown, then `process.exit(1)` so restart policies engage.
-- **`closeServer(server)`** – Promisified `server.close()`. Immediately closes idle keep-alive sockets; sets an `unref`'d timer at 50 % of the deadline to force-close remaining connections (e.g. SSE streams) so downstream stores still get to close.
-- **`shutdownInfra(server?)`** – The full teardown chain in fixed order: close server → `stopLocaleOverrideRefresh` → `settleRenders` → `stopQueue` → `stopCache` → `stopRateLimitStore` → `stopDatabase` → `shutdownAnalytics` → `shutdownTracing`. Each step swallows its own rejection so one failure cannot block the rest.
-- **`registerSignalHandlers(stopFunction)`** – Installs `SIGTERM` and `SIGINT` listeners. On signal: marks the server draining (`markServerDraining`), starts an `unref`'d forced-exit timer, runs `stopFunction`, then exits 0 or 1. Skipped entirely when `NODE_ENV === 'test'`.
-- **`DRAIN_SHARE` (0.5)** / **`RENDER_SHARE` (0.25)** – Partition the total deadline so server drain, PDF render settlement, and infra teardown each get a bounded window before forced exit.
+- **`getShutdownTimeoutMs()`** — Reads `NODE_GRACEFUL_SHUTDOWN_TIMEOUT_MS` from `serverConfig()`; the single source of truth for every timeout split in this file.
+- **`listenOn(app, port, host?)`** — Promisified `app.listen` that distinguishes bind errors (EADDRINUSE, EACCES) from success, working around Express 5's shared callback signature.
+- **`failBoot(error, stopFunction)`** — Calls the provided teardown (tolerating its failure), then `process.exit(1)` so a restart policy actually fires.
+- **`closeServer(server)`** — Promisified `server.close()` that immediately closes idle keep-alive sockets and schedules `closeAllConnections()` at 50 % of the deadline to cut long-lived (e.g. SSE) streams.
+- **`shutdownInfra(server?, settleInFlight?)`** — The main shutdown chain: close server → stop locale-override refresh → settle in-flight PDF renders → settle caller's in-flight work → stop queue → stop cache → stop limits-Redis → stop database → shutdown analytics → shutdown tracing. Each `.then` swallows its own error so one broken adapter cannot block the rest.
+- **`registerSignalHandlers(stopFunction)`** — Installs SIGTERM/SIGINT listeners. On signal: marks the server draining (`markServerDraining`), starts a forced-exit timer, runs `stopFunction`, then exits 0 on success or 1 on failure. Skipped entirely in test environments.
 
 ## Relationships
 
-- **`src/serve.ts`** – The process entry point; calls `listenOn` to start serving and `registerSignalHandlers` to wire shutdown.
-- **`src/app.ts`** – Builds the Express app and its own `stop` closure, which is passed to `failBoot` and (indirectly) to the signal handlers.
-- **`src/infrastructure/runtime/readiness.ts`** – `markServerDraining()` flips `/readyz` to 503 the instant a shutdown signal arrives, ahead of connection drain.
-- **`src/infrastructure/runtime/environment.ts`** – Provides `environmentNumber` for validated numeric env reads.
-- **`src/infrastructure/runtime/otel-sdk.ts`** – `shutdownTracing()` is the *last* step in `shutdownInfra` so spans covering the entire teardown are flushed.
-- **`src/infrastructure/observability/analytics/index.ts`** – `shutdownAnalytics()` runs second-to-last; both analytics and tracing buffer in memory and must capture events from the adapters they instrument.
-- **`src/infrastructure/runtime/database.ts`** – `stopDatabase()` is called after all higher-level stores that depend on it.
-- **`src/infrastructure/adapters/queue.ts`** – `stopQueue()` is deliberately called *before* `stopCache()` so an in-flight job cannot re-open the cache connection it just lost.
-- **`src/infrastructure/adapters/cache.ts`** – `stopCache()` closes the Redis (or equivalent) connection.
-- **`src/infrastructure/adapters/pdf.ts`** – `settleRenders()` waits for (or times out) in-flight Chromium renders; exiting mid-render would orphan the browser process and its temp profile.
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** – `stopRateLimitStore()` releases the rate-limit backend.
-- **`src/infrastructure/i18n/index.ts`** – `stopLocaleOverrideRefresh()` stops the periodic locale-refresh interval.
-- **`src/infrastructure/adapters/logger.ts`** – All log calls in this file go through the shared `logger`.
+- **`src/serve.ts`** — Entry point that calls `listenOn`, passes its failure to `failBoot`, and registers `registerSignalHandlers` wrapping `shutdownInfra`.
+- **`src/app.ts`** — Produces the Express `app` instance handed to `listenOn`; its internal `stop` closure is the `stopFunction` passed to `failBoot`.
+- **`src/infrastructure/runtime/config.ts`** — Supplies `serverConfig()` (timeout value) and `isTestEnvironment()` (signal-handler guard).
+- **`src/infrastructure/runtime/readiness.ts`** — `markServerDraining()` flips `/readyz` to 503 the instant a shutdown signal arrives, before `server.close()` runs.
+- **`src/infrastructure/runtime/database.ts`** — `stopDatabase()` is the fourth-to-last step in the shutdown chain.
+- **`src/infrastructure/adapters/cache.ts`** — `stopCache()` runs after the queue so a still-running job cannot reopen a just-closed connection.
+- **`src/infrastructure/adapters/limits-redis.ts`** — `stopLimitsRedis()` runs after the cache.
+- **`src/infrastructure/adapters/queue.ts`** — `stopQueue()` runs before cache (see above).
+- **`src/infrastructure/adapters/pdf.ts`** — `settleRenders(timeoutMs)` gives in-flight Chromium renders time to finish before their temp profiles are orphaned.
+- **`src/infrastructure/i18n/index.ts`** — `stopLocaleOverrideRefresh()` halts the periodic refresh loop first, so no locale write lands after stores close.
+- **`src/infrastructure/observability/analytics/index.ts`** — `shutdownAnalytics()` is second-to-last so buffered events from the teardown steps above are still captured.
+- **`src/infrastructure/runtime/otel-sdk.ts`** — `shutdownTracing()` is the very last step for the same buffering reason.
+- **`src/infrastructure/adapters/logger.ts`** — `logger` is used throughout for structured error/info logging during boot, drain, and forced-exit paths.
 
 ## Notes
 
-- **Shutdown order is load-bearing.** Queue before cache (prevents re-open), database before analytics/tracing (they must see the DB-stop events), analytics before tracing (tracing is the outermost instrumentation layer). Reordering breaks the invariants documented in the chain.
-- **Every timer is `unref`'d.** Both the connection-cut timer in `closeServer` and the forced-exit timer in `registerSignalHandlers` must not independently keep the event loop alive once real work is done.
-- **Explicit `process.exit`** is used on both the success (`exit(0)`) and failure (`exit(1)`) paths after shutdown, because OTel background timers and driver sockets can otherwise hold the loop open indefinitely.
-- **Express 5 `listen` quirk:** the callback receives a bind error in the same position as the success call, so `listenOn` inspects the argument rather than relying on the callback being a separate "error" callback.
-- **Jest guard:** `registerSignalHandlers` is a no-op under `NODE_ENV === 'test'` to avoid killing the test runner's process when Jest dispatches its own signals.
+- **Deadline splits are proportional, not absolute.** `DRAIN_SHARE` (0.5), `RENDER_SHARE` (0.25), and `IN_FLIGHT_SHARE` (0.1) each claim a fraction of the same configurable total; they are deliberately summing to < 1 so the store-closure steps still get time.
+- **Shutdown order is intentional and load-bearing.** Queue before cache (avoids reopening a closed connection), analytics/tracing last (they buffer in memory and must flush records written by every preceding step). Reordering without updating both the code and the JSDoc will silently drop telemetry or orphan connections.
+- **`unref()` on every timer is load-bearing.** Without it, a pending `setTimeout` would keep the event loop alive after a clean `process.exit` path has already fired, producing zombie containers in CI.
+- **Signal handlers are a no-op under Jest** (`isTestEnvironment()`), because multiple suites share one process and Jest itself sends signals; installing `process.exit` handlers there would kill the runner mid-run.
+- **The forced-exit timer uses `process.exit(1)`, not `process.kill`.** This guarantees the non-zero exit code is recorded by the orchestrator even if a lingering handle would otherwise prevent a natural exit.

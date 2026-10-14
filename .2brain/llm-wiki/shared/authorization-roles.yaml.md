@@ -1,7 +1,7 @@
 ---
 source: shared/authorization-roles.yaml
-sha256: e37a9e383007526fdc09e1b718708528bcc92975540cc0b75609a41d3acf7f10
-generated_at: 2026-10-01T12:42:40.615322+00:00
+sha256: 1321239fb59d68090c5b58eeefc929ddb2a31c90b923ae31618b2ad06f38fad4
+generated_at: 2026-10-14T07:35:02.929464+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the preset tenant roles and the exact set of permission keys each one holds. It is committed byte-identical in both `boilerplate-node-backend` and `boilerplate-php-laravel-backend` so that both seeders produce the same starting permission matrix. While `authorization-keys.yaml` and `authorization-conformance.yaml` make the two backends *agree*, this file makes them the same **product**: without it, two independently written seeders could pass every conformance test yet yield different shops.
+Defines the preset tenant-scope roles (who can do what in a shop) as a single canonical YAML document. It is committed byte-identical into both the Node and PHP backend boilerplates and read by both seeders at setup, ensuring two independently-stored permission systems (a `spatie/laravel-permission` table vs. a Node equivalent) produce the same product on day one. It is a starting point for a deployment, not a fixed schema.
 
 ## Key elements
 
-- **`version`** — schema version (currently `1`) for forward-compatibility of the role list.
-- **`roles[]`** — array of role objects, each with:
-  - `name` — machine identifier (e.g. `customer`, `manager`, `admin`).
-  - `scope` — always `tenant`; no platform-scope roles exist here.
-  - `title` / `description` — human-readable intent and boundary notes.
-  - `signupDefault` (optional) — exactly one role may carry `true`; read by `access/service.ts` (Node) to auto-assign at registration. `kernel/permissions.ts` throws at boot if more than one role sets it.
-  - `promotesTo` (optional) — the role an account is promoted to after verification (e.g. `unverified → customer`).
-  - `permissions` — explicit list of key names; **no wildcards** — breadth is encoded in the key itself (`self` vs `any` segment).
-- **`&admin_permissions`** — YAML anchor on `admin`'s permission list; a subsequent background/scheduled role (truncated) reuses it via `*admin_permissions` alias so audit rows can distinguish "a sweep did this" from "an admin did this."
-- **Role set (tenant scope):** `unverified`, `customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`, `admin`, plus at least one background/scheduled role (content truncated).
+- **`version`** — Schema version (`1`); gates how seeders interpret the document.
+- **`roles[]`** — Array of role objects. Each carries:
+  - `name`, `scope` (`tenant`), `title`, `level` (`user` | `staff` | `admin`)
+  - `description` — Human-facing explanation of the role's intent.
+  - `signupDefault: true` — Present on exactly one role (`unverified`); read by `access/service.ts` (`SIGNUP_DEFAULT_ROLE`) and enforced at boot by `kernel/permissions.ts`.
+  - `promotesTo` — Target role name after the verification flow (e.g. `unverified → customer`).
+  - `permissions[]` — Explicit list of authorization keys (see `shared/authorization-keys.yaml`). No wildcards; breadth is encoded in the key itself (`.self.` vs `.any.`).
+- **Defined roles (tenant scope):** `unverified`, `customer`, `manager`, `warehouse`, `support`, `editor`, `moderator`, `admin` (truncated in source but implied by the header comment that admin lists every tenant key by name).
+- **Level semantics** — A second check layered on top of key grants: for write operations on another person's resource, the owner's level must be strictly below the caller's. A person holding multiple roles is evaluated at the highest level.
+- **Shopper-only keys** — `cart.self.update` and `cart.self.checkout` are held only by `unverified`/`customer`; no staff or admin role owns a basket, order, payment, or return.
 
 ## Relationships
 
-- **`shared/authorization-keys.yaml`** — declares the full key vocabulary. This file's `admin.permissions` must list *every* declared tenant key by name; the conformance suite rejects a declared key that `admin` omits. Key descriptions in the keys file (e.g. `cart.self.checkout`) inform the role descriptions here.
-- **`shared/authorization-conformance.yaml`** — the conformance suite reads this file to verify that both backends' seeded roles match the declared list. It enforces that `admin` covers all keys and that `signupDefault` uniqueness holds.
+- **`shared/authorization-keys.yaml`** — The `permissions` entries in each role reference keys declared in that file. The closing note in `authorization-keys.yaml` reinforces the "a key nothing lists grants nothing" rule that this file's no-wildcard policy enforces.
+- **`shared/authorization-conformance.yaml`** — Defines the structural invariants (e.g. exactly one `signupDefault`, level hierarchy) that both this file and the seeders must satisfy; this file is the data that conformance checks validate.
 
 ## Notes
 
-- **No implicit grants.** A key not listed in a role's `permissions` is not granted — even for `admin`. Adding a new key to `authorization-keys.yaml` without adding it to `admin`'s list is a deliberate omission, not a default.
-- **`cart.self.checkout` is the only key `unverified` lacks.** Every other staff and customer role holds it explicitly; there is no "unverified manager" because granting a role *is* the vouching act.
-- **`self` vs `any` is not a wildcard mechanism.** It is a segment on the key name. A role gets `self` or `any` by explicit listing; nothing is inferred from "holding a wildcard."
-- **`admin` is tenant-scoped only.** It says nothing about platform scope by design — one role cannot reach both scopes.
-- **Background/scheduled roles** (truncated section) run as a distinct principal, not `admin`, so audit trails attribute automated work to the sweep/reaper rather than to a human admin.
-- The file is a **starting point, not a schema**: deployments receive these roles on day one and may edit or add roles afterwards.
+- **No wildcards, ever.** Breadth lives in the key name (`<family>.self.*` vs `<family>.any.*`). `admin` is no exception—it enumerates every tenant key explicitly.
+- **Level is additive, not替代.** A route still requires its named key; `level` only gates the "acting on someone else's thing" case. A role can hold a key but still be blocked by level, and vice-versa.
+- **Staff do not shop.** If a staff member needs to buy, they use a separate customer account. This is a design invariant, not a suggestion.
+- **`unverified` is thinner by exactly one key** (`cart.self.checkout`) compared to `customer`; everything else is the same. Browsing, wishlist, address book, and account pages require no key at all (they follow from being signed in).
+- **Demo coupling.** Every tenant role except `admin` is a demo persona exercised against all screens in `docs/demo-ecommerce/`. Changing a role's permission set affects demo coverage.
+- **`operator` (admin level)** is not a tenant role in this list; it sits at the admin level so no tenant role can act on the installation's own account.
+- **Idempotent seeding.** Because both backends read this file verbatim, the seeders must treat it as read-only input. Do not fork or restated it per implementation.

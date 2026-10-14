@@ -1,7 +1,7 @@
 ---
 source: src/app/routes.ts
-sha256: 90e8d2aa7b1d2a8c3c9847d54891f8c6f76f7a344cd57930e91a5e928c3de2d0
-generated_at: 2026-09-27T14:02:46.980573+00:00
+sha256: f846da2a3a832e88d1eec80fb393beddc58f2b040cce46f797cd7a53c914c37d
+generated_at: 2026-10-14T07:38:44.134201+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single entry point for wiring all HTTP routes onto the Express app. It mounts each domain module's router at the base path that module's own manifest declares, adds the system-level root ping, and closes with a 404 catch-all — all without importing or referencing any specific domain by name.
+Single-file route installer for the Express app. It sets a default `Cache-Control: no-store` header, mounts every registered domain module at its self-declared `basePath`, mounts the system router (root ping) at `/`, and registers the 404 catch-all. The file intentionally knows no domain names — modules declare their own paths and routers in their manifests.
 
 ## Key elements
 
-- **`installRoutes(app: Express): void`** — the sole export. Called once during app setup. Performs three steps in order:
-  1. Iterates `enabledModules` and calls `app.use(basePath, routes)` for each module that provides both a `basePath` and a `routes` router. Modules missing either are silently skipped (e.g. `access`, which holds data but exposes no URLs).
-  2. Mounts `systemRoutes` at `'/'` for the root ping.
-  3. Registers an inline 404 handler that calls `rejectResponse(response, 404)`.
+- **`installRoutes(app: Express): void`** — the sole export. Runs the install sequence: cache header → module mounts → system routes → 404 handler.
+- **Cache header middleware** (inline, no named export) — sets `Cache-Control: no-store` on every response as the safe default. Must run *after* `installStatic` (see Notes), so it lives here rather than in security middleware.
+- **Module mount loop** — iterates `enabledModules`; mounts a module only when both `basePath` and `routes` are present. Modules with data but no routes (e.g. `access`) are silently skipped.
+- **404 catch-all** — inline handler calling `rejectResponse(response, 404)`. Placed last in this function so no later mount can shadow it.
 
 ## Relationships
 
-- **`src/modules.ts`** — provides the `enabledModules` array that drives the loop. This file is domain-agnostic; it knows nothing about which modules are enabled.
-- **`src/app/system-routes.ts`** — supplies the `systemRoutes` router for the root ping. The only explicitly imported route source (as opposed to being discovered via the module manifest).
-- **`src/infrastructure/http/response.ts`** — source of `rejectResponse`, used by the 404 catch-all.
-- **`src/app.ts`** — the caller that invokes `installRoutes(app)` during Express app construction.
-- **`tests/integration/app/demo-routes.test.ts`** — integration tests that exercise the mounted routes end-to-end.
+- **`src/app.ts`** — caller; invokes `installRoutes` during app setup (between `installStatic` and the security/error installers).
+- **`src/app/system-routes.ts`** — imported as `systemRoutes`; mounted at `/`. Serves the root ping that belongs to no domain module.
+- **`src/modules.ts`** — provides `enabledModules`, the list this file iterates to mount domain routers.
+- **`src/infrastructure/http/response.ts`** — provides `rejectResponse`, used by the 404 handler.
+- **`tests/integration/scenarios/demo-routes.test.ts`** — integration test that exercises the mounted routes end-to-end.
 
 ## Notes
 
-- The 404 handler lives here (not in a separate error-handling install) deliberately: it must be the **last** route registered. If it were installed independently, a later module mount could be registered after it and become unreachable.
-- A module manifest that carries `basePath` but no `routes` (or vice versa) is skipped, not errored — the file treats a half-configured manifest as "nothing to mount."
-- The system-routes import is the one hard-coded, domain-specific dependency in an otherwise fully data-driven install. Everything else flows from the `enabledModules` manifest.
+- **Ordering is load-bearing.** The 404 handler is registered *here*, not in the error-handling installer, because it must be the last route. Separating it would let a later mount register behind it and become unreachable.
+- **Cache header placement.** Set here (after `installStatic`) so it doesn't clobber the long-lived cache headers `installStatic` applies to images. The bare `setHeader` call is used instead of the `noStore` middleware because that middleware marks the response in a way `setCache`/`privateNoCache` treat as a conflict.
+- **Module skip rule.** A manifest carrying only `basePath` or only `routes` is ignored, not an error — both are required for a meaningful mount.

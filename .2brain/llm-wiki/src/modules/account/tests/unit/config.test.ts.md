@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/unit/config.test.ts
-sha256: 012c3759f726ec7ad282df4e94a8bf9372b7fea69b0b46096ff7b764b49fcc04
-generated_at: 2026-09-27T14:36:19.782090+00:00
+sha256: db7c112927fec1b213be4dd70de6879c72c95b4114f5c96fe211a12f9d85cb67
+generated_at: 2026-10-14T09:18:57.043846+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,21 +9,24 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `accountFrontendLink` helper (defined in the account config module), verifying that each account-flow kind (`verify`, `reset`, `delete`, `email-change`) produces the correct default frontend URL and that per-kind environment-variable overrides work in isolation.
+Unit tests for `accountFrontendLink`, the helper that maps a link *kind* (verify, reset, delete, email-change) plus a locale and token to a full frontend URL. The file validates both the built-in default templates and the per-kind environment-variable override mechanism, ensuring each kind resolves to a distinct path and that overriding one kind does not affect the others.
 
 ## Key elements
 
-- **`withoutEnvironmentInThisFile([...])`** — strips the five `NODE_FRONTEND_*` env vars before tests run, ensuring defaults are exercised.
-- **`TOKEN`** — a fixed sentinel string substituted into URL query params for assertions.
-- **`describe('… default template per kind')`** — five cases: one per kind asserting the full expected URL, plus a distinctness check that all four paths are unique (so a token can't be replayed into the wrong flow).
-- **`describe('… per-kind override')`** — sets `NODE_FRONTEND_LINK_RESET` directly on `process.env`, asserts the `reset` URL changes while the `verify` URL stays at its default.
+- **`accountFrontendLink`** (imported from `@modules/account/config`) — the function under test; takes a kind, a locale, and a token and returns a fully-resolved frontend URL.
+- **`withoutEnvironmentInThisFile`** (imported from `@tests/environment`) — called at module scope to guarantee the five `NODE_FRONTEND_LINK_*` env vars are unset for every test in this file, preventing cross-test contamination.
+- **`setEnvironment`** (imported from `@tests/environment`) — used inside the override test to set a single env var for the duration of that test.
+- **`TOKEN`** — a fixed hex string (`a1b2c3d4e5f6`) used as the token argument in all assertions.
+- **`describe('accountFrontendLink — the default template per kind')`** — four tests (one per kind) asserting the exact expected URL, plus one test asserting all four URLs are pairwise distinct.
+- **`describe('accountFrontendLink — per-kind override')`** — sets `NODE_FRONTEND_LINK_RESET` and asserts that only the reset URL changes while the verify URL remains the default.
 
 ## Relationships
 
-- **`src/modules/account/config.ts`** — provides `accountFrontendLink`, the function under test. This file is the sole consumer being tested here.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile`, a test-scope env-var cleanup utility used to guarantee a clean starting state.
+- **`src/modules/account/config.ts`** — exports `accountFrontendLink`; this test file is its primary unit-test consumer. All assertions here validate the behavior defined in that module.
+- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile` (module-level env isolation) and `setEnvironment` (per-test env mutation). The test file relies on both for a hermetic environment.
 
 ## Notes
 
-- The override test mutates `process.env` inline rather than going through the `withoutEnvironmentInThisFile` helper; Jest's module-level isolation is expected to contain the side-effect, but there is no explicit cleanup in the file.
-- The file's doc-block documents a deliberate "D14" architectural decision: env-var defaults and per-kind templates live in the account config module, *not* in `infrastructure/http/frontend-link.ts` (which only performs template → URL substitution). Changing where those defaults are defined would require updating both files.
+- The file's doc comment records a **D14 architectural fix**: env vars and default templates intentionally live in `config.ts` (account domain) rather than in `infrastructure/http/frontend-link.ts`, which only performs template-to-URL resolution.
+- Tokens are embedded as a **URL fragment** (`#token=…`) in the default templates, not as a query parameter. The override test uses a `?t=` query-param style, showing the template string is fully operator-controlled.
+- `withoutEnvironmentInThisFile` is called at the top level (not inside a `beforeEach`), so the env reset applies for the lifetime of the file's test run.

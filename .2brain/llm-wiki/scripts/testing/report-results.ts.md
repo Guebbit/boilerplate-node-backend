@@ -1,7 +1,7 @@
 ---
 source: scripts/testing/report-results.ts
-sha256: 191ceb8ae79cd2b3d64fa75590eb557a3cdafb582b547b8dc9fac043c4839f4d
-generated_at: 2026-10-01T12:41:24.672443+00:00
+sha256: 608a44228f6761d07fa2c2a7f891964299eb37c0fc923f49bf3402dcc83c79fd
+generated_at: 2026-10-14T07:33:17.695203+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A standalone CLI script (`npm run test:report`) that reads a runner's JSON test report (Jest `--json` or Vitest `json` reporter — same shape) and prints a human-readable summary: per-module roll-up of suites/tests/failures/time, the slowest suites and tests, failures grouped by owning module, and (when present) per-module line coverage from `lcov.info`. It exists because the codebase is organised by deletable modules, yet no other tool in the stack attributes test cost or ownership at that level.
+CLI script (invoked via `npm run test:report`) that reads a Jest `--json` or Vitest `json` reporter artefact and prints a module-organised summary: per-module test counts and timing, the slowest suites/tests, and failures named by owning module. It exists because neither the raw log nor the flat file list tells you *which module* a failure belongs to or *where the time went*.
 
 ## Key elements
 
-- **`bucketOf(file)`** — Derives a module/layer label from a test file's path. Priority: `src/modules/<name>/` → bare name; `tests/<layer>/` → `(layer)`; `src/<area>/` → `(area)`; otherwise `(other)`.
-- **`readReport(file)`** — Reads and parses the JSON report; exits with code 2 and a hint if the file is missing.
-- **`readCoverage(file)`** — Parses `lcov.info` (`SF:`/`LF:`/`LH:` lines) into per-bucket hit/found totals. Returns `undefined` when the file is absent (non-coverage run).
-- **Main script body** — Aggregates buckets, prints the summary table, slowest-suites list, slowest-tests list, failure list (first line of each message only), and optional coverage table.
-- **`REPO_ROOT`** — Set to `process.cwd()` (not `__dirname`/`import.meta.url`) so the file is byte-identical in both CJS and ESM repos.
-- **`SLOWEST`** — Constant (8) controlling how many rows the "slowest" sections print.
-- **`Report` / `SuiteResult` interfaces** — Describe the shared JSON shape emitted by both Jest and Vitest.
+- **`bucketOf(file: string): string`** — Maps a test-file path to a bucket label. `src/modules/<name>/…` → the module name; `tests/<layer>/…` → `(layer)`; other `src/<area>/…` → `(area)`; fallback `(other)`. No registration or config needed.
+- **`readReport(file: string): Report`** — Validates the file exists, parses JSON into `Report`; exits with code 2 and a hint if missing.
+- **`seconds(ms: number): string`** — Formats milliseconds as `1.2s`.
+- **`REPO_ROOT`** — `process.cwd()`; deliberately avoids `__dirname` / `import.meta.url` so the file stays byte-identical across CJS and ESM repos.
+- **`DEFAULT_REPORT`** — `tmp/reports/test-report.json` relative to repo root; overridable via first CLI arg.
+- **`SLOWEST`** (= 8) — How many entries appear in the "slowest suites" and "slowest tests" sections.
+- **`SuiteResult` / `Report`** — Minimal interfaces over the JSON shape shared by Jest and Vitest (`testResults[]` → `assertionResults[]`).
+- **`Bucket`** — Aggregates (`suites`, `tests`, `failed`, `milliseconds`) accumulated per bucket label.
+- **Top-level flow** — One pass buckets every suite; prints a headline line, a per-bucket table (modules first, then layer buckets in alphabetical order), the 8 slowest suites, the 8 slowest individual tests, and a failure list (bucket + file + first failure line).
 
 ## Relationships
 
-No graph neighbors are recorded. The script is intentionally dependency-free (only `node:fs` and `node:path`) so it can live unchanged in both boilerplate repos.
+No import or export dependencies. The file is a self-contained script; it reads only `node:fs` and `node:path`. Comments reference `scripts/pairing/spec-identity.ts` (shared-file registry this file is *not* in) and `scripts/mutation/baseline.ts` (same `cwd` convention), but there is no code-level coupling.
 
 ## Notes
 
-- **Shared but unenforced.** The file is meant to be byte-identical in `boilerplate-node-backend` and `boilerplate-vue-frontend`, but it is *not* listed in `SHARED_FILES` (`scripts/pairing/spec-identity.ts`). Drift detection is manual `diff`.
-- **Invocation contract.** Always run via `npm run test:report [-- <file.json>]` from the package root; `process.cwd()` is the only resolution basis for paths.
-- **JSON, not JUnit.** Chosen so neither repo needs an extra dependency. If PR-line annotations are ever needed, a JUnit reporter would be *added alongside*, not as a replacement.
-- **Crashed suites.** A suite that failed on import has no `startTime`/`endTime`; the script coerces to 0 rather than producing `NaN` in the time column.
-- **Sorting.** Layer/area buckets (parenthesised labels) always sort *after* module names, despite `(` preceding letters in ASCII — the comparator explicitly reverses that.
-- **Coverage is advisory only.** Per-file coverage floors in `jest.config.js` / `vitest.config.ts` remain the gate that fails a build; this script's coverage table is informational.
-- **Failure output is an index.** Only the first line of `failureMessages` is printed; the full stack stays in the runner's own log.
+- **Shared by hand, not enforced.** This file is byte-identical in `boilerplate-node-backend` and `boilerplate-vue-frontend` but is *not* listed in `SHARED_FILES`; keeping copies in sync is a manual `diff` obligation.
+- **Always exits 0.** Even when failures exist. The runner already gates the build; a second non-zero exit here would duplicate or risk disagreeing with that verdict.
+- **Summed suite time ≠ wall clock.** Parallel workers mean the "suite time" column and headline figure exceed real elapsed time.
+- **Sorting quirk.** Parenthesised layer labels sort *after* module names via an explicit `isLayer` comparator, because plain ASCII would place `(integration)` before `account`.
+- **JSON over JUnit** is a deliberate choice: zero extra dependencies, strictly richer data. If PR-line annotations are ever needed, add a JUnit reporter *alongside* this one rather than replacing it.

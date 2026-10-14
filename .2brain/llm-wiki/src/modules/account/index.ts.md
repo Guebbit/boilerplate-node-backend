@@ -1,32 +1,28 @@
 ---
 source: src/modules/account/index.ts
-sha256: 6d9c8bf8bdb04371196295aeba895b1f3b08279d496f5c99ff223f362a3f9ea3
-generated_at: 2026-09-23T18:05:07.317217+00:00
+sha256: 4dcf96ea3bd88b1655a7ebb0ff9435f59945b0906fbbd391f1f0a2bacf710cc5
+generated_at: 2026-10-14T08:40:19.493720+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/index.ts
 
 ## Purpose
-
-Public barrel for the Account module. It is the **only** surface a sibling module is permitted to import (enforced by the strategic DDD rule in `docs/theory/strategic-ddd.md` §5). It re-exports the service and email APIs while deliberately withholding internal sub-modules (`session/`, `oauth/`, `two-factor/`) so they remain reachable exclusively through `accountService` or `twoFactorService` rather than as standalone imports.
+Public barrel (re-export facade) for the account module. It is the **only** surface that sibling modules are permitted to import from (rule defined in `docs/theory/strategic-ddd.md` §5). It deliberately curates what is visible: internal sub-modules like `session/`, `oauth/`, `two-factor/`, and the export build (`services/export*.ts`) are intentionally **not** re-exported here.
 
 ## Key elements
-
-- **`export * from './services'`** — re-exports the account service surface (e.g. `accountService`, `twoFactorService`) from `src/modules/account/services/index.ts`.
-- **`export * from './emails'`** — re-exports the account email templates/helpers from `src/modules/account/emails.ts`.
-
-No types, models, or other declarations are defined here; the file is purely a re-export barrel.
+- `export * from './services'` — surfaces `accountService` (and friends) defined in `src/modules/account/services/index.ts`.
+- `export * from './emails'` — surfaces the account email-sending functions in `src/modules/account/emails.ts`.
+- `export * from './events'` — surfaces account domain events from `src/modules/account/events.ts`.
+- `export type * from './model'` — re-exports **types only** from `src/modules/account/model.ts`; no runtime values leak.
 
 ## Relationships
-
-- **`src/modules/account/services/index.ts`** — directly re-exported; provides the service functions that other modules call.
-- **`src/modules/account/emails.ts`** — directly re-exported; provides email-sending helpers used by the services.
-- **`scripts/ops/reap-inactive-accounts.ts`** — consumes the barrel (via `./services` re-export) to invoke account-service operations during cleanup.
-- **`tests/integration/signup-grant-compensation.test.ts`** — imports through this barrel to exercise the account service and email paths in an integration test.
+- **Direct re-export targets (the four lines above):** `services/index.ts`, `emails.ts`, `events.ts`, `model.ts`. Consumers of this barrel get those modules' APIs without importing the paths directly.
+- **Sibling modules (api-keys):** `src/modules/api-keys/module.ts`, `src/modules/api-keys/services/api-keys.ts`, and `src/modules/api-keys/emails.ts` import account types/services through this barrel rather than reaching into internal paths.
+- **Ops scripts:** `scripts/ops/reap-account-exports.ts`, `reap-inactive-accounts.ts`, `reap-previous-emails.ts`, and `reencrypt.ts` obtain account-model types and services via this barrel.
+- **Integration tests** (`signup-grant-atomicity.test.ts`, `reencrypt.test.ts`, api-keys tests) reference the account surface through this barrel.
 
 ## Notes
-
-- This module **publishes no model of its own** because it owns no database collection. The address-book model lives in `@modules/addresses`.
-- `session/` tokens are intentionally _not_ re-exported; every request authenticates through `kernel/authentication.ts` instead.
-- `oauth/` and `two-factor/` sub-modules are also hidden behind the service objects rather than exposed as separate imports.
+- Only `./model` uses `export type *`; the other three use plain `export *`. If you add runtime values to `model.ts`, they will **not** be re-exported — switch to `export *` or add a named re-export.
+- The docstring explicitly warns against adding re-exports for `session/`, `oauth/`, `two-factor/`, or `services/export*.ts`. If a new sibling needs one of those, the intended pattern is to call through `accountService` / `twoFactorService`, not to widen this barrel.
+- See `docs/modules/account.md` for the broader module architecture.

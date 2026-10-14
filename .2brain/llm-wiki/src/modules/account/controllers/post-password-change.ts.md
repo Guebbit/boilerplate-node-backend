@@ -1,35 +1,41 @@
 ---
 source: src/modules/account/controllers/post-password-change.ts
-sha256: f758edcf5873100cedfb7bc7ba163affbb2065d2a06fcaea59825b6e91a318d7
-generated_at: 2026-09-27T14:25:20.224162+00:00
+sha256: 3eb0dbbf27cb31e23789e4d616c2909d8bfa05e3935b80acd485653ac1b06014
+generated_at: 2026-10-14T08:35:51.208107+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/account/controllers/post-password-change.ts
 
 ## Purpose
-HTTP controller for `POST /account/password`. Accepts a verified caller's current password and a new one, delegates the actual change and cross-session revocation to `accountService.passwordChangeWithCurrent`, then re-mints the caller's own session token so they remain signed in to the tab they are typing in.
+
+HTTP controller for `POST /account/password`. Validates the request body, delegates the actual password change (current-password-verified, no email round-trip) to `accountService.passwordChangeWithCurrent`, then re-mints the caller's session so they remain logged in. It exists as a thin adapter between the Express route and the domain service, handling validation, error mapping, metrics, and the session-reissue edge case.
 
 ## Key elements
-- **`postPasswordChange(request, response)`** — the sole export. Performs shape validation (field presence via a stripped-down `ChangePasswordBody` zod schema), calls the service, handles success/refusal/database-error paths, and issues a new session token.
-- **`changePasswordShape`** — a local zod schema derived from the API contract's `ChangePasswordBody` with content rules (min length, etc.) removed. Exists so that *absent* fields produce a generic validation 400 here, while *content* violations (weak password, mismatch, wrong current) are answered by the service in the caller's language.
-- **Session re-mint with graceful degradation** — if `issueSession` throws after the password write and cross-session revoke have already committed, the controller logs a warning, still increments the success metric, and returns 200 with no token rather than a 500. The password *did* change; a 500 would misreport reality.
+
+- **`postPasswordChange`** (exported) — The sole handler. Pipeline: Zod parse → service call → session re-mint → response. No other exports.
+- **`sessionSnapshotOf` (called before the service)** — Captures the current session state *before* `passwordChangeWithCurrent` revokes all sessions. The snapshot is passed to `reissueSession` so the new token continues the caller's existing session.
+- **Graceful re-mint degradation** — If `reissueSession` throws, the handler still sends `200` + success message (password *did* change, old sessions *are* gone) and logs a `logger.warn`. The response body omits tokens.
+- **`authPasswordChangeTotal`** — Prometheus counter incremented on every terminal path (`success` / `failure`), including the degraded re-mint branch (still counted as `success`).
 
 ## Relationships
-- **`routes.ts`** — wires `POST /account/password` to `postPasswordChange`, behind the `isAuth` middleware that populates `request.authContext`.
-- **`services/index.ts`** — calls `accountService.passwordChangeWithCurrent`, which performs the password verification, write, and revocation of all *other* sessions.
-- **`session/session.ts`** — calls `issueSession` to mint a fresh token for the caller after the change.
-- **`metrics.ts`** — increments `authPasswordChangeTotal` with `{ status: 'success' | 'failure' }` on every terminal path.
-- **`controller.ts`** — uses `rejectValidation` (shape errors) and `refused` (service-level refusals like wrong current password).
-- **`errors.ts`** — delegates unhandled DB/service errors to `rejectDatabaseError`.
-- **`request.ts`** — extracts `callerContextOf(request)` to pass locale/IP context into the service for localized error copy.
-- **`response.ts`** — sends the final 200 via `successResponse` with an i18n success message.
-- **`i18n/index.ts`** — calls `t('account.password-change.success')` for the localized success string.
-- **`logger.ts`** — emits a `warn`-level entry when the re-mint fails but the password change succeeded.
-- **`types/index.ts`** — imports `ChangePasswordRequest` (typed request body) and `AuthTokens` (response payload shape).
+
+- **`../services` (accountService)** — `passwordChangeWithCurrent` performs the actual write and revokes all other sessions. This controller is its only caller in the HTTP layer.
+- **`../session/session`** — `sessionSnapshotOf` reads the pre-revoke state; `reissueSession` creates the new auth-token pair after the change.
+- **`../domain/session-proof`** — Imports `AMR.password` to tag the re-minted session's authentication-method reference.
+- **`../metrics`** — `authPasswordChangeTotal` counter for observability.
+- **`@infrastructure/http/controller`** — `rejectValidation` (400 on bad body) and `refused` (business-logic rejection, e.g. wrong current password).
+- **`@infrastructure/http/errors`** — `rejectDatabaseError` maps unexpected service errors to a 5xx.
+- **`@infrastructure/http/response`** — `successResponse` shapes the 200 reply with `AuthTokens`.
+- **`@infrastructure/http/request`** — `callerContextOf` extracts IP/UA etc. forwarded to the service for audit.
+- **`@infrastructure/i18n`** — `t('account.password-change.success')` localises the success message.
+- **`@infrastructure/adapters/logger`** — Logs the swallowed re-mint failure (the only place `logger` is used in this file).
+- **`@types`** — `ChangePasswordRequest` (body shape) and `AuthTokens` (response shape).
+- **`../routes`** — Wires `postPasswordChange` to the `POST /account/password` path behind `isAuth` middleware.
 
 ## Notes
-- Shape validation is intentionally split from content validation: the controller only checks that `currentPassword`, `password`, and `passwordConfirm` are *present strings*. All policy (min length, complexity, mismatch) lives in the service so error copy can be localized.
-- The `changePasswordShape` schema is derived from the generated `ChangePasswordBody` contract; if a field is added to the contract, this local shape must be updated too (noted in the inline comment).
-- The re-mint-failure path returns `200` with an empty body (`undefined` as the data arg) rather than the usual `{ token }` shape — clients should treat "no token in body" as "password changed, but you need to re-authenticate."
-- The service is expected to revoke every *other* session; this controller does **not** invalidate the caller's own session before re-minting.
+
+- **Ordering constraint:** `sessionSnapshotOf` *must* run before `passwordChangeWithCurrent`; the service revokes every session for that user, including the caller's. Swapping the order would make the re-mint reference a dead session.
+- **`request.authContext!`** is asserted non-null on the basis that `isAuth` middleware already rejected unauthenticated requests. No defensive check is repeated here.
+- **Re-mint failure is intentionally non-fatal.** A 500 would mislead the client into thinking the password was *not* changed. The 200-without-tokens response is the correct signal; the `logger.warn` is the only audit trail for that degraded path.
+- **Validation vs. authentication errors are distinct:** a missing/malformed field → `rejectValidation` (400); a wrong current password → `refused` (likely 401/403, business logic in the service). Both increment the metric as `failure`, but they hit different HTTP status codes and different code paths.

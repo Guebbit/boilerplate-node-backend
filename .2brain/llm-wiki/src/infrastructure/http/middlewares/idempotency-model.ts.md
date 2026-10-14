@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/http/middlewares/idempotency-model.ts
-sha256: 65554bb5d8cd00aaff1c37e7e85234e5641fc63cb3a7c8be37c2b637164e0344
-generated_at: 2026-09-23T17:43:31.120631+00:00
+sha256: 856499644f9f3a6e14b384137e89f7ed0e9831119655d44fded31f03c5dc73a7
+generated_at: 2026-10-14T07:56:11.467057+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Mongoose schema and model for the idempotency ledger — one document per `(key, caller)` pair that records a retried write's fingerprint and, once the handler has answered, its response. This is the storage layer that `idempotency.ts` reads and writes against to implement replay, in-flight, and mismatch detection. It lives at the infrastructure level (not inside a domain module) because the collection belongs to no domain; the same exception applies to `rate-limit.ts`'s store.
+Defines the Mongoose schema, indexes, and model for the idempotency ledger — a Mongo collection that stores one record per `(key, caller)` pair, capturing a retried write's request fingerprint and, once the handler has responded, its status/body. It exists so that `idempotency.ts` can deduplicate in-flight requests and replay cached outcomes without re-executing side effects.
 
 ## Key elements
 
-- **`IdempotencyRecordState`** — union type `'in-flight' | 'done'`; tracks where a record sits in its lifecycle (the three-way branch in `idempotency.ts`).
-- **`IdempotencyRecordDocument`** — Mongoose document interface: `key`, `caller`, `fingerprint`, `state`, optional `status`/`body`, and timestamps.
-- **`IdempotencyRecordModel`** — Mongoose `Model` type alias.
-- **`retentionHours`** — read once at import time via `environmentNumber('NODE_IDEMPOTENCY_RETENTION_HOURS', 24, 1)`; sets the TTL window in hours.
-- **`idempotencyRecordSchema`** — the schema definition with two indexes:
-    - Unique compound index on `(key, caller)` — acts as the distributed lock; a duplicate-key `E11000` error is the signal that another caller already holds the key.
-    - TTL index on `createdAt` with `expireAfterSeconds = retentionHours * 3600`.
-- **`idempotencyRecordModel`** — the exported Mongoose model (collection `idempotencyrecords`), the entry point used by `idempotency.ts`.
+- **`IDEMPOTENCY_RECORD_STATES`** — `['in-flight', 'done']` const array; the single source of truth for the state enum and the `IdempotencyRecordState` type.
+- **`IdempotencyRecordDocument`** — interface describing a stored attempt: `key`, `caller`, `fingerprint`, `state`, and optional `status` / `body` / `location` (populated only after the handler answers).
+- **`IdempotencyRecordModel`** — Mongoose `Model` type parameterized on the document interface.
+- **`idempotencyRecordSchema`** — the schema definition. Notable points: `body` uses `Schema.Types.Mixed` because its shape varies per route; `timestamps: true` adds `createdAt`/`updatedAt`.
+- **Unique index** `idempotency_key_caller_unique` on `{ key, caller }` — acts as the distributed lock; `idempotency.ts` interprets the `E11000` collision as the "already in-flight / replay" signal rather than an error.
+- **TTL index** `idempotency_createdAt_ttl` on `{ createdAt }` — auto-deletes records after `NODE_IDEMPOTENCY_RETENTION_HOURS` (default 24 h).
+- **`idempotencyRecordModel`** — the exported model entrypoint; collection name is `idempotencyrecords`.
 
 ## Relationships
 
-- **`idempotency.ts`** — consumes `idempotencyRecordModel` for all reads/writes; interprets `E11000` on insert as "key already held" rather than a DB error, and branches on `state` to decide replay vs. in-flight vs. mismatch.
-- **`environment.ts`** — provides `environmentNumber()` used to read the retention-hours config at import time.
-- **`tests/contract/idempotency.test.ts`** — exercises the ledger end-to-end (insert, replay, mismatch, TTL expiry).
-- **`tests/unit/infrastructure/http/middlewares/idempotency.test.ts`** — unit-level coverage of the middleware logic built on this model.
+- **`src/infrastructure/http/config.ts`** — imports `idempotencyConfig()` to read `NODE_IDEMPOTENCY_RETENTION_HOURS` at module load time for the TTL index.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** — the middleware that performs the insert (lock) / read (replay) / update (persist outcome) flow against `idempotencyRecordModel`.
+- **`tests/contract/idempotency.test.ts`** — contract-level tests exercising the idempotency guarantee end-to-end.
+- **`tests/unit/infrastructure/http/middlewares/idempotency.test.ts`** — unit tests for the middleware logic that depends on this model.
 
 ## Notes
 
-- **TTL index is not hot-reloadable.** Changing `NODE_IDEMPOTENCY_RETENTION_HOURS` and restarting will **fail the boot** because Mongoose refuses to modify an existing index's `expireAfterSeconds` in place. You must run `npm run db:sync` to drop and rebuild the index. This is the same caveat shared by every other TTL index in the repo (`feedback/model.ts`, `persistence/lease.ts`).
-- **`E11000` is not an error.** The unique index is intentionally used as a mutex; `idempotency.ts` catches the duplicate-key error and treats it as the "someone else is here" signal. Do not add a generic error handler around inserts that would mask this.
-- **`body` is `Mixed`.** The stored response shape varies per route; this is deliberate, not a type hole.
-- **Infrastructure-owned exception.** This collection is not wrapped in a domain module on purpose — adding a module, registry entry, and manifest for four fields would be ceremony without benefit.
+- **Infrastructure-owned, not module-owned.** This collection has no domain module; it follows the same exception as `rate-limit.ts`'s store. Do not expect a per-module registry/manifest/folder for it.
+- **TTL is baked in at import time.** `retentionHours` is read once from config. Changing `NODE_IDEMPOTENCY_RETENTION_HOURS` and simply restarting the server will **fail boot** because Mongo refuses to alter an existing index's `expireAfterSeconds`. Run `npm run db:sync` to drop and rebuild the index.
+- **`E11000` is a feature, not a bug.** The unique index collision is the mechanism `idempotency.ts` uses to detect an in-flight or already-completed request; it is never surfaced as an HTTP 500.
+- **`body` is untyped on purpose (`Mixed`).** Each route's response shape differs; the ledger stores it opaquely and replays it verbatim.

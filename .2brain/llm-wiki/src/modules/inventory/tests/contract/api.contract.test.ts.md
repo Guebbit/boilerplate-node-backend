@@ -1,36 +1,33 @@
 ---
 source: src/modules/inventory/tests/contract/api.contract.test.ts
-sha256: 5a6421bd56abcbb82767058128508360849b53f331bbf122ac03b8580b7b838f
-generated_at: 2026-09-27T14:56:55.186198+00:00
+sha256: 378b522d3c29f82400b4b3b5127407aa38de571852f70603555a87f5d46eb508
+generated_at: 2026-10-14T16:00:43.092350+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/modules/inventory/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the `/inventory` HTTP surface. Each test drives a real request through the app and asserts both the business-level response (status, body shape, counters) and that the entire payload conforms to the published API spec via `toSatisfyApiSpec()`. The file covers the two read endpoints, the two write transitions (receipts, adjustments) with their success and error branches (404, 409, 422), and the reservations sweep. Transition *rules* (e.g. how `onHand` is computed) are delegated to the unit suite; this file only pins the wire contract.
+HTTP contract tests for every `/inventory` endpoint. Pins the observable wire format — status codes, response envelope shape, pagination meta, and error codes — for both happy paths and the 404 / 409 / 422 / 401 / 403 branches. Business-rule assertions (e.g. *why* an adjustment is rejected) are intentionally left to the unit suite; this file only verifies what a client sees on the wire.
 
 ## Key elements
-
-- **`setupTestDb()`** — called once at module top; resets the test database before the suite runs.
-- **`describe('GET /inventory/levels')`** — 3 cases: full read with all three counters, `lowOnly=true` filter, and pagination (`page`/`pageSize`).
-- **`describe('GET /inventory/movements')`** — 4 cases: empty ledger, paginated ledger with `totalItems` reflecting the full filtered set, `reason` filter, and product-scoped read exposing `onHandDelta`/`reservedDelta`.
-- **`describe('POST /inventory/receipts')`** — 3 cases: 200 success returning updated counters, 404 for an unknown `productId` (uses `MISSING_ID`), 422 for an invalid body.
-- **`describe('POST /inventory/adjustments')`** — 3 cases: 200 for a negative delta, 409 with error code `INVENTORY_BELOW_RESERVED`, 422 for a zero delta.
-- **`describe('POST /inventory/reservations/sweep')`** — 1 case: 200 returning `{ expired: 0 }`.
+- **`GET /inventory/levels`** — three tests: full counter set (`onHand`, `reserved`, `available`), `lowOnly=true` filter, and `page`/`pageSize` pagination with `meta.totalItems` / `meta.totalPages`.
+- **`GET /inventory/movements`** — four tests: empty ledger, paginated ledger (verifies `meta.page`, `meta.pageSize`, `totalItems` counts *all* matches not just the page), `reason` filter, and per-product filter showing `onHandDelta` / `reservedDelta`.
+- **`POST /inventory/receipts`** — success returns updated counters; 404 for unknown product; 422 for invalid body (missing `productId` or zero quantity).
+- **`POST /inventory/adjustments`** — success with positive and negative `delta`; 409 with error code `INVENTORY_BELOW_RESERVED` when delta would push `onHand` below `reserved`; 422 for zero delta.
+- **`POST /inventory/reservations/sweep`** — returns `{ expired: 0 }` when nothing to expire.
+- **`GET /inventory/preorders`** — full allowance fields (`preorderLimit`, `preordered`, `held`, `paid`, `left`, `ordered`); 403 for non-admin (`user` role).
+- **`PUT /inventory/levels/:productId/preorder-limit`** — success returns the updated level; 404 for unknown product; 422 for negative, fractional, or missing `preorderLimit` (parameterised via `it.each`); 403 for non-admin.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** — provides the `toSatisfyApiSpec()` matcher (imported as a side-effect module) that every assertion block relies on for spec conformance.
-- **`tests/support/setup-test-db.ts`** — exports `setupTestDb()`, used to initialise a clean database for the run.
-- **`tests/support/http.ts`** — exports `api()` (the HTTP client) and `authenticateAs()` (returns a bearer token for a given role).
-- **`src/modules/products/tests/factories.ts`** — exports `createProduct()`, used to seed inventory rows with specific `onHand`/`reserved` values before each assertion.
-- **`tests/support/ids.ts`** — exports `MISSING_ID`, a sentinel ID that is guaranteed not to exist, used to exercise 404 paths.
+- **`tests/support/http.ts`** — supplies the `api()` HTTP client and `authenticateAs(role)` used in every test to obtain a bearer token.
+- **`src/modules/products/tests/factories.ts`** — `createProduct()` seeds a product (with optional `onHand`, `reserved`, `releaseDate`) so each test can exercise a known inventory state.
+- **`tests/support/ids.ts`** — exports `MISSING_ID`, a guaranteed-nonexistent ID used in the 404 tests.
+- **`tests/support/contract.ts`** — imported as a side-effect (`import '@tests/contract'`); likely registers shared matchers or contract-level Jest setup.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to provision an isolated test database before any test runs.
 
 ## Notes
-
-- The file docstring mentions 401/403 coverage ("keep the counters off a customer's screen"), but no such tests are present in the file body — only admin-authenticated requests are exercised here.
-- Every test's final assertion is `expect(response).toSatisfyApiSpec()`; omitting it would mean the response shape is unchecked against the spec.
-- The 409 test on adjustments asserts a *specific* error code (`INVENTORY_BELOW_RESERVED`) in `body.errors[0].code`, not just the status — other 4xx tests only assert status + spec.
-- The sweep endpoint is tested only for the no-op case; there is no test that seeds expired reservations and asserts a non-zero `expired` count.
+- `setupTestDb()` is invoked at the **module top level**, not inside `beforeAll`; it must complete before the first `describe` block executes.
+- All non-permission tests authenticate as `admin`; the 403 tests authenticate as `user`. There is no 401 test in this file despite the module doc-comment mentioning it — the 401 branch is presumably covered elsewhere or by the `@tests/contract` side-effect setup.
+- `meta.totalItems` is asserted to count **all** rows matching the filter, not just the current page — the tests call this out explicitly as the mechanism that lets an audit client know more history exists.
+- The 409 response is asserted to carry `errors[0].code === 'INVENTORY_BELOW_RESERVED'`; other error codes (422) are not pinned to a specific string in this file.

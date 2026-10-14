@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/contract/abilities.test.ts
-sha256: d1ce13839df3738ea7c7684b13a950d624524902c91ea1714b6c6b41c8c34ac9
-generated_at: 2026-09-23T18:12:12.147020+00:00
+sha256: 7ecbb2ef26b363f24ab154eae7bf6729a008809c85afee9f7872c1841371db7f
+generated_at: 2026-10-14T09:03:08.820598+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test for `GET /account/abilities`. It verifies that the endpoint publishes the _same_ rules the server enforces, by unpacking the wire payload with CASL's own `unpackRules` and asserting specific allow/deny decisions per role and scope. The goal is to catch drift between server-side policy and what a client can actually act on — not to assert response shape.
+Contract test for `GET /account/abilities`. It verifies the round-trip invariant: rules the server packs into the response must unpack (via CASL `unpackRules`) into a working `MongoAbility` on the client side. The point is not endpoint shape but that both sides agree on the same policy, preventing silent drift between server enforcement and client-side UI greying-out.
 
 ## Key elements
 
-- **`abilityFrom(body, scope)`** — Rebuilds a single-scope `MongoAbility` from the response body using `unpackRules` (the exact client code path). Accepts scope by name so the two lists are never merged, preserving the invariant that a client asks the list that owns the subject.
-- **Guest read Product** — Unauthenticated caller gets 200 with a usable ability that allows reading active products.
-- **Guest deny Order** — Same caller cannot read another user's order.
-- **Authenticated user — own rows only** — `authenticateAs('user')` yields an ability that allows reading their own order but denies another user's.
-- **Admin (shop owner) — broad grant** — `authenticateAs('admin')` can delete a Product; the tenant rule set "narrows nothing."
-- **Scope separation** — The admin (who holds both memberships) proves the platform list answers platform subjects and the tenant list does not, and vice-versa.
-- **Empty platform list** — A user with no platform membership receives `[]` (present, not absent) so clients never branch on field presence.
-- **Version fingerprint** — The `version` field equals `permissionModelVersion(PERMISSION_KEYS.map(e => e.key))`, tying it to the key set rather than any single role.
-- **Stable subject set** — `subjects` equals `PERMISSION_SUBJECTS` for every caller, giving clients a fixed type-level surface.
+- **`abilityFrom(body, scope)`** — Rebuilds a single-scope `MongoAbility` from the wire payload using `unpackRules` (CASL's own reader for `packRules` output). Accepts `'tenant'` or `'platform'` as the scope; the two lists are never merged.
+- **`describe('GET /account/abilities')`** — The test suite. Covers:
+  - Guest (unauthenticated) gets `guest` role, can read active Products, cannot read others' Orders.
+  - Authenticated customer sees only their own Orders.
+  - Admin (shop owner) can delete Products.
+  - Scope isolation: platform-only subjects (`ObservabilitySnapshot`) are reachable solely from the platform list, even for a caller holding all tenant keys.
+  - Non-platform callers receive an empty `platform` array (not absent), preserving a uniform response shape.
+  - `version` field equals `permissionModelVersion(PERMISSION_KEYS.map(k => k.key))` — a fingerprint of the declared key set, independent of the caller's role.
+  - `subjects` field always equals `PERMISSION_SUBJECTS`, regardless of caller.
+  - `grantableRoles` is empty for strangers; for admins it lists tenant roles (`customer`, `manager`, `moderator`, `admin`) but excludes `operator`.
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — Provides `permissionModelVersion`, `PERMISSION_KEYS`, and `PERMISSION_SUBJECTS`; the test asserts the response's `version` and `subjects` fields match these canonical exports.
-- **`tests/support/http.ts`** — Supplies `api()` (unauthenticated request builder) and `authenticateAs(role)` (returns `{ user, bearer }` for role-scoped auth headers).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module top to seed a clean Mongo instance before the suite runs.
+- **`src/kernel/permissions.ts`** — Provides `permissionModelVersion`, `PERMISSION_KEYS`, and `PERMISSION_SUBJECTS`. The test uses these to assert the `version` fingerprint and the published `subjects` array, ensuring the endpoint's metadata tracks the declared permission model rather than any individual role.
+- **`tests/support/http.ts`** — Provides `api()` (the HTTP request helper) and `authenticateAs(role)` (creates a session and returns `{ user, bearer }`). All requests in this file go through these.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to provision a clean test database before the suite runs.
 
 ## Notes
 
-- The file deliberately tests **round-trip semantics** (pack → wire → unpack → decide) rather than asserting a fixed JSON shape, because the contract is "the client can use what arrives."
-- `abilityFrom` takes a scope _by name_ on purpose: concatenating tenant + platform rules into one ability would prove the opposite of the scope-separation invariant.
-- `tenantId` is read from the **response envelope** (`body.data.tenantId`), not from the collection — the deployment is single-tenant and stores no tenant column.
-- The `version` assertion uses a key-fingerprint (not a simple count) so that a key rename or key-for-key swap would be detected, while editing a role's conditions would not bump it.
+- **Round-trip, not shape.** Tests deliberately unpack the packed rules and query the resulting ability rather than asserting on the raw JSON structure. This mirrors the actual client code path.
+- **Scopes are never concatenated.** The `abilityFrom` helper takes a single scope name. A test that merged tenant and platform rules would prove the opposite of the intended invariant (scope isolation).
+- **`tenantId` is client-supplied.** The collection has no `tenant` column (single-tenant deployment); the envelope's `tenantId` is what a client attaches before calling `.can()`. Tests reflect this by pulling `tenantId` from the response body.
+- **Empty ≠ absent for platform scope.** Non-platform callers get `platform: []`, not a missing field, so clients never branch on field presence.

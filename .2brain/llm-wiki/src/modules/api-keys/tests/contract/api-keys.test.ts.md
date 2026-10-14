@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/tests/contract/api-keys.test.ts
-sha256: 4eeb066c86da57b43d4c912dfd589ab0f9d2e53676d7c89955ddcc584f4b729e
-generated_at: 2026-09-23T18:25:38.766227+00:00
+sha256: 35323cc6925b5c7c14081e96860665469e85f0bd07b0b882b0378ee9c02b5d75
+generated_at: 2026-10-14T15:02:06.163176+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,26 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract tests for the `/api-keys` admin surface (list, mint, revoke). Each response is asserted both for expected status/body **and** for conformance to the bundled `openapi.yaml` via `toSatisfyApiSpec()`. Credentials minted here are intentionally _not_ reused against other routes in this file; cross-cutting usage lives in `tests/cross-cutting/`.
+Contract tests for the `/api-keys` admin surface (GET list, POST mint, DELETE revoke), validated against the bundled `openapi.yaml`. Every route requires a human bearer session; the credentials minted here are *not* exercised against other routes — that happens in `tests/cross-cutting/`.
 
 ## Key elements
 
-- **`beforeEach` → `ensureTenant(DEPLOYMENT_TENANT_SLUG, …)`** — guarantees the deployment's shop exists so the `tenant` field (`context.caller.tenantId`) resolves during real auth.
-- **`describe('GET /api-keys')`** — 401 unauthenticated; 403 for a `customer` role (no `apikeys` permission); 200 listing where every item's `secret` is `undefined`.
-- **`describe('POST /api-keys')`** — 201 mint (secret starts with `sk_`, permissions echoed back); 422 for a platform-scope permission the admin doesn't hold; 422 for an empty `permissions` array; 403 for `customer`.
-- **`describe('DELETE /api-keys/:id')`** — 200 revoke of a just-minted id; 404 for an id outside the admin's tenant scope.
-- **`toSatisfyApiSpec()`** (from `@tests/contract`) — custom matcher run on every response to validate the shape against the OpenAPI spec.
+- **`setupTestDb()`** — initialises the in-memory test database before any test runs.
+- **`beforeEach` → `ensureTenant(DEPLOYMENT_TENANT_SLUG, …)`** — creates the deployment's shop so that `context.caller.tenantId` resolves to a string (same setup the webhooks contract suite needs).
+- **`ahead(days)` / `IN_A_WEEK()`** — local helpers that produce ISO-8601 expiry timestamps (N days out / one week out, safely under the one-year ceiling).
+- **`describe('GET /api-keys')`** — 401 (no auth), 403 (role without `apikeys` key), 200 listing with `secret` asserted absent on every item.
+- **`describe('POST /api-keys')`** — 201 mint (secret starts with `sk_`, permissions echoed), `Cache-Control: no-store`, 422 for over-scoped / empty / missing / too-far expiry, 401 `REAUTH_REQUIRED` after the reauth window elapses, 403 for unauthorised role.
+- **`describe('DELETE /api-keys/:id')`** — 200 revoke, 404 for an id outside the caller's reach.
+- **`afterEach` → `jest.useRealTimers()`** — restores the timer mock used by the reauth-window test.
 
 ## Relationships
 
-- **`tests/support/contract.ts`** — imported as `@tests/contract`; registers the `toSatisfyApiSpec()` matcher used in every assertion.
-- **`tests/support/http.ts`** — provides `api()` (supertest-style HTTP client) and `authenticateAsRole(role)` (injects a bearer token for a given role).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module top-level to initialise/isolate the test database.
-- **`src/modules/access/index.ts`** — source of `ensureTenant` and `DEPLOYMENT_TENANT_SLUG` used in the `beforeEach` tenant bootstrap.
-- **`src/modules/access/service.ts`** — underlying authorization logic that the role-based 403/422 assertions exercise (admin vs. customer permission floors).
+- **`tests/support/contract.ts`** — side-effect import (`import '@tests/contract'`); registers the OpenAPI contract-assertion harness that makes every response shape-check against `openapi.yaml`.
+- **`tests/support/http.ts`** — provides the `api()` HTTP client and `authenticateAsRole(role)` helper used to obtain bearer tokens per test.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` resets and seeds the test database before the suite runs.
+- **`tests/support/clock.ts`** — `freezeDate()` / `advanceDate(ms)` let the REAUTH_REQUIRED test deterministically push the clock past the reauth window.
+- **`src/kernel/config.ts`** — supplies `reauthWindowSeconds('critical')`, the exact threshold the clock-advance test must exceed by one second.
+- **`src/modules/access/index.ts`** — re-exports `ensureTenant` and `DEPLOYMENT_TENANT_SLUG` used in the `beforeEach` to guarantee a tenant context exists.
 
 ## Notes
 
-- The 422 "over-reaching permission" test uses `platform.observability.any.read` as a _proxy_ for a genuinely missing permission: admin is unrestricted in **tenant** scope but not in **platform** scope, so the 422 path is identical.
-- The `tenant` field on a credential is only resolved after the deployment's shop exists (same precondition as the webhooks contract suite). Forgetting the `ensureTenant` call causes auth to fail before the API-key logic is reached.
-- Every test pairs a conventional status/body assertion with `toSatisfyApiSpec()`; omitting the matcher means the OpenAPI shape is unchecked for that response.
+- The `@tests/contract` import is deliberately bare (no bindings); its sole effect is to wire up OpenAPI validation. Removing it would silently disable contract assertions.
+- The 422 "over-reaching permission" test uses a **platform-scope** key (`platform.observability.any.read`) as a stand-in for "a permission the caller genuinely lacks." The comment in-file explains that an admin is unrestricted within tenant scope, so only a platform-scope request triggers the same 422 path.
+- The one-year expiry boundary is tested with 367 days (→ 422) and 360 days (→ 201), implying the ceiling is 365 days.
+- `reauthWindowSeconds` is called with the `'critical'` severity argument; other severities may have different windows — only this one is exercised here.

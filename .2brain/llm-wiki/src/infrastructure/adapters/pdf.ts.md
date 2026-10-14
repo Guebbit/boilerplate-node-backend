@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/adapters/pdf.ts
-sha256: 77f10e08d68b9cf874980be51ebeab44996d077b46618d8750cdf5bdfdfa8634
-generated_at: 2026-10-01T12:50:08.689959+00:00
+sha256: 3a140230bebc23bef48029a87dd323892b9a4ed836f7e990d0561932d14ce9f1
+generated_at: 2026-10-14T07:47:29.201825+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Renders HTML strings to PDF byte arrays using headless Chromium (via `puppeteer-core`). Exists as an infrastructure adapter so that domain modules (invoicing, reporting) get a stable "HTML in → PDF bytes out" API without depending on browser-automation details, container paths, or concurrency management.
+Infrastructure-level HTML→PDF rendering adapter. Wraps a headless Chromium (via `puppeteer-core`) in a concurrency-bounded, timeout-guarded, network-locked pipeline so that invoice and report HTML can be turned into PDF byte arrays without exhausting container memory or leaking browser processes.
 
 ## Key elements
 
-- **`renderHtmlToPdf(html, pdfOptions?)`** – Public entry point. Acquires a render slot, launches a browser, prints to PDF, closes the browser. Returns `Promise<Uint8Array>`. Defaults to A4 portrait.
-- **`settleRenders(timeoutMs)`** – Public export. Resolves once every in-flight render has finished (or the timeout elapses). Intended for graceful-shutdown sequences.
-- **`renderOnce`** (internal) – The single launch → newPage → setContent → page.pdf → close pipeline.
-- **`withRenderSlot` / `acquireSlot` / `releaseSlot`** – A 2-slot counting semaphore (`MAX_CONCURRENT_RENDERS = 2`) that caps simultaneous Chromium processes to protect container memory.
-- **`launchOptions()`** – Function (not constant) returning `executablePath` from `pdfConfig()` plus `--no-sandbox` / `--disable-setuid-sandbox` args.
-- **`DEFAULT_PDF_OPTIONS`** – `{ format: 'A4' }`, the default geometry.
+- **`renderHtmlToPdf(html, pdfOptions?)`** — Public entry point. Acquires a render slot, launches Chromium, prints the HTML to a `Uint8Array`, closes the browser. Defaults to A4 portrait.
+- **`settleRenders(timeoutMs)`** — Shutdown hook: resolves once every in-flight render (tracked in the `inFlight` set) has settled, or the timeout elapses. Prevents orphaned Chromium processes on exit.
+- **`refuseNonDataRequest(request)`** — Request-interception callback. Allows only `data:` URLs; aborts everything else. Prevents SSRF via template-injected `<img>`/`<link>` tags.
+- **`RenderTimeoutError`** — Thrown (as a rejection) when a single render exceeds `RENDER_TIMEOUT_MS`. The browser is closed before the error propagates.
+- **`MAX_CONCURRENT_RENDERS` (2) / `MAX_WAITING_RENDERS` (20) / `RENDER_TIMEOUT_MS` (20 000)** — Tuning constants for the semaphore, the wait queue, and the per-render deadline.
+- **`withRenderSlot(task)`** — Internal counting-semaphore wrapper. Rejects with `ServiceBusyError` before queueing when both the pool and the wait queue are full.
+- **`withDeadline(browser, work)`** — Races the render against `RENDER_TIMEOUT_MS`; on timeout or any error, closes the browser (skipping the close if the deadline already did it).
+- **`printIn(browser, html, pdfOptions)`** — Opens a fresh tab, disables JavaScript, enables request interception, writes HTML via `setContent` (`waitUntil: 'load'`), and calls `page.pdf()`.
+- **`launchOptions()`** — Function (not a constant) that reads `pdfConfig()` at call time so tests can swap the executable path post-import. Sets `--no-sandbox` / `--disable-setuid-sandbox`.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/config.ts`** – Provides `pdfConfig()`, from which this module reads `PUPPETEER_EXECUTABLE_PATH` at call time.
-- **`src/infrastructure/runtime/settle.ts`** – Provides `settleWithin`, the timeout-bounded "wait for a set of promises" primitive used inside `settleRenders`.
-- **`src/modules/invoicing/providers/pdf.ts`** – Domain consumer; calls `renderHtmlToPdf` to produce invoice attachments.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls `settleRenders` during shutdown to avoid orphaning Chromium processes.
+- **`src/infrastructure/adapters/config.ts`** — Source of `pdfConfig()`, which supplies `PUPPETEER_EXECUTABLE_PATH` at launch time.
+- **`src/infrastructure/runtime/busy.ts`** — Source of `ServiceBusyError`, thrown (as a rejection) when the render queue is full; the caller maps it to a 503 with `Retry-After`.
+- **`src/infrastructure/runtime/settle.ts`** — Source of `settleWithin`, the generic "wait for a set of promises with a deadline" utility that `settleRenders` delegates to.
+- **`src/infrastructure/runtime/server-lifecycle.ts`** — Consumes `settleRenders` as a shutdown step so an exiting process does not orphan its Chromium child.
+- **`src/modules/invoicing/providers/pdf.ts`** — Domain-level provider that calls `renderHtmlToPdf` to produce the invoice PDF bytes.
+- **`tests/unit/infrastructure/adapters/pdf.test.ts`** — Unit tests for the semaphore, timeout, and refusal logic.
+- **`src/modules/invoicing/tests/integration/download.test.ts`** — End-to-end test exercising the full render→download path.
 
 ## Notes
 
-- **`puppeteer-core`, not `puppeteer`.** The `-core` package ships no browser; the binary must come from the base image (Alpine/Debian `chromium`). The path is read via `pdfConfig()` at call time so tests can redirect it after import.
-- **`--no-sandbox` is load-bearing but risky.** Safe only because rendered HTML comes from internal EJS templates. Feeding untrusted HTML through this path is a real security exposure.
-- **`setJavaScriptEnabled(false)`** is a second layer of defense: even with the sandbox disabled, template-injected scripts cannot execute.
-- **`browser.close()` lives in `.finally()` on the launch chain.** Omitting it leaks a ~120 MB Chromium process per failed render.
-- **`waitUntil: 'load'`** is the strongest option available in `page.setContent` under Puppeteer 25 (`networkidle0` was removed for that API). Sufficient here because templates contain no client-side fetches.
-- **In-flight tracking uses `.then(f, f)` rather than `.finally`** to avoid creating a second unhandled-rejection promise when the render rejects.
-- **The semaphore is deliberately inline** (a few lines of state) rather than an external dependency; its only edge case is releasing on failure, handled by `.finally(releaseSlot)`.
+- **`puppeteer-core`, not `puppeteer`:** the `-core` package ships no browser; the base container image provides Chromium via the OS package manager. The path is read from config at call time, not at import time.
+- **`--no-sandbox` is a deliberate security trade-off:** acceptable only because the rendered HTML comes from internal EJS templates. Feeding untrusted HTML through this adapter would be a real SSRF/RCE risk.
+- **One browser per render, not a pool:** each call launches a fresh Chromium (~120 MB profile). The semaphore caps this at 2 concurrent. A pooled long-lived browser is a noted future step if this becomes a hot path.
+- **`launchOptions` is a function, not a constant:** this is intentional so tests can mutate `pdfConfig` after the module is already imported.
+- **`waitUntil: 'load'` (not `networkidle0`):** `setContent` does not navigate, and puppeteer 25 excludes `networkidle0` from `setContent`. `load` is sufficient because the templates run no scripts.
+- **The semaphore is hand-rolled, not a library dependency:** its only non-trivial edge case is releasing the slot on rejection, handled via `.finally`.
+- **`inFlight` tracking uses `then(f, f)` rather than `.finally`:** a `.finally` on an already-rejected promise would create a second unhandled rejection; `then(f, f)` avoids that.

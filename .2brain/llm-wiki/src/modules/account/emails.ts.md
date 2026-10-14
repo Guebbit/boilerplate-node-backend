@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/emails.ts
-sha256: ccae3a4e5fb4a9686947f91ffab9e8e465ecd1a2e54f6bab50bbbfabe2ea1212
-generated_at: 2026-09-27T14:27:08.164174+00:00
+sha256: 5efd6b2a81ef7cfe018acf34d07b6b24c9550c6ca924a3529c1b6b3655ae2f3b
+generated_at: 2026-10-14T08:39:55.045622+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,41 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry of every account-module email's copy. Each exported builder receives an explicit locale string and returns a fully-resolved `EmailContent` (template id, translated subject, and render-context data) ready for the mailer adapter. Because emails are rendered later in a worker with no request or locale store, translation is bound here at build time to the *recipient's* language rather than inherited from a caller context.
+Central registry of every email the account module sends. Each exported builder resolves i18n strings (via an explicit `locale` argument) into a complete `EmailContent` object—template name, subject, and render context—that the mail worker later sends. Templates here only interpolate; they never translate, because the rendering step (`adapters/email.worker.ts`) has no request or locale store to read from.
 
 ## Key elements
 
-- **`verifyRequestEmail(locale, name, token, kind?)`** – Confirmation-link email shared by signup, re-send, and email-change flows. `kind` (`'verify'` | `'email-change'`) only selects the frontend page the token lands on; the copy is intentionally neutral about which address it confirms.
-- **`emailChangeNoticeEmail(locale, name, newEmail)`** – Warning sent to the *old* address the moment a change is requested. No token, no actionable link by design.
-- **`resetRequestEmail(locale, name, token)`** – Password-reset link email.
-- **`setupRequestEmail(locale, name, token)`** – Same link and token semantics as `resetRequestEmail` (both use `'reset'` link kind); differs only in copy (the user never had a password).
-- **`twoFactorCodeEmail(locale, name, code, minutes)`** – Delivers the 6-digit 2FA code in the clear. Deliberately contains **no** link or button to avoid training the recipient to click, which a phishing page would exploit.
-- **`resetConfirmEmail(locale, name)`** – Sent after the password has actually changed.
-- **`deleteRequestEmail(locale, name, token)`** – Deletion confirmation link.
-- **`deleteConfirmEmail(locale, name)`** – Farewell sent after the account row is removed.
-- **`inactivityWarningEmail(locale, name, graceDays)`** – Grace-period warning consumed by the reaper script.
-- **`recipientLocale(locale, context?)`** – Resolves the language to use: account's own locale → caller-context locale → `getDefaultLocale()`.
+- **`greetableName`** (exported) – Security gate: returns the account's `username` *only* when the destination address matches the account's verified email; otherwise returns `''`. Prevents placing attacker-chosen display text in a stranger's inbox.
+- **`greetingFor`** (private) – Chooses between the named greeting key and the shared `greeting-anonymous` key based on whether a name was supplied.
+- **`verifyRequestEmail`** – Builds the verification / email-change confirmation email (parameterised by `kind: 'verify' | 'email-change'`).
+- **`emailChangeNoticeEmail`** – Warning to the *old* address at the moment a change is requested; carries the 7-day undo link.
+- **`resetRequestEmail`** – Password-reset link email.
+- **`setupRequestEmail`** – Same link/token as reset, but copy reflects "you never had a password."
+- **`twoFactorCodeEmail`** – Delivers the 6-digit code in the body. Deliberately contains **no link**, so the recipient types the code rather than clicking.
+- **`reauthCodeEmail`** – Step-up (re-authentication) code; same no-link layout as the 2FA code email.
+- **`TwoFactorChange`** (type) – `'enrolled' | 'removed' | 'disabled'`.
+- **`twoFactorChangedEmail`** – Out-of-band notice that a 2FA factor was added, removed, or 2FA disabled. No actionable link.
+- **`twoFactorLockedEmail`** – One-shot warning when repeated wrong codes lock 2FA checks. No actionable link.
+- *(File is truncated; additional builders—e.g. reset confirmation, export, deletion notices—likely follow.)*
 
 ## Relationships
 
-- **`src/infrastructure/adapters/mailer.ts`** – Imports the `EmailContent` type; every builder's return value is shaped to that contract.
-- **`src/infrastructure/i18n/index.ts` (→ `catalog.ts`, `context.ts`)** – Imports `translator` and `getDefaultLocale`; each builder calls `translator(locale)` to bind all strings.
-- **`src/modules/account/config.ts`** – Imports `accountFrontendLink` and `AccountLinkKind` to construct the `linkUrl` value in link-bearing emails.
-- **`src/types/index.ts` / `src/types/auth-context.ts`** – Imports `CallerContext` as the optional fallback parameter of `recipientLocale`.
-- **`src/modules/account/services/verification.ts`** – Primary consumer of `verifyRequestEmail`.
-- **`src/modules/account/services/authentication.ts`** – Consumes `resetRequestEmail` and `setupRequestEmail` (the latter via `requestAccountSetup`).
-- **`src/modules/account/services/profile.ts`** – Consumes `emailChangeNoticeEmail`, `deleteRequestEmail`, `deleteConfirmEmail`.
-- **`src/modules/account/two-factor/methods/email.ts`** – Consumes `twoFactorCodeEmail`.
-- **`scripts/ops/reap-inactive-accounts.ts`** – Consumes `inactivityWarningEmail`.
-- **`src/modules/account/index.ts`** – Re-exports the builders for external import.
-- **`src/modules/account/tests/unit/emails.test.ts`** – Unit tests for the builders.
-- **`tests/unit/i18n/email-locale.test.ts`** – Exercises locale-resolution paths, including `recipientLocale`.
+- **`@infrastructure/adapters/mailer`** – Supplies the `EmailContent` return type that every builder produces.
+- **`@infrastructure/i18n`** (`index`, `catalog`, `context`) – Provides `translator(locale)` and `getDefaultLocale`; all strings here are resolved through these.
+- **`./config`** – `accountFrontendLink` builds the absolute URLs embedded in each email; `AccountLinkKind` constrains the `kind` parameter of `verifyRequestEmail`.
+- **`@infrastructure/persistence/normalize-email`** – Used by `greetableName` to compare addresses case/format-insensitively.
+- **Service callers** – `email-change.ts`, `password-reset-request.ts`, `password-reset.ts`, `reauth.ts`, `export.ts` / `export-job.ts`, `deletion-request.ts` each import the relevant builder(s) to obtain their `EmailContent`.
+- **`src/modules/account/index.ts`** – Re-exports this module (and/or its siblings) at the package boundary.
+- **`scripts/ops/reap-inactive-accounts.ts`** – Ops script that presumably triggers an inactivity-warning email through a builder in this file.
 
 ## Notes
 
-- **Templates interpolate, they don't translate.** The `template` field is an id; all human-readable strings are pre-translated into `data`/`subject` by the builder. The worker (`adapters/email.worker.ts`) only fills in the already-resolved strings.
-- **`setupRequestEmail` and `resetRequestEmail` share the same frontend link** (`accountFrontendLink('reset', …)`). If you change one link's behavior, change both.
-- **`twoFactorCodeEmail` has no `linkUrl`.** This is intentional and load-bearing; adding a button would undermine the anti-phishing rationale.
-- **`emailChangeNoticeEmail` is a one-way warning.** It carries no token and no link. The "undo" path is the existing password-change / logout-everywhere flow, not anything in this email.
-- **`data` always includes `locale`, `pageMetaTitle`, and `pageMetaLinks`.** These are consumed by the shared email renderer for page framing, not shown as body copy.
-- **Locale resolution order in `recipientLocale`:** account's stored locale → caller context → server default. Emails sent outside a request (e.g. admin-created setup) have no caller context, so the third branch matters.
+- **Locale is always an explicit parameter.** There is no ambient request context at render time; every builder takes `locale: string` as its first argument and binds `translator(locale)` locally.
+- **No link in code-delivery emails.** `twoFactorCodeEmail` and `reauthCodeEmail` intentionally omit `linkUrl` to avoid training the recipient to click, which is the exact reflex a phishing page exploits.
+- **`greetableName` is the single choke-point** for the "may I print this name?" decision. Every template that greets by name calls `greetingFor`, which in turn relies on the caller having passed the result of `greetableName`. Adding a new name-bearing email without going through this path is a security bug.
+- **`emailChangeNoticeEmail` fires at request time, not completion.** The doc comment is explicit: a warning that arrives after the takeover is a receipt, not a warning.
+- **Template names are stable identifiers** (e.g. `'account.two-factor-code'`) used by the mail worker and outbox; they are not interchangeable even when two emails share a layout.

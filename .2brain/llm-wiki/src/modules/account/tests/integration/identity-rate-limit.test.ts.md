@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/identity-rate-limit.test.ts
-sha256: a40824743bc276a1c2b3d445ca801607bce317a6e4931d020d5c8dc97788501a
-generated_at: 2026-09-23T18:13:02.696456+00:00
+sha256: 078bb69a66f6765a88332f3b92f7f60101b6fa00edac49c7c515dafa01a3337f
+generated_at: 2026-10-14T09:10:07.568433+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,28 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests verifying that the account module's rate limiters enforce three independent budget dimensions — identity (submitted email), single address (IP), and address block (IPv4 /24 or IPv6 /64) — and that the MFA-challenge limiter correctly keys by challenge or falls back to the caller's block. The tests exercise the limiters in isolation (via trivial handlers) and also confirm they are actually mounted on the real `/account/signup` and `/account/reset` routes.
+Integration tests that verify the identity (submitted email / account id) and address-block (IPv4 /24, IPv6 /64) dimensions of the account module's rate limiters. Each limiter is exercised against a trivial handler (via the rate-limit harness) rather than a real route, because the property under test—budget keying—belongs to the limiter itself. The file covers "Anti-automation Rung 1" as described in `docs/tools/security.md`.
 
 ## Key elements
 
-- **`withAccountRateLimits`** — Local wrapper around `withReloadedRateLimits` that pre-binds the dynamic import to `@modules/account/rate-limits`, so each test can set env-var overrides and receive a specific limiter export.
-- **`describe('signupLimiters')`** — Asserts the identity budget is consumed per-unique-email on successful (201) signups, and the address budget is consumed across distinct emails from the same caller IP.
-- **`describe('resetRequestLimiters')`** — Asserts the identity budget is consumed on every 200 response (matching `postResetRequest`'s indistinguishable-response design).
-- **`describe('address-block keying')`** — Confirms that IPs within the same /24 (IPv4) or /64 (IPv6) share one block budget, while IPs in different subnets get separate budgets.
-- **`describe('mfaChallengeLimiter')`** — Verifies per-challenge budgeting (6th guess → 429) and that requests with no challenge key on the caller's block rather than a shared anonymous bucket.
-- **`describe('mounted on the real routes')`** — Hits the actual Express routes with `supertest` and asserts the `ratelimit` response header is present, proving the limiter arrays are wired to the router.
+- **`withAccountRateLimits`** — Typed wrapper around `withReloadedRateLimits` that pre-binds the dynamic import of `@modules/account/rate-limits`, so every test case only supplies env overrides and a picker.
+- **`asAccount`** — Stub Express middleware that populates `request.authContext` from an `x-test-account` header, standing in for the real `isAuth` middleware.
+- **`describe('credentialLimiters on an authenticated route')`** — Asserts that an authenticated caller's budget is keyed on the *account* (not the address block) and that an unauthenticated attempt falls back to the email it names.
+- **`describe('signupLimiters')`** — Asserts identity-budget spending on successful signups and cross-email address-budget enforcement from the same IP.
+- **`describe('resetRequestLimiters')`** — Asserts the identity budget is consumed on the indistinguishable 200 response (every attempt counts).
+- **`describe('address-block keying')`** — Verifies that distinct IPs within the same /24 (IPv4) or /64 (IPv6) share one block budget, while a different block gets a fresh one.
+- **`describe('mfaChallengeLimiter')`** — Verifies per-challenge budgets, the OAuth cookie-based challenge key, and the fallback to the address-block key when no challenge is present.
 
 ## Relationships
 
-- **`src/modules/account/rate-limits.ts`** — The module under test. Each test dynamically imports it (via `withReloadedRateLimits`) with different `NODE_*` env overrides to isolate one budget dimension at a time.
-- **`tests/support/rate-limit-harness.ts`** — Supplies `appAnswering` (builds a minimal Express app with the given limiters), `statusOf` (extracts the HTTP status from a supertest response), and `withReloadedRateLimits` (per-test env-var override + module re-import).
-- **`tests/support/http.ts`** — Provides `api()` for the "mounted on real routes" section, which makes requests against the full application rather than a trivial handler.
-- **`tests/support/setup-test-db.ts`** — Called once in the "mounted on real routes" block so the reset-route test can create a real user row.
-- **`src/modules/users/tests/factories.ts`** — Supplies `createUser` and `PLAIN_PASSWORD` for the mounted-route assertions.
+- **`src/modules/account/rate-limits.ts`** — The module under test; each test dynamically imports it (via `withReloadedRateLimits`) to obtain `credentialLimiters`, `signupLimiters`, `resetRequestLimiters`, and `mfaChallengeLimiter`.
+- **`tests/support/rate-limit-harness.ts`** — Provides `appAnswering` (builds an Express app with a fixed status response and the limiters), `statusOf` (fires a request and returns the status code), and `withReloadedRateLimits` (resets the module registry and re-imports with env overrides).
+- **`tests/support/stub.ts`** — Provides `asStub`, used to fabricate a minimal `AuthContext` object for the `asAccount` middleware.
+- **`src/types/auth-context.ts` / `src/types/index.ts`** — Supply the `AuthContext` type used in the `asStub<AuthContext>` cast.
+- **`src/modules/users/tests/factories.ts`** — Imports `createUser` and `PLAIN_PASSWORD` (available for auth-related fixtures; used in the truncated portion of the file).
+- **`tests/support/http.ts`** — Exports `api` (app construction helper imported for potential use in fuller test scenarios).
+- **`tests/support/setup-test-db.ts`** — Imports `setupTestDb`; relevant when tests need a clean database state.
 
 ## Notes
 
-- `jest.resetModules()` runs in every `afterEach`; this is required so the next test's `withReloadedRateLimits` can re-import `rate-limits.ts` with a fresh env-var set. Omitting it causes silent budget-carry-over between cases.
-- The trivial-handler tests (all except "mounted on real routes") intentionally avoid the real route handlers — the doc comment states the property under test belongs to the limiter, not to `postSignup`/`postResetRequest`.
-- A parallel test for the feedback module's `contactLimiters` lives at `src/modules/feedback/tests/integration/contact-identity-rate-limit.test.ts`; the two share the same three-dimension shape but are tested independently.
-- `X-Forwarded-For` is used to simulate distinct client IPs; the limiter reads this header (or equivalent) for the address and block dimensions.
+- Every `describe` block calls `jest.resetModules()` in `afterEach`; this is required because `withReloadedRateLimits` relies on a fresh module registry to pick up env-var overrides. Omitting it causes budget counters to leak between tests.
+- The tests intentionally do **not** exercise real route handlers (`postSignup`, `postResetRequest`). They mount limiters on a dummy endpoint that returns a fixed status, isolating the keying logic.
+- `feedback`'s `contactLimiters` share the same three-key shape; their tests live in `src/modules/feedback/tests/integration/contact-identity-rate-limit.test.ts` and are intentionally separate.
+- The `mfaChallengeLimiter` "no challenge" case asserts the fallback key is the caller's *address block*, not a single shared key—protecting against two anonymous callers exhausting one bucket. See `challengeKey` in `account/rate-limits.ts`.

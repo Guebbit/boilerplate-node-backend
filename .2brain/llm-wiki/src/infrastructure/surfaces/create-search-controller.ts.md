@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/surfaces/create-search-controller.ts
-sha256: 1247a7e0dd635af16bf5b71c34e74d779d428c3fd6fc287b92611c70c66fa544
-generated_at: 2026-09-23T17:53:59.203869+00:00
+sha256: d7bdcad04fb2707aa16eda40475d405fad97dc8bf465d2f9ab4b29ba3496e8aa
+generated_at: 2026-10-14T08:19:21.105481+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Factory that builds a standardised search controller (a single Express handler) shared by the `products`, `users`, and `orders` modules. Each module supplies only its entity name, Zod schema, optional input overlay, and search logic; everything else—input reading, validation, response shaping, error handling—is handled here. The `feedback` module intentionally does **not** use this factory.
+Factory that produces a single Express handler for modules exposing both `GET /x` and `POST /x/search` behind one controller. It standardises the request→validate→search→respond pipeline so each module only supplies its own schema, optional input overlay, and search implementation.
 
 ## Key elements
 
-- **`SearchControllerSpec<TSchema, TResult>`** — Interface describing what varies per entity: `entity` (plural name used to derive the operation string), `schema` (Zod validation schema), `extendInput?` (optional overlay function for coercions/request-derived values), and `runSearch` (the module's actual search, receiving validated input and the raw `Request`).
-- **`createSearchController`** — The exported factory. Calls `operationName('get', entity)` to produce a name like `getProducts`, then returns a `namedHandler` that: reads input via `readInput` (surface `'search'`, `stringArrays: ['id']`), applies `extendInput` if present, validates with `parseBody`, executes `runSearch`, responds with `successResponse`, and funnels rejections into `catchAs`.
+- **`SearchControllerSpec<TSchema, TResult>`** (interface) — the per-module contract: `entity` (plural name used to derive the operation label), `schema` (Zod schema for the merged input), optional `extendInput` (overlay for coercions/request-derived values), and `runSearch` (the actual query).
+- **`mergedSearchInput(request, extendInput?)`** (exported function) — calls `readInput` with the `search` surface rules (`stringArrays: ['id']`, `csvLists: ['sort']`) and then applies the module's `extendInput` overlay. Exported separately so the response-cache layer can build its key from the exact same value the controller will validate.
+- **`createSearchController(spec)`** (exported factory) — returns a `namedHandler` that: merges input → `parseBody` against the schema (422 on failure) → `runSearch` → `successResponse`, with errors funneled through `catchAs` under the derived operation name (e.g. `getProducts`).
 
 ## Relationships
 
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs`, `namedHandler`, `operationName`, `parseBody` for handler naming, validation, and error handling.
-- **`src/infrastructure/http/request.ts`** — Imports `readInput` to normalise params/query/body into a single record under the `'search'` surface rules.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` for the 200 reply path.
-- **`src/modules/products/controllers/get-products.ts`**, **`src/modules/users/controllers/get-users.ts`**, **`src/modules/orders/controllers/get-orders.ts`** — Consumer modules that each call `createSearchController` with their own spec to expose `GET /x` and `POST /x/search`.
-- **`src/modules/feedback/controllers/get-feedback.ts`** — Explicitly _not_ a consumer; documented in the file's module comment as an intentional exclusion.
-- **`tests/unit/infrastructure/surfaces/create-search-controller.test.ts`** — Unit tests for this factory.
+- **`@infrastructure/http/controller`** — provides `namedHandler`, `operationName`, `parseBody`, and `catchAs`; the core request-lifecycle primitives this factory composes.
+- **`@infrastructure/http/request`** — provides `readInput`, which performs the surface-specific parameter/query/body merge before validation.
+- **`@infrastructure/http/response`** — provides `successResponse`, used to serialise the search result back to the client.
+- **Module controllers** (`get-products`, `get-orders`, `get-payments`, `get-refunds`, `get-users`, `get-examples`, `get-feedback`, `get-orders-export`) — each is a concrete consumer that calls `createSearchController` with its own `SearchControllerSpec`.
+- **`tests/unit/infrastructure/surfaces/create-search-controller.test.ts`** — unit tests for the factory and `mergedSearchInput`.
 
 ## Notes
 
-- `id` is passed through `stringArrays` rather than `ids`. The `ids` helper collapses repeated query keys to the first value (correct for single-row `update`/`delete`), but search needs batch filtering where `?id=a&id=b` must stay a two-element array.
-- `extendInput` returns **only** the overlay fields, not the full merged object; the factory spreads it over the `readInput` result. Omit it entirely when a module needs no extra coercion.
-- The operation name (`getProducts`, etc.) is the single source of truth for stack-trace labels, request-log lines, and the generated `docs/modules/` tables—changing `entity` changes all of those.
+- `id` is deliberately registered as `stringArrays`, **not** `ids`. `ids` collapses repeated keys to the first value (correct for single-row `update`/`delete`), but would silently drop `?id=a&id=b` down to `?id=a` in a batch search.
+- `sort` uses `csvLists`, which splits only the *query-string* CSV form. A body-supplied CSV string is left intact and rejected by the schema's enum rather than silently accepted as an array.
+- `extendInput` receives the already-merged `readInput` result plus the raw Express `Request`; it must return **only** the overlay object, not a full replacement.
+- The operation name is derived as `get` + entity (e.g. `getProducts`) and appears in stack traces, request-log lines, and the generated `docs/modules/` tables — changing `entity` affects all three.

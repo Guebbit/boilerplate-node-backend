@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/sweep-webhook-retries.ts
-sha256: b52be68a7b1a338f5e4cdf784b2923bbe3ee2315e68c3f4e81e3635bcd4b198c
-generated_at: 2026-10-01T12:37:12.711294+00:00
+sha256: a4c825eeb9387f82462d71a8b982ddbda883c11407a3213aef035b7a0f6d1e1b
+generated_at: 2026-10-14T07:29:00.674939+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A per-minute cron script that turns webhook deliveries whose `nextAttemptAt` has passed back into active delivery attempts. It exists because the retry design (decision (c) in `docs/modules/webhooks.md`) uses a database timestamp rather than a broker delay queue, so something must periodically "wake" due rows.
+Cron entry-point (npm script `sweep:webhook-retries`) that runs every minute to find webhook delivery rows whose `nextAttemptAt` has passed and re-dispatches them—either by publishing to a broker or by sending the HTTP attempt inline when no broker is configured. It exists because the delayed-retry strategy (decision c in the webhooks module docs) parks failed attempts back in `pending` with a future timestamp rather than using a broker delay queue, so something must periodically pull due rows back into the delivery path.
 
 ## Key elements
 
-- **`main`** — thin async function: starts the database connection, then calls `sweepDueWebhookDeliveries()`. No further cleanup; `runScript` handles teardown.
-- **`runScript('sweep:webhook-retries', main, stopDatabase)`** — entry-point wrapper (from `scripts/run-script.ts`) that registers the shutdown hook.
+- **`main`** – async function; calls `startJob()` (DB connection) then `sweepDueWebhookDeliveries()`. Resolves void; no return value is consumed.
+- **`runScript('sweep:webhook-retries', main, stopDatabase)`** – wraps `main` with the shared script lifecycle: records outcome under the `sweep:webhook-retries` key for `/observability/health`, and calls `stopDatabase` on both success and failure paths.
+- **Import ordering** – `@infrastructure/config/dotenv` and `@infrastructure/runtime/mongoose-boot` are imported before any model-bearing module so Mongoose schema defaults are set at build time.
 
 ## Relationships
 
-- **`scripts/run-script.ts`** — provides the `runScript` helper that wires up CLI lifecycle (error handling, signal cleanup, `stopDatabase` on exit).
-- **`src/infrastructure/runtime/database.ts`** — supplies `start()` to open a pool and `stopDatabase` as the registered shutdown callback.
-- **`src/modules/webhooks/index.ts`** — re-exports `sweepDueWebhookDeliveries`; this script is the only caller for the scheduled-retry path.
-- **`src/modules/webhooks/services/sweep.ts`** — contains the actual `sweepDueWebhookDeliveries` implementation (claim-and-publish-or-send logic).
+- **`scripts/run-script.ts`** – provides the `runScript` wrapper that owns process exit, health recording, and teardown.
+- **`src/infrastructure/runtime/database.ts`** – supplies `startJob` (connection) and `stopDatabase` (teardown) used by `runScript`.
+- **`src/infrastructure/runtime/mongoose-boot.ts`** – must load before any schema/model import; sets Mongoose connection defaults.
+- **`src/infrastructure/config/dotenv.ts`** – loads environment variables before anything else.
+- **`src/modules/webhooks/index.ts`** – re-exports `sweepDueWebhookDeliveries`, the single function this script calls.
+- **`src/modules/webhooks/services/sweep.ts`** – implements the actual claim-and-publish (or claim-and-send) logic for each due delivery row.
+- **`docker/observability/prometheus.alert-rules.yaml`** – the `sweep:webhook-retries` job name is the key under which `runScript` records health; alert rules can key off that metric.
 
 ## Notes
 
-- Runs **every minute** (per-minute cron container, unlike nightly `reap:*` / `sweep:order-effects` jobs). Idempotent by design: the per-row claim means an overlapping run simply lets one HTTP attempt through; a missed run costs nothing because the next tick picks the row up.
-- Unlike `sweep-order-effects.ts`, **no domain event is emitted**, so there is no listener/module-registration step.
-- Removal is owned by the `webhooks` module: delete the script, the `sweep:webhook-retries` npm script entry, and the corresponding `docker/crontab` line together.
+- **Idempotent & overlap-safe.** A second run starting before the first finishes is harmless: the per-row claim guarantees only one HTTP attempt goes through.
+- **No domain event.** Unlike `sweep-order-effects.ts`, this script emits no domain event and therefore registers no module listeners.
+- **Removal contract.** Deleting this file also requires removing the `sweep:webhook-retries` npm script and its `docker/crontab` entry; the script is owned by the `webhooks` module.
+- **Frequency differs from `reap:*` jobs.** This sweeps every minute; nightly `reap` jobs run on a much longer cadence. Do not assume shared scheduling semantics.

@@ -1,47 +1,44 @@
 ---
 source: src/infrastructure/http/middlewares/upload.ts
-sha256: c67d818ff2576e0775cbf764e2b8f20b7131297df20766b1678ca62d7fe41fdb
-generated_at: 2026-09-27T14:10:37.402430+00:00
+sha256: 9c77856bb3e62b4137638d599cad79be05fb8c87d8983471a3d821fe12b49381
+generated_at: 2026-10-14T07:59:05.756683+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # src/infrastructure/http/middlewares/upload.ts
 
 ## Purpose
-Defines the complete multer-based image-upload pipeline: staging directory, random filename generation, MIME-type filtering (both declared and byte-level), size limits, and post-write validation. It is the *write* side of image uploads; the read side (`readUploadedImage`) lives in `../uploads`. Mounted per-route by the account, products, and users modules.
+
+Defines the multer-based file-upload pipeline: where uploads land (staging dir), how they are named (128-bit random hex), which MIME types are accepted, and size/count limits. Exports both the raw multer middleware and a post-write validation middleware that confirms the file's actual bytes match the declared type. Files live in a non-public staging directory until a downstream quarantine step commits them.
 
 ## Key elements
 
-- **`uploadStagingPath()`** — Returns the temp staging directory (`NODE_UPLOAD_STAGING_PATH` or `tmpdir()/node-api-uploads`). Files land here *before* acceptance; never directly in a public path.
-- **`resolveUploadDestination`** — Multer destination callback. Whitelists `file.fieldname` against the single constant `IMAGE_UPLOAD_FIELD` (`'imageUpload'`); rejects unknown fields. Creates the staging dir on demand.
-- **`resolveUploadFilename`** — Multer filename callback. Generates `randomBytes(16).toString('hex')` + a safe extension derived from the *declared* MIME. Never reuses the client-supplied `originalname`.
-- **`fileStorage`** — The `multer.diskStorage` instance wiring the two callbacks above.
-- **`fileFilter`** — First gate (pre-write). Checks the client-declared `mimetype` against `ACCEPTED_UPLOAD_MIMETYPES`. Silently drops the file (`callback(null, false)`); the request still succeeds with no `request.file`.
-- **`maxUploadBytes()`** — Reads `NODE_MAX_UPLOAD_BYTES` at call time (default 5 MB). Called lazily so `.env` loading is respected.
-- **`rawUpload()` / `configuredUpload`** — Memoised `multer` instance with `limits` (fileSize, files: 1, fields: 32, fieldSize: 100 KB, parts: 64). Built once because multer freezes limits at construction.
-- **`withLocaleRestored`** — Wraps a RequestHandler so `AsyncLocalStorage` locale context survives multer's stream consumption (which breaks `AsyncLocalStorage` propagation through `EventEmitter` listeners).
-- **`validateUploadedImages`** — Second gate (post-write). Reads the staged file bytes, calls `identifyImageFile` to confirm the actual format matches the declared MIME. On mismatch: deletes the file and responds 422 via `rejectResponse`.
-- **`quarantineUploadedImages`** (referenced in comments) — Commits an accepted file from staging to its final store (`imageStore`) and triggers `digestQuarantinedImage` in the worker. Makes "written" and "stored" two distinct moments, enabling a remote-bucket backend.
+- **`uploadStagingPath()`** — Returns the staging directory from `uploadConfig().NODE_UPLOAD_STAGING_PATH`. Not the public directory; files here are not yet reachable by clients.
+- **`resolveUploadDestination`** — Multer `destination` callback. Rejects any field name other than `'imageUpload'` (whitelist), creates the staging dir on demand, passes the path to multer.
+- **`resolveUploadFilename`** — Multer `filename` callback. Generates `randomBytes(16).toString('hex')` + a safe extension derived from the declared MIME. Never uses the client-supplied `originalname`.
+- **`fileStorage`** — `multer.diskStorage` instance combining the two callbacks above.
+- **`fileFilter`** — Pre-write gate. Silently drops the file (`callback(null, false)`) if the declared MIME is not in `ACCEPTED_UPLOAD_MIMETYPES`. Runs before the file touches disk.
+- **`maxUploadBytes()`** — Returns `uploadConfig().NODE_MAX_UPLOAD_BYTES` (default 5 MB). Read at call time for testability.
+- **`rawUpload()`** — Memoised (`configuredUpload`) factory that returns the single shared `Multer` instance with `fileStorage`, `fileFilter`, and explicit `limits` (`fileSize`, `files: 1`, `fields: 32`, `fieldSize: 100 KiB`, `parts: 64`).
+- **`withLocaleRestored`** — Internal wrapper around any `RequestHandler` that re-establishes the i18n `AsyncLocalStorage` context after multer's stream consumption breaks it.
+- **`validateUploadedImages`** — Post-write middleware. Reads each staged file, calls `identifyImageFile` to verify the magic bytes match the declared MIME (and are a recognised image). Deletes the file and responds 422 on mismatch; calls `next()` on success.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/image-signatures.ts`** — Source of `ACCEPTED_UPLOAD_MIMETYPES`, `extensionForImage`, `identifyImageFile`, and `normaliseDeclaredImageMime`; the only authority on what formats are legal.
-- **`src/infrastructure/adapters/filesystem.ts`** — Provides `deleteFile`, used to clean up rejected uploads from staging.
-- **`src/infrastructure/adapters/image-store.ts`** — `imageStore` is the final destination for accepted files (abstracts local vs. remote bucket).
-- **`src/infrastructure/adapters/image.worker.ts`** — `digestQuarantinedImage` is called during quarantine to process the image in a worker thread.
-- **`src/infrastructure/adapters/queue.ts`** — `queueState` is consulted (likely to gate whether the worker pipeline is ready before accepting an upload).
-- **`src/infrastructure/http/uploads.ts`** — `getFormFiles` extracts the list of staged file paths from `request.files` after multer has run.
-- **`src/infrastructure/http/response.ts`** — `rejectResponse` sends the 422 on byte-level validation failure.
-- **`src/infrastructure/i18n/context.ts` / `i18n/index.ts`** — `createLocaleContext`, `runWithLocaleContext`, `t` are used by `withLocaleRestored` and for user-facing error strings.
-- **`src/infrastructure/runtime/environment.ts`** — `environmentNumber` reads `NODE_MAX_UPLOAD_BYTES` from the process environment.
-- **`src/infrastructure/adapters/logger.ts`** — `logger` for structured logging of upload events/errors.
-- **`src/modules/account/routes.ts`, `src/modules/products/routes.ts`, `src/modules/users/routes.ts`** — The three route files that mount the `rawUpload()` middleware (wrapped with `withLocaleRestored`) and then chain `validateUploadedImages` / `quarantineUploadedImages`.
-- **`shared/contracts/openapi.root.yaml`** — Documents the multipart upload endpoints (field name, size limits, accepted types) that this middleware enforces.
+- **`@infrastructure/http/config`** — Source of `NODE_UPLOAD_STAGING_PATH` and `NODE_MAX_UPLOAD_BYTES`.
+- **`@infrastructure/adapters/image-signatures`** — Provides `ACCEPTED_UPLOAD_MIMETYPES`, `extensionForImage`, `identifyImageFile`, `normaliseDeclaredImageMime` used by both the pre- and post-write gates.
+- **`@infrastructure/adapters/filesystem`** — `deleteFile` is called to remove quarantined/rejected files from staging.
+- **`@infrastructure/http/uploads`** — `getFormFiles` extracts staged file paths; `readUploadedImage` is the read-side counterpart (lives there, not here).
+- **`@infrastructure/adapters/image-store` / `image.worker` / `queue`** — Downstream consumers that pick up staged files after this middleware's validation passes (quarantine, digest, enqueue).
+- **`@infrastructure/i18n`** — `createLocaleContext` / `runWithLocaleContext` used by `withLocaleRestored` to survive the stream-consumption boundary.
+- **`@infrastructure/http/response`** — `rejectResponse` used when `validateUploadedImages` returns 422.
+- **`src/modules/account/routes.ts`, `src/modules/example/routes.ts`** — Route modules that attach the upload middleware per-route.
+- **`shared/contracts/openapi.root.yaml`** — API contract describing the upload endpoints this middleware serves.
 
 ## Notes
 
-- **Two-gate design:** `fileFilter` (header-based, silent drop) runs *before* the file touches disk; `validateUploadedImages` (byte-based, 422 response) runs *after*. The former prevents useless I/O; the latter prevents format spoofing.
-- **Staging ≠ public:** Files in the staging directory are not web-served. They only become publicly reachable after `quarantineUploadedImages` moves them to `imageStore`. This gap is what allows a remote S3-compatible bucket as the final store.
-- **Locale fix is structural:** `withLocaleRestored` exists because multer's internal stream reading breaks `AsyncLocalStorage` propagation. Without it, every handler after the upload runs in the boot-language context. Routes that forget the wrapper fail silently in non-default locales.
-- **`fileFilter` is intentionally silent:** It calls `callback(null, false)` (no error) so the request "succeeds" with zero files, rather than throwing into the central error handler. `validateUploadedImages` is the opposite — it writes a direct 422. Don't "fix" one to match the other.
-- **Multer is memoised:** `configuredUpload` is assigned once. Because `limits` are frozen at `multer()` construction, reading `maxUploadBytes()` lazily only helps if the first request (and thus first `rawUpload()` call) happens *after* `.env` is loaded. A test that sets the env var and then imports the module for the first time will see the correct value.
+- **Memoisation is load-bearing.** `rawUpload()` caches the `Multer` instance because `limits` are frozen at construction. Calling it before `.env` is loaded would bake in wrong values; the lazy-init pattern avoids that.
+- **Two-gate validation is intentional.** `fileFilter` checks the *declared* MIME before the write (cheap rejection). `validateUploadedImages` checks the *actual* bytes after the write. Neither is sufficient alone.
+- **Locale context breaks after multer.** Multer consumes the request stream via a socket-read callback whose async context is the connection's, not the route handler's. `withLocaleRestored` must wrap the middleware at the mount site; forgetting it causes silent i18n fallback.
+- **Staging ≠ public.** Files in the staging directory are not served by any static handler. They only become reachable after the quarantine/store step moves them. Do not point a static server at this directory.
+- **Multer's default `fileSize` is unlimited.** The explicit `limits.fileSize` here is a DoS guard, not an optimisation.

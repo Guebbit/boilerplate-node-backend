@@ -1,7 +1,7 @@
 ---
 source: src/modules/cart/tests/unit/retention.test.ts
-sha256: da3d69142521d603c1296d8137f0f4505baeca8591c6b09c4f4149960c57a726
-generated_at: 2026-09-23T18:34:44.692387+00:00
+sha256: 84a8d2a60a93d26d7856196af4a6f56c947575304bac7fb14ff68dfb8841bc43
+generated_at: 2026-10-14T15:19:50.992263+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,23 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit test that verifies the cart collection's TTL (time-to-live) index is created with the correct `expireAfterSeconds` value derived from the `NODE_CART_RETENTION_DAYS` environment variable. Because the model reads that variable only once at import time, the test must force a fresh module evaluation for each scenario.
+Unit test that verifies the cart collection's TTL index is created with the correct `expireAfterSeconds` value derived from `NODE_CART_RETENTION_DAYS`. Because the TTL index is built once at import time in the model, the test re-imports the model under a fresh module registry to trigger that import-time read again.
 
 ## Key elements
 
-- **`loadSchema()`** — Calls `jest.resetModules()` then dynamically re-imports `@modules/cart/model`, returning `cartSchema`. Ensures the import-time env-var read re-executes for each test case.
-- **`ttlSeconds(schema)`** — Scans a Mongoose `Schema`'s declared indexes and returns the first non-undefined `expireAfterSeconds` value.
-- **`describe('cart retention')`** — Two test cases: one asserting the 365-day default when the env var is unset, one asserting a custom value (`30` days). Each restores the env var and resets the module registry in `afterEach`.
+- **`loadSchema()`** — Calls `jest.resetModules()`, dynamically re-imports `@modules/cart/model`, and returns the exported `cartSchema`. This forces the import-time TTL configuration to re-execute with the current environment.
+- **`ttlSeconds(schema)`** — Scans a Mongoose `Schema`'s declared indexes for the first non-undefined `expireAfterSeconds` value and returns it.
+- **`describe('cart retention')`** — Two test cases:
+  - *defaults to 365 days when the variable is unset* — asserts TTL is `365 * 24 * 60 * 60` seconds.
+  - *honours a configured retention* — sets the variable to `'30'` and asserts TTL is `30 * 24 * 60 * 60` seconds.
+  - `afterEach` resets the Jest module registry to prevent cross-test leakage.
 
 ## Relationships
 
-- **`src/modules/cart/model.ts`** — The sole production dependency. Imported dynamically via `import('@modules/cart/model')` to access `cartSchema` and its TTL index declaration.
+- **`src/modules/cart/model.ts`** — The module under test. Imported dynamically (not statically) so each call to `loadSchema` re-evaluates it and reads `NODE_CART_RETENTION_DAYS` fresh.
+- **`tests/support/environment.ts`** — Provides `setEnvironment`, used to stub `NODE_CART_RETENTION_DAYS` before each test's dynamic import.
 
 ## Notes
 
-- The top-level `import type { Schema } from 'mongoose'` is intentionally present (per the inline comment) to force TypeScript to treat this file as a **module** rather than a global script, preventing `loadSchema`/`ttlSeconds` from colliding with identically-named bindings in the analogous `audit-logs` retention test.
-- Each test relies on `jest.resetModules()` so that the model's one-time env-var read at import time is re-evaluated; simply mutating `process.env` in the test body is not sufficient.
-- The test mirrors the structure of `audit-logs/tests/unit/retention.test.ts` (explicitly referenced in the module docstring).
+- The `import type { Schema } from 'mongoose'` line is load-bearing, not just a type annotation: without a top-level import the file would be treated as a *global script* by TypeScript, and its top-level `loadSchema`/`ttlSeconds` would collide with identically-named globals in `audit-logs/tests/unit/retention.test.ts`.
+- This file intentionally mirrors `audit-logs/tests/unit/retention.test.ts`; changes to one pattern (e.g., the resetModules + dynamic-import approach) should be considered for the other.

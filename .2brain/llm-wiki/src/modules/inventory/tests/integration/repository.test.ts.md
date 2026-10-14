@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/repository.test.ts
-sha256: f13b725a9ca8ac0b3d1c8772a7919fdd1fcc19a0490f9a8e6761a63d1e570678
-generated_at: 2026-09-23T18:46:59.432903+00:00
+sha256: 11aa98dbbcb886789dfbc523e8937fd5eeccf4552018213c186113521bcb2785
+generated_at: 2026-10-14T16:03:38.762269+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests for `stockLevelRepository`'s aggregate read methods (`sumReserved`, `stockBoard`, `lowAvailabilityProductIds`) against a real MongoDB instance. Its primary concern is asserting the `.at(0)` fallback path: a `$group`/`$facet` pipeline on an empty collection yields zero rows rather than a zeroed row, so the guard the calling code relies on is verified explicitly. Transition-path methods (`applyDelta`, `ensure`) are intentionally out of scope here — they belong to the service tests.
+Integration tests for `stockLevelRepository`'s aggregate read methods (`sumReserved`, `stockBoard`, `lowAvailabilityProductIds`) against a real MongoDB instance. The file verifies zero-state behavior (empty collection returns sane defaults, not a missing row) and documents the deliberate design choice that these gauges operate over the *entire* catalogue regardless of product visibility. Transition-path logic (`applyDelta`, `ensure`) is intentionally excluded — it is covered by the services-layer tests.
 
 ## Key elements
 
-- **`describe('an empty collection')`** — three tests confirming each aggregate returns a sensible zero/empty value when the collection has no documents, exercising the `.at(0)` arm.
-- **`describe('the two stock gauges count different populations')`** — asserts that `lowAvailabilityProductIds` and `sumReserved` both include inactive/hidden products by design (no visibility filter at the repository layer), using `createProduct` to seed visible, all-reserved, and hidden fixtures.
-- **`beforeEach(() => stockLevelModel.deleteMany({}))`** — cleans only the stock-level collection between tests in the second block (visibility is applied by `products`, not by a join here).
+- **`setupTestDb()`** (from `@tests/setup-test-db`) — spins up a real Mongo instance for the suite.
+- **`describe('an empty collection')`** — three tests asserting that `sumReserved()` → `0`, `stockBoard()` → `{ items: [], totalItems: 0 }`, and `lowAvailabilityProductIds()` → `[]` when the collection has no documents. This pins the `.at(0)` guard that the calling code relies on, since a `$group`/`$facet` pipeline yields no row at all rather than a zeroed one.
+- **`describe('the two stock gauges count different populations')`** — seeds products via `createProduct` and asserts that both `lowAvailabilityProductIds` and `sumReserved` include *inactive* products in their counts. Uses `stockLevelModel.deleteMany({})` in `beforeEach` to isolate the stock-level collection.
+- **Availability vs. onHand distinction** — the test explicitly includes a fully-reserved product (`onHand: 40, reserved: 40`) as a low-availability candidate, confirming the gauge measures `onHand - reserved`, not raw `onHand`.
 
 ## Relationships
 
-- **`src/modules/inventory/repository.ts`** — the SUT; `stockLevelRepository` is imported and its three aggregate methods are the sole things under test.
-- **`src/modules/inventory/model.ts`** — `stockLevelModel` is used exclusively for `deleteMany` cleanup in `beforeEach`.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds fixture products (with `active`, `onHand`, `reserved` fields) so the stock-level aggregates have rows to read.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` provisions and connects a real MongoDB instance for the entire suite.
+- **`src/modules/inventory/repository.ts`** — the system under test; imports `stockLevelRepository`.
+- **`src/modules/inventory/model.ts`** — imports `stockLevelModel` solely for `deleteMany` cleanup in `beforeEach`.
+- **`src/modules/products/tests/factories.ts`** — imports `createProduct` to seed products with specific `active`/`onHand`/`reserved` values.
+- **`tests/support/setup-test-db.ts`** — imports and calls `setupTestDb()` to provision the real Mongo connection.
 
 ## Notes
 
-- The file is deliberately narrow: it tests aggregates **only**. `applyDelta` and `ensure` guarantees are asserted in `src/modules/inventory/tests/integration/service.test.ts`.
-- The "two gauges" distinction is a documented domain rule (see `docs/modules/inventory-reservations.md` § "The threshold, and its two readers"): `lowAvailabilityProductIds` returns candidates across the whole catalogue (admin restocking needs inactive SKUs), while the service's `lowStockCount` narrows to publicly visible products. This repository applies **no** visibility filter; that half of the behaviour is asserted in the service tests.
-- `sumReserved` similarly has no visibility scope — an inactive product still holds reserved units, and the total must reflect that.
-- The all-reserved product (`onHand: 40, reserved: 40`) is an explicit candidate in the low-availability test: availability is `onHand − reserved`, not a bare `$lte: onHand` check.
+- **Visibility is not this repository's concern.** `lowAvailabilityProductIds` and `sumReserved` intentionally do *not* filter by `active`. The public-visibility narrowing is applied downstream by `services/levels.ts` (`lowStockCount`). The "two numbers will not match, and should not" invariant is documented in `docs/modules/inventory-reservations.md` §"The threshold, and its two readers."
+- **Transition path is out of scope here.** `applyDelta` and `ensure` are tested in `../../services/transition.ts`'s own test file, where their guarantees are contractually asserted.
+- **`beforeEach` clears only the stock-level collection**, not `products`. Both gauges query *from* the stock-level collection; visibility is applied by `products` afterwards, so deleting the stock-level rows is sufficient isolation.
+- **The `.at(0)` guard is a load-bearing assumption.** Mongo's `$group`/`$facet` returns an empty array (not a zero-filled row) on an empty collection. These tests pin that behavior so the repository's defensive `.at(0) ?? 0` arm is verified, not merely assumed.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/services/tokens.ts
-sha256: b2551dca382d1ae923807feed1d87a1cec5b2c08d8805f4a08ccc258c6b5aea5
-generated_at: 2026-09-27T14:31:02.828068+00:00
+sha256: 6c6e963f07e34d4ad5f7e76e7bf769990727c94524deb6937d1d8adc156e7c76
+generated_at: 2026-10-14T08:54:44.146351+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,37 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Single owner of every non-password token flow on a user account (reset, verification, delete-confirmation, refresh sessions). Defines what "live" means in one place and exposes find / spend / redeem primitives plus the `GET /account/sessions` listing. Keeping the semantics here means `two-factor.ts` and the four confirm controllers all agree on expiry, hashing, and race-handling without duplicating the rules.
+Central service for all one-time verification tokens an account holds in the `verificationtokens` collection — password reset, email verification, email change (and undo), account deletion, and the MFA login challenge. It owns the "live" definition (exists, correct type, not expired), the find/spend/redeem split, and the rejection audit+metric path. Plaintext tokens are generated here and returned to the caller for the emailed link or challenge response; only the hash is persisted.
 
 ## Key elements
 
-- **`findLiveTokenEntry(type, token)`** — Locates the account holding a live token of `type` *without* spending it. Returns `{ user, entry }` or `undefined` for every refusal. The `entry` is needed by `two-factor.ts` to read back `entry.amr` off an `MFA_CHALLENGE`.
-- **`findLiveToken(type, token)`** — Thinner wrapper around the above; discards the entry and returns only the `UserDocument`.
-- **`spendLiveToken(user, token)`** — Atomically removes the token via `userService.consumeToken`. Returns `true` only for the request whose own `$pull` won the race; `false` (race-loser) is indistinguishable from "token never existed."
-- **`redeemLiveToken(type, token)`** — Composes find + spend in one call for the four confirm controllers that have no work of their own between the two steps.
-- **`toSession(token, cookieToken?)`** *(module-private)* — Maps a stored refresh-token subdocument to the wire `Session` shape. The raw token value never appears in the output; the subdocument `_id` is the handle.
-- **`sessionsList(userId, cookieToken?)`** — Public entry for `GET /account/sessions`. Filters to live refresh tokens only (other token kinds are one-time secrets, not sessions) and returns `ResponseSuccess | ResponseReject`.
+- **`issueToken(userId, type, ttlMs, amr?)`** — Generates a 128-bit hex token, stores its hash with `sentAt`/`expiresAt` (and optional `amr` for MFA), and returns the plaintext. A kind that allows one live link replaces the prior one in the same atomic write.
+- **`removeTokens(userId, types)`** — Deletes every token of the given kinds for an account.
+- **`tokenSentAt(userId, type)`** — Returns the last `sentAt` for a kind, used by resend-cooldown logic.
+- **`findLiveTokenEntry(type, token)`** — Looks up the live token row and the owning user (with credentials). Returns `{ user, entry }` or `undefined`. The `entry` exposes fields like `amr` needed by the MFA challenge flow.
+- **`findLiveToken(type, token)`** — Thin wrapper around `findLiveTokenEntry` that returns only the user.
+- **`spendLiveToken(type, token)`** — Atomically deletes the token row. Returns `true` only for the request whose write actually removed it (the race loser gets `false` and is indistinguishable from a missing token).
+- **`redeemLiveToken(type, token)`** — Composes `findLiveToken` → `spendLiveToken` for confirm controllers with no work between the two halves.
+- **`OneTimeTokenFlow`** (type) — Union of the four flows that spend a link token: `password_reset | email_verify | email_change | account_delete`.
+- **`recordOneTimeTokenRejected(context, flow)`** — Increments the `auth_one_time_token_rejected_total` counter and writes an audit entry.
 
 ## Relationships
 
-- **`@modules/users`** (`service.ts`, `model.ts`) — Source of `userService`, `hashToken`, `isLiveRefreshSession`, `Token`, `UserDocument`. All read/write of the `tokens` array goes through `userService`; this file never touches the DB directly.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the API responses from `sessionsList`.
-- **`@infrastructure/i18n`** — `t()` localises the "user not found" reject message.
-- **`@types`** — `Session` type defines the wire contract for `toSession`.
-- **`services/two-factor.ts`** — Consumes `findLiveToken` + `spendLiveToken` as separate steps (it performs MFA work between them). The `entry` returned by `findLiveTokenEntry` exists specifically for this caller.
-- **`services/index.ts`** — Barrel re-exports this module's public functions.
-- **`tests/unit/two-factor.test.ts`** — Exercises the find/spend path indirectly through the two-factor service.
+- **`src/modules/account/repository.ts`** — All token reads/writes go through `verificationTokenRepository` (`issue`, `removeOfTypes`, `lastSentAt`, `findLive`, `spend`). This file never touches the collection directly.
+- **`src/infrastructure/security/hash-token.ts`** — Every token value is passed through `hashToken` before being stored or compared; plaintext never hits the DB.
+- **`src/modules/users/index.ts`** — `findLiveTokenEntry` / `redeemLiveToken` resolve the owning user via `userService.findByIdWithCredentials`.
+- **`src/modules/account/token-types.ts`** — Provides the `VerificationTokenType` enum used as the discriminant throughout.
+- **`src/modules/account/services/password-reset.ts`** — Uses `findLiveTokenEntry` + `spendLiveToken` *separately* (needs the user for a breach check before spending), not `redeemLiveToken`.
+- **`src/modules/account/services/two-factor-challenge.ts`** — Uses `findLiveTokenEntry` to read `entry.amr`, then `spendLiveToken` independently.
+- **`src/modules/account/services/email-change.ts`**, **`verification.ts`**, **`deletion-request.ts`** — Issue tokens via `issueToken`; confirm via `redeemLiveToken`.
+- **`src/modules/account/services/revocation.ts`** — Calls `removeTokens` to invalidate outstanding links.
+- **`src/modules/account/services/index.ts`** — Re-exports this module for consumers.
+- **`src/infrastructure/observability/audit.ts`** + **`src/modules/account/audit.ts`** + **`src/modules/account/metrics.ts`** — `recordOneTimeTokenRejected` writes an audit line and increments a Prometheus counter.
 
 ## Notes
 
-- **Tokens are hashed at rest.** `token.token` on the document is a digest. Always `hashToken(rawValue)` before comparing or looking up.
-- **Absent `expiration` = never expires.** This is how a non-positive TTL is stored. Treating a missing field as "already expired" would silently revoke those tokens.
-- **Race losers are silent.** `spendLiveToken` → `false` and "token never existed" produce the same `undefined` from `redeemLiveToken`. There is no distinct error path for double-use.
-- **`tokens` is `select: false`** on the user model. Any query that needs them must explicitly request the field (as `findByIdWithCredentials` does); a plain `findById` will not include them.
-- **`current` flag is cookie-based.** Bearer-only callers (no refresh cookie) will see `current: false` on every row — by design, not a bug.
-- **`lastUsedAt` is omitted, not zeroed.** A session that has never been exchanged renders without the field rather than showing its issue time as a "last used" value.
+- **Deliberate refusal ambiguity.** Every failure mode (wrong type, expired, wrong hash, already spent) returns `undefined` / `false` with no reason. Do not add distinguishing error messages here.
+- **`redeemLiveToken` is not universal.** The password-reset and two-factor flows intentionally call `findLiveTokenEntry` and `spendLiveToken` separately because they need the user/entry *before* the spend. Only "dumb" confirm controllers should use the composed helper.
+- **Race safety.** `spendLiveToken` is the only point where a token is deleted; the repository guarantees that of N simultaneous spends, exactly one returns `true`.
+- **Metric prefix.** Rejections use `auth.` (not `security.`) because the expected cause is a customer following a stale or mistyped link, not an attack — it should not page the platform operator.
+- **`amr` is optional and MFA-only.** It records how the first factor was proven during the login challenge; it is absent on all other token types.

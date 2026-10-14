@@ -1,7 +1,7 @@
 ---
 source: src/infrastructure/observability/analytics/umami.ts
-sha256: 1db40f01c5da09234006f7c0dd36c409b77795b851892ec24f22c0ae5765917c
-generated_at: 2026-09-27T14:12:43.573008+00:00
+sha256: a5b9df809486fd8ccfafae33aa60049f9fcbe957c329bed3213f4bf0c338bafb
+generated_at: 2026-10-14T08:04:56.886434+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the `AnalyticsProvider` port for Umami, the self-hosted analytics service the compose stack already runs. It posts events to Umami's `/api/send` endpoint over plain HTTP (no SDK), placing server-side funnel events into the same database as browser-side tracking, so the entire shared funnel is queryable in one place.
+The default analytics provider for the backend. It implements the `AnalyticsProvider` port by POSTing each event as a plain HTTP request to Umami's `/api/send` collect endpoint — the same endpoint the browser tracking script hits — so server-side and client-side events land in the same Umami database without a server SDK.
 
 ## Key elements
 
-- **`umamiAnalyticsProvider`** (export) — the singleton `AnalyticsProvider` object with `name`, `configured()`, `capture()`, and `shutdown()`.
-- **`capture(event)`** — fire-and-forget `POST` to `{host}/api/send`. Applies a 2 s `AbortSignal.timeout`, injects a `User-Agent` (required by Umami or the event is silently dropped), sets `X-Forwarded-For` from `clientIp`, and maps event fields into Umami's `data` map. Never awaited by callers.
-- **`configured()`** — returns `true` only if both `NODE_UMAMI_INGEST_HOST` (or `NODE_UMAMI_HOST`) and `NODE_UMAMI_WEBSITE_ID` are set. Used for health reporting.
-- **`shutdown()`** — resolves immediately; in-flight requests are deliberately not awaited so they never block the deploy/shutdown chain.
-- **`stripPort(host)`** (module-private) — removes the port from a `Host` header value before sending it as Umami's `hostname` field. Handles IPv6 bracket notation.
-- **`buildEventData(event)`** (module-private) — flattens `AnalyticsEvent` into the `data` record: caller-supplied `properties` first, then `user_id` ← `distinctId`, and `trace_id` ← `traceId` (omitted if absent).
-- **`readConfig()`** (module-private) — reads env vars on every call (no caching) so the value always reflects the current environment. Strips trailing slashes from the host. Falls back from `NODE_UMAMI_INGEST_HOST` to `NODE_UMAMI_HOST`.
-- **`SERVER_USER_AGENT`** (module-private) — constant UA string used when `event.userAgent` is absent (webhooks, jobs, queue consumers).
-- **`warnedAboutConfiguration`** (module-private) — one-shot guard so a misconfigured provider logs a warning once, not per-event.
+- **`umamiAnalyticsProvider`** (exported) — the `AnalyticsProvider` implementation. Exposes `name`, `configured()`, `capture(event)`, and `shutdown()`.
+- **`stripPort(host)`** — removes a port from a `Host`/hostname value. Handles IPv6 bracket notation. Required because Umami 400s on any hostname carrying a port.
+- **`readConfig()`** — reads `analyticsConfig()` fresh on every call (deliberately uncached) and returns `{ host, websiteId }` or `undefined`. Tries `NODE_UMAMI_INGEST_HOST` first, falls back to `NODE_UMAMI_HOST`; strips trailing slashes.
+- **`buildEventData(event)`** — maps an `AnalyticsEvent` onto Umami's `data` object. Caller-supplied `properties` are spread first so they cannot be overwritten by the reserved keys `user_id` and `trace_id`.
+- **`SERVER_USER_AGENT`** — fallback `User-Agent` for events with no browser (webhooks, cron, queue consumers). Umami silently drops events missing this header while still returning 200.
+- **`SEND_TIMEOUT_MS`** (2000 ms) — `AbortSignal.timeout` bound on each fetch to prevent a hung Umami from holding sockets indefinitely.
+- **`warnedAboutConfiguration`** — module-level flag ensuring the "provider selected but not configured" warning fires at most once.
 
 ## Relationships
 
-- **`src/infrastructure/observability/analytics/index.ts`** — defines the `AnalyticsEvent` and `AnalyticsProvider` types that this file implements. The provider is registered back into the analytics registry exposed by that module.
-- **`src/infrastructure/adapters/logger.ts`** — imported as `logger`; used for a one-time misconfiguration `warn`, a per-event rejection `warn` (non-OK status), and a per-event delivery-failure `debug`.
+- **`src/infrastructure/observability/analytics/index.ts`** — provides the `AnalyticsProvider` interface and `AnalyticsEvent` type that this file implements/consumes. This file is the concrete Umami adapter registered against that port.
+- **`src/infrastructure/observability/config.ts`** — source of `analyticsConfig()`, which supplies the Umami host, ingest host, and website ID environment variables.
+- **`src/infrastructure/adapters/logger.ts`** — provides the `logger` used for the one-time misconfiguration warning, per-event rejection warnings, and debug-level delivery-failure logs.
 
 ## Notes
 
-- **User-Agent is mandatory.** Umami 2.14+ silently discards an event with no `User-Agent` header while still returning 200. The `SERVER_USER_AGENT` constant ensures the header is always present.
-- **Port stripping.** Umami's collect endpoint 400s on a `hostname` that includes a port. `localhost:3000` (the default local-dev case) would be rejected without `stripPort`. IPv6 literals (`[::1]:8080`) are handled by checking the last colon's position relative to the closing bracket.
-- **Two env vars, one server.** `NODE_UMAMI_HOST` is the public origin a browser loads the tracking script from (often unreachable from inside the compose network). `NODE_UMAMI_INGEST_HOST` is the address the API container can actually reach. The code prefers the ingest host and falls back to the public one for single-host setups.
-- **Config is read per-call, not cached.** The analytics registry already memoises the provider instance; caching env vars here too would freeze the value at whichever test resolved first.
-- **`shutdown()` is intentionally a no-op.** In-flight analytics beacons are not part of the graceful-shutdown chain; they are fire-and-forget and bounded by the 2 s timeout.
-- **Mutation testing.** `Stryker disable` / `restore` annotations wrap logger calls that would create false-positive mutants (logging-only branches).
-- **No `timestamp` field is sent.** Umami's `/api/send` schema has no timestamp input; it stamps its own ingest time.
+- **Fire-and-forget by design.** `capture()` launches a `fetch` and returns immediately; `shutdown()` is a no-op. In-flight requests are intentionally not awaited so analytics never holds a deploy/shutdown open.
+- **Two host variables for one server.** `NODE_UMAMI_HOST` is the *public* origin (what the browser uses); `NODE_UMAMI_INGEST_HOST` is the *internal* address reachable from the API container. In a compose network these differ (`localhost:3080` vs. `umami:3080`).
+- **Config is re-read per event** to avoid freezing the environment at whichever test resolved first (the registry memoises the provider, not its config reads).
+- **`X-Forwarded-For`** is set from `event.clientIp` so Umami attributes the server event to the same visitor as surrounding browser events.
+- **No `timestamp` field** is sent: Umami's `/api/send` schema has no such field and stamps its own ingest time.
+- A **404 response** specifically indicates a wrong/unknown website ID and is the one error Umami reports "honestly" — it's logged at `warn` because every subsequent event will fail identically.

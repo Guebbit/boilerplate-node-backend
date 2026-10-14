@@ -1,7 +1,7 @@
 ---
 source: src/app/request-context.ts
-sha256: 16c31f44cc873be66afd674e57c1766add48234db9a07aeb4a7d200ca90b7963
-generated_at: 2026-09-23T17:35:34.315704+00:00
+sha256: 4adf6cd19ef036d3e485de60f886f3e61493e30ae111ea5a07fa5ec1469da493
+generated_at: 2026-10-14T07:38:28.648734+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Installs the per-request context middlewares (correlation ID, access logging, locale) on an Express app. It exists as a single install step so that these cross-cutting concerns are guaranteed to run before any route handler, in a specific internal order that downstream code depends on.
+Sets up per-request context that the rest of the request pipeline reads: the access log, the observability trace handle, the negotiated locale, and the canonical request ID. It must be mounted before the routes (and, for the request ID, before security/rate-limiting middleware) so that every downstream handler—including rejected ones—can log and correlate against these values.
 
 ## Key elements
 
-- **`REQUEST_ID_PATTERN`** – Regex matching a canonical RFC 4122 UUID (any version/variant). Used to validate a client-supplied `x-request-id` before it is trusted into logs and audit entries.
-- **`installRequestContext(app: Express): void`** – The sole export. Registers three middlewares in sequence:
-    1. Inline request-ID middleware: reuses a valid `x-request-id` header or generates one via `crypto.randomUUID()`; sets it on `request` and the response header.
-    2. `requestLogger` (Winston access log + OpenTelemetry trace injection).
-    3. `attachLocale` (negotiates `Accept-Language` and makes the locale available to downstream code).
+- **`REQUEST_ID_PATTERN`** — Regex that matches a canonical RFC 4122 UUID (any version/variant). Used to validate a client-supplied `x-request-id` before it is allowed into logs and audit entries, preventing log-injection.
+- **`requestIdMiddleware: RequestHandler`** — Assigns `request.requestId` (always a service-chosen UUID unless a trusted ingress vouches for the header) and `request.clientRequestId` (the validated caller-supplied UUID, if any). Sets the `x-request-id` response header. Designed to be mounted before rate-limiting so even refused requests carry the header.
+- **`installRequestContext(app: Express): void`** — Registers `requestLogger` (Winston access log + OpenTelemetry trace injection) and then `attachLocale` (Accept-Language negotiation) on the Express app. Must run before route registration.
 
 ## Relationships
 
-- **`src/app.ts`** – Calls `installRequestContext` before mounting routes, making this the entry point for request-scoped setup.
-- **`src/infrastructure/http/middlewares/request-logger.ts`** – Provides `requestLogger`, the second middleware in the chain; it reads `request.requestId` set by the first middleware.
-- **`src/infrastructure/http/middlewares/locale.ts`** – Provides `attachLocale`, the third middleware; it resolves the request locale that routes and services consume.
-- **`tests/integration/app/demo-routes.test.ts`** – Exercises the `x-request-id` header behavior (reuse vs. generation) through the full app.
+- **`src/app.ts`** — Consumes `requestIdMiddleware` and `installRequestContext` to wire them into the Express app in the correct mount order (request ID first, then security, then `installRequestContext`, then routes).
+- **`src/infrastructure/http/middlewares/request-logger.ts`** — Provides the `requestLogger` middleware that `installRequestContext` registers.
+- **`src/infrastructure/http/middlewares/locale.ts`** — Provides `attachLocale`, registered by `installRequestContext` for locale negotiation.
+- **`src/infrastructure/runtime/config.ts`** — Exposes `tracingConfig()`, from which `requestIdMiddleware` reads the `NODE_TRUSTED_INGRESS` flag to decide whether to trust the caller's `x-request-id`.
+- **`tests/integration/refusal-request-id.test.ts`** — Verifies that refused (rate-limited) responses still carry a valid `x-request-id` header, exercising `requestIdMiddleware`'s early-mount guarantee.
+- **`tests/integration/scenarios/demo-routes.test.ts`** — Integration tests that exercise routes after the request context (logging, locale, request ID) is installed.
 
 ## Notes
 
-- **Order is load-bearing.** The request-ID middleware must run first because both the access log and any audit entries record that ID. Moving it after `requestLogger` would log a missing correlation ID.
-- **Client `x-request-id` is strictly validated.** Any value that does not match the UUID regex is discarded and a fresh UUID is generated. This is a log-injection guard, not merely a correlation convenience.
-- **Locale must precede routes.** Anything downstream that resolves user-facing copy depends on the locale being already attached to the request.
+- Mount order matters: `requestIdMiddleware` is intentionally mounted **before** `installSecurity` (the global rate limiter) so that a 429 response still includes `x-request-id` in the response header and in the access log. `installRequestContext` is mounted after security but before routes.
+- A client-supplied `x-request-id` is **never** used as `request.requestId` unless `NODE_TRUSTED_INGRESS` is set. In the untrusted case it is stored only as `request.clientRequestId` (logged as `clientRequestId`, mirroring AWS ALB convention), and a fresh `crypto.randomUUID()` is assigned.
+- The UUID regex is strict (lowercase hex, fixed 8-4-4-4-12 shape). Any header that fails the check is treated as absent—no partial validation.

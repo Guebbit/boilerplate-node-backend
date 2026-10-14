@@ -1,7 +1,7 @@
 ---
 source: src/modules/delivery/controllers/get-shipping-methods.ts
-sha256: aaed13a1074e6116d04d7ce17e8f7b97c4d3976935ac4614ee1cbf47b4cb8d1e
-generated_at: 2026-09-27T14:49:12.871113+00:00
+sha256: 5a57ed6bf61227db7b1f3ff688d9221aad71856115230e24768f471f90200026
+generated_at: 2026-10-14T15:20:15.212400+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,20 +9,21 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Express route handler for `GET /delivery/methods`. Returns the shop's full list of available shipping methods (flat rates and free-above-threshold tiers). It is intentionally public so that guests can see shipping costs before signing up.
+Handler for the public `GET /delivery/methods` endpoint. It returns the shop's full list of available shipping methods (flat rates, free-above thresholds, etc.) so a guest can see shipping costs before signing up or checking out.
 
 ## Key elements
 
-- **`getShippingMethods(request, response)`** – The sole export. Calls `deliveryService.listMethods()`, then wraps the result in a `successResponse`. No error branch exists because `listMethods` is documented as always succeeding.
+- **`getShippingMethods`** (exported) – Express handler. Calls `deliveryService.listMethods()`, then passes `result.data` through `successResponse<ShippingMethodsResponse>`. No query-string parsing, no auth check, no error branch (per the docblock, `listMethods` always succeeds and `data` is always set).
 
 ## Relationships
 
-- **`src/modules/delivery/service.ts`** – Calls `deliveryService.listMethods()` to fetch the shipping-method data.
-- **`src/infrastructure/http/response.ts`** – Uses `successResponse<ShippingMethodsResponse>` to serialize the JSON envelope and set the HTTP status.
-- **`src/types/index.ts`** – Imports the `ShippingMethodsResponse` type that shapes the response payload.
-- **`src/modules/delivery/routes.ts`** – Registers this handler at the `GET /delivery/methods` path.
+- **`src/infrastructure/http/response.ts`** – Imports `successResponse` to format the JSON envelope for the reply.
+- **`src/modules/delivery/routes.ts`** – Registers this handler on the `GET /delivery/methods` route.
+- **`src/modules/delivery/services/index.ts`** – Imports `deliveryService`; the handler delegates all business logic to its `listMethods()` call.
+- **`src/types/index.ts`** – Imports the `ShippingMethodsResponse` type, used as the generic parameter on `successResponse`.
 
 ## Notes
 
-- **No weight filtering here.** The original `?weight=` query parameter was removed; weight-fit validation lives on the write side (`PUT /cart/shipping-method`, `POST /cart/checkout`), which checks against the actual basket. Clients should treat the list as "all methods that *could* apply" and rely on the write endpoints for the definitive answer.
-- **Always 2xx.** Because `listMethods` has no failure path, this handler never emits an error response. Callers should not write `catch` logic for non-2xx from this endpoint.
+- **No `?weight=` filter.** This is deliberate: the list is advisory/read-only. The authoritative weight-fit check lives server-side in `PUT /cart/shipping-method` and `POST /cart/checkout`, which operate against the real basket.
+- **Always 200.** There is no `catch` or 4xx/5xx path in the handler; the service is documented to never reject for this operation.
+- **Public endpoint.** No auth middleware is applied here; the intent is that a non-logged-in visitor can still see shipping costs.

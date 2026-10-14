@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/controllers/post-account-export.ts
-sha256: cdb6dbdc8b2f9ac9e26962809c83be727f406f3dbf755e8bb7d624bb1d930aa4
-generated_at: 2026-09-23T18:01:43.131088+00:00
+sha256: 5b486977022891238aab60ff1a4bf0000343e4ca8044bcc1fb337dc13ebcce71
+generated_at: 2026-10-14T08:33:40.988891+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,22 +9,22 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Thin HTTP adapter for `POST /account/export`. It extracts the authenticated caller's identity from the request, delegates the actual data assembly to `exportOwnData`, and returns the result through the standard response helpers. All business logic lives in the service; this file only bridges Express I/O.
+Thin HTTP adapter for `POST /account/export`. It translates the incoming Express request into a `requestExport` call (passing the caller's `id`, `email`, and a derived caller context) and writes back a `202` response with the export job's `id` and `status`. The actual file generation happens asynchronously in the background; a link is emailed when ready.
 
 ## Key elements
 
-- **`postAccountExport(request, response)`** — the sole export. Reads `id` and `email` from `request.authContext!`, calls `exportOwnData(id, email, callerContextOf(request))`, then either sends the payload via `successResponse` or short-circuits with `refused`. Unhandled rejections are funneled through `catchAs(response, 'postAccountExport')`.
+- **`postAccountExport`** — the sole export. Reads `id` and `email` from `request.authContext` (populated by upstream `isAuth` / `requireFreshAuth` middleware), calls `requestExport(id, email, callerContextOf(request))`, then routes the result through `refused` / `successResponse` / `catchAs` helpers.
+- **`callerContextOf(request)`** — extracts a caller-context object (used downstream by the export service for attribution or scoping).
 
 ## Relationships
 
-- **`src/modules/account/routes.ts`** — mounts this handler on the `POST /account/export` route behind the `requireFreshAuth` middleware, which is the sole auth gate.
-- **`src/modules/account/services/export.ts`** — provides `exportOwnData`, the function this controller wraps. Imported directly (not via the `accountService` barrel) by design.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (error-to-HTTP mapping) and `refused` (short-circuit on rejected result envelopes).
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, extracted from the incoming request and forwarded to the service.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, the standard 200 envelope writer.
+- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (unified error → HTTP response mapping) and `refused` (detects and short-circuits refusal results).
+- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, which builds the context argument passed to the service.
+- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, the canonical "write status + body" helper.
+- **`src/modules/account/routes.ts`** — mounts `postAccountExport` on the `POST /account/export` path and applies the `requireFreshAuth` guard *before* this handler runs.
+- **`src/modules/account/services/export.ts`** — the business-logic layer (`requestExport`). This controller intentionally imports it directly rather than through the `accountService` barrel, keeping the data-export service out of the general barrel's surface.
 
 ## Notes
 
-- **No local auth check.** Identity is guaranteed upstream by the `requireFreshAuth` middleware on the route; the controller trusts `request.authContext!` unconditionally.
-- **Un-typed response envelope.** The return is _not_ annotated `successResponse<AccountExportResponse>` because each `PersonalDataSection`'s `collect` returns raw Mongoose documents whose contract-shaped fields (ISO timestamps, computed totals, `Shipment.id`, audit `timestamp` strings) only appear after each document's own `toJSON` fires. The controller cannot statically know every contributor's shape; the outbound envelope validation is what actually enforces the wire contract.
-- **Direct service import.** Deliberately bypasses the `accountService` barrel — see that barrel's docblock for the rationale (data-export function is intentionally excluded from it).
+- The file's JSDoc explicitly warns against importing `requestExport` from the `accountService` barrel; always import from `../services/export` here.
+- No authorization or input-validation logic lives in this controller. All identity guarantees are enforced by `requireFreshAuth` (mounted in `routes.ts`); the non-null assertion `request.authContext!` is therefore safe by contract, not by a local check.

@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/module.ts
-sha256: 9e9962a0d2e2aabc05c5e84ad99fd280dc739c71685d1b8c55314df9eeb43a94
-generated_at: 2026-09-23T17:57:22.320092+00:00
+sha256: a20b86b511ef91a9346ebcc71ef056f963704a72d40a4e243a298c02c7730525
+generated_at: 2026-10-14T08:26:10.270756+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,25 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Declares the `access` module's manifest (name + GDPR Art. 15 personal-data section) and registers it with the kernel. The module owns tenant and membership data but exposes no HTTP routes; it is consumed solely through its barrel export by `account`, `api-keys`, and `users`.
+Defines the **access** module's manifest (a single default-exported object satisfying `AppModule`) for the tenant-and-membership domain. It is intentionally routeless: no endpoint creates a shop or grants a role, so the module exists purely to declare its personal-data obligations (GDPR Art. 15 collect/erase) and to act as the barrel through which other modules consume membership data.
 
 ## Key elements
 
-- **`export default` (satisfies `AppModule`)** — The module manifest object. Sets `name: 'access'` and defines a single `personalData` section (`roles`).
-- **`personalData[0].collect`** — Asks `membershipsOf(subject.userId)` for the subject's memberships, then maps them to `{ role, scope }` pairs. Intentionally omits tenant id (single-shop deployment; scope + role already answer "what can this account do").
-- **`membershipsOf`** (imported from `./service`) — The sole runtime dependency; resolves a user's membership records.
-- **`AppModule`** (type-imported from `@kernel/registry`) — The structural type this default export must satisfy.
+- **`export default { … } satisfies AppModule`** — the module manifest.
+  - `name: 'access'` — registry identifier.
+  - `personalData[0]` (section `"roles"`)
+    - `collect(subject)` — calls `membershipsOf(subject.userId)` and maps each membership to `{ role, scope }`. Deliberately omits the tenant id (single-shop deployment; role/scope alone answer Art. 15's "what can this account do").
+    - `erase` — aliased to `eraseMemberships`; joins the caller's hard-delete transaction to remove the subject's membership rows.
+- **Imports** — `AppModule` type from `@kernel/registry`; `eraseMemberships`, `membershipsOf` from `./service`.
 
 ## Relationships
 
-- **`src/kernel/registry.ts`** — Supplies the `AppModule` type that constrains the manifest shape.
-- **`src/modules/access/service.ts`** — Provides `membershipsOf`, the query used inside the `collect` callback.
-- **`src/modules.ts`** — The barrel/registry where this module's default export is re-exported for consumers.
-- **`src/modules/account/module.ts`** — A downstream consumer that reads the access module's collections through the barrel (never over HTTP).
-- **`src/modules/account/openapi.yaml`** — Account's route surface; interacts indirectly because account is the primary consumer of access data.
+- **`src/kernel/registry.ts`** — supplies the `AppModule` type that the default export satisfies; the registry is what reads this manifest at boot.
+- **`src/modules/access/service.ts`** — provides the two functions (`membershipsOf`, `eraseMemberships`) that the `collect` and `erase` callbacks delegate to. This file is the thin declarative wrapper; the service holds the actual data-access logic.
+- **`src/modules.ts`** — top-level module index that registers `access` alongside the other domain modules so the kernel can resolve it.
+- **`src/modules/account/module.ts`** / **`src/modules/account/openapi.yaml`** — the account module is one of the documented consumers of the access barrel (the file header lists `account`, `api-keys`, `example`, `orders`, `payments`, `returns`, `users` as consumers). The account module's OpenAPI spec defines the account-facing surface that ultimately depends on membership data exposed here.
 
 ## Notes
 
-- **Routeless by design.** The file header explicitly states no boilerplate route creates a shop or grants a role, so there is no URL to mount. This does not demote it to kernel code — `./model.ts` (referenced in the header doc) explains why it remains a module.
-- **Personal-data scope is intentionally narrow.** Only `role` and `scope` are surfaced to the subject; the tenant id is excluded because the deployment is single-tenant and the id adds no recognisable context.
-- **No shared HTTP surface.** All cross-module access to tenant/membership data flows through this barrel export; the module itself defines zero endpoints.
+- The module is **routeless by design**. If you need an HTTP endpoint for tenant/membership mutations, it does not exist in this codebase; the file header explicitly states none is planned in the boilerplate.
+- `collect` returns only `role` + `scope`. Do not add the tenant id — the comment explains it is intentionally omitted for a single-tenant deployment and because Art. 15 only requires the permission summary.
+- `erase` is a **hard delete** (not soft). It is expected to run inside the caller's existing transaction; it does not open its own.

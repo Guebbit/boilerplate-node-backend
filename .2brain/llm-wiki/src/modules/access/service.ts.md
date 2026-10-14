@@ -1,7 +1,7 @@
 ---
 source: src/modules/access/service.ts
-sha256: 6ced567df746e62dedd8049de9aeaad9a180b65c889c838904eeafe6c75dfa01
-generated_at: 2026-09-27T14:21:15.178675+00:00
+sha256: 1dcfd77c970f6b15196ac381ddc8f2c5297e7f5446f064a27ef1c15a1c709b3d
+generated_at: 2026-10-14T08:26:59.739043+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,43 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Service layer for reading and writing the authorization model (tenants, memberships, role grants). Every write path enforces two invariants at execution time — not in docs: the role must be declared in `shared/authorization-roles.yaml`, and the granter must hold every key the target role holds (one narrow exception for `users.any.create` → `customer`). Failures surface as `AccessInvariantError` (a `ConflictError` subclass → HTTP 409) or, for system callers, as an audited rejection.
+The service layer for the authorization model: it reads roles and memberships, writes them, and refuses any write that would break a structural invariant (an undeclared role, or a grant the granter cannot make themselves). It sits between the HTTP/API layer and the repository, translating business rules into either a committed write or a thrown `AccessInvariantError` (HTTP 409).
 
 ## Key elements
 
-- **`AccessInvariantError`** — extends `ConflictError`; thrown when a grant would assign an undeclared role or escalate beyond the granter's keys. Mapped to 409 by `infrastructure/http/errors.ts` via `instanceof`, without that module knowing `access` exists.
-- **`SIGNUP_DEFAULT_ROLE` / `VERIFIED_CUSTOMER_ROLE`** — the two roles the public lifecycle touches (`unverified` → `customer`); hardcoded here so no caller can inject a name.
-- **`ensureTenant(slug, name, id?)`** — upsert a tenant by slug; the optional `id` is only used by `bootstrapAccessModel` to pin `DEPLOYMENT_TENANT_ID` across reseeds.
-- **`membershipsOf(userId)` / `membershipIn(userId, tenantId, scope)`** — read queries against the membership store.
-- **`assertCanGrant(scope, roleName, granter?)`** — pre-flight validation (no write) so callers like `users/service.ts` can check before committing unrelated state.
-- **`assignRole(userId, tenantId, scope, roleName, granter?, context?)`** — the write path: validates, upserts the membership row, then records an audit event on both success and failure. All logic runs inside a `Promise.resolve().then(…)` chain so synchronous throws become rejections for `.catch` callers.
-- **`assignDefaultRole(userId, tenantId, scope?)`** — thin wrapper that hardcodes `SIGNUP_DEFAULT_ROLE`; deliberately has no `roleName` parameter so a signup endpoint cannot be coerced into granting an arbitrary role.
-- **`promoteVerifiedCustomer(userId, tenantId)`** — one-way `unverified` → `customer` promotion; no-op if the membership already holds a different role.
-- **`revokeRole`** (truncated in source) — removes a membership; intentionally allowed even for a tenant's last admin.
-- **`validateGrant`** (internal) — shared validation core used by both `assertCanGrant` and `assignRole`.
-- **`auditRoleChange`** (internal) — single `recordAudit` call shared by assign/revoke success/failure branches, preventing drift between near-identical blocks.
+- **`SIGNUP_DEFAULT_ROLE` / `VERIFIED_CUSTOMER_ROLE`** – Re-exported constants read from `shared/authorization-roles.yaml` (via `@kernel/permissions`); the only role signup may grant, and the role it promotes to after verification.
+- **`CREATE_USER_KEY`** (`'users.any.create'`) – Private constant identifying the key that exempts `VERIFIED_CUSTOMER_ROLE` from the "granter must hold every key" check, since creating an account is distinct from managing the grantee's own data.
+- **`AccessInvariantError`** – Extends `ConflictError` so the HTTP error interpreter maps it to 409 via `instanceof`; carries a human-readable explanation of which invariant was violated.
+- **`ensureTenant(slug, name, id?)`** – Upserts a tenant by lowercased slug. The optional `id` is passed only by the bootstrap script to keep a stable `DEPLOYMENT_TENANT_ID` across reseed cycles.
+- **`membershipsOf(userId)` / `membershipIn(userId, tenantId, scope)`** – Read helpers returning all of a user's role rows, or the single row for a given scope.
+- **`checkGrant(scope, roleName, granter?)`** – Private, pure function and the single source of truth for grant validation. Returns `{ lowered }` or `{ refusal }`. Two refusal reasons: role not declared in any preset for that scope, or the role holds keys the granter lacks (with the `CREATE_USER_KEY` exemption).
+- **`validateGrant`** – Wraps `checkGrant` in a throw; returns the lowered role name on success.
+- **`grantableRoles(scope, granter)`** – Filters `PRESET_ROLES` through `checkGrant` to produce the list a UI role-picker shows. Read-only; the write path re-validates.
+- **`assertCanGrant`** – Pre-commit validation that throws before a caller commits unrelated state (used by `users/services/update.ts`).
+- **`assertCanGrantAudited`** – Same check, but on refusal emits a failure audit row *before* throwing, so the attempt is recorded even though nothing was written.
+- **`auditRoleAssigned`** – Emits a success audit row after the caller's transaction has committed.
+- **`auditRoleChange`** (private) – Shared emitter for both assign and revoke, success and failure, to prevent the four near-identical blocks from drifting (e.g., one dropping `role` from metadata).
 
 ## Relationships
 
-- **`src/kernel/permissions.ts`** — imports `findRole` to resolve a role name to its declared permissions within a scope.
-- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID`, the fixed id used when bootstrapping the default tenant.
-- **`src/infrastructure/http/errors.ts`** — imports `ConflictError` as the base class for `AccessInvariantError`; the error interpreter in that file maps any `ConflictError` to HTTP 409.
-- **`src/infrastructure/observability/audit.ts`** — imports `recordAudit` and the `AuditAction` type for structured audit logging of every grant/revoke attempt.
-- **`src/modules/access/repository.ts`** — imports `membershipRepository` and `tenantRepository` for all persistence (upsert, find, remove).
-- **`src/modules/access/model.ts`** — imports `MembershipDocument` and `TenantDocument` types.
-- **`src/modules/access/audit.ts`** — imports `accessAuditActions` (e.g. `ROLE_ASSIGNED`) as the action enum values for audit records.
-- **`src/modules/access/index.ts`** — re-exports this module's public surface as the package entry point.
-- **`src/modules/access/module.ts`** — wires the service into the DI container alongside repository bindings.
-- **`src/modules/account/roles.ts`** — consumes `assignRole` / `assertCanGrant` when account flows change a user's role.
-- **`scenarios/users.ts` / `scenarios/accounts.ts`** — call `assignDefaultRole`, `promoteVerifiedCustomer`, or `ensureTenant` during signup and account setup flows.
-- **`scripts/db/bootstrap-access.ts`** — calls `ensureTenant` with `DEPLOYMENT_TENANT_ID` to seed the fixed tenant row.
-- **`scripts/db/access-grant.ts`** — invokes `assignRole` with `granter = undefined` (operator/migration path, no escalation check).
-- **`src/modules/access/tests/integration/access.test.ts`** — integration tests covering grant, revoke, escalation refusal, and audit emission.
+- **`src/kernel/permissions.ts`** – Source of `PRESET_ROLES`, `findRole`, `isBelowLevel`, `levelOfRoles`, and the two role-name constants. The service treats this module (and the YAML it encodes) as the sole authority on what roles and keys exist.
+- **`src/kernel/access/tenant.ts`** – Provides `DEPLOYMENT_TENANT_ID`, used in audit rows for tenant-scope events and by `ensureTenant`'s bootstrap caller.
+- **`src/infrastructure/http/errors.ts`** – `AccessInvariantError` extends `ConflictError`; the error interpreter maps any `ConflictError` to 409 without knowing this module exists.
+- **`src/infrastructure/http/response.ts`** – `generateReject` / `ResponseReject` imported for building rejection payloads (used by truncated portion of the file).
+- **`src/infrastructure/i18n/index.ts`** – `t()` for localizing refusal messages surfaced to callers.
+- **`src/infrastructure/observability/audit.ts`** – `recordAudit`, `coreAuditActions`, and the `AuditAction` type; all audit emissions in this file funnel through these.
+- **`src/modules/access/repository.ts`** – `tenantRepository` and `membershipRepository` are the only persistence access this service uses; no direct Mongoose calls.
+- **`src/modules/access/model.ts`** – `TenantDocument` and `MembershipDocument` types returned by the read helpers and consumed by callers.
+- **`src/modules/access/audit.ts`** – `accessAuditActions` enum providing the action identifiers (`ROLE_ASSIGNED`, etc.) passed to `auditRoleChange`.
+- **`src/modules/access/index.ts`** – Re-exports the public surface of this file so other modules import from the module barrel.
+- **`src/modules/access/module.ts`** – Registers this service (and its dependencies) in the DI / module graph.
+- **`scripts/db/bootstrap-access.ts`** – Calls `ensureTenant` with the fixed `DEPLOYMENT_TENANT_ID` to seed the platform tenant on a fresh database.
+- **`scenarios/accounts.ts` / `scenarios/users.ts`** – Integration-test scenarios that exercise signup, verification, and role-assignment flows through this service's public API.
 
 ## Notes
 
-- **All checks run inside a `Promise` chain on purpose.** `assignRole` wraps validation in `Promise.resolve().then(…)` so that synchronous throws from `validateGrant` become a *rejection*, matching the `.catch(…)` style used by every caller. A caller that `await`s still sees the same error, but one that only chains sees a rejection, never an uncaught throw.
-- **`granter` is optional and means "no escalation check."** Pass `undefined` for seeders, migrations, or console operators. Passing an empty array is *not* the same as `undefined` — it would trigger the escalation check against zero held keys and reject everything.
-- **The `customer`-role exemption is narrow.** A granter holding `users.any.create` may assign `customer` even without `orders.self.read` / `payments.self.read`, because those keys govern the *grantee's* own data, not the granter's shop. The exemption applies only in the `tenant` scope and only for that specific role name.
-- **`assignDefaultRole` is not a general-purpose "assign the default."** It is the *only* code path a signup endpoint should use; its lack of a `roleName` parameter is the security boundary, not a documentation convention.
-- **Audit is recorded on refusal, not skipped.** An escalation attempt that fails validation still emits a `failure` audit row (when `context` is provided). This is considered the most useful entry the audit vocabulary produces.
+- **Refusal over documentation.** The file's header states explicitly: an invariant that is only documented will drift; the check that is not executed is not true. Every guard here is a `throw`, not a comment.
+- **`checkGrant` is the single decision point.** `validateGrant`, `grantableRoles`, `assertCanGrant`, and `assertCanGrantAudited` all delegate to it. Adding a new rule means editing one function.
+- **`grantableRoles` is advisory, not authoritative.** A client builds its picker from it, but the write path re-runs `checkGrant`. The two can never disagree because they call the same function, but the picker is not a permission grant.
+- **Audit-before-throw in `assertCanGrantAudited`.** A refused grant on a new account (admin create) still leaves an audit row. `assignRole`'s success path, by contrast, audits only *after* the caller's transaction commits (via `auditRoleAssigned`), because the write isn't durable until then.
+- **`ensureTenant`'s `id` parameter is intentional.** Only the bootstrap script passes it. This keeps the platform tenant row at a fixed ID across `emptyDatabase()` + reseed, so any cached reference (including `DEPLOYMENT_TENANT_ID`) remains valid.
+- **The `CREATE_USER_KEY` exemption is narrow.** It applies only when scope is `tenant`, the role is `VERIFIED_CUSTOMER_ROLE`, and the granter holds `users.any.create`. It does *not* relax the undeclared-role check.

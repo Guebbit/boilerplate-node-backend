@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/root-assembly.ts
-sha256: fa0ebecc63c67bb0c1c32c04a98224d4dfae69945cfa68819ebeb7ea81943f57
-generated_at: 2026-10-01T12:28:17.428073+00:00
+sha256: 3f745dfc0dc15483bb3d16426753d8fe26d2a21727c3cdea56d2918edea81f14
+generated_at: 2026-10-14T07:12:25.600392+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Reconciles the root OpenAPI document (`shared/contracts/openapi.root.yaml`) with the module fragments that exist on disk, so that adding or removing a module requires no manual edit outside that module's folder. It prunes stale `$ref` entries, appends new path refs and tags, and returns the corrected YAML text ready for `redocly bundle`.
+Reconciles the root OpenAPI document (`shared/contracts/openapi.root.yaml`) against whatever module fragments actually exist on disk, so that adding or removing a module never requires editing the root file. It prunes `$ref` entries whose fragment path is gone and appends `$ref` entries and tag declarations for new ones.
 
 ## Key elements
 
-- **`ModuleFragment`** (interface) — the per-module contract: `section` (folder name), `paths` (URL paths it declares), `tags` (tags its operations use).
-- **`pathRefFor(section, urlPath)`** — builds the `$ref` string (`../../src/modules/<section>/openapi.yaml#/paths/<escaped>`) the root uses for one module path.
-- **`assembleRoot(rootText, fragments)`** — main entry point. Parses the root YAML with the `yaml` Document API, then calls the three reconcilers below. Returns serialized YAML (`lineWidth: 0, indent: 4`). Throws if the root has no `paths` map.
-- **`readModuleFragments(modulesRoot, preferredOrder)`** — discovers modules by directory listing (a folder containing `openapi.yaml` qualifies), reads each fragment, and returns `ModuleFragment[]` in the order dictated by `orderSections`.
-- **`pruneStaleReferences`** (internal) — removes root `paths` entries whose `$ref` no longer matches any fragment's declared path. Collects stale keys first, then deletes, to avoid mutating the array mid-filter.
-- **`appendMissingPaths`** (internal) — sets a `$ref` node in root `paths` for every fragment path not already present.
-- **`appendMissingTags`** (internal) — appends bare `{ name }` entries to the root `tags` sequence for tags a fragment uses that the root does not yet list.
-- **`encodePointer(segment)`** — JSON Pointer escaping (`~` → `~0` first, then `/` → `~1`).
-- **`PATH_REF`** (regex) — matches the well-known `$ref` shape so the pruner can distinguish module refs from any other value.
+- **`ModuleFragment`** — interface describing one module's contract surface: `section`, `paths`, `tags`, optional `declaredTags`.
+- **`DeclaredTag`** — a single entry from a fragment's top-level `tags:` list (`name`, optional `description`).
+- **`pathRefFor(section, urlPath)`** — builds the `../../src/modules/<section>/openapi.yaml#/paths/<pointer>` `$ref` string (JSON-Pointer-escaped).
+- **`assembleRoot(rootText, fragments)`** — pure entry point: parses the root YAML with the `yaml` Document API, calls `pruneStaleReferences`, `appendMissingPaths`, `appendMissingTags`, then serialises. Returns the reconciled YAML string ready for `redocly bundle`. Throws if the root lacks a `paths` map.
+- **`readModuleFragments(modulesRoot, preferredOrder)`** — discovers module directories on disk (a folder containing `openapi.yaml` qualifies), orders them via `orderSections`, reads each fragment's `paths` keys, operation `tags`, and top-level `tags` declarations. Returns `ModuleFragment[]`.
+- **`pruneStaleReferences`** (internal) — removes `paths` entries whose `$ref` no longer matches any fragment declaration; returns the set of surviving refs.
+- **`appendMissingPaths`** (internal) — adds `$ref` entries for fragment paths the root does not yet reference.
+- **`appendMissingTags`** (internal) — merges fragment-declared tags (first-writer-wins for descriptions) and used-but-undeclared tag names into the root's `tags` list.
+- **`PATH_REF`** / **`encodePointer`** — regex and helper for matching/producing the `$ref` format.
 
 ## Relationships
 
-- **`section-order.ts`** — provides `orderSections`, used by `readModuleFragments` to arrange fragments in the preferred narrative order (unknown sections fall back to alphabetical).
-- **`openapi-bundle.ts`** — the bundling pipeline that calls `readModuleFragments` + `assembleRoot` to produce the final root document before handing it to `redocly bundle`.
-- **`tests/unit/scripts/contracts/root-assembly.test.ts`** — unit tests covering `assembleRoot`, `pathRefFor`, and `readModuleFragments`.
-- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — integration-style test asserting that dropping a new module folder into `src/modules` requires zero edits to the root file.
+- **`scripts/contracts/section-order.ts`** — imports `orderSections` to order fragments by the preferred narrative list, appending unlisted modules alphabetically.
+- **`scripts/contracts/openapi-bundle.ts`** — the downstream consumer: calls `readModuleFragments` + `assembleRoot` and hands the result to `redocly bundle`.
+- **`tests/unit/scripts/contracts/root-assembly.test.ts`** — unit tests for `assembleRoot` and `readModuleFragments`.
+- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — integration-level test verifying the "new module folder is sufficient" invariant.
 
 ## Notes
 
-- **Pure I/O boundary.** `assembleRoot` is a string-in / string-out function; the caller owns all disk access. This makes it trivially testable with scratch fixtures.
-- **Document-level editing, not re-serialization.** Uses the `yaml` library's `Document` API so comments, anchors, and key order in the root file survive the round-trip. A plain `parse` → mutate object → `stringify` would lose them.
-- **Preference ≠ registry.** The root's existing `paths` list and the `preferredOrder` array are ordering hints. Actual membership is determined solely by which `openapi.yaml` files exist on disk. A path in the root with no backing fragment is pruned; a fragment path not yet in the root is appended.
-- **Escape order matters.** `encodePointer` must replace `~` before `/`; reversing the order corrupts pointers that contain a literal `~1`.
-- **Stale-prune collect-then-delete.** `pruneStaleReferences` filters into a `stale` array first and deletes in a second loop, because `paths.items` is the live backing array that `delete` mutates.
+- The function is **pure** with respect to disk I/O in `assembleRoot`: it takes and returns strings. Only `readModuleFragments` touches `node:fs`. The caller owns file writes.
+- Uses the `yaml` package's `Document` node API (not `parse` to plain objects) specifically to preserve comments, anchors, and key order in the root file. Serialisation uses `lineWidth: 0` (no wrapping) and `indent: 4`.
+- The root's `paths` list is a **preference order**, not a registry. Membership is determined entirely by which fragments exist on disk. Entries for vanished paths are silently dropped.
+- Tag description conflicts: the first fragment (in section order) that declares a tag name provides the description; later duplicates are ignored.
+- `PATH_REF` expects exactly two leading `../` segments, matching the root's location in `shared/contracts/`. A different directory layout would break matching.

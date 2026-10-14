@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/oauth/providers/index.ts
-sha256: ed95f553e0107212e0b12161c89cbbcc971f2066dc944ba04633ea3d3a7a3ed0
-generated_at: 2026-09-23T18:06:48.590290+00:00
+sha256: 1b94159989401a6b4f2878549c1510964d287ee1a40035afb9cce3a56956cb04
+generated_at: 2026-10-14T08:44:01.551812+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Central registry that maps provider names (`google`, `github`, `fake`) to their concrete `OAuthProvider` implementations, but only when each provider is actually configured in the current environment. Unlike the single-winner pattern used in `payments/providers/index.ts`, multiple OAuth providers can be active simultaneously, so this module answers "which are available right now" rather than picking one.
+Central registry that tracks which OAuth providers (Google, GitHub) are currently enabled based on their environment variables. Unlike the payments module (single active provider), multiple OAuth providers can be active simultaneously, so this exposes a live "who is configured" query rather than a memoized winner. Providers are re-evaluated on every call so that setting/unsetting env vars takes effect without a restart.
 
 ## Key elements
 
-- **`PROVIDERS`** (internal) — `Partial<Record<string, () => OAuthProvider | undefined>>`. Each entry is a closure that re-checks configuration on every call (`isOAuthProviderConfigured` for google/github, `isDemoMode` for fake), so a provider becomes visible the moment its env vars or demo flag are set, with no import-time memo to go stale.
-- **`enabledProviders()`** (export) — Returns the array of provider names currently resolvable. Used by `GET /account/oauth/providers` to list what the deployment actually supports.
-- **`resolveOAuthProvider(name)`** (export) — Looks up a provider by name; returns `undefined` if the name is unknown _or_ if the provider is not configured. Controllers treat `undefined` as a 404.
+- **`registerOAuthProvider(name, factory)`** — Adds or overrides a provider entry at runtime. Used by deployments to register custom providers and by tests to inject fakes. No file edit needed here.
+- **`enabledProviders()`** — Returns the array of provider names currently resolved to a configured instance. A deployment with no keys set returns `[]`. Consumed by the `GET /account/oauth/providers` endpoint.
+- **`resolveOAuthProvider(name)`** — Looks up a single provider by name and calls its factory. Returns `undefined` if the name is unknown or the provider's env vars are not set. Controllers treat `undefined` as a 404.
+- **`registry`** (module-internal) — Built via `createProviderRegistry<OAuthProviderFactory>`; seeds `google` and `github` entries whose factories call `isOAuthProviderConfigured` at resolution time.
+- **`OAuthProviderFactory`** (internal type) — `() => OAuthProvider | undefined`. Documents the contract that every registered entry is a *factory*, not a value.
 
 ## Relationships
 
-- **`./port`** — Imports the `OAuthProvider` interface type that all implementations and the registry are typed against.
-- **`./google`**, **`./github`**, **`./fake`** — Concrete provider instances imported and wrapped in the registry closures.
-- **`../config`** — `isOAuthProviderConfigured(name)` gates google and github entries at call time.
-- **`@infrastructure/runtime/demo-profile`** — `isDemoMode()` gates the `fake` entry.
-- **`src/modules/account/controllers/get-oauth-start.ts`** — Calls `resolveOAuthProvider` to obtain the provider for the requested name before building the authorization URL.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — Calls `resolveOAuthProvider` to exchange the callback code.
-- **`src/modules/account/controllers/get-oauth-providers.ts`** — Calls `enabledProviders` to list available options to the client.
-- **`src/modules/account/tests/unit/oauth-providers.test.ts`** — Unit-tests the registry's resolution and listing behavior.
-- **`src/infrastructure/runtime/demo-profile.ts`** — Supplies the `isDemoMode` check that activates the fake provider.
+- **`src/infrastructure/runtime/provider-registry.ts`** — Supplies `createProviderRegistry`, the generic registry primitive. This file is the OAuth-specific instantiation of it.
+- **`src/modules/account/oauth/providers/port.ts`** — Defines the `OAuthProvider` interface used as the type parameter for the registry and the return type of `resolveOAuthProvider`.
+- **`src/modules/account/oauth/providers/google.ts`** / **`github.ts`** — Provide the concrete `googleOAuthProvider` / `githubOAuthProvider` instances referenced inside the factory closures.
+- **`src/modules/account/oauth/config.ts`** — Provides `isOAuthProviderConfigured`, the predicate each factory calls to decide whether to return the provider or `undefined`.
+- **`src/modules/account/controllers/get-oauth-providers.ts`** — Calls `enabledProviders()` to build the list returned to the client.
+- **`src/modules/account/controllers/get-oauth-start.ts`** / **`get-oauth-callback.ts`** — Call `resolveOAuthProvider(name)` to obtain the provider for the requested flow step; `undefined` → 404.
+- **`scenarios/support/development-doubles.ts`** — Registers a `fake` provider via `registerOAuthProvider` so integration tests can exercise OAuth without real credentials. The `fake` entry is intentionally absent from this file's seed list.
 
 ## Notes
 
-- The `Partial<Record<…>>` shape is deliberate: an unrecognised name (typo, unshipped provider) resolves to `undefined` at the map level, so `PROVIDERS[name]?.()` is safe without a separate existence check.
-- Configuration is evaluated **per call**, not at module load. Tests or dev tooling that set env vars mid-process will see the provider appear without a restart.
-- `fake` is gated by `isDemoMode()`, not by an env-var pair like the real providers; see `./fake`'s own docs for why it needs no credentials.
-- The contrast with `payments/providers/index.ts` (single active provider, memoised winner) is called out in the module doc comment to prevent copy-paste confusion between the two subsystems.
+- Providers are **factories**, not singletons. Calling `enabledProviders()` twice in the same process can yield different results if env vars change between calls (e.g., in a test that toggles config). Do not cache the returned array across awaits.
+- The `fake` provider is **not** seeded in this file. It lives outside `src/` and is registered by the dev preload. If you see `fake` missing from `enabledProviders()` in a test, check that `development-doubles.ts` ran before the test.
+- Naming convention: the registry key (e.g. `"google"`) is the same string a client sends in the URL path and what `OAuthAccount` stores. Mismatch = silent 404 at the controller.

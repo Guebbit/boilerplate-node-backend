@@ -1,7 +1,7 @@
 ---
 source: scripts/ops/sweep-outbox.ts
-sha256: 035b90c909c790fd846d884fcbf4ff2e2710538f2151e203c8cd47bc0461df45
-generated_at: 2026-10-01T12:36:47.995332+00:00
+sha256: 3ad843be0910acefc99373a57b19b5dbb38d9af2bd671891f182d00fdb7887ce
+generated_at: 2026-10-14T07:27:44.925093+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Cron backstop that publishes all transactional-outbox events that are due (crashed, unreachable, or still backing off after a failure). The fast path is the per-transaction nudge from the writer; this sweep catches what that missed. Runs every minute in the shared scheduled-jobs container and is safe to overlap.
+Scheduled cron job (runs every minute) that publishes every transactional-outbox event whose due time has arrived. It is the **backstop**, not the fast path: it recovers events left behind by crashed/unreachable processes and retries that have waited out their backoff. Lease-based claiming in `relayOutbox` makes it safe to overlap with the nudge or a previous run.
 
 ## Key elements
 
-- **`main`** — sequential pipeline: `start()` → `registerModules(enabledModules)` → `relayOutbox()` → log result. No return value beyond the log.
-- **`runScript('sweep:outbox', main, stopDatabase)`** — top-level entry; wires the script into the shared ops-script harness (lifecycle, error handling, DB shutdown on exit). Invoked with `void` (fire-and-forget at module level).
-- **`#!/usr/bin/env tsx`** shebang — the file is also directly executable as a Node script via tsx.
+- **`main()`** — `startJob()` → `registerModules(enabledModules)` → `relayOutbox()` → log result. Resolves `void`; no return value.
+- **`runScript('sweep:outbox', main, stopDatabase)`** — entry-point call; records the outcome under the `sweep:outbox` key for `/observability/health` and closes DB connections on both success and failure paths.
+- **`enabledModules`** (from `src/modules.ts`) — the concrete module list passed to `registerModules`; publishing an event means invoking its subscribers, and `relayOutbox` refuses to run in a process with none registered.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `scripts/run-script.ts` | Provides `runScript`, the wrapper that manages process lifecycle and registers `stopDatabase` as the teardown hook. |
-| `src/infrastructure/runtime/database.ts` | `start()` opens the DB connection before work begins; `stopDatabase` is passed to `runScript` for clean shutdown. |
-| `src/kernel/registry.ts` | `registerModules` installs all event-subscriber handlers so that `relayOutbox` can dispatch. |
-| `src/kernel/outbox.ts` | `relayOutbox` performs the actual lease-claim-and-publish of due rows. |
-| `src/modules.ts` | Exports `enabledModules`, the list handed to `registerModules`. |
-| `src/infrastructure/adapters/logger.ts` | `logger.info` records the sweep result (`published` / `skipped` counts) for observability. |
+- **`scripts/run-script.ts`** — provides the `runScript` wrapper that handles health reporting and guaranteed connection teardown.
+- **`src/kernel/outbox.ts`** — provides `relayOutbox`, the actual publish engine (lease-claims rows, invokes subscribers).
+- **`src/kernel/registry.ts`** — provides `registerModules`, which installs event subscribers before `relayOutbox` can run.
+- **`src/modules.ts`** — exports the `enabledModules` array consumed by the script.
+- **`src/infrastructure/runtime/database.ts`** — provides `startJob` (DB connect) and `stopDatabase` (cleanup passed to `runScript`).
+- **`src/infrastructure/runtime/mongoose-boot.ts`** — must load before any Mongoose model is touched; sets Mongoose defaults at schema-build time.
+- **`src/infrastructure/config/dotenv.ts`** — loads environment variables; must be the very first import.
+- **`src/infrastructure/adapters/logger.ts`** — provides `logger` for the single "sweep finished" info line.
 
 ## Notes
 
-- **`registerModules` is mandatory.** `relayOutbox` will refuse to run in a process with zero subscribers; this script would crash at that step if the call were removed.
-- **Idempotent by design.** `relayOutbox` uses a lease per row, so overlapping runs (or a run concurrent with the writer's nudge) never double-publish.
-- **Not a module.** The outbox is kernel infrastructure; there is no corresponding module to disable or remove.
-- **Stryker guard.** The `// Stryker disable next-line all` comment suppresses mutation testing on the log line only—intentional, not a bug.
-- Runs as `npm run sweep:outbox`; expected cadence is once per minute (see `docs/reference/ops.md#scheduled-jobs`).
+- **Import order is load-bearing.** `dotenv` → `mongoose-boot` → everything else. Mongoose reads its defaults at schema-build time, so any import that touches a model before `mongoose-boot` will silently pick up wrong defaults.
+- **`registerModules` is not optional.** `relayOutbox` hard-refuses to run in a subscriber-less process; don't "simplify" by removing the registration step.
+- **Stryker mutation-testing** is disabled on the `logger.info` line (`// Stryker disable next-line all`) to avoid a false-positive mutation report.
+- The script is idempotent by design (lease + backoff), so a missed or overlapping cron tick costs nothing extra.
+- Lives under `scripts/ops/` alongside other scheduled jobs; see `docs/reference/ops.md#scheduled-jobs` for the cron schedule and `docs/tools/outbox.md` for the outbox contract.

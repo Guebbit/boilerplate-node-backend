@@ -1,7 +1,7 @@
 ---
 source: src/modules/account/tests/integration/persisted-locale.test.ts
-sha256: 2479ef3c00a604f1f9a1a9d7baf7d25a523e7d6967a443cb1694b0e716f029cc
-generated_at: 2026-09-23T18:13:47.119315+00:00
+sha256: 0a0f78de0cdfb007bb8e26d6e73daadac79ba47ad8785e7b20ba372281867f8e
+generated_at: 2026-10-14T09:12:35.294420+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Integration tests verifying that the `locale` field on the user document is (1) captured from the request language at signup, (2) falls back to the boot default outside a request, (3) editable after signup via the users service, (4) unaffected by partial updates that omit it, and (5) serialised to the client as part of the public `User` contract.
+Integration tests verifying that the `locale` field on the user document is correctly captured from the request context at signup, falls back to the boot locale when no request context exists, remains editable via subsequent updates, is not clobbered by unrelated partial updates, and is exposed through the user's JSON serialization. The field exists so that non-request code (e.g., worker-sent emails) can resolve a user's preferred language.
 
 ## Key elements
 
-- **`describe('a user's persisted locale')`** — single suite with five cases covering the two "halves" of the field's lifecycle: capture-at-signup and edit-afterwards.
-- **`runWithLocale('it', …)`** (from `@infrastructure/i18n`) — wraps `accountService.signup` to simulate an `Accept-Language` context without a real HTTP request.
-- **`getDefaultLocale()`** — used to assert the fallback locale when no request context is present.
-- **`accountService.signup(…)`** — exercises the account module's signup path, which is where locale is first persisted.
-- **`userService.updateById(id, { locale: 'it' }, …)`** — exercises the users module's update path for the "editable afterwards" and "left alone" cases.
-- **`createUser` / `PLAIN_PASSWORD` / `userRepository`** (from `@modules/users/tests/factories`) — test factory and direct repository access for assertions that bypass the service layer.
-- **`ResponseSuccess<UserDocument>`** — type-guard for asserting on the shape of service results.
-- **`setupTestDb()`** — installs an in-memory database before the suite runs.
+- **`describe('a user's persisted locale')`** — the single suite; all tests are top-level `it` blocks (no nested describes).
+- **`setupTestDb()`** — called once at module scope; provisions a fresh test database for the whole file.
+- **Signup capture test** — wraps `accountService.signup` in `runWithLocale('it', …)` and asserts `data.locale === 'it'`.
+- **Fallback test** — calls `accountService.signup` *without* `runWithLocale` and asserts `data.locale` equals `getDefaultLocale()`.
+- **Edit test** — creates a user via the `createUser` factory, then calls `userService.updateById` with `{ locale: 'it' }` and asserts the change.
+- **Partial-update safety test** — sets locale, then updates only `username`; re-reads via `userRepository.findById` and asserts locale is still `'it'`.
+- **Serialization test** — updates locale, re-reads the document, and asserts `toJSON()` includes the `locale` key.
 
 ## Relationships
 
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` for the in-memory Mongo instance.
-- **`tests/support/callers.ts`** — provides `testCallerContext` (authenticated caller identity) passed to every service call.
-- **`src/modules/users/tests/factories.ts`** — supplies the `createUser` factory, `PLAIN_PASSWORD` constant, and a direct `userRepository` handle.
-- **`src/modules/account/services/index.ts`** — exports `accountService`, whose `signup` method is the primary SUT for the capture-at-signup tests.
-- **`src/modules/users/index.ts`** — re-exports `userService` and the `UserDocument` type used in assertions.
-- **`src/modules/users/model.ts`** — defines the `UserDocument` shape (including `locale` and `toJSON()`).
-- **`src/modules/users/repository.ts`** — underlying repository backing `userRepository.findById`.
-- **`src/modules/users/service.ts`** — implementation behind `userService.updateById`.
-- **`src/infrastructure/i18n/index.ts`** — exports `getDefaultLocale` and `runWithLocale`.
-- **`src/infrastructure/i18n/context.ts`** — request-scoped locale context that `runWithLocale` sets.
-- **`src/infrastructure/i18n/catalog.ts`** — locale catalog referenced by the i18n infrastructure.
-- **`src/infrastructure/http/response.ts`** — defines `ResponseSuccess`, the discriminated-union envelope asserted throughout.
+- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which the file calls at module load to initialise the in-memory/database test environment.
+- **`tests/support/callers.ts`** — provides `testCallerContext` (used for signup) and `callerContextAs('admin')` (used for update calls).
+- **`src/modules/users/tests/factories.ts`** — provides `createUser`, `PLAIN_PASSWORD`, and a re-exported `userRepository` used for direct DB reads.
+- **`src/modules/account/services/index.ts`** — source of `accountService.signup`, the primary code under test.
+- **`src/modules/users/index.ts`** / **`src/modules/users/services/index.ts`** — source of `userService.updateById` and the `UserDocument` type.
+- **`src/modules/users/model.ts`** — defines the `UserDocument` shape (including `locale` and `toJSON`).
+- **`src/infrastructure/i18n/index.ts`** → **`context.ts`** / **`catalog.ts`** — provides `runWithLocale` (simulates a request's `Accept-Language`) and `getDefaultLocale` (boot-time fallback).
+- **`src/infrastructure/http/response.ts`** — source of the `ResponseSuccess<T>` type used in type-casts to access `.data`.
 
 ## Notes
 
-- The file deliberately lives under `account/tests` even though three of the five cases exercise the `users` service, because the field's _origin_ (signup) belongs to the account module. The "editable afterwards" and "left alone" cases cross into users-module territory.
-- The "left alone" test performs two sequential `updateById` calls and then reads via the repository directly, confirming that omitting `locale` from a partial update does not reset it.
-- The `toJSON()` assertion guards against a future regression where `locale` is added to the document but excluded from the public serialisation.
+- The file is side-effectful: `setupTestDb()` runs at import time, so the test runner must load this module before any assertions are meaningful.
+- The two signup tests are intentionally asymmetric—one *inside* `runWithLocale` and one *outside*—to pin down both the happy path and the no-request fallback.
+- The "left alone" test bypasses the service layer for its assertion (uses `userRepository.findById` directly) to confirm the write truly persisted rather than being an in-memory artifact.
+- `PLAIN_PASSWORD` and `createUser` come from the same factories module; `PLAIN_PASSWORD` is the shared constant so both halves of the signup payload match without hardcoding.

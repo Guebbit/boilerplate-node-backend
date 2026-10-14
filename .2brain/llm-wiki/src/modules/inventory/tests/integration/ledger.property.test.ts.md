@@ -1,7 +1,7 @@
 ---
 source: src/modules/inventory/tests/integration/ledger.property.test.ts
-sha256: c6bd99be0c7f9ea8e2d0e4282e2cf08576e887ab6f60a8aadcbcdd109f41f850
-generated_at: 2026-09-23T18:46:48.439043+00:00
+sha256: 07a6d8b7eb0e9ce84e33c2e7dee73a29ee443352c8ae1d8920b8303520357af7
+generated_at: 2026-10-14T16:01:51.590703+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,36 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Property-based integration test that verifies the core invariant of the inventory module: replaying every stock-movement ledger row for a product reproduces its stored `onHand` and `reserved` counters exactly, for _all_ generated sequences of transitions rather than a fixed set of examples. It runs against a real MongoDB instance so that the conditional-write coupling between ledger rows and counter updates is exercised end-to-end.
+Property-based integration test that verifies the stock-movement ledger for a product is a faithful replay of its stored `onHand` and `reserved` counters. Instead of enumerating example transitions, it generates random sequences of caller-visible operations (via `fast-check`), executes them against a real MongoDB instance, then asserts that summing the ledger rows reproduces the counters exactly. The file also asserts two invariants: counters never go negative, and a refused transition writes no row.
 
 ## Key elements
 
-- **`RUN`** — Shared fast-check config: fixed seed (`20_260_817`), run count from `PROPERTY_RUNS_WITH_DATABASE`, and `endOnFailure: true` so a single counterexample halts the suite.
-- **`OPENING_ON_HAND`** (500) — Starting stock for every case; large enough that a generated sequence of receipts/reserves has room to move, preventing the property from being trivially satisfied by an all-refusal sequence.
-- **`Step`** (type) — Union of the six caller-visible operations: `receive`, `adjust`, `reserve`, `commit`, `release`, `expire`. Deliberately excludes direct calls to the private `applyTransition` chokepoint.
-- **`step()`** — `fc.Arbitrary<Step>` generator; `adjust` deltas exclude zero (matching the endpoint's own validation).
-- **`play(productId, steps)`** — Drives a generated sequence through the public `inventoryService` API. Maintains a single open hold (one order at a time) with a deterministically derived ObjectId so a failing run replays identically.
-- **`replay(productId)`** — Queries raw `stockMovementModel` rows for the product and sums `onHandDelta` / `reservedDelta` to produce the "ledger says" totals.
-- **Three test cases** in `describe('the ledger reproduces the counters')`:
-    1. _Replaying every row lands exactly on both stored counters_ — property-based equality check.
-    2. _Never lets either counter go negative_ — property-based non-negativity and `reserved ≤ onHand` invariant.
-    3. _Writes no row for a transition that was refused_ — single deterministic case: reserving more than exists must leave zero ledger rows.
+- **`RUN`** — shared `fc.assert` config: fixed seed (`20_260_817`), run count from `PROPERTY_RUNS_WITH_DATABASE`, `endOnFailure: true`.
+- **`OPENING_ON_HAND`** (500) — starting inventory level for every generated case; large enough that a sequence of receipts/reserves can actually move counters (a fully-refused sequence would satisfy the property trivially).
+- **`Step`** (type) — union of the seven operations a caller can issue: `receive`, `adjust`, `reserve`, `commit`, `ship`, `release`, `expire`.
+- **`step()`** — `fc.Arbitrary<Step>` that produces random steps; `adjust` deltas exclude zero to mirror the endpoint guard.
+- **`play(productId, steps)`** — drives a generated sequence through `inventoryService`, tracking at most one open hold (order id + paid flag) so `commit`/`ship`/`release`/`expire` resolve a single live reservation. Order IDs are derived from a counter (not random) so a failing run replays identically.
+- **`replay(productId)`** — reads raw `stockMovementModel` rows for the product and sums `onHandDelta` / `reservedDelta` columns.
+- **Three specs** under `describe('the ledger reproduces the counters')`:
+  1. Stored counters equal opening balance + ledger delta.
+  2. Neither counter goes negative, and `reserved ≤ onHand`.
+  3. A single deterministic refusal case (reserve 99 from stock of 2) produces zero ledger rows.
 
 ## Relationships
 
-- **`src/modules/inventory/service.ts`** (`inventoryService`) — The system under test; every `Step` is dispatched through its public methods (`receive`, `adjust`, `reserveForOrder`, `commitForOrder`, `releaseForOrder`).
-- **`src/modules/inventory/repository.ts`** (`stockMovementRepository`) — Used in the "no row" test to confirm the search returns an empty result set and zero `meta.totalItems`.
-- **`src/modules/inventory/model.ts`** (`stockMovementModel`) — Queried directly in `replay()` to read raw ledger rows for summation.
-- **`src/modules/products/tests/factories.ts`** (`createProduct`) — Creates a product document with a specified `onHand` / `reserved` count before each property case.
-- **`src/modules/products/index.ts` / `service.ts`** (`productService.findByIdRaw`) — Reads back the stored counters to compare against the ledger replay.
-- **`src/types/index.ts`** (`StockMovementReason`) — Supplies the `expire` reason enum value passed to `releaseForOrder`.
-- **`tests/support/setup-test-db.ts`** (`setupTestDb`) — Initialises the real MongoDB connection the file depends on.
-- **`tests/support/knobs.ts`** (`PROPERTY_RUNS_WITH_DATABASE`) — Controls how many property runs execute when the test hits a live database.
+- **`src/modules/inventory/services/index.ts`** — `inventoryService` is the API under test; every step in `play` calls one of its public methods (`receive`, `adjust`, `reserveForOrder`, `commitForOrder`, `shipForOrder`, `releaseForOrder`, `releaseCommittedForOrder`).
+- **`src/modules/inventory/model.ts`** — `stockMovementModel` is queried directly in `replay()` to read raw ledger rows and compute expected deltas.
+- **`src/modules/inventory/repository.ts`** — `stockMovementRepository.search` is used in the refusal spec to confirm the repository layer also reports zero items.
+- **`src/modules/products/index.ts`** — `productService.findByIdRaw` reads the stored counters to compare against the ledger replay.
+- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds a product with a known `onHand` / `reserved` before each property run.
+- **`src/types/index.ts`** — `StockMovementReason.expire` is passed to `releaseForOrder` in the expire branch.
+- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to provision the real Mongo connection.
+- **`tests/support/knobs.ts`** — `PROPERTY_RUNS_WITH_DATABASE` controls how many property cases execute per spec.
 
 ## Notes
 
-- The test intentionally drives the **public service API**, not the internal `applyTransition` method. This ensures the property verifies the full path (validation → conditional write → ledger row) rather than just arithmetic self-consistency.
-- Only **one hold** (reservation) is open at any time per product, mirroring real usage where each order has its own hold. Generated `commit`/`release`/`expire` steps are no-ops if no hold is open.
-- Order IDs are **derived** (`(++counter).toString(16).padStart(24, 'a')`) rather than random, so a failing seed replays the exact same identifiers.
-- The "no row for refused transition" test is **not** property-based; it is a single deterministic assertion using a product with `onHand: 2` and a reserve request for 99.
-- The `OPENING_ON_HAND` comment explicitly warns that a small starting value would make the property trivially true if every step were refused — the 500 buffer prevents that degenerate case.
+- **No mocks.** The test deliberately runs against real MongoDB; mocking the repository would only re-verify `counterDeltaFor` arithmetic rather than the write-path coupling between counter mutation and ledger row insertion.
+- **One open hold at a time.** `play` enforces a single active reservation (skipping `reserve` if one is already open). This mirrors a realistic one-order-at-a-time caller and keeps the state machine tractable for the 1–25 step sequences.
+- **Seeded and replayable.** The fixed seed plus derived (counter-based) order IDs mean a failing run can be reproduced exactly by re-running the file.
+- **The third spec is deterministic, not property-based.** It exists to pin the "no row on refusal" guarantee with the cheapest possible case rather than relying on the property generator to stumble on a refusal.
+- **Adjust deltas exclude zero** to match the endpoint's own guard; a zero-delta adjust is a no-op that the API rejects.

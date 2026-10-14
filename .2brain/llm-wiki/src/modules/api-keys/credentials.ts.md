@@ -1,7 +1,7 @@
 ---
 source: src/modules/api-keys/credentials.ts
-sha256: 504ab0cc960dd3b5f3c2b789f957e334b403cb4687a845dff50eaa431ea29c21
-generated_at: 2026-09-23T18:24:02.388106+00:00
+sha256: 3ac3a812226bdaaaa24032c547016a7240e22eafcc1eb031e3bc0d532f9e6b38
+generated_at: 2026-10-14T14:58:06.054443+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,31 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Implements the one-way hashing half of the API-key credential lifecycle: minting a new high-entropy token, parsing the public prefix out of a presented token, and verifying a presented plaintext against a stored SHA-256 digest. Deliberately avoids bcrypt/argon2 because `randomBytes(32)` leaves no search space for a stretch function to exploit, so the per-request cost buys nothing.
+Mints and verifies API-key credentials using one-way SHA-256 hashing (`hashToken`). It deliberately avoids bcrypt/argon2 because the tokens are pure `randomBytes` output with no search space to make expensive, so the ~100 ms per-authenticated-request cost buys nothing. This is the "mint and verify" half of the credential lifecycle; storage and lifecycle management live in the services layer.
 
 ## Key elements
 
-- **`PREFIX_BYTES` / `PUBLIC_PREFIX_LENGTH`** – 6 random bytes → exactly 8 base64url characters. The fixed length is what makes position-based slicing in `parseApiKeyToken` reliable.
-- **`SECRET_BYTES`** – 32 bytes (256 bits) of randomness for the secret half; matches the entropy budget of every other high-entropy token in the repo.
-- **`MintedApiKey`** – Interface returned by `mintApiKey`: `plaintext` (shown once to the caller), `publicPrefix` (stored/indexed), `hash` (the only secret artifact persisted).
-- **`mintApiKey()`** – Generates `sk_<prefix>_<secret>` in base64url, hashes the full plaintext with `hashToken`, and returns the three-part result.
-- **`parseApiKeyToken(token)`** – Validates the `sk_` prefix, slices out the 8-char public prefix by position, and returns it (or `undefined`). This is the cheap first rejection before any DB lookup.
-- **`verifyApiKey(plaintext, storedHash)`** – Hashes the presented plaintext and compares digests via `constantTimeEqual`; never compares plaintexts directly.
-- **`displayIdOf(publicPrefix)`** – Returns the human-readable, non-secret identifier (`sk_<prefix>`) used in audit trails and key-list UIs.
+- **`PREFIX_BYTES` / `PUBLIC_PREFIX_LENGTH`** — 6 bytes of randomness → always exactly 8 base64url characters. The fixed length is what enables position-based slicing in `parseApiKeyToken`.
+- **`SECRET_BYTES`** — 32 bytes (256 bits) for the secret half, matching every other high-entropy token in the repo.
+- **`MintedApiKey`** (interface) — `{ plaintext, publicPrefix, hash }`. `plaintext` is shown to the caller exactly once; `hash` is what gets stored.
+- **`mintApiKey()`** — Generates `sk_<prefix>_<secret>`, both halves base64url. Returns the plaintext, the public prefix (for indexing/display), and the SHA-256 hash.
+- **`parseApiKeyToken(token)`** — Extracts the public prefix by slicing at a fixed offset. Returns `undefined` if the token is too short or lacks the expected `_` separator. This is the resolver's cheap pre-database rejection.
+- **`verifyApiKey(plaintext, storedHash)`** — Hashes the presented plaintext and compares the two digests with `constantTimeEqual`.
+- **`displayIdOf(publicPrefix)`** — Returns the audit/log-safe identifier (`sk_<prefix>`), never the database `_id`.
 
 ## Relationships
 
-- **`@modules/users` (`src/modules/users/index.ts` / `model.ts`)** – Provides `hashToken`, the shared SHA-256 helper also used by two-factor backup codes.
-- **`@kernel/authentication` (`src/kernel/authentication.ts`)** – Supplies the `API_KEY_TOKEN_PREFIX` constant (`"sk_"`) used for minting, parsing, and display.
-- **`@infrastructure/security/constant-time` (`src/infrastructure/security/constant-time.ts`)** – Provides `constantTimeEqual` to prevent timing side-channels in `verifyApiKey`.
-- **`src/modules/api-keys/services/api-keys.ts`** – The service layer that calls `mintApiKey`, `parseApiKeyToken`, and `verifyApiKey` as part of CRUD and authentication flows.
-- **`src/modules/api-keys/module.ts`** – Registers/routes the api-keys module; depends on the service which in turn depends on this file.
-- **`src/modules/api-keys/tests/unit/credentials.test.ts`** – Unit tests exercising every export above.
-- **`src/modules/api-keys/tests/integration/api-keys.test.ts`** – Integration tests that exercise the full mint → store → verify path through the service.
+- **`@infrastructure/security/hash-token`** — Provides `hashToken` (SHA-256). Both `mintApiKey` and `verifyApiKey` depend on it.
+- **`@infrastructure/security/constant-time`** — Provides `constantTimeEqual`, used by `verifyApiKey` to prevent timing oracles on the digest comparison.
+- **`@kernel/authentication`** — Supplies the `API_KEY_TOKEN_PREFIX` constant (`sk_`), ensuring the prefix string is defined in exactly one place.
+- **`services/resolver.ts`** — Calls `parseApiKeyToken` as the first, cheap rejection before any database lookup.
+- **`services/api-keys.ts`** — Calls `mintApiKey` on creation and `verifyApiKey` on authentication.
+- **`tests/unit/credentials.test.ts`** / **`tests/integration/api-keys.test.ts`** — Cover mint/parse/verify and the full credential flow.
 
 ## Notes
 
-- **Parsing is positional, not split-based.** Base64url's alphabet legally includes `_`, so `token.split('_')` would misalign the prefix. The 8-character prefix length is fixed by construction (6 bytes ÷ 6 bits/char, no padding), making `slice(prefixStart, prefixEnd)` exact.
-- **The prefix is public by design.** It is stored, indexed, and displayed in the UI. Only the hash of the full plaintext is secret. The `_id` in the database is explicitly _not_ the identifier shown to operators.
-- **Verification always hashes first**, then compares fixed-length digests. This means a length mismatch on the presented token is never observable to the caller, eliminating a trivial oracle.
-- **`plaintext` is returned once** from `mintApiKey` and never persisted. Any code path that logs or stores the `MintedApiKey` object after the initial response must redact `plaintext`.
+- **Do not split on `_`.** The base64url alphabet legally contains `_`, so either token half can include one. `parseApiKeyToken` slices by the fixed 8-character offset instead.
+- The public prefix is **not secret** — it is stored, indexed, and shown in lists. A log or audit line showing `sk_a1b2c3d4…` leaks nothing.
+- `verifyApiKey` compares **digests**, not plaintexts, so the comparison length is always fixed regardless of the presented token's length.
+- The plaintext is displayed to the caller **exactly once** at mint time; only the hash is persisted. There is no "reveal" path.

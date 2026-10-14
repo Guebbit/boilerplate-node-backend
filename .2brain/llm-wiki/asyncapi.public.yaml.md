@@ -1,7 +1,7 @@
 ---
 source: asyncapi.public.yaml
-sha256: 697518d2ef186297e49361378dda22df54e9d9b651a4561905ef540f34ade8a6
-generated_at: 2026-10-07T23:45:42.290647+00:00
+sha256: b24fa7fabdac4be20e1fd137ccf711683f146ef5ddfaa01c718715241c354438
+generated_at: 2026-10-14T06:45:20.204428+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,32 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Generated, read-only AsyncAPI 3.0.0 contract that bundles all event-driven and real-time channel definitions from the individual module fragments into a single public document. It is produced by `npm run contracts:bundle` and exists so that consumers (dashes, webhook subscribers, type generators) have one canonical reference for every outbound event the backend emits.
+A **generated** AsyncAPI 3.0.0 bundle that consolidates all event-driven contracts (SSE streams and webhook deliveries) into a single public specification. It is produced by `npm run contracts:bundle` from per-module fragments and the root contract, and is intended for external consumers (dashboards, webhook subscribers, type generation) rather than for human editing.
 
 ## Key elements
 
-- **`servers.sseLocal`** – Local HTTP endpoint (`localhost:3000`) backing the observability SSE stream at `/observability/events`.
-- **`servers.sseNotificationsLocal`** – Local HTTP endpoint backing the notifications SSE stream at `/notifications/stream`.
-- **`servers.subscriberEndpoint`** – A *variable* server (`{subscriberHost}{subscriberPath}`) representing the reverse direction: the backend opens an outbound HTTPS call to a subscriber-configured URL. It is not a host this application listens on.
-- **Channels (observability `*`.)** – `observability.metrics.snapshot`, `observability.metrics.updated`, `observability.heartbeat`. Tagged with `x-transport: sse` (consumed by `scripts/contracts/generate-asyncapi-types.ts` to identify SSE channels).
-- **Channels (domain webhooks)** – `order.*`, `payment.*`, `return.*`, `example.published`. Each binds to `subscriberEndpoint` and carries a single message.
-- **Channels (notifications `*`.)** – `notifications.created`, `notifications.deleted`, `notifications.read`. Tagged `x-transport: sse`, bound to `sseNotificationsLocal`.
-- **Operations** – One `send` operation per channel with a human-readable description of when/how the event fires and which source code produces it.
-- **`components.messages`** (referenced, defined in the full file) – Typed payload schemas for every event.
+- **`servers`** — Three server definitions: `sseLocal` (localhost SSE for observability), `sseNotificationsLocal` (localhost SSE for notifications), and `subscriberEndpoint` (a *variable* HTTPS host+path representing each subscriber's own configured URL, not a server this app runs).
+- **`channels`** — All event topics: `observability.*` (metrics snapshot/update, heartbeat), `order.*` (created, paid, cancelled), `shipment.*` (shipped, delivered), `payment.*` (succeeded, failed, refunded), `return.*` (requested, received, closed), `example.published`, and `notifications.*` (created, deleted, read). SSE channels carry an `x-transport: sse` extension; webhook channels bind to `subscriberEndpoint`.
+- **`operations`** — One-to-one send operations per channel, each linking a channel to its message schema. Descriptions document firing semantics (e.g., `order.paid` is derived from `status_changed` filtering on `to: 'paid'`).
+- **`components.messages`** (referenced via `$ref`) — Payload schemas for every event, defined in the source fragments and inlined here.
+- **`x-transport` extension** — Custom field read by `scripts/contracts/generate-asyncapi-types.ts` to select which channels produce SSE TypeScript types (not the channel name prefix).
 
 ## Relationships
 
-- **`shared/contracts/asyncapi.root.yaml`** – Listed as the primary source in the generated header; provides the top-level `asyncapi`, `id`, `info`, `defaultContentType`, and `components` skeleton that the bundler expands.
-- **`src/modules/observability/asyncapi.yaml`** – Source fragment contributing the three `observability.*` channels, the `sseLocal` server, and the corresponding operations.
-- **`src/modules/webhooks/asyncapi.yaml`** – Source fragment contributing the domain webhook channels (`order.*`, `payment.*`, `return.*`, `example.published`) and the `subscriberEndpoint` server.
-- **`src/modules/orders/events.ts`** – Runtime emitter for `order.paid`, `order.shipped` (derived from `order.status_changed`) and `order.cancelled`; the operation descriptions point here as the firing site.
-- **`src/modules/orders/services/crud.ts`** – `recordCreated` is the emit point for `order.created` (fired on both admin create and storefront checkout).
-- **`src/modules/payments/events.ts`** – Runtime emitter for `payment.succeeded`, `payment.failed`, and `payment.refunded`.
+- **`shared/contracts/asyncapi.root.yaml`** — Root fragment supplying `info`, license, and shared component definitions that this file inherits and re-exports.
+- **`src/modules/observability/asyncapi.yaml`** — Source fragment contributing the `observability.*` channels and their SSE server binding.
+- **`src/modules/webhooks/asyncapi.yaml`** — Source fragment contributing webhook channel scaffolding and the `subscriberEndpoint` variable server.
+- **`src/modules/orders/events.ts`** — Emits the domain events (`order.created`, `order.status_changed`, `order.cancelled`) that the `webhookOrder*` operations fire; `order.paid` is derived here by filtering `status_changed` on `to: 'paid'`.
+- **`src/modules/orders/services/crud.ts`** — `recordCreated` is the runtime call-site that triggers the `order.created` webhook operation.
+- **`src/modules/payments/events.ts`** — Emits the payment domain events that back the `payment.*` webhook channels.
 
 ## Notes
 
-- **Do not edit by hand.** The file header marks it as generated; all edits go to the per-module `asyncapi.yaml` fragments or `shared/contracts/asyncapi.root.yaml`, then `npm run contracts:bundle` is re-run.
-- **`x-transport: sse` is load-bearing.** The type generator (`generate-asyncapi-types.ts`) keys off this extension to select SSE channels; it is *not* inferred from the channel name prefix. Omitting it on a new SSE channel will silently exclude it from generated types.
-- **`subscriberEndpoint` is intentionally non-concrete.** Its `host`/`pathname` are variables because each subscription registers its own URL. Spectral rules (`asyncapi-servers`, `asyncapi-channel-servers`) still pass because the channels explicitly `$ref` this server.
-- **`order.paid` / `order.shipped` are not standalone domain events.** They are derived by filtering `order.status_changed` on the `to` field; the `payments/events.ts` and `orders/events.ts` files are the canonical source of truth for the actual publish logic.
-- **Version is `0.1.0`** and `check:asyncapi-breaking` explicitly ignores this field during semver checks.
+- **DO NOT EDIT.** Regenerate via `npm run contracts:bundle`. All source-of-truth edits go into the per-module `asyncapi.yaml` / `asyncapi.webhooks.yaml` fragments or the root contract.
+- The `subscriberEndpoint` server uses `{subscriberHost}` / `{subscriberPath}` variables — it is *not* a fixed address. Linters (`asyncapi-servers`, `asyncapi-channel-servers`) still pass because the merged module fragments bind channels to it.
+- `version: 0.1.0` is intentionally pinned at alpha; the `check:asyncapi-breaking` script ignores this field, so bumping it will not trip CI.
+- `x-transport: sse` is the authoritative marker for SSE channel selection in codegen — the `observability.` / `notifications.` name prefix is *not* what the generator keys on.
+- The file lists sources in its header comment; if a module is missing from that list its fragment was not included in the last bundle run.

@@ -1,7 +1,7 @@
 ---
 source: scripts/mutation/ci/waves.ts
-sha256: 1e8c2f03e4d9ea600019b485427dbc80a0a0da16d9efba1201d5524c0b8534b5
-generated_at: 2026-10-01T12:33:03.666502+00:00
+sha256: aefe3493d7842bce699966432a22a0dc421687255bc3e9bf74496131685cce49
+generated_at: 2026-10-14T07:20:13.140523+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,36 +9,48 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pure planning logic for the GitHub mutation-testing sweep. Given a set of files (or line-slices) and the outcomes of the previous wave, it decides what each wave's matrix of shards will run, how a timed-out shard is split smaller, and when a shard is abandoned. The module performs no I/O; all file reading and artifact writing lives in the CLI.
+Pure planner for the GitHub mutation-testing sweep. Given a scope of mutable files, it decides how to slice work into shards (matrix jobs) across successive waves, how timed-out shards are split and requeued, and how errors are retried or abandoned. It contains no I/O — `cli.ts` performs all file reading/writing.
 
 ## Key elements
 
-- **Constants** — `MAX_SHARDS_PER_WAVE` (256, GitHub matrix cap), `SHARD_LINES` (200, cost proxy per shard), `SPLIT_FACTOR` (4, pieces a timed-out unit is cut into), `MIN_SLICE_LINES` (8, below this a slice is not split again), `MAX_ERROR_RETRIES` (1, non-timeout failures before abandonment).
-- **Types** — `ScopeFile` (file + line counts), `Unit` (a file or a line-slice), `CiShard` (one matrix job: name, units, error count), `ShardOutcome` (`'reported' | 'timeout' | 'error'`), `WavePlan` (the full per-wave artifact: scope, shards, backlog, abandoned).
-- **`spanOf`** — returns the effective line range of a unit (its slice, or the whole file).
-- **`cut`** (private) — splits a unit's range into *parts* contiguous sub-slices with proportionally distributed line counts.
-- **`unitsOf`** — initial decomposition: a file that fits `SHARD_LINES` stays whole; otherwise it is pre-sliced.
-- **`splitUnit`** — splits a timed-out unit into `SPLIT_FACTOR` pieces, or returns `undefined` if it is too small (`< factor × MIN_SLICE_LINES`).
-- **`packUnits`** — groups units into shards: each slice gets its own shard; whole files are first-fit-decreasing up to `SHARD_LINES`.
-- **`firstWave`** — builds the wave-1 `WavePlan` from the full scope.
-- **`nextWave`** — builds wave *N+1* from the previous plan and a `Map<shardName, ShardOutcome>`; retries, splits, abandons, and carries forward backlog + abandoned.
-- **`retryOf`** (private) — per-shard decision: reported → done; timeout with multiple units → one shard per unit; timeout with one unit → `splitUnit`; error → retry once then abandon.
-- **`outcomeOf`** — maps a Stryker exit code + report-presence flag to a `ShardOutcome` (report on disk wins; 124/137 → timeout).
-- **`strykerArguments`** — produces the `--mutate` file list and `MUTATION_SLICE` string for one shard.
+- **Constants**
+  - `MAX_SHARDS_PER_WAVE` (256) — GitHub's per-matrix job cap.
+  - `SHARD_LINES` (200) — non-blank-line budget per shard; also the slice size for large files.
+  - `SPLIT_FACTOR` (4) — pieces a timed-out unit is cut into.
+  - `MIN_SLICE_LINES` (8, unexported) — below this a slice is no longer split.
+  - `MAX_ERROR_RETRIES` (1) — non-timeout failures before a shard is abandoned.
+
+- **Types**
+  - `ScopeFile` — a file with `lines` (cost proxy) and `physicalLines` (indexing range).
+  - `Unit` — a whole file or a `LineSlice` of one.
+  - `CiShard` — one matrix job: name, units, error count.
+  - `ShardOutcome` — `'reported' | 'timeout' | 'error'`.
+  - `WavePlan` — the serializable plan artifact: wave number, scope, shards, backlog, abandoned.
+
+- **Functions**
+  - `spanOf(unit)` — returns the line range a unit covers (slice or full file).
+  - `cut(unit, parts)` *(private)* — splits a range into `parts` roughly-equal contiguous slices, distributing `lines` proportionally.
+  - `unitsOf(file, shardLines?)` — pre-slices a large file into units sized to one shard.
+  - `splitUnit(unit, factor?)` — cuts a timed-out unit into `factor` pieces, or returns `undefined` if too small.
+  - `packUnits(units, shardLines?)` — groups units into shard arrays: slices get their own shard; whole files are first-fit-decreasing up to `shardLines`.
+  - `firstWave(scope, shardLines?)` — builds wave 1: all files, big ones pre-sliced, packed, named, capped.
+  - `nextWave(previous, outcomes)` — builds the following wave from prior failures (split or retry) plus the prior backlog.
+  - `retryOf(shard, outcome)` *(private)* — the per-shard decision: split on timeout, retry-once on error, abandon after retries.
+  - `outcomeOf(exitCode, hasReport)` — maps a Stryker step's exit code + report presence to a `ShardOutcome`.
+  - `strykerArguments(shard)` — produces the `--mutate` file list and `MUTATION_SLICE` value for one shard's command line.
 
 ## Relationships
 
-- **`scripts/mutation/ci/cli.ts`** — the CLI reads the scope, calls `firstWave` / `nextWave`, uploads the `WavePlan` as an artifact, and calls `outcomeOf` and `strykerArguments` to drive the Stryker step. This module exports only pure logic and types.
-- **`scripts/mutation/ci/merge.ts`** — consumes the final `WavePlan` (scope, abandoned) to reconcile results across waves.
-- **`scripts/mutation/ci/slice-ignorer.ts`** — provides the `LineSlice` type (`{ from, to }`) used throughout this module.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — unit tests for the planning functions in this file.
-- **`tests/unit/scripts/mutation/ci/merge.test.ts`** — tests merge, which depends on the `WavePlan` shape defined here.
+- **`scripts/mutation/ci/slice-ignorer.ts`** — provides the `LineSlice` type used by `Unit`, `spanOf`, `cut`, and `strykerArguments`.
+- **`scripts/mutation/ci/cli.ts`** — the I/O layer that calls `firstWave`, `nextWave`, `outcomeOf`, and `strykerArguments`; this file stays pure.
+- **`scripts/mutation/ci/merge.ts`** — consumes `WavePlan.scope` and `WavePlan.abandoned` to determine which files are finished and which to merge results for.
+- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — unit tests for the planning, packing, splitting, and wave-sequencing logic in this file.
+- **`tests/unit/scripts/mutation/ci/merge.test.ts`** — exercises merge against `WavePlan` structures produced by this module.
 
 ## Notes
 
-- `SHARD_LINES` is a **floor**, not a target: heavier files will time out and be split by design; that is the recovery path, not a misconfiguration.
-- Slices **always** get a dedicated shard (one per matrix job) because `MUTATION_SLICE` applies to the entire Stryker invocation; they are never packed with whole files.
-- Whole-file packing uses **first-fit-decreasing**, which is intentionally different from the balanced bin-packing in `sharding.ts`.
-- Shard names follow `w<wave>-<index>` with a zero-padded 3-digit index (e.g. `w1-000`), unique across the whole run.
-- A shard with **no entry** in the outcomes map (runner lost mid-job) is treated as an error, not a timeout.
-- The module is pure: no imports beyond the `LineSlice` type from `slice-ignorer.ts`.
+- Slices always get their own shard (`packUnits` puts them first); they are never co-packed with whole files. This matters because a slice's `MUTATION_SLICE` env var governs the entire Stryker run for that job.
+- `SHARD_LINES` is a *hard cap* in `packUnits` (first-fit-decreasing), unlike the balanced-bin packing in `sharding.ts`.
+- `outcomeOf` treats the on-disk report as authoritative over the exit code: Stryker writes the report only after the last mutant, so its presence means the job truly completed. Exit 124 is `timeout`'s own signal; 137 is its `--kill-after` follow-up.
+- A shard with multiple units that times out is split one-unit-per-shard (not sliced further). Only a single-unit shard gets `splitUnit` treatment.
+- `MIN_SLICE_LINES` is deliberately unexported; it is an internal guard, not a tunable for callers.

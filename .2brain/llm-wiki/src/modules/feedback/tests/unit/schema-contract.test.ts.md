@@ -1,7 +1,7 @@
 ---
 source: src/modules/feedback/tests/unit/schema-contract.test.ts
-sha256: 248f630ace17531844a3e737882b194a356eee936a14df974135fd0b976153d4
-generated_at: 2026-09-23T18:43:10.510645+00:00
+sha256: 7a22c74b5c04354d97037b68da4a163ae2802dd700a5720a1dfac08ff49c4f99
+generated_at: 2026-10-14T15:53:03.799831+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,31 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Pins the social contract of `feedbackRequestSchema` — the one surface where an anonymous stranger writes to the database. It asserts which fields are required, which are optional, which carry defaults, which are indexed, and how long documents are retained, so that a schema refactor cannot silently change what a reporter must provide or how the operator queue behaves.
+Contract test for `feedbackRequestSchema`. Pins the schema's public shape — required vs. optional fields, enum bounds, defaults, index definitions, and TTL — so that any change to the feedback-request contract is either intentional and reviewed or caught here. The design intent encoded in the tests: a stranger must supply enough to be reachable (email, subject, message) but is not obliged to identify themselves (name optional), and operator-side fields must remain absent until an operator acts.
 
 ## Key elements
 
-- **`RETENTION_SECONDS`** – Module-level constant computed from `NODE_FEEDBACK_RETENTION_DAYS` (default 730 days) converted to seconds. Used as the expected TTL value so the test and the policy move together when the env var changes.
-- **`describe('feedbackRequestSchema')`** – Single describe block containing seven assertions:
-    - Required fields are exactly `email`, `message`, `subject`.
-    - `name` is _not_ required.
-    - `respondedAt` and `adminNotes` have no default (operator-filled fields).
-    - `status` is restricted to the `FeedbackRequestStatus` enum and defaults to `FeedbackRequestStatus.new`.
-    - Index specs include `createdAt_1` (TTL) and `status_1_createdAt_-1` (operator queue).
-    - `timestamps: true` is set (Mongoose auto-manages `createdAt`/`updatedAt`).
-    - TTL `expireAfterSeconds` appears only on the ascending single-field index, not the compound one.
-- **Test helpers** (imported from `@tests/schema`): `requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf` — small utilities that extract schema metadata for comparison.
+- **`RETENTION_SECONDS`** — computed at module load from `currentEnvironment().NODE_FEEDBACK_RETENTION_DAYS` (fallback 730 days) converted to seconds. Used to assert the TTL value rather than hardcoding a number.
+- **`describe('feedbackRequestSchema')`** — eight focused assertions:
+  - `requiredPaths` contains exactly `email`, `message`, `subject` (and explicitly not `name`).
+  - `defaultOf` for `respondedAt` and `adminNotes` is `undefined` (no default that would pre-mark a ticket as answered).
+  - `enumOf` for `status` matches `Object.values(FeedbackRequestStatus)`; `defaultOf` for `status` is `FeedbackRequestStatus.new`.
+  - `indexSpecs` lists `createdAt_1` (ascending) and `status_1_createdAt_-1` (compound queue index).
+  - `optionsOf(...).timestamps` is `true`.
+  - `indexOptionSpecs` confirms `expireAfterSeconds` appears only on `createdAt_1` and equals `RETENTION_SECONDS`; the compound index has no TTL option.
+  - A final test re-asserts the ascending direction of `createdAt_1`, documenting that Mongo only honours TTL on a single-field ascending index.
 
 ## Relationships
 
-- **`src/modules/feedback/model.ts`** – Source of `feedbackRequestSchema`; every assertion in this file reads a property of that exported schema object.
-- **`src/types/index.ts`** – Provides the `FeedbackRequestStatus` enum; the test validates that the schema's `status` field's enum values match `Object.values(FeedbackRequestStatus)` and that its default is `FeedbackRequestStatus.new`.
-- **`tests/support/schema.ts`** – Supplies the six introspection helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`) that this file uses to interrogate the schema without instantiating a document.
+| Neighbor | Interaction |
+|---|---|
+| `src/modules/feedback/model.ts` | Source of `feedbackRequestSchema` under test. |
+| `src/types/index.ts` | Provides the `FeedbackRequestStatus` enum used to assert the status field's allowed values and default. |
+| `tests/support/schema.ts` | Supplies the schema-inspection helpers (`requiredPaths`, `defaultOf`, `enumOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`) that extract structural facts from a Mongoose schema. |
+| `src/infrastructure/config/store.ts` | `currentEnvironment()` is called to read `NODE_FEEDBACK_RETENTION_DAYS`, keeping the TTL assertion in lockstep with the configured retention policy. |
 
 ## Notes
 
-- The TTL assertion is written against `RETENTION_SECONDS` (env-derived), not a hard-coded number. Changing `NODE_FEEDBACK_RETENTION_DAYS` in CI or locally updates both the model's TTL and the expected value automatically — but a stray TTL on the compound index will still fail the test because only one `expireAfterSeconds` entry is expected.
-- Mongo enforces `expireAfterSeconds` only on a **single-field ascending** index. The test explicitly asserts `createdAt_1` (ascending) exists as its own index to guard against accidentally placing the TTL on the descending `createdAt_-1` member of the compound index, which would silently never expire documents.
-- Several assertions are "absence" checks (`not.toContain`, `toBeUndefined`). These are intentional: they encode the policy decision that name is optional and that operator fields must not be pre-filled by the submission schema.
+- The TTL assertion deliberately compares against the *configured* value (`RETENTION_SECONDS`) rather than a literal, so rotating the env var updates both the runtime policy and the test expectation in one place.
+- The file's trailing test and its inline comment call out a real failure mode: placing `expireAfterSeconds` on the compound `status_1_createdAt_-1` index (descending on `createdAt`) would create an index that **silently never expires documents**. The ascending single-field `createdAt_1` index is the only valid TTL carrier.
+- `RETENTION_SECONDS` is evaluated once at import time. If the config store is mockable per-test, the constant still reflects the value present at module-load; tests that change env mid-run would not see the updated value here.

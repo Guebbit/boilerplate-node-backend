@@ -1,7 +1,7 @@
 ---
 source: scripts/eslint/barrel-allowed-sources.ts
-sha256: fbf59f31691c10d111adda08f86d06077a70a0b43384b965083b0fe8bd76953f
-generated_at: 2026-10-01T12:31:37.259921+00:00
+sha256: 3aeace558f01dc123e44e9711f3dae8b0afc2d56507dc3141fd61836994dc798
+generated_at: 2026-10-14T07:17:53.406340+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,30 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-A custom ESLint rule that enforces what a module's barrel file (`src/modules/<name>/index.ts`) is permitted to export. It restricts value exports to services, domain rules, events, and emails; limits model and presenter(s) to type-only re-exports; and categorically blocks repository, wiring, and runtime-value files. The rule operationalises the module-boundary rules described in `docs/theory/strategic-ddd.md` §5.
+A custom ESLint rule that enforces which files a module's barrel (`src/modules/<name>/index.ts`) is permitted to re-export, codifying the public-surface contract from `docs/theory/strategic-ddd.md` §5. It restricts barrels to publishing services, domain, events, and emails as values; model and presenter(s) as types only; and rejects repositories, wiring files, and runtime model/presenter exports in any form.
 
 ## Key elements
 
-- **`barrelAllowedSources`** (exported) — The ESLint rule created via `ESLintUtils.RuleCreator.withoutDocs`. No options; seven message IDs (`notAllowed`, `modelAsValue`, `modelNamedValue`, `presenterAsValue`, `presenterNamedValue`, `repositoryExport`, `wiringExport`).
-- **`VALUE_SOURCES`** — Set of stems a barrel may `export *` as values: `services`, `service`, `domain`, `events`, `emails`.
-- **`PRESENTER_SOURCES`** — `presenter`, `presenters`; reachable but type-only.
-- **`TYPE_SOURCES`** — Union of the above plus `model`; the allow-list for `export type *`.
-- **`isRepositorySource`** — Matches stem `repository`.
-- **`isWiringSource`** — Matches stems `routes`, `module`, `probes`, `metrics`, `analytics`, `audit`, `controllers` (and `controllers/*`).
-- **`isModelRuntimeValueName`** — Identifies a named pick from `./model` that is a mongoose schema, its `toJSON` transform, or the model object (excludes Zod schemas named `zod*Schema`).
-- **`sourceStem`** — Normalises a relative specifier (`./model`, `./services/index`) to its bare stem.
-- **`MODULE_BARREL_PATH`** — Regex that captures the module name from the file path so the rule can special-case the `products` barrel (tax pick).
-- **`reportSource`** / **`reportModelNamedValuePicks`** — Internal helpers that emit the appropriate diagnostic for a given node.
+- **`barrelAllowedSources`** (exported) — The ESLint rule created via `RuleCreator.withoutDocs`. No options; seven message IDs (`notAllowed`, `modelAsValue`, `modelNamedValue`, `presenterAsValue`, `presenterNamedValue`, `repositoryExport`, `wiringExport`). Visits `ExportAllDeclaration`, `ExportNamedDeclaration`, and `Program` (to build an import-source map for re-exports).
+- **`VALUE_SOURCES`** — `Set` of stems a barrel may value-export: `services`, `service`, `domain`, `events`, `emails`.
+- **`TYPE_SOURCES`** — Superset of `VALUE_SOURCES` plus `model`, `presenter`, `presenters`; the ceiling for `export type *`.
+- **`PRESENTER_SOURCES`** — `Set(['presenter', 'presenters'])`.
+- **`isModelRuntimeValueName(name)`** — Returns `true` for names matching the repo's runtime-model conventions (`<name>Schema` excluding `zod*`, `apply*Transform`, `<name>Model`); used to reject individual named picks from `./model`.
+- **`isRepositorySource(stem)`** / **`isWiringSource(stem)`** — Categorical rejects for `repository` and for wiring files (`routes`, `module`, `probes`, `metrics`, `analytics`, `audit`, `controllers`).
+- **`sourceStem(specifier)`** — Normalises a relative specifier (`./services/index` → `services`) so checks are about the file, not the spelling.
+- **`MODULE_BARREL_PATH`** — Regex that captures the module name from the file path; used to detect the `products` barrel (which additionally may name-pick from `tax`).
 
 ## Relationships
 
-- **`scripts/eslint/index.ts`** — Registers this rule in the ESLint configuration (restricted to `index.ts` files under `src/modules/*/`). This file does not import it; the registration is one-directional.
-- **`tests/unit/scripts/eslint/barrel-allowed-sources.test.ts`** — Unit-test suite that exercises the rule's visitors against synthetic source strings, covering every message ID.
+- **`scripts/eslint/index.ts`** — Re-exports or registers `barrelAllowedSources` so it is available to the ESLint config; the rule is applied only to files matching `src/modules/*/index.ts`.
+- **`tests/unit/scripts/eslint/barrel-allowed-sources.test.ts`** — Unit tests that exercise each message path (value exports, type-only exports, model/presenter named picks, repository/wiring rejection, products `tax` exception) via the `RuleTester` pattern.
 
 ## Notes
 
-- The rule only lints files matching `src/modules/<name>/index.ts`; it is not a general-purpose import checker.
-- The `tax` named-pick exception is scoped to the `products` module alone (detected via the captured module name in the file path). Sibling modules are not granted this carve-out.
-- `factories` is deliberately absent from both allow-lists. It is already blocked categorically by a separate `no-restricted-imports` entry in `eslint.config.ts`, so this rule does not duplicate that check.
-- The `isModelRuntimeValueName` check relies on this repo's own naming convention (`*Schema`, `apply*Transform`, `*Model`). A future rename of those conventions would silently weaken the rule.
-- For `ExportNamedDeclaration` with a source, a non-type `export { x } from './model'` is checked specifier-by-specifier (only offending names are flagged); a non-type named pick from `./presenter` is rejected wholesale because no individual name from that file is considered safe.
+- The rule is intentionally scoped to barrel files only; it does not lint arbitrary `export *` elsewhere in the codebase.
+- `factories` is never allowed from any barrel, but the rule does not carry its own check for it — `no-restricted-imports` in `eslint.config.ts` blocks that import categorically, so no allowance or denial logic is needed here.
+- The `products` exception for `tax` is determined at runtime by matching `context.filename` against `MODULE_BARREL_PATH`; a test's bare relative `filename` (no leading slash) is handled by the `(?:^|[/\\])` in the regex.
+- Named picks from `./model` are checked **by name** (via `isModelRuntimeValueName`), not by blanket rejection — genuinely pure helpers exported from `model.ts` are permitted.
+- Named picks from `./presenter(s)` are rejected wholesale when non-type, because the only thing worth publishing is the output type, which `export type *` already covers.
