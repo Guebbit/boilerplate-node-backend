@@ -90,14 +90,13 @@ export const remove = (
         return Promise.resolve(hardDeleteRefusal(order) ?? hardDeleteCancelled(order)).then(
             (refusal) => {
                 if (refusal) return refusal;
-                if (context)
-                    recordAudit(context, {
-                        action: ordersAuditActions.ORDER_DELETED,
-                        outcome: 'success',
-                        targetType: 'order',
-                        targetId: id,
-                        metadata: { hardDelete: true }
-                    });
+                recordAudit(context, {
+                    action: ordersAuditActions.ORDER_DELETED,
+                    outcome: 'success',
+                    targetType: 'order',
+                    targetId: id,
+                    metadata: { hardDelete: true }
+                });
                 return generateSuccess(undefined, 200, t('orders.hard-deleted'));
             }
         );
@@ -109,14 +108,13 @@ export const remove = (
 
     order.deletedAt = new Date();
     return orderRepository.save(order).then((saved) => {
-        if (context)
-            recordAudit(context, {
-                action: ordersAuditActions.ORDER_DELETED,
-                outcome: 'success',
-                targetType: 'order',
-                targetId: id,
-                metadata: { hardDelete: false }
-            });
+        recordAudit(context, {
+            action: ordersAuditActions.ORDER_DELETED,
+            outcome: 'success',
+            targetType: 'order',
+            targetId: id,
+            metadata: { hardDelete: false }
+        });
         return generateSuccess(saved, 200, t('orders.soft-deleted'));
     });
 };
@@ -142,13 +140,12 @@ export const restoreById = (
             if (!order.deletedAt) return generateReject(409, [t('orders.not-deleted')]);
             order.deletedAt = undefined;
             return orderRepository.save(order).then((saved) => {
-                if (context)
-                    recordAudit(context, {
-                        action: ordersAuditActions.ORDER_RESTORED,
-                        outcome: 'success',
-                        targetType: 'order',
-                        targetId: id
-                    });
+                recordAudit(context, {
+                    action: ordersAuditActions.ORDER_RESTORED,
+                    outcome: 'success',
+                    targetType: 'order',
+                    targetId: id
+                });
                 return generateSuccess(saved, 200, t('orders.restored'));
             });
         });

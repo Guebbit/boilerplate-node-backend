@@ -92,16 +92,15 @@ export const remove = (
             .then((deferred) => runAfterErase(user.id, deferred))
             .then(() => imageStore.remove(user.imageUrl))
             .then(() => {
-                if (context)
-                    recordAudit(context, {
-                        action: context.caller.system
-                            ? usersAuditActions.SYSTEM_USER_ERASED
-                            : usersAuditActions.ADMIN_USER_ERASED,
-                        outcome: 'success',
-                        targetType: 'user',
-                        targetId: user.id,
-                        metadata: { hardDelete: true }
-                    });
+                recordAudit(context, {
+                    action: context?.caller.system
+                        ? usersAuditActions.SYSTEM_USER_ERASED
+                        : usersAuditActions.ADMIN_USER_ERASED,
+                    outcome: 'success',
+                    targetType: 'user',
+                    targetId: user.id,
+                    metadata: { hardDelete: true }
+                });
             })
             .then(() => generateSuccess(undefined, 200, t('users.hard-deleted')));
 
@@ -114,16 +113,15 @@ export const remove = (
     // Only the reaper's own soft delete may later be hard-deleted by it.
     if (context?.caller.system) user.deletedBy = 'reaper';
     return userRepository.save(user).then((saved) => {
-        if (context)
-            recordAudit(context, {
-                action: context.caller.system
-                    ? usersAuditActions.SYSTEM_USER_SOFT_DELETED
-                    : usersAuditActions.ADMIN_USER_SOFT_DELETED,
-                outcome: 'success',
-                targetType: 'user',
-                targetId: user.id,
-                metadata: { hardDelete: false }
-            });
+        recordAudit(context, {
+            action: context?.caller.system
+                ? usersAuditActions.SYSTEM_USER_SOFT_DELETED
+                : usersAuditActions.ADMIN_USER_SOFT_DELETED,
+            outcome: 'success',
+            targetType: 'user',
+            targetId: user.id,
+            metadata: { hardDelete: false }
+        });
         return generateSuccess(saved, 200, t('users.soft-deleted'));
     });
 };
@@ -150,13 +148,12 @@ export const restoreById = (
             user.deletedAt = undefined;
             user.deletedBy = undefined;
             return userRepository.save(user).then((saved) => {
-                if (context)
-                    recordAudit(context, {
-                        action: usersAuditActions.ADMIN_USER_RESTORED,
-                        outcome: 'success',
-                        targetType: 'user',
-                        targetId: id
-                    });
+                recordAudit(context, {
+                    action: usersAuditActions.ADMIN_USER_RESTORED,
+                    outcome: 'success',
+                    targetType: 'user',
+                    targetId: id
+                });
                 return generateSuccess(saved, 200, t('users.restored'));
             });
         });

@@ -67,14 +67,13 @@ export const remove = (
     const id = product._id.toString();
 
     const auditDeleted = () => {
-        if (context)
-            recordAudit(context, {
-                action: productsAuditActions.ADMIN_PRODUCT_DELETED,
-                outcome: 'success',
-                targetType: 'product',
-                targetId: id,
-                metadata: { hardDelete }
-            });
+        recordAudit(context, {
+            action: productsAuditActions.ADMIN_PRODUCT_DELETED,
+            outcome: 'success',
+            targetType: 'product',
+            targetId: id,
+            metadata: { hardDelete }
+        });
     };
 
     // Translations go with a HARD delete, in this same transaction — through the port, never the
@@ -142,13 +141,12 @@ export const restoreById = (
         if (!product.deletedAt) return generateReject(409, [t('products.not-deleted')]);
         product.deletedAt = undefined;
         return productRepository.save(product).then((saved) => {
-            if (context)
-                recordAudit(context, {
-                    action: productsAuditActions.ADMIN_PRODUCT_RESTORED,
-                    outcome: 'success',
-                    targetType: 'product',
-                    targetId: id
-                });
+            recordAudit(context, {
+                action: productsAuditActions.ADMIN_PRODUCT_RESTORED,
+                outcome: 'success',
+                targetType: 'product',
+                targetId: id
+            });
             return generateSuccess(saved, 200, t('products.restored'));
         });
     });
