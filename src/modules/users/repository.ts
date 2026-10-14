@@ -681,7 +681,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     findInactiveUnminimised: (cutoff: Date) =>
         userModel
             .find({
-                deletedAt: { $exists: false },
+                deletedAt: null,
                 $expr: {
                     $and: [
                         { $lt: [LAST_ACTIVE_EXPR, cutoff] },
