@@ -17,6 +17,7 @@
  */
 
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     resolveErrorMessage,
@@ -348,5 +349,28 @@ describe('rejectResponse', () => {
         const response = makeResponseStub();
 
         expect(() => rejectResponse(response, 500)).not.toThrow();
+    });
+});
+
+describe('fieldError', () => {
+    it('names the field under VALIDATION_ERROR by default', () => {
+        expect(fieldError('shippingAddress.zip', 'Too short')).toEqual({
+            code: 'VALIDATION_ERROR',
+            message: 'Too short',
+            details: { field: 'shippingAddress.zip' }
+        });
+    });
+
+    it('keeps a domain code, and extra context beside the field without letting it rename it', () => {
+        expect(
+            fieldError('permissions', 'Not yours', 'RETURN_DEDUCTION_INVALID', {
+                permissions: ['a'],
+                field: 'other'
+            })
+        ).toEqual({
+            code: 'RETURN_DEDUCTION_INVALID',
+            message: 'Not yours',
+            details: { permissions: ['a'], field: 'permissions' }
+        });
     });
 });

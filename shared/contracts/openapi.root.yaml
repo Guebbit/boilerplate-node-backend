@@ -652,7 +652,11 @@ components:
                 details:
                     type: object
                     additionalProperties: true
-                    description: Optional structured metadata for programmatic handling
+                    description: >-
+                        Optional structured metadata for programmatic handling. Any refusal about
+                        one request field names it in `details.field`, whatever its `code`: a
+                        dotted path into the body (`shippingAddress.zip`), so a client can show the
+                        message under that input.
 
         # `additionalProperties: false` cannot live on a schema used as an `allOf` base: the
         # constraint is evaluated per-subschema, so it would reject the properties a sibling

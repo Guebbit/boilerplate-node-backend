@@ -29,7 +29,7 @@ import { callerContextOf } from '@infrastructure/http/request';
 import { requireId } from '@infrastructure/http/ids';
 import { localeService } from '../services';
 import { presentLocaleEntry } from '../presenters';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /locales/:locale/apps/:app/entries (admin)
@@ -39,16 +39,11 @@ export const createLocaleEntry = (
     request: Request<{ locale: string; app: string }, unknown, CreateLocaleEntryRequest>,
     response: Response
 ) => {
-    const parseResult = CreateLocaleEntryBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
+    const body = parseBody(CreateLocaleEntryBody, request.body, response);
+    if (!body) return;
 
     return localeService
-        .createEntry(
-            request.params.locale,
-            request.params.app,
-            parseResult.data,
-            callerContextOf(request)
-        )
+        .createEntry(request.params.locale, request.params.app, body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 
@@ -81,15 +76,15 @@ export const updateLocaleEntry = (
     });
     if (!entryId) return;
 
-    const parseResult = UpdateLocaleEntryBody.safeParse(request.body);
-    if (!parseResult.success) return rejectValidation(response, parseResult.error);
+    const body = parseBody(UpdateLocaleEntryBody, request.body, response);
+    if (!body) return;
 
     return localeService
         .updateEntry(
             request.params.locale,
             request.params.app,
             entryId,
-            parseResult.data,
+            body,
             callerContextOf(request)
         )
         .then((result) => {
@@ -117,14 +112,14 @@ const importEntries =
         >,
         response: Response
     ) => {
-        const parseResult = schema.safeParse(request.body);
-        if (!parseResult.success) return rejectValidation(response, parseResult.error);
+        const body = parseBody(schema, request.body, response);
+        if (!body) return;
 
         return localeService
             .importEntries(
                 request.params.locale,
                 request.params.app,
-                parseResult.data.entries,
+                body.entries,
                 mode,
                 callerContextOf(request)
             )

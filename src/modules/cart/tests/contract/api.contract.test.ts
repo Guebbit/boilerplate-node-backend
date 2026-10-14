@@ -836,7 +836,10 @@ describe('POST /cart/checkout', () => {
         const response = await checkoutAs(bearer);
 
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].code).toBe('CART_BILLING_ADDRESS_REQUIRED');
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'CART_BILLING_ADDRESS_REQUIRED',
+            details: { field: 'billingAddressId' }
+        });
     });
 
     it('empties the cart on success', async () => {

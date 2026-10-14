@@ -174,7 +174,10 @@ describe('a refund that asks for too much', () => {
         const result = await refund(orderId, { amount: 40.01 });
 
         expect(asReject(result).status).toBe(422);
-        expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_EXCEEDS_REMAINING');
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'PAYMENT_REFUND_EXCEEDS_REMAINING',
+            details: { field: 'amount' }
+        });
         const { refunds: refundsNow } = await paymentOf(orderId);
         expect(refundsNow).toHaveLength(1);
     });
@@ -187,6 +190,30 @@ describe('a refund that asks for too much', () => {
 
         expect(asReject(result).status).toBe(422);
         expect(asReject(result).errors[0].code).toBe('PAYMENT_REFUND_EXCEEDS_REMAINING');
+    });
+
+    it('is refused with 422 naming `currency` when it is not the payment currency', async () => {
+        const { orderId } = await paidOrder();
+
+        const result = await refund(orderId, { amount: 10, currency: 'USD' });
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'currency' }
+        });
+    });
+
+    it('is refused with 422 naming `amount` when the currency has no unit that small', async () => {
+        const { orderId } = await paidOrder();
+
+        const result = await refund(orderId, { amount: 0.001 });
+
+        expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'amount' }
+        });
     });
 
     it('is refused with 409 when no amount is named and nothing is left', async () => {

@@ -9,6 +9,7 @@
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseSuccess,
@@ -159,24 +160,20 @@ export const mint = (
     // A credential that never expires is one that is never rotated: bounded at mint, not at use.
     if (new Date(body.expiresAt) > latestExpiry())
         return Promise.resolve(
-            generateReject(422, [
-                {
-                    code: ERROR_CODES.VALIDATION_ERROR,
-                    message: t('api-keys.expiry-too-far'),
-                    details: { expiresAt: body.expiresAt }
-                }
-            ])
+            generateReject(422, [fieldError('expiresAt', t('api-keys.expiry-too-far'))])
         );
 
     const invalid = body.permissions.filter((key) => !isMintable(key, context.caller));
     if (invalid.length > 0)
         return Promise.resolve(
+            // `permissions` beside `field`: a client gives each refused key its own message.
             generateReject(422, [
-                {
-                    code: ERROR_CODES.VALIDATION_ERROR,
-                    message: t('api-keys.permission-not-mintable'),
-                    details: { permissions: invalid }
-                }
+                fieldError(
+                    'permissions',
+                    t('api-keys.permission-not-mintable'),
+                    ERROR_CODES.VALIDATION_ERROR,
+                    { permissions: invalid }
+                )
             ])
         );
 

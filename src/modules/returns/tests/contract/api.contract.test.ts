@@ -306,7 +306,10 @@ describe('POST /returns/{id}/receive', () => {
             .send({ handlingDeduction: 1_000_000 });
 
         expect(response.status).toBe(422);
-        expect(response.body.errors[0].code).toBe('RETURN_DEDUCTION_INVALID');
+        expect(response.body.errors[0]).toMatchObject({
+            code: 'RETURN_DEDUCTION_INVALID',
+            details: { field: 'handlingDeduction' }
+        });
     });
 
     it('is forbidden to the customer and to a role that only decides', async () => {

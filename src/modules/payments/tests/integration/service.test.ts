@@ -1487,6 +1487,10 @@ describe('recordOfflinePayment', () => {
         );
 
         expect(asReject(result).status).toBe(422);
+        expect(asReject(result).errors[0]).toMatchObject({
+            code: 'VALIDATION_ERROR',
+            details: { field: 'receivedAt' }
+        });
     });
 });
 

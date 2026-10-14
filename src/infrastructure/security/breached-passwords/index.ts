@@ -20,8 +20,7 @@ import path from 'node:path';
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { breachedPasswordsConfig } from '@infrastructure/security/config';
-import type { ResponseErrorItem } from '@infrastructure/http/response';
-import { ERROR_CODES } from '@api/error-codes';
+import { fieldError, type ResponseErrorItem } from '@infrastructure/http/response';
 import { readCappedText, DEFAULT_BODY_CAP_BYTES } from '@infrastructure/http/read-capped-body';
 
 /**
@@ -127,13 +126,5 @@ export const checkPasswordBreach = (
  */
 export const assertPasswordNotBreached = (password: string): Promise<ResponseErrorItem[]> =>
     checkPasswordBreach(password).then(({ breached }) =>
-        breached
-            ? [
-                  {
-                      code: ERROR_CODES.VALIDATION_ERROR,
-                      message: t('validation.password-breached'),
-                      details: { field: 'password' }
-                  }
-              ]
-            : []
+        breached ? [fieldError('password', t('validation.password-breached'))] : []
     );

@@ -14,6 +14,7 @@
 import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import {
+    fieldError,
     generateSuccess,
     generateReject,
     type ResponseReject,
@@ -30,7 +31,7 @@ import type { ProductQuantity } from '../domain';
 import { deliveryAuditActions } from '../audit';
 import { fulfillmentOrderRepository } from '../repository';
 import type { FulfillmentOrderDocument, ShipmentDocument } from '../model';
-import { refuse, refuseMissing, runAct } from './act';
+import { ActRefusal, refuse, refuseMissing, runAct } from './act';
 import { viewShipment } from './actions';
 import { announceShipped } from './announce';
 import { cutShipment } from './cut';
@@ -96,11 +97,20 @@ const gateFulfillmentOrder = (
  * frozen at checkout, so a rate change also changes what the door requires.
  * @param order - the order
  * @param trackingCode - what staff sent
+ * @throws {ActRefusal} a 422 naming `trackingCode` when a tracked method has none
  */
 const gateTracking = (order: OrderDocument, trackingCode: string | undefined): void => {
     const method = order.shippingMethod ? findShippingMethod(order.shippingMethod) : undefined;
     if (method?.tracked && !trackingCode)
-        refuse(422, ERROR_CODES.DELIVERY_TRACKING_CODE_REQUIRED, 'delivery.tracking-code-required');
+        throw new ActRefusal(
+            generateReject(422, [
+                fieldError(
+                    'trackingCode',
+                    t('delivery.tracking-code-required'),
+                    ERROR_CODES.DELIVERY_TRACKING_CODE_REQUIRED
+                )
+            ])
+        );
 };
 
 /**

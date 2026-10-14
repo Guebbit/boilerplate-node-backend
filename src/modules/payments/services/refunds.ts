@@ -23,6 +23,7 @@ import { extractErrorMessage } from '@guebbit/js-toolkit';
 import { logger } from '@infrastructure/adapters/logger';
 import { t } from '@infrastructure/i18n';
 import {
+    fieldError,
     generateSuccess,
     generateReject,
     type ResponseSuccess,
@@ -597,20 +598,23 @@ const refusalFor = (
 ): ResponseReject | undefined => {
     const { amount, currency } = body;
     if (currency !== undefined && currency !== payment.currency)
-        return generateReject(422, [t('payments.refund-currency-mismatch')]);
+        return generateReject(422, [
+            fieldError('currency', t('payments.refund-currency-mismatch'))
+        ]);
     if (amount === undefined) return undefined;
 
     // A decimal the currency has no minor unit for (0.001 EUR) would round to a different amount
     // than the one the operator typed — refused rather than quietly changed.
     if (!fitsCurrency(amount, payment.currency))
-        return generateReject(422, [t('payments.refund-invalid-amount')]);
+        return generateReject(422, [fieldError('amount', t('payments.refund-invalid-amount'))]);
     const minor = toMinorUnits(amount, payment.currency);
     if (payment.status === REFUNDABLE_PAYMENT_STATUS && minor > remainingOf(payment))
         return generateReject(422, [
-            {
-                code: ERROR_CODES.PAYMENT_REFUND_EXCEEDS_REMAINING,
-                message: t('payments.refund-exceeds-remaining')
-            }
+            fieldError(
+                'amount',
+                t('payments.refund-exceeds-remaining'),
+                ERROR_CODES.PAYMENT_REFUND_EXCEEDS_REMAINING
+            )
         ]);
     return undefined;
 };

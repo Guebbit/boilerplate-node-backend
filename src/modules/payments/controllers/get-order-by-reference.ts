@@ -12,7 +12,7 @@ import { GetOrderByReferenceQueryParams } from '@api/schemas.zod';
 import { successResponse } from '@infrastructure/http/response';
 import { orderService } from '@modules/orders';
 import { paymentService } from '../services';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /** Handles `GET /payments/order-by-reference`. */
 export const getOrderByReference = (
@@ -21,11 +21,11 @@ export const getOrderByReference = (
 ) => {
     // The contract's own bounds on `ref`, so a missing or oversized one answers 422 rather than
     // reaching the mod-97 check and coming back as a plain 404.
-    const parsed = GetOrderByReferenceQueryParams.safeParse(request.query);
-    if (!parsed.success) return rejectValidation(response, parsed.error);
+    const query = parseBody(GetOrderByReferenceQueryParams, request.query, response);
+    if (!query) return;
 
     return paymentService
-        .getOrderByReference(parsed.data.ref)
+        .getOrderByReference(query.ref)
         .then((result) => {
             if (refused(response, result)) return;
             // `withActions` is what every `orders` read puts on the wire: the lines' `current`

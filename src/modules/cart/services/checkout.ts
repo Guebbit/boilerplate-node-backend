@@ -9,6 +9,7 @@
 import { getDefaultLocale, t } from '@infrastructure/i18n';
 import { shipToCountries, shopCurrency } from '@modules/orders';
 import {
+    fieldError,
     generateSuccess,
     generateReject,
     type ResponseSuccess,
@@ -265,10 +266,11 @@ const resolveBilling = async (
         return {
             ok: false,
             reject: generateReject(422, [
-                {
-                    code: ERROR_CODES.CART_BILLING_ADDRESS_REQUIRED,
-                    message: t('cart.billing-address-required')
-                }
+                fieldError(
+                    'billingAddressId',
+                    t('cart.billing-address-required'),
+                    ERROR_CODES.CART_BILLING_ADDRESS_REQUIRED
+                )
             ])
         };
     return { ok: true, billingAddress };
@@ -500,7 +502,11 @@ const runCheckout = async (
                       code: ERROR_CODES.CART_SHIPPING_METHOD_REQUIRED,
                       message: t('cart.shipping-method-required')
                   }
-                : { code: ERROR_CODES.CART_ADDRESS_REQUIRED, message: t('cart.address-required') }
+                : fieldError(
+                      'addressId',
+                      t('cart.address-required'),
+                      ERROR_CODES.CART_ADDRESS_REQUIRED
+                  )
         ]);
 
     // After the shipping requirement, so a physical basket short of a method or an address is

@@ -10,6 +10,7 @@
 import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import {
+    fieldError,
     generateReject,
     generateSuccess,
     type ResponseSuccess,
@@ -28,7 +29,6 @@ import { webhookSubscriptionRepository } from '../repository';
 import { liveRingEntries, mintRingSecret, removeRingSecret } from '../secrets';
 import { getWebhookSubscriptionCap } from '../config';
 import { resolveSafeOutboundTarget, SsrfRefusedError } from '@infrastructure/adapters/ssrf-guard';
-import { ERROR_CODES } from '@api/error-codes';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { webhooksAuditActions } from '../audit';
 import { unknownEventTypes } from './catalogue';
@@ -66,13 +66,7 @@ const refuseUnsafeUrl = (url: string): Promise<ResponseReject | undefined> =>
             });
             // A timeout is not an SsrfRefusedError, but it refuses the same way: nothing
             // verified the target, so nothing is subscribed to it.
-            return generateReject(422, [
-                {
-                    code: ERROR_CODES.VALIDATION_ERROR,
-                    message: t('webhooks.url-refused'),
-                    details: { field: 'url' }
-                }
-            ]);
+            return generateReject(422, [fieldError('url', t('webhooks.url-refused'))]);
         });
 
 /**
@@ -89,11 +83,7 @@ const refuseUnknownEvents = (
     const unknown = unknownEventTypes(eventTypes ?? []);
     if (unknown.length === 0) return undefined;
     return generateReject(422, [
-        {
-            code: ERROR_CODES.VALIDATION_ERROR,
-            message: t('webhooks.unknown-event-types', { names: unknown.join(', ') }),
-            details: { field: 'eventTypes' }
-        }
+        fieldError('eventTypes', t('webhooks.unknown-event-types', { names: unknown.join(', ') }))
     ]);
 };
 
