@@ -128,9 +128,12 @@ const send = (
 export const signIn = (baseUrl: string, email: string, password: string): Promise<Caller> =>
     send(baseUrl, { 'content-type': 'application/json' }, 'POST', '/account/login', {
         email,
-        password
+        password,
+        transport: 'bearer'
     }).then((attempt) => {
-        const token = (attempt.data as { token?: string } | undefined)?.token;
+        // jwt mode answers `token`; cookie mode answers `sessionToken` to a `transport: bearer` login.
+        const data = attempt.data as { token?: string; sessionToken?: string } | undefined;
+        const token = data?.token ?? data?.sessionToken;
         if (attempt.status !== 200 || !token)
             throw new ScenarioFlowError(email, 'POST', '/account/login', attempt);
 
