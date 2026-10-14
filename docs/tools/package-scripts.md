@@ -228,15 +228,15 @@ live in `.env` and this one cannot.
 
 ## Maintenance & publishing scripts
 
-| Script               | Job                                                                                                       | Read more                                                                                        |
-| -------------------- | --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `setup`              | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                    | [First run](./configuration.md#first-run-npm-run-setup)                                          |
-| `scaffold:module`    | generate a new module's skeleton                                                                          | [Module scaffolder](./module-scaffolder.md)                                                      |
-| `demo:remove`        | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project | [Getting started: new project](../getting-started-new-project.md)                                |
-| `measure:demo-strip` | the report-only twin: run the strip in a scratch copy and run the gate on the result                      | [Getting started: new project](../getting-started-new-project.md)                                |
-| `update:all`         | bump dependency ranges with `npm-check-updates`                                                           | [Package Dependencies](./package-dependencies.md)                                                |
-| `postinstall`        | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`  | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
-| `prepare`            | npm lifecycle hook — installs the husky hooks after `npm install`                                         | not run by hand                                                                                  |
+| Script               | Job                                                                                                           | Read more                                                                                        |
+| -------------------- | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `setup`              | first run: copies `.env-example` to `.env` if absent and fills the placeholder secrets                        | [First run](./configuration.md#first-run-npm-run-setup)                                          |
+| `scaffold:module`    | generate a new module's skeleton                                                                              | [Module scaffolder](./module-scaffolder.md)                                                      |
+| `demo:remove`        | strip the `shop` and `example` modules and the demo scenarios from THIS checkout, to start a real project     | [Getting started: new project](../getting-started-new-project.md)                                |
+| `measure:demo-strip` | the measuring twin: run the strip in a scratch copy and run the gate on the result (CI: `demo-strip-measure`) | [Getting started: new project](../getting-started-new-project.md)                                |
+| `update:all`         | bump dependency ranges with `npm-check-updates`                                                               | [Package Dependencies](./package-dependencies.md)                                                |
+| `postinstall`        | npm lifecycle hook — rebuilds `openapi.yaml`/`api/`/`asyncapi.generated.ts` after `npm install`/`npm ci`      | [Regenerating After a Change](../api/regenerating.md#the-generated-output-and-what-is-committed) |
+| `prepare`            | npm lifecycle hook — installs the husky hooks after `npm install`                                             | not run by hand                                                                                  |
 
 ## Periodic jobs
 
