@@ -455,10 +455,10 @@ const reissueRotated = (
         // The epoch may have moved since the presented token was minted: a rotation must not
         // carry a revoked session forward.
         if (predatesSessionEpoch(claims.auth_time, user.tokensValidAfter))
-            throw new TokenRejection('revoked', 'The session epoch has passed this token');
+            throw new TokenRejection('revoked', 'Forbidden');
 
         return sessionRepository.findByHash(hashToken(oldToken)).then((previous) => {
-            if (!previous) throw new TokenRejection('revoked', 'The session is gone');
+            if (!previous) throw new TokenRejection('revoked', 'Forbidden');
 
             return signRefreshToken(claims, Math.ceil(remainingMs / 1000)).then((newRefreshToken) =>
                 storeSuccessor(previous, newRefreshToken, claims, remainingMs)
@@ -489,7 +489,7 @@ const resolveLostRotation = (
         // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
         // already gone. `verifyRefreshToken` answers this identically for the non-rotating
         // callers that still use it.
-        if (!row) throw new TokenRejection('revoked', 'The session is gone');
+        if (!row) throw new TokenRejection('revoked', 'Forbidden');
 
         // Still live (no `supersededAt`) despite losing the claim: only reachable through
         // a race tighter than `supersede` itself allows for. Treat it as live — the
