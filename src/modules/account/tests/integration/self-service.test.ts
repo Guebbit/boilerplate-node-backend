@@ -10,7 +10,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import {
     createUser,
-    LEGACY_PASSWORD,
+    PASSPHRASE_PASSWORD,
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
@@ -388,12 +388,12 @@ describe("`verify` and `email-change` tokens do not do each other's work", () =>
 
 describe('passwordChangeWithCurrent', () => {
     it('changes the password when the current one matches', async () => {
-        const user = await createUser({ password: LEGACY_PASSWORD });
+        const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         asSuccess(
             await passwordChangeWithCurrent(
                 user.id,
-                LEGACY_PASSWORD,
+                PASSPHRASE_PASSWORD,
                 REPLACEMENT_PASSWORD,
                 REPLACEMENT_PASSWORD,
                 testCallerContext
@@ -403,13 +403,13 @@ describe('passwordChangeWithCurrent', () => {
         // The new credential works and the old one is dead — both directions, or the test
         // passes on a no-op.
         const withNew = await accountService.login(user.email, REPLACEMENT_PASSWORD);
-        const withOld = await accountService.login(user.email, LEGACY_PASSWORD);
+        const withOld = await accountService.login(user.email, PASSPHRASE_PASSWORD);
         expect(withNew.success).toBe(true);
         expect(withOld.success).toBe(false);
     });
 
     it('answers a wrong current password with 422, not 401', async () => {
-        const user = await createUser({ password: LEGACY_PASSWORD });
+        const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         const response = asReject(
             await passwordChangeWithCurrent(
@@ -423,17 +423,17 @@ describe('passwordChangeWithCurrent', () => {
 
         expect(response.status).toBe(422);
         // And nothing changed.
-        const login = await accountService.login(user.email, LEGACY_PASSWORD);
+        const login = await accountService.login(user.email, PASSPHRASE_PASSWORD);
         expect(login.success).toBe(true);
     });
 
     it('validates the new pair before spending a bcrypt comparison', async () => {
-        const user = await createUser({ password: LEGACY_PASSWORD });
+        const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         const response = asReject(
             await passwordChangeWithCurrent(
                 user.id,
-                LEGACY_PASSWORD,
+                PASSPHRASE_PASSWORD,
                 REPLACEMENT_PASSWORD,
                 'different',
                 testCallerContext
@@ -441,7 +441,7 @@ describe('passwordChangeWithCurrent', () => {
         );
 
         expect(response.status).toBe(422);
-        const login = await accountService.login(user.email, LEGACY_PASSWORD);
+        const login = await accountService.login(user.email, PASSPHRASE_PASSWORD);
         expect(login.success).toBe(true);
     });
 });
@@ -1047,7 +1047,7 @@ describe('an email change is paced per account', () => {
 describe('passwordResetChange', () => {
     it('changes the password and audits a reset completion, distinct from a logged-in change', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ password: LEGACY_PASSWORD });
+        const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         asSuccess(
             await accountService.passwordResetChange(
@@ -1070,7 +1070,7 @@ describe('passwordResetChange', () => {
 
     it('does not audit a rejected pair', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const user = await createUser({ password: LEGACY_PASSWORD });
+        const user = await createUser({ password: PASSPHRASE_PASSWORD });
 
         const response = asReject(
             await accountService.passwordResetChange(
@@ -1092,7 +1092,7 @@ describe('passwordResetChange', () => {
      * `unverified` — unable to check out, with a re-send of the failed mail as their only remedy.
      */
     it('proves the address, promoting an unverified account to customer', async () => {
-        const user = await createUser({ password: LEGACY_PASSWORD }, 'unverified');
+        const user = await createUser({ password: PASSPHRASE_PASSWORD }, 'unverified');
 
         asSuccess(
             await accountService.passwordResetChange(
@@ -1112,7 +1112,7 @@ describe('passwordResetChange', () => {
     // One save carries both facts, so a refused password cannot verify an address as a side
     // effect of failing.
     it('leaves the address unproven when the new password is refused', async () => {
-        const user = await createUser({ password: LEGACY_PASSWORD }, 'unverified');
+        const user = await createUser({ password: PASSPHRASE_PASSWORD }, 'unverified');
 
         asReject(
             await accountService.passwordResetChange(
@@ -1136,7 +1136,7 @@ describe('passwordResetChange', () => {
      * fail the response.
      */
     it('still succeeds, logged, when the post-reset role lookup fails', async () => {
-        const user = await createUser({ password: LEGACY_PASSWORD });
+        const user = await createUser({ password: PASSPHRASE_PASSWORD });
         const loggedWarn = jest.spyOn(logger, 'warn').mockImplementation(() => logger);
         // The mock factory above wraps `rolesOf` in a plain `jest.fn`, so this is genuinely a
         // mock function, not the real export the compiler otherwise sees.

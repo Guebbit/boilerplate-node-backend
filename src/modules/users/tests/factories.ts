@@ -36,10 +36,10 @@ export const REPLACEMENT_PASSWORD = 'Replacement1!';
 export const MINIMAL_PASSWORD = 'Aa1!aaaa';
 
 /**
- * A long, all-lowercase passphrase: valid under a length-only policy, and what the old composition
- * rule used to refuse. Proves nothing about the shape of a password is asked beyond its length.
+ * A long, all-lowercase passphrase: valid because the policy asks for length alone, with no mix of
+ * character classes.
  */
-export const LEGACY_PASSWORD = 'correct-horse-battery';
+export const PASSPHRASE_PASSWORD = 'correct-horse-battery';
 
 /** Fails the policy outright, for a test asserting the rejection rather than the success. */
 export const WEAK_PASSWORD = 'weak';

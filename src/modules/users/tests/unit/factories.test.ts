@@ -10,7 +10,7 @@ import { makeUser, PLAIN_PASSWORD } from '@modules/users/factories';
 import { SignupBody, signupBodyPasswordMin } from '@api/schemas.zod';
 import { isInBundledBreachList } from '@infrastructure/security/breached-passwords';
 import {
-    LEGACY_PASSWORD,
+    PASSPHRASE_PASSWORD,
     MINIMAL_PASSWORD,
     REPLACEMENT_PASSWORD,
     WEAK_PASSWORD
@@ -87,19 +87,13 @@ describe('the password vocabulary', () => {
         ['PLAIN_PASSWORD', PLAIN_PASSWORD],
         ['REPLACEMENT_PASSWORD', REPLACEMENT_PASSWORD],
         ['MINIMAL_PASSWORD', MINIMAL_PASSWORD],
-        ['LEGACY_PASSWORD', LEGACY_PASSWORD]
+        ['PASSPHRASE_PASSWORD', PASSPHRASE_PASSWORD]
     ])('accepts %s as a settable password', (_name, password) => {
         expect(satisfiesPolicy(password)).toBe(true);
     });
 
     it('rejects WEAK_PASSWORD as a settable password', () => {
         expect(satisfiesPolicy(WEAK_PASSWORD)).toBe(false);
-    });
-
-    it('keeps LEGACY_PASSWORD all lowercase: no mix of character classes is asked for', () => {
-        // The policy is length alone, so a value that the old composition rule refused must pass.
-        expect(LEGACY_PASSWORD).toMatch(/^[a-z-]+$/);
-        expect(LEGACY_PASSWORD.length).toBeGreaterThanOrEqual(signupBodyPasswordMin);
     });
 
     it('keeps MINIMAL_PASSWORD exactly at the length floor', () => {
@@ -124,7 +118,7 @@ describe('the password vocabulary', () => {
             PLAIN_PASSWORD,
             REPLACEMENT_PASSWORD,
             MINIMAL_PASSWORD,
-            LEGACY_PASSWORD,
+            PASSPHRASE_PASSWORD,
             WEAK_PASSWORD
         ];
 

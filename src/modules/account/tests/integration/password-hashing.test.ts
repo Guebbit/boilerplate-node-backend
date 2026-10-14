@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
-import { createUser, LEGACY_PASSWORD, PLAIN_PASSWORD } from '@modules/users/tests/factories';
+import { createUser, PASSPHRASE_PASSWORD, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
 import * as passwordHash from '@infrastructure/security/password-hash';
 import { observePort } from '@tests/ports';
@@ -57,11 +57,11 @@ describe('the password shape', () => {
         const changed = await accountService.passwordChangeWithCurrent(
             user.id,
             PLAIN_PASSWORD,
-            LEGACY_PASSWORD,
-            LEGACY_PASSWORD,
+            PASSPHRASE_PASSWORD,
+            PASSPHRASE_PASSWORD,
             testCallerContext
         );
-        const login = await accountService.login(user.email, LEGACY_PASSWORD);
+        const login = await accountService.login(user.email, PASSPHRASE_PASSWORD);
 
         expect(changed.success).toBe(true);
         expect(login.success).toBe(true);

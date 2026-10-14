@@ -11,7 +11,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { testCallerContext } from '@tests/callers';
 import {
     createUser,
-    LEGACY_PASSWORD,
+    PASSPHRASE_PASSWORD,
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
@@ -374,7 +374,7 @@ describe('passwordChange', () => {
     it('writes the new password, hashed', async () => {
         const user = await createUser({
             email: 'change@example.com',
-            password: LEGACY_PASSWORD
+            password: PASSPHRASE_PASSWORD
         });
 
         const response = asSuccess(
@@ -396,7 +396,7 @@ describe('passwordChange', () => {
         // be set to a value its owner never confirmed.
         const user = await createUser({
             email: 'unchanged@example.com',
-            password: LEGACY_PASSWORD
+            password: PASSPHRASE_PASSWORD
         });
 
         const response = asReject(
@@ -405,7 +405,7 @@ describe('passwordChange', () => {
 
         expect(response.status).toBe(422);
 
-        const stillWorks = await accountService.login('unchanged@example.com', LEGACY_PASSWORD);
+        const stillWorks = await accountService.login('unchanged@example.com', PASSPHRASE_PASSWORD);
         expect(stillWorks.success).toBe(true);
     });
 });
