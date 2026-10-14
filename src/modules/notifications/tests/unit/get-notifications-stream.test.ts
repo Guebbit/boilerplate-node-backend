@@ -30,7 +30,7 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
 
 /** What `requirePermissionViaCookie` leaves on a request it admitted. */
 const admittedRequest = () =>
-    asStub<Request>({ cookies: { '__Host-session': 'cookie.jwt' }, authContext: { id: 'user-1' } });
+    asStub<Request>({ sessionRecheck: jest.fn(), authContext: { id: 'user-1' } });
 
 /** A response recording what a refusal answers. */
 const makeResponse = () => {
@@ -52,7 +52,7 @@ describe('GET /notifications/stream', () => {
         expect(streamNotifications).toHaveBeenCalledWith(response, 'user-1', expect.any(Function));
     });
 
-    it('wires the recheck to the same key and the cookie the stream connected with', () => {
+    it('wires the recheck to the key and the request the stream connected with', () => {
         const request = admittedRequest();
         jest.mocked(stillHoldsKeyViaCookie).mockResolvedValueOnce(true);
 
@@ -64,16 +64,12 @@ describe('GET /notifications/stream', () => {
         ];
         void call[2]();
 
-        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(
-            request,
-            'cookie.jwt',
-            NOTIFICATIONS_READ_KEY
-        );
+        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(request, NOTIFICATIONS_READ_KEY);
     });
 
     it.each([
-        ['no refresh cookie', asStub<Request>({ cookies: {}, authContext: { id: 'user-1' } })],
-        ['no resolved caller', asStub<Request>({ cookies: { '__Host-session': 'cookie.jwt' } })]
+        ['no recheck', asStub<Request>({ authContext: { id: 'user-1' } })],
+        ['no resolved caller', asStub<Request>({ sessionRecheck: jest.fn() })]
     ])('fails closed with 401 on %s, and opens no stream', (_name, request) => {
         const { response, status, json } = makeResponse();
 

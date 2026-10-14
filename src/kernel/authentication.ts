@@ -13,16 +13,20 @@
  * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */
 
-import type { AuthContext, Caller } from '@types';
+import type { AuthContext, Caller, Resolution } from '@types';
 
-/**
- * Why a presented credential was refused. `invalid_signature` and `malformed` are an attack on a
- * credential; `revoked` and `expired` are normally a customer holding a stale one.
- */
-export type ResolveMissReason = 'invalid_signature' | 'malformed' | 'revoked' | 'expired';
+export type { Resolution, ResolveMissReason } from '@types';
 
-/** What a resolver answers: the resolved value, or the reason the credential was refused. */
-export type Resolution<T> = { ok: T } | { miss: ResolveMissReason };
+/** What an SSE stream holds on to between its connect and its periodic recheck. */
+export interface StreamWatch {
+    /** The caller the cookie names right now, as {@link AuthResolver.fromCookie} would answer. */
+    context: AuthContext | undefined;
+    /**
+     * Re-answers "who is this, still?" for as long as the session's FAMILY lives, however many
+     * times its credential is rotated or replaced in the meantime. A stream outlives one credential.
+     */
+    recheck: () => Promise<Resolution<AuthContext | undefined>>;
+}
 
 /**
  * Turns a session credential into the user it names. Implemented by `account`, which knows what
@@ -34,6 +38,8 @@ export interface AuthResolver {
     fromBearer: (token: string) => Promise<Resolution<AuthContext | undefined>>;
     /** The value of the session cookie. */
     fromCookie: (token: string) => Promise<Resolution<AuthContext | undefined>>;
+    /** The session cookie of an SSE stream: who it names now, and a recheck that survives rotation. */
+    watchCookie: (token: string) => Promise<Resolution<StreamWatch>>;
     /**
      * Whether the session cookie authenticates EVERY route, or only the two SSE streams that cannot
      * send a header. Answered per call: it follows the deployment's session mode.
@@ -112,6 +118,10 @@ const requireResolver = (): AuthResolver => {
 /** Resolve a bearer credential — an access token, or a `ses_…` session id. */
 export const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefined>> =>
     Promise.resolve().then(() => requireResolver().fromBearer(token));
+
+/** Resolve the session cookie of an SSE stream, keeping what its recheck needs. */
+export const watchCookie = (token: string): Promise<Resolution<StreamWatch>> =>
+    Promise.resolve().then(() => requireResolver().watchCookie(token));
 
 /** Resolve the session cookie's value. */
 export const resolveCookie = (token: string): Promise<Resolution<AuthContext | undefined>> =>

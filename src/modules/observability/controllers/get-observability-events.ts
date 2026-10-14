@@ -8,7 +8,6 @@
 
 import type { Request, Response } from 'express';
 import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
-import { readSessionCookie } from '@kernel/cookies';
 import { streamObservabilityMetrics } from '../services/stream';
 
 /**
@@ -27,11 +26,9 @@ export const OBSERVABILITY_READ_KEY = 'platform.observability.any.read';
  * `streamObservabilityMetrics`.
  */
 export const getObservabilityEvents = (request: Request, response: Response) => {
-    // Guaranteed present and valid: `requirePermissionViaCookie` already required it to resolve a
-    // key-holding caller, or this handler would never run.
-    const refreshToken = readSessionCookie(request)!;
-
+    // `requirePermissionViaCookie` already resolved a key-holding caller and left its recheck on
+    // the request, or this handler would never run.
     streamObservabilityMetrics(response, () =>
-        stillHoldsKeyViaCookie(request, refreshToken, OBSERVABILITY_READ_KEY)
+        stillHoldsKeyViaCookie(request, OBSERVABILITY_READ_KEY)
     );
 };

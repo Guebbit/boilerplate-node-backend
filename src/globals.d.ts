@@ -6,7 +6,7 @@
  */
 
 import type { TFunction } from 'i18next';
-import type { AuthContext, Caller } from './types/auth-context';
+import type { AuthContext, Caller, Resolution } from './types/auth-context';
 
 declare module 'express-serve-static-core' {
     interface Request {
@@ -36,6 +36,11 @@ declare module 'express-serve-static-core' {
          * stream — which is what keeps that cookie from counting as a session elsewhere.
          */
         sessionVia?: 'bearer' | 'cookie';
+        /**
+         * Set by `requirePermissionViaCookie` for an SSE stream: re-answers who the session is, for
+         * as long as its family lives, whatever happens to the cookie that opened it.
+         */
+        sessionRecheck?: () => Promise<Resolution<AuthContext | undefined>>;
         requestId?: string;
         /** The caller's own well-formed `x-request-id`, kept for correlation; never the request id. */
         clientRequestId?: string;

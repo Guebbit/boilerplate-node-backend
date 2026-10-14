@@ -307,20 +307,27 @@ const removeSessionFamilyExcept = (
         .then(({ deletedCount }) => deletedCount);
 
 /**
- * Whether a `jwt` session family still has an unexpired row — the check an access token's `sid`
- * claim is held to. ANY unexpired row counts, rotated-away or not: a rotation supersedes the old
- * row before it inserts the successor, and a mid-refresh access token must not be refused.
+ * Whether a session family still has an unexpired row — the check an access token's `sid` claim
+ * and an open SSE stream are held to. ANY unexpired row counts, rotated-away or not: a rotation
+ * supersedes the old row before it inserts the successor, and a mid-refresh credential must not
+ * be refused.
  *
- * @param userId - the account the token names
- * @param familyId - the `sid` claim
+ * @param userId - the account the credential names
+ * @param familyId - the `sid` claim, or the family the stream's session belongs to
+ * @param mode - the session mode the family was minted under
  * @param now - the moment to compare expiry against
  */
-const sessionFamilyIsLive = (userId: string, familyId: string, now: Date): Promise<boolean> =>
+const sessionFamilyIsLive = (
+    userId: string,
+    familyId: string,
+    mode: SessionMode,
+    now: Date
+): Promise<boolean> =>
     sessionModel
         .exists({
             userId: toObjectId(userId),
             familyId: toObjectId(familyId),
-            mode: 'jwt',
+            mode,
             expiresAt: { $gt: now }
         })
         .exec()

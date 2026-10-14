@@ -18,6 +18,8 @@ export type {
     AuthorizationScope,
     Caller,
     CallerContext,
+    Resolution,
+    ResolveMissReason,
     PlatformCaller,
     RoleLevel,
     TenantCaller,

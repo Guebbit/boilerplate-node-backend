@@ -260,7 +260,9 @@ export const verifyAccessToken = (token: string): Promise<AccessTokenData> =>
  * @param token - refresh JWT string
  * @returns decoded payload, and the live row it was checked against
  */
-const verifyRefreshWithRow = (token: string): Promise<{ data: TokenData; row: SessionRow }> =>
+export const verifyRefreshWithRow = (
+    token: string
+): Promise<{ data: TokenData; row: SessionRow }> =>
     verifyAgainstRing(token, getRefreshTokenRing(), 'refresh').then((data) =>
         sessionRepository.findByHash(hashToken(token)).then((row) => {
             // A rotated-away token still has its row (reuse detection and the two-tab grace need

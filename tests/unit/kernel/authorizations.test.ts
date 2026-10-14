@@ -82,11 +82,24 @@ const ADMIN_ONLY_KEY = 'apikeys.any.delete';
 
 const fromAccessToken = jest.fn<Promise<unknown>, [string]>();
 const fromRefreshToken = jest.fn<Promise<unknown>, [string]>();
+/** What a stream's family recheck answers, standing in for the strategy's live-family check. */
+const recheckFamily = jest.fn<Promise<unknown>, []>();
 /** Whether the session cookie authenticates ordinary routes — `cookie` mode's switch. */
 let cookieAuthenticates = false;
 registerAuthResolver({
     fromBearer: (token) => fromAccessToken(token) as never,
     fromCookie: (token) => fromRefreshToken(token) as never,
+    watchCookie: (token) =>
+        fromRefreshToken(token).then((resolution) =>
+            'miss' in (resolution as object)
+                ? (resolution as never)
+                : ({
+                      ok: {
+                          context: (resolution as { ok: AuthContext | undefined }).ok,
+                          recheck: () => recheckFamily() as never
+                      }
+                  } as never)
+        ),
     cookieAuthenticates: () => cookieAuthenticates
 });
 
@@ -1020,6 +1033,13 @@ describe('requirePermissionViaCookie', () => {
     });
 });
 
+/** A request the guard admitted: it carries the recheck the guard left on it. */
+const admittedRequest = () => {
+    const request = makeCookieRequest('cookie.jwt');
+    request.sessionRecheck = () => recheckFamily() as never;
+    return request;
+};
+
 /**
  * `stillHoldsKeyViaCookie` — the same verdict as `requirePermissionViaCookie`, re-run outside the
  * request lifecycle for the SSE stream's 30-second recheck. It never rejects: a resolver failure
@@ -1030,43 +1050,55 @@ describe('stillHoldsKeyViaCookie', () => {
     const adminUser = { ...asAdmin('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
     it('resolves true for a caller who still holds the key', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
+        recheckFamily.mockResolvedValueOnce({ ok: adminUser });
 
-        await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
-        ).resolves.toBe(true);
+        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(true);
     });
 
     it('resolves false when the caller no longer holds the key', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
+        recheckFamily.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
-        await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
-        ).resolves.toBe(false);
+        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
+            false
+        );
     });
 
-    it('resolves false when the token no longer names anyone', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
+    it('resolves false when the session no longer names anyone', async () => {
+        recheckFamily.mockResolvedValueOnce({ ok: undefined });
 
-        await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
-        ).resolves.toBe(false);
+        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
+            false
+        );
     });
 
-    it('fails closed, not rejected, when the resolver itself throws', async () => {
-        // An expired token or a datastore outage — the stream must close, not hang on an
-        // unhandled rejection.
-        mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
+    it('resolves false once the session family is gone', async () => {
+        recheckFamily.mockResolvedValueOnce({ miss: 'revoked' });
 
+        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
+            false
+        );
+    });
+
+    it('fails closed, not rejected, when the recheck itself throws', async () => {
+        // A datastore outage — the stream must close, not hang on an unhandled rejection.
+        recheckFamily.mockRejectedValueOnce(new Error('mongo is down'));
+
+        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
+            false
+        );
+    });
+
+    it('fails closed for a request the guard never admitted', async () => {
         await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY)
+            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), ADMIN_ONLY_KEY)
         ).resolves.toBe(false);
+        expect(recheckFamily).not.toHaveBeenCalled();
     });
 
     it('audits the refusal the same way the connect-time guard does', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
+        recheckFamily.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
-        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
+        await stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY);
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1078,11 +1110,27 @@ describe('stillHoldsKeyViaCookie', () => {
     });
 
     it('does not audit a passing recheck', async () => {
-        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
+        recheckFamily.mockResolvedValueOnce({ ok: adminUser });
 
-        await stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), 'cookie.jwt', ADMIN_ONLY_KEY);
+        await stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY);
 
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('is bound to the family the guard saw, not to the cookie value presented later', async () => {
+        mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
+        const request = makeCookieRequest('cookie.jwt');
+        await new Promise<void>((resolve) => {
+            requirePermissionViaCookie(ADMIN_ONLY_KEY)(request, makeResponseStub(), () => {
+                resolve();
+            });
+        });
+        recheckFamily.mockResolvedValueOnce({ ok: adminUser });
+        // The cookie rotates after connect; the old value would now be refused.
+        request.cookies = { '__Host-session': 'rotated.jwt' };
+
+        await expect(stillHoldsKeyViaCookie(request, ADMIN_ONLY_KEY)).resolves.toBe(true);
+        expect(mockedVerifyRefreshToken).toHaveBeenCalledTimes(1);
     });
 });
 

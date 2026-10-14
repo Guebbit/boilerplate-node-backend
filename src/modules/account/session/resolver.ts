@@ -23,5 +23,6 @@ import { activeStrategy } from './strategy';
 export const accountAuthResolver: AuthResolver = {
     fromBearer: (token) => activeStrategy().resolveBearer(token),
     fromCookie: (token) => activeStrategy().resolveCookie(token),
+    watchCookie: (token) => activeStrategy().watchCookie(token),
     cookieAuthenticates: () => activeStrategy().cookieAuthenticates
 };

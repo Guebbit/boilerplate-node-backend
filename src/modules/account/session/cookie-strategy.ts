@@ -17,7 +17,7 @@
 import type { Response } from 'express';
 import { Types } from 'mongoose';
 import { readSessionCookie } from '@kernel/cookies';
-import type { Resolution } from '@kernel/authentication';
+import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
@@ -185,28 +185,45 @@ const retirePresentedSession = (request: SessionRequest): Promise<void> => {
 };
 
 /**
+ * Find the live row a presented session id names.
+ *
+ * @param id - the Bearer or cookie value
+ * @returns a miss for an unknown, other-mode or expired id; the row otherwise
+ */
+const findLiveRow = (id: string): Promise<Resolution<SessionRow>> => {
+    if (!looksLikeSessionId(id)) return Promise.resolve({ miss: 'malformed' });
+
+    return sessionRepository.findByHash(hashToken(id)).then((row): Resolution<SessionRow> => {
+        if (row?.mode !== 'cookie') return { miss: 'revoked' };
+        if (row.expiresAt <= new Date()) return { miss: 'expired' };
+        return { ok: row };
+    });
+};
+
+/**
+ * What a row proves, as the caller it names — `undefined` for an account that may no longer sign
+ * in, or a session the epoch has passed.
+ */
+const resolveRowProof = (row: SessionRow): Promise<AuthContext | undefined> =>
+    resolveProof(String(row.userId), { authTime: row.authTime ?? 0, amr: row.amr ?? [] });
+
+/**
  * Resolve a presented session id to the caller it names.
  *
  * @param id - the Bearer or cookie value
  * @returns a miss for an unknown, other-mode or expired id; `ok` otherwise (`undefined` for an
  *   account that may no longer sign in, or a session the epoch has passed)
  */
-const resolveSession = (id: string): Promise<Resolution<AuthContext | undefined>> => {
-    if (!looksLikeSessionId(id)) return Promise.resolve({ miss: 'malformed' });
+const resolveSession = (id: string): Promise<Resolution<AuthContext | undefined>> =>
+    findLiveRow(id).then((found) => {
+        if ('miss' in found) return found;
+        const row = found.ok;
 
-    const digest = hashToken(id);
-    return sessionRepository.findByHash(digest).then((row) => {
-        if (row?.mode !== 'cookie') return { miss: 'revoked' } as const;
-        if (row.expiresAt <= new Date()) return { miss: 'expired' } as const;
-
-        return resolveProof(String(row.userId), {
-            authTime: row.authTime ?? 0,
-            amr: row.amr ?? []
-        }).then((ok) => {
+        return resolveRowProof(row).then((ok) => {
             // Housekeeping, off the request's path: a lost stamp costs a stale reading only.
             if (ok)
                 void sessionRepository
-                    .touch(digest, new Date(), USE_STAMP_INTERVAL_MS)
+                    .touch(hashToken(id), new Date(), USE_STAMP_INTERVAL_MS)
                     .then((wrote) => (wrote ? recordActivity(String(row.userId)) : undefined))
                     .catch((error: unknown) => {
                         logger.warn({ message: 'Could not stamp a session as used.', error });
@@ -214,7 +231,38 @@ const resolveSession = (id: string): Promise<Resolution<AuthContext | undefined>
             return { ok };
         });
     });
-};
+
+/**
+ * The session cookie of an SSE stream. The recheck follows the row's FAMILY: a re-proof replaces
+ * the id (and the row) but keeps the family, and must not close a stream the owner still holds.
+ */
+const watchSession = (id: string): Promise<Resolution<StreamWatch>> =>
+    findLiveRow(id).then((found) => {
+        if ('miss' in found) return found;
+        const row = found.ok;
+        const familyId = String(row.familyId);
+
+        return resolveRowProof(row).then(
+            (context): Resolution<StreamWatch> => ({
+                ok: {
+                    context,
+                    recheck: () =>
+                        Promise.all([
+                            sessionRepository.familyIsLive(
+                                String(row.userId),
+                                familyId,
+                                'cookie',
+                                new Date()
+                            ),
+                            resolveRowProof(row)
+                        ]).then(
+                            ([live, ok]): Resolution<AuthContext | undefined> =>
+                                live ? { ok } : { miss: 'revoked' }
+                        )
+                }
+            })
+        );
+    });
 
 /** The `cookie` adapter. */
 export const cookieStrategy: SessionStrategy = {
@@ -269,6 +317,7 @@ export const cookieStrategy: SessionStrategy = {
 
     resolveBearer: resolveSession,
     resolveCookie: resolveSession,
+    watchCookie: watchSession,
 
     credentialOf,
 

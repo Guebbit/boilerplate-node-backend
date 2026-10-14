@@ -3,7 +3,11 @@ import supertest from 'supertest';
 import cookieParser from 'cookie-parser';
 import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { withEnvironmentOverrides } from '@tests/environment';
+import { setEnvironment, withEnvironmentOverrides } from '@tests/environment';
+import {
+    requirePermissionViaCookie,
+    stillHoldsKeyViaCookie
+} from '@kernel/middlewares/authorizations';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { dropAllSessions } from '@modules/account/tests/factories';
 
@@ -74,6 +78,54 @@ describe('GET /observability/events', () => {
         const response = await api().get('/observability/events').set('Cookie', cookie);
 
         expect(response.status).toBe(401);
+    });
+});
+
+/**
+ * An open SSE stream outlives the cookie that opened it: a refresh rotates that token away, and
+ * the 30-second recheck must follow the session's family, not the superseded value.
+ */
+describe('the recheck of an open stream', () => {
+    const KEY = 'platform.observability.any.read';
+    const FRONTEND = 'https://shop.example';
+
+    beforeEach(() => {
+        setEnvironment({ NODE_CORS_ORIGIN: FRONTEND });
+    });
+
+    /** Connects through the real guard, and answers the request the stream would recheck with. */
+    const connect = async (cookie: string) => {
+        let admitted: express.Request | undefined;
+        const guarded = express();
+        guarded.use(cookieParser());
+        guarded.get('/stream', requirePermissionViaCookie(KEY), (request, response) => {
+            admitted = request;
+            response.end();
+        });
+        await supertest(guarded).get('/stream').set('Cookie', cookie).expect(200);
+        return admitted!;
+    };
+
+    it('stays open across a refresh rotation', async () => {
+        const { cookie } = await signIn('admin');
+        const request = await connect(cookie);
+
+        await api()
+            .post('/account/refresh')
+            .set('Origin', FRONTEND)
+            .set('Cookie', cookie)
+            .expect(200);
+
+        await expect(stillHoldsKeyViaCookie(request, KEY)).resolves.toBe(true);
+    });
+
+    it('closes once its session family is revoked', async () => {
+        const { user, cookie } = await signIn('admin');
+        const request = await connect(cookie);
+
+        await dropAllSessions(String(user._id));
+
+        await expect(stillHoldsKeyViaCookie(request, KEY)).resolves.toBe(false);
     });
 });
 

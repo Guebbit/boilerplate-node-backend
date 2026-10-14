@@ -235,3 +235,12 @@ export interface CallerContext {
 export interface TenantCallerContext extends CallerContext {
     caller: TenantCaller;
 }
+
+/**
+ * Why a presented credential was refused. `invalid_signature` and `malformed` are an attack on a
+ * credential; `revoked` and `expired` are normally a customer holding a stale one.
+ */
+export type ResolveMissReason = 'invalid_signature' | 'malformed' | 'revoked' | 'expired';
+
+/** What a resolver answers: the resolved value, or the reason the credential was refused. */
+export type Resolution<T> = { ok: T } | { miss: ResolveMissReason };

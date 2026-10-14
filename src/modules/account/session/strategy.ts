@@ -15,7 +15,7 @@
 
 import type { Request, Response } from 'express';
 import type { Types } from 'mongoose';
-import type { Resolution } from '@kernel/authentication';
+import type { Resolution, StreamWatch } from '@kernel/authentication';
 import type { AuthContext, Session } from '@types';
 import type { SessionMode } from '../session-mode';
 import { getSessionMode, type RefreshTokenExpiryTime } from './config';
@@ -128,6 +128,12 @@ export interface SessionStrategy {
 
     /** Resolve the session cookie's value. */
     resolveCookie(token: string): Promise<Resolution<AuthContext | undefined>>;
+
+    /**
+     * Resolve the session cookie of an SSE stream and keep its session family, so a recheck holds
+     * across a rotation or a re-proof — either replaces the credential, never the family.
+     */
+    watchCookie(token: string): Promise<Resolution<StreamWatch>>;
 
     /** The credential naming the caller's own session on this request, if it carries one. */
     credentialOf(request: SessionRequest): string | undefined;

@@ -11,7 +11,7 @@
 import type { Request, Response } from 'express';
 import type { Types } from 'mongoose';
 import { readSessionCookie } from '@kernel/cookies';
-import type { Resolution } from '@kernel/authentication';
+import type { Resolution, StreamWatch } from '@kernel/authentication';
 import { logger } from '@infrastructure/adapters/logger';
 import { hashToken } from '@infrastructure/security/hash-token';
 import type { AuthContext } from '@types';
@@ -23,6 +23,7 @@ import {
     rememberOfRefreshToken,
     verifyAccessToken,
     verifyRefreshToken,
+    verifyRefreshWithRow,
     TokenRejection,
     type TokenData
 } from './jwt';
@@ -175,21 +176,50 @@ const resolveWith =
             );
 
 /**
+ * Resolve a proof, but only while the session family it came from still has a live row: revoking
+ * a session stops its access tokens and its open streams at once, not when they expire.
+ */
+const resolveInLiveFamily = (
+    claims: Pick<TokenData, 'sub' | 'auth_time' | 'amr'>,
+    familyId: string
+): Promise<Resolution<AuthContext | undefined>> =>
+    Promise.all([
+        sessionRepository.familyIsLive(claims.sub, familyId, 'jwt', new Date()),
+        resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr })
+    ]).then(
+        ([live, ok]): Resolution<AuthContext | undefined> => (live ? { ok } : { miss: 'revoked' })
+    );
+
+/**
  * The bearer's resolver: the token must verify, and the session family it names must still be
- * alive, so revoking a session stops its access tokens at once, not when they expire. The `sid` is
- * ours (the signature vouches for it), so it is always a well-formed id.
+ * alive. The `sid` is ours (the signature vouches for it), so it is always a well-formed id.
  */
 const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefined>> =>
     verifyAccessToken(token).then(
-        (claims) =>
-            Promise.all([
-                sessionRepository.familyIsLive(claims.sub, claims.sid, new Date()),
-                resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr })
-            ]).then(
-                ([live, ok]): Resolution<AuthContext | undefined> =>
-                    live ? { ok } : { miss: 'revoked' }
-            ),
+        (claims) => resolveInLiveFamily(claims, claims.sid),
         (error: unknown): Resolution<AuthContext | undefined> => {
+            if (error instanceof TokenRejection) return { miss: error.reason };
+            throw error;
+        }
+    );
+
+/**
+ * The refresh cookie of an SSE stream. The connect verifies the token as any refresh use does;
+ * the recheck then follows the token's FAMILY, because the next rotation supersedes this very
+ * token and a stream must outlive that.
+ */
+const watchRefreshCookie = (token: string): Promise<Resolution<StreamWatch>> =>
+    verifyRefreshWithRow(token).then(
+        ({ data, row }) =>
+            resolveProof(data.sub, { authTime: data.auth_time, amr: data.amr }).then(
+                (context): Resolution<StreamWatch> => ({
+                    ok: {
+                        context,
+                        recheck: () => resolveInLiveFamily(data, String(row.familyId))
+                    }
+                })
+            ),
+        (error: unknown): Resolution<StreamWatch> => {
             if (error instanceof TokenRejection) return { miss: error.reason };
             throw error;
         }
@@ -254,6 +284,7 @@ export const jwtStrategy: SessionStrategy = {
 
     resolveBearer,
     resolveCookie: resolveWith(verifyRefreshToken),
+    watchCookie: watchRefreshCookie,
 
     credentialOf: readSessionCookie,
 

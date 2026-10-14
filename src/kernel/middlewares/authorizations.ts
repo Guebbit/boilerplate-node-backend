@@ -20,9 +20,11 @@ import type { Request, Response, NextFunction } from 'express';
 import {
     resolveBearer,
     resolveCookie,
+    watchCookie,
     resolveCredential,
     cookieAuthenticatesRequests,
     API_KEY_TOKEN_PREFIX,
+    type Resolution,
     type ResolveMissReason
 } from '@kernel/authentication';
 import { heldKeys, holdsKey } from '@kernel/ability';
@@ -53,6 +55,7 @@ import {
     type SecurityEventAction
 } from '@infrastructure/observability/security-events';
 import { reauthWindowSeconds } from '@kernel/config';
+import type { AuthContext } from '@types';
 
 /**
  * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
@@ -565,46 +568,52 @@ export const requirePermission = (key: string, options: { exact?: boolean } = {}
 };
 
 /**
- * Resolves the session cookie's caller and checks `key`, auditing a refusal exactly as
- * {@link requirePermissionViaCookie} answers one — shared by that connect-time guard and by
- * {@link stillHoldsKeyViaCookie}'s periodic recheck of an already-open stream, so the two can never
- * disagree about who holds `key`.
+ * Judges a resolved cookie against `key`, auditing a refusal exactly as {@link requirePermissionViaCookie}
+ * answers one — shared by that connect-time guard and by {@link stillHoldsKeyViaCookie}'s periodic
+ * recheck of an already-open stream, so the two can never disagree about who holds `key`.
  *
- * Rejects when the token is refused (forged, expired, revoked) or on an outage, and leaves that
- * distinct from "resolved to nobody, or resolved but lacks the key" on purpose: the two callers
- * below disagree about what a resolver failure should mean (401 to a connecting client; fail-closed
- * to an already-open stream that cannot be told apart from a revoked one), so only they may decide.
+ * Throws when the credential is refused (forged, expired, revoked), and leaves that distinct from
+ * "resolved to nobody, or resolved but lacks the key" on purpose: the two callers below disagree
+ * about what a refusal should mean (401 to a connecting client; fail-closed to an already-open
+ * stream that cannot be told apart from a revoked one), so only they may decide.
  *
  * @param request - only for the audit trail; never re-authenticated from it
- * @param sessionToken - the session cookie's value
+ * @param resolution - what the session cookie resolved to
  * @param key - the permission key to check
  * @returns the resolved user when they hold `key`, otherwise `undefined`
+ * @throws {Error} when the credential itself was refused
  */
-const resolveKeyHolderViaCookie = (request: Request, sessionToken: string, key: string) =>
-    resolveCookie(sessionToken).then((resolution) => {
-        if ('miss' in resolution) {
-            noteMiss(request, 'session', resolution.miss);
-            throw new Error(`Session cookie refused: ${resolution.miss}`);
-        }
-        const user = resolution.ok;
-        const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
+const judgeKeyHolder = (
+    request: Request,
+    resolution: Resolution<AuthContext | undefined>,
+    key: string
+) => {
+    if ('miss' in resolution) {
+        noteMiss(request, 'session', resolution.miss);
+        throw new Error(`Session cookie refused: ${resolution.miss}`);
+    }
+    const user = resolution.ok;
+    const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
 
-        if (!allowed) {
-            auditRefusal(request, {
-                action: coreAuditActions.SECURITY_FORBIDDEN,
-                actorUserId: user?.id ?? 'anonymous',
-                metadata: { reason: 'missing_permission', permission: key }
-            });
-        }
+    if (!allowed) {
+        auditRefusal(request, {
+            action: coreAuditActions.SECURITY_FORBIDDEN,
+            actorUserId: user?.id ?? 'anonymous',
+            metadata: { reason: 'missing_permission', permission: key }
+        });
+    }
 
-        return allowed ? user : undefined;
-    });
+    return allowed ? user : undefined;
+};
 
 /**
  * {@link requirePermission} for endpoints a BROWSER opens without being able to set a header —
  * SSE, via `EventSource`, which cannot send `Authorization`. The session cookie is the credential,
  * verified as the deployment verifies a session anywhere else: a revoked one is rejected rather
  * than merely an expired one.
+ *
+ * Leaves the stream's recheck on `request.sessionRecheck`, bound to the session FAMILY rather than
+ * to this cookie's value, which the next rotation supersedes.
  *
  * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
  *
@@ -628,9 +637,14 @@ export const requirePermissionViaCookie = (key: string) => {
             return;
         }
 
-        resolveKeyHolderViaCookie(request, sessionToken, key)
-            .then((user) => {
-                if (!user) {
+        watchCookie(sessionToken)
+            .then((watch) => {
+                const user = judgeKeyHolder(
+                    request,
+                    'miss' in watch ? watch : { ok: watch.ok.context },
+                    key
+                );
+                if (!user || 'miss' in watch) {
                     rejectResponse(response, 403, [
                         { code: 'FORBIDDEN', message: t('generic.error-forbidden') }
                     ]);
@@ -639,6 +653,7 @@ export const requirePermissionViaCookie = (key: string) => {
 
                 request.authContext = user;
                 request.caller = callerInScope(user, 'tenant');
+                request.sessionRecheck = watch.ok.recheck;
                 next();
             })
             .catch(() => {
@@ -648,27 +663,23 @@ export const requirePermissionViaCookie = (key: string) => {
 };
 
 /**
- * {@link requirePermissionViaCookie}'s check, re-run outside the request lifecycle — for the one
- * stream that connects via that guard and then stays open. Revocation lands on the next request
+ * {@link requirePermissionViaCookie}'s check, re-run outside the request lifecycle — for the
+ * streams that connect via that guard and then stay open. Revocation lands on the next request
  * everywhere else in this codebase; a stream has no next request until something closes it, so
- * `streamObservabilityMetrics` calls this every 30 seconds and ends the stream on `false`.
+ * the stream calls this every 30 seconds and ends on `false`.
  *
- * Fails closed: a resolver error (an expired token, a datastore outage) answers `false`, the same
+ * Fails closed: a resolver error (a revoked family, a datastore outage) answers `false`, the same
  * as a role that no longer holds `key` — indistinguishable from outside, and both mean the stream
- * stops.
+ * stops. A request the guard never admitted has nothing to recheck, which is the same answer.
  *
- * @param request - the request that opened the stream, kept only for the audit trail
- * @param sessionToken - the session cookie's value captured when the stream connected
+ * @param request - the request that opened the stream, carrying the guard's recheck
  * @param key - the permission key to re-check
  * @returns whether the caller still holds `key`
  */
-export const stillHoldsKeyViaCookie = (
-    request: Request,
-    sessionToken: string,
-    key: string
-): Promise<boolean> =>
-    resolveKeyHolderViaCookie(request, sessionToken, key)
-        .then((user) => user !== undefined)
+export const stillHoldsKeyViaCookie = (request: Request, key: string): Promise<boolean> =>
+    Promise.resolve()
+        .then(() => request.sessionRecheck?.() ?? { miss: 'revoked' as const })
+        .then((resolution) => judgeKeyHolder(request, resolution, key) !== undefined)
         .catch(() => false);
 
 /** What {@link requireFreshAuth} may additionally demand, beyond how recently. */

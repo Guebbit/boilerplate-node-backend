@@ -36,6 +36,7 @@ jest.mock('@modules/account/repository', () => {
             findByHash: jest.fn(),
             removeByHash: jest.fn(),
             touch: jest.fn(),
+            familyIsLive: jest.fn(),
             listLive: jest.fn()
         }
     };
@@ -68,6 +69,7 @@ const sessions = asStub<{
     findByHash: jest.Mock;
     removeByHash: jest.Mock;
     touch: jest.Mock;
+    familyIsLive: jest.Mock;
     listLive: jest.Mock;
 }>(sessionRepository);
 
@@ -520,6 +522,49 @@ describe('remint', () => {
             })
         ).resolves.toBeUndefined();
         expect(cookie).not.toHaveBeenCalled();
+    });
+});
+
+describe('watchCookie, the recheck of an open stream', () => {
+    it('rechecks the session family, so a re-proof that replaced the row does not end the stream', async () => {
+        const row = liveRow();
+        sessions.findByHash.mockResolvedValue(row);
+        proof.mockResolvedValue({ id: USER_ID });
+        sessions.familyIsLive.mockResolvedValue(true);
+
+        const watch = await cookieStrategy.watchCookie(SOME_ID);
+        // The row the stream connected with is gone (a re-proof replaced it); its family lives on.
+        sessions.findByHash.mockResolvedValue(undefined);
+        const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
+
+        await expect(recheck?.()).resolves.toEqual({ ok: { id: USER_ID } });
+        expect(sessions.familyIsLive).toHaveBeenCalledWith(
+            USER_ID,
+            String(row.familyId),
+            'cookie',
+            expect.any(Date)
+        );
+    });
+
+    it('rechecks to a miss once the family is gone', async () => {
+        sessions.findByHash.mockResolvedValue(liveRow());
+        proof.mockResolvedValue({ id: USER_ID });
+        sessions.familyIsLive.mockResolvedValue(false);
+
+        const watch = await cookieStrategy.watchCookie(SOME_ID);
+        const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
+
+        await expect(recheck?.()).resolves.toEqual({ miss: 'revoked' });
+    });
+
+    it.each([
+        ['an id of the wrong shape', 'not-a-session', undefined, 'malformed'],
+        ['an unknown id', SOME_ID, undefined, 'revoked'],
+        ['an expired row', SOME_ID, { expiresAt: new Date(Date.now() - 1000) }, 'expired']
+    ])('answers a miss for %s', async (_name, id, overrides, miss) => {
+        sessions.findByHash.mockResolvedValue(overrides ? liveRow(overrides) : undefined);
+
+        await expect(cookieStrategy.watchCookie(id)).resolves.toEqual({ miss });
     });
 });
 

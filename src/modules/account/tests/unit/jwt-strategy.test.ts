@@ -22,7 +22,8 @@ jest.mock('@modules/account/session/jwt', () => {
         createAccessToken: jest.fn(),
         rememberOfRefreshToken: jest.fn(),
         verifyAccessToken: jest.fn(),
-        verifyRefreshToken: jest.fn()
+        verifyRefreshToken: jest.fn(),
+        verifyRefreshWithRow: jest.fn()
     };
 });
 
@@ -72,6 +73,7 @@ const tokens = asStub<{
     rememberOfRefreshToken: jest.Mock;
     verifyAccessToken: jest.Mock;
     verifyRefreshToken: jest.Mock;
+    verifyRefreshWithRow: jest.Mock;
 }>(jwt);
 
 /** The store doubles. */
@@ -314,13 +316,68 @@ describe('resolveBearer and the session it names', () => {
 
         await jwtStrategy.resolveBearer('a-token');
 
-        expect(sessions.familyIsLive).toHaveBeenCalledWith(USER_ID, FAMILY_ID, expect.any(Date));
+        expect(sessions.familyIsLive).toHaveBeenCalledWith(
+            USER_ID,
+            FAMILY_ID,
+            'jwt',
+            expect.any(Date)
+        );
     });
 
     it('answers a miss for a token whose session was revoked, though the token itself verifies', async () => {
         sessions.familyIsLive.mockResolvedValue(false);
 
         await expect(jwtStrategy.resolveBearer('a-token')).resolves.toEqual({ miss: 'revoked' });
+    });
+});
+
+describe('watchCookie, the recheck of an open stream', () => {
+    const claims = { sub: USER_ID, auth_time: 1_700_000_000, amr: ['pwd'] };
+
+    beforeEach(() => {
+        tokens.verifyRefreshWithRow.mockResolvedValue({
+            data: claims,
+            row: { familyId: FAMILY_ID }
+        });
+        proof.mockResolvedValue({ id: USER_ID });
+    });
+
+    it('answers who the cookie names at connect', async () => {
+        const watch = await jwtStrategy.watchCookie('a-token');
+
+        expect(watch).toEqual({ ok: { context: { id: USER_ID }, recheck: expect.any(Function) } });
+    });
+
+    it('rechecks the family, not the token, so a later rotation does not end the stream', async () => {
+        sessions.familyIsLive.mockResolvedValue(true);
+        const watch = await jwtStrategy.watchCookie('a-token');
+        // The connect-time token is superseded by now: verifying it again would be refused.
+        tokens.verifyRefreshWithRow.mockRejectedValue(new jwt.TokenRejection('revoked', 'gone'));
+
+        const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
+
+        await expect(recheck?.()).resolves.toEqual({ ok: { id: USER_ID } });
+        expect(sessions.familyIsLive).toHaveBeenCalledWith(
+            USER_ID,
+            FAMILY_ID,
+            'jwt',
+            expect.any(Date)
+        );
+    });
+
+    it('rechecks to a miss once the family is revoked', async () => {
+        sessions.familyIsLive.mockResolvedValue(false);
+        const watch = await jwtStrategy.watchCookie('a-token');
+
+        const recheck = 'ok' in watch ? watch.ok.recheck : undefined;
+
+        await expect(recheck?.()).resolves.toEqual({ miss: 'revoked' });
+    });
+
+    it('answers a refused token as a miss, naming why', async () => {
+        tokens.verifyRefreshWithRow.mockRejectedValue(new jwt.TokenRejection('expired', 'lapsed'));
+
+        await expect(jwtStrategy.watchCookie('a-token')).resolves.toEqual({ miss: 'expired' });
     });
 });
 

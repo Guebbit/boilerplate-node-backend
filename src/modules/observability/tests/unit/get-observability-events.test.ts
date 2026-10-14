@@ -26,8 +26,8 @@ jest.mock('@kernel/middlewares/authorizations', () => ({
     stillHoldsKeyViaCookie: jest.fn()
 }));
 
-/** The cookie `requirePermissionViaCookie` already validated before this handler ran. */
-const cookieRequest = () => asStub<Request>({ cookies: { '__Host-session': 'cookie.jwt' } });
+/** What `requirePermissionViaCookie` leaves behind once it admitted the caller. */
+const cookieRequest = () => asStub<Request>({ sessionRecheck: jest.fn() });
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -42,7 +42,7 @@ describe('GET /observability/events', () => {
         expect(streamObservabilityMetrics).toHaveBeenCalledWith(response, expect.any(Function));
     });
 
-    it('wires the recheck to the same key and the cookie the stream connected with', () => {
+    it('wires the recheck to the key and the request the stream connected with', () => {
         const response = asStub<Response>({});
         const request = cookieRequest();
         jest.mocked(stillHoldsKeyViaCookie).mockResolvedValueOnce(true);
@@ -54,10 +54,6 @@ describe('GET /observability/events', () => {
         ];
         void recheck();
 
-        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(
-            request,
-            'cookie.jwt',
-            OBSERVABILITY_READ_KEY
-        );
+        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(request, OBSERVABILITY_READ_KEY);
     });
 });
