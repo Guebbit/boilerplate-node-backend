@@ -6,6 +6,7 @@
  * layer itself is `./session-jwt.test.ts`'s and is REPLACED here.
  */
 
+import { Types } from 'mongoose';
 import { asStub } from '@tests/stub';
 import { setEnvironment } from '@tests/environment';
 
@@ -36,6 +37,8 @@ jest.mock('@modules/account/repository', () => {
             ...actual.sessionRepository,
             removeByHash: jest.fn(),
             removeFamilyByHash: jest.fn(),
+            removeFamilyExcept: jest.fn(),
+            findByHash: jest.fn(),
             familyIsLive: jest.fn(),
             listLive: jest.fn()
         }
@@ -75,6 +78,8 @@ const tokens = asStub<{
 const sessions = asStub<{
     removeByHash: jest.Mock;
     removeFamilyByHash: jest.Mock;
+    removeFamilyExcept: jest.Mock;
+    findByHash: jest.Mock;
     familyIsLive: jest.Mock;
     listLive: jest.Mock;
 }>(sessionRepository);
@@ -90,6 +95,8 @@ beforeEach(() => {
     tokens.createAccessToken.mockResolvedValue('access-token');
     tokens.rememberOfRefreshToken.mockResolvedValue(undefined);
     sessions.removeByHash.mockResolvedValue(1);
+    sessions.removeFamilyExcept.mockResolvedValue(0);
+    sessions.findByHash.mockResolvedValue(undefined);
 });
 
 describe('issue', () => {
@@ -98,7 +105,7 @@ describe('issue', () => {
 
         const issued = await jwtStrategy.issue(requestWith(), response, USER_ID, { amr: ['pwd'] });
 
-        expect(tokens.startSession).toHaveBeenCalledWith(USER_ID, ['pwd'], undefined);
+        expect(tokens.startSession).toHaveBeenCalledWith(USER_ID, ['pwd'], undefined, undefined);
         expect(tokens.continueSession).not.toHaveBeenCalled();
         expect(tokens.createAccessToken).toHaveBeenCalledWith('refresh-from-login');
         expect(issued).toEqual({ token: 'access-token' });
@@ -147,11 +154,46 @@ describe('reissue', () => {
         );
 
         expect(tokens.rememberOfRefreshToken).toHaveBeenCalledWith('old-refresh', USER_ID);
-        expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd', 'otp'], 'medium');
+        expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd', 'otp'], 'medium', {
+            remember: 'medium'
+        });
         expect(tokens.startSession).not.toHaveBeenCalled();
         expect(sessions.removeByHash).toHaveBeenCalledWith(hashToken('old-refresh'));
         expect(cookieSet(cookie, '__Host-session')?.[2].maxAge).toBe(86_400_000);
         expect(issued).toEqual({ token: 'access-token' });
+    });
+
+    it('continues the presented session: same family and expiry, then drops the family’s other rows', async () => {
+        const familyId = new Types.ObjectId();
+        const expiresAt = new Date(Date.now() + 3_600_000);
+        sessions.findByHash.mockResolvedValue({
+            mode: 'jwt',
+            userId: new Types.ObjectId(USER_ID),
+            familyId,
+            startedAt: new Date(),
+            expiresAt
+        });
+        tokens.continueSession.mockResolvedValue('successor');
+
+        await jwtStrategy.reissue(
+            requestWith({ cookie: 'old-refresh' }),
+            recordingResponse().response,
+            USER_ID,
+            { amr: ['pwd'] }
+        );
+
+        expect(tokens.continueSession).toHaveBeenCalledWith(
+            USER_ID,
+            ['pwd'],
+            undefined,
+            expect.objectContaining({ familyId, expiresAt })
+        );
+        expect(sessions.removeFamilyExcept).toHaveBeenCalledWith(
+            USER_ID,
+            String(familyId),
+            hashToken('successor')
+        );
+        expect(sessions.removeByHash).not.toHaveBeenCalled();
     });
 
     it('takes the tier from a snapshot when the change already deleted the row', async () => {
@@ -161,7 +203,9 @@ describe('reissue', () => {
         });
 
         expect(tokens.rememberOfRefreshToken).not.toHaveBeenCalled();
-        expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd'], 'long');
+        expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd'], 'long', {
+            remember: 'long'
+        });
         expect(sessions.removeByHash).not.toHaveBeenCalled();
     });
 
@@ -192,7 +236,9 @@ describe('remint', () => {
             })
         ).resolves.toBeUndefined();
 
-        expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd', 'otp'], 'medium');
+        expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd', 'otp'], 'medium', {
+            remember: 'medium'
+        });
         expect(cookieSet(cookie, '__Host-session')?.[1]).toBe('refresh-from-remint');
         expect(cookieSet(cookie, '__Host-session')?.[2].maxAge).toBe(86_400_000);
         expect(tokens.createAccessToken).not.toHaveBeenCalled();

@@ -16,6 +16,7 @@ import { hashToken } from '@infrastructure/security/hash-token';
 import { userService } from '@modules/users';
 import { sessionRepository } from '../repository';
 import type { SessionRow } from '../repository';
+import type { SessionSnapshot } from './strategy';
 import {
     getAccessTokenRing,
     getRefreshTokenRing,
@@ -301,13 +302,16 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<
  * @param amr - how `auth_time` was proved
  * @param remember - the ticked "remember me" tier, absent for a browser-session login
  * @param guard - runs on the loaded account before anything is signed; throws to refuse
+ * @param continued - the session being continued, when there is one: the successor joins its family
+ *   and ends when it would have ended, so a re-proof cannot stretch a session's absolute life
  * @returns the signed refresh token
  */
 const mintRefreshToken = (
     id: string,
     amr: readonly string[],
     remember: RefreshTokenExpiryTime | undefined,
-    guard: (user: { id: string; twoFactorEnabledAt?: Date }) => void
+    guard: (user: { id: string; twoFactorEnabledAt?: Date }) => void,
+    continued?: SessionSnapshot
 ): Promise<string> =>
     userService.findAuthenticatableById(id).then((user) => {
         if (!user) throw new Error('User not found');
@@ -331,18 +335,23 @@ const mintRefreshToken = (
                 amr: [...amr],
                 ...(remember && { remember })
             },
-            getExpiryTime(remember)
+            continued?.expiresAt
+                ? Math.max(Math.ceil((continued.expiresAt.getTime() - Date.now()) / 1000), 1)
+                : getExpiryTime(remember)
         ).then((token) => {
             const now = new Date();
             return sessionRepository
                 .insert({
                     userId: new Types.ObjectId(id),
-                    // A first row starts a session family; a rotation's successor copies it.
-                    familyId: new Types.ObjectId(),
+                    // A first row starts a session family; a rotation's or a re-proof's
+                    // successor copies it.
+                    familyId: continued?.familyId ?? new Types.ObjectId(),
                     mode: 'jwt',
                     tokenHash: hashToken(token),
-                    startedAt: now,
-                    expiresAt: new Date(now.getTime() + getExpiryTimeMilliseconds(remember))
+                    startedAt: continued?.startedAt ?? now,
+                    expiresAt:
+                        continued?.expiresAt ??
+                        new Date(now.getTime() + getExpiryTimeMilliseconds(remember))
                 })
                 .then(() => recordActivity(id))
                 .then(() => token);
@@ -379,13 +388,15 @@ export const startSession = (
  * @param id - user ID
  * @param amr - the proofs the continued session claims; never defaulted
  * @param remember - the tier the replaced session had
+ * @param continued - what the replaced session carried, read before the change that ended it
  * @returns the signed refresh token
  */
 export const continueSession = (
     id: string,
     amr: readonly string[],
-    remember?: RefreshTokenExpiryTime
-): Promise<string> => mintRefreshToken(id, amr, remember, () => undefined);
+    remember?: RefreshTokenExpiryTime,
+    continued?: SessionSnapshot
+): Promise<string> => mintRefreshToken(id, amr, remember, () => undefined, continued);
 
 /**
  * Exchange a valid refresh token for a short-lived access token.

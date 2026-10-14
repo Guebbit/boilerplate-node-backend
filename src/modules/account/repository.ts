@@ -285,6 +285,28 @@ const removeSessionFamily = (userId: string, familyId: string): Promise<number> 
         .then(({ deletedCount }) => deletedCount);
 
 /**
+ * Delete every row of a session family but one — the successor a re-proof just stored.
+ *
+ * @param userId - the account
+ * @param familyId - the session
+ * @param keepHash - the digest of the row to keep
+ * @returns how many rows went
+ */
+const removeSessionFamilyExcept = (
+    userId: string,
+    familyId: string,
+    keepHash: string
+): Promise<number> =>
+    sessionModel
+        .deleteMany({
+            userId: toObjectId(userId),
+            familyId: toObjectId(familyId),
+            tokenHash: { $ne: keepHash }
+        })
+        .exec()
+        .then(({ deletedCount }) => deletedCount);
+
+/**
  * Whether a `jwt` session family still has an unexpired row — the check an access token's `sid`
  * claim is held to. ANY unexpired row counts, rotated-away or not: a rotation supersedes the old
  * row before it inserts the successor, and a mid-refresh access token must not be refused.
@@ -340,6 +362,7 @@ export const sessionRepository: {
     removeByHash: typeof removeSessionByHash;
     removeFamily: typeof removeSessionFamily;
     familyIsLive: typeof sessionFamilyIsLive;
+    removeFamilyExcept: typeof removeSessionFamilyExcept;
     removeFamilyByHash: typeof removeSessionFamilyByHash;
     removeAll: typeof removeAllSessions;
 } = {
@@ -351,6 +374,7 @@ export const sessionRepository: {
     removeByHash: removeSessionByHash,
     removeFamily: removeSessionFamily,
     familyIsLive: sessionFamilyIsLive,
+    removeFamilyExcept: removeSessionFamilyExcept,
     removeFamilyByHash: removeSessionFamilyByHash,
     removeAll: removeAllSessions
 };

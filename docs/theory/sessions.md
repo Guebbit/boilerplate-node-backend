@@ -105,7 +105,7 @@ obey the same windows:
 | `jwt`    | the `auth_time` claim of the tokens    | a refresh copies it forward and never reads the clock       |
 | `cookie` | `authTime` on the session row          | only `POST /account/reauth` writes it; plain use never does |
 
-Re-proving replaces the session in both modes: a new token pair, or a new id for the same row.
+Re-proving replaces the credential in both modes: a new token pair, or a new id, in the same session family with the same start and absolute expiry. A re-proof proves who you are again; it never stretches how long the sign-in lasts.
 
 ## What each defends against
 

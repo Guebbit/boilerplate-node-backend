@@ -1099,7 +1099,7 @@ describe('an access token and the session it belongs to (jwt mode)', () => {
         expect(await statusWithBearer(session.headers)).toBe(200);
     });
 
-    it('dies when the session is renewed by a re-proof, which starts a new one', async () => {
+    it('survives a re-proof, which continues the session under a new refresh token', async () => {
         const { session } = await account('jwt');
 
         const reauth = await api()
@@ -1109,6 +1109,31 @@ describe('an access token and the session it belongs to (jwt mode)', () => {
             .send({ method: 'password', password: PLAIN_PASSWORD });
 
         expect(reauth.status).toBe(200);
-        expect(await statusWithBearer(session.headers)).toBe(401);
+        expect(await statusWithBearer(session.headers)).toBe(200);
+    });
+});
+
+describe.each(MODES)('a re-proof in %s mode continues the session', (mode) => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: mode });
+    });
+
+    it('keeps the session id the owner sees, and its absolute expiry', async () => {
+        const { user, session } = await account(mode);
+        const [before] = await sessionRowsOf(user.id);
+        const publicId = await ownSessionId(session.headers);
+
+        const reauth = await api()
+            .post('/account/reauth')
+            .set(session.headers)
+            .set('Origin', FRONTEND)
+            .send({ method: 'password', password: PLAIN_PASSWORD });
+
+        expect(reauth.status).toBe(200);
+        const rows = await sessionRowsOf(user.id);
+        expect(rows).toHaveLength(1);
+        expect(String(rows[0]?.familyId)).toBe(publicId);
+        expect(rows[0]?.startedAt).toEqual(before?.startedAt);
+        expect(rows[0]?.expiresAt).toEqual(before?.expiresAt);
     });
 });
