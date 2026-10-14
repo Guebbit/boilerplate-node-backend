@@ -285,6 +285,19 @@ const removeSessionFamily = (userId: string, familyId: string): Promise<number> 
         .then(({ deletedCount }) => deletedCount);
 
 /**
+ * Delete the whole session a credential belongs to: the row it names and every sibling of its
+ * family, such as a predecessor still inside the rotation grace window. Nothing when the credential
+ * names no row.
+ *
+ * @param tokenHash - the credential's digest
+ * @returns how many rows went
+ */
+const removeSessionFamilyByHash = (tokenHash: string): Promise<number> =>
+    findSessionByHash(tokenHash).then((row) =>
+        row ? removeSessionFamily(String(row.userId), String(row.familyId)) : 0
+    );
+
+/**
  * Delete every session an account holds — logout everywhere, a password change, an erasure.
  *
  * @param userId - the account
@@ -306,6 +319,7 @@ export const sessionRepository: {
     listLive: typeof listLiveSessions;
     removeByHash: typeof removeSessionByHash;
     removeFamily: typeof removeSessionFamily;
+    removeFamilyByHash: typeof removeSessionFamilyByHash;
     removeAll: typeof removeAllSessions;
 } = {
     insert: insertSession,
@@ -315,6 +329,7 @@ export const sessionRepository: {
     listLive: listLiveSessions,
     removeByHash: removeSessionByHash,
     removeFamily: removeSessionFamily,
+    removeFamilyByHash: removeSessionFamilyByHash,
     removeAll: removeAllSessions
 };
 

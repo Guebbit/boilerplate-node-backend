@@ -989,3 +989,42 @@ describe('switching mode', () => {
         expect(await sessionsOf(asCookie.headers)).toHaveLength(1);
     });
 });
+
+describe.each(MODES)('ending a session on purpose in %s mode', (mode) => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: mode });
+    });
+
+    it('clears the caller’s own cookies when it revokes its own session, as POST /account/logout does', async () => {
+        const { session } = await account(mode);
+        const own = await ownSessionId(session.headers);
+
+        const revoked = await api().delete(`/account/sessions/${own}`).set(session.headers);
+
+        expect(revoked.status).toBe(200);
+        expect(clears(setCookie(revoked, '__Host-session'))).toBe(true);
+        expect(clears(setCookie(revoked, 'isAuth'))).toBe(true);
+    });
+
+    it('sends no cookie clear when it revokes another device’s session', async () => {
+        const { user, session } = await account(mode);
+        const other = await signIn(user.email, mode);
+        const otherId = await ownSessionId(other.headers);
+
+        const revoked = await api().delete(`/account/sessions/${otherId}`).set(session.headers);
+
+        expect(revoked.status).toBe(200);
+        expect(setCookie(revoked, '__Host-session')).toBeUndefined();
+        expect(await statusOfSession(session, mode)).toBe(200);
+    });
+
+    it('ends the session a new sign-in replaces, so one browser holds one session', async () => {
+        const { user, session } = await account(mode);
+
+        const second = await logIn(user.email).set('Cookie', session.cookie);
+
+        expect(second.status).toBe(200);
+        expect(await statusOfSession(session, mode)).toBe(401);
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+    });
+});

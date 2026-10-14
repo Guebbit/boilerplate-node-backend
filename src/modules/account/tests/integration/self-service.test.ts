@@ -456,10 +456,11 @@ describe('sessionRevoke', () => {
         const revoked = await accountService.sessionRevoke(
             user.id,
             sessionIdOfRow(target),
+            undefined,
             testCallerContext
         );
 
-        expect(revoked).toBe(true);
+        expect(revoked).toEqual({ revoked: true, current: false });
         expect(auditSpy).toHaveBeenCalledWith(
             expect.objectContaining({
                 action: accountAuditActions.AUTH_SESSION_REVOKED,
@@ -475,11 +476,47 @@ describe('sessionRevoke', () => {
         const revoked = await accountService.sessionRevoke(
             user.id,
             String(user._id),
+            undefined,
             testCallerContext
         );
 
-        expect(revoked).toBe(false);
+        expect(revoked).toEqual({ revoked: false, current: false });
         expect(auditSpy).not.toHaveBeenCalled();
+    });
+
+    it('says the revoked session was the caller’s own when its credential names that family', async () => {
+        const user = await createUser();
+        await plantSession(user.id, 'refresh-a', { ttlMs: 60_000 });
+        await plantSession(user.id, 'refresh-b', { ttlMs: 60_000 });
+        const rows = await sessionRowsOf(user.id);
+        const own = rows.find((row) => row.tokenHash === hashToken('refresh-a'));
+
+        const revoked = await accountService.sessionRevoke(
+            user.id,
+            sessionIdOfRow(own),
+            'refresh-a',
+            testCallerContext
+        );
+
+        expect(revoked).toEqual({ revoked: true, current: true });
+        expect(await sessionRowsOf(user.id)).toHaveLength(1);
+    });
+
+    it('does not call another device’s session the caller’s own', async () => {
+        const user = await createUser();
+        await plantSession(user.id, 'refresh-a', { ttlMs: 60_000 });
+        await plantSession(user.id, 'refresh-b', { ttlMs: 60_000 });
+        const rows = await sessionRowsOf(user.id);
+        const other = rows.find((row) => row.tokenHash === hashToken('refresh-b'));
+
+        const revoked = await accountService.sessionRevoke(
+            user.id,
+            sessionIdOfRow(other),
+            'refresh-a',
+            testCallerContext
+        );
+
+        expect(revoked).toEqual({ revoked: true, current: false });
     });
 });
 

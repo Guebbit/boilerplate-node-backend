@@ -166,6 +166,22 @@ const replaceSession = (
 };
 
 /**
+ * A sign-in on top of a live session ends that session: the browser is no longer using it, and a
+ * session nobody holds the id of would live out its expiry. Stored-first like `replaceSession`, so
+ * a failure here leaves two sessions rather than none.
+ */
+const retirePresentedSession = (request: SessionRequest): Promise<void> => {
+    const previous = credentialOf(request);
+    return (
+        previous ? sessionRepository.removeFamilyByHash(hashToken(previous)) : Promise.resolve(0)
+    )
+        .then(() => undefined)
+        .catch((error: unknown) => {
+            logger.warn({ message: 'Could not retire the session this sign-in replaced.', error });
+        });
+};
+
+/**
  * Resolve a presented session id to the caller it names.
  *
  * @param id - the Bearer or cookie value
@@ -211,7 +227,9 @@ export const cookieStrategy: SessionStrategy = {
             // The label is read once, at the sign-in, from the client that made it.
             const device = describeDevice(request.get('user-agent'));
             return storeSession(userId, { amr }, remember, { device }).then((started) =>
-                deliver(response, started, remember, transport)
+                retirePresentedSession(request).then(() =>
+                    deliver(response, started, remember, transport)
+                )
             );
         });
     },

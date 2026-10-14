@@ -20,6 +20,32 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 
+/** What revoking a session did: whether anything went, and whether it was the caller's own. */
+export interface SessionRevocation {
+    /** A session matched and was removed. */
+    revoked: boolean;
+    /** The removed session is the one the caller's credential names, so its cookies are dead too. */
+    current: boolean;
+}
+
+/**
+ * Whether a credential names a row of the given family, by family and not by row: a `jwt` cookie
+ * one rotation behind still belongs to the session.
+ */
+const isOwnFamily = (
+    userId: string,
+    familyId: string,
+    credential: string | undefined
+): Promise<boolean> =>
+    credential
+        ? sessionRepository
+              .findByHash(hashToken(credential))
+              .then(
+                  (row) =>
+                      !!row && String(row.userId) === userId && String(row.familyId) === familyId
+              )
+        : Promise.resolve(false);
+
 /**
  * Revoke one of the caller's own sessions.
  *
@@ -27,25 +53,29 @@ import { accountAuditActions } from '../audit';
  * an invented id for someone else's session or a stale one, and an audit row would misrepresent a
  * revoke that never happened.
  *
- * @returns whether a session was removed
+ * @param credential - what the request presented, to tell whether it revoked its own session
  */
 export const sessionRevoke = (
     userId: string,
     sessionId: string,
+    credential: string | undefined,
     context: CallerContext
-): Promise<boolean> =>
-    sessionRepository.removeFamily(userId, sessionId).then((removed) => {
-        if (removed > 0)
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_SESSION_REVOKED,
-                outcome: 'success'
-            });
-        return removed > 0;
-    });
+): Promise<SessionRevocation> =>
+    // Read before the delete: afterwards the credential names nothing.
+    isOwnFamily(userId, sessionId, credential).then((current) =>
+        sessionRepository.removeFamily(userId, sessionId).then((removed) => {
+            if (removed > 0)
+                recordAudit(context, {
+                    action: accountAuditActions.AUTH_SESSION_REVOKED,
+                    outcome: 'success'
+                });
+            return { revoked: removed > 0, current: removed > 0 && current };
+        })
+    );
 
 /**
- * Log out of the current session only: delete the session the request's credential names, if
- * any, and record it either way.
+ * Log out of the current session only: delete the session (its whole family) the request's
+ * credential names, if any, and record it either way.
  * A missing cookie isn't a failure — `postLogout` answers 200 for it either way — so the audit
  * event still fires; there's simply nothing to revoke.
  */
@@ -53,24 +83,25 @@ export const logoutCurrentSession = (
     credential: string | undefined,
     context: CallerContext
 ): Promise<void> =>
-    (credential ? sessionRepository.removeByHash(hashToken(credential)) : Promise.resolve()).then(
-        () => {
-            recordAudit(context, {
-                action: accountAuditActions.AUTH_LOGGED_OUT,
-                outcome: 'success'
-            });
-            /*
-             * This route authenticates by cookie alone, so there is no bearer to resolve and
-             * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
-             * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
-             */
-            emitAnalyticsEvent({
-                ...buildAnalyticsBase(context),
-                event: accountAnalyticsEvents.USER_LOGGED_OUT,
-                properties: { scope: 'session' }
-            });
-        }
-    );
+    (credential
+        ? sessionRepository.removeFamilyByHash(hashToken(credential))
+        : Promise.resolve()
+    ).then(() => {
+        recordAudit(context, {
+            action: accountAuditActions.AUTH_LOGGED_OUT,
+            outcome: 'success'
+        });
+        /*
+         * This route authenticates by cookie alone, so there is no bearer to resolve and
+         * `distinctId` falls back to 'anonymous'. Under Umami the visitor is still separated
+         * by the IP + user-agent hash; under PostHog these rows do not attribute to a person.
+         */
+        emitAnalyticsEvent({
+            ...buildAnalyticsBase(context),
+            event: accountAnalyticsEvents.USER_LOGGED_OUT,
+            properties: { scope: 'session' }
+        });
+    });
 
 /**
  * Log the account out everywhere: every session goes and the session epoch moves, so access

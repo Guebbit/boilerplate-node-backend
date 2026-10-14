@@ -74,6 +74,25 @@ const retireRefreshToken = (refreshToken: string | undefined): Promise<void> =>
         : Promise.resolve();
 
 /**
+ * A sign-in on top of a live session ends that session, whole family included: the browser is no
+ * longer using it. Stored-first like `reissue`; a failure is logged, the new session exists.
+ *
+ * @param refreshToken - the refresh cookie the request carried, if any
+ */
+const retirePresentedSession = (refreshToken: string | undefined): Promise<void> =>
+    refreshToken
+        ? sessionRepository
+              .removeFamilyByHash(hashToken(refreshToken))
+              .then(() => undefined)
+              .catch((error: unknown) => {
+                  logger.warn({
+                      message: 'Could not retire the session this sign-in replaced.',
+                      error
+                  });
+              })
+        : Promise.resolve();
+
+/**
  * The tier of the session behind a refresh cookie, so a re-mint keeps its persistence instead of
  * resetting it. Signature and expiry only, no database read: a password change has already deleted
  * the row by the time it re-mints.
@@ -110,8 +129,10 @@ export const jwtStrategy: SessionStrategy = {
     // access token as a bearer.
     cookieAuthenticates: false,
 
-    issue: (_request, response, userId, { amr, remember }) =>
-        mintSession(response, userId, amr, remember, startSession),
+    issue: (request, response, userId, { amr, remember }) =>
+        mintSession(response, userId, amr, remember, startSession).then((issued) =>
+            retirePresentedSession(readSessionCookie(request)).then(() => issued)
+        ),
 
     snapshot: snapshotOf,
 
