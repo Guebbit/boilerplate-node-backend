@@ -457,6 +457,8 @@ locales recipe of `measure:demo-strip` shares) takes the mechanical share of the
 - **The alert rules on the module's own metrics go**, with their `promtool` cases
   (`docker/observability/prometheus.alert-rules*.yaml`). A metric is the module's when only its
   folder registers it.
+- **The shared validation labels only its fields used go** (`validation.attributes` in
+  `src/locales/*.json`): a field its contract names that no surviving request carries.
 - **The scenario fixtures lose the module's slice** (`scenarios/<name>.ts` and its table entry).
 
 Writing a test that survives this is one rule: **a test that needs a module to say something says so
