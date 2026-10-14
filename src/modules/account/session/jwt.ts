@@ -200,7 +200,7 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
 
 /**
  * Verify a refresh token — JWT check + DB revocation lookup.
- * Rejects with 'Forbidden' if the token is not a LIVE session row of an account that may still
+ * Rejects with a `revoked` {@link TokenRejection} if the token is not a LIVE session row of an account that may still
  * sign in: a rotated-away (superseded) one is refused here, though the rotation itself still reads it.
  *
  * @param token - refresh JWT string
@@ -451,14 +451,14 @@ const reissueRotated = (
     remainingMs: number
 ): Promise<RotatedSession> =>
     userService.findAuthenticatableById(claims.id).then((user) => {
-        if (!user) throw new Error('User not found');
+        if (!user) throw new TokenRejection('revoked', 'User not found');
         // The epoch may have moved since the presented token was minted: a rotation must not
         // carry a revoked session forward.
         if (predatesSessionEpoch(claims.auth_time, user.tokensValidAfter))
-            throw new Error('Forbidden');
+            throw new TokenRejection('revoked', 'The session epoch has passed this token');
 
         return sessionRepository.findByHash(hashToken(oldToken)).then((previous) => {
-            if (!previous) throw new Error('Forbidden');
+            if (!previous) throw new TokenRejection('revoked', 'The session is gone');
 
             return signRefreshToken(claims, Math.ceil(remainingMs / 1000)).then((newRefreshToken) =>
                 storeSuccessor(previous, newRefreshToken, claims, remainingMs)
@@ -476,7 +476,7 @@ const reissueRotated = (
  * @param claims - the OLD token's claims (`id`, `auth_time`, `amr`, `remember`), copied forward on a reissue
  * @param oldToken - the refresh JWT the caller presented
  * @param remainingMs - the losing token's remaining lifetime, carried forward on a reissue
- * @throws {Error} when the token is genuinely absent, or {@link TokenReuseError} on detected reuse
+ * @throws {TokenRejection} when the token is genuinely absent, or {@link TokenReuseError} on detected reuse
  */
 const resolveLostRotation = (
     claims: TokenData,
@@ -489,7 +489,7 @@ const resolveLostRotation = (
         // credential, same as it always was: NOT reuse, and nothing to revoke that isn't
         // already gone. `verifyRefreshToken` answers this identically for the non-rotating
         // callers that still use it.
-        if (!row) throw new Error('Forbidden');
+        if (!row) throw new TokenRejection('revoked', 'The session is gone');
 
         // Still live (no `supersededAt`) despite losing the claim: only reachable through
         // a race tighter than `supersede` itself allows for. Treat it as live — the

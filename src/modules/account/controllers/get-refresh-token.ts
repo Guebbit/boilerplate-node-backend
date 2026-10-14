@@ -5,6 +5,7 @@
 
 import type { Request, Response } from 'express';
 import { rejectResponse, successResponse } from '@infrastructure/http/response';
+import { isInfrastructureError, rejectServiceUnavailable } from '@infrastructure/http/errors';
 import type { RefreshTokenResponse } from '@types';
 import { accountService } from '../services';
 import { createSessionCookie, createLoggedCookie } from '../session/cookies';
@@ -42,9 +43,14 @@ export const getRefreshToken = (request: Request, response: Response) => {
                 authRefreshTotal.inc({ status: 'success' });
                 successResponse<RefreshTokenResponse>(response, { token: accessToken });
             })
-            // Every failure of the exchange is the same 401: an unknown, expired, revoked or replayed
-            // token must not be told apart by a client.
-            .catch(() => {
+            // Every refusal of the token is the same 401: an unknown, expired, revoked or replayed
+            // token must not be told apart by a client. An outage is not a refusal: the client
+            // treats 401 as a definitive sign-out, so it gets a retryable 503 instead.
+            .catch((error: unknown) => {
+                if (isInfrastructureError(error)) {
+                    rejectServiceUnavailable(response);
+                    return;
+                }
                 authRefreshTotal.inc({ status: 'failure' });
                 rejectResponse(response, 401);
             })

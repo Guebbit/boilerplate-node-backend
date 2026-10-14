@@ -30,6 +30,7 @@ import { hashToken } from '@infrastructure/security/hash-token';
 import { decodeJwt } from 'jose';
 import type { Response } from 'express';
 import { plantToken, sessionRowFor, sessionRowsOf } from '../factories';
+import { sessionRepository } from '../../repository';
 import { activeStrategy, type SessionRequest } from '../../session/strategy';
 import { SecondFactorRequiredError } from '../../session/mint-guard';
 import { registerOAuthProvider } from '../../oauth/providers';
@@ -1026,5 +1027,27 @@ describe.each(MODES)('ending a session on purpose in %s mode', (mode) => {
         expect(second.status).toBe(200);
         expect(await statusOfSession(session, mode)).toBe(401);
         expect(await sessionRowsOf(user.id)).toHaveLength(1);
+    });
+});
+
+describe('POST /account/refresh during a datastore outage', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+    });
+
+    it('answers a retryable 503 and leaves the cookie alone, where a refusal would sign the client out', async () => {
+        const { session } = await account('jwt');
+        jest.spyOn(sessionRepository, 'supersede').mockRejectedValueOnce(
+            Object.assign(new Error('unreachable'), { name: 'MongoNetworkError' })
+        );
+
+        const refreshed = await api()
+            .post('/account/refresh')
+            .set('Origin', FRONTEND)
+            .set('Cookie', session.cookie);
+
+        expect(refreshed.status).toBe(503);
+        expect(refreshed.headers['retry-after']).toBeDefined();
+        expect(setCookie(refreshed, '__Host-session')).toBeUndefined();
     });
 });
