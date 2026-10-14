@@ -54,7 +54,12 @@ export {
 export type { StampedPaymentStatus, StampedReturnStatus } from './projections';
 
 /** What `delivery` reports about the goods, and what `orders` reads off it. */
-export { NO_FULFILLMENT, fulfillmentStatusOf, fulfillmentStatusFilter } from './fulfillment';
+export {
+    NO_FULFILLMENT,
+    fulfillmentStatusOf,
+    fulfillmentStatusFilter,
+    shipsAwaitedStock
+} from './fulfillment';
 export type { FulfillmentSummary, FulfillmentFilter } from './fulfillment';
 
 /** What each status means, declared once and total over the contract's statuses. */

@@ -6,7 +6,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { callerContextAs } from '@tests/callers';
+import { asAdmin, callerContextAs } from '@tests/callers';
 import {
     seedOrder,
     seedDigitalOrder,
@@ -16,6 +16,7 @@ import {
 import { withTransaction } from '@infrastructure/runtime/database';
 import { overrideStatus } from '../../services/override';
 import { recordForcedFulfilment } from '../../services/fulfillment';
+import { withActions } from '../../services/scope';
 import { orderModel } from '../../model';
 import { orderRepository } from '../../repository';
 import { ORDER_STATUS_CHANGED, ORDER_STATUS_OVERRIDDEN } from '../../events';
@@ -286,6 +287,30 @@ describe('the override event', () => {
         );
 
         expect(result.success).toBe(true);
+    });
+
+    // The menu asks the door's own stock guard, so it never offers a move the door answers 409 to.
+    it('leaves shipped and delivered out of the override menu while units await stock', async () => {
+        const order = await seedOrder(OrderStatus.paid);
+        const awaiting = await orderModel
+            .findByIdAndUpdate(
+                order._id,
+                {
+                    fulfillment: {
+                        shipped: false,
+                        remaining: 1,
+                        onHold: 1,
+                        awaitingStock: 1,
+                        undelivered: 0
+                    }
+                },
+                { returnDocument: 'after' }
+            )
+            .exec();
+
+        const { actions } = await withActions(awaiting!, asAdmin());
+
+        expect(actions?.override).toEqual([OrderStatus.processing]);
     });
 });
 

@@ -20,7 +20,8 @@ import {
     overridableTargetsFrom,
     isDigitalOnlyOrder,
     isPayable,
-    canWithdraw
+    canWithdraw,
+    shipsAwaitedStock
 } from '../domain';
 import type { OrderActor } from '../domain';
 import { resolveCurrentImages } from './current';
@@ -188,17 +189,16 @@ export const actorOf = (authContext?: AuthContext): OrderActor => {
  * OWN key, at the same tenant scope `actorOf` already resolves. The ship, deliver and fulfil doors
  * are not here: they act on a fulfillment order or a shipment, each of which carries its own
  * `actions` (`delivery`'s presenter).
- * @param status - the order's current status
- * @param digitalOnly - whether every line on this order is digital — see `isDigitalOnlyOrder`
+ * @param order - the order being served
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
 const startAndOverrideActions = (
-    status: OrderStatus,
-    digitalOnly: boolean,
+    order: OrderDocument,
     authContext: AuthContext | undefined
 ): Pick<OrderActions, 'start' | 'override'> => {
     if (!authContext) return { start: false, override: [] };
 
+    const { status } = order;
     const caller = callerForSubject(authContext, 'Order');
     // The `start` event's own `from` set, not a raw `canTransition(status, target, 'system')`:
     // the latter answers `true` for an ECHO write (status already equals target), which would
@@ -206,8 +206,11 @@ const startAndOverrideActions = (
     const reachesProcessing = (ORDER_EVENTS.start.from as readonly OrderStatus[]).includes(status);
     return {
         start: holdsKey(caller, 'delivery.any.start') && reachesProcessing,
+        // The door's own stock guard, so no target is offered that answers 409.
         override: holdsKey(caller, 'orders.any.override')
-            ? [...overridableTargetsFrom(status, digitalOnly)]
+            ? overridableTargetsFrom(status, isDigitalOnlyOrder(order.items)).filter(
+                  (to) => !shipsAwaitedStock(to, order.fulfillment)
+              )
             : []
     };
 };
@@ -417,11 +420,7 @@ export const withActions = (order: OrderDocument, authContext?: AuthContext): Pr
                     {
                         ...statusActions,
                         pay: statusActions.pay && holdsCheckout(authContext),
-                        ...startAndOverrideActions(
-                            order.status,
-                            isDigitalOnlyOrder(order.items),
-                            authContext
-                        ),
+                        ...startAndOverrideActions(order, authContext),
                         ...withdrawalActions(order, authContext),
                         recordPayment: canRecordPayment(order.status, authContext),
                         // `paidAt` is stamped in the SAME write that moves an order to `paid`

@@ -42,6 +42,20 @@ export const NO_FULFILLMENT: FulfillmentSummary = Object.freeze({
 });
 
 /**
+ * Whether moving the order to `to` would ship goods whose stock has not arrived: forward to
+ * `shipped` or `delivered` while units still await it. A consistency guard, not a policy: the
+ * stock ledger never counted those units out, so the move would ship them on paper. The override
+ * door refuses it and the override menu leaves it out, from this one answer.
+ * @param to - the status the order would move to
+ * @param summary - what `delivery` reported; absent before the order's fulfillment orders exist
+ */
+export const shipsAwaitedStock = (
+    to: OrderStatus,
+    summary: FulfillmentSummary = NO_FULFILLMENT
+): boolean =>
+    (to === OrderStatus.shipped || to === OrderStatus.delivered) && summary.awaitingStock > 0;
+
+/**
  * Whether every remaining unit is held back — the order has goods to send and none of them may go.
  * @param summary - the order's fulfilment summary
  */

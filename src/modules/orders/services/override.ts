@@ -34,6 +34,7 @@ import { ordersAuditActions } from '../audit';
 import {
     canOverrideTo,
     isDigitalOnlyOrder,
+    shipsAwaitedStock,
     withdrawalStartFor,
     withdrawUntilFrom
 } from '../domain';
@@ -145,17 +146,6 @@ const awaitingStock = (): ResponseReject =>
     ]);
 
 /**
- * Whether an override to `to` would ship goods whose stock has not arrived: forward to `shipped` or
- * `delivered` while units still await it. A consistency guard, not a policy — the stock ledger
- * never counted those units out, so moving the order past dispatch would ship them on paper.
- * @param order - the order being moved
- * @param to - the status it is being moved to
- */
-const wouldShipAwaitedStock = (order: OrderDocument, to: OrderStatus): boolean =>
-    (to === OrderStatus.shipped || to === OrderStatus.delivered) &&
-    (order.fulfillment?.awaitingStock ?? 0) > 0;
-
-/**
  * `POST /orders/{id}/status-override` — an override holder moves an order forward with no shipped
  * email, for the cases that consequence would be wrong (a manual correction, a parcel that was
  * never going to be tracked through the normal doors). `delivery` hears `order.status_overridden`
@@ -181,7 +171,7 @@ export const overrideStatus = (
             if (refusal) return refusal;
             if (!canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items)))
                 return notAllowed(order.status, to);
-            if (wouldShipAwaitedStock(order, to)) return awaitingStock();
+            if (shipsAwaitedStock(to, order.fulfillment)) return awaitingStock();
 
             return applyOverride(order, to, reason, context).then((updated) =>
                 // Lost a race against another write since the read above — same shape as the
