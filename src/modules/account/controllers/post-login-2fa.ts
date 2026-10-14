@@ -72,7 +72,7 @@ export const postLoginTwoFactor = (
                     destroyMfaChallengeCookie(response);
                     // The login is only complete here, so the browser becomes familiar here.
                     rememberDevice(request, response, user.email);
-                    successResponse<AuthTokens>(response, issued, 200, 'Authentication successful');
+                    successResponse<AuthTokens>(response, issued, 200, t('account.login.success'));
                 })
             );
         })

@@ -1,7 +1,9 @@
 {
     "account": {
         "login": {
-            "wrong-data": "Email o password non validi."
+            "wrong-data": "Email o password non validi.",
+            "second-factor-required": "Autenticazione a due fattori richiesta.",
+            "success": "Autenticazione riuscita."
         },
         "signup": {
             "email-already-used": "L'email è già stata utilizzata.",
@@ -51,7 +53,8 @@
             "challenge-invalid": "Questo tentativo di accesso è scaduto. Effettua di nuovo l'accesso."
         },
         "logout": {
-            "success": "Disconnessione effettuata."
+            "success": "Disconnessione effettuata.",
+            "all-success": "Disconnessione effettuata da tutti i dispositivi."
         },
         "sessions": {
             "revoked": "Sessione revocata.",

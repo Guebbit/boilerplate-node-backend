@@ -7,6 +7,7 @@
 
 import type { Request, Response } from 'express';
 import { z } from 'zod';
+import { t } from '@infrastructure/i18n';
 import { accountService, twoFactorService } from '../services';
 import { RefreshTokenExpiryTime } from '../session/config';
 import { SESSION_TRANSPORTS } from '../session/strategy';
@@ -97,7 +98,7 @@ export const postLogin = (
                             response,
                             challenge,
                             200,
-                            'Two-factor authentication required'
+                            t('account.login.second-factor-required')
                         );
                     });
             }
@@ -117,7 +118,7 @@ export const postLogin = (
                         response,
                         issued,
                         200,
-                        'Authentication successful'
+                        t('account.login.success')
                     );
                 })
             );

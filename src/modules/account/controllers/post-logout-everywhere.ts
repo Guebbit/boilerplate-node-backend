@@ -4,7 +4,8 @@
  */
 
 import type { Request, Response } from 'express';
-import { successResponse } from '@infrastructure/http/response';
+import { t } from '@infrastructure/i18n';
+import { rejectResponse, successResponse } from '@infrastructure/http/response';
 import { destroyLoggedCookie, destroySessionCookie } from '../session/cookies';
 import { accountService } from '../services';
 import { catchAs } from '@infrastructure/http/controller';
@@ -19,11 +20,18 @@ import { callerContextOf } from '@infrastructure/http/request';
 export const postLogoutEverywhere = (request: Request, response: Response) => {
     return accountService
         .logoutEverywhere(request.authContext!.id, callerContextOf(request))
-        .then(() => {
+        .then((result) => {
+            // A failed revocation must not read as success: the caller would believe every
+            // device is out while a stolen one keeps working.
+            if (!result.success) {
+                rejectResponse(response, result.status, result.errors);
+                return;
+            }
+
             destroySessionCookie(response);
             destroyLoggedCookie(response);
 
-            successResponse(response, undefined, 200, 'Logged out from all devices');
+            successResponse(response, undefined, 200, t('account.logout.all-success'));
         })
         .catch(catchAs(response, 'postLogoutEverywhere'));
 };

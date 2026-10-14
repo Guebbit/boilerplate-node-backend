@@ -129,6 +129,26 @@ describe('the events that move the epoch', () => {
         );
     });
 
+    it('logout-all refuses when the revocation fails, clearing no cookie and ending nothing', async () => {
+        const user = await createUser({ verifiedAt: new Date() });
+        const other = await loginAs(user.email);
+        const caller = await loginAs(user.email);
+        // The guard reads the account first; the service's own read is the second call.
+        const read = userService.findAuthenticatableById.bind(userService);
+        jest.spyOn(userService, 'findAuthenticatableById')
+            .mockImplementationOnce(read)
+            .mockRejectedValueOnce(new Error('datastore down'));
+
+        const response = await api()
+            .post('/account/logout-all')
+            .set('Authorization', caller.bearer)
+            .set('Cookie', caller.cookie);
+
+        expect(response.status).toBeGreaterThanOrEqual(500);
+        expect(response.headers['set-cookie']).toBeUndefined();
+        expect(await statusWith(other.bearer)).toBe(200);
+    });
+
     it('a plain logout leaves the other devices alone', async () => {
         const user = await createUser({ verifiedAt: new Date() });
         const other = await loginAs(user.email);

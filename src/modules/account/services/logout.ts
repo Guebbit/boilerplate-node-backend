@@ -75,9 +75,7 @@ export const logoutCurrentSession = (
 /**
  * Log the account out everywhere: every session goes and the session epoch moves, so access
  * tokens already handed out die too. The caller is signed out as well, deliberately.
- * The audit emit fires unconditionally: the caller's next step is "clear cookies, answer
- * success" either way, so it was never actually gated on `result.success` — this preserves
- * that rather than introducing a new condition.
+ * The audit row carries the real outcome, and a failed revocation is a refusal, never a 200.
  */
 export const logoutEverywhere = (
     userId: string,
@@ -104,7 +102,7 @@ export const logoutEverywhere = (
         .then((result) => {
             recordAudit(context, {
                 action: accountAuditActions.AUTH_LOGGED_OUT_EVERYWHERE,
-                outcome: 'success'
+                outcome: result.success ? 'success' : 'failure'
             });
             // Same name as the single-session logout, told apart by `scope`: one funnel counts
             // logouts, and splitting it across two names would make every rate built on it wrong.

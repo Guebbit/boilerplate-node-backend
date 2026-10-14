@@ -1,7 +1,9 @@
 {
     "account": {
         "login": {
-            "wrong-data": "Invalid email or password."
+            "wrong-data": "Invalid email or password.",
+            "second-factor-required": "Two-factor authentication required.",
+            "success": "Authentication successful."
         },
         "signup": {
             "email-already-used": "Email was already used.",
@@ -51,7 +53,8 @@
             "challenge-invalid": "This login attempt has expired. Please sign in again."
         },
         "logout": {
-            "success": "Logged out."
+            "success": "Logged out.",
+            "all-success": "Logged out from all devices."
         },
         "sessions": {
             "revoked": "Session revoked.",
