@@ -11,6 +11,7 @@
  * `session/key-ring.ts`.
  */
 
+import { randomUUID } from 'node:crypto';
 import { SignJWT, decodeJwt, decodeProtectedHeader } from 'jose';
 import { setupTestDb } from '@tests/setup-test-db';
 import { createUser } from '@modules/users/tests/factories';
@@ -21,14 +22,18 @@ import {
     rotateRefreshToken,
     rememberOfRefreshToken,
     TokenReuseError,
-    startSession
+    startSession,
+    FIRST_PARTY_CLIENT_ID
 } from '@modules/account/session/jwt';
 import { withEnvironmentOverrides, setEnvironment } from '@tests/environment';
 import { advanceDate, freezeDate } from '@tests/clock';
 import {
     RefreshTokenExpiryTime,
+    getAccessTokenAudience,
     getExpiryTime,
-    getExpiryTimeMilliseconds
+    getExpiryTimeMilliseconds,
+    getRefreshTokenAudience,
+    getTokenIssuer
 } from '@modules/account/session/config';
 import { keyId } from '@modules/account/session/key-ring';
 import { userRepository } from '@modules/users/tests/factories';
@@ -52,15 +57,24 @@ const signAs = (
     { expiresIn = 3600, typ }: { expiresIn?: number; typ?: string } = {}
 ): Promise<string> => {
     const now = Math.floor(Date.now() / 1000);
+    const refresh = secret === REFRESH_SECRET;
     return (
-        new SignJWT({ auth_time: now, amr: ['pwd'], ...payload })
+        new SignJWT({
+            auth_time: now,
+            amr: ['pwd'],
+            ...(!refresh && { client_id: FIRST_PARTY_CLIENT_ID }),
+            ...payload
+        })
             // The `typ` a real token of that ring carries (RFC 9068); `typ` overrides it for the
             // cases that are about a wrong one.
             .setProtectedHeader({
                 alg: 'HS256',
-                typ: typ ?? (secret === REFRESH_SECRET ? 'rt+jwt' : 'at+jwt'),
+                typ: typ ?? (refresh ? 'rt+jwt' : 'at+jwt'),
                 kid: keyId(secret)
             })
+            .setIssuer(getTokenIssuer())
+            .setAudience(refresh ? getRefreshTokenAudience() : getAccessTokenAudience())
+            .setJti(randomUUID())
             .setIssuedAt(now)
             .setExpirationTime(now + expiresIn)
             .sign(new TextEncoder().encode(secret))
@@ -78,17 +92,17 @@ describe('verifyAccessToken', () => {
     it('resolves the payload of a token signed with the access secret', async () => {
         const token = await signAs(
             ACCESS_SECRET,
-            { id: 'user-1', sid: 'family-1' },
+            { sub: 'user-1', sid: 'family-1' },
             { expiresIn: 900 }
         );
 
-        await expect(verifyAccessToken(token)).resolves.toMatchObject({ id: 'user-1' });
+        await expect(verifyAccessToken(token)).resolves.toMatchObject({ sub: 'user-1' });
     });
 
     it('rejects a token signed with the refresh secret', async () => {
         // The two secrets must not be interchangeable: if they were, a refresh token would be
         // accepted as an access token and the revocation lookup could be bypassed entirely.
-        const token = await signAs(REFRESH_SECRET, { id: 'user-1' }, { expiresIn: 900 });
+        const token = await signAs(REFRESH_SECRET, { sub: 'user-1' }, { expiresIn: 900 });
 
         // Its `kid` names no member of the access ring: a key this ring never held.
         await expect(verifyAccessToken(token)).rejects.toMatchObject({
@@ -97,7 +111,7 @@ describe('verifyAccessToken', () => {
     });
 
     it('rejects an expired token', async () => {
-        const token = await signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: -10 });
+        const token = await signAs(ACCESS_SECRET, { sub: 'user-1' }, { expiresIn: -10 });
 
         await expect(verifyAccessToken(token)).rejects.toMatchObject({ reason: 'expired' });
     });
@@ -109,9 +123,9 @@ describe('verifyAccessToken', () => {
     });
 
     it('rejects a token whose payload was tampered with', async () => {
-        const token = await signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: 900 });
+        const token = await signAs(ACCESS_SECRET, { sub: 'user-1' }, { expiresIn: 900 });
         const [header, , signature] = token.split('.', 3);
-        const forgedPayload = Buffer.from(JSON.stringify({ id: 'admin' })).toString('base64url');
+        const forgedPayload = Buffer.from(JSON.stringify({ sub: 'admin' })).toString('base64url');
 
         await expect(
             verifyAccessToken(`${header}.${forgedPayload}.${signature}`)
@@ -149,7 +163,7 @@ describe('token types (`typ` header)', () => {
     });
 
     it('refuses a token carrying no `typ` at all', async () => {
-        const unTyped = await new SignJWT({ id: 'user-1', auth_time: 1, amr: ['pwd'] })
+        const unTyped = await new SignJWT({ sub: 'user-1', auth_time: 1, amr: ['pwd'] })
             .setProtectedHeader({ alg: 'HS256', kid: keyId(ACCESS_SECRET) })
             .setExpirationTime('15m')
             .sign(new TextEncoder().encode(ACCESS_SECRET));
@@ -179,8 +193,8 @@ describe('verifyRefreshToken after a rotation', () => {
         // The rotated-away token is no longer a credential for anything but the rotation itself...
         await expect(verifyRefreshToken(original)).rejects.toThrow('Forbidden');
         // ...and refusing it here is NOT reuse detection: the family is untouched.
-        await expect(verifyRefreshToken(sibling)).resolves.toMatchObject({ id });
-        await expect(verifyRefreshToken(rotated.refreshToken)).resolves.toMatchObject({ id });
+        await expect(verifyRefreshToken(sibling)).resolves.toMatchObject({ sub: id });
+        await expect(verifyRefreshToken(rotated.refreshToken)).resolves.toMatchObject({ sub: id });
         // The two-tab grace (a rotation inside the window) is the rotation's own path, unchanged.
         await expect(rotateRefreshToken(original)).resolves.toMatchObject({
             accessToken: expect.any(String)
@@ -191,28 +205,28 @@ describe('verifyRefreshToken after a rotation', () => {
 describe('verifyRefreshToken', () => {
     it('resolves when the token is signed AND stored as a live session', async () => {
         const user = await createUser();
-        const token = await signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
+        const token = await signAs(REFRESH_SECRET, { sub: String(user._id) }, { expiresIn: 3600 });
         await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
-        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: String(user._id) });
     });
 
     it('rejects a validly-signed token that is not stored on any user', async () => {
         // This is the revocation check. A correct signature is necessary but not sufficient —
         // otherwise logout could never invalidate anything.
         await createUser();
-        const orphanToken = await signAs(REFRESH_SECRET, { id: 'user-1' }, { expiresIn: 3600 });
+        const orphanToken = await signAs(REFRESH_SECRET, { sub: 'user-1' }, { expiresIn: 3600 });
 
         await expect(verifyRefreshToken(orphanToken)).rejects.toThrow('Forbidden');
     });
 
     it('rejects once its session row has been removed', async () => {
         const user = await createUser();
-        const token = await signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
+        const token = await signAs(REFRESH_SECRET, { sub: String(user._id) }, { expiresIn: 3600 });
         await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         // Precondition: it works before revocation, so the assertion below cannot pass vacuously.
-        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: String(user._id) });
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: String(user._id) });
 
         await sessionRepository.removeAll(user.id);
 
@@ -224,7 +238,7 @@ describe('verifyRefreshToken', () => {
 
     it('rejects a token signed with the access secret', async () => {
         const user = await createUser();
-        const token = await signAs(ACCESS_SECRET, { id: String(user._id) }, { expiresIn: 3600 });
+        const token = await signAs(ACCESS_SECRET, { sub: String(user._id) }, { expiresIn: 3600 });
         await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         // Even though it is stored, the signature is checked first and must fail.
@@ -233,7 +247,7 @@ describe('verifyRefreshToken', () => {
 
     it('rejects an expired refresh token without consulting the database', async () => {
         const user = await createUser();
-        const token = await signAs(REFRESH_SECRET, { id: String(user._id) }, { expiresIn: -10 });
+        const token = await signAs(REFRESH_SECRET, { sub: String(user._id) }, { expiresIn: -10 });
         await plantSession(user.id, token, { ttlMs: 3_600_000 });
 
         await expect(verifyRefreshToken(token)).rejects.toThrow();
@@ -248,7 +262,7 @@ describe('startSession', () => {
 
         // Round-trip through the verifier rather than inspecting the string: what matters is
         // that the token this function produced is one the system will later accept.
-        await expect(verifyRefreshToken(issued)).resolves.toMatchObject({ id: String(user._id) });
+        await expect(verifyRefreshToken(issued)).resolves.toMatchObject({ sub: String(user._id) });
     });
 
     it('stores a `jwt` session row, as a digest, with an expiry and its sign-in time', async () => {
@@ -297,8 +311,8 @@ describe('startSession', () => {
 
         // Both must remain individually verifiable: signing in on a phone must not sign the
         // laptop out. A write that replaced the account's rows would break exactly this.
-        await expect(verifyRefreshToken(first)).resolves.toMatchObject({ id: String(user._id) });
-        await expect(verifyRefreshToken(second)).resolves.toMatchObject({ id: String(user._id) });
+        await expect(verifyRefreshToken(first)).resolves.toMatchObject({ sub: String(user._id) });
+        await expect(verifyRefreshToken(second)).resolves.toMatchObject({ sub: String(user._id) });
 
         const rows = await sessionRowsOf(user.id);
         expect(rows).toHaveLength(2);
@@ -319,7 +333,7 @@ describe('createAccessToken', () => {
         const accessToken = await createAccessToken(refreshToken);
 
         await expect(verifyAccessToken(accessToken)).resolves.toMatchObject({
-            id: String(user._id)
+            sub: String(user._id)
         });
     });
 
@@ -353,8 +367,8 @@ describe('createAccessToken', () => {
         const accessToken = await createAccessToken(refreshToken);
         const payload = await verifyAccessToken(accessToken);
 
-        expect(payload.id).toBe(String(owner._id));
-        expect(payload.id).not.toBe(String(other._id));
+        expect(payload.sub).toBe(String(owner._id));
+        expect(payload.sub).not.toBe(String(other._id));
     });
 
     // "The one that matters most": if this regresses, the step-up freshness gate silently

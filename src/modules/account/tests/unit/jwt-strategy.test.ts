@@ -271,7 +271,7 @@ describe.each([
 ] as const)('%s', (method, verifier) => {
     it(`verifies with ${verifier} and hands the claims' proof to the shared resolver`, async () => {
         tokens[verifier].mockResolvedValue({
-            id: USER_ID,
+            sub: USER_ID,
             auth_time: 1_700_000_000,
             amr: ['pwd'],
             sid: FAMILY_ID
@@ -301,7 +301,7 @@ describe.each([
 describe('resolveBearer and the session it names', () => {
     beforeEach(() => {
         tokens.verifyAccessToken.mockResolvedValue({
-            id: USER_ID,
+            sub: USER_ID,
             auth_time: 1_700_000_000,
             amr: ['pwd'],
             sid: FAMILY_ID

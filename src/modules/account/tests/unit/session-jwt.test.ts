@@ -11,6 +11,7 @@
  * found at all.
  */
 
+import { randomUUID } from 'node:crypto';
 import { SignJWT, decodeJwt, decodeProtectedHeader } from 'jose';
 import { asStub } from '@tests/stub';
 import { keyId } from '@modules/account/session/key-ring';
@@ -53,8 +54,14 @@ import {
     verifyAccessToken,
     verifyRefreshToken,
     createAccessToken,
-    startSession
+    startSession,
+    FIRST_PARTY_CLIENT_ID
 } from '@modules/account/session/jwt';
+import {
+    getAccessTokenAudience,
+    getRefreshTokenAudience,
+    getTokenIssuer
+} from '@modules/account/session/config';
 import { userService } from '@modules/users';
 import { sessionRepository } from '@modules/account/repository';
 import { hashToken } from '@infrastructure/security/hash-token';
@@ -112,18 +119,47 @@ const mintable = () => {
 const signAs = (
     secret: string,
     payload: object,
-    { expiresIn = 3600, typ }: { expiresIn?: number; typ?: string } = {}
+    {
+        expiresIn = 3600,
+        typ,
+        issuer,
+        audience
+    }: {
+        expiresIn?: number;
+        typ?: string;
+        issuer?: string | null;
+        audience?: string | null;
+    } = {}
 ): Promise<string> => {
     const now = Math.floor(Date.now() / 1000);
+    const refresh = secret === 'refresh-secret';
+    // `null` leaves the claim out; `undefined` stamps what a real token of that ring carries.
+    const registered = {
+        iss: issuer === undefined ? getTokenIssuer() : issuer,
+        aud:
+            audience === undefined
+                ? refresh
+                    ? getRefreshTokenAudience()
+                    : getAccessTokenAudience()
+                : audience
+    };
     return (
-        new SignJWT({ auth_time: now, amr: ['pwd'], ...payload })
+        new SignJWT({
+            auth_time: now,
+            amr: ['pwd'],
+            ...(!refresh && { client_id: FIRST_PARTY_CLIENT_ID }),
+            ...(registered.iss !== null && { iss: registered.iss }),
+            ...(registered.aud !== null && { aud: registered.aud }),
+            ...payload
+        })
             // The `typ` a real token of that ring carries (RFC 9068); `typ` overrides it for the
             // cases that are about a wrong one.
             .setProtectedHeader({
                 alg: 'HS256',
-                typ: typ ?? (secret === 'refresh-secret' ? 'rt+jwt' : 'at+jwt'),
+                typ: typ ?? (refresh ? 'rt+jwt' : 'at+jwt'),
                 kid: keyId(secret)
             })
+            .setJti(randomUUID())
             .setIssuedAt(now)
             .setExpirationTime(now + expiresIn)
             .sign(new TextEncoder().encode(secret))
@@ -146,18 +182,18 @@ describe('verifyAccessToken', () => {
     it('resolves the payload of a token signed with the access secret', async () => {
         const token = await signAs(
             'access-secret',
-            { id: USER_ID, sid: '507f1f77bcf86cd799439022' },
+            { sub: USER_ID, sid: '507f1f77bcf86cd799439022' },
             { expiresIn: 900 }
         );
 
         await expect(verifyAccessToken(token)).resolves.toMatchObject({
-            id: USER_ID,
+            sub: USER_ID,
             sid: '507f1f77bcf86cd799439022'
         });
     });
 
     it('refuses a token that names no session: the signature is valid, the shape is not', async () => {
-        const token = await signAs('access-secret', { id: USER_ID }, { expiresIn: 900 });
+        const token = await signAs('access-secret', { sub: USER_ID }, { expiresIn: 900 });
 
         await expect(verifyAccessToken(token)).rejects.toMatchObject({ reason: 'malformed' });
     });
@@ -165,7 +201,7 @@ describe('verifyAccessToken', () => {
     it('rejects a token signed with the REFRESH secret', async () => {
         // The separation that matters: a refresh token presented as a bearer token must not be
         // accepted, or the long-lived credential becomes the API credential.
-        const refresh = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
 
         await expect(verifyAccessToken(refresh)).rejects.toThrow();
     });
@@ -173,7 +209,7 @@ describe('verifyAccessToken', () => {
     it('rejects a token whose signature does not verify', async () => {
         // Claims the real ring member's `kid` but was actually signed with a different secret —
         // an attacker who can read the (public) kid format but not the secret itself.
-        const forged = await new SignJWT({ id: USER_ID })
+        const forged = await new SignJWT({ sub: USER_ID })
             .setProtectedHeader({ alg: 'HS256', kid: keyId('access-secret') })
             .setExpirationTime('10m')
             .sign(new TextEncoder().encode('wrong-secret'));
@@ -182,18 +218,18 @@ describe('verifyAccessToken', () => {
     });
 
     it('rejects an expired token', async () => {
-        const expired = await signAs('access-secret', { id: USER_ID }, { expiresIn: -10 });
+        const expired = await signAs('access-secret', { sub: USER_ID }, { expiresIn: -10 });
 
         await expect(verifyAccessToken(expired)).rejects.toThrow();
     });
 
     it('classifies each refusal for the resolver: expired, forged, retired key, not a JWT', async () => {
-        const expired = await signAs('access-secret', { id: USER_ID }, { expiresIn: -10 });
-        const forged = await new SignJWT({ id: USER_ID })
+        const expired = await signAs('access-secret', { sub: USER_ID }, { expiresIn: -10 });
+        const forged = await new SignJWT({ sub: USER_ID })
             .setProtectedHeader({ alg: 'HS256', typ: 'at+jwt', kid: keyId('access-secret') })
             .setExpirationTime('10m')
             .sign(new TextEncoder().encode('wrong-secret'));
-        const retired = await signAs('gone-secret', { id: USER_ID });
+        const retired = await signAs('gone-secret', { sub: USER_ID });
 
         await expect(verifyAccessToken(expired)).rejects.toMatchObject({ reason: 'expired' });
         await expect(verifyAccessToken(forged)).rejects.toMatchObject({
@@ -209,18 +245,31 @@ describe('verifyAccessToken', () => {
     });
 
     it('refuses a correctly signed token that never expires', async () => {
-        const forever = await new SignJWT({ id: USER_ID, auth_time: 1, amr: ['pwd'] })
+        const forever = await new SignJWT({
+            sub: USER_ID,
+            sid: '507f1f77bcf86cd799439022',
+            client_id: FIRST_PARTY_CLIENT_ID,
+            auth_time: 1,
+            amr: ['pwd']
+        })
             .setProtectedHeader({ alg: 'HS256', typ: 'at+jwt', kid: keyId('access-secret') })
+            .setIssuer(getTokenIssuer())
+            .setAudience(getAccessTokenAudience())
+            .setJti(randomUUID())
+            .setIssuedAt()
             .sign(new TextEncoder().encode('access-secret'));
 
         await expect(verifyAccessToken(forever)).rejects.toMatchObject({ reason: 'malformed' });
     });
 
     it('refuses a correctly signed token that lacks the claims this app signs', async () => {
-        const bare = await new SignJWT({ id: USER_ID })
-            .setProtectedHeader({ alg: 'HS256', typ: 'at+jwt', kid: keyId('access-secret') })
-            .setExpirationTime('10m')
-            .sign(new TextEncoder().encode('access-secret'));
+        // Every registered claim present; the app's own `auth_time` and `amr` dropped.
+        const bare = await signAs('access-secret', {
+            sub: USER_ID,
+            sid: '507f1f77bcf86cd799439022',
+            auth_time: undefined,
+            amr: undefined
+        });
 
         await expect(verifyAccessToken(bare)).rejects.toMatchObject({
             reason: 'malformed',
@@ -242,7 +291,7 @@ describe('verifyAccessToken', () => {
         const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString(
             'base64url'
         );
-        const payload = Buffer.from(JSON.stringify({ id: USER_ID })).toString('base64url');
+        const payload = Buffer.from(JSON.stringify({ sub: USER_ID })).toString('base64url');
         // Empty signature segment — the trailing dot is `alg: none`'s whole point.
         const forged = `${header}.${payload}.`;
 
@@ -256,19 +305,114 @@ describe('verifyAccessToken', () => {
         const header = Buffer.from(
             JSON.stringify({ alg: 'none', typ: 'JWT', kid: keyId('access-secret') })
         ).toString('base64url');
-        const payload = Buffer.from(JSON.stringify({ id: USER_ID })).toString('base64url');
+        const payload = Buffer.from(JSON.stringify({ sub: USER_ID })).toString('base64url');
         const forged = `${header}.${payload}.`;
 
         await expect(verifyAccessToken(forged)).rejects.toThrow();
     });
 });
 
-describe('verifyRefreshToken', () => {
-    it('resolves when the signature verifies AND the token is still stored', async () => {
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+/** A live access token's claims but for one registered field. */
+const accessWith = (options: { issuer?: string | null; audience?: string | null }) =>
+    signAs('access-secret', { sub: USER_ID, sid: '507f1f77bcf86cd799439022' }, options);
+
+/**
+ * RFC 8725 §3.10 / RFC 9068 §2.2: a token minted under a shared secret by someone else, or for the
+ * other kind, names the wrong issuer or audience and is refused.
+ */
+describe('the registered claims', () => {
+    it.each([
+        ['no `iss`', { issuer: null }],
+        ['another `iss`', { issuer: 'https://other.example' }],
+        ['no `aud`', { audience: null }],
+        ['another `aud`', { audience: 'https://other.example' }],
+        ['the refresh token’s `aud`', { audience: getRefreshTokenAudience() }]
+    ])('refuses an access token carrying %s', async (_name, options) => {
+        await expect(verifyAccessToken(await accessWith(options))).rejects.toMatchObject({
+            reason: 'malformed'
+        });
+    });
+
+    it('refuses a refresh token carrying the access token’s `aud`, before any lookup', async () => {
+        const token = await signAs(
+            'refresh-secret',
+            { sub: USER_ID },
+            { audience: getAccessTokenAudience() }
+        );
         holdingLive();
 
-        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
+        await expect(verifyRefreshToken(token)).rejects.toMatchObject({ reason: 'malformed' });
+        expect(mockedSessions.findByHash).not.toHaveBeenCalled();
+    });
+
+    it('refuses an access token missing `client_id`', async () => {
+        const token = await signAs('access-secret', {
+            sub: USER_ID,
+            sid: '507f1f77bcf86cd799439022',
+            client_id: undefined
+        });
+
+        await expect(verifyAccessToken(token)).rejects.toMatchObject({ reason: 'malformed' });
+    });
+
+    it('stamps RFC 9068’s set on an access token, and `sub` rather than an `id`', async () => {
+        holdingLive();
+        const refresh = await signAs('refresh-secret', { sub: USER_ID });
+
+        const access = decodeJwt(await createAccessToken(refresh));
+
+        expect(access).toMatchObject({
+            sub: USER_ID,
+            iss: getTokenIssuer(),
+            aud: getAccessTokenAudience(),
+            client_id: FIRST_PARTY_CLIENT_ID,
+            iat: expect.any(Number),
+            exp: expect.any(Number),
+            jti: expect.any(String)
+        });
+        expect(access).not.toHaveProperty('id');
+    });
+
+    it('stamps a refresh token with its own `aud`, and no `client_id`', async () => {
+        mintable();
+
+        const refresh = decodeJwt(await startSession(USER_ID, ['pwd']));
+
+        expect(refresh).toMatchObject({
+            sub: USER_ID,
+            iss: getTokenIssuer(),
+            aud: getRefreshTokenAudience()
+        });
+        expect(refresh).not.toHaveProperty('client_id');
+    });
+
+    it('derives the issuer and both audiences from NODE_URL when none is set', () => {
+        setEnvironment({ NODE_URL: 'https://api.example.com/' });
+
+        expect(getTokenIssuer()).toBe('https://api.example.com');
+        expect(getAccessTokenAudience()).toBe('https://api.example.com');
+        expect(getRefreshTokenAudience()).toBe('https://api.example.com/account/refresh');
+    });
+
+    it('takes each from its own variable when set', () => {
+        setEnvironment({
+            NODE_TOKEN_ISSUER: 'https://id.example.com',
+            NODE_TOKEN_ACCESS_AUDIENCE: 'https://api.example.com',
+            NODE_TOKEN_REFRESH_AUDIENCE: 'https://id.example.com/refresh'
+        });
+
+        expect(getTokenIssuer()).toBe('https://id.example.com');
+        expect(getAccessTokenAudience()).toBe('https://api.example.com');
+        expect(getRefreshTokenAudience()).toBe('https://id.example.com/refresh');
+    });
+});
+
+describe('verifyRefreshToken', () => {
+    it('resolves when the signature verifies AND the token is still stored', async () => {
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
+        holdingLive();
+
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: USER_ID });
         // Looked up BY THE TOKEN's digest, not by the id in its payload: the stored rows are the
         // authority on which sessions are live, and a payload cannot be asked whether it was revoked.
         expect(mockedSessions.findByHash).toHaveBeenCalledWith(hashToken(token));
@@ -277,14 +421,14 @@ describe('verifyRefreshToken', () => {
     it('rejects a validly signed token that is no longer stored', async () => {
         // Revocation. Without this branch, logout and session revocation are cosmetic: the JWT
         // still verifies until it expires, whatever the database says.
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         mockedSessions.findByHash.mockResolvedValue(null);
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('Forbidden');
     });
 
     it('rejects a stored row that was rotated away, an expired one, and one of the other mode', async () => {
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         const live = { userId: USER_ID, mode: 'jwt', expiresAt: new Date(Date.now() + 60_000) };
         mockedUsers.findAuthenticatableById.mockResolvedValue(signedInUser());
 
@@ -299,7 +443,7 @@ describe('verifyRefreshToken', () => {
     });
 
     it('rejects a live row whose account may no longer sign in', async () => {
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
         mockedUsers.findAuthenticatableById.mockResolvedValue(null);
 
@@ -307,7 +451,7 @@ describe('verifyRefreshToken', () => {
     });
 
     it('rejects a token signed with the ACCESS secret', async () => {
-        const access = await signAs('access-secret', { id: USER_ID }, { expiresIn: 900 });
+        const access = await signAs('access-secret', { sub: USER_ID }, { expiresIn: 900 });
 
         await expect(verifyRefreshToken(access)).rejects.toThrow();
     });
@@ -322,7 +466,7 @@ describe('verifyRefreshToken', () => {
     it('rejects rather than resolving when the lookup itself fails', async () => {
         // A database error must not be read as "no such token" OR as success. It rejects, and the
         // caller answers 500 rather than silently logging someone out or letting them in.
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         mockedSessions.findByHash.mockRejectedValue(new Error('connection lost'));
 
         await expect(verifyRefreshToken(token)).rejects.toThrow('connection lost');
@@ -341,12 +485,12 @@ describe('the signing-key ring', () => {
     it('still verifies a token signed under an entry a rotation later prepends past', async () => {
         // The property rotation depends on: a token signed moments before a new key is
         // prepended must not be invalidated by that deploy.
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
 
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret,refresh-secret' });
 
-        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: USER_ID });
     });
 
     it("signs new tokens with the ring's first entry once one is prepended", async () => {
@@ -361,7 +505,7 @@ describe('the signing-key ring', () => {
     it('rejects a kid naming a key already dropped from the ring', async () => {
         // The other half of rotation: once an old secret is removed, a token still carrying its
         // kid is a retired key presented as current — 401, "log in again", never a crash.
-        const token = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const token = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
 
         setEnvironment({ NODE_TOKEN_REFRESH: 'new-refresh-secret' });
 
@@ -376,7 +520,7 @@ describe('the signing-key ring', () => {
         const token = await startSession(USER_ID, ['pwd']);
         holdingLive();
 
-        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: USER_ID });
     });
 });
 
@@ -412,7 +556,7 @@ describe('startSession', () => {
 
         // Verifies against the refresh secret...
         holdingLive();
-        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ id: USER_ID });
+        await expect(verifyRefreshToken(token)).resolves.toMatchObject({ sub: USER_ID });
         // ...and is not accepted as a bearer token.
         await expect(verifyAccessToken(token)).rejects.toThrow();
     });
@@ -487,25 +631,25 @@ describe('startSession', () => {
 
 describe('createAccessToken', () => {
     it('mints an access token from a refresh token that is still stored', async () => {
-        const refresh = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
 
         const access = await createAccessToken(refresh);
 
-        await expect(verifyAccessToken(access)).resolves.toMatchObject({ id: USER_ID });
+        await expect(verifyAccessToken(access)).resolves.toMatchObject({ sub: USER_ID });
     });
 
     it('refuses to mint one from a revoked refresh token', async () => {
         // The property that makes logout mean anything: a revoked session must not be able to
         // keep issuing fresh access tokens for the remainder of the refresh token's lifetime.
-        const refresh = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         mockedSessions.findByHash.mockResolvedValue(null);
 
         await expect(createAccessToken(refresh)).rejects.toThrow('Forbidden');
     });
 
     it('signs the access token with the access secret and pins HS256', async () => {
-        const refresh = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
 
         const access = await createAccessToken(refresh);
@@ -517,7 +661,7 @@ describe('createAccessToken', () => {
     it('gives the access token the short TTL, not the refresh window', async () => {
         // The whole point of the pair: the credential sent on every request is the short-lived
         // one. Signing it with the refresh window would make revocation irrelevant for a month.
-        const refresh = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const refresh = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
         holdingLive();
 
         const { iat, exp } = decodeJwt(await createAccessToken(refresh)) as {
@@ -534,10 +678,10 @@ describe('createAccessToken carrying the tier', () => {
         holdingLive();
         const remembered = await signAs(
             'refresh-secret',
-            { id: USER_ID, remember: 'medium' },
+            { sub: USER_ID, remember: 'medium' },
             { expiresIn: 3600 }
         );
-        const session = await signAs('refresh-secret', { id: USER_ID }, { expiresIn: 3600 });
+        const session = await signAs('refresh-secret', { sub: USER_ID }, { expiresIn: 3600 });
 
         expect(decodeJwt(await createAccessToken(remembered))).toMatchObject({
             remember: 'medium'
@@ -549,7 +693,7 @@ describe('createAccessToken carrying the tier', () => {
         holdingLive();
         const refresh = await signAs(
             'refresh-secret',
-            { id: USER_ID, remember: 'long' },
+            { sub: USER_ID, remember: 'long' },
             { expiresIn: 3600 }
         );
 

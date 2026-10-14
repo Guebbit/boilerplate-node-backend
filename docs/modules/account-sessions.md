@@ -20,6 +20,7 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
 | Keys the deployment needs | `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH`, each a ring    | none                                  |
 | Lifetimes                 | `NODE_TOKEN_ACCESS_TIME`, `NODE_SESSION_TIME_*`              | `NODE_SESSION_TIME_*`                 |
 | Rotation windows          | `NODE_TOKEN_ROTATION_GRACE_MS`, `NODE_TOKEN_REUSE_WINDOW_MS` | not used                              |
+| Issuer and audiences      | optional, [derived from `NODE_URL`](#token-claims)           | not used                              |
 | `POST /account/refresh`   | exists                                                       | answers 404                           |
 
 - **Shared by both modes:** `NODE_SESSION_TIME_{SHORT,MEDIUM,LONG}` (the "remember me" tiers) and the
@@ -143,6 +144,28 @@ newest first. `jwt.ts` signs with `ring[0]` and stamps a `kid` (`key-ring.ts#key
 the secret itself); verifying looks the token's `kid` up in the ring rather than assuming
 `ring[0]`, so a token signed moments before a rotation still verifies. Full rotation procedure:
 [Security](../tools/security.md#signing-key-rotation).
+
+## What a token says, and who it is for {#token-claims}
+
+An access token carries RFC 9068's full set of registered claims, so its `at+jwt` header is true;
+a refresh token carries the same minus `client_id`. `jwt.ts#signToken` stamps them and
+`verifyAgainstRing` demands them.
+
+| Claim       | Access token            | Refresh token    | From                                   |
+| ----------- | ----------------------- | ---------------- | -------------------------------------- |
+| `sub`       | the account             | the account      | the user id                            |
+| `iss`       | checked                 | checked          | `NODE_TOKEN_ISSUER`, else `NODE_URL`   |
+| `aud`       | checked, its own        | checked, its own | `NODE_TOKEN_{ACCESS,REFRESH}_AUDIENCE` |
+| `iat` `exp` | required                | required         | the clock and the lifetime             |
+| `jti`       | required, random        | required, random | `randomUUID()`                         |
+| `client_id` | required, `first-party` | absent           | `FIRST_PARTY_CLIENT_ID`                |
+| `sid`       | the session family      | absent           | the row it was minted against          |
+
+- **Why `iss`/`aud`.** A secret shared with another service would otherwise let that service mint
+  tokens accepted as sessions here (RFC 8725 §3.10). A wrong or missing one is a `401`.
+- **Why two audiences.** Unset, the access audience is `NODE_URL` (the API) and the refresh one
+  `NODE_URL/account/refresh` (where it is redeemed). A token of one kind is refused as the other
+  even if both rings shared a secret — the second fence after `typ`.
 
 ## Freshness: how recently they proved it {#freshness-auth-time-and-amr}
 
@@ -586,8 +609,9 @@ for where they sit among everything else this repo depends on.
 | `typ` header check, after the signature             | `jose`, through `typ` (was hand-written)                                         |
 | Reading the `kid` before verifying                  | `jose`, which hands it to the key lookup (was a separate `decode`)               |
 | Expiry, and refusing a token with none              | `jose`, through `requiredClaims: ['exp']`                                        |
+| `iss`, `aud`, and every registered claim present    | `jose`, through `issuer`, `audience` and `requiredClaims`                        |
 | Which ring member a `kid` names, and key rotation   | ours, `key-ring.ts`: a JWKS holds no shared secrets, so there is nothing to load |
-| The shape of our own claims (`id`, `auth_time`)     | ours, `carriesTokenClaims`: a signature proves the author, not the shape         |
+| The shape of our own claims (`sub`, `auth_time`)    | ours, `carriesTokenClaims`: a signature proves the author, not the shape         |
 | The session row, rotation, reuse and the grace      | ours: a JWT is stateless, and the revocation rules are the point                 |
 | The epoch, the mint guard and the step-up freshness | ours: policy, not cryptography                                                   |
 

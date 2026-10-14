@@ -118,7 +118,7 @@ sequenceDiagram
     participant P as kernel/permissions.ts callerInScope()
 
     C->>R: bearer token
-    R->>U: findAuthenticatableById(claims.id)
+    R->>U: findAuthenticatableById(claims.sub)
     U-->>R: user (or none)
     R->>S: rolesOf(user.id, DEPLOYMENT_TENANT_ID)
     S-->>R: { tenant, platform } role names

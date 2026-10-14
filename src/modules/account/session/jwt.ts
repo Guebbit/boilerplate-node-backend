@@ -23,6 +23,9 @@ import {
     getExpiryTime,
     getExpiryTimeMilliseconds,
     getAccessExpiryTime,
+    getAccessTokenAudience,
+    getRefreshTokenAudience,
+    getTokenIssuer,
     getRotationGraceMilliseconds,
     getReuseDetectionWindowMilliseconds
 } from './config';
@@ -34,11 +37,13 @@ import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { revokeFor } from '../services/revocation';
 
 /**
- * The claims this app puts in every access/refresh JWT. Wire names are OIDC's, so a future
- * external identity provider's tokens would satisfy the same guards unchanged.
+ * The claims this app puts in every access/refresh JWT, beyond the registered ones `signToken`
+ * stamps (`iss`, `aud`, `iat`, `exp`, `jti`). Wire names are OIDC's, so a future external identity
+ * provider's tokens would satisfy the same guards unchanged.
  */
 export interface TokenData {
-    id: string;
+    /** The account the token speaks for — RFC 7519's `sub`. */
+    sub: string;
     /**
      * Epoch seconds (RFC 7519 NumericDate) at which the user last actually proved themselves —
      * when the login's check BEGAN (`startSession`'s `provedAt`), then COPIED FORWARD on every
@@ -66,10 +71,21 @@ export interface TokenData {
      * access token is stamped from the row it was minted against.
      */
     sid?: string;
+    /**
+     * The client an ACCESS token was issued to, RFC 9068 §2.2: always {@link FIRST_PARTY_CLIENT_ID}.
+     * Never on a refresh token, and never carried forward.
+     */
+    client_id?: string;
 }
 
 /** An access token's claims: {@link TokenData} with the session it belongs to. */
 export type AccessTokenData = TokenData & { sid: string };
+
+/**
+ * The one client this app issues access tokens to: its own first-party frontend. RFC 9068 requires
+ * the claim; there is no client registry to draw a second value from.
+ */
+export const FIRST_PARTY_CLIENT_ID = 'first-party';
 
 /**
  * What a rotation hands the controller. `refreshMaxAgeMs` is the new refresh cookie's `maxAge`,
@@ -85,8 +101,8 @@ export interface RotatedSession {
  * The claims to carry forward from one token to the next: `auth_time`, `amr`, and `remember`
  * only when one was ticked (an `undefined` claim would otherwise sit in the payload).
  */
-const carriedClaims = ({ id, auth_time: authTime, amr, remember }: TokenData): TokenData => ({
-    id,
+const carriedClaims = ({ sub, auth_time: authTime, amr, remember }: TokenData): TokenData => ({
+    sub,
     auth_time: authTime,
     amr,
     ...(remember && { remember })
@@ -102,6 +118,21 @@ const TOKEN_TYPE_HEADER = { access: 'at+jwt', refresh: 'rt+jwt' } as const;
 
 /** Which kind of token a verifier accepts — a key of {@link TOKEN_TYPE_HEADER}. */
 type TokenKind = keyof typeof TOKEN_TYPE_HEADER;
+
+/** Each kind's `aud`, read per call from config, so a token of one kind is refused as the other. */
+const AUDIENCE_OF = {
+    access: getAccessTokenAudience,
+    refresh: getRefreshTokenAudience
+} as const satisfies Record<TokenKind, () => string>;
+
+/**
+ * The registered claims a verifier demands present, per kind — `iss` and `aud` are demanded by
+ * their own options. An access token carries RFC 9068 §2.2's full set; `client_id` is its alone.
+ */
+const REQUIRED_CLAIMS = {
+    access: ['exp', 'iat', 'jti', 'sub', 'client_id'],
+    refresh: ['exp', 'iat', 'jti', 'sub']
+} as const satisfies Record<TokenKind, readonly string[]>;
 
 /**
  * A token was refused for a reason the caller can act on — the one rejection the resolver turns
@@ -150,7 +181,7 @@ const carriesTokenClaims = (
     payload: JWTPayload,
     kind: TokenKind
 ): payload is JWTPayload & TokenData & { exp: number } =>
-    typeof payload.id === 'string' &&
+    typeof payload.sub === 'string' &&
     typeof payload.auth_time === 'number' &&
     Array.isArray(payload.amr) &&
     typeof payload.exp === 'number' &&
@@ -176,12 +207,13 @@ const ringKeyLookup =
     };
 
 /**
- * Verify a token against whichever ring member its `kid` header names, HS256 pinned and the
- * `typ` header pinned to `kind`, with an `exp` required.
+ * Verify a token against whichever ring member its `kid` header names, HS256 pinned, the `typ`
+ * header, `iss` and `aud` pinned to `kind`, and every registered claim it must carry present.
  *
  * jose: `algorithms` is the allow-list that closes algorithm confusion (`none`, an asymmetric
  * algorithm under a symmetric key); `typ` is checked after the signature, as RFC 8725 §3.11 asks;
- * `requiredClaims` refuses a token that never expires.
+ * `issuer`/`audience` refuse a token another service minted, or one meant for the other kind
+ * (RFC 8725 §3.10); `requiredClaims` refuses a token missing any of the rest.
  * https://github.com/panva/jose/blob/main/docs/jwt/verify/interfaces/JWTVerifyOptions.md
  *
  * @param token - signed JWT string
@@ -198,7 +230,9 @@ const verifyAgainstRing = (
     jwtVerify(token, ringKeyLookup(ring), {
         algorithms: ['HS256'],
         typ: TOKEN_TYPE_HEADER[kind],
-        requiredClaims: ['exp']
+        issuer: getTokenIssuer(),
+        audience: AUDIENCE_OF[kind](),
+        requiredClaims: [...REQUIRED_CLAIMS[kind]]
     }).then(({ payload }) => {
         if (!carriesTokenClaims(payload, kind))
             throw new TokenRejection('malformed', 'Wrong claims');
@@ -253,7 +287,8 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
     verifyRefreshWithRow(token).then(({ data }) => data);
 
 /**
- * Sign a payload with a ring's current key, stamping `kid` so a verifier can find it again.
+ * Sign a payload with a ring's current key, stamping `kid` so a verifier can find it again, and
+ * the registered claims every token carries.
  *
  * jose: `SignJWT` builds and HMACs the compact token; `setExpirationTime` takes an absolute epoch
  * second (a bare number is never relative); `setJti` is the random id that makes two tokens
@@ -262,38 +297,44 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
  *
  * @param claims - the payload
  * @param ring - the signing ring, newest first; its first member signs
- * @param kind - which kind of token this is, which picks the `typ` header
+ * @param kind - which kind of token this is, which picks the `typ` header and the `aud`
  * @param lifetimeSeconds - how long the token lives
- * @param jti - a token id, when the kind needs one
  */
 const signToken = (
     claims: TokenData,
     ring: readonly string[],
     kind: TokenKind,
-    lifetimeSeconds: number,
-    jti?: string
+    lifetimeSeconds: number
 ): Promise<string> => {
     const [secret] = ring;
     const now = Math.floor(Date.now() / 1000);
-    const token = new SignJWT({ ...claims } satisfies JWTPayload)
+    return new SignJWT({ ...claims } satisfies JWTPayload)
         .setProtectedHeader({ alg: 'HS256', typ: TOKEN_TYPE_HEADER[kind], kid: keyId(secret) })
+        .setIssuer(getTokenIssuer())
+        .setAudience(AUDIENCE_OF[kind]())
         .setIssuedAt(now)
-        .setExpirationTime(now + lifetimeSeconds);
-    return (jti ? token.setJti(jti) : token).sign(new TextEncoder().encode(secret));
+        .setExpirationTime(now + lifetimeSeconds)
+        .setJti(randomUUID())
+        .sign(new TextEncoder().encode(secret));
 };
 
-/** Sign an access-token payload with the access ring's current key. */
+/** Sign an access-token payload with the access ring's current key, naming the client it is for. */
 const signAccessToken = (claims: TokenData): Promise<string> =>
-    signToken(claims, getAccessTokenRing(), 'access', getAccessExpiryTime());
+    signToken(
+        { ...claims, client_id: FIRST_PARTY_CLIENT_ID },
+        getAccessTokenRing(),
+        'access',
+        getAccessExpiryTime()
+    );
 
 /**
  * Sign a refresh-token payload with the refresh ring's current key.
  *
- * The random `jti` is what makes two refresh tokens minted in the same second different — see
- * `mintRefreshToken`'s note on why that matters.
+ * Its random `jti` (stamped by `signToken`) is what makes two refresh tokens minted in the same
+ * second different — see `mintRefreshToken`'s note on why that matters.
  */
 const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<string> =>
-    signToken(claims, getRefreshTokenRing(), 'refresh', expiresInSeconds, randomUUID());
+    signToken(claims, getRefreshTokenRing(), 'refresh', expiresInSeconds);
 
 /**
  * Sign a refresh token for an account, and store its session row. The one place a refresh row is
@@ -319,18 +360,18 @@ const mintRefreshToken = (
         guard(user);
         /*
          * Signed through `signRefreshToken`, whose `jti` is what makes two refresh tokens
-         * minted in the same second different. The payload is `{ id }` plus JWT's own
+         * minted in the same second different. The payload is `{ sub }` plus JWT's own
          * `iat`/`exp`, both at one-second resolution — so signing twice within a second for
          * one user produced byte-identical tokens. Two devices signing in together then
          * shared one credential stored as two identical rows, and revoking either revoked
          * both: logging out a phone silently logged out the laptop signed in alongside it. A
          * random `jti` gives every token its own identity — the digest is looked up as
-         * though it addressed one session, because it does; verification carries `jti`
-         * through without checking it.
+         * though it addressed one session, because it does; verification requires `jti`
+         * present and never compares it.
          */
         return signRefreshToken(
             {
-                id,
+                sub: id,
                 // Stamped HERE, from the proof, and nowhere else — see the TokenData doc above.
                 auth_time: Math.floor(provedAt / 1000),
                 amr: [...amr],
@@ -473,7 +514,7 @@ const storeSuccessor = (
             lastUsedAt: now,
             expiresAt: new Date(now.getTime() + remainingMs)
         })
-        .then(() => recordActivity(claims.id))
+        .then(() => recordActivity(claims.sub))
         .then(() => signAccessToken({ ...claims, sid: String(previous.familyId) }))
         .then((accessToken) => ({
             accessToken,
@@ -499,7 +540,7 @@ const reissueRotated = (
     oldToken: string,
     remainingMs: number
 ): Promise<RotatedSession> =>
-    userService.findAuthenticatableById(claims.id).then((user) => {
+    userService.findAuthenticatableById(claims.sub).then((user) => {
         if (!user) throw new TokenRejection('revoked', 'User not found');
         // The epoch may have moved since the presented token was minted: a rotation must not
         // carry a revoked session forward.
@@ -522,7 +563,7 @@ const reissueRotated = (
  * function reads as one decision (won the race, or didn't); the revoke-then-throw at the bottom
  * stays sequential, unchanged, since the throw must never be a lie about the account's state.
  *
- * @param claims - the OLD token's claims (`id`, `auth_time`, `amr`, `remember`), copied forward on a reissue
+ * @param claims - the OLD token's claims (`sub`, `auth_time`, `amr`, `remember`), copied forward on a reissue
  * @param oldToken - the refresh JWT the caller presented
  * @param remainingMs - the losing token's remaining lifetime, carried forward on a reissue
  * @throws {TokenRejection} when the token is genuinely absent, or {@link TokenReuseError} on detected reuse
@@ -555,8 +596,8 @@ const resolveLostRotation = (
         // reuse from an ordinary dead credential — a token this account rotated away, on
         // purpose, being replayed long after. Revoke first, so the throw below is never a
         // lie about what state the account is left in.
-        return revokeAllRefreshTokens(claims.id).then(() => {
-            throw new TokenReuseError(claims.id);
+        return revokeAllRefreshTokens(claims.sub).then(() => {
+            throw new TokenReuseError(claims.sub);
         });
     });
 
@@ -608,7 +649,7 @@ export const rememberOfRefreshToken = (
 ): Promise<RefreshTokenExpiryTime | undefined> =>
     refreshToken
         ? verifyAgainstRing(refreshToken, getRefreshTokenRing(), 'refresh')
-              .then((claims) => (claims.id === userId ? claims.remember : undefined))
+              .then((claims) => (claims.sub === userId ? claims.remember : undefined))
               // An unreadable cookie is an answer ("no known persistence"), not a failure.
               .catch(() => undefined)
         : Promise.resolve(undefined);

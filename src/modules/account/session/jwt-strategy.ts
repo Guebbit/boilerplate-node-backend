@@ -164,7 +164,7 @@ const resolveWith =
     (token: string): Promise<Resolution<AuthContext | undefined>> =>
         verify(token)
             .then((claims) =>
-                resolveProof(claims.id, { authTime: claims.auth_time, amr: claims.amr })
+                resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr })
             )
             .then(
                 (ok): Resolution<AuthContext | undefined> => ({ ok }),
@@ -183,8 +183,8 @@ const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefine
     verifyAccessToken(token).then(
         (claims) =>
             Promise.all([
-                sessionRepository.familyIsLive(claims.id, claims.sid, new Date()),
-                resolveProof(claims.id, { authTime: claims.auth_time, amr: claims.amr })
+                sessionRepository.familyIsLive(claims.sub, claims.sid, new Date()),
+                resolveProof(claims.sub, { authTime: claims.auth_time, amr: claims.amr })
             ]).then(
                 ([live, ok]): Resolution<AuthContext | undefined> =>
                     live ? { ok } : { miss: 'revoked' }

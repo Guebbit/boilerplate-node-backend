@@ -28,7 +28,7 @@ import {
 } from '@modules/users/tests/factories';
 import { userService } from '@modules/users';
 import { hashToken } from '@infrastructure/security/hash-token';
-import { decodeJwt } from 'jose';
+import { SignJWT, decodeJwt } from 'jose';
 import type { Response } from 'express';
 import { plantToken, sessionRowFor, sessionRowsOf } from '../factories';
 import { sessionRepository } from '../../repository';
@@ -36,6 +36,8 @@ import { accountService } from '../../services';
 import { activeStrategy, type SessionRequest } from '../../session/strategy';
 import { SecondFactorRequiredError } from '../../session/mint-guard';
 import { registerOAuthProvider } from '../../oauth/providers';
+import { getAccessTokenRing, getRefreshTokenAudience } from '../../session/config';
+import { keyId } from '../../session/key-ring';
 
 setupTestDb();
 
@@ -959,6 +961,28 @@ describe('jwt mode only', () => {
 
         expect(response.status).toBe(401);
     });
+
+    it.each([
+        ['its own issuer and audience: the control', {}, 200],
+        ['another issuer', { iss: 'https://other.example' }, 401],
+        ['the refresh token’s audience', { aud: getRefreshTokenAudience() }, 401]
+    ])(
+        'answers a bearer re-signed with the access key and %s',
+        async (_name, overrides, status) => {
+            const { session } = await account('jwt');
+            const claims = decodeJwt(session.response.body.data.token as string);
+            const [secret = ''] = getAccessTokenRing();
+            // jose: the same claims re-signed under the real access key, one registered claim swapped.
+            // https://github.com/panva/jose/blob/main/docs/jwt/sign/classes/SignJWT.md
+            const forged = await new SignJWT({ ...claims, ...overrides })
+                .setProtectedHeader({ alg: 'HS256', typ: 'at+jwt', kid: keyId(secret) })
+                .sign(new TextEncoder().encode(secret));
+
+            const response = await api().get('/account').set('Authorization', `Bearer ${forged}`);
+
+            expect(response.status).toBe(status);
+        }
+    );
 });
 
 describe('switching mode', () => {
