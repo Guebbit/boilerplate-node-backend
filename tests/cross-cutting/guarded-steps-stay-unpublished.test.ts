@@ -15,6 +15,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import { isDeployed } from '@tests/paths';
 
 /** The repo root, so paths in a failure read as the reader's own. */
 const ROOT = path.resolve(__dirname, '../..');
@@ -103,8 +104,17 @@ const leaksOf = (barrel: string): string[] => {
     });
 };
 
-/** The steps the codebase names in its own docs; the canary below proves the tag is still read. */
-const KNOWN_STEPS = ['applyTransition', 'performRefund', 'settlePayment'];
+/**
+ * The steps the codebase names in its own docs, while their module is deployed; the canary below
+ * proves the tag is still read. Every one is the shop's, so a stripped checkout has none.
+ */
+const KNOWN_STEPS = [
+    ['inventory', 'applyTransition'],
+    ['payments', 'performRefund'],
+    ['payments', 'settlePayment']
+]
+    .filter(([module]) => isDeployed(module))
+    .map(([, name]) => name);
 
 /**
  * Every `@internal` top-level declaration under `src/modules`, by name.
@@ -130,6 +140,7 @@ describe('a step beneath a guarded door', () => {
     });
 
     it('is followed through the barrels (canary: a known door resolves)', () => {
+        if (!isDeployed('payments')) return;
         const payments = barrels.find((file) => file.includes(path.join('modules', 'payments')));
         const source = payments && program.getSourceFile(payments);
         const symbol = source && checker.getSymbolAtLocation(source);

@@ -39,7 +39,7 @@
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { MODULES_ROOT } from '@tests/paths';
+import { isDeployed, MODULES_ROOT } from '@tests/paths';
 
 /** The layer a module file belongs to, from its path alone. */
 type Layer = 'controller' | 'service' | 'repository' | 'model' | 'routes' | 'domain' | 'other';
@@ -148,7 +148,9 @@ describe('every side effect is published from one layer', () => {
 
         expect(moduleFiles().length).toBeGreaterThan(0);
         for (const marker of Object.keys(EXPECTED_LAYER))
-            expect(sites.get(marker)!.length).toBeGreaterThan(0);
+            // Only shop modules publish a domain event, so without them there is none to find.
+            if (marker !== 'emitDomainEvent' || isDeployed('orders'))
+                expect(sites.get(marker)!.length).toBeGreaterThan(0);
     });
 
     it('publishes each one from the layer that owns it, or says why not', () => {

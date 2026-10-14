@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
+import { isDeployed } from '@tests/paths';
 
 /** `src/modules`, resolved from this file. */
 const MODULES = path.join(__dirname, '..', '..', 'src', 'modules');
@@ -59,7 +60,8 @@ describe('contract references and dependsOn', () => {
 
     it('finds the references it means to check', () => {
         // Exact, not "at least": a sweep that silently found nothing would pass for ever.
-        expect(references).toHaveLength(18);
+        // Two are foundation's own; the other sixteen go with the shop.
+        expect(references).toHaveLength(isDeployed('orders') ? 18 : 2);
     });
 
     it('has every cross-module $ref declared as a dependency of the module that writes it', () => {
