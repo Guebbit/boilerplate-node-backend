@@ -16,7 +16,12 @@
 
 import path from 'node:path';
 import type { AppModule } from '@kernel/registry';
-import { addressesDeleteByUserId, addressesGet, addressesMinimise } from './service';
+import {
+    addressesDeleteByUserId,
+    addressesGet,
+    addressesMinimise,
+    reencryptAddressBooks
+} from './service';
 import { router } from './routes';
 import { addressesConfig } from './config';
 
@@ -37,5 +42,7 @@ export default {
             minimise: addressesMinimise
         }
     ],
+    // Every entry's name, street, city, zip, country and phone are PII-encrypted.
+    reencrypt: reencryptAddressBooks,
     locales: path.join(__dirname, 'locales')
 } satisfies AppModule;

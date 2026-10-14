@@ -106,10 +106,11 @@ assuming `ring[0]`.
    only a fresh write of that same field or this script moves it, so skipping it leaves `v1` rows
    that the next step would strand. `npm run reencrypt -- --dry-run` writes nothing and prints, per
    field, how many values sit on each key version. Batched, and safe to repeat: a value already on
-   `v2` is not touched, so a second run writes nothing. Each owning module walks its own
-   fields (address books, user phones, order and invoice addresses and notes, TOTP secrets,
-   webhook secrets); `scripts/ops/reencrypt.ts` only lists them. Not scheduled: a rotation is an
-   event, not a cadence. Until it finishes, both entries must stay in the ring.
+   `v2` is not touched, so a second run writes nothing. Each owning module declares its own walk
+   on its manifest (`reencrypt` in `module.ts`: address books, user phones, order and invoice
+   addresses and notes, TOTP secrets, webhook secrets); `scripts/ops/reencrypt.ts` runs every
+   enabled module's, so it names none. Not scheduled: a rotation is an event, not a cadence.
+   Until it finishes, both entries must stay in the ring.
 3. Once `npm run reencrypt -- --dry-run` reports nothing on `v1`, drop it from the ring and deploy
    again. A row still stamped with a dropped version fails loudly (`Unknown TOTP key version: v1`)
    rather than reading as garbage.

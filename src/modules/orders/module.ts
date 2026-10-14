@@ -27,6 +27,7 @@ import {
     collectTimelineOf,
     eraseUserOrders,
     findOwnOrders,
+    reencryptOrders,
     startOrderPiiClock
 } from './services';
 // Also registers this module's event declarations (ORDER_CANCELLED, ORDER_CREATED,
@@ -75,6 +76,8 @@ export default {
     // Jurisdiction, currency, bank transfer and the order link: see `./config`.
     config: [ordersConfig.slice],
     rateLimits: ordersRateLimits,
+    // The frozen addresses and the notes are PII-encrypted.
+    reencrypt: reencryptOrders,
     personalData: [
         {
             section: 'orders',

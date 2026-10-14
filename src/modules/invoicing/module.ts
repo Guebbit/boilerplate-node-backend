@@ -23,7 +23,7 @@ import { ORDER_STATUS_CHANGED, getById as getOrderById } from '@modules/orders';
 import { PAYMENT_REFUNDED } from '@modules/payments';
 import { OrderStatus } from '@types';
 import { router } from './routes';
-import { issueInvoice, issueCreditNote } from './services';
+import { issueInvoice, issueCreditNote, reencryptInvoices } from './services';
 import { collectPersonalData } from './services/personal-data';
 import { invoicingRateLimits } from './rate-limits';
 import { invoicingConfig } from './config';
@@ -36,6 +36,8 @@ export default {
     routes: router,
     config: [invoicingConfig.slice, invoicingProviderProbe.slice],
     rateLimits: invoicingRateLimits,
+    // The buyer address frozen on each invoice and credit note is PII-encrypted.
+    reencrypt: reencryptInvoices,
     personalData: [
         {
             section: 'invoicing',
