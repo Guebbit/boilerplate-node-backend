@@ -267,7 +267,12 @@ export const mintSession = (
     // `bearer` transport: `cookie` mode returns the id in the result; `jwt` mode ignores it,
     // returns its access token and puts the refresh token on the cookie stub above.
     return activeStrategy()
-        .issue(request, response, userId, { transport: 'bearer', amr: [AMR.password], ...options })
+        .issue(request, response, userId, {
+            transport: 'bearer',
+            amr: [AMR.password],
+            provedAt: Date.now(),
+            ...options
+        })
         .then((issued) => {
             const credential = issued.token ?? issued.sessionToken;
             const refresh = cookies.get(SESSION_COOKIE) ?? issued.sessionToken;

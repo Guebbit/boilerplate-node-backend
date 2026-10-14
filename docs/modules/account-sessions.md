@@ -4,7 +4,7 @@ How this application decides who is making a request — and why none of it is p
 
 ::: tip At a glance
 **Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
-**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor, `activity.ts` stamps `lastActiveAt`, `epoch.ts` holds the session-epoch rule, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
+**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor or on a stale proof, `activity.ts` stamps `lastActiveAt`, `epoch.ts` holds the session-epoch rule, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -20,6 +20,7 @@ One variable, `NODE_SESSION_MODE`, read through `session/config.ts`. Documented 
 | Keys the deployment needs | `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH`, each a ring    | none                                  |
 | Lifetimes                 | `NODE_TOKEN_ACCESS_TIME`, `NODE_SESSION_TIME_*`              | `NODE_SESSION_TIME_*`                 |
 | Rotation windows          | `NODE_TOKEN_ROTATION_GRACE_MS`, `NODE_TOKEN_REUSE_WINDOW_MS` | not used                              |
+| Issuer and audiences      | optional, [derived from `NODE_URL`](#token-claims)           | not used                              |
 | `POST /account/refresh`   | exists                                                       | answers 404                           |
 
 - **Shared by both modes:** `NODE_SESSION_TIME_{SHORT,MEDIUM,LONG}` (the "remember me" tiers) and the
@@ -144,6 +145,28 @@ the secret itself); verifying looks the token's `kid` up in the ring rather than
 `ring[0]`, so a token signed moments before a rotation still verifies. Full rotation procedure:
 [Security](../tools/security.md#signing-key-rotation).
 
+## What a token says, and who it is for {#token-claims}
+
+An access token carries RFC 9068's full set of registered claims, so its `at+jwt` header is true;
+a refresh token carries the same minus `client_id`. `jwt.ts#signToken` stamps them and
+`verifyAgainstRing` demands them.
+
+| Claim       | Access token            | Refresh token    | From                                   |
+| ----------- | ----------------------- | ---------------- | -------------------------------------- |
+| `sub`       | the account             | the account      | the user id                            |
+| `iss`       | checked                 | checked          | `NODE_TOKEN_ISSUER`, else `NODE_URL`   |
+| `aud`       | checked, its own        | checked, its own | `NODE_TOKEN_{ACCESS,REFRESH}_AUDIENCE` |
+| `iat` `exp` | required                | required         | the clock and the lifetime             |
+| `jti`       | required, random        | required, random | `randomUUID()`                         |
+| `client_id` | required, `first-party` | absent           | `FIRST_PARTY_CLIENT_ID`                |
+| `sid`       | the session family      | absent           | the row it was minted against          |
+
+- **Why `iss`/`aud`.** A secret shared with another service would otherwise let that service mint
+  tokens accepted as sessions here (RFC 8725 §3.10). A wrong or missing one is a `401`.
+- **Why two audiences.** Unset, the access audience is `NODE_URL` (the API) and the refresh one
+  `NODE_URL/account/refresh` (where it is redeemed). A token of one kind is refused as the other
+  even if both rings shared a secret — the second fence after `typ`.
+
 ## Freshness: how recently they proved it {#freshness-auth-time-and-amr}
 
 A valid token and a recently-proved token are different things, and two OIDC claims are what makes
@@ -154,6 +177,11 @@ tokens would satisfy the same guards unchanged.
 | ----------- | ----------------------------------------------------------------- |
 | `auth_time` | epoch seconds at which the user last actually proved themselves   |
 | `amr`       | **how** they proved it — RFC 8176 values, an array, not a boolean |
+
+`auth_time` is a NumericDate (RFC 7519, seconds), the same unit in both modes: the claim in `jwt`
+mode, the row's `authTime` in `cookie` mode. A login reads the clock **before** its check begins (the
+password hash, the code, the OAuth exchange) and hands that `provedAt` to `issue`; OIDC defines
+`auth_time` as when the user authenticated, not when the token was signed.
 
 Both are **stamped once**, at login, then COPIED FORWARD on every access-token mint and every
 rotation. Never re-stamped from the clock — a clock-derived `auth_time` would make every refresh
@@ -354,9 +382,18 @@ flowchart LR
 
 The controllers still branch to the challenge first, so the guard is the backstop for the path that
 forgot to: it fails loudly (a `500`, never a session) instead of handing out a session the factor
-never guarded. A **re-mint** (`reissueSession`, `remintSession`) continues a session the
-caller already holds and is not checked; that door, and `amr` becoming required, are a separate
-decision.
+never guarded.
+
+The same `issue` also calls `assertProofCurrent`: a first session is refused with `StaleProofError`
+(also a `500`) when the account's epoch moved after `provedAt`, compared in milliseconds. That is a
+login whose old password checked out while a password change, or a logout everywhere, committed
+elsewhere: minted after the change, it would otherwise carry an `auth_time` the epoch does not
+predate, and survive it.
+
+A **re-mint** (`reissueSession`, `remintSession`) continues a session the caller already holds and
+is not checked. It stamps `auth_time` at the mint: a password change re-mints after its own epoch
+move, which a proof time read before that move would predate. That door, and `amr` becoming
+required, are a separate decision.
 
 ## Where sessions live {#where-sessions-live}
 
@@ -572,8 +609,9 @@ for where they sit among everything else this repo depends on.
 | `typ` header check, after the signature             | `jose`, through `typ` (was hand-written)                                         |
 | Reading the `kid` before verifying                  | `jose`, which hands it to the key lookup (was a separate `decode`)               |
 | Expiry, and refusing a token with none              | `jose`, through `requiredClaims: ['exp']`                                        |
+| `iss`, `aud`, and every registered claim present    | `jose`, through `issuer`, `audience` and `requiredClaims`                        |
 | Which ring member a `kid` names, and key rotation   | ours, `key-ring.ts`: a JWKS holds no shared secrets, so there is nothing to load |
-| The shape of our own claims (`id`, `auth_time`)     | ours, `carriesTokenClaims`: a signature proves the author, not the shape         |
+| The shape of our own claims (`sub`, `auth_time`)    | ours, `carriesTokenClaims`: a signature proves the author, not the shape         |
 | The session row, rotation, reuse and the grace      | ours: a JWT is stateless, and the revocation rules are the point                 |
 | The epoch, the mint guard and the step-up freshness | ours: policy, not cryptography                                                   |
 

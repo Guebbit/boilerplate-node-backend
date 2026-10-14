@@ -43,6 +43,12 @@ export interface IssueOptions {
     remember?: RefreshTokenExpiryTime;
     /** How `authTime` was proved; the mint refuses a 2FA account whose proof lacks `otp`. */
     amr: readonly string[];
+    /**
+     * When the proof's check BEGAN, epoch milliseconds — read before the password hash, the code or
+     * the OAuth exchange. Becomes `authTime` (in seconds, OIDC's `auth_time`); the mint refuses it
+     * once the account's epoch has moved past it.
+     */
+    provedAt: number;
     /** Where the credential goes. Defaults to `'cookie'`. */
     transport?: SessionTransport;
 }
@@ -86,6 +92,7 @@ export interface SessionStrategy {
      * Mint a session for an account and put its credential on the response.
      *
      * @throws {SecondFactorRequiredError} for a first session on an account whose second factor `amr` lacks
+     * @throws {StaleProofError} when the account's epoch moved after `provedAt`
      */
     issue(
         request: SessionRequest & Pick<Request, 'get'>,

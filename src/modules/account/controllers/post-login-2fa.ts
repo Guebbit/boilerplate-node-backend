@@ -49,6 +49,9 @@ export const postLoginTwoFactor = (
         return rejectResponse(response, 401, [t('account.two-factor.challenge-invalid')]);
     }
 
+    // Read before the code check: a password changed while it runs must refuse this login.
+    const provedAt = Date.now();
+
     return twoFactorService
         .verifyLoginChallenge(challenge, code, callerContextOf(request))
         .then((result) => {
@@ -63,6 +66,7 @@ export const postLoginTwoFactor = (
             return issueSession(request, response, userId, {
                 remember: toRememberTier(remember),
                 amr: withProofs(amr, AMR.otp),
+                provedAt,
                 transport
             }).then((issued) =>
                 // Read fresh from the membership — the document carries no role of its own.

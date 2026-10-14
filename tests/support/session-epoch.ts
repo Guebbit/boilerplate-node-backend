@@ -19,7 +19,7 @@ import { sessionRepository } from '@modules/account/repository';
  * @param bearer - the login bearer to keep, with or without its `Bearer ` prefix
  */
 export const forgetSessionEpoch = (bearer: string): Promise<unknown> => {
-    const { id, sid } = decodeJwt(bearer.replace(/^Bearer /i, ''));
+    const { sub: id, sid } = decodeJwt(bearer.replace(/^Bearer /i, ''));
     const now = new Date();
     return userRepository
         .updateMany({}, { $unset: { tokensValidAfter: '' } })

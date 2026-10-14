@@ -103,9 +103,17 @@ describe('issue', () => {
     it('mints through the guarded login door, sets the refresh cookie and answers the access token', async () => {
         const { cookie, response } = recordingResponse();
 
-        const issued = await jwtStrategy.issue(requestWith(), response, USER_ID, { amr: ['pwd'] });
+        const issued = await jwtStrategy.issue(requestWith(), response, USER_ID, {
+            amr: ['pwd'],
+            provedAt: 1_700_000_000_000
+        });
 
-        expect(tokens.startSession).toHaveBeenCalledWith(USER_ID, ['pwd'], undefined, undefined);
+        expect(tokens.startSession).toHaveBeenCalledWith(
+            USER_ID,
+            ['pwd'],
+            undefined,
+            1_700_000_000_000
+        );
         expect(tokens.continueSession).not.toHaveBeenCalled();
         expect(tokens.createAccessToken).toHaveBeenCalledWith('refresh-from-login');
         expect(issued).toEqual({ token: 'access-token' });
@@ -119,6 +127,7 @@ describe('issue', () => {
 
         await jwtStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
+            provedAt: Date.now(),
             remember: RefreshTokenExpiryTime.MEDIUM
         });
 
@@ -131,6 +140,7 @@ describe('issue', () => {
 
         const issued = await jwtStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
+            provedAt: Date.now(),
             transport: 'bearer'
         });
 
@@ -261,7 +271,7 @@ describe.each([
 ] as const)('%s', (method, verifier) => {
     it(`verifies with ${verifier} and hands the claims' proof to the shared resolver`, async () => {
         tokens[verifier].mockResolvedValue({
-            id: USER_ID,
+            sub: USER_ID,
             auth_time: 1_700_000_000,
             amr: ['pwd'],
             sid: FAMILY_ID
@@ -291,7 +301,7 @@ describe.each([
 describe('resolveBearer and the session it names', () => {
     beforeEach(() => {
         tokens.verifyAccessToken.mockResolvedValue({
-            id: USER_ID,
+            sub: USER_ID,
             auth_time: 1_700_000_000,
             amr: ['pwd'],
             sid: FAMILY_ID

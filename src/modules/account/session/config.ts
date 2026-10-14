@@ -7,8 +7,16 @@
  */
 
 import { defineConfig } from '@infrastructure/config/define';
-import { choice, int, keyRing, secret, versionedKeyRing } from '@infrastructure/config/fields';
+import {
+    choice,
+    int,
+    keyRing,
+    secret,
+    text,
+    versionedKeyRing
+} from '@infrastructure/config/fields';
 import type { Environment } from '@infrastructure/config/store';
+import { siteConfig } from '@infrastructure/http/config';
 import type { VersionedKey } from '@infrastructure/security/versioned-secret';
 import { SESSION_MODES, type SessionMode } from '../session-mode';
 
@@ -47,8 +55,8 @@ const selectsCookieMode = (environment: Environment): boolean =>
  *
  * Shared by both modes: `NODE_SESSION_MODE` and the three `NODE_SESSION_TIME_*` tiers (a
  * refresh token's life in `jwt` mode, the session row's in `cookie` mode). `jwt` only: the two
- * signing rings, the access lifetime, and the rotation windows — a `cookie` deployment signs
- * nothing, so its rings are not required at boot.
+ * signing rings, the access lifetime, the rotation windows, and the issuer and audiences — a
+ * `cookie` deployment signs nothing, so its rings are not required at boot.
  *
  * The TTL fallbacks exist so an unset variable cannot mean a TTL of zero, which would expire every
  * token the instant it is signed — a deployment that never sets them still issues usable ones.
@@ -96,6 +104,10 @@ export const sessionConfig = defineConfig({
             placeholder: 'your-device-cookie-secret-here',
             productionOnly: true
         }),
+        // Unset derives each from `NODE_URL` — see `getTokenIssuer` and the audience getters.
+        NODE_TOKEN_ISSUER: text(),
+        NODE_TOKEN_ACCESS_AUDIENCE: text(),
+        NODE_TOKEN_REFRESH_AUDIENCE: text(),
         NODE_TOKEN_ROTATION_GRACE_MS: int({ default: 10_000, min: 0 }),
         NODE_TOKEN_REUSE_WINDOW_MS: int({ default: 86_400_000, min: 1 })
     },
@@ -177,6 +189,31 @@ export const getAccessTokenRing = (): string[] => sessionConfig().NODE_TOKEN_ACC
 
 /** The refresh-token ring. Same shape and rotation contract as {@link getAccessTokenRing}. */
 export const getRefreshTokenRing = (): string[] => sessionConfig().NODE_TOKEN_REFRESH;
+
+/** This deployment's own address with no trailing slash — what the token defaults derive from. */
+const ownUrl = (): string => siteConfig().NODE_URL.replace(/\/+$/, '');
+
+/**
+ * The `iss` every token is signed with and verified against: `NODE_TOKEN_ISSUER`, else this
+ * deployment's own `NODE_URL`. A token another service minted with a shared secret names another
+ * issuer, and is refused (RFC 8725 §3.10).
+ */
+export const getTokenIssuer = (): string => sessionConfig().NODE_TOKEN_ISSUER ?? ownUrl();
+
+/**
+ * The `aud` of an ACCESS token: `NODE_TOKEN_ACCESS_AUDIENCE`, else `NODE_URL` — the API itself is
+ * the resource server it is meant for.
+ */
+export const getAccessTokenAudience = (): string =>
+    sessionConfig().NODE_TOKEN_ACCESS_AUDIENCE ?? ownUrl();
+
+/**
+ * The `aud` of a REFRESH token: `NODE_TOKEN_REFRESH_AUDIENCE`, else `NODE_URL` +
+ * `/account/refresh`, the endpoint that redeems it. Distinct from the access audience on purpose, so
+ * a token of one kind is refused as the other even if both rings shared a secret.
+ */
+export const getRefreshTokenAudience = (): string =>
+    sessionConfig().NODE_TOKEN_REFRESH_AUDIENCE ?? `${ownUrl()}/account/refresh`;
 
 /**
  * The key ring every second factor's stored material is protected with — see `two-factor/`. It

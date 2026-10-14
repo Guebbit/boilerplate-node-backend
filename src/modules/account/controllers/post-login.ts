@@ -73,6 +73,8 @@ export const postLogin = (
         return;
     }
     const { remember, transport } = tier.data;
+    // Read before the hash check: a password changed while it runs must refuse this login.
+    const provedAt = Date.now();
 
     return accountService
         .login(email, password)
@@ -105,6 +107,7 @@ export const postLogin = (
 
             return issueSession(request, response, userId, {
                 amr: [AMR.password],
+                provedAt,
                 remember,
                 transport
             }).then((issued) =>
