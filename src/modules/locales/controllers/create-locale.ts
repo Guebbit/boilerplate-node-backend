@@ -16,7 +16,7 @@ import { createdResponse } from '@infrastructure/http/response';
 import { callerContextOf } from '@infrastructure/http/request';
 import { localeService } from '../services';
 import { presentLocale } from '../presenters';
-import { catchAs, refused, rejectValidation } from '@infrastructure/http/controller';
+import { catchAs, parseBody, refused } from '@infrastructure/http/controller';
 
 /**
  * POST /locales (admin)
@@ -26,14 +26,18 @@ export const createLocale = (
     request: Request<Record<string, never>, unknown, CreateLocaleRequest>,
     response: Response
 ) => {
-    const parseResult = CreateLocaleBody.extend({
-        name: localeService.localeDisplayName,
-        nativeName: localeService.localeDisplayName
-    }).safeParse(request.body);
-    if (!parseResult.success) return Promise.resolve(rejectValidation(response, parseResult.error));
+    const body = parseBody(
+        CreateLocaleBody.extend({
+            name: localeService.localeDisplayName,
+            nativeName: localeService.localeDisplayName
+        }),
+        request.body,
+        response
+    );
+    if (!body) return;
 
     return localeService
-        .createLanguage(parseResult.data, callerContextOf(request))
+        .createLanguage(body, callerContextOf(request))
         .then((result) => {
             if (refused(response, result)) return;
 
