@@ -1,16 +1,42 @@
 /**
  * @module
- * The one place a product document becomes the `Product` contract — every read path agrees here,
- * `services/read.ts`'s `getById` included, rather than a hand-written `.toJSON() as Product` cast
- * in each.
+ * The one place a product document becomes the `Product` contract — every read path that builds
+ * from a document agrees here, `services/read.ts`'s `getById` included, rather than a hand-written
+ * `.toJSON() as Product` cast in each. Search's lean rows never hold a document: they take the
+ * derived fields from {@link derivedStockFields}.
  */
 
 import type { Product } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { availableStock, stockFlags } from './domain/stock';
-import { isPreorder } from './domain/preorder';
+import { isPreorder, type PreorderFacts } from './domain/preorder';
 import { lowStockThreshold, productCurrency } from './config';
 import type { ProductDocument } from './model';
+
+/**
+ * The block of a product's response that is derived, never stored: `available`, the `inStock` /
+ * `lowStock` flags, `preorder` and the live `currency`. One place, because the document's own
+ * serialisation and a presented document must agree on every one of them.
+ *
+ * @param facts - the two stock counters and what decides a preorder
+ * @returns the derived fields of a `Product`
+ */
+export const derivedStockFields = (
+    facts: PreorderFacts & { onHand?: number; reserved?: number }
+) => {
+    const available = availableStock(facts.onHand, facts.reserved);
+    const preorder = isPreorder(facts, new Date());
+    const flags = stockFlags(available, lowStockThreshold());
+
+    return {
+        available,
+        ...flags,
+        // A preorder waits for stock that does not exist yet: it is not "running low".
+        ...(preorder ? { lowStock: false } : {}),
+        preorder,
+        currency: productCurrency()
+    };
+};
 
 /**
  * Maps a document straight onto the `Product` contract: `id` from the Mongoose getter, `available`
@@ -19,22 +45,11 @@ import type { ProductDocument } from './model';
  * contract, so it rides beside the result (`carryVersion`) for the `ETag`.
  */
 export const presentProduct = (document: ProductDocument): Product => {
-    const onHand = document.onHand ?? 0;
-    const reserved = document.reserved ?? 0;
-    const available = availableStock(onHand, reserved);
-    const preorder = isPreorder(document, new Date());
-    const flags = stockFlags(available, lowStockThreshold());
-
     return carryVersion(document, {
         id: document.id,
         title: document.title,
         price: document.price,
-        available,
-        ...flags,
-        // A preorder waits for stock that does not exist yet: it is not "running low".
-        ...(preorder ? { lowStock: false } : {}),
-        preorder,
-        currency: productCurrency(),
+        ...derivedStockFields(document),
         ...(document.taxClass === undefined ? {} : { taxClass: document.taxClass }),
         ...(document.rateType === undefined ? {} : { rateType: document.rateType }),
         ...(document.sku === undefined ? {} : { sku: document.sku }),

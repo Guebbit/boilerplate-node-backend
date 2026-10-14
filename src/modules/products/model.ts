@@ -17,9 +17,9 @@ import { applySerialization } from '@infrastructure/persistence/serialize';
 import { moneyPath, moneyPlugin } from '@infrastructure/persistence/money-field';
 import type { TranslationFieldIssue } from '@kernel/registry';
 import { fitsCurrency, minorUnitExponent } from '@shared-kernel/money';
-import { availableStock, stockFlags } from './domain/stock';
-import { isPreorder, latestReleaseDate } from './domain/preorder';
-import { lowStockThreshold, productCurrency } from './config';
+import { latestReleaseDate } from './domain/preorder';
+import { derivedStockFields } from './presenter';
+import { productCurrency } from './config';
 import { RateType, TaxClass, type Product } from '@types';
 
 /**
@@ -404,23 +404,16 @@ productSchema.index({ sku: 1 }, { name: 'products_sku', unique: true, sparse: tr
  * `NODE_DEFAULT_CURRENCY`, read fresh rather than frozen onto the catalogue row.
  */
 const applyProductAvailability = (serialized: Record<string, unknown>) => {
-    const onHand = typeof serialized.onHand === 'number' ? serialized.onHand : 0;
-    const reserved = typeof serialized.reserved === 'number' ? serialized.reserved : 0;
-    const available = availableStock(onHand, reserved);
-    serialized.available = available;
-    const preorder = isPreorder(
-        {
+    Object.assign(
+        serialized,
+        derivedStockFields({
+            onHand: typeof serialized.onHand === 'number' ? serialized.onHand : undefined,
+            reserved: typeof serialized.reserved === 'number' ? serialized.reserved : undefined,
             active: serialized.active === false ? false : undefined,
             purchasable: serialized.purchasable === false ? false : undefined,
             releaseDate: serialized.releaseDate instanceof Date ? serialized.releaseDate : undefined
-        },
-        new Date()
+        })
     );
-    serialized.preorder = preorder;
-    Object.assign(serialized, stockFlags(available, lowStockThreshold()));
-    // A preorder is waiting for stock that does not exist yet: it is not "running low".
-    if (preorder) serialized.lowStock = false;
-    serialized.currency = productCurrency();
 };
 
 /**
