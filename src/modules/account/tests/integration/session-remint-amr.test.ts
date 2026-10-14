@@ -46,7 +46,7 @@ const armedAccount = async () => {
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
-    await forgetSessionEpoch();
+    await forgetSessionEpoch(bearer);
     return { user, secret };
 };
 

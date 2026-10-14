@@ -16,9 +16,9 @@ import { activeStrategy } from './strategy';
  * comment for why it is registered in `onRegistered`, not at import time.
  *
  * Two failures that are not the same failure: a **bad credential** resolves a miss, a **valid
- * credential whose user is gone** resolves `undefined`, and an outage rejects. The guard turns the
- * first two into `401` versus `403`, and collapsing them would tell an attacker whether an account
- * exists.
+ * credential whose user is gone** resolves `undefined`, and an outage rejects. The guard answers
+ * the first two with the same `401`, so nothing tells a caller whether an account exists; the
+ * distinction stays in the miss reason the guard counts and audits.
  */
 export const accountAuthResolver: AuthResolver = {
     fromBearer: (token) => activeStrategy().resolveBearer(token),

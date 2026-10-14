@@ -75,7 +75,7 @@ const armedAccount = async () => {
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
-    await forgetSessionEpoch();
+    await forgetSessionEpoch(bearer);
 
     return { user, bearer, backupCodes: confirm.body.data.backupCodes as string[] };
 };
@@ -146,7 +146,7 @@ describe('a mailed 2FA code, in parallel', () => {
         const { user, bearer } = await signedIn();
         await api().post('/account/2fa/methods/email/setup').set('Authorization', bearer).send({});
         await confirmEmail(bearer, mailedCode('account.two-factor-code'));
-        await forgetSessionEpoch();
+        await forgetSessionEpoch(bearer);
         mockOutbox.length = 0;
 
         await twoFactorService.sendLoginCode(
@@ -171,7 +171,7 @@ describe('a mailed 2FA code, in parallel', () => {
             )
         );
         const right = await confirmEmail(bearer, code);
-        await forgetSessionEpoch();
+        await forgetSessionEpoch(bearer);
 
         expect(right.status).toBe(422);
     });
@@ -248,7 +248,7 @@ describe('the first backup-code set, when two factors are confirmed in parallel'
                 .send({ code: await codeFor(secret, 0) }),
             confirmEmail(bearer, emailCode)
         ]);
-        await forgetSessionEpoch();
+        await forgetSessionEpoch(bearer);
 
         expect(responses.map(({ status }) => status)).toEqual([200, 200]);
         const handedOut = responses.flatMap(

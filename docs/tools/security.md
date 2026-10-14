@@ -668,7 +668,8 @@ The distinction is the client's next move, not a shade of politeness:
 Every guard follows it: no credentials at all is 401 even on the most tightly keyed route, and a
 verified caller who does not hold the key is 403. The same rule decides what the auth resolver
 does with a token whose user no longer exists — it resolves `undefined` rather than rejecting, so
-a deleted account gets 403 rather than being told to log in to an account that cannot.
+a deleted account gets the same 401 as a bad token, so the answer never tells a caller whether an
+account exists.
 
 An [api-key](#machine-to-machine-credentials) follows the same rule from a third direction: it IS
 a credential, so a route it holds no permission for is 403 like any other refusal — including a

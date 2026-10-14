@@ -1051,3 +1051,64 @@ describe('POST /account/refresh during a datastore outage', () => {
         expect(setCookie(refreshed, '__Host-session')).toBeUndefined();
     });
 });
+
+/** `GET /account` with a bearer: 200 while the token and its session live. */
+const statusWithBearer = (headers: Record<string, string>): Promise<number> =>
+    api()
+        .get('/account')
+        .set('Authorization', headers.Authorization ?? '')
+        .then((response) => response.status);
+
+describe('an access token and the session it belongs to (jwt mode)', () => {
+    beforeEach(() => {
+        setEnvironment({ NODE_SESSION_MODE: 'jwt' });
+    });
+
+    it('dies at once when its session is revoked by id, while another device’s token lives', async () => {
+        const { user, session } = await account('jwt');
+        const other = await signIn(user.email, 'jwt');
+        const otherId = await ownSessionId(other.headers);
+
+        await api().delete(`/account/sessions/${otherId}`).set(session.headers).expect(200);
+
+        expect(await statusWithBearer(other.headers)).toBe(401);
+        expect(await statusWithBearer(session.headers)).toBe(200);
+    });
+
+    it('dies at once on a plain logout', async () => {
+        const { session } = await account('jwt');
+
+        await api()
+            .post('/account/logout')
+            .set('Origin', FRONTEND)
+            .set('Cookie', session.cookie)
+            .expect(200);
+
+        expect(await statusWithBearer(session.headers)).toBe(401);
+    });
+
+    it('survives a rotation of its own session’s refresh token', async () => {
+        const { session } = await account('jwt');
+
+        const refreshed = await api()
+            .post('/account/refresh')
+            .set('Origin', FRONTEND)
+            .set('Cookie', session.cookie);
+
+        expect(refreshed.status).toBe(200);
+        expect(await statusWithBearer(session.headers)).toBe(200);
+    });
+
+    it('dies when the session is renewed by a re-proof, which starts a new one', async () => {
+        const { session } = await account('jwt');
+
+        const reauth = await api()
+            .post('/account/reauth')
+            .set(session.headers)
+            .set('Origin', FRONTEND)
+            .send({ method: 'password', password: PLAIN_PASSWORD });
+
+        expect(reauth.status).toBe(200);
+        expect(await statusWithBearer(session.headers)).toBe(401);
+    });
+});

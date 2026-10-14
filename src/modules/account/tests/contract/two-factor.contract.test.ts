@@ -82,7 +82,7 @@ const armTotp = async (session: Session) => {
         .set('Authorization', bearer)
         .send({ code: await codeFor(secret, 0) });
     backupCodesOf.set(secret, confirm.body.data.backupCodes as string[]);
-    await forgetSessionEpoch();
+    await forgetSessionEpoch(bearer);
     await carryOn(session);
     return secret;
 };
@@ -107,7 +107,7 @@ const armEmail = async (session: Session, proof?: string) => {
         .post('/account/2fa/methods/email/confirm')
         .set('Authorization', bearer)
         .send({ code: String(mail?.data.code) });
-    await forgetSessionEpoch();
+    await forgetSessionEpoch(bearer);
     await carryOn(session);
 };
 
@@ -196,7 +196,7 @@ describe('DELETE /account/2fa', () => {
             .send({ code: await codeFor(secret, 1) });
 
         expect(response.status).toBe(200);
-        await forgetSessionEpoch();
+        await forgetSessionEpoch(session.bearer);
         await carryOn(session);
         const status = await api().get('/account/2fa').set('Authorization', session.bearer);
         expect(status.body.data.methods).toEqual([]);

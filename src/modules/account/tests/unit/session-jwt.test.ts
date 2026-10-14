@@ -144,9 +144,22 @@ beforeEach(() => {
 
 describe('verifyAccessToken', () => {
     it('resolves the payload of a token signed with the access secret', async () => {
+        const token = await signAs(
+            'access-secret',
+            { id: USER_ID, sid: '507f1f77bcf86cd799439022' },
+            { expiresIn: 900 }
+        );
+
+        await expect(verifyAccessToken(token)).resolves.toMatchObject({
+            id: USER_ID,
+            sid: '507f1f77bcf86cd799439022'
+        });
+    });
+
+    it('refuses a token that names no session: the signature is valid, the shape is not', async () => {
         const token = await signAs('access-secret', { id: USER_ID }, { expiresIn: 900 });
 
-        await expect(verifyAccessToken(token)).resolves.toMatchObject({ id: USER_ID });
+        await expect(verifyAccessToken(token)).rejects.toMatchObject({ reason: 'malformed' });
     });
 
     it('rejects a token signed with the REFRESH secret', async () => {

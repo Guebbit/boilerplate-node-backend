@@ -35,6 +35,8 @@ jest.mock('@modules/account/repository', () => {
         sessionRepository: {
             ...actual.sessionRepository,
             removeByHash: jest.fn(),
+            removeFamilyByHash: jest.fn(),
+            familyIsLive: jest.fn(),
             listLive: jest.fn()
         }
     };
@@ -56,6 +58,9 @@ import { cookieSet, recordingResponse, requestWith } from '../strategy-doubles';
 /** The account every case signs in. */
 const USER_ID = '507f1f77bcf86cd799439011';
 
+/** The session family the access token names. */
+const FAMILY_ID = '507f1f77bcf86cd799439022';
+
 /** The token-layer doubles. */
 const tokens = asStub<{
     startSession: jest.Mock;
@@ -67,7 +72,12 @@ const tokens = asStub<{
 }>(jwt);
 
 /** The store doubles. */
-const sessions = asStub<{ removeByHash: jest.Mock; listLive: jest.Mock }>(sessionRepository);
+const sessions = asStub<{
+    removeByHash: jest.Mock;
+    removeFamilyByHash: jest.Mock;
+    familyIsLive: jest.Mock;
+    listLive: jest.Mock;
+}>(sessionRepository);
 
 /** The proof resolver double. */
 const proof = asStub<jest.Mock>(resolveProof);
@@ -204,8 +214,14 @@ describe.each([
     ['resolveCookie', 'verifyRefreshToken']
 ] as const)('%s', (method, verifier) => {
     it(`verifies with ${verifier} and hands the claims' proof to the shared resolver`, async () => {
-        tokens[verifier].mockResolvedValue({ id: USER_ID, auth_time: 1_700_000_000, amr: ['pwd'] });
+        tokens[verifier].mockResolvedValue({
+            id: USER_ID,
+            auth_time: 1_700_000_000,
+            amr: ['pwd'],
+            sid: FAMILY_ID
+        });
         proof.mockResolvedValue({ id: USER_ID });
+        sessions.familyIsLive.mockResolvedValue(true);
 
         await expect(jwtStrategy[method]('a-token')).resolves.toEqual({ ok: { id: USER_ID } });
         expect(tokens[verifier]).toHaveBeenCalledWith('a-token');
@@ -223,6 +239,32 @@ describe.each([
         tokens[verifier].mockRejectedValue(new Error('store down'));
 
         await expect(jwtStrategy[method]('a-token')).rejects.toThrow('store down');
+    });
+});
+
+describe('resolveBearer and the session it names', () => {
+    beforeEach(() => {
+        tokens.verifyAccessToken.mockResolvedValue({
+            id: USER_ID,
+            auth_time: 1_700_000_000,
+            amr: ['pwd'],
+            sid: FAMILY_ID
+        });
+        proof.mockResolvedValue({ id: USER_ID });
+    });
+
+    it('asks whether the token’s own session family is still live', async () => {
+        sessions.familyIsLive.mockResolvedValue(true);
+
+        await jwtStrategy.resolveBearer('a-token');
+
+        expect(sessions.familyIsLive).toHaveBeenCalledWith(USER_ID, FAMILY_ID, expect.any(Date));
+    });
+
+    it('answers a miss for a token whose session was revoked, though the token itself verifies', async () => {
+        sessions.familyIsLive.mockResolvedValue(false);
+
+        await expect(jwtStrategy.resolveBearer('a-token')).resolves.toEqual({ miss: 'revoked' });
     });
 });
 

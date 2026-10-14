@@ -45,6 +45,12 @@ export const configuredRedisUrl = (): string | undefined => {
 const COMMAND_TIMEOUT_MS = 1000;
 
 /**
+ * How often an idle client PINGs the server. Below the socket's idle ceiling, so the socket only
+ * goes quiet when the connection is dead, never merely because nobody asked for anything.
+ */
+const KEEPALIVE_PING_MS = 500;
+
+/**
  * node-redis client options every adapter here connects with.
  * https://github.com/redis/node-redis/blob/master/docs/client-configuration.md
  *
@@ -58,10 +64,12 @@ const COMMAND_TIMEOUT_MS = 1000;
  *   with no ceiling at all.
  * - `socket.timeout` (node-redis' own name for `net.Socket#setTimeout`): closes the SOCKET after
  *   1s of no traffic either way, independent of command bookkeeping — the half-open case above.
- *   Safe here specifically because every caller (`cache.ts`, `rate-limit-store.ts`) is a plain
- *   request/reply lookup: nothing on this client ever subscribes or blocks, so there is no
- *   legitimate reason for the socket to sit idle mid-command.
+ *   It is an IDLE timer, so on its own it also closes a healthy connection after 1s without a
+ *   request; `pingInterval` below is what keeps a healthy one talking.
  *   https://github.com/redis/node-redis/blob/master/docs/client-configuration.md
+ * - `pingInterval`: a `PING` every 500ms, so the idle ceiling only ever fires on a connection that
+ *   stopped answering. Without it the socket closed after every quiet second, the next call hit a
+ *   closed client, and `cacheState()` read `unavailable` between requests.
  * - `RESP: 2` and `maintNotifications: 'disabled'`: node-redis 6 defaults to RESP3 and, with it,
  *   to Enterprise maintenance handling. Stated rather than inherited, so the wire format the
  *   callers (and `rate-limit-redis`'s raw commands) were written against stays the one in use.
@@ -82,6 +90,7 @@ export const redisClientOptions = (url: string) => ({
         // function's own docblock.
         socketTimeout: COMMAND_TIMEOUT_MS
     },
+    pingInterval: KEEPALIVE_PING_MS,
     commandOptions: { timeout: COMMAND_TIMEOUT_MS }
 });
 

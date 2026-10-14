@@ -7,8 +7,8 @@
  * Nobody:      resolves `{ ok: undefined }` — token verified, user no longer exists.
  * Outage:      rejects — Mongo/Redis unreachable. Never a "your credentials are wrong".
  *
- * Collapsing the first two turns a deleted account's 403 into a 401: "log in again" for an account
- * that cannot. The miss REASON is what the guard counts and audits.
+ * The guard answers both the first two with 401, so a caller cannot tell a bad token from a deleted
+ * account. The miss REASON is what the guard counts and audits.
  *
  * See: docs/tools/security.md#_401-or-403-and-why-the-guards-agree
  */

@@ -68,8 +68,8 @@ document shape — that is what keeps `kernel` below `modules` in the tier order
 
 ::: warning Two failures that are not the same failure
 A **bad token** rejects. A **valid token whose user is gone** resolves `undefined`. The guard turns
-that distinction into `401` versus `403`, and collapsing the two would tell an attacker whether an
-account exists.
+that distinction into the same `401` for both (the miss reason is what is counted and audited), so
+the answer never tells an attacker whether an account exists.
 :::
 
 ## `jwt` mode: two tokens, two lifetimes, two homes
@@ -265,7 +265,8 @@ flowchart TD
   successor is stored first, the old row deleted second, so a failure between leaves two sessions,
   not none. A password change and a factor change delete every session first, so the controller
   reads the caller's session BEFORE the change (`sessionSnapshotOf`) and the re-mint continues it.
-- **Logging out** is `deleteOne` on the digest; "log out that device" deletes by `familyId`;
+- **Logging out** deletes the digest's whole family (`removeFamilyByHash`); "log out that device"
+  deletes by `familyId`, and clears the caller's own cookies when the family is its own;
   logout-everywhere moves the epoch and deletes every row. The epoch refuses what a failed delete
   would leave behind: a row whose `authTime` predates it never resolves.
 - **A `ses_…` Bearer** is resolved exactly like the cookie, and is how every non-browser client logs
@@ -431,8 +432,13 @@ is what keeps `GET /account/sessions` honest.
 
 ### The session epoch
 
-Removing refresh tokens does not touch an access token already handed out (stateless, ten minutes).
-So every "I may be compromised" event also moves `tokensValidAfter` on the user, and a token whose
+Removing refresh tokens does not touch an access token already handed out (stateless, ten minutes)
+except through its `sid` claim: every `jwt` access token names its session family, and the bearer
+resolver checks that the family still has an unexpired row, so revoking one session (by id, or a
+plain logout) stops its access tokens at once. Any unexpired row counts, rotated away or not: a
+rotation supersedes the old row before it stores the successor. Ending a session deletes its whole
+family, never only the presented row, so a predecessor inside the grace window dies with it. And
+every "I may be compromised" event also moves `tokensValidAfter` on the user, and a token whose
 `auth_time` (floored to the second) predates it is refused — by the resolver for an access token, by
 `verifyRefreshToken` and the rotation for a refresh one. `auth_time`, not `iat`, because one
 `/refresh` resets `iat` and would walk a stolen session out of the cut.
@@ -446,7 +452,7 @@ So every "I may be compromised" event also moves `tokensValidAfter` on the user,
 | email change undone ("not me")        | yes, FIRST, before the address is touched, and pending links purged | n/a: the undo link is the credential                                                    |
 | refresh reuse detected                | yes                                                                 | n/a                                                                                     |
 | admin ban or soft delete              | yes, in the same save as `active` / `deletedAt`                     | n/a: an unban or a restore does not bring the old tokens back                           |
-| plain logout                          | no: one access token lives out its ten minutes                      | n/a                                                                                     |
+| plain logout                          | no, but its session family goes, so its access token stops at once  | n/a                                                                                     |
 
 ### One table, keyed by cause {#revocation}
 

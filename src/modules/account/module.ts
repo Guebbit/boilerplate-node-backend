@@ -47,7 +47,7 @@ import { runExportJob } from './services/export-job';
  * The resolver is registered HERE rather than at import time, so importing this file (a type, a
  * test) does not install it — only a module `registerModules` actually runs `onRegistered` for
  * does. The resolver itself rejects a bad token and resolves `undefined` for a token whose user is
- * gone — the distinction `requirePermissionViaCookie` turns into 401 versus 403. The resolution
+ * gone — the guard answers both with 401, and only the miss reason tells them apart. The resolution
  * logic lives in `./session/resolver.ts`, alongside the rest of the session machinery; this file
  * only installs it.
  *

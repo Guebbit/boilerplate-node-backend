@@ -122,6 +122,27 @@ const resolveWith =
                 }
             );
 
+/**
+ * The bearer's resolver: the token must verify, and the session family it names must still be
+ * alive, so revoking a session stops its access tokens at once, not when they expire. The `sid` is
+ * ours (the signature vouches for it), so it is always a well-formed id.
+ */
+const resolveBearer = (token: string): Promise<Resolution<AuthContext | undefined>> =>
+    verifyAccessToken(token).then(
+        (claims) =>
+            Promise.all([
+                sessionRepository.familyIsLive(claims.id, claims.sid, new Date()),
+                resolveProof(claims.id, { authTime: claims.auth_time, amr: claims.amr })
+            ]).then(
+                ([live, ok]): Resolution<AuthContext | undefined> =>
+                    live ? { ok } : { miss: 'revoked' }
+            ),
+        (error: unknown): Resolution<AuthContext | undefined> => {
+            if (error instanceof TokenRejection) return { miss: error.reason };
+            throw error;
+        }
+    );
+
 /** The `jwt` adapter. */
 export const jwtStrategy: SessionStrategy = {
     mode: 'jwt',
@@ -165,7 +186,7 @@ export const jwtStrategy: SessionStrategy = {
                 });
             }),
 
-    resolveBearer: resolveWith(verifyAccessToken),
+    resolveBearer,
     resolveCookie: resolveWith(verifyRefreshToken),
 
     credentialOf: readSessionCookie,

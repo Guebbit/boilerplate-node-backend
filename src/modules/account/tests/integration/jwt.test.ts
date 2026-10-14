@@ -76,7 +76,11 @@ beforeEach(() => {
 
 describe('verifyAccessToken', () => {
     it('resolves the payload of a token signed with the access secret', async () => {
-        const token = await signAs(ACCESS_SECRET, { id: 'user-1' }, { expiresIn: 900 });
+        const token = await signAs(
+            ACCESS_SECRET,
+            { id: 'user-1', sid: 'family-1' },
+            { expiresIn: 900 }
+        );
 
         await expect(verifyAccessToken(token)).resolves.toMatchObject({ id: 'user-1' });
     });

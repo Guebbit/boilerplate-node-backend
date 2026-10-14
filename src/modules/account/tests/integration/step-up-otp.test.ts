@@ -73,7 +73,7 @@ const armedAccount = async (email = 'armed@example.com') => {
         .post('/account/2fa/methods/totp/confirm')
         .set('Authorization', bearer)
         .send({ code: await codeFor(setup.body.data.secret as string, 0) });
-    await forgetSessionEpoch();
+    await forgetSessionEpoch(bearer);
     return { user, backupCodes: confirm.body.data.backupCodes as string[] };
 };
 

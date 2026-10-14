@@ -58,7 +58,16 @@ export interface TokenData {
      * the session cookie persistent again on the first refresh.
      */
     remember?: RefreshTokenExpiryTime;
+    /**
+     * The session family an ACCESS token belongs to, so a revoked session stops its access tokens
+     * at once instead of when they expire. Never on a refresh token, and never carried forward: each
+     * access token is stamped from the row it was minted against.
+     */
+    sid?: string;
 }
+
+/** An access token's claims: {@link TokenData} with the session it belongs to. */
+export type AccessTokenData = TokenData & { sid: string };
 
 /**
  * What a rotation hands the controller. `refreshMaxAgeMs` is the new refresh cookie's `maxAge`,
@@ -133,14 +142,18 @@ const rejectionOf = (error: unknown): never => {
  * proves who wrote it, not its shape, so the shape is checked before anything reads it.
  *
  * @param payload - what jose verified, typed only as the open `JWTPayload`
+ * @param kind - which kind of token it was verified as
  */
 const carriesTokenClaims = (
-    payload: JWTPayload
+    payload: JWTPayload,
+    kind: TokenKind
 ): payload is JWTPayload & TokenData & { exp: number } =>
     typeof payload.id === 'string' &&
     typeof payload.auth_time === 'number' &&
     Array.isArray(payload.amr) &&
-    typeof payload.exp === 'number';
+    typeof payload.exp === 'number' &&
+    // Only an access token names its session; a refresh token IS the session's credential.
+    (kind !== 'access' || typeof payload.sid === 'string');
 
 /**
  * The key lookup `jwtVerify` calls once it has parsed the header: the ring member the `kid` names.
@@ -185,7 +198,8 @@ const verifyAgainstRing = (
         typ: TOKEN_TYPE_HEADER[kind],
         requiredClaims: ['exp']
     }).then(({ payload }) => {
-        if (!carriesTokenClaims(payload)) throw new TokenRejection('malformed', 'Wrong claims');
+        if (!carriesTokenClaims(payload, kind))
+            throw new TokenRejection('malformed', 'Wrong claims');
         return payload;
     }, rejectionOf);
 
@@ -195,8 +209,12 @@ const verifyAgainstRing = (
  * @param token - signed JWT string
  * @returns decoded payload
  */
-export const verifyAccessToken = (token: string): Promise<TokenData> =>
-    verifyAgainstRing(token, getAccessTokenRing(), 'access');
+export const verifyAccessToken = (token: string): Promise<AccessTokenData> =>
+    verifyAgainstRing(token, getAccessTokenRing(), 'access').then((claims) => ({
+        ...claims,
+        // `carriesTokenClaims` required it for the access kind; the compiler cannot follow that.
+        sid: claims.sid!
+    }));
 
 /**
  * Verify a refresh token — JWT check + DB revocation lookup.
@@ -204,9 +222,9 @@ export const verifyAccessToken = (token: string): Promise<TokenData> =>
  * sign in: a rotated-away (superseded) one is refused here, though the rotation itself still reads it.
  *
  * @param token - refresh JWT string
- * @returns decoded payload
+ * @returns decoded payload, and the live row it was checked against
  */
-export const verifyRefreshToken = (token: string): Promise<TokenData> =>
+const verifyRefreshWithRow = (token: string): Promise<{ data: TokenData; row: SessionRow }> =>
     verifyAgainstRing(token, getRefreshTokenRing(), 'refresh').then((data) =>
         sessionRepository.findByHash(hashToken(token)).then((row) => {
             // A rotated-away token still has its row (reuse detection and the two-tab grace need
@@ -218,10 +236,19 @@ export const verifyRefreshToken = (token: string): Promise<TokenData> =>
             return userService.findAuthenticatableById(String(row.userId)).then((user) => {
                 if (!user || predatesSessionEpoch(data.auth_time, user.tokensValidAfter))
                     throw new TokenRejection('revoked', 'Forbidden');
-                return data;
+                return { data, row };
             });
         })
     );
+
+/**
+ * Verify a refresh token (signature, a live row, an account that may still sign in).
+ *
+ * @param token - refresh JWT string
+ * @returns decoded payload
+ */
+export const verifyRefreshToken = (token: string): Promise<TokenData> =>
+    verifyRefreshWithRow(token).then(({ data }) => data);
 
 /**
  * Sign a payload with a ring's current key, stamping `kid` so a verifier can find it again.
@@ -373,7 +400,9 @@ export const continueSession = (
  * @returns signed access JWT string
  */
 export const createAccessToken = (refreshToken: string) =>
-    verifyRefreshToken(refreshToken).then((claims) => signAccessToken(carriedClaims(claims)));
+    verifyRefreshWithRow(refreshToken).then(({ data, row }) =>
+        signAccessToken({ ...carriedClaims(data), sid: String(row.familyId) })
+    );
 
 /**
  * A refresh token was presented that no live session holds — genuinely unknown, or superseded
@@ -425,7 +454,7 @@ const storeSuccessor = (
             expiresAt: new Date(now.getTime() + remainingMs)
         })
         .then(() => recordActivity(claims.id))
-        .then(() => signAccessToken(claims))
+        .then(() => signAccessToken({ ...claims, sid: String(previous.familyId) }))
         .then((accessToken) => ({
             accessToken,
             refreshToken: newRefreshToken,
