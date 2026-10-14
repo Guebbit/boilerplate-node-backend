@@ -45,7 +45,7 @@ import { enqueueIfPending } from './image';
  */
 export const update = (
     user: UserDocument,
-    data: WithServerImage<UpdateUserByIdRequest> & {
+    data: WithServerImage<Omit<UpdateUserByIdRequest, 'role'>> & {
         /** Not on `UpdateUserByIdRequest` — `readOnly` on the contract, set only by the server. */
         thumbnailUrl?: string;
         /** Set alongside a new pending-image placeholder — see `readUploadedImage`. */
@@ -65,18 +65,20 @@ export const update = (
      * privilege-escalation endpoint: any caller who can reach this function at all could grant
      * any role, including their own promotion to `admin`.
      */
-    context: CallerContext
+    context: CallerContext,
+    /** {@link changedRole}'s answer: the role to grant, or `undefined` for none. */
+    role?: string
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> => {
     if (data.username !== undefined) user.username = data.username;
     // `role` is not written here — there is no column, only the membership,
-    // written below in `updateSavedUser` once the rest of the document has saved.
+    // written below in `saveWithRole` once the rest of the document has saved.
     if (data.active !== undefined) {
         // A ban ends every session in the SAME save: the `active` gate alone would let the old
         // tokens back in the moment someone unbans the account.
         if (!data.active && user.active) markSessionsEnded(user);
         user.active = data.active;
     }
-    // The old url is captured before the overwrite so `updateSavedUser` can delete it once
+    // The old url is captured before the overwrite so the save can delete it once
     // the new one is durably saved — see `applyImageWriteback`'s own docblock for the gate
     // shared with `products/services/crud.ts`'s own `update`. `null` unsets the field, and the
     // same old-url capture then deletes the file and its thumbnail.
@@ -92,7 +94,7 @@ export const update = (
     // boolean changes it.
     if (data.analyticsConsent !== undefined) user.analyticsConsent = data.analyticsConsent;
 
-    return updateSavedUser(user, data, context, oldImageUrl);
+    return saveWithRole(user, { active: data.active, role }, context, oldImageUrl);
 };
 
 /**
@@ -113,24 +115,6 @@ const changedRole = (user: UserDocument, requested?: string): Promise<string | u
               // Stored lower-cased and trimmed — the membership schema's own normalisation.
               tenant === requested.trim().toLowerCase() ? undefined : requested
           );
-
-/**
- * The save-and-react half of {@link update}, split out so the breach check above it reads as one
- * idea rather than the start of an even longer function.
- *
- * @param oldImageUrl - the image the update just replaced, or `undefined` when the avatar was
- *   not touched. Deleted only after the save succeeds — bytes removed ahead of a write that then
- *   fails would leave a row pointing at a 404.
- */
-const updateSavedUser = (
-    user: UserDocument,
-    data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
-    context: CallerContext,
-    oldImageUrl?: string
-): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    changedRole(user, data.role).then((role) =>
-        saveWithRole(user, { active: data.active, role }, context, oldImageUrl)
-    );
 
 /**
  * The write half of an update, inside the caller's transaction: the document's save and, for a
@@ -208,7 +192,7 @@ const finishUpdate = (
 };
 
 /**
- * {@link updateSavedUser} once the role is known to be a real change (or none): check the grant
+ * {@link update} once the role is known to be a real change (or none): check the grant
  * and audit a refusal, write the document and the membership in one transaction, then clean up.
  *
  * @param data - `role` here is {@link changedRole}'s answer, never the raw request's
@@ -307,12 +291,14 @@ const ownRoleRefusal = (id: string, context: CallerContext): ResponseReject => {
  * @param user - the loaded document
  * @param data - the request body
  * @param context - the caller
+ * @param role - {@link changedRole}'s answer for this request
  * @returns the refusal, or `undefined` to carry on
  */
 const refusalFor = (
     user: UserDocument,
     data: Pick<UpdateUserByIdRequest, 'active' | 'role'>,
-    context: CallerContext
+    context: CallerContext,
+    role: string | undefined
 ): Promise<ResponseReject | undefined> => {
     const id = String(user._id);
     const held = heldKeys(context.caller);
@@ -323,10 +309,8 @@ const refusalFor = (
     return outrankedRefusal(context, id, 'user').then(
         (outranked) =>
             outranked ??
-            (context.caller.id === id
-                ? changedRole(user, data.role).then((role) =>
-                      role === undefined ? undefined : ownRoleRefusal(id, context)
-                  )
+            (context.caller.id === id && role !== undefined
+                ? ownRoleRefusal(id, context)
                 : undefined)
     );
 };
@@ -362,14 +346,16 @@ type UpdateByIdData = WithServerImage<UpdateUserByIdRequest> & {
  * @param context - the caller
  * @param wasActive - `user.active` read BEFORE `update()` mutates it in place — the flip is the
  *   whole signal for the ban/unban audit action and the deactivation event
+ * @param role - {@link changedRole}'s answer for this request
  */
 const applyUpdate = (
     user: UserDocument,
     data: UpdateByIdData,
     context: CallerContext,
-    wasActive: boolean | undefined
+    wasActive: boolean | undefined,
+    role: string | undefined
 ): Promise<ResponseSuccess<UserDocument> | ResponseReject> =>
-    update(user, data, context).then((result) => {
+    update(user, data, context, role).then((result) => {
         if (result.success) {
             recordAudit(context, {
                 action: auditActionForUpdate(wasActive, data.active),
@@ -411,7 +397,10 @@ export const updateById = (
         // Read before `update()` mutates `user.active` in place — the flip is the whole signal.
         const wasActive = user.active;
 
-        return refusalFor(user, data, context).then(
-            (refusal) => refusal ?? applyUpdate(user, data, context, wasActive)
+        // Once per request: the role the membership already holds is not a change.
+        return changedRole(user, data.role).then((role) =>
+            refusalFor(user, data, context, role).then(
+                (refusal) => refusal ?? applyUpdate(user, data, context, wasActive, role)
+            )
         );
     });

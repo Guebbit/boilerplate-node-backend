@@ -149,7 +149,7 @@ const checkGrant = (
  * The synchronous half of {@link assignRole}: refuses what {@link checkGrant} refuses, and returns
  * the lowered role name for the caller to act on. Split out so {@link assertCanGrant} can ask
  * "would this succeed" before committing other state, without a compensating rollback if the grant
- * turns out to be refused — see `users/services/update.ts`'s `updateSavedUser`.
+ * turns out to be refused — see `users/services/update.ts`'s `saveWithRole`.
  *
  * @param granter - same meaning as in {@link checkGrant}
  * @throws AccessInvariantError for either reason {@link checkGrant} gives
@@ -181,7 +181,7 @@ export const grantableRoles = (scope: AuthorizationScope, granter: readonly stri
 /**
  * Would {@link assignRole} succeed, without writing anything — for a caller that needs to know
  * BEFORE it commits other state, since a refused grant discovered afterwards means either a
- * rollback or a half-applied update. See `users/services/update.ts`'s `updateSavedUser`, which validates
+ * rollback or a half-applied update. See `users/services/update.ts`'s `saveWithRole`, which validates
  * a role change before saving the rest of the document.
  *
  * @param granter - same meaning as {@link assignRole}'s own parameter
