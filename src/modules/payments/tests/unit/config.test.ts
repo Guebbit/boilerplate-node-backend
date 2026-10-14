@@ -1,16 +1,10 @@
 /**
  * `payments/config.ts` — `listPaymentMethods` (what `GET /payments/methods` and checkout both
- * defer to), `validateBankTransferConfig` (a boot-time check of the slice, run through
- * `ibantools`), and `validateStripeSecretKey` (the same slice check). All three are pure
- * reads over the environment, so no database is needed.
+ * defer to) and `validateBankTransferConfig` (a boot-time check of the slice, run through
+ * `ibantools`). Both are pure reads over the environment, so no database is needed.
  */
-import {
-    listPaymentMethods,
-    validateBankTransferConfig,
-    validateStripeSecretKey
-} from '../../config';
-import { currentEnvironment } from '@infrastructure/config/store';
-import { withoutEnvironmentInThisFile, withEnvironment, setEnvironment } from '@tests/environment';
+import { listPaymentMethods, validateBankTransferConfig } from '../../config';
+import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 
 /** Sets both variables `bankTransferEnabled()` requires. */
 const configureBankTransfer = () => {
@@ -29,8 +23,7 @@ const TOUCHED = [
     'NODE_BANK_TRANSFER_BENEFICIARY',
     'NODE_BANK_TRANSFER_IBAN',
     'NODE_BANK_TRANSFER_BIC',
-    'NODE_BANK_TRANSFER_HOLD_HOURS',
-    'NODE_STRIPE_SECRET_KEY'
+    'NODE_BANK_TRANSFER_HOLD_HOURS'
 ] as const;
 
 withoutEnvironmentInThisFile(TOUCHED);
@@ -107,49 +100,4 @@ describe('validateBankTransferConfig', () => {
         setEnvironment({ NODE_BANK_TRANSFER_BIC: 'COBADEFFXXX' });
         expect(validateBankTransferConfig()).toEqual([]);
     });
-});
-
-/** `validateStripeSecretKey` against the environment this case set up. */
-const stripeProblems = (): string[] => {
-    const environment = currentEnvironment();
-    return validateStripeSecretKey(environment.NODE_STRIPE_SECRET_KEY, environment);
-};
-
-describe('validateStripeSecretKey', () => {
-    it('reports nothing when no key is configured', () => {
-        expect(stripeProblems()).toEqual([]);
-    });
-
-    it('reports nothing for a test-mode key outside production', () => {
-        setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
-        expect(stripeProblems()).toEqual([]);
-    });
-
-    it('reports nothing for a live key in production', () =>
-        withEnvironment('NODE_ENV', 'production', () => {
-            setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_live_abc123' });
-            expect(stripeProblems()).toEqual([]);
-            return Promise.resolve();
-        }));
-
-    it('refuses a test-mode key when NODE_ENV is staging, like production', () =>
-        withEnvironment('NODE_ENV', 'staging', () => {
-            setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
-            expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
-            return Promise.resolve();
-        }));
-
-    it('refuses a test-mode key when NODE_ENV is unset', () => {
-        setEnvironment({ NODE_ENV: undefined });
-        setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
-
-        expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
-    });
-
-    it('refuses a test-mode key in production', () =>
-        withEnvironment('NODE_ENV', 'production', () => {
-            setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
-            expect(stripeProblems()).toEqual(['NODE_STRIPE_SECRET_KEY']);
-            return Promise.resolve();
-        }));
 });

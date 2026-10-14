@@ -13,7 +13,7 @@
  */
 
 import { electronicFormatIBAN, isValidBIC, isValidIBAN } from 'ibantools';
-import { defineConfig, isRelaxedIn } from '@infrastructure/config/define';
+import { defineConfig } from '@infrastructure/config/define';
 import { int, secret, text } from '@infrastructure/config/fields';
 import {
     bankTransferBeneficiary,
@@ -106,21 +106,19 @@ export const paymentsConfig = defineConfig({
             placeholder: 'your-payment-webhook-secret-here',
             productionOnly: true
         }),
-        NODE_STRIPE_SECRET_KEY: text({ sensitive: true }),
         NODE_PAYMENT_EFFECT_RETRY_MINUTES: int({ default: 1, min: 0 }),
         NODE_PAYMENT_RECONCILE_MINUTES: int({ default: 15, min: 0 }),
         NODE_PAYMENT_ATTENTION_MINUTES: int({ default: 60, min: 1 }),
         NODE_PAYMENT_ABANDONED_RETENTION_DAYS: int({ default: 30, min: 1 })
     },
-    check: (config, environment) => [
+    check: (config) => [
         ...(config.NODE_PAYMENT_WEBHOOK_SECRET !== undefined &&
         webhookSecretRing(config.NODE_PAYMENT_WEBHOOK_SECRET).some(
             (entry) => entry.length < WEBHOOK_SECRET_MIN_LENGTH
         )
             ? ['NODE_PAYMENT_WEBHOOK_SECRET']
             : []),
-        ...validateBankTransferConfig(),
-        ...validateStripeSecretKey(config.NODE_STRIPE_SECRET_KEY, environment)
+        ...validateBankTransferConfig()
     ]
 });
 
@@ -168,21 +166,3 @@ export const paymentWebhookSecrets = (): string[] => {
     const value = paymentsConfig().NODE_PAYMENT_WEBHOOK_SECRET;
     return value === undefined ? [] : webhookSecretRing(value);
 };
-
-/**
- * Refuse to boot on a deployment (any `NODE_ENV` but development/test) with a Stripe TEST-mode key. `sk_test_` is Stripe's own prefix
- * for one — https://docs.stripe.com/keys#test-live-modes — and a deployment that pastes one into
- * production would silently run every "real" payment through Stripe's test ledger: orders marked
- * paid, and no money ever actually moving. Checked outside development/test only; a test key is
- * exactly right there, `NODE_STRIPE_SECRET_KEY` unset included — there is no shipped
- * Stripe implementation yet, so this stays dormant until a deployment sets one.
- * @param key - the configured secret key, if any
- * @param environment - judged for development/test
- * @returns `['NODE_STRIPE_SECRET_KEY']` when a deployment boot is configured with a test-mode
- *   Stripe key; empty otherwise
- */
-export const validateStripeSecretKey = (
-    key: string | undefined,
-    environment: Readonly<Record<string, string | undefined>>
-): string[] =>
-    !isRelaxedIn(environment) && key?.startsWith('sk_test_') ? ['NODE_STRIPE_SECRET_KEY'] : [];

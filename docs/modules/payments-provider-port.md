@@ -133,16 +133,10 @@ Nothing here ships a PSP adapter; Stripe is the worked example.
    vendor's own verifier (`stripe.webhooks.constructEvent`) and maps any `payment_intent.*` event
    onto `{ id, providerRef }`: the state is then read back through `retrieve`.
 2. Call `registerPaymentProvider('stripe', …)` (from `providers/registry.ts`) where the module loads.
-3. Set `NODE_PAYMENT_PROVIDER`, `NODE_STRIPE_SECRET_KEY` to the vendor's own secret key, and
-   `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
+3. Set `NODE_PAYMENT_PROVIDER`, and `NODE_PAYMENT_WEBHOOK_SECRET` to the vendor's webhook signing secret.
+   Your adapter reads its own secret key, and refuses its vendor's test key outside development
+   (Stripe's is `sk_test_`).
 4. Point the vendor's dashboard at `POST /payments/webhook`, which needs a public HTTPS endpoint.
-
-::: warning A test-mode key never boots in production
-`NODE_STRIPE_SECRET_KEY` is checked at boot even though no `stripe.ts` ships, so a project that adds one inherits the gate: a value starting `sk_test_` <!-- doc-paths:ignore -->
-— Stripe's own test-mode prefix — refuses to boot outside
-`NODE_ENV=development`/`test` (staging included), rather than silently running every "real" payment through Stripe's test
-ledger.
-:::
 
 The frontend swaps its method widget for the vendor's, which is the point of the exercise — the app
 stops touching card data. The service and the contract's shape stay as they are; settlement stays too, with one added input: the adapter reports `amountReceived`, `currency` and `paymentId` with every `succeeded`, converted from its minor units, and echoes the `metadata.paymentId` it was given at `prepare`. A success that disagrees with the frozen payment is refused, see [the final write](./payments.md#the-pre-check-and-the-final-write).

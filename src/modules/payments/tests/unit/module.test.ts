@@ -13,12 +13,7 @@ import { assertModuleConfig } from '@kernel/module-config';
 import { withoutEnvironmentInThisFile, setEnvironment } from '@tests/environment';
 import paymentsModule from '../../module';
 
-withoutEnvironmentInThisFile([
-    'NODE_ENV',
-    'NODE_PAYMENT_PROVIDER',
-    'NODE_PAYMENT_WEBHOOK_SECRET',
-    'NODE_STRIPE_SECRET_KEY'
-]);
+withoutEnvironmentInThisFile(['NODE_ENV', 'NODE_PAYMENT_PROVIDER', 'NODE_PAYMENT_WEBHOOK_SECRET']);
 
 /** A deployment that satisfies every unconditional check, for a case to break one thing in. */
 const configure = (): void => {
@@ -101,20 +96,5 @@ describe('the payment webhook secret', () => {
         expect(() => assertModuleConfig([paymentsModule], [])).toThrow(
             /NODE_PAYMENT_WEBHOOK_SECRET/
         );
-    });
-});
-
-/**
- * The Stripe secret key gate's own boot wiring. `validateStripeSecretKey`'s pure cases (no key,
- * live key, test key outside production) live in `config.test.ts` — this is only the one case
- * that proves the module's manifest actually WIRES it into `assertModuleConfig`: a build that
- * forgot the wiring would not throw here either, and the other three cases wouldn't tell.
- */
-describe('the Stripe secret key gate', () => {
-    it('refuses to boot in production with a test-mode key', () => {
-        setEnvironment({ NODE_ENV: 'production' });
-        setEnvironment({ NODE_STRIPE_SECRET_KEY: 'sk_test_abc123' });
-
-        expect(() => assertModuleConfig([paymentsModule], [])).toThrow(/NODE_STRIPE_SECRET_KEY/);
     });
 });

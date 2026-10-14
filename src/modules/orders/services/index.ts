@@ -154,7 +154,6 @@ export {
 } from './scope';
 export { freezeOrderLines } from './snapshot';
 export { reencryptOrders } from './reencrypt';
-export { allocateOrderNumber } from './order-numbering';
 export type {
     PaidBucket,
     ProductTotal,

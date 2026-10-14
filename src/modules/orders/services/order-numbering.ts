@@ -26,6 +26,7 @@ const SEQUENCE_WIDTH = 6;
  * the order write that follows this call fails, the number allocated here is never reused: a
  * documented, acceptable gap rather than a bug, and no rollback is attempted for it.
  *
+ * @internal The counter step beneath `placeOrder`; unpublished so no sibling burns a number.
  * @returns the formatted order number for a new order
  */
 export const allocateOrderNumber = (): Promise<string> => {
