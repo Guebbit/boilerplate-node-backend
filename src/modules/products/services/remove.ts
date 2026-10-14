@@ -3,6 +3,7 @@
  * Soft and hard delete and restore, and what each announces.
  */
 
+import type { ClientSession } from 'mongoose';
 import { t } from '@infrastructure/i18n';
 import { removeTranslations } from '@kernel/translation';
 import type { CallerContext } from '@types';
@@ -20,6 +21,30 @@ import { PRODUCT_DELETED } from '../events';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 import { titlesOf } from './lookups';
+
+/**
+ * Run a delete's write and announce `product.deleted` in the same transaction. The titles are read
+ * first: a hard delete's write takes the other languages' rows with it, and the event has to carry
+ * the names a subscriber's message will print.
+ *
+ * @param product - the document being removed
+ * @param hardDelete - whether the row goes, which subscribers read off the payload
+ * @param write - the delete itself, run inside the transaction
+ */
+const announceDeleted = <T>(
+    product: ProductDocument,
+    hardDelete: boolean,
+    write: (session: ClientSession) => Promise<T>
+): Promise<T> => {
+    const id = product._id.toString();
+    return titlesOf(product).then((titles) =>
+        announceInTransaction(write, () => ({
+            name: PRODUCT_DELETED,
+            payload: { productId: id, hardDelete, titles },
+            aggregateId: id
+        }))
+    );
+};
 
 /**
  * Remove a product document (soft or hard delete). Hard delete also removes the image file;
@@ -52,28 +77,17 @@ export const remove = (
             });
     };
 
-    // HARD delete
-    // Translations go with it, in this same transaction — through the port, never the
+    // Translations go with a HARD delete, in this same transaction — through the port, never the
     // `PRODUCT_DELETED` event: that event fires on a SOFT delete too, with the same `productId` —
     // `hardDelete` on the payload is what lets a subscriber (`inventory`'s level row) tell the two
     // apart. A soft delete can be restored, so both the rows and the counters must survive it.
     if (hardDelete)
-        // Titles are read first: `removeTranslations` below takes the other languages with it.
-        return titlesOf(product)
-            .then((titles) =>
-                announceInTransaction(
-                    (session) =>
-                        productRepository
-                            .deleteOne(product, session)
-                            .then(() => removeTranslations('product', id, session))
-                            .then(() => product),
-                    () => ({
-                        name: PRODUCT_DELETED,
-                        payload: { productId: id, hardDelete: true, titles },
-                        aggregateId: id
-                    })
-                )
-            )
+        return announceDeleted(product, true, (session) =>
+            productRepository
+                .deleteOne(product, session)
+                .then(() => removeTranslations('product', id, session))
+                .then(() => product)
+        )
             .then(() => imageStore.remove(product.imageUrl))
             .then(() => auditDeleted())
             .then(() => generateSuccess(undefined, 200, t('products.hard-deleted')));
@@ -83,21 +97,12 @@ export const remove = (
         return Promise.resolve(generateSuccess(product, 200, t('products.soft-deleted')));
 
     product.deletedAt = new Date();
-    return titlesOf(product)
-        .then((titles) =>
-            announceInTransaction(
-                (session) => productRepository.save(product, session),
-                () => ({
-                    name: PRODUCT_DELETED,
-                    payload: { productId: id, hardDelete: false, titles },
-                    aggregateId: id
-                })
-            )
-        )
-        .then((saved) => {
-            auditDeleted();
-            return generateSuccess(saved, 200, t('products.soft-deleted'));
-        });
+    return announceDeleted(product, false, (session) =>
+        productRepository.save(product, session)
+    ).then((saved) => {
+        auditDeleted();
+        return generateSuccess(saved, 200, t('products.soft-deleted'));
+    });
 };
 
 /**

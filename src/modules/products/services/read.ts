@@ -3,20 +3,14 @@
  * Single-product reads: the caller's scope, the resolved view, the editor's all-locales view.
  */
 
-import { getFallbackLocale } from '@infrastructure/i18n';
-import { applyTranslations, readAllTranslations } from '@kernel/translation';
-import type {
-    Product,
-    ProductAdmin,
-    ProductTranslationFields,
-    CallerContext,
-    Caller
-} from '@types';
+import { applyTranslations } from '@kernel/translation';
+import type { Product, ProductAdmin, CallerContext, Caller } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { accessibleFilterFor } from '@kernel/access/query';
 import { presentProduct } from '../presenter';
 import { canSeeStock, redactStock } from './stock-view';
 import { productRepository } from '../repository';
+import { translationsWithFallback } from './lookups';
 
 /**
  * Which products a caller is allowed to read.
@@ -89,28 +83,10 @@ export const getAdmin = (id: string, caller?: Caller): Promise<ProductAdmin | nu
     productRepository.findById(id).then((product) => {
         if (!product) return null;
 
-        return readAllTranslations('product', id).then((rows) => {
-            const translations: Record<string, ProductTranslationFields> = {};
-            for (const [locale, fields] of rows)
-                translations[locale] = {
-                    title: fields.title,
-                    // `TranslationFields` types as `Record<string, string>`, but a row can genuinely
-                    // omit the key — `in` is a runtime presence check `fields.description ===
-                    // undefined` isn't, since the index signature already promises every key is a
-                    // `string`.
-                    ...('description' in fields ? { description: fields.description } : {})
-                };
-
-            const fallbackLocale = getFallbackLocale();
-            if (!(fallbackLocale in translations))
-                translations[fallbackLocale] = {
-                    title: product.title,
-                    ...(product.description ? { description: product.description } : {})
-                };
-
-            return redactStock(
+        return translationsWithFallback(product).then((translations) =>
+            redactStock(
                 carryVersion(product, { ...presentProduct(product), translations }),
                 canSeeStock(caller)
-            );
-        });
+            )
+        );
     });

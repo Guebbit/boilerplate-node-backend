@@ -6,6 +6,7 @@
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { getFallbackLocale } from '@infrastructure/i18n';
 import { readAllTranslations } from '@kernel/translation';
+import type { ProductTranslationFields } from '@types';
 import type { ProductDocument } from '../model';
 import { productRepository } from '../repository';
 
@@ -82,24 +83,50 @@ export const syncStockCache = (productId: string, counters: { onHand: number; re
     productRepository.syncStockCache(productId, counters);
 
 /**
- * A product's name in every language it has one in, locale → title.
+ * A product's title and description in every language it has them in, locale → fields.
  *
- * The product's own `title` column IS the fallback language's name, so it fills that slot when the
- * translation port has no row for it (or no `locales` module at all) — the same rule the admin
- * read applies. For a message that has to outlive the product: copy the names in, never look the
- * product up again.
+ * The product's own `title`/`description` columns ARE the fallback language's content, so they fill
+ * that slot when the translation port has no row for it (or no `locales` module at all).
+ *
+ * @param product - the document whose translations to collect
+ */
+export const translationsWithFallback = (
+    product: ProductDocument
+): Promise<Record<string, ProductTranslationFields>> =>
+    readAllTranslations('product', product._id.toString()).then((rows) => {
+        const translations: Record<string, ProductTranslationFields> = {};
+        for (const [locale, fields] of rows)
+            translations[locale] = {
+                title: fields.title,
+                // `TranslationFields` types as `Record<string, string>`, but a row can genuinely
+                // omit the key — `in` is a runtime presence check `fields.description ===
+                // undefined` isn't, since the index signature already promises every key is a
+                // `string`.
+                ...('description' in fields ? { description: fields.description } : {})
+            };
+
+        const fallbackLocale = getFallbackLocale();
+        if (!(fallbackLocale in translations))
+            translations[fallbackLocale] = {
+                title: product.title,
+                ...(product.description ? { description: product.description } : {})
+            };
+
+        return translations;
+    });
+
+/**
+ * A product's name in every language it has one in, locale → title. For a message that has to
+ * outlive the product: copy the names in, never look the product up again.
  *
  * @param product - the document whose names to collect
  */
 export const titlesOf = (product: ProductDocument): Promise<Record<string, string>> =>
-    readAllTranslations('product', product._id.toString()).then((rows) => {
-        const titles: Record<string, string> = {};
-        for (const [locale, fields] of rows) titles[locale] = fields.title;
-
-        const fallbackLocale = getFallbackLocale();
-        if (!(fallbackLocale in titles)) titles[fallbackLocale] = product.title;
-        return titles;
-    });
+    translationsWithFallback(product).then((translations) =>
+        Object.fromEntries(
+            Object.entries(translations).map(([locale, { title }]) => [locale, title])
+        )
+    );
 
 /**
  * {@link titlesOf} for an id: the names of a product in any state, soft-deleted included, or an
