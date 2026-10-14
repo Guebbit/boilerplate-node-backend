@@ -67,6 +67,27 @@ const NOT_WARNED_THIS_STRETCH = {
     ]
 };
 
+/**
+ * Stamp one activity field on an account, at most once a day: the filter matches only an account
+ * with no stamp yet or one older than the throttle. `$max` keeps the stamp from ever moving
+ * backwards; `timestamps: false`, since activity is not an edit of the profile.
+ */
+const stampDaily = (id: string, field: 'lastActiveAt' | 'lastApiKeyUseAt', now: Date) =>
+    userModel
+        .updateOne(
+            {
+                _id: toObjectId(id),
+                $or: [
+                    { [field]: { $exists: false } },
+                    { [field]: { $lt: new Date(now.getTime() - ACTIVITY_THROTTLE_MS) } }
+                ]
+            },
+            { $max: { [field]: now } },
+            { timestamps: false }
+        )
+        .exec()
+        .then(() => undefined);
+
 /** The four fields one delivered code occupies, in a slot. */
 const CODE_FIELDS = ['codeHash', 'codeExpiresAt', 'codeSentAt', 'codeAttempts'] as const;
 
@@ -618,27 +639,11 @@ export const userRepository: Repository<UserDocument, UserWire> & {
     /**
      * Stamp the account's `lastActiveAt`, at most once a day: the filter matches only an account
      * with no stamp yet or one older than a day, so a busy account costs one write a day.
-     * `$max` keeps the stamp from ever moving backwards. `timestamps: false`, since signing in
-     * is not an edit of the profile.
      *
      * @param id - the account
      * @param now - the moment to stamp
      */
-    touchLastActive: (id: string, now: Date) =>
-        userModel
-            .updateOne(
-                {
-                    _id: toObjectId(id),
-                    $or: [
-                        { lastActiveAt: { $exists: false } },
-                        { lastActiveAt: { $lt: new Date(now.getTime() - ACTIVITY_THROTTLE_MS) } }
-                    ]
-                },
-                { $max: { lastActiveAt: now } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(() => undefined),
+    touchLastActive: (id: string, now: Date) => stampDaily(id, 'lastActiveAt', now),
 
     /**
      * Stamp `lastApiKeyUseAt`, at most once a day — same throttle and same reasons as
@@ -647,21 +652,7 @@ export const userRepository: Repository<UserDocument, UserWire> & {
      * @param id - the account that minted the key
      * @param now - the moment to stamp
      */
-    touchApiKeyUse: (id: string, now: Date) =>
-        userModel
-            .updateOne(
-                {
-                    _id: toObjectId(id),
-                    $or: [
-                        { lastApiKeyUseAt: { $exists: false } },
-                        { lastApiKeyUseAt: { $lt: new Date(now.getTime() - ACTIVITY_THROTTLE_MS) } }
-                    ]
-                },
-                { $max: { lastApiKeyUseAt: now } },
-                { timestamps: false }
-            )
-            .exec()
-            .then(() => undefined),
+    touchApiKeyUse: (id: string, now: Date) => stampDaily(id, 'lastApiKeyUseAt', now),
 
     /**
      * Stamp that every minimise hook has run for this account. `timestamps: false`: minimising is
