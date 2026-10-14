@@ -25,10 +25,11 @@ type SessionCaller = SessionRequest & Pick<Request, 'get'>;
  * @param request - the request that logged in, for the transport and the device
  * @param response - the live response to set the cookies on
  * @param userId - whose session this is
- * @param options - the "remember me" tier, how `auth_time` was proved, and transport
+ * @param options - the "remember me" tier, how and when `auth_time` was proved, and transport
  * @returns the credential fields the response body carries (`AuthTokens` on the wire)
- * @throws when the session cannot be persisted or signed, or `SecondFactorRequiredError` for a
- *   first session on an account whose second factor `amr` does not carry
+ * @throws when the session cannot be persisted or signed, `SecondFactorRequiredError` for a
+ *   first session on an account whose second factor `amr` does not carry, or `StaleProofError`
+ *   when the account ended its sessions after `provedAt`
  */
 export const issueSession = (
     request: SessionCaller,

@@ -54,6 +54,9 @@ export const postSignup = (
         analyticsConsent,
         termsAccepted = false
     } = request.body ?? {};
+    // The password this request sets is its proof. The account is new, so no epoch can predate
+    // it; stated anyway, since every first session says when its proof began.
+    const proof = { amr: [AMR.password], provedAt: Date.now() };
 
     return accountService
         .signup(
@@ -115,7 +118,7 @@ export const postSignup = (
              * signup issues a session at all. Rung 2 is off by default, and the 409 for an
              * address in use already leaks existence.
              */
-            return issueSession(request, response, data.id, { amr: [AMR.password] }).then(() => {
+            return issueSession(request, response, data.id, proof).then(() => {
                 // SIGNUP_DEFAULT_ROLE, not a lookup: self-service signup's `assignDefaultRole` can only
                 // ever grant this one role, so it's what the membership just written holds, by
                 // construction — see `signup.ts#signup`.

@@ -48,7 +48,7 @@ jest.mock('@modules/account/session/auth-context', () => ({
 }));
 
 import { cookieStrategy } from '@modules/account/session/cookie-strategy';
-import { SecondFactorRequiredError } from '@modules/account/session/mint-guard';
+import { SecondFactorRequiredError, StaleProofError } from '@modules/account/session/mint-guard';
 import { resolveProof } from '@modules/account/session/auth-context';
 import { sessionRepository, type NewSessionRow } from '@modules/account/repository';
 import { userService } from '@modules/users';
@@ -219,7 +219,10 @@ describe('issue', () => {
         const { response } = recordingResponse();
 
         await expect(
-            cookieStrategy.issue(requestWith(), response, USER_ID, { amr: ['pwd'] })
+            cookieStrategy.issue(requestWith(), response, USER_ID, {
+                amr: ['pwd'],
+                provedAt: Date.now()
+            })
         ).rejects.toThrow('User not found');
         expect(sessions.insert).not.toHaveBeenCalled();
     });
@@ -232,9 +235,41 @@ describe('issue', () => {
         const { response } = recordingResponse();
 
         await expect(
-            cookieStrategy.issue(requestWith(), response, USER_ID, { amr: ['pwd'] })
+            cookieStrategy.issue(requestWith(), response, USER_ID, {
+                amr: ['pwd'],
+                provedAt: Date.now()
+            })
         ).rejects.toBeInstanceOf(SecondFactorRequiredError);
         expect(sessions.insert).not.toHaveBeenCalled();
+    });
+
+    it('refuses a proof checked before the account ended its sessions, storing nothing', async () => {
+        const provedAt = Date.now();
+        users.findAuthenticatableById.mockResolvedValue({
+            id: USER_ID,
+            tokensValidAfter: new Date(provedAt + 1)
+        });
+        const { response } = recordingResponse();
+
+        await expect(
+            cookieStrategy.issue(requestWith(), response, USER_ID, { amr: ['pwd'], provedAt })
+        ).rejects.toBeInstanceOf(StaleProofError);
+        expect(sessions.insert).not.toHaveBeenCalled();
+    });
+
+    it('stamps `authTime` from when the proof began, in seconds', async () => {
+        const provedAt = 1_700_000_000_999;
+        users.findAuthenticatableById.mockResolvedValue({
+            id: USER_ID,
+            tokensValidAfter: new Date(provedAt)
+        });
+
+        await cookieStrategy.issue(requestWith(), recordingResponse().response, USER_ID, {
+            amr: ['pwd'],
+            provedAt
+        });
+
+        expect(insertedRow().authTime).toBe(1_700_000_000);
     });
 
     it('stores only the digest of the id, as a `cookie` row carrying its proof', async () => {
@@ -242,6 +277,7 @@ describe('issue', () => {
 
         const issued = await cookieStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
+            provedAt: Date.now(),
             transport: 'bearer'
         });
 
@@ -256,6 +292,7 @@ describe('issue', () => {
 
         const issued = await cookieStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
+            provedAt: Date.now(),
             transport: 'bearer'
         });
 
@@ -268,7 +305,8 @@ describe('issue', () => {
         const before = Date.now();
 
         const issued = await cookieStrategy.issue(requestWith(), response, USER_ID, {
-            amr: ['pwd']
+            amr: ['pwd'],
+            provedAt: Date.now()
         });
 
         expect(issued).toEqual({});
@@ -285,6 +323,7 @@ describe('issue', () => {
 
         await cookieStrategy.issue(requestWith(), response, USER_ID, {
             amr: ['pwd'],
+            provedAt: Date.now(),
             remember: RefreshTokenExpiryTime.LONG
         });
 
@@ -303,13 +342,12 @@ describe('issue', () => {
             requestWith({ userAgent: firefox }),
             recordingResponse().response,
             USER_ID,
-            {
-                amr: ['pwd']
-            }
+            { amr: ['pwd'], provedAt: Date.now() }
         );
         const named = insertedRow();
         await cookieStrategy.issue(requestWith(), recordingResponse().response, USER_ID, {
-            amr: ['pwd']
+            amr: ['pwd'],
+            provedAt: Date.now()
         });
 
         expect(named.device).toBe('Firefox on Linux');
@@ -318,11 +356,13 @@ describe('issue', () => {
 
     it('starts a new family per sign-in', async () => {
         await cookieStrategy.issue(requestWith(), recordingResponse().response, USER_ID, {
-            amr: ['pwd']
+            amr: ['pwd'],
+            provedAt: Date.now()
         });
         const first = insertedRow();
         await cookieStrategy.issue(requestWith(), recordingResponse().response, USER_ID, {
-            amr: ['pwd']
+            amr: ['pwd'],
+            provedAt: Date.now()
         });
 
         expect(String(insertedRow().familyId)).not.toBe(String(first.familyId));

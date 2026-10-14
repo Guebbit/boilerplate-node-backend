@@ -4,7 +4,7 @@ How this application decides who is making a request — and why none of it is p
 
 ::: tip At a glance
 **Two modes behind one port** — `strategy.ts` is the port (`issue` · `snapshot` · `reissue` · `remint` · `resolveBearer` · `resolveCookie` · `credentialOf` · `list`), `jwt-strategy.ts` and `cookie-strategy.ts` are its adapters, and `NODE_SESSION_MODE` picks one. The choice and what each defends against: [Two ways to stay signed in](../theory/sessions.md).
-**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor, `activity.ts` stamps `lastActiveAt`, `epoch.ts` holds the session-epoch rule, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
+**The files** — `config.ts` reads the mode and the lifetimes, `session.ts` is what controllers call, `resolver.ts` answers the kernel's port, `auth-context.ts` turns a proof into an `AuthContext`, `listing.ts` shapes the session list, `mint-guard.ts` refuses a first session without its second factor or on a stale proof, `activity.ts` stamps `lastActiveAt`, `epoch.ts` holds the session-epoch rule, `cookies.ts` sets and clears. `jwt` mode adds `jwt.ts` (sign, verify, rotate) and `key-ring.ts` (a secret's `kid`); `cookie` mode adds `session-id.ts` (the `ses_…` id). `device-cookie.ts` is the familiar-device cookie, `login-observability.ts` records that a login happened.
 **Published** — nothing. `session/` has no barrel and may not be imported from outside the module.
 **Breaks if you change** — the cookie flags or the lifetimes. Every guard in the app resolves through here.
 :::
@@ -154,6 +154,11 @@ tokens would satisfy the same guards unchanged.
 | ----------- | ----------------------------------------------------------------- |
 | `auth_time` | epoch seconds at which the user last actually proved themselves   |
 | `amr`       | **how** they proved it — RFC 8176 values, an array, not a boolean |
+
+`auth_time` is a NumericDate (RFC 7519, seconds), the same unit in both modes: the claim in `jwt`
+mode, the row's `authTime` in `cookie` mode. A login reads the clock **before** its check begins (the
+password hash, the code, the OAuth exchange) and hands that `provedAt` to `issue`; OIDC defines
+`auth_time` as when the user authenticated, not when the token was signed.
 
 Both are **stamped once**, at login, then COPIED FORWARD on every access-token mint and every
 rotation. Never re-stamped from the clock — a clock-derived `auth_time` would make every refresh
@@ -354,9 +359,18 @@ flowchart LR
 
 The controllers still branch to the challenge first, so the guard is the backstop for the path that
 forgot to: it fails loudly (a `500`, never a session) instead of handing out a session the factor
-never guarded. A **re-mint** (`reissueSession`, `remintSession`) continues a session the
-caller already holds and is not checked; that door, and `amr` becoming required, are a separate
-decision.
+never guarded.
+
+The same `issue` also calls `assertProofCurrent`: a first session is refused with `StaleProofError`
+(also a `500`) when the account's epoch moved after `provedAt`, compared in milliseconds. That is a
+login whose old password checked out while a password change, or a logout everywhere, committed
+elsewhere: minted after the change, it would otherwise carry an `auth_time` the epoch does not
+predate, and survive it.
+
+A **re-mint** (`reissueSession`, `remintSession`) continues a session the caller already holds and
+is not checked. It stamps `auth_time` at the mint: a password change re-mints after its own epoch
+move, which a proof time read before that move would predate. That door, and `amr` becoming
+required, are a separate decision.
 
 ## Where sessions live {#where-sessions-live}
 

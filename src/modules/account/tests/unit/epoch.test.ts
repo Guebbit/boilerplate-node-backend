@@ -1,9 +1,10 @@
 /**
  * @module
- * `predatesSessionEpoch` — the one comparison the resolver and the refresh path share.
+ * The epoch rule: `predatesSessionEpoch` for a token (the resolver and the refresh path share
+ * it), `proofPredatesEpoch` for a login's proof at the mint.
  */
 
-import { predatesSessionEpoch } from '../../session/epoch';
+import { predatesSessionEpoch, proofPredatesEpoch } from '../../session/epoch';
 
 describe('predatesSessionEpoch', () => {
     const epoch = new Date('2026-10-06T12:00:00.900Z');
@@ -23,5 +24,22 @@ describe('predatesSessionEpoch', () => {
 
     it('keeps a token stamped later', () => {
         expect(predatesSessionEpoch(epochSecond + 5, epoch)).toBe(false);
+    });
+});
+
+describe('proofPredatesEpoch', () => {
+    const epoch = new Date('2026-10-06T12:00:00.900Z');
+
+    it('never refuses when no event ever moved the epoch', () => {
+        expect(proofPredatesEpoch(0, undefined)).toBe(false);
+    });
+
+    it('refuses a proof checked a millisecond before the bump, in the same second', () => {
+        expect(proofPredatesEpoch(epoch.getTime() - 1, epoch)).toBe(true);
+    });
+
+    it('keeps a proof checked at the bump or after it', () => {
+        expect(proofPredatesEpoch(epoch.getTime(), epoch)).toBe(false);
+        expect(proofPredatesEpoch(epoch.getTime() + 1, epoch)).toBe(false);
     });
 });

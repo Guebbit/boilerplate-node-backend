@@ -202,8 +202,10 @@ export const jwtStrategy: SessionStrategy = {
     // access token as a bearer.
     cookieAuthenticates: false,
 
-    issue: (request, response, userId, { amr, remember }) =>
-        mintSession(response, userId, amr, remember, startSession).then(({ issued }) =>
+    issue: (request, response, userId, { amr, remember, provedAt }) =>
+        mintSession(response, userId, amr, remember, (id, proofs, tier) =>
+            startSession(id, proofs, tier, provedAt)
+        ).then(({ issued }) =>
             retirePresentedSession(readSessionCookie(request)).then(() => issued)
         ),
 

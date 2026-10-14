@@ -26,11 +26,13 @@ import {
     PLAIN_PASSWORD,
     REPLACEMENT_PASSWORD
 } from '@modules/users/tests/factories';
+import { userService } from '@modules/users';
 import { hashToken } from '@infrastructure/security/hash-token';
 import { decodeJwt } from 'jose';
 import type { Response } from 'express';
 import { plantToken, sessionRowFor, sessionRowsOf } from '../factories';
 import { sessionRepository } from '../../repository';
+import { accountService } from '../../services';
 import { activeStrategy, type SessionRequest } from '../../session/strategy';
 import { SecondFactorRequiredError } from '../../session/mint-guard';
 import { registerOAuthProvider } from '../../oauth/providers';
@@ -363,6 +365,27 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         expect(await statusOfSession(session, mode)).toBe(401);
     });
 
+    it('refuses a login whose password check a password change overtook, storing nothing', async () => {
+        const user = await createUser({ email: 'raced@example.com', verifiedAt: new Date() });
+        const { login } = accountService;
+        // Held between the credential check and the mint: the epoch a password change on another
+        // device writes lands while this login is still in flight, in the same second.
+        const held = jest
+            .spyOn(accountService, 'login')
+            .mockImplementationOnce((...args) =>
+                login(...args).then((result) =>
+                    userService.bumpSessionEpoch(user.id, new Date()).then(() => result)
+                )
+            );
+
+        const response = await logIn(user.email);
+        held.mockRestore();
+
+        expect(response.status).toBe(500);
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+        expect(await sessionRowsOf(user.id)).toEqual([]);
+    });
+
     it('keeps the "remember me" choice through a password change', async () => {
         const user = await createUser(
             { email: 'remembered@example.com', verifiedAt: new Date() },
@@ -448,12 +471,18 @@ describe.each(MODES)('sessions in %s mode', (mode) => {
         const response = asStub<Response>({ cookie: jest.fn(), clearCookie: jest.fn() });
 
         await expect(
-            activeStrategy().issue(request, response, user.id, { amr: ['pwd'] })
+            activeStrategy().issue(request, response, user.id, {
+                amr: ['pwd'],
+                provedAt: Date.now()
+            })
         ).rejects.toBeInstanceOf(SecondFactorRequiredError);
         expect(await sessionRowsOf(user.id)).toEqual([]);
 
         await expect(
-            activeStrategy().issue(request, response, user.id, { amr: ['pwd', 'otp'] })
+            activeStrategy().issue(request, response, user.id, {
+                amr: ['pwd', 'otp'],
+                provedAt: Date.now()
+            })
         ).resolves.toBeDefined();
         expect(await sessionRowsOf(user.id)).toHaveLength(1);
     });

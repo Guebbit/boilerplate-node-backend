@@ -29,7 +29,7 @@ import { createSessionCookie, createLoggedCookie } from './cookies';
 import { RefreshTokenExpiryTime, getExpiryTimeMilliseconds } from './config';
 import { describeDevice } from './device-label';
 import { listSessions } from './listing';
-import { assertSecondFactor } from './mint-guard';
+import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { looksLikeSessionId, newSessionId } from './session-id';
 import type {
     IssuedSession,
@@ -54,14 +54,14 @@ type Inherited = Pick<SessionSnapshot, 'familyId' | 'startedAt' | 'expiresAt' | 
  * Store a new session row and return its id.
  *
  * @param userId - whose session this is
- * @param proof - how and when the account proved itself
+ * @param proof - how the account proved itself, and when its check began (epoch milliseconds)
  * @param remember - the ticked tier, absent for a browser-session login
  * @param inherited - when this REPLACES a session, the identity, device and expiry it keeps
  * @returns the plaintext id (the only moment it exists here) and the row's expiry
  */
 const storeSession = (
     userId: string,
-    proof: { amr: readonly string[] },
+    proof: { amr: readonly string[]; provedAt: number },
     remember: RefreshTokenExpiryTime | undefined,
     inherited: Inherited = {}
 ): Promise<{ id: string; expiresAt: Date }> => {
@@ -76,7 +76,8 @@ const storeSession = (
             familyId: inherited.familyId ?? new Types.ObjectId(),
             mode: 'cookie',
             tokenHash: hashToken(id),
-            authTime: Math.floor(now.getTime() / 1000),
+            // Seconds, OIDC's `auth_time` unit, the same as the `jwt` claim.
+            authTime: Math.floor(proof.provedAt / 1000),
             amr: [...proof.amr],
             ...(remember && { remember }),
             startedAt: inherited.startedAt ?? now,
@@ -155,7 +156,9 @@ const replaceSession = (
     snapshot: SessionSnapshot
 ): Promise<{ id: string; expiresAt: Date }> => {
     const previous = credentialOf(request);
-    return storeSession(userId, { amr }, snapshot.remember, snapshot).then((started) =>
+    // Stamped at the mint: a re-mint can follow its own epoch move (a password change).
+    const proof = { amr, provedAt: Date.now() };
+    return storeSession(userId, proof, snapshot.remember, snapshot).then((started) =>
         (previous ? sessionRepository.removeByHash(hashToken(previous)) : Promise.resolve(0))
             .then(() => started)
             .catch((error: unknown) => {
@@ -220,13 +223,14 @@ export const cookieStrategy: SessionStrategy = {
     cookieAuthenticates: true,
 
     issue: (request, response, userId, options: IssueOptions) => {
-        const { remember, amr, transport = 'cookie' } = options;
+        const { remember, amr, provedAt, transport = 'cookie' } = options;
         return userService.findAuthenticatableById(userId).then((user) => {
             if (!user) throw new Error('User not found');
             assertSecondFactor(user, amr);
+            assertProofCurrent(user, provedAt);
             // The label is read once, at the sign-in, from the client that made it.
             const device = describeDevice(request.get('user-agent'));
-            return storeSession(userId, { amr }, remember, { device }).then((started) =>
+            return storeSession(userId, { amr, provedAt }, remember, { device }).then((started) =>
                 retirePresentedSession(request).then(() =>
                     deliver(response, started, remember, transport)
                 )

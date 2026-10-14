@@ -30,7 +30,7 @@ import type { RefreshTokenExpiryTime } from './config';
 import { keyId, keyForId } from './key-ring';
 import { predatesSessionEpoch } from './epoch';
 import { recordActivity } from './activity';
-import { assertSecondFactor } from './mint-guard';
+import { assertProofCurrent, assertSecondFactor } from './mint-guard';
 import { revokeFor } from '../services/revocation';
 
 /**
@@ -40,11 +40,12 @@ import { revokeFor } from '../services/revocation';
 export interface TokenData {
     id: string;
     /**
-     * Epoch seconds at which the user last actually proved themselves — stamped once, at login
-     * (`startSession`), then COPIED FORWARD on every access-token mint and every rotation,
-     * never re-stamped from the clock. Required: `keyForId` already refuses any token whose `kid`
-     * names no current ring member, and every token this app has ever signed under a live ring
-     * member carries this claim — there is no reachable token that carries a `kid` but not this.
+     * Epoch seconds (RFC 7519 NumericDate) at which the user last actually proved themselves —
+     * when the login's check BEGAN (`startSession`'s `provedAt`), then COPIED FORWARD on every
+     * access-token mint and every rotation, never re-stamped from the clock. Required: `keyForId`
+     * already refuses any token whose `kid` names no current ring member, and every token this app
+     * has ever signed under a live ring member carries this claim — there is no reachable token
+     * that carries a `kid` but not this.
      */
     auth_time: number;
     /**
@@ -299,7 +300,7 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<
  * written; {@link startSession} and {@link continueSession} differ only in the guard in front.
  *
  * @param id - user ID
- * @param amr - how `auth_time` was proved
+ * @param proof - how `auth_time` was proved, and when (epoch milliseconds)
  * @param remember - the ticked "remember me" tier, absent for a browser-session login
  * @param guard - runs on the loaded account before anything is signed; throws to refuse
  * @param continued - the session being continued, when there is one: the successor joins its family
@@ -308,9 +309,9 @@ const signRefreshToken = (claims: TokenData, expiresInSeconds: number): Promise<
  */
 const mintRefreshToken = (
     id: string,
-    amr: readonly string[],
+    { amr, provedAt }: { amr: readonly string[]; provedAt: number },
     remember: RefreshTokenExpiryTime | undefined,
-    guard: (user: { id: string; twoFactorEnabledAt?: Date }) => void,
+    guard: (user: { id: string; twoFactorEnabledAt?: Date; tokensValidAfter?: Date }) => void,
     continued?: SessionSnapshot
 ): Promise<string> =>
     userService.findAuthenticatableById(id).then((user) => {
@@ -330,8 +331,8 @@ const mintRefreshToken = (
         return signRefreshToken(
             {
                 id,
-                // Stamped HERE, at login, and nowhere else — see the TokenData doc above.
-                auth_time: Math.floor(Date.now() / 1000),
+                // Stamped HERE, from the proof, and nowhere else — see the TokenData doc above.
+                auth_time: Math.floor(provedAt / 1000),
                 amr: [...amr],
                 ...(remember && { remember })
             },
@@ -369,16 +370,21 @@ const mintRefreshToken = (
  * @param amr - how `auth_time` was proved, e.g. `[AMR.password]` or `[AMR.password, AMR.otp]`
  * @param remember - the ticked "remember me" tier; absent for a browser-session login, whose
  *   token still lives for the `short` tier
+ * @param provedAt - when the proof's check began, epoch milliseconds; "now" for a caller that
+ *   checked nothing before minting
  * @returns the signed refresh token
  * @throws {SecondFactorRequiredError} for a 2FA account whose `amr` lacks the second factor
+ * @throws {StaleProofError} when the account's epoch moved after `provedAt`
  */
 export const startSession = (
     id: string,
     amr: readonly string[],
-    remember?: RefreshTokenExpiryTime
+    remember?: RefreshTokenExpiryTime,
+    provedAt: number = Date.now()
 ): Promise<string> =>
-    mintRefreshToken(id, amr, remember, (user) => {
+    mintRefreshToken(id, { amr, provedAt }, remember, (user) => {
         assertSecondFactor(user, amr);
+        assertProofCurrent(user, provedAt);
     });
 
 /**
@@ -396,7 +402,10 @@ export const continueSession = (
     amr: readonly string[],
     remember?: RefreshTokenExpiryTime,
     continued?: SessionSnapshot
-): Promise<string> => mintRefreshToken(id, amr, remember, () => undefined, continued);
+): Promise<string> =>
+    // Stamped at the mint: a re-mint can follow its own epoch move (a password change), which a
+    // proof time read before that move would predate.
+    mintRefreshToken(id, { amr, provedAt: Date.now() }, remember, () => undefined, continued);
 
 /**
  * Exchange a valid refresh token for a short-lived access token.
