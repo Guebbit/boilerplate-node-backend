@@ -311,6 +311,12 @@ Conventional Commits, enforced by commitlint on the `commit-msg` hook
 - Breaking change: `!` after the scope plus a `BREAKING CHANGE:` footer.
 - MUST stage explicit pathspecs. Never `git add -A` or `git add .`: another session may have
   untracked work in this worktree, and it is not yours to commit.
+- MUST commit with the pathspec, `git commit -m "…" -- <paths>`, not bare `git commit` after `git add`.
+  A commit the hook rejects leaves its files staged, and the retry then commits them together with
+  whatever else got staged since. After a failed hook, run `git status` before retrying.
+- The container engine here is **podman** (rootless); there is no Docker. `docker` on this box is
+  the podman shim, `CONTAINER_ENGINE` defaults to `podman`, and a hung `docker run` means the
+  podman service is wedged, not that the image is missing.
 - MUST NOT run research subagents that implement concurrently in the same working tree. A subagent
   investigates and reports; writing code is single-threaded. Two agents that cannot see each
   other's edits, reconciled by hand afterward, is exactly how a merged file ends up with defects
