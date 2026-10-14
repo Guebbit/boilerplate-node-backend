@@ -21,7 +21,8 @@ import {
     isStockBoundToOrder,
     isHoldReleased
 } from './holds';
-import { restockReturnedLines, refreshStockCacheForProducts } from './returns';
+import { restockReturnedLines } from './returns';
+import { refreshStockCacheForProducts } from './transition';
 import { runReservationSweep } from './sweep';
 import {
     availableFor,
@@ -57,7 +58,8 @@ export {
     refreshStockCacheForOrder,
     extendHoldForOrder
 } from './holds';
-export { restockReturnedLines, refreshStockCacheForProducts } from './returns';
+export { restockReturnedLines } from './returns';
+export { refreshStockCacheForProducts } from './transition';
 export { runReservationSweep } from './sweep';
 export {
     availableFor,

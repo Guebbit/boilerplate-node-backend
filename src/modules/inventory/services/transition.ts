@@ -41,9 +41,21 @@ export const syncStockCache = async (productId: string): Promise<void> => {
 };
 
 /**
+ * Bring the catalogue's stock cache into step for these products — what a caller of
+ * `restockReturnedLines` inside a transaction owes once it has committed.
+ *
+ * @param productIds - the products whose counters just moved
+ */
+export const refreshStockCacheForProducts = async (
+    productIds: readonly string[]
+): Promise<void> => {
+    for (const productId of new Set(productIds)) await syncStockCache(productId);
+};
+
+/**
  * Move one product's counters and record why, or do neither.
  *
- * The chokepoint every stock change in the application passes through. `ensure` guarantees a row
+ * The chokepoint every stock change in the application passes through. `insertIfAbsent` guarantees a row
  * exists first — a product with no level yet reads as all-zero, the correct starting point for
  * every transition including the very first `receive` — then the conditional write decides the
  * rest: a refusal is not a movement, so no row is written. Last, this product's synced copy on
@@ -94,7 +106,7 @@ export const applyTransition = async (
             return true;
         }
 
-        await stockLevelRepository.ensure(productId, session);
+        await stockLevelRepository.insertIfAbsent(productId, session);
     }
     const delta = counterDeltaFor(reason, quantity, kind);
     const moved = await stockLevelRepository.applyDelta(

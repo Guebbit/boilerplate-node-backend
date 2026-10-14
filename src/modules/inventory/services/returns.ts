@@ -5,7 +5,7 @@
 
 import type { ClientSession } from 'mongoose';
 import { StockMovementReason } from '@types';
-import { applyToEveryLine, syncStockCache } from './transition';
+import { applyToEveryLine } from './transition';
 
 /**
  * Put returned goods back on the shelf — units a customer sent back and staff received. This
@@ -18,7 +18,7 @@ import { applyToEveryLine, syncStockCache } from './transition';
  *
  * @param lines - what came back
  * @param context - `reference` names the order; `note` names the return
- * @param session - the caller's transaction; see {@link refreshStockCacheForProducts}
+ * @param session - the caller's transaction; see `refreshStockCacheForProducts` in `./transition`
  * @throws {Error} when a line's counters refuse the restock
  */
 export const restockReturnedLines = (
@@ -26,15 +26,3 @@ export const restockReturnedLines = (
     context: { reference: string; note: string },
     session?: ClientSession
 ): Promise<void> => applyToEveryLine(StockMovementReason.restock, lines, context, session);
-
-/**
- * Bring the catalogue's stock cache into step for these products — what a caller of
- * {@link restockReturnedLines} inside a transaction owes once it has committed.
- *
- * @param productIds - the products whose counters just moved
- */
-export const refreshStockCacheForProducts = async (
-    productIds: readonly string[]
-): Promise<void> => {
-    for (const productId of new Set(productIds)) await syncStockCache(productId);
-};

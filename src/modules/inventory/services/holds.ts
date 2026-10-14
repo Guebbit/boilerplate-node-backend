@@ -15,8 +15,7 @@ import { reservationRepository } from '../repository';
 import { inventoryAuditActions } from '../audit';
 import { takeFromHold } from '../domain';
 import type { StockLine } from './types';
-import { applyToEveryLine } from './transition';
-import { refreshStockCacheForProducts } from './returns';
+import { applyToEveryLine, refreshStockCacheForProducts } from './transition';
 import { allocateWithin } from './allocate';
 
 /**

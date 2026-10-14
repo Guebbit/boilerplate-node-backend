@@ -3,7 +3,7 @@
  * `stockLevelRepository`'s own aggregate reads against a real Mongo instance, including their
  * answers over an empty collection — a `$group`/`$facet` pipeline returns no row at all rather
  * than a zeroed one, so the `.at(0)` arm the calling code guards is asserted, not assumed. The
- * transition path itself (`applyDelta`, `ensure`) is exercised through `../../services/transition.ts`'s own
+ * transition path itself (`applyDelta`, `insertIfAbsent`) is exercised through `../../services/transition.ts`'s own
  * tests, which is where its guarantees actually matter; this file is the aggregates alone.
  */
 
