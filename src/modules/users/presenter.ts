@@ -11,7 +11,7 @@ import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
 import { heldKeys } from '@kernel/ability';
 import { isBelowLevel, levelOfRoles } from '@kernel/permissions';
-import { rolesOf } from '@modules/access';
+import { levelsOfMany, rolesOf, rolesOfMany } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import type { UserDocument, UserWire } from './model';
 
@@ -101,3 +101,30 @@ export const presentUserWithCurrentRole = (user: UserDocument, caller?: Caller):
             caller ? userActionsFor(String(user._id), levelOfRoles(roles), caller) : undefined
         )
     );
+
+/**
+ * {@link presentUserWithCurrentRole} for a whole page of already-loaded rows: the roles in one
+ * `$in` query and the levels in two more, never a lookup per row. Takes {@link UserWire} — the
+ * lean, already-normalised rows `search()` returns.
+ *
+ * @param rows - the page's accounts
+ * @param caller - `request.caller`, so each row says what that caller may do to it; absent means
+ *   no `actions`
+ */
+export const presentUsersWithCurrentRoles = (
+    rows: readonly UserWire[],
+    caller?: Caller
+): Promise<User[]> => {
+    const ids = rows.map((user) => user.id);
+
+    return Promise.all([rolesOfMany(ids, DEPLOYMENT_TENANT_ID), levelsOfMany(ids)]).then(
+        ([roles, levels]) =>
+            rows.map((user) =>
+                presentUser(
+                    user,
+                    roles.get(user.id) ?? null,
+                    caller && userActionsFor(user.id, levels.get(user.id) ?? 'user', caller)
+                )
+            )
+    );
+};

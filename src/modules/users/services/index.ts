@@ -11,7 +11,12 @@
  * See: docs/modules/users.md
  */
 
-import { presentUser, presentUserWithCurrentRole, userActionsFor } from '../presenter';
+import {
+    presentUser,
+    presentUserWithCurrentRole,
+    presentUsersWithCurrentRoles,
+    userActionsFor
+} from '../presenter';
 import { search, getById, findByEmail } from './read';
 import { enqueueIfPending } from './image';
 import { create } from './create';
@@ -133,5 +138,6 @@ export const userService = {
     // helper it needs to build a response rides through the service instead.
     toUser: presentUser,
     toUserContract: presentUserWithCurrentRole,
+    toUserContracts: presentUsersWithCurrentRoles,
     userActionsFor
 };
