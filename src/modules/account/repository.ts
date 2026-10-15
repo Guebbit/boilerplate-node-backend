@@ -241,14 +241,18 @@ const touchSession = (tokenHash: string, now: Date, minIntervalMs = 0): Promise<
  * not past its expiry — the TTL monitor lags, so expiry is checked here too.
  *
  * @param userId - the account
- * @param mode - the mode whose rows are listed; the other mode's are never shown
+ * @param mode - the mode whose rows are listed; `undefined` lists every mode's (the data export)
  * @param now - the moment to compare expiry against
  */
-const listLiveSessions = (userId: string, mode: SessionMode, now: Date): Promise<SessionRow[]> =>
+const listLiveSessions = (
+    userId: string,
+    mode: SessionMode | undefined,
+    now: Date
+): Promise<SessionRow[]> =>
     sessionModel
         .find({
             userId: toObjectId(userId),
-            mode,
+            ...(mode && { mode }),
             supersededAt: { $exists: false },
             expiresAt: { $gt: now }
         })

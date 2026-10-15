@@ -19,8 +19,18 @@ jest.mock('@modules/account/repository', () => {
     };
 });
 
+jest.mock('@modules/users', () => {
+    const actual = jest.requireActual<typeof import('@modules/users')>('@modules/users');
+    return {
+        ...actual,
+        __esModule: true,
+        userService: { ...actual.userService, findAuthenticatableById: jest.fn() }
+    };
+});
+
 import { listSessions, newestPerFamily } from '@modules/account/session/listing';
 import { sessionRepository, type SessionRow } from '@modules/account/repository';
+import { userService } from '@modules/users';
 import { hashToken } from '@infrastructure/security/hash-token';
 
 /** The account every case lists. */
@@ -42,8 +52,12 @@ const row = (familyId: Types.ObjectId, overrides: Partial<SessionRow> = {}): Ses
         ...overrides
     });
 
+/** The account-read double. */
+const { findAuthenticatableById } = asStub<{ findAuthenticatableById: jest.Mock }>(userService);
+
 beforeEach(() => {
     jest.resetAllMocks();
+    findAuthenticatableById.mockResolvedValue({ id: USER_ID });
 });
 
 describe('newestPerFamily', () => {
@@ -121,5 +135,31 @@ describe('listSessions', () => {
         });
         expect(bare).not.toHaveProperty('lastUsedAt');
         expect(bare).not.toHaveProperty('device');
+    });
+});
+
+describe('listSessions and the account epoch', () => {
+    it('drops a row whose proof predates the epoch, as a ban moves it without deleting a row', async () => {
+        const stale = row(new Types.ObjectId(), { authTime: 1_700_000_000 });
+        const fresh = row(new Types.ObjectId(), { authTime: 1_800_000_000 });
+        listLive.mockResolvedValue([stale, fresh]);
+        findAuthenticatableById.mockResolvedValue({
+            id: USER_ID,
+            tokensValidAfter: new Date(1_750_000_000_000)
+        });
+
+        const listed = await listSessions('jwt', USER_ID, undefined);
+
+        expect(listed.map((entry) => entry.id)).toEqual([String(fresh.familyId)]);
+    });
+
+    it('keeps a row with no stored proof: there is no epoch to judge it by', async () => {
+        listLive.mockResolvedValue([row(new Types.ObjectId())]);
+        findAuthenticatableById.mockResolvedValue({
+            id: USER_ID,
+            tokensValidAfter: new Date(1_750_000_000_000)
+        });
+
+        await expect(listSessions('jwt', USER_ID, undefined)).resolves.toHaveLength(1);
     });
 });

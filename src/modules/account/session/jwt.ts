@@ -392,6 +392,8 @@ const mintRefreshToken = (
                     familyId: continued?.familyId ?? new Types.ObjectId(),
                     mode: 'jwt',
                     tokenHash: hashToken(token),
+                    // Seconds, the claim's own unit: the session list judges a row by the epoch.
+                    authTime: Math.floor(provedAt / 1000),
                     startedAt: continued?.startedAt ?? now,
                     expiresAt:
                         continued?.expiresAt ??
@@ -513,6 +515,7 @@ const storeSuccessor = (
             startedAt: previous.startedAt,
             mode: 'jwt',
             tokenHash: hashToken(newRefreshToken),
+            authTime: claims.auth_time,
             lastUsedAt: now,
             expiresAt: new Date(now.getTime() + remainingMs)
         })

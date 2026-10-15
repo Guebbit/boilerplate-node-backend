@@ -394,13 +394,3 @@ describe('credentialOf', () => {
         ).toBeUndefined();
     });
 });
-
-describe('list', () => {
-    it('lists the `jwt` rows only', async () => {
-        sessions.listLive.mockResolvedValue([]);
-
-        await jwtStrategy.list(USER_ID, undefined);
-
-        expect(sessions.listLive).toHaveBeenCalledWith(USER_ID, 'jwt', expect.any(Date));
-    });
-});

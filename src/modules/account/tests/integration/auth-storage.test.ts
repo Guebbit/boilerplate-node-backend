@@ -358,14 +358,14 @@ describe('what leaves with the account', () => {
         expect(JSON.stringify(exported)).not.toContain('exported-credential');
     });
 
-    it('exports one entry per session, and only the active mode’s', async () => {
+    it('exports one entry per session, whichever mode issued it', async () => {
         const user = await createUser();
         const family = new Types.ObjectId().toString();
         await plantSession(user.id, 'dup-a', { familyId: family });
         await plantSession(user.id, 'dup-b', { familyId: family });
         await plantSession(user.id, 'other-mode', { mode: 'cookie' });
 
-        expect(await exportSessions(user.id)).toHaveLength(1);
+        expect(await exportSessions(user.id)).toHaveLength(2);
     });
 
     it('erases every session and one-time token of the account, and no one else’s', async () => {

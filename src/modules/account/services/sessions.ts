@@ -9,7 +9,6 @@
 import type { ClientSession } from 'mongoose';
 import type { ExportSession, Session } from '@types';
 import { sessionRepository, verificationTokenRepository } from '../repository';
-import { getSessionMode } from '../session/config';
 import { newestPerFamily } from '../session/listing';
 import { activeStrategy, type SessionRequest } from '../session/strategy';
 
@@ -33,7 +32,7 @@ export const sessionsList = (userId: string, request: SessionRequest): Promise<S
  * @param userId - the account being exported
  */
 export const exportSessions = (userId: string): Promise<ExportSession[]> =>
-    sessionRepository.listLive(userId, getSessionMode(), new Date()).then((rows) =>
+    sessionRepository.listLive(userId, undefined, new Date()).then((rows) =>
         newestPerFamily(rows).map(
             (row): ExportSession => ({
                 id: String(row.familyId),

@@ -6,7 +6,9 @@
 
 import type { Session } from '@types';
 import { hashToken } from '@infrastructure/security/hash-token';
+import { userService } from '@modules/users';
 import { sessionRepository, type SessionRow } from '../repository';
+import { predatesSessionEpoch } from './epoch';
 import type { SessionMode } from '../session-mode';
 
 /**
@@ -58,7 +60,17 @@ export const listSessions = (
     userId: string,
     credential: string | undefined
 ): Promise<Session[]> =>
-    sessionRepository.listLive(userId, mode, new Date()).then((rows) => {
+    Promise.all([
+        sessionRepository.listLive(userId, mode, new Date()),
+        userService.findAuthenticatableById(userId)
+    ]).then(([allRows, user]) => {
+        // A ban moves the account's epoch and deletes no row: those rows no longer sign anyone in,
+        // so they are not sessions. A row stamped before `authTime` existed has no epoch to judge.
+        const rows = allRows.filter(
+            (row) =>
+                row.authTime === undefined ||
+                !predatesSessionEpoch(row.authTime, user?.tokensValidAfter)
+        );
         const digest = credential === undefined ? undefined : hashToken(credential);
         const current = new Set(
             rows.filter((row) => row.tokenHash === digest).map((row) => String(row.familyId))

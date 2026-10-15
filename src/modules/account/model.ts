@@ -85,11 +85,12 @@ export interface SessionDocument extends Document {
     /** sha256 of the credential (a refresh JWT, or the opaque session id). Never the value itself. */
     tokenHash: string;
     /**
-     * Epoch seconds the account last proved itself (the step-up clock). Cookie mode only: a JWT
-     * carries it as a claim, so a `jwt` row does not need it.
+     * Epoch seconds the account last proved itself (the step-up clock). A `jwt` token carries it
+     * as a claim too; the row keeps it so the session list can tell a session the account's epoch
+     * has passed from a live one without holding the token.
      */
     authTime?: number;
-    /** How `authTime` was proved (RFC 8176 values). Cookie mode only, for the same reason. */
+    /** How `authTime` was proved (RFC 8176 values). Cookie mode only: the `jwt` claim is the one place it is read. */
     amr?: string[];
     /** The "remember me" tier ticked at login. Cookie mode only. */
     remember?: string;
