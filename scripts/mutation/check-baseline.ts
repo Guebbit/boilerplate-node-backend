@@ -31,6 +31,7 @@ import {
     writeBaseline,
     BASELINE_PATH
 } from './baseline';
+import { flagValue } from '../cli';
 
 /** `--update`: record this run's scores (a full run only; see the partial-report guard below). */
 const update = process.argv.includes('--update');
@@ -38,10 +39,8 @@ const update = process.argv.includes('--update');
 /** `--merge`: fold a sharded sweep's reports into the baseline. Needs `--merge-dir`. */
 const merge = process.argv.includes('--merge');
 
-/** The raw `--merge-dir=<path>` argument, if any. */
-const mergeDirectoryArgument = process.argv.find((argument) => argument.startsWith('--merge-dir='));
-/** Where the shard reports live: the argument's value. */
-const mergeDirectory = mergeDirectoryArgument?.slice('--merge-dir='.length);
+/** Where the shard reports live: `--merge-dir=<path>`, if given. */
+const mergeDirectory = flagValue('merge-dir');
 
 // Exit 2 (usage error): `--merge` without somewhere to merge from.
 if (merge && !mergeDirectory) {

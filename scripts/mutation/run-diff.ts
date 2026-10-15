@@ -43,11 +43,10 @@ import { runStryker } from './stryker-run';
 import { changedMutable, mutableFiles } from './mutate-scope';
 import { mergeBase } from '../git-base';
 import { REPO_ROOT } from '../modules-on-disk';
+import { flagValue } from '../cli';
 
-/** The raw `--base=<ref>` argument, if given. */
-const baseArgument = process.argv.find((a) => a.startsWith('--base='));
 /** The git ref to diff against; `origin/main` unless `--base` says otherwise. */
-const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
+const base = flagValue('base') ?? 'origin/main';
 
 /** Every file the diff touched, changed or added or renamed into — unfiltered. */
 const changedFiles = (baseCommit: string): string[] =>

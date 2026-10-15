@@ -22,6 +22,7 @@ import type { ShardReport, StrykerReport } from './merge';
 import { formatSummary, mergeReports, renderHtml } from './merge';
 import type { ShardOutcome, WavePlan } from './waves';
 import { firstWave, nextWave, outcomeOf, strykerArguments } from './waves';
+import { flagValue } from '../../cli';
 
 /** Where `config` writes: under `tmp/`, so it is gitignored and outside Stryker's sandbox copy. */
 const CI_CONFIG_PATH = 'tmp/stryker.ci.json';
@@ -38,9 +39,7 @@ const WEAKEST_SHOWN = 15;
  * @throws {Error} when it is missing — every subcommand's arguments are required
  */
 const option = (name: string): string => {
-    const value = process.argv
-        .find((argument) => argument.startsWith(`--${name}=`))
-        ?.slice(name.length + 3);
+    const value = flagValue(name);
     if (value === undefined) throw new Error(`missing --${name}=…`);
     return value;
 };

@@ -38,23 +38,21 @@ import { scopeWithLines } from './mutate-scope';
 import { TARGET_LINES_PER_SHARD, packIntoShards } from './sharding';
 import { runStryker } from './stryker-run';
 import { REPO_ROOT } from '../modules-on-disk';
+import { flagValue } from '../cli';
 
 /** Where each shard's report is kept between evenings. Under `tmp/`, so it is gitignored. */
 const SHARD_ROOT = path.join(REPO_ROOT, 'tmp', 'reports', 'mutation-shards');
 
 /** A comma-separated CLI value, e.g. `--only=shard-03,shard-07`. */
 const listArgument = (flag: string): string[] =>
-    process.argv
-        .find((argument) => argument.startsWith(`${flag}=`))
-        ?.slice(flag.length + 1)
-        .split(',')
+    flagValue(flag.slice(2))
+        ?.split(',')
         .map((value) => value.trim())
         .filter(Boolean) ?? [];
 
 /** A numeric CLI value, e.g. `--limit=2`. Absent or unparseable means "no cap". */
 const numberArgument = (flag: string): number | undefined => {
-    const raw = process.argv.find((argument) => argument.startsWith(`${flag}=`));
-    const value = Number(raw?.slice(flag.length + 1));
+    const value = Number(flagValue(flag.slice(2)));
     return Number.isInteger(value) && value > 0 ? value : undefined;
 };
 

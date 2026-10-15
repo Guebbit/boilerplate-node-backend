@@ -25,14 +25,13 @@ import { Parser } from '@asyncapi/parser';
 import { mergeBase } from '../git-base';
 import { breakingChanges } from './asyncapi-breaking';
 import { REPO_ROOT } from '../modules-on-disk';
+import { flagValue } from '../cli';
 
 /** The only bundle this gate cares about: the one a webhook subscriber actually reads. */
 const BUNDLE = 'asyncapi.public.yaml';
 
-/** The raw `--base=<ref>` argument, if given. */
-const baseArgument = process.argv.find((argument) => argument.startsWith('--base='));
 /** The git ref to compare against; `origin/main` unless `--base` says otherwise. */
-const base = baseArgument ? baseArgument.slice('--base='.length) : 'origin/main';
+const base = flagValue('base') ?? 'origin/main';
 
 /** `BUNDLE` as it stood at `ref`, or undefined when the ref predates the file. */
 const bundleAt = (ref: string): string | undefined => {

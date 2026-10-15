@@ -26,6 +26,7 @@ import { removeModules } from '../scaffold/demo-remove-modules';
 import { readDemoModuleNames } from './demo-module-names';
 import { assembleScratchCopy, runIn } from './scratch-copy';
 import { REPO_ROOT } from '../modules-on-disk';
+import { flagValue } from '../cli';
 
 /**
  * Where the scratch copy is assembled — under the OS temp directory, never under `REPO_ROOT`:
@@ -109,9 +110,7 @@ const run = (check: Check): boolean => {
 };
 
 /** The recipe to measure: `--recipe <name>`, else `shop`. */
-const recipeName = process.argv.includes('--recipe')
-    ? (process.argv[process.argv.indexOf('--recipe') + 1] ?? '')
-    : 'shop';
+const recipeName = flagValue('recipe') ?? 'shop';
 /** The recipe object for {@link recipeName}. */
 const recipe = RECIPES[recipeName];
 
