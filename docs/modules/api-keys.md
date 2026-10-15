@@ -139,3 +139,22 @@ permissions field is free text rather than a picker.
 
 See: [Security](../tools/security.md#machine-to-machine-credentials),
 [Authorization theory](../theory/authorization.md).
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule            | Set                | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                    |
+| --------------- | ------------------ | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `read:ApiKey`   | `ApiKeyDisplay`    | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | List this shop's machine-to-machine credentials. Never returns a key's secret.                                          |
+| `create:ApiKey` | `ApiKeyManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅ ⚡c  | —          | —          | Mint a credential. Carries its own floor on top of this key: a credential can never hold a permission the minter lacks. |
+| `delete:ApiKey` | `ApiKeyManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Revoke a credential. Soft and immediate; the row stays readable.                                                        |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->

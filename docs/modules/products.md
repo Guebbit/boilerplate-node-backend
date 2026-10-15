@@ -307,6 +307,27 @@ snapshot resolver does the resolving, bound explicitly to the buyer's locale wit
 rather than read off the ambient request context, since the order being created is not always the
 buyer's own request.
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule              | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                             |
+| ----------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------- |
+| `read:Product`    | `ProductStorefront` | ✅      | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Read active, undeleted products — the storefront's own view.                     |
+| `display:Product` | `ProductDisplay`    | —       | —            | —          | ✅        | ✅          | —         | ✅       | —           | ✅      | —          | ✅         | Read every product regardless of publish state — what staff need to see a draft. |
+| `create:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Add a product to the catalogue.                                                  |
+| `update:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Change a product, including its price and its published state.                   |
+| `delete:Product`  | `ProductManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Remove a product. Separate from update because the blast radius is.              |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->
+
 ## Related pages
 
 - [Modules overview](./index.md) — the whole context map

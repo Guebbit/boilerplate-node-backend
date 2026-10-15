@@ -264,6 +264,23 @@ that paid, so it cannot send money elsewhere, and a refusal for a one-person sho
 Where separation of duties is wanted, the audit row is what NIST SP 800-53 AC-5 asks of the
 compensating control.
 
+## Who can do what, per module
+
+Each module's page carries a **Who can do what** table, generated from the model and not written by
+hand: one row per rule the module declares, the set that bundles it, and a column per role as the
+evaluator answers it (`own` where a condition pins the rule to the caller's own rows, `⚡` where a
+freshly proved session is demanded, and whether an API key can be minted with it).
+`npm run docs:roles` rewrites them; `check:docs-roles` fails the build on drift.
+
+| Module                                                       | Module                                               | Module                                                              |
+| ------------------------------------------------------------ | ---------------------------------------------------- | ------------------------------------------------------------------- |
+| [products](../modules/products.md#who-can-do-what)           | [cart](../modules/cart.md#who-can-do-what)           | [orders](../modules/orders.md#who-can-do-what)                      |
+| [payments](../modules/payments.md#who-can-do-what)           | [inventory](../modules/inventory.md#who-can-do-what) | [delivery](../modules/delivery.md#who-can-do-what)                  |
+| [returns](../modules/returns.md#who-can-do-what)             | [feedback](../modules/feedback.md#who-can-do-what)   | [locales](../modules/locales.md#who-can-do-what) (and translations) |
+| [users](../modules/users.md#who-can-do-what)                 | [access](../modules/access.md#who-can-do-what)       | [audit-logs](../modules/audit-logs.md#who-can-do-what)              |
+| [webhooks](../modules/webhooks.md#who-can-do-what)           | [api-keys](../modules/api-keys.md#who-can-do-what)   | [observability](../modules/observability.md#who-can-do-what)        |
+| [notifications](../modules/notifications.md#who-can-do-what) | [stats](../modules/stats.md#who-can-do-what)         | [the role matrix](../demo-ecommerce/index.md)                       |
+
 ## Where it lives
 
 The model is stored, evaluated, compiled into every scoped read, published to the client and

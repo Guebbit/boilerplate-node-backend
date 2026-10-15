@@ -159,6 +159,29 @@ deleted, is a 422. Admin overrides, other
 languages and `/locales*` are simply absent. A product's own row still carries its `title`/
 `description`, since the read path treats no provider as "nothing to overlay," not an error.
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule                 | Set                     | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                                                           |
+| -------------------- | ----------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `read:Locale`        | `LocaleStorefront`      | ✅      | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Read active locales and their dictionaries — the storefront's own view.                                                                                                                                                        |
+| `display:Locale`     | `LocaleDisplay`         | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Read every locale regardless of publish state — what staff need to see a draft language.                                                                                                                                       |
+| `create:Locale`      | `LocaleManagement`      | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Add a locale.                                                                                                                                                                                                                  |
+| `update:Locale`      | `LocaleManagement`      | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Change a locale or one of its entries.                                                                                                                                                                                         |
+| `delete:Locale`      | `LocaleManagement`      | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Remove a locale or one of its entries.                                                                                                                                                                                         |
+| `read:Translation`   | `TranslationDisplay`    | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Read an entity's translated fields, in the admin shape (every locale at once).                                                                                                                                                 |
+| `update:Translation` | `TranslationManagement` | —       | —            | —          | ✅        | —           | —         | ✅       | —           | ✅      | —          | ✅         | Write an entity's translated fields. Never grants a write on the entity itself — that is `update:Product`, and the two are stacked on the product write route precisely so one alone cannot turn a rewording into a repricing. |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->
+
 ## Related pages
 
 - [Internationalisation](../tools/i18n.md) — the mechanism both tiers, and the translations collection, run on

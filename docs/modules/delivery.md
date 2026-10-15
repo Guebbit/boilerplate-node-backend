@@ -511,6 +511,24 @@ The same module answers "what would standard delivery have cost?" (`cheapestStan
 `domain/rates.ts`): a withdrawal refunds delivery only up to that, and `pickup` — collection, not
 delivery — never counts, which `requiresAddress: false` already says.
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule              | Set                  | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                             |
+| ----------------- | -------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `update:Shipment` | `DeliveryManagement` | —       | —            | —          | —         | ✅          | —         | —        | —           | ✅      | —          | ✅         | Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, and hold or release a fulfillment order. |
+| `start:Shipment`  | `DeliveryStart`      | —       | —            | —          | ✅        | ✅          | —         | —        | —           | ✅      | —          | ✅         | Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.                                  |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->
+
 ## Related pages
 
 - [`orders`](./orders.md) — what a fulfillment order is about, and the summary it reads

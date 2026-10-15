@@ -239,6 +239,24 @@ checkout-only scope are all `cart`'s. Checkout asks `orders` for `openUnpaidOrde
 the count itself. Parallel checkouts cannot slip past it, because only the one that clears the
 cart's lines wins ([the race](./cart-checkout.md#the-race-and-why-it-is-a-409)).
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule            | Set            | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                          |
+| --------------- | -------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | --------------------------------------------------------------------------------------------- |
+| `update:Cart`   | `CartShopping` | —       | ✅           | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Use a basket at all — add to it, change it, reorder into it. Held by every signed-in account. |
+| `checkout:Cart` | `CartCheckout` | —       | —            | ✅         | ✅        | ✅          | ✅        | ✅       | ✅          | ✅      | —          | ✅         | Spend the caller's own basket — place an order and start paying for it.                       |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->
+
 ## Related pages
 
 - [Checkout](./cart-checkout.md) — the flow, step by step

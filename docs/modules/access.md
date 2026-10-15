@@ -124,6 +124,23 @@ exemptions and where each service asks it are on
 [Authorization](../theory/authorization.md#protecting-people); this module owns only the question,
 never the places it is asked.
 
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule          | Set              | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                              |
+| ------------- | ---------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `assign:Role` | `RoleManagement` | —       | —            | —          | —         | —           | —         | —        | —           | ✅      | —          | ✅         | Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators. |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->
+
 ## Related pages
 
 - [`account`](./account.md) — resolves a bearer token into an `AuthContext` via `rolesOf`

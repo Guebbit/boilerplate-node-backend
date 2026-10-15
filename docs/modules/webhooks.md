@@ -330,3 +330,23 @@ npm run sync:frontend     # hands the same three to the paired frontend
 
 See: [Events & Logging](../tools/events-and-logging.md), [RabbitMQ](../tools/rabbitmq.md), and
 [the AsyncAPI workflow](../api/asyncapi-workflow.md).
+
+## Who can do what
+
+Every rule this module declares and who holds it, role by role. The rule is what a route guard asks for; the set is what a role lists.
+
+<!-- permissions:start -->
+
+| Rule                         | Set                 | `guest` | `unverified` | `customer` | `manager` | `warehouse` | `support` | `editor` | `moderator` | `admin` | `operator` | Credential | What it lets them do                                                                                                                                                                                              |
+| ---------------------------- | ------------------- | ------- | ------------ | ---------- | --------- | ----------- | --------- | -------- | ----------- | ------- | ---------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read:WebhookSubscription`   | `WebhookDisplay`    | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Read this shop's webhook subscriptions, delivery log and event catalogue.                                                                                                                                         |
+| `create:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Add a subscription, minting its first secret.                                                                                                                                                                     |
+| `update:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The blast radius of all three is the same — a party this shop did not intend gets signed deliveries — so they share one key. |
+| `delete:WebhookSubscription` | `WebhookManagement` | —       | —            | —          | ✅        | —           | —         | —        | —           | ✅      | —          | ✅         | Remove a subscription. Separate from update because the blast radius is.                                                                                                                                          |
+
+✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·
+Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in
+`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the
+evaluator — [Authorization](../theory/authorization.md) explains the model.
+
+<!-- permissions:end -->

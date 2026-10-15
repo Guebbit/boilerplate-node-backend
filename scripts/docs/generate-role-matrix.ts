@@ -1,10 +1,11 @@
 #!/usr/bin/env tsx
 /**
  * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: which rules a role actually holds,
- * per role, per module. Same shape as `generate-module-graph.ts` — markers in the page, prose around
+ * per role, per module — and, on every module's own page, the "who can do what" table of that
+ * module's rules. Same shape as `generate-module-graph.ts` — markers in the page, prose around
  * them untouched, `--check` in `complete`.
  *
- * ONE TABLE, and only this one. What a role DECLARES is prose on the page, written by hand from
+ * ONE TABLE per page, and only generated ones. What a role DECLARES is prose on the page, written by hand from
  * `shared/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
  * and a generated copy of its set lists said less than the descriptions it ignored.
  *
@@ -22,6 +23,7 @@ import {
     AUDIENCE_NAMES,
     IMPLIED_ACTIONS,
     PERMISSION_RULES,
+    PERMISSION_SETS,
     PRESET_ROLES,
     assembleCaller,
     keysInScope,
@@ -172,14 +174,119 @@ const body = (): string =>
         'why `admin` — unrestricted **inside one shop** — cannot reach observability either.'
     ].join('\n');
 
-void applyMarkerBlocks({
-    file: PAGE,
-    root: ROOT,
-    blocks: [{ start: START, end: END, body: body() }],
-    label: 'role-matrix',
-    checkOnly,
-    driftSubject: 'the permission model',
-    rerunScript: 'docs:roles'
-}).then((code) => {
+/** The marker pair a module page carries around its generated "who can do what" table. */
+const MODULE_START = '<!-- permissions:start -->';
+const MODULE_END = '<!-- permissions:end -->';
+
+/**
+ * The docs page of a module's rules. `core`'s translation rules are documented with the locales
+ * that carry them; `example` has no page by design (it exists to be copied).
+ *
+ * @param module - the `module` a rule declares
+ * @returns the page's name under `docs/modules/`, or `undefined` when the module has none
+ */
+const pageOf = (module: string): string | undefined => {
+    if (module === 'example') return undefined;
+
+    return module === 'core' ? 'locales' : module;
+};
+
+/** The modules whose rules a page documents, keyed by that page. */
+const modulesByPage = (): Map<string, string[]> => {
+    const pages = new Map<string, string[]>();
+
+    for (const module of modules) {
+        const page = pageOf(module);
+        if (page !== undefined) pages.set(page, [...(pages.get(page) ?? []), module]);
+    }
+
+    return pages;
+};
+
+/** How a step-up tier is written in a cell: critical or sensitive. */
+const STEP_UP_MARKS = { critical: ' ⚡c', sensitive: ' ⚡s' } as const;
+
+/**
+ * One persona's cell for one rule: a tick when the persona holds it, `own` when a condition pins it
+ * to the caller's own rows, and the step-up tier when the rule demands a freshly proved session.
+ *
+ * @param rule - the rule asked about
+ * @param caller - the persona's resolved caller
+ */
+const ruleCell = (rule: (typeof PERMISSION_RULES)[number], caller: Caller): string => {
+    if (!heldRules(caller).has(rule.id)) return '—';
+
+    const own = JSON.stringify(rule.conditions ?? {}).includes('$caller') ? ' own' : '';
+    const tier = rule.stepUp === undefined ? '' : STEP_UP_MARKS[rule.stepUp];
+
+    return `✅${own}${tier}`;
+};
+
+/**
+ * The "who can do what" block for a page: one row per rule of its modules, the sets that bundle
+ * it, and one column per role as the evaluator answers it.
+ *
+ * @param pageModules - the modules whose rules the page documents
+ */
+const moduleBody = (pageModules: readonly string[]): string => {
+    const callers = personas.map((persona) => callerFor(persona));
+    const rows = PERMISSION_RULES.filter((rule) => pageModules.includes(rule.module)).map(
+        (rule) => {
+            const sets = PERMISSION_SETS.filter((set) => set.rules.includes(rule.id))
+                .map((set) => `\`${set.name}\``)
+                .join(', ');
+            const credential = rule.scope === 'tenant' && rule.stepUp === undefined ? '✅' : '—';
+
+            return `| \`${rule.id}\` | ${sets} | ${callers
+                .map((caller) => ruleCell(rule, caller))
+                .join(' | ')} | ${credential} | ${rule.description} |`;
+        }
+    );
+
+    return [
+        `| Rule | Set | ${personas.map((persona) => `\`${persona.name}\``).join(' | ')} | Credential | What it lets them do |`,
+        `| --- | --- |${' --- |'.repeat(personas.length + 1)} --- |`,
+        ...rows,
+        '',
+        '✅ held · `own` only the caller’s own rows · ⚡c / ⚡s needs a freshly proved session (critical / sensitive) ·',
+        'Credential: ✅ when an API key can be minted with the rule. Generated from the rules and sets in',
+        '`src/modules/*/authorization.yaml` and the roles in `shared/authorization-roles.yaml`, asked of the',
+        'evaluator — [Authorization](../theory/authorization.md) explains the model.'
+    ].join('\n');
+};
+
+/** Every page this script owns a block on, matrix first. */
+const pages = [
+    { file: PAGE, blocks: [{ start: START, end: END, body: body() }], label: 'role-matrix' },
+    ...[...modulesByPage()].map(([page, pageModules]) => ({
+        file: path.join(ROOT, 'docs', 'modules', `${page}.md`),
+        blocks: [{ start: MODULE_START, end: MODULE_END, body: moduleBody(pageModules) }],
+        label: `role-matrix:${page}`
+    }))
+];
+
+/**
+ * Writes (or checks) every page in turn, so one stale page does not hide another.
+ *
+ * @returns the worst exit code any page answered
+ */
+const run = async (): Promise<number> => {
+    let worst = 0;
+
+    for (const page of pages) {
+        const code = await applyMarkerBlocks({
+            ...page,
+            root: ROOT,
+            checkOnly,
+            driftSubject: 'the permission model',
+            rerunScript: 'docs:roles'
+        });
+        worst = Math.max(worst, code);
+    }
+
+    return worst;
+};
+
+void run().then((code) => {
     process.exitCode = code;
 });
