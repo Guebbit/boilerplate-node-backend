@@ -363,12 +363,12 @@ describe('fieldError', () => {
 
     it('keeps a domain code, and extra context beside the field without letting it rename it', () => {
         expect(
-            fieldError('permissions', 'Not yours', 'RETURN_DEDUCTION_INVALID', {
+            fieldError('permissions', 'Not yours', 'CONFLICT', {
                 permissions: ['a'],
                 field: 'other'
             })
         ).toEqual({
-            code: 'RETURN_DEDUCTION_INVALID',
+            code: 'CONFLICT',
             message: 'Not yours',
             details: { permissions: ['a'], field: 'permissions' }
         });
