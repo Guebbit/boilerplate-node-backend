@@ -73,7 +73,7 @@ export const notificationDelete = (
 
 /** Empty the caller's inbox. Emptying an empty one is the state they asked for, so it succeeds. */
 export const notificationsDismissAll = (userId: string): Promise<ResponseSuccess<undefined>> =>
-    notificationRepository.deleteAllOwned(userId).then(() => {
+    notificationRepository.deleteByUserId(userId).then(() => {
         publishToUser(userId, NOTIFICATIONS_CHANNELS.DELETED, { all: true, ids: [] });
         return generateSuccess(undefined, 200, t('notifications.dismissed-all'));
     });

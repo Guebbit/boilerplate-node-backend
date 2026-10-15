@@ -16,8 +16,8 @@
 import { enqueueEmail } from '@infrastructure/adapters/mailer';
 import { getDefaultLocale } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
-import { emitAuditEvent } from '@infrastructure/observability/audit';
-import type { AuditEvent } from '@infrastructure/observability/audit';
+import { recordAudit } from '@infrastructure/observability/audit';
+import { systemCallerContext } from '@kernel/permissions';
 import { userService } from '@modules/users';
 import { deliverWebhook } from '../transport/webhook-delivery';
 import type { WebhookDeliverJobPayload } from '@types';
@@ -46,19 +46,14 @@ import type { WebhookDeliveryDocument, WebhookSubscriptionDocument } from '../mo
 const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | null): void => {
     if (!subscription) return;
 
-    // No `CallerContext` behind this — see `../audit.ts`'s own note on why `actorUserId` is the
-    // literal string `'system'` rather than attributing it to whichever worker process ran this.
-    // `actorRole: 'system'` for the same reason: this is a background job, not an admin's
-    // own action, and there is no `Caller` here for `resolveActorRole` to read that off of.
-    emitAuditEvent({
-        actorUserId: 'system',
-        actorRole: 'system',
-        actorScope: 'tenant',
+    // No request behind this: a background job, audited as the system actor — see `../audit.ts`'s
+    // own note on why not as whichever worker process ran it.
+    recordAudit(systemCallerContext('WebhookSubscription'), {
         action: webhooksAuditActions.SYSTEM_WEBHOOK_SUBSCRIPTION_AUTO_DISABLED,
         outcome: 'success',
         targetType: 'webhook_subscription',
         targetId: String(subscription._id)
-    } satisfies AuditEvent);
+    });
 
     void userService
         .getById(subscription.ownerUserId)

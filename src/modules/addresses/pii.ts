@@ -13,14 +13,37 @@ import { encryptPii, decryptPii } from '@infrastructure/security/pii-encryption'
 import type { Types } from 'mongoose';
 import type { AddressItem } from './model';
 
+/** The PII fields every entry must have, in the order they are reported. */
+export const REQUIRED_PII_FIELDS = ['fullName', 'street', 'city', 'zip', 'country'] as const;
+
+/**
+ * Every PII field of an entry — the one list encrypt, decrypt, update and re-encrypt all walk, so a
+ * new field cannot be stored in plaintext by missing one of them. `phone` alone is optional.
+ */
+export const ADDRESS_PII_FIELDS = [...REQUIRED_PII_FIELDS, 'phone'] as const;
+
 /**
  * The PII fields shared by a stored entry and an incoming write — `AddressItem` and the
  * contract's `AddressInput` alike carry these under the same names.
  */
-type AddressPiiFields = Pick<
-    AddressItem,
-    'fullName' | 'street' | 'city' | 'zip' | 'country' | 'phone'
->;
+type AddressPiiFields = Pick<AddressItem, (typeof ADDRESS_PII_FIELDS)[number]>;
+
+/**
+ * `item` with each PII field it holds passed through `transform` — a new object, the rest of the
+ * entry untouched. An absent `phone` stays absent.
+ */
+const mapPiiFields = <T extends AddressPiiFields>(
+    item: T,
+    transform: (field: keyof AddressPiiFields, value: string) => string
+): T => ({
+    ...item,
+    ...Object.fromEntries(
+        ADDRESS_PII_FIELDS.flatMap((field) => {
+            const value = item[field];
+            return value === undefined ? [] : [[field, transform(field, value)]];
+        })
+    )
+});
 
 /**
  * The associated data binding one field of one entry: a ciphertext copied to another entry or
@@ -42,16 +65,8 @@ export const encryptAddressItem = <T extends AddressPiiFields>(
     item: T,
     entryId: Types.ObjectId
 ): T & { _id: Types.ObjectId } => ({
-    ...item,
-    _id: entryId,
-    fullName: encryptPii(item.fullName, addressAad('fullName', entryId)),
-    street: encryptPii(item.street, addressAad('street', entryId)),
-    city: encryptPii(item.city, addressAad('city', entryId)),
-    zip: encryptPii(item.zip, addressAad('zip', entryId)),
-    country: encryptPii(item.country, addressAad('country', entryId)),
-    ...(item.phone === undefined
-        ? {}
-        : { phone: encryptPii(item.phone, addressAad('phone', entryId)) })
+    ...mapPiiFields(item, (field, value) => encryptPii(value, addressAad(field, entryId))),
+    _id: entryId
 });
 
 /**
@@ -71,15 +86,7 @@ export const encryptAddressField = (
 export const decryptAddressItem = (item: AddressItem): AddressItem => {
     // A stored entry always has an `_id`: `{ _id: true }` in its schema.
     const id = item._id!;
-    return {
-        ...item,
-        fullName: decryptPii(item.fullName, addressAad('fullName', id), 'address fullName'),
-        street: decryptPii(item.street, addressAad('street', id), 'address street'),
-        city: decryptPii(item.city, addressAad('city', id), 'address city'),
-        zip: decryptPii(item.zip, addressAad('zip', id), 'address zip'),
-        country: decryptPii(item.country, addressAad('country', id), 'address country'),
-        ...(item.phone === undefined
-            ? {}
-            : { phone: decryptPii(item.phone, addressAad('phone', id), 'address phone') })
-    };
+    return mapPiiFields(item, (field, value) =>
+        decryptPii(value, addressAad(field, id), `address ${field}`)
+    );
 };

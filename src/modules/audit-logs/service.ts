@@ -10,7 +10,8 @@
 import { auditLogRepository, AUDIT_SORT } from './repository';
 import type { AuditLogSearchFilters, OwnEntriesCursor } from './repository';
 import type { PaginatedResult } from '@infrastructure/persistence/create-repository';
-import type { AuditEntry } from '@infrastructure/observability/audit';
+import type { AuditAction, AuditEntry } from '@infrastructure/observability/audit';
+import { SHOP_REFUSAL_REASONS } from '@modules/access';
 import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
 import { logger } from '@infrastructure/adapters/logger';
@@ -59,13 +60,13 @@ const record = (entry: AuditEntry): void => {
 export const search = (filters: AuditLogSearchFilters): Promise<PaginatedResult<AuditEntryItem>> =>
     auditLogRepository.search(filters, auditLogRepository.sinceScope(filters.since), AUDIT_SORT);
 
-/**
- * The `metadata.reason` of a `security.forbidden` row that the shop's own rules wrote
- * (`@modules/access`'s `outrankedRefusal` and `ownMoneyRefusal`): a staff member refused a thing
- * that belongs to an equal, a superior or themselves. Shop business, and `ownerId` names an
- * account, so the operator's view leaves them out; `GET /audit` still shows them.
- */
-const SHOP_REFUSAL_REASONS: readonly string[] = ['outranked', 'own'];
+/** The attacks-on-a-credential and degraded-endpoint actions the operator sees. Typed, so a rename stops compiling. */
+const INCIDENT_ACTIONS = [
+    'auth.two_factor.challenge_failed',
+    'auth.oauth.failed',
+    'auth.refresh_token.reuse_detected',
+    'system.webhook_subscription.auto_disabled'
+] satisfies readonly AuditAction[];
 
 /**
  * The platform operator's rows, an explicit allow-list: the incidents an installation's operator
@@ -89,12 +90,7 @@ const INCIDENT_SCOPE: Record<string, unknown> = {
         { action: 'auth.login', outcome: 'failure' },
         {
             action: {
-                $in: [
-                    'auth.two_factor.challenge_failed',
-                    'auth.oauth.failed',
-                    'auth.refresh_token.reuse_detected',
-                    'system.webhook_subscription.auto_disabled'
-                ]
+                $in: INCIDENT_ACTIONS
             }
         }
     ]

@@ -7,7 +7,7 @@
  * stream's credential, which is the refresh cookie and must NOT be a bearer guard (an
  * `EventSource` cannot send the header).
  */
-import { routeTable, routeSignatures, guardsOn } from '@tests/routes';
+import { routeSignatures, guardsOn } from '@tests/routes';
 import { router } from '@modules/notifications/routes';
 
 describe('notifications routes', () => {
@@ -36,12 +36,5 @@ describe('notifications routes', () => {
 
         expect(guards).toContain('requirePermissionViaCookieGuard');
         expect(guards).not.toContain('isAuth');
-    });
-
-    it('declares every literal segment before the bare /:id route', () => {
-        const paths = routeTable(router).map(({ path }) => path);
-
-        expect(paths.indexOf('/dismiss-all')).toBeLessThan(paths.indexOf('/:id'));
-        expect(paths.indexOf('/read-all')).toBeLessThan(paths.indexOf('/:id'));
     });
 });

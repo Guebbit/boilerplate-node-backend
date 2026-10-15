@@ -8,15 +8,12 @@ import type { EncryptedField } from '@infrastructure/security/reencrypt';
 import { getPiiEncryptionKeyRing, piiBinding } from '@infrastructure/security/pii-encryption';
 import type { AddressBookDocument } from './model';
 import { addressBookRepository } from './repository';
-import { addressAad } from './pii';
-
-/** The encrypted fields of an entry, in the order they are reported. */
-const ENTRY_FIELDS = ['fullName', 'street', 'city', 'zip', 'country', 'phone'] as const;
+import { ADDRESS_PII_FIELDS, addressAad } from './pii';
 
 /** Every encrypted value one book holds, with the path to write it back to. */
 const fieldsOf = (book: AddressBookDocument): EncryptedField[] =>
     book.items.flatMap((entry, index) =>
-        ENTRY_FIELDS.flatMap((field) => {
+        ADDRESS_PII_FIELDS.flatMap((field) => {
             const stored = entry[field];
             return stored === undefined
                 ? []

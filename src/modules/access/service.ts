@@ -31,6 +31,18 @@ import { membershipRepository, tenantRepository } from './repository';
 import type { MembershipDocument, TenantDocument } from './model';
 import { accessAuditActions } from './audit';
 
+/** The `metadata.reason` of a `security.forbidden` row for a refusal because the owner outranks the caller. */
+export const OUTRANKED_REASON = 'outranked';
+
+/** The `metadata.reason` of a `security.forbidden` row for a refusal because the thing is the caller's own. */
+export const OWN_REASON = 'own';
+
+/**
+ * The reasons the shop's own rules write on a `security.forbidden` row — shop business, which the
+ * platform operator's incident view leaves out.
+ */
+export const SHOP_REFUSAL_REASONS: readonly string[] = [OUTRANKED_REASON, OWN_REASON];
+
 /** The one role self-service signup (or an OAuth signup a provider already vouches for) may ever
  * grant — never a caller-supplied name. Read off `shared/authorization-roles.yaml`'s
  * `signupDefault` flag, not hand-typed. See {@link assignDefaultRole}. */
@@ -590,7 +602,7 @@ export const outrankedRefusal = (
             outcome: 'failure',
             targetType: targetType,
             targetId: targetId,
-            metadata: { reason: 'outranked', ownerId }
+            metadata: { reason: OUTRANKED_REASON, ownerId }
         });
 
         return generateReject(403, [
@@ -643,7 +655,7 @@ export const ownMoneyRefusal = (
         outcome: 'failure',
         targetType: targetType,
         targetId: targetId,
-        metadata: { reason: 'own' }
+        metadata: { reason: OWN_REASON }
     });
 
     return Promise.resolve(

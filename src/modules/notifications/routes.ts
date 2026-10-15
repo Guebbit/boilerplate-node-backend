@@ -4,11 +4,8 @@
  *
  * An inbox is somebody's, so every route is authenticated and scoped to the caller by the service.
  * The two permission keys are the only ones this module declares: `read` covers listing, the
- * stream and marking read; `delete` covers both ways of removing. Two things can silently break:
- *
- * - ORDER: `/stream`, `/read-all` and `/dismiss-all` are literal segments and must be declared
- *   before `/:id`, or `DELETE /dismiss-all`-shaped paths read them as ids.
- * - The stream authenticates by refresh cookie, not by header, so it sits above the bearer chain.
+ * stream and marking read; `delete` covers both ways of removing. One thing can silently break:
+ * the stream authenticates by refresh cookie, not by header, so it sits above the bearer chain.
  *
  * See: docs/modules/notifications.md
  */

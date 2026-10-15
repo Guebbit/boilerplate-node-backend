@@ -11,7 +11,6 @@ import {
     type ReencryptReport
 } from '@infrastructure/security/reencrypt';
 import { randomUUID } from 'node:crypto';
-import type { UpdateQuery } from 'mongoose';
 import {
     createRepository,
     toObjectId,
@@ -26,6 +25,7 @@ import {
     type WebhookDeliveryDocument
 } from './model';
 import type { WebhookSubscription, WebhookDelivery } from '@types';
+import { setAndUnset } from '@infrastructure/persistence/changes';
 
 /** The shared factory's CRUD, scoped to `webhooksubscriptions`. No `searchable`: the admin list has no filters. */
 const subscriptionBase = createRepository<WebhookSubscriptionDocument, WebhookSubscription>(
@@ -238,27 +238,6 @@ type OutcomePatch = Partial<
 >;
 
 /**
- * An outcome is the whole result of one attempt, so a field it leaves `undefined` is one that
- * attempt did not produce — a replay that succeeds has no `error`, a refused connection has no
- * `responseCode`. `$set` alone would drop an `undefined` key and leave the PREVIOUS attempt's value
- * on the row (a succeeded delivery still showing the error of the failure before it), so those
- * keys are `$unset` instead.
- *
- * @param patch - the fields the attempt decided
- * @returns a Mongo update that sets what is present and clears what is absent
- */
-const outcomeUpdate = (patch: OutcomePatch): UpdateQuery<WebhookDeliveryDocument> => {
-    // Widened on purpose: the patch type is `Partial`, but a caller may name a key and say `undefined`.
-    const entries: [string, unknown][] = Object.entries(patch);
-    const present = entries.filter(([, value]) => value !== undefined);
-    const absent = entries.filter(([, value]) => value === undefined);
-    return {
-        ...(present.length > 0 && { $set: Object.fromEntries(present) }),
-        ...(absent.length > 0 && { $unset: Object.fromEntries(absent.map(([key]) => [key, ''])) })
-    };
-};
-
-/**
  * Apply an outcome patch to a delivery, but ONLY while `leaseToken` still matches the claim writing
  * it — a write from a superseded claim (its lease expired and something else has since picked the
  * row up) must not clobber a newer attempt's state. `services/attempt.ts` is the one caller, and
@@ -278,7 +257,9 @@ const applyOutcome = (
     patch: OutcomePatch
 ): Promise<WebhookDeliveryDocument | null> =>
     webhookDeliveryModel
-        .findOneAndUpdate({ _id: toObjectId(id), leaseToken }, outcomeUpdate(patch), {
+        // A key named with `undefined` is cleared, not skipped: a succeeded retry must not keep the
+        // error of the failure before it.
+        .findOneAndUpdate({ _id: toObjectId(id), leaseToken }, setAndUnset(patch), {
             returnDocument: 'after'
         })
         .exec();

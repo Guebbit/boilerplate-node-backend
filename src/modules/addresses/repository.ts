@@ -19,7 +19,12 @@ import {
     type Repository,
     type Wire
 } from '@infrastructure/persistence/create-repository';
-import { encryptAddressItem, encryptAddressField, decryptAddressItem } from './pii';
+import {
+    REQUIRED_PII_FIELDS,
+    encryptAddressItem,
+    encryptAddressField,
+    decryptAddressItem
+} from './pii';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
 import { isDuplicateKey } from '@infrastructure/persistence/mongo-errors';
 import { addressBookMax } from './config';
@@ -88,6 +93,13 @@ const appendEntryPipeline = (item: object, claimsDefault: boolean) => {
 const decryptBook = (book: AddressBookDocument): AddressBookDocument => {
     for (const item of book.items) Object.assign(item, decryptAddressItem(item));
     return book;
+};
+
+/** The caller's book and the entry in it, or `null` when either is absent — the same 404 an invented id gets. */
+const loadEntry = async (userId: string, addressId: string) => {
+    const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
+    const entry = book?.items.find((item) => String(item._id) === addressId);
+    return book && entry ? { book, entry } : null;
 };
 
 /**
@@ -203,24 +215,18 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
      * an edit of one entry — it is the book's pointer, moved by {@link setDefault}.
      */
     updateEntry: async (userId: string, addressId: string, changes: UpdateAddressRequest) => {
-        const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
-        const entry = book?.items.find((item) => String(item._id) === addressId);
-        if (!book || !entry) return null;
+        const found = await loadEntry(userId, addressId);
+        if (!found) return null;
+        const { book, entry } = found;
 
         // `label`/`phone` are the nullable fields — `null` clears them
         // ($unset on save, via `clearedOrValue`); the other five are required on the resource
         // itself, so the contract refuses `null` for them before this ever runs.
         if (changes.label !== undefined) entry.label = clearedOrValue(changes.label);
-        if (changes.fullName !== undefined)
-            entry.fullName = encryptAddressField('fullName', changes.fullName, addressId);
-        if (changes.street !== undefined)
-            entry.street = encryptAddressField('street', changes.street, addressId);
-        if (changes.city !== undefined)
-            entry.city = encryptAddressField('city', changes.city, addressId);
-        if (changes.zip !== undefined)
-            entry.zip = encryptAddressField('zip', changes.zip, addressId);
-        if (changes.country !== undefined)
-            entry.country = encryptAddressField('country', changes.country, addressId);
+        for (const field of REQUIRED_PII_FIELDS) {
+            const value = changes[field];
+            if (value !== undefined) entry[field] = encryptAddressField(field, value, addressId);
+        }
         if (changes.phone !== undefined)
             entry.phone =
                 changes.phone === null
@@ -236,9 +242,9 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
      * book or entry is absent, the same 404 an invented id gets.
      */
     setDefault: async (userId: string, addressId: string) => {
-        const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
-        const entry = book?.items.find((item) => String(item._id) === addressId);
-        if (!book || !entry) return null;
+        const found = await loadEntry(userId, addressId);
+        if (!found) return null;
+        const { book, entry } = found;
         if (entry.default) return decryptBook(book);
 
         for (const item of book.items) item.default = false;
@@ -252,9 +258,9 @@ export const addressBookRepository: Repository<AddressBookDocument, Wire<Address
      * remaining entry — a non-empty book always has exactly one default.
      */
     removeEntry: async (userId: string, addressId: string) => {
-        const book = await addressBookModel.findOne({ userId: toObjectId(userId) }).exec();
-        const entry = book?.items.find((item) => String(item._id) === addressId);
-        if (!book || !entry) return null;
+        const found = await loadEntry(userId, addressId);
+        if (!found) return null;
+        const { book, entry } = found;
 
         book.items = book.items.filter((item) => String(item._id) !== addressId);
         if (entry.default && book.items.length > 0) book.items[0].default = true;

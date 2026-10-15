@@ -35,7 +35,6 @@ export const notificationRepository: Repository<
     listByUserId: (userId: string) => Promise<NotificationDocument[]>;
     insertMany: (rows: NewNotification[]) => Promise<NotificationDocument[]>;
     deleteOwned: (userId: string, id: string) => Promise<boolean>;
-    deleteAllOwned: (userId: string) => Promise<void>;
     deleteByUserId: (userId: string, session?: ClientSession) => Promise<void>;
     markAllRead: (userId: string, readAt: Date) => Promise<void>;
     trimToNewest: (userId: string, keep: number) => Promise<string[]>;
@@ -70,16 +69,8 @@ export const notificationRepository: Repository<
             .exec()
             .then(({ deletedCount }) => deletedCount > 0),
 
-    /** Empty a user's inbox. */
-    deleteAllOwned: async (userId: string) =>
-        notificationModel
-            .deleteMany({ userId: toObjectId(userId) })
-            .exec()
-            .then(() => {
-                // explicit void return
-            }),
-
-    /** What a hard account deletion owes the inbox, inside that deletion's own transaction. */
+    /** Empty a user's inbox: what a hard account deletion owes it (inside that deletion's own
+     * transaction), and what "clear everything" does. */
     deleteByUserId: (userId: string, session?: ClientSession) =>
         notificationModel
             .deleteMany({ userId: toObjectId(userId) }, session ? { session } : undefined)

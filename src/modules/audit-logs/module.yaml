@@ -1,7 +1,8 @@
 summary: "Owns the audit trail; the read endpoint is its own, the platform operator's view lives in observability."
 subdomain: generic
 group: foundation
-dependsOn: []
+dependsOn:
+    - access # the reasons it writes on a refusal row, which the operator's incident view leaves out
 noAudit: 'It owns and reads the trail; it is the destination, not a writer.'
 frontend:
     counterparts: [observability]
