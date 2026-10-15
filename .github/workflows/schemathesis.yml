@@ -69,12 +69,12 @@ jobs:
                   NODE_CLUSTER_WORKERS: 1
               run: npm run demo > demo.log 2>&1 &
 
-            # /products is public and unauthenticated — the same default probe
-            # scripts/testing/run-prism-smoke-test.ts uses to know the app is actually up.
+            # /readyz answers 200 only once the app is serving, belongs to no module (so it
+            # survives `demo:remove`), and needs no credential.
             # 120s: a slow boot needs the room, and a failure prints demo.log to show why.
             - name: Wait for the API to accept requests
               run: |
-                  if ! timeout 120 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/products >/dev/null; do sleep 1; done'; then
+                  if ! timeout 120 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/readyz >/dev/null; do sleep 1; done'; then
                       echo "::error::The demo API never came up. Its log:"
                       cat demo.log
                       exit 1

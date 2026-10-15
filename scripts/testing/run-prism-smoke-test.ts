@@ -15,8 +15,12 @@ import { REPO_ROOT } from '../modules-on-disk';
 /** Where the mock server listens. Overridable so a busy port doesn't fail the gate. */
 const PORT = Number(process.env.PRISM_PORT ?? 4010);
 
-/** The one route the smoke test asks for — any 2xx proves prism parsed the spec and served it. */
-const PROBE = process.env.PRISM_PROBE ?? '/products';
+/**
+ * The one route the smoke test asks for — any 2xx proves prism parsed the spec and served it. `/`
+ * belongs to no module, so it survives `demo:remove`, and it is the one route whose body prism
+ * generates from a `$ref`'d schema, which is what this test claims to prove.
+ */
+const PROBE = process.env.PRISM_PROBE ?? '/';
 
 /** How long prism gets to become answerable before the run is called a failure. */
 const BOOT_TIMEOUT_MS = 30_000;
