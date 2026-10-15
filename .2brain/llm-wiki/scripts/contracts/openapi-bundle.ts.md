@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/openapi-bundle.ts
-sha256: 098471c13f1971b45428eb863c5a4aa06451dbfdb285266db0a5e92098b407ac
-generated_at: 2026-10-14T07:11:27.373365+00:00
+sha256: e106389a78f8576f8dd56d59c40966aeb098ee14affaf3866b27c77bb79f5a58
+generated_at: 2026-10-15T09:38:39.360822+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,44 +9,44 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Compiles the repository's published REST contract (`openapi.yaml`) from one standalone OpenAPI document per module under `src/modules/<name>/`. Instead of concatenating, it invokes `redocly bundle` and then runs a series of post-processing passes (app-level responses, versioned-resource headers, module stamps, error-code catalogue) on the bundled YAML. Also provides the section-order and path-discovery utilities that other contract scripts (client collections, personal-data export, pruning) rely on to locate which module owns which path.
+Compiles the monolithic `openapi.yaml` from per-module standalone OpenAPI documents (via `redocly bundle`) and then applies five post-bundle transformations to produce the final published REST contract. It exists so that each module owns a self-contained `openapi.yaml`, adding a module is just dropping a file on disk, and removing one is `rm -rf`.
 
 ## Key elements
 
-- **`MODULE_ORDER`** – Static preference list (locales → observability → … → api-keys) defining the narrative order sections appear in the contract.
-- **`MODULE_SECTIONS`** – Runtime-discovered list of module folders that contain an `openapi.yaml`, ordered via `orderSections(MODULE_ORDER, modulesWithOpenapi())`.
-- **`SECTION_ORDER`** – `['system', …MODULE_SECTIONS]`; the full set of groupings for paths.
-- **`moduleSpec(section)`** – Returns the filesystem path to a module's standalone `openapi.yaml`.
-- **`sectionPaths(section)`** – Returns every path a section declares, in declaration order. For `system`, parses the root YAML and filters out `$ref` entries; for modules, regex-extracts path keys (`PATH_LINE`).
-- **`withAppLevelResponses(bundled: string): string`** – Merges the root's `x-app-level-responses` (e.g. 429, 400/413/415 for body-carrying ops) into every operation that lacks its own declaration. Deletes the `x-app-level-responses` key afterward. Returns re-stringified YAML with `lineWidth: 0`.
-- **`withVersionedResources`** – Adds `ETag` (GET), `If-Match` + 412 (PUT/PATCH/DELETE) to paths marked `x-versioned`. (Implementation truncated in source view.)
-- **`withModuleStamps`** – Tags every operation with an `x-module` tag derived from the fragment that owns it. (Referenced in header doc; implementation not visible.)
-- **`withErrorCodes`** – Collects each fragment's `x-error-codes` into a single catalogue on the bundle. (Referenced in header doc; implementation not visible.)
-- **`withEtagHeader`** – Internal helper; adds an `ETag` header to an inline `200` response. Refuses `$ref`-shaped 200s loudly.
-- **`operationsOf` / `appliesToOperation` / `withDefaults`** – Internal helpers for the app-level-response merge pass.
-- **`isBundledDocument` / `isOperation`** – Type guards that fail early with descriptive messages on malformed input.
+- **`MODULE_ORDER`** – A preference list (not a registry) controlling the narrative order of sections in the contract and client collections.
+- **`MODULE_SECTIONS`** – Discovered from disk via `modulesWith(MODULES_ROOT, 'openapi.yaml')`, ordered by `MODULE_ORDER` through `orderSections`. New modules append alphabetically; deleted ones drop out.
+- **`SECTION_ORDER`** – `'system'` followed by `MODULE_SECTIONS`. `system` is the shell (`GET /`) written in the root document.
+- **`SectionName`** – Type alias for a section key (`'system'` or a module folder name).
+- **`moduleSpec(section)`** – Resolves the on-disk path of a module's `openapi.yaml`.
+- **`sectionPaths(section)`** – Returns every path key a section declares. For `system`, parses the root YAML and filters out `$ref` entries; for modules, uses a regex (`PATH_LINE`) to extract path keys textually.
+- **`withAppLevelResponses(bundled)`** – Merges the root's `x-app-level-responses` map (e.g. 429, 400/413/415) into every operation that doesn't already declare that status. Never overwrites a route-specific response. Deletes the `x-app-level-responses` key after spending it.
+- **`withVersionedResources`** (referenced in header, implementation truncated) – Adds `ETag` header, `If-Match` parameter, and 412 response to operations on paths marked `x-versioned`. Refuses to attach an `ETag` to a `$ref`-based `200`.
+- **`withModuleStamps`**, **`withErrorCodes`** – Tag operations with `x-module`; collect all fragments' `x-error-codes` into one catalogue.
+- **`withEtagHeader(operation, where)`** – Helper that mutates an operation's inline `200` response to include an `ETag` header; throws if the `200` is a `$ref`.
+- **`rootPaths()`** – Parses `openapi.root.yaml`, returns only non-`$ref` path keys (the shell's own operations).
+- **`isBundledDocument`**, **`isOperation`**, **`operationsOf`** – Narrowing helpers and a flat iterator over all operations in the bundled document.
 
 ## Relationships
 
-| Neighbor | Interaction |
-|---|---|
-| `shared/contracts/openapi.root.yaml` | Read by `rootPaths()` and passed as the root document to `redocly bundle`; supplies `x-app-level-responses` and shared components. |
-| `scripts/contracts/bundle-kinds.ts` | Imports `REPO_ROOT` and the `CompiledBundle` type used throughout path resolution. |
-| `scripts/contracts/section-order.ts` | Imports `orderSections` to produce `MODULE_SECTIONS` from the preference list + disk discovery. |
-| `scripts/contracts/root-assembly.ts` | Imports `assembleRoot` (completes the root's path index before bundling) and `readModuleFragments`. |
-| `scripts/contracts/analytics-browser-events.ts` | Imports `withBrowserEvents` for a post-bundle pass. |
-| `scripts/contracts/personal-data-assembly.ts` | Imports `stageExportSchema` for the personal-data export step. |
-| `scripts/contracts/prune-unused.ts` | Imports `pruneUnused` to strip unreferenced components after assembly. |
-| `src/infrastructure/adapters/logger.ts` | Graph neighbor; likely used for build-step logging (not visible in truncated portion). |
-| `tests/unit/scripts/contracts/openapi-bundle.test.ts` | Unit tests for the functions in this file. |
-| `tests/cross-cutting/contract-bundles.test.ts` | Cross-cutting integration test over the assembled bundles. |
-| `tests/unit/scripts/mutation/ci/waves.test.ts` | Verifies CI mutation waves exercise the bundling pipeline. |
+- **`shared/contracts/openapi.root.yaml`** – Read as `ROOT_SPEC`; supplies the preamble, shared components, `GET /`, and the `x-app-level-responses` / `x-error-codes` instructions.
+- **`scripts/contracts/root-assembly.ts`** – Provides `assembleRoot` (completes the root's path index from fragments before redocly runs) and `readModuleFragments`.
+- **`scripts/contracts/section-order.ts`** – Provides `orderSections`, which merges the preference list with disk-discovered modules.
+- **`scripts/modules-on-disk.ts`** – Provides `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for disk discovery.
+- **`scripts/contracts/fragments.ts`** – Provides `readOpenApiFragment`.
+- **`scripts/contracts/bundle-kinds.ts`** – Provides the `CompiledBundle` type.
+- **`scripts/contracts/cookie-auth.ts`** – Provides `withCookieAuth` (post-bundle step 1).
+- **`scripts/contracts/analytics-browser-events.ts`** – Provides `withBrowserEvents`.
+- **`scripts/contracts/personal-data-assembly.ts`** – Provides `stageExportSchema`.
+- **`scripts/contracts/prune-unused.ts`** – Provides `pruneUnused`.
+- **`scripts/contracts/client-collections-bundle.ts`** – Consumes `SECTION_ORDER` / `sectionPaths` to group requests.
+- **`tests/unit/scripts/contracts/openapi-bundle.test.ts`** and **`tests/cross-cutting/contract-bundles.test.ts`** – Unit and integration tests for this file.
+- **`src/infrastructure/adapters/logger.ts`** – Used for runtime logging during bundle generation.
 
 ## Notes
 
-- **`lineWidth: 0`** on every `stringifyYaml` call is deliberate: it disables line-folding so that unrelated text shifts never rewrap `description:` fields, keeping regeneration diffs minimal.
-- **`x-app-level-responses` is deleted** after the merge pass. It is an assembly instruction, not a consumer-facing key; leaving it in the published contract would be noise.
-- **`PATH_LINE` is a regex, not a parse.** It is intentionally textual because `sectionPaths` is called on every client-collections regeneration, and the answer ("which file contains this URL?") is a property of the source file, not the parsed document.
-- **`rootPaths()` parses YAML** (unlike `PATH_LINE`) because the root's `paths:` map mixes real system operations with `$ref` pass-throughs; only the non-`$ref` entries belong to the `system` section.
-- **`withAppLevelResponses` never overwrites.** An operation that already declares its own `429` (e.g. a named per-route budget) keeps it; the merge fills gaps only.
-- **Adding or removing a module** requires no change to this file: `MODULE_SECTIONS` is discovered from disk at build time. The only artifact is the module's own `openapi.yaml`.
+- Path extraction for modules is intentionally **textual** (regex on raw YAML) rather than parsed, because it is called on every collection regeneration and the answer is a file-level property, not a document-level one.
+- `stringifyYaml` is called with `lineWidth: 0` to disable line folding; folded `description:` fields are valid YAML but rewrap on unrelated edits, producing unreadable diffs on every regeneration.
+- The bundle is a **generated artefact**; no comments survive `redocly bundle`. All authored documentation lives in the module `openapi.yaml` files.
+- `x-app-level-responses` is deleted from the output after merging—it is a build instruction, not consumer-facing contract metadata.
+- A `$ref` entry under a path key in the root document is a module path passing through, not a system operation; `rootPaths()` filters these out.
+- `withAppLevelResponses` never overwrites an existing status code on an operation—a route that declares its own `429` (e.g. with custom `Retry-After` semantics) is respected.

@@ -194,7 +194,7 @@ Run pattern: `docker compose -f docker-compose.proxy.yml run --rm <service> <com
 Run pattern: `docker compose -f docker-compose.test.yml run --rm <service> <command>`
 
 ## Required Environment (.env-example)
-- `.env-example` defines 137 variables — copy it to `.env`.
+- `.env-example` defines 138 variables — copy it to `.env`.
 
 ## Quick Commands
 - `npm run test`
@@ -262,7 +262,7 @@ Run pattern: `docker compose -f docker-compose.test.yml run --rm <service> <comm
 - `sync:frontend` → `tsx scripts/pairing/sync-to-frontend.ts`
 - `regenerate` → `tsx scripts/regenerate-artifacts.ts`
 - `gen:permission-actions` → `tsx scripts/contracts/generate-permission-actions.ts --in shared/authorization-keys.yaml --out api/permission-actions.ts`
-- `gen:api` → `rm -rf ./api && orval --config orval.config.ts && tsx scripts/contracts/generate-error-codes.ts --out api/error-codes.ts && tsx scripts/contracts/generate-request-content-types.ts --out api/request-content-types.ts && tsx scripts/contracts/generate-permission-actions.ts --in shared/authorization-keys.yaml --out api/permission-actions.ts`
+- `gen:api` → `rm -rf ./api && orval --config orval.config.ts && tsx scripts/contracts/generate-error-codes.ts --out api/error-codes.ts && tsx scripts/contracts/generate-request-content-types.ts --out api/request-content-types.ts && npm run gen:permission-actions`
 - `gen:asyncapi` → `tsx scripts/contracts/generate-asyncapi-types.ts --out src/types/asyncapi.generated.ts`
 - `test` → `npm run test:unit && npm run test:cross-cutting && npm run test:integration && npm run test:contract && npm run test:fuzz`
 - `test:unit` → `tsx scripts/testing/run-suite.ts unit`
@@ -387,7 +387,7 @@ Run pattern: `docker compose -f docker-compose.test.yml run --rm <service> <comm
 - `.github/workflows/schemathesis.yml` — Schemathesis (stateful contract fuzz)
   - `run: npm ci`
   - `run: npm run demo > demo.log 2>&1 &`
-  - `run: if ! timeout 120 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/products >/dev/null; do sleep 1; done'; then ⏎ echo "::error::The demo API never came up. Its log:" ⏎ cat demo.log ⏎ exit 1 ⏎ fi`
+  - `run: if ! timeout 120 bash -c 'until curl -sf http://localhost:${{ env.NODE_PORT }}/readyz >/dev/null; do sleep 1; done'; then ⏎ echo "::error::The demo API never came up. Its log:" ⏎ cat demo.log ⏎ exit 1 ⏎ fi`
   - `run: credentials=$(curl -sf http://localhost:${{ env.NODE_PORT }}/__test/scenario) ⏎ token=$(curl -sf -X POST http://localhost:${{ env.NODE_PORT }}/account/login \ ⏎ -H 'Content-Type: application/json' \ ⏎ -d "$(echo "$credentials" | jq -c '.accounts.admin | {email, password}')" \ ⏎ | jq -r '.data.token') ⏎ if [ -z "$token" ] || [ "$token" = "null" ]; then ⏎ echo "::error::Could not log in as the demo admin." ⏎ exit 1 ⏎ fi ⏎ echo "::add-mask::$token" ⏎ echo "token=$token" >> "$GITHUB_OUTPUT"`
   - `run: mkdir -p tmp/reports/schemathesis ⏎ docker run --rm --network host \ ⏎ -v ${{ github.workspace }}/openapi.yaml:/spec/openapi.yaml:ro \ ⏎ -v ${{ github.workspace }}/tmp/reports/schemathesis:/reports \ ⏎ ${{ env.SCHEMATHESIS_IMAGE }} \ ⏎ run /spec/openapi.yaml \ ⏎ --url http://localhost:${{ env.NODE_PORT }} \ ⏎ --header "Authorization: Bearer ${{ steps.token.outputs.token }}" \ ⏎ --checks all \ ⏎ --phases=stateful \ ⏎ --generation-deterministic \ ⏎ --report junit --report-dir /reports`
 

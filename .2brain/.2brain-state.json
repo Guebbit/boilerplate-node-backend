@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-10-14T14:28:27.711922+00:00",
-  "head": "8d825ef948198a2ca744099be7a98020b96a509d",
+  "generated_at": "2026-10-15T09:32:58.452714+00:00",
+  "head": "681cecc0d73614f9431057bd9e9b66453d047bc0",
   "threshold": 5,
   "layers": {
     "execution": {
@@ -15,10 +15,10 @@
     },
     "index": {
       "artifact": ".2brain/repo-index.json",
-      "revision": "46442cb9b1ed5973601eddaf6a679fca03e976cce98311a78c87bec29cfe7aa5",
-      "chunk_count": 9255,
-      "artifact_count": 1368,
-      "artifact_digest": "b49164bb8da9f0b0b5242f96060398c15437c34cac0ec324a8bcfb7ded2dece1"
+      "revision": "3c899488b629f2cee2ae2d8893853e6478ca6374a1089d02325d2251b7fa6ca3",
+      "chunk_count": 9991,
+      "artifact_count": 1526,
+      "artifact_digest": "632f0e99fa5f7180038bfe84a0ab5af7f899f39006c9e35c3fe16b034cddb2a6"
     },
     "context": {
       "artifact": ".2brain/REPO_CONTEXT.md",

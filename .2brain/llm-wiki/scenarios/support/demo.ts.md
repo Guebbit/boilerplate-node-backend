@@ -1,7 +1,7 @@
 ---
 source: scenarios/support/demo.ts
-sha256: 308f3d67f1bd4838875703d509b61d569aeec8aaaa3786b8407fc2ab982c01bb
-generated_at: 2026-10-14T07:02:53.181004+00:00
+sha256: 40ceffba3b6d6103dffc72c2cefb9fa3719109172283a2b1bb131fee2d5acea9
+generated_at: 2026-10-15T09:34:30.076479+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,37 +9,39 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Control surface for the demo profile (`npm run demo`). It mounts six `/__test/*` routes that the paired frontend's e2e suite uses to restore a named scenario, inspect its state, read the mail outbox, advance the demo clock, and trigger background jobs. Nothing under `src/` references it; it is imported only by `scenarios/run-server.ts` and handed to `createApp` as the `extension.install` callback.
+Control surface for the demo profile, mounted exclusively by `scenarios/run-server.ts` (via `npm run demo`). Exposes six `/__test/*` routes consumed by a paired frontend's e2e suite to restore scenarios, inspect state, manipulate a fake clock, and trigger background jobs. Nothing under `src/` is aware of these routes; production has no such extension point.
 
 ## Key elements
 
-- **`UnknownScenarioError`** – Error subclass that renders the offending name via `JSON.stringify`; thrown by both `restoreScenario` (unknown registry name) and `installDemo` (non-string `scenario` body field).
-- **`buildOnce`** (internal) – Builds a scenario into an empty database *once* per process, captures the resulting rows via `captureDatabase`, and caches the `ScenarioCopy` in a module-level `Map`. Subsequent restores of the same name replay the cached copy.
-- **`restoreScenario`** (exported) – Public entry point. Chains the restore onto a module-level promise queue so overlapping calls are serialised. Each caller receives its own outcome; a failure never wedges later restores.
-- **`runRestore`** (internal) – The actual work: `buildOnce` → `restoreDatabaseCopy` → set `currentScenario` → clear outbox → reset demo clock → `refreshLocaleOverrides` → `clearCache`.
-- **`installDemo`** (exported) – Registers all six routes on the Express app. Stores the app in `demoApp` so the flow runner (inside `buildOnce`) can spin up a loopback listener.
-- **`describeScenario`** (internal) – Assembles the `GET /__test/scenario` payload: current name, `seedCredentials` from accounts, and pinned `subjects` ids.
-- **`requireClock`** (internal) – Guards the two clock routes; returns a 501 if no `DemoClock` instance was created.
-- **Module state** – `copies` (Map of built scenarios), `currentScenario` (last restored name), `demoApp` (Express ref), `restoreQueue` (serialisation tail).
+- **`installDemo(app: Express)`** — Entry point called by `run-server.ts`. Stores the Express app in `demoApp` (needed by the flow runner's loopback listener) and registers all six routes.
+- **`restoreScenario(scenario?: string)`** — Queued restore: builds (or replays) a scenario, empties and reseeds the database, clears the mail outbox, resets the demo clock, refreshes locale overrides, and clears the cache.
+- **`buildOnce(name)`** — Builds a scenario into an empty DB exactly once per process, then caches the snapshot (`copies` map). Subsequent restores of the same name are cheap replays.
+- **`UnknownScenarioError`** — Thrown for scenario names not in the `SCENARIOS` registry; used by both `restoreScenario` and the restore route handler.
+- **`describeScenario()`** — Returns the currently loaded scenario name, seed credentials (from `accounts.ts`), and the pinned row-id map for the frontend.
+- **`requireClock(response)`** — Guard that responds `501` when no demo clock is installed.
+- **`restoreQueue`** — Promise chain that serialises concurrent restore calls so they don't interleave writes or collide on `_id`.
+- **`RESTORE_BODY` / `CLOCK_BODY`** — Zod schemas validating the JSON bodies for the restore and clock-advance routes.
 
 ## Relationships
 
-- **`scenarios/index.ts`** – Source of `DEFAULT_SCENARIO`, `buildScenario`, and `isScenarioName`; the registry that defines which names are valid.
-- **`scenarios/accounts.ts`** – Provides `seedCredentials` (resolved `NODE_SEED_*` logins) surfaced in the `/__test/scenario` response.
-- **`scenarios/jobs.ts`** – Provides the `DEMO_JOBS` map keyed by job name, dispatched by `POST /__test/jobs/:name`.
-- **`scenarios/support/database-snapshot.ts`** – Supplies `emptyDatabase`, `captureDatabase`, and `restoreDatabaseCopy` used by the build-then-replay cycle.
-- **`scenarios/support/demo-clock.ts`** – Supplies `getDemoClock()` / `DemoClock` type; the clock is reset on every restore and advanced only forward via the route.
-- **`scenarios/support/doubles/mail-outbox.ts`** – `clearDemoOutbox` on restore, `readDemoOutbox` for `GET /__test/emails`.
-- **`src/infrastructure/adapters/cache.ts`** – `clearCache` is called at the end of every restore so the app serves fresh data.
-- **`src/infrastructure/adapters/logger.ts`** – `logger.error` for failed restores and failed job runs.
-- **`src/infrastructure/i18n/index.ts`** – `refreshLocaleOverrides` reloaded after each restore so locale-dependent strings track the new data.
-- **`tests/integration/scenarios/demo-restore.test.ts`** / **`demo-routes.test.ts`** – Integration tests that exercise the restore flow and the individual route contracts.
+- **`scenarios/index.ts`** — Provides `DEFAULT_SCENARIO`, `buildScenario`, and `isScenarioName` used by `buildOnce`.
+- **`scenarios/accounts.ts`** — Supplies `seedCredentials` returned by `GET /__test/scenario`.
+- **`scenarios/jobs.ts`** — Supplies the `DEMO_JOBS` map looked up by `POST /__test/jobs/:name`.
+- **`scenarios/support/database-snapshot.ts`** — Provides `emptyDatabase`, `captureDatabase`, `restoreDatabaseCopy`, and the `DatabaseCopy` type used throughout the restore pipeline.
+- **`scenarios/support/demo-clock.ts`** — Provides `getDemoClock()` and the `DemoClock` type; the clock route and restore reset both call into it.
+- **`scenarios/support/doubles/mail-outbox.ts`** — Provides `clearDemoOutbox` (called after every restore) and `readDemoOutbox` (returned by `GET /__test/emails`).
+- **`src/infrastructure/adapters/cache.ts`** — `clearCache` is invoked at the end of every restore.
+- **`src/infrastructure/adapters/logger.ts`** — `logger.error` logs restore and job failures.
+- **`src/infrastructure/i18n/index.ts`** — `refreshLocaleOverrides` is called after every restore.
+- **`tests/integration/scenarios/demo-restore.test.ts`** — Integration test exercising the restore flow end-to-end.
+- **`tests/integration/scenarios/demo-routes.test.ts`** — Integration test covering the remaining `/__test/*` routes.
 
 ## Notes
 
-- **Build-once semantics:** Building a scenario involves password hashing and hundreds of real HTTP-driven flows (checkout, payment, refund). It is deliberately non-idempotent and happens exactly once per process; every later restore is a cheap row replay.
-- **Serialisation:** `restoreQueue` is a self-chaining promise. The queue itself swallows rejections (`.then(() => undefined, () => undefined)`) so one failed restore cannot block the next, while each caller still receives its own error.
-- **No `dropDatabase()`:** The restore path uses `emptyDatabase` (delete-many per collection) specifically to preserve index builds. Dropping the database would clear unique indexes, allowing a racing write to succeed where a duplicate key should have been rejected.
-- **Unauthenticated by design:** The demo profile binds only next to a freshly-created database; there is no auth middleware on any `/__test/*` route.
-- **Clock is forward-only:** `POST /__test/clock` rejects negative or non-finite `advanceMs`. A test that needs time to "go back" must restore the scenario first.
-- **`Stryker disable` comments:** Two `logger.error` lines carry mutation-testing suppression; do not remove without updating Stryker config.
+- **Build-once, replay-many:** Scenario construction (password hashing, hundreds of real HTTP-driven flow requests) is non-idempotent and expensive, so it runs only on first restore; later restores write the cached copy back.
+- **Serialisation:** `restoreQueue` ensures overlapping restores don't interleave. A failed restore does **not** wedge the queue — the queue promise always resolves; the caller's own promise still carries the error.
+- **`dropDatabase` is never used:** It would discard index builds; `emptyDatabase` (collection-level delete) preserves them.
+- **Clock is forward-only:** `POST /__test/clock` rejects negative `advanceMs` via the Zod schema.
+- **Unauthenticated by design:** The demo profile binds to a local, throwaway server; no auth middleware is applied to these routes.
+- **`demoApp` is load-bearing:** `buildOnce` passes it to `buildScenario` so the flow runner can drive real HTTP requests through the actual application over a loopback listener.
+- **Stryker mutation-testing suppression:** Two `Stryker disable next-line all` comments mark error-logging lines that would otherwise be mutated.

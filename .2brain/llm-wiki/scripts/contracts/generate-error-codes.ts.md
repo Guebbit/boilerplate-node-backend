@@ -1,29 +1,31 @@
 ---
 source: scripts/contracts/generate-error-codes.ts
-sha256: 1740c0b2a56375cc68df39bfd6f912a7d67099e98df03eba0c62307caf542d5f
-generated_at: 2026-10-01T12:26:58.324744+00:00
+sha256: 9113f9abe7b69ba519b3351582d6ffaabf63b667288d98fccbab250119ace0c5
+generated_at: 2026-10-15T09:37:50.721880+00:00
 model: ollama:qwen3.8:27b
 ---
 
 # scripts/contracts/generate-error-codes.ts
 
 ## Purpose
-Generates a TypeScript `error-codes.ts` module (a `const` object + union type) from the `x-error-codes` extension in the shared `openapi.yaml`. It exists so call sites can reference `ERROR_CODES.CART_EMPTY` instead of retyping raw strings, while the contract itself keeps `errors[].code` as an open `string` (CT-D5 / Zalando guideline #112) so adding a code is never a breaking change.
+Generates a TypeScript `ERROR_CODES` constants object and an `ErrorCode` union type from the `x-error-codes` extension in `openapi.yaml`. It exists so call sites can reference error codes as typed constants (catching typos and removed codes at compile time) while the contract itself keeps `errors[].code` as an open `string` — a new code is additive, never a breaking response change (Zalando API guideline #112).
 
 ## Key elements
-- **`resolveOutputPath()`** – parses the required `--out` CLI flag and resolves it relative to the repo root; exits 1 if missing.
-- **`checkOnly`** – boolean flag (`--check`); when set the script diffs output against the existing file and exits 1 on mismatch instead of writing.
-- **`renderRow(code)`** – renders one JSDoc-annotated `key: value` line per code, embedding the code's `status` and `description` from the contract so hovering in an editor surfaces the meaning.
-- **`ERROR_CODES`** (generated output) – a `const` object mapping each declared code string to itself; keys are sorted alphabetically.
-- **`ErrorCode`** (generated output) – a union type derived from `ERROR_CODES` via `(typeof ERROR_CODES)[keyof typeof ERROR_CODES]`.
-- **`ErrorCodeEntry` / `OpenApiDocument`** – narrow structural types for the `x-error-codes` fragment read from YAML.
+- **`ErrorCodeEntry`** — interface describing one entry in `x-error-codes` (`status: number`, `description: string`).
+- **`OpenApiDocument`** — interface narrowing the slice of the YAML document this script reads (`'x-error-codes'`).
+- **`renderRow(code)`** — renders a single `key: value` property with a two-line JSDoc comment (`/** status — description */`).
+- **`codes`** — `Object.keys(errorCodes).toSorted()`; sorted to keep the generated file stable across runs.
+- **`output`** — the full generated file: header banner, `export const ERROR_CODES = { … } as const`, and `export type ErrorCode = …`.
+- **`requiredPath('out', ROOT)`** (from `../cli`) — resolves the `--out` CLI argument into an absolute path.
+- **`writeOrCheck(OUTPUT, output, 'openapi.yaml')`** (from `./generated-file`) — writes the file, or under `--check` compares it to disk and exits 1 on mismatch.
 
 ## Relationships
-No graph neighbors are recorded. The script is byte-identical in both repos of the pair; it reads only the shared `openapi.yaml` and writes a standalone `error-codes.ts` that is consumed by application code in either repo.
+- **`scripts/cli.ts`** — provides `requiredPath`, used to parse the required `--out` CLI flag and resolve it relative to the repo root.
+- **`scripts/contracts/generated-file.ts`** — provides `writeOrCheck`, the shared write-or-verify primitive used by every generator in this family.
 
 ## Notes
-- **Deliberately not a Zod `z.enum`** – the catalogue is a compile-time convenience only; it never rejects a code the contract hasn't declared yet. The contract's `code: string` stays open-ended.
-- **Byte-identical across repos** – both the backend and frontend keep an exact copy of this script. The input (`x-error-codes`) is collected once in the backend's bundler and shipped to the frontend inside the shared `openapi.yaml`.
-- **`Object.hasOwn` guard in `renderRow`** – used instead of a nullish check because `codes` comes from `Object.keys(errorCodes)`; the guard is defensive, not expected to fire. The same pattern appears in `generate-asyncapi-types.ts`.
-- **ESM context** – `import.meta.url` is used for path resolution; the script must run via `tsx` (shebang confirms this).
-- **`--check` contract** – same exit-code-1-on-mismatch convention as every other generator in this family; safe for CI pre-commit hooks.
+- **Shared script:** byte-identical in both repos of the pair. Both read the same `openapi.yaml` (bundled once in the backend from per-module fragments).
+- **Not a Zod enum:** the generated constants object is deliberately plain — the contract's `errors[].code` has no `enum`, so the `ErrorCode` union is a *subset* of what the wire format permits, not a constraint on it.
+- **`Object.hasOwn` guard** in `renderRow` is a defensive check; every key in `codes` is guaranteed to exist in `errorCodes` by construction.
+- **ESM context:** uses `import.meta.url` (not `__dirname`) for path resolution.
+- **`--check` mode:** writes nothing; exits 1 if the on-disk file differs from the rendered output.

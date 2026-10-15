@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/asyncapi-webhook-events.ts
-sha256: f45eff201ce55981e6ca19b7d6605b9029e04795248966065af06f401864178f
-generated_at: 2026-10-14T07:09:15.689330+00:00
+sha256: 50c2c79282141dabb54b872d0e5256024dcf015dc2ef97b408e0f3dc54db9d95
+generated_at: 2026-10-15T09:35:37.657349+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,26 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Discovers per-module AsyncAPI webhook-event fragments on disk and merges them into the `webhooks` section of an AsyncAPI bundle. It exists so the bundler needs only a single call (`withWebhookEvents`) to fold in all webhook events, and so the discovery rule is independently unit-testable.
+Discovers per-module AsyncAPI webhook-event fragments from disk and merges them into the `webhooks` section of the bundled AsyncAPI document. Exists as its own module so the bundler interacts with it through a single call (`withWebhookEvents`) and the discovery logic stays independently testable.
 
 ## Key elements
 
-- **`webhookEventFragments(): string[]`** — Scans `src/modules/*/asyncapi.webhooks.yaml` and returns absolute file paths in a preferred module order (orders → delivery → payments → returns), then alphabetically for the rest.
-- **`withWebhookEvents(section, document, merge): Document`** — The entry point the bundler calls. If `section` is not `'webhooks'`, returns the document unchanged. Otherwise parses each fragment with `yaml#parseDocument` (`keepSourceTokens: true`) and hands it to the bundler-supplied `merge` callback.
-- **`WEBHOOKS_SECTION`** — `'webhooks'`; the only section this file touches.
-- **`FRAGMENT_FILE`** — `'asyncapi.webhooks.yaml'`; the filename a module must ship to opt in.
-- **`FRAGMENT_ORDER`** — `['orders', 'delivery', 'payments', 'returns']`; a narrative preference, not a registry.
+- **`webhookEventFragments()`** — Returns absolute paths to every `asyncapi.webhooks.yaml` file found under module directories, ordered by `FRAGMENT_ORDER` then alphabetically.
+- **`withWebhookEvents(section, document, merge)`** — The bundler hook. If `section` is `"webhooks"`, reads each fragment, parses it with `yaml`'s `parseDocument`, and hands it to the bundler's `merge` function. All other sections are returned unchanged.
+- **`WEBHOOKS_SECTION`** (`"webhooks"`) — The only section this file mutates.
+- **`FRAGMENT_FILE`** (`"asyncapi.webhooks.yaml"`) — The per-module file name that marks a module as a webhook owner.
+- **`FRAGMENT_ORDER`** (`['orders', 'delivery', 'payments', 'returns']`) — Narrative ordering for known shop modules; any other module sorts alphabetically after this list.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-kinds.ts`** — Provides `REPO_ROOT`, the base path used to locate the `src/modules` directory.
-- **`scripts/contracts/section-order.ts`** — Provides `orderSections`, which applies `FRAGMENT_ORDER` and appends remaining modules alphabetically.
-- **`scripts/contracts/asyncapi-bundles.ts`** — The bundler that imports and calls `withWebhookEvents` as part of its per-section dispatch, and supplies the `merge` callback (which enforces the no-duplicate-key invariant across owners).
-- **`tests/unit/scripts/contracts/asyncapi-webhook-events.test.ts`** — Direct unit tests for fragment discovery and merge behavior.
-- **`tests/unit/scripts/contracts/analytics-browser-events.test.ts`** — Sibling test in the same contracts test directory; exercises related bundler section-dispatch paths.
+- **`./section-order.ts`** — Provides `orderSections`, used to apply `FRAGMENT_ORDER` before falling back to alphabetical.
+- **`../modules-on-disk.ts`** — Provides `MODULES_ROOT` (the directory root to scan) and `modulesWith` (the disk-discovery predicate that finds modules shipping `FRAGMENT_FILE`).
+- **`./asyncapi-bundles.ts`** — The bundler that calls `withWebhookEvents` during assembly; supplies the `merge` callback that enforces duplicate-key rejection.
+- **`tests/unit/scripts/contracts/asyncapi-webhook-events.test.ts`** — Unit tests exercising the discovery and merge behaviors in isolation.
 
 ## Notes
 
-- **Conflict handling is delegated.** This file never compares keys across fragments; the bundler's `merge` callback is responsible for refusing a key that two modules both declare.
-- **`keepSourceTokens: true`** is passed to `parseDocument` so that authored YAML style (comments, block vs. flow syntax, indentation) survives into the merged document.
-- **Opt-in is by file existence.** A module participates only if it ships `asyncapi.webhooks.yaml`; there is no manifest or registry to update.
-- **Sections other than `webhooks` are returned verbatim.** The guard at the top of `withWebhookEvents` ensures this file is a no-op for, e.g., `events` or `channels`.
+- `FRAGMENT_ORDER` is a *preference* list, not a registry — modules not listed are not excluded, they simply sort after the listed ones.
+- `parseDocument` is called with `{ keepSourceTokens: true }` so each merged node retains its authored YAML style (indentation, quoting, etc.) rather than being re-serialized.
+- The `merge` callback is owned by the bundler, not by this file; duplicate-key detection and error messaging are the bundler's responsibility.
+- A module that does not ship `asyncapi.webhooks.yaml` simply never appears in the fragment list — there is no explicit opt-in/out flag.

@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/bundle-kinds.ts
-sha256: 51d3ef4009a3c387293016f7fdc001e794e3b14ea9ea9edb036a30754fe04f93
-generated_at: 2026-10-01T12:25:48.353210+00:00
+sha256: 0934917ac6c1cc2bedce8e2399183e28e451be8e0f6ac2744307dd880a4fb9f6
+generated_at: 2026-10-15T09:36:20.772056+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,33 +9,29 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Defines the type contract (`ContractBundle`) and a handful of small helpers that every bundle in the registry must satisfy. It encodes the single distinction that drives build ordering—**compiled** bundles (from authored source) run before **generated** bundles (from an already-committed document)—and provides the read/compare/fragment primitives the staleness check and CLI use. No bundle content is built here; each bundle owns its own build.
+Defines the type system for contract bundles and provides four thin utility functions that operate over a `ContractBundle` without performing any bundling. It exists so that `bundle-registry.ts`, `build-bundles.ts`, and the cross-cutting test can all share one vocabulary for "compiled vs. generated" and a uniform way to produce, read, and compare a bundle's output.
 
 ## Key elements
 
-- **`BundleIdentity`** (interface, not exported) — common fields: `name`, `label`, `output`, and optional `shared?: false` to mark a bundle as backend-only.
-- **`CompiledBundle`** (exported interface) — extends `BundleIdentity` with synchronous `content()`, a `sources()` list of authored files, and `compiled: true`.
-- **`GeneratedBundle`** (exported interface) — extends `BundleIdentity` with async `content()` (scans modules at build time), and `generated: true`.
-- **`ContractBundle`** (exported type) — the `CompiledBundle | GeneratedBundle` union.
-- **`REPO_ROOT`** (exported const) — absolute path to the repo root, resolved from `scripts/contracts/`.
-- **`isGenerated(bundle)`** (exported const) — type guard using the `'generated' in bundle` key-presence check.
-- **`assembleBundle(bundle)`** (exported const) — normalises both kinds to `Promise<string>` via `Promise.resolve(bundle.content())`.
-- **`readCommittedBundle(bundle)`** (exported const) — reads the committed file at `bundle.output`; returns `''` if the file is absent (stale = fixable, not fatal).
-- **`bundleFragments(bundle)`** (exported const) — returns `sources()` for compiled bundles, `[]` for generated ones (nothing authored sits between input and output).
+- **`BundleIdentity`** (interface, not exported) — common fields: `name` (CLI handle), `label`, `output` (absolute path), and optional `shared?: false`. A bundle is shared with the frontend by default; `asyncapi.yaml` opts out.
+- **`CompiledBundle`** (exported interface) — extends `BundleIdentity` with `content: () => string` (synchronous) and `sources: () => readonly string[]`. Represents documents built from authored files in this repo (e.g. via `redocly bundle` or YAML AST merge). Discriminated by `compiled: true`.
+- **`GeneratedBundle`** (exported interface) — extends `BundleIdentity` with `content: () => Promise<string>` (async, because collections scan `probes.ts` modules). Represents documents derived from an already-committed document (the client collections). Discriminated by `generated: true`.
+- **`ContractBundle`** (exported type) — the union `CompiledBundle | GeneratedBundle`.
+- **`isGenerated`** (exported const) — type guard that checks `'generated' in bundle` (key presence, not value).
+- **`assembleBundle`** (exported const) — wraps `bundle.content()` in `Promise.resolve` so callers get a single `Promise<string>` regardless of kind. Does not handle ordering.
+- **`readCommittedBundle`** (exported const) — reads the file at `bundle.output`; returns `''` if the file is absent rather than throwing (a missing file is "stale", and the caller needs to fix it, not crash).
+- **`bundleFragments`** (exported const) — returns the authored source paths for a compiled bundle, or `[]` for a generated one. Used by the staleness check.
 
 ## Relationships
 
-- **`scripts/contracts/bundle-registry.ts`** — declares the concrete bundle entries whose objects conform to `CompiledBundle` / `GeneratedBundle`; this file is the shape they fill.
-- **`scripts/contracts/openapi-bundle.ts`** — a `CompiledBundle` implementation (builds `openapi.yaml` via `redocly bundle`).
-- **`scripts/contracts/asyncapi-bundles.ts`** — two `CompiledBundle` implementations (build AsyncAPI docs via YAML AST).
-- **`scripts/contracts/client-collections-bundle.ts`** — a `GeneratedBundle` implementation (derives collections from `openapi.yaml`).
-- **`scripts/contracts/build-bundles.ts`** — the orchestrator that reads `bundleFragments`/`isGenerated` to order compilation before generation, then calls `assembleBundle` and `readCommittedBundle` for the staleness comparison.
-- **`tests/cross-cutting/contract-bundles.test.ts`** — asserts the committed-vs-generated comparison on every run; also validates the `shared` flag against the cross-repo spec-identity list.
-- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — exercises the "no authored fragments" path for generated bundles.
+- **`bundle-registry.ts`** — declares each registry entry as a `CompiledBundle` or `GeneratedBundle`; this file supplies the shape it fills in.
+- **`openapi-bundle.ts`** / **`asyncapi-bundles.ts`** — implement the `content()` and `sources()` methods of `CompiledBundle` entries; they are the two concrete compiled producers.
+- **`build-bundles.ts`** — consumes `isGenerated` to split bundles into two phases (compiled first, then generated) and calls `assembleBundle` to produce text.
+- **`tests/cross-cutting/contract-bundles.test.ts`** — imports `ContractBundle`, `isGenerated`, `assembleBundle`, `readCommittedBundle`, and `bundleFragments` to assert that produced text matches the committed copy on every run and to enforce the `shared` / backend-only pairing rule.
 
 ## Notes
 
-- The discriminant is **key presence**, not a string value: only `GeneratedBundle` carries the `generated` key. A `compiled` literal exists for symmetry but `isGenerated` checks for `'generated'`.
-- `shared?: false` uses *absence-as-true* semantics (a bundle is shared with the frontend unless it explicitly says otherwise). `asyncapi.yaml` is the one `false` case.
-- `readCommittedBundle` deliberately returns `''` for a missing file rather than throwing—treating a missing output as "stale, needs writing" so the fixing command itself never crashes.
-- `assembleBundle` exists solely to erase the sync/async difference at the call site; it adds no logic of its own.
+- The discriminant is **key presence**, not a string value: only `GeneratedBundle` carries the `generated` key at all, so `isGenerated` uses `'generated' in bundle` rather than a `.compiled === false` check.
+- `content()` is **synchronous** for compiled bundles and **asynchronous** for generated ones. Callers must always go through `assembleBundle` (or `await`) to handle both uniformly.
+- `shared` is typed as `shared?: false` (optional, only-false) rather than `boolean`, making "present and false" the explicit opt-out while absence means shared. This lets the test assert both directions without ambiguity.
+- `readCommittedBundle` deliberately returns `''` for a missing file. Do not add a throw or a default read; the "stale → regenerate" flow depends on the caller seeing an empty string and writing.

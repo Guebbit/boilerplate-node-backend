@@ -1,7 +1,7 @@
 ---
 source: scripts/contracts/generate-asyncapi-types.ts
-sha256: 279a2c6037ab64d8dc9db95f56f288ac9ccf281b9ef8436638f28db00ee10c26
-generated_at: 2026-10-01T12:26:47.472148+00:00
+sha256: d0c102547078b08be29d9a4f81789ad08cfd7df8e32d543ce1be45b6a1fda14b
+generated_at: 2026-10-15T09:37:39.447394+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,34 +9,28 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Code-generation script that reads the repo's `asyncapi.yaml` contract and emits `src/types/asyncapi.generated.ts` — TypeScript interfaces for event payloads, channel-namespace constant objects, SSE event-name→payload maps, and (in this backend copy) queue-payload Zod validators. It exists so that runtime event types are always derived from the single AsyncAPI source of truth rather than hand-maintained.
+Generates the backend repo's TypeScript realtime contract types (payload interfaces, message aliases, per-namespace channel constants, SSE event maps, and queue-payload Zod validators) from the bundled `asyncapi.yaml`. It exists so that a contract change forces a regeneration rather than letting stale hand-written types ship. The `--check` flag turns it into a CI gate: writes nothing, exits 1 if the on-disk file would differ.
 
 ## Key elements
 
-- **`resolveOutputPath()`** – Parses the required `--out` CLI flag; exits 1 if missing.
-- **`checkOnly`** – Boolean flag (`--check`) that suppresses file writes and exits 1 on content mismatch, used as a CI gate.
-- **`toPascalCase()`** – Sanitises arbitrary contract names into valid PascalCase identifiers.
-- **`lastRefSegment()`** – Extracts the final path segment from an AsyncAPI `$ref` string.
-- **`refToTypeName()`** – Converts a `$ref` to its generated TypeScript type name via `toPascalCase`.
-- **`resolveMessagePayloadType()`** – Resolves a message name to its actual payload type (never the possibly-deduped alias), returning `'unknown'` when undeclared.
-- **`collectChannelMessageEntries()`** – Filters channels by a predicate and returns sorted `{channelName, messageType}` pairs.
-- **`channelProtocols()`** – Resolves a channel's `servers` bindings to their `protocol` values.
-- **`channelPayloadSchemaNames()`** – Returns all resolved payload schema names for a channel's messages.
-- **`renderLiteralArray()`** – Emits a `readonly string[] as const` export.
-- **`renderPayloadMap()`** – Emits a `Record`-style interface mapping event names to payload types.
-- **`toConstantKey()`** – Converts a namespaced channel name to a `SCREAMING_SNAKE` object key.
-- **Interfaces** – `AsyncApiChannel`, `AsyncApiMessage`, `AsyncApiServer`, `JsonSchema`, `AsyncApiDocument` model the subset of AsyncAPI 3.0 the generator reads.
-- **`ROOT` / `INPUT` / `OUTPUT`** – Resolved paths; `INPUT` is always `<repo-root>/asyncapi.yaml`.
+- **`AsyncApiDocument`, `AsyncApiChannel`, `AsyncApiMessage`, `AsyncApiServer`, `JsonSchema`** — narrow structural interfaces describing the subset of the AsyncAPI 3.0 spec this script actually reads (channels, messages, servers, payload schemas, and the `x-transport` vendor extension).
+- **`toPascalCase` / `lastRefSegment` / `refToTypeName`** — name-resolution utilities that turn `$ref` strings into generated TypeScript identifiers.
+- **`resolveMessagePayloadType`** — resolves a message key to its *payload* type name (not the message alias, which Modelina may dedupe away). Uses `Object.hasOwn` as the presence guard.
+- **`collectChannelMessageEntries`** — filters channels by a data-driven predicate (transport or server binding) and returns sorted `{ channelName, messageType }` pairs.
+- **`channelProtocols` / `channelPayloadSchemaNames`** — resolve a channel's reachable server protocols and payload schema names, respectively.
+- **`renderLiteralArray` / `renderPayloadMap` / `toConstantKey`** — emit TypeScript source for `as const` string arrays, typed event→payload map interfaces, and SCREAMING_SNAKE namespace keys.
+- **`TypeScriptGenerator`** (from `@asyncapi/modelina`) — builds the payload interfaces directly from the spec text.
+- **`ROOT`, `INPUT`, `OUTPUT`** — resolved paths for the bundled contract, the script's own location (ESM via `import.meta.url`), and the `--out` target.
 
 ## Relationships
 
-This file is a leaf script with no project-internal imports. Its only external dependency is `@asyncapi/modelina` (used for the Modelina TypeScript interface generation). It is invoked via `tsx` from a package.json script or CI step; it has no graph neighbors within the repo.
+- **`scripts/cli.ts`** — imports `requiredPath` to parse and validate the `--out` CLI argument against the repo root.
+- **`scripts/contracts/generated-file.ts`** — imports `writeOrCheck`, which handles both the write-to-disk path and the `--check` compare-and-exit-1 path, so this script never calls `fs.writeFileSync` directly.
 
 ## Notes
 
-- **Shared but diverged.** A near-twin copy lives in the frontend repo. Both share the channel/message-naming machinery, but the backend copy emits Zod validators for queue payloads while the frontend emits an inlined JSON-Schema map for SSE-frame validation. Keep fixes in lockstep by hand until a shared package extracts the common code.
-- **Input asymmetry.** The backend generates from the *whole* contract; the frontend generates from the *public* subset. Only the backend output carries queue-payload types.
-- **`x-transport` vendor extension.** SSE channels are identified by `x-transport: 'sse'` rather than by which `servers` they bind to, because in AsyncAPI 3.0 a channel omitting `servers` binds to *every* server and the two become indistinguishable.
-- **`Object.hasOwn` guards.** Several lookups use `Object.hasOwn` instead of nullish checks on index access. This is deliberate: `Record<string, T>` tells TypeScript the value is always present, so `no-unnecessary-condition` would reject `?.` guards. The `hasOwn` pattern is the only way to express "this key might not exist" without a lint error.
-- **ESM only.** The script uses `import.meta.url` (not `__dirname`) and must be run with `tsx` or an ESM-capable runtime.
-- **`--check` is idempotent and non-destructive.** It reads, generates in memory, compares, and exits — safe to run in CI before or after a build step.
+- **Diverged twin.** The frontend repo keeps a parallel copy of this script that also emits an inlined JSON-Schema map for runtime SSE-frame validation; this backend copy emits queue-payload Zod validators instead. Both share the input format and channel/message-naming logic. A fix to either half must be mirrored in the other by hand until the generator is extracted into a shared package.
+- **Input scope differs per repo.** This backend copy generates from the *whole* contract (hence queue payloads); the frontend copy uses only the public subset.
+- **`Object.hasOwn` guards.** `Record<string, T>` typing makes a plain index access "always present" to TypeScript, and `no-unnecessary-condition` would flag `?.` or truthiness checks. The script therefore uses `Object.hasOwn` explicitly wherever a key might be absent.
+- **Channel selection is data-driven, not name-driven.** Whether a channel is SSE vs. queue is decided by its declared transport (`x-transport` extension) or its `servers` binding — never by a name prefix — so renaming a channel does not silently change classification.
+- **ESM.** The script runs under `tsx` as ESM; `ROOT` is derived from `import.meta.url`, not `__dirname`.

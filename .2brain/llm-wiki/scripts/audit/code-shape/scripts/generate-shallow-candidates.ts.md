@@ -1,7 +1,7 @@
 ---
 source: scripts/audit/code-shape/scripts/generate-shallow-candidates.ts
-sha256: be0e8406242a3ad19003f036a48276d441764be6f58258860c888cb30f42ab25
-generated_at: 2026-10-14T07:07:36.537209+00:00
+sha256: fa510bc08c61eb2227ed9a04a16d97e35c900616e37216a7bafb8a892ae27db6
+generated_at: 2026-10-15T09:34:39.328854+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,24 +9,25 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-CLI entry point that runs the code-shape "shallow candidates" audit and writes the result as JSON to `tmp/reports/audit/code-shape/shallow.json`. It exists as a thin side-effect wrapper around `findShallowCandidates` so that unit tests can import the counting logic without triggering the file-write.
+CLI entry point that runs the `code-shape` shallow-candidates audit and writes the resulting JSON report to `tmp/reports/audit/code-shape/shallow.json`. It is deliberately split out from the pure counting logic so that the sibling module's unit tests can import `findShallowCandidates` without triggering filesystem writes or `process.argv` side effects.
 
 ## Key elements
 
-- **`DEFAULT_SCOPE`** — `['src', 'scripts', 'scenarios']`; the directories scanned when no CLI path arguments are supplied.
-- **`OUTPUT`** — Resolved path under `REPO_ROOT/tmp/reports/audit/code-shape/shallow.json` where the report is written.
-- **`rawConfig` / `parsed` / `program`** — Module-level (eager) setup that reads `tsconfig.json`, parses it, and builds a full TypeScript `Program` so the checker can resolve every import in the project.
-- **`scope`** — CLI args (`process.argv.slice(2)`) or `DEFAULT_SCOPE`.
-- **`report`** — Result of `findShallowCandidates(program, REPO_ROOT, scope)`; contains `smallAndRare`, `passThroughs`, `optionalNeverPassed`, and `lazyFiles` lists.
-- **Main flow** — Creates the output directory, writes pretty-printed JSON (`{ scope, ...report }`), and logs a one-line summary to stdout.
+- **`DEFAULT_SCOPE`** — `['src', 'scripts', 'scenarios']`; the directories scanned when no CLI paths are supplied.
+- **`OUTPUT`** — Absolute path to the JSON report, derived from `REPO_ROOT`.
+- **`rawConfig` / `parsed` / `program`** — TypeScript compiler-API bootstrap: reads `tsconfig.json`, resolves its `include` globs, and builds a full `ts.Program` so every import can be resolved during analysis.
+- **`scope`** — CLI arguments (`process.argv.slice(2)`) or `DEFAULT_SCOPE`.
+- **`report`** — The object returned by `findShallowCandidates(program, REPO_ROOT, scope)`, containing the four candidate lists: `smallAndRare`, `passThroughs`, `optionalNeverPassed`, `lazyFiles`.
+- **Final block** — Creates the output directory, writes the JSON (scope + report), and logs a one-line summary with counts and the relative output path.
 
 ## Relationships
 
-- **`scripts/audit/code-shape/scripts/shallow-candidates.ts`** — Source of `findShallowCandidates`, the pure counting function. This file is the only consumer that pairs it with I/O.
-- **`scripts/git-base.ts`** — Provides `REPO_ROOT`, used to anchor `tsconfig.json` lookup, `parsed` resolution, and the `OUTPUT` path.
+- **`scripts/audit/code-shape/scripts/shallow-candidates.ts`** — Imports the pure `findShallowCandidates` function. This file is the *only* caller of that function in the repo; the sibling file contains no I/O.
+- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT`, which anchors all path resolution (tsconfig read, output path, scope-relative comparisons).
 
 ## Notes
 
-- **Side-effectful by design.** Importing this module runs the audit and writes the file. Tests must import `shallow-candidates.ts` directly, never this file.
-- **Eager program build.** `ts.createProgram` runs at module load, not inside a function. There is no exported function to call; the entire body is top-level.
-- **Invocation:** `npm run audit:shallow -- [path...]` via the `tsx` shebang; not intended to be `require`d or `import`ed as a library.
+- Runs via `npm run audit:shallow -- [path…]`; the paths are repo-relative prefixes, not globs.
+- The output lives under `tmp/` and is expected to be gitignored (working evidence, not committed artifact).
+- Because a full `ts.Program` is built at module scope, this script is expensive to import; never import it from test code — import `shallow-candidates.ts` directly instead.
+- The `tsconfig.json` `include` globs determine which files enter the program; files outside those globs but inside the `scope` directories will still be analyzed (scope filters the *report*), but their imports won't resolve through the program.

@@ -12,15 +12,27 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { api, bearerForCookie } from '@tests/http';
 import { setCookie, cookieHeader } from '@tests/cookies';
 import { codeFor } from '@tests/totp';
-import { userRepository } from '@modules/users/tests/factories';
+import { createUser, userRepository } from '@modules/users/tests/factories';
 import { registerOAuthProvider } from '../../oauth/providers';
 import { fakeOAuthProvider } from '@scenarios/support/doubles/oauth-fake';
 import { claimedAmr } from './support';
 
 setupTestDb();
 
+/** The fake provider, but answering an address the provider itself has not verified. */
+const unverifiedOAuthProvider = {
+    ...fakeOAuthProvider,
+    name: 'fake-unverified',
+    exchangeCode: (...args: Parameters<typeof fakeOAuthProvider.exchangeCode>) =>
+        fakeOAuthProvider.exchangeCode(...args).then((identity) => ({
+            ...identity,
+            emailVerified: false
+        }))
+};
+
 beforeAll(() => {
     registerOAuthProvider('fake', () => fakeOAuthProvider);
+    registerOAuthProvider('fake-unverified', () => unverifiedOAuthProvider);
 });
 
 /**
@@ -55,6 +67,18 @@ describe('GET /account/oauth/:provider', () => {
         expect(setCookie(response, 'oauth_state')).toBeTruthy();
         expect(setCookie(response, 'oauth_verifier')).toBeTruthy();
     });
+
+    it.each(['oauth_state', 'oauth_verifier'])(
+        'sets %s for five minutes, httpOnly and SameSite=Lax',
+        async (name) => {
+            const response = await api().get('/account/oauth/fake');
+
+            const cookie = setCookie(response, name)!;
+            expect(cookie).toMatch(/Max-Age=300(;|$)/i);
+            expect(cookie).toMatch(/HttpOnly/i);
+            expect(cookie).toMatch(/SameSite=Lax/i);
+        }
+    );
 
     it('saves a same-origin `continue` as a cookie of its own', async () => {
         const response = await api().get('/account/oauth/fake?continue=%2Fcheckout');
@@ -154,6 +178,51 @@ describe('GET /account/oauth/:provider/callback', () => {
         expect(created).not.toBeNull();
         expect(created?.verifiedAt).toBeInstanceOf(Date);
     });
+
+    it('clears the state and verifier cookies after a successful callback', async () => {
+        const response = await fakeLogin();
+
+        expect(response.status).toBe(302);
+        expect(setCookie(response, 'oauth_state')).toMatch(/oauth_state=;/);
+        expect(setCookie(response, 'oauth_verifier')).toMatch(/oauth_verifier=;/);
+    });
+
+    it('sends an address the provider has not verified to `email_unverified`, with no session', async () => {
+        const response = await fakeLogin(undefined, 'fake-unverified');
+
+        expect(response.status).toBe(302);
+        expect(new URL(response.headers.location).searchParams.get('error')).toBe(
+            'email_unverified'
+        );
+        expect(setCookie(response, '__Host-session')).toBeUndefined();
+    });
+
+    it.each([
+        ['banned', { active: false }],
+        ['soft-deleted', { deletedAt: new Date() }]
+    ])(
+        'sends a %s account to `provider_error`, so the caller learns nothing of its state',
+        async (_label, state) => {
+            const user = await createUser({
+                email: 'oauth.demo@example.com',
+                verifiedAt: new Date(),
+                ...state
+            });
+            await userRepository.linkOAuthAccount(user.id, {
+                provider: 'fake',
+                providerId: 'fake-oauth-subject',
+                connectedAt: new Date()
+            });
+
+            const response = await fakeLogin();
+
+            expect(response.status).toBe(302);
+            expect(new URL(response.headers.location).searchParams.get('error')).toBe(
+                'provider_error'
+            );
+            expect(setCookie(response, '__Host-session')).toBeUndefined();
+        }
+    );
 
     it('carries a saved `continue` through to the frontend redirect, and clears the cookie', async () => {
         const start = await api().get('/account/oauth/fake?continue=%2Fcheckout');
@@ -261,10 +330,11 @@ describe('GET /account/oauth/:provider/callback', () => {
 /**
  * One full start → callback round trip through the fake provider.
  * @param continueTo - a same-origin path to request at the start, carried the whole way through.
+ * @param provider - which registered provider to walk through
  */
-const fakeLogin = async (continueTo?: string) => {
+const fakeLogin = async (continueTo?: string, provider = 'fake') => {
     const query = continueTo ? `?continue=${encodeURIComponent(continueTo)}` : '';
-    const start = await api().get(`/account/oauth/fake${query}`);
+    const start = await api().get(`/account/oauth/${provider}${query}`);
     const callbackUrl = new URL(start.headers.location);
     const cookies = continueTo
         ? cookieHeader(start, 'oauth_state', 'oauth_verifier', 'oauth_continue')
