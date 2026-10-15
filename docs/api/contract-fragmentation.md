@@ -45,7 +45,7 @@ layout and shared parts are declared in one file under `scripts/contracts/`.
 
 | Bundle                   | Verb          | What does it                                                             |
 | ------------------------ | ------------- | ------------------------------------------------------------------------ |
-| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation — none of them any one module's business) is merged into every operation that doesn't already declare its own |
+| `openapi.yaml`           | **compiled**  | `redocly bundle` resolves `$ref` across whole documents, then the root's `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation — none of them any one module's business) is merged into every operation that doesn't already declare its own. A second step (`scripts/contracts/cookie-auth.ts`) adds `cookieAuth` as an alternative to every operation that takes `bearerAuth`, and the origin `403` to its unsafe methods |
 | `asyncapi.yaml`          | **merged**    | `scripts/contracts/asyncapi-bundles.ts` copies five maps; `$ref`s stay untouched |
 | `asyncapi.public.yaml`   | **merged**    | the same merge over the shared sections only — one `SHARED_SECTIONS` list decides which |
 | the 4 client collections | **generated** | produced whole from `openapi.yaml` + the dataset, nothing on disk between; untracked |

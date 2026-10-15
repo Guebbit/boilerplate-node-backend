@@ -7,8 +7,9 @@
  * boundary, never by assuming a neighbour's text is concatenated above.
  *
  * Compiled by `redocly bundle` rather than concatenated, because the comments that matter are in
- * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Four steps
- * run after it, on the bundle: {@link withAppLevelResponses} merges the root's
+ * the MODULE files, which are authored, not in the bundle, which nobody reads by hand. Five steps
+ * run after it, on the bundle: {@link withCookieAuth} adds `cookieAuth` to every operation that
+ * takes a bearer, with the origin `403` on its unsafe methods; {@link withAppLevelResponses} merges the root's
  * `x-app-level-responses` (429, and 400/413/415 for a body-carrying operation) into every
  * operation that doesn't already declare its own; {@link withVersionedResources} hangs `ETag`,
  * `If-Match` and 412 on every path marked `x-versioned`; {@link withModuleStamps} tags every operation
@@ -37,6 +38,7 @@ import { REPO_ROOT, type CompiledBundle } from './bundle-kinds';
 import { orderSections } from './section-order';
 import { assembleRoot, readModuleFragments } from './root-assembly';
 import { withBrowserEvents } from './analytics-browser-events';
+import { withCookieAuth } from './cookie-auth';
 import { stageExportSchema } from './personal-data-assembly';
 import { pruneUnused } from './prune-unused';
 
@@ -575,7 +577,9 @@ const compile = (): string => {
             withErrorCodes(
                 withModuleStamps(
                     withVersionedResources(
-                        withAppLevelResponses(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                        withAppLevelResponses(
+                            withCookieAuth(withBrowserEvents(readFileSync(temporary, 'utf8')))
+                        )
                     ),
                     moduleOfPath()
                 ),
