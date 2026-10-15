@@ -8,3 +8,5 @@
  */
 
 export * from './services';
+
+export * from './domain';
