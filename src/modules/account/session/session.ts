@@ -72,7 +72,7 @@ export const reissueSession = (
 ): Promise<IssuedSession> => activeStrategy().reissue(request, response, userId, options);
 
 /**
- * Re-mint ONLY the caller's session cookie, after a change that revoked every session including
+ * Re-mint the caller's own session, after a change that revoked every session including
  * theirs (a 2FA factor change). The way GitHub and Google keep the acting device signed in.
  *
  * Never fails the response: the change already happened, so a failed re-mint degrades to "sign in
@@ -90,7 +90,7 @@ export const remintSession = (
     userId: string,
     amr: readonly string[],
     snapshot?: SessionSnapshot
-): Promise<void> => activeStrategy().remint(request, response, userId, { amr, snapshot });
+): Promise<IssuedSession> => activeStrategy().remint(request, response, userId, { amr, snapshot });
 
 /**
  * The credential naming the caller's own session on this request — what `current` is matched

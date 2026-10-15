@@ -297,23 +297,21 @@ export const cookieStrategy: SessionStrategy = {
         ),
 
     remint: (request, response, userId, { amr, snapshot }) =>
-        // A bearer client has no cookie to refresh, and a row nobody holds the id of would only
-        // wait for its expiry: it signs in again, as it would in `jwt` mode.
-        transportOf(request) === 'bearer'
-            ? Promise.resolve()
-            : (snapshot ? Promise.resolve(snapshot) : snapshotOf(request, userId))
-                  .then((kept) =>
-                      replaceSession(request, userId, amr, kept).then((started) => {
-                          deliver(response, started, kept.remember, 'cookie');
-                      })
-                  )
-                  .catch((error: unknown) => {
-                      logger.warn({
-                          message: 'The session change succeeded, but the re-mint failed.',
-                          userId,
-                          error
-                      });
-                  }),
+        (snapshot ? Promise.resolve(snapshot) : snapshotOf(request, userId))
+            .then((kept) =>
+                replaceSession(request, userId, amr, kept).then((started) =>
+                    // A bearer client holds the id itself, so it gets the new one back in the body.
+                    deliver(response, started, kept.remember, transportOf(request))
+                )
+            )
+            .catch((error: unknown): IssuedSession => {
+                logger.warn({
+                    message: 'The session change succeeded, but the re-mint failed.',
+                    userId,
+                    error
+                });
+                return {};
+            }),
 
     resolveBearer: resolveSession,
     resolveCookie: resolveSession,

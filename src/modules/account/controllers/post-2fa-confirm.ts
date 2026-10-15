@@ -55,10 +55,10 @@ export const post2faConfirm = (
                         id,
                         withProofs(amr, AMR.otp),
                         snapshot
-                    ).then(() => {
+                    ).then((issued) => {
                         successResponse<TwoFactorConfirmed>(
                             response,
-                            result.data,
+                            { ...result.data, ...issued },
                             200,
                             t('account.two-factor.method-added')
                         );

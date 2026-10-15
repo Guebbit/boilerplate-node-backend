@@ -6,7 +6,7 @@
 
 import type { Request, Response } from 'express';
 import { RemoveTwoFactorMethodBody, RemoveTwoFactorMethodParams } from '@api/schemas.zod';
-import type { TwoFactorCodeRequest } from '@types';
+import type { AuthTokens, TwoFactorCodeRequest } from '@types';
 import { successResponse } from '@infrastructure/http/response';
 import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -55,10 +55,10 @@ export const delete2faMethod = (
                         id,
                         withProofs(amr, AMR.otp),
                         snapshot
-                    ).then(() => {
-                        successResponse<undefined>(
+                    ).then((issued) => {
+                        successResponse<AuthTokens | undefined>(
                             response,
-                            undefined,
+                            issued.sessionToken ? issued : undefined,
                             200,
                             t('account.two-factor.method-removed')
                         );

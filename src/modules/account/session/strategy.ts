@@ -113,15 +113,17 @@ export interface SessionStrategy {
     ): Promise<IssuedSession>;
 
     /**
-     * Re-mint ONLY the caller's cookie after a change that ended every session including theirs (a
-     * second-factor change). Never fails the response: the change already happened.
+     * Re-mint the caller's own session after a change that ended every session including theirs (a
+     * second-factor change): the cookie for a browser, the new `ses_…` id for a bearer client of
+     * `cookie` mode. Never fails the response: the change already happened, so a failed re-mint
+     * answers an empty {@link IssuedSession}.
      */
     remint(
         request: SessionRequest & Pick<Request, 'get'>,
         response: Response,
         userId: string,
         options: { amr: readonly string[]; snapshot?: SessionSnapshot }
-    ): Promise<void>;
+    ): Promise<IssuedSession>;
 
     /** Resolve the credential an `Authorization: Bearer` header carries (not an `sk_…` key). */
     resolveBearer(token: string): Promise<Resolution<AuthContext | undefined>>;

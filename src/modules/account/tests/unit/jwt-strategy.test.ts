@@ -246,7 +246,7 @@ describe('remint', () => {
                 amr: ['pwd', 'otp'],
                 snapshot: { remember: RefreshTokenExpiryTime.MEDIUM }
             })
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({});
 
         expect(tokens.continueSession).toHaveBeenCalledWith(USER_ID, ['pwd', 'otp'], 'medium', {
             remember: 'medium'
@@ -262,7 +262,7 @@ describe('remint', () => {
 
         await expect(
             jwtStrategy.remint(requestWith(), response, USER_ID, { amr: ['pwd'], snapshot: {} })
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({});
         expect(cookie).not.toHaveBeenCalled();
     });
 });

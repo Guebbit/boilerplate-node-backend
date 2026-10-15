@@ -655,6 +655,32 @@ describe('cookie mode only', () => {
         ).toEqual([true]);
     });
 
+    it('hands a bearer client a replacement `ses_` id when it arms and disables a second factor', async () => {
+        await createUser({ email: 'factor@example.com', verifiedAt: new Date() });
+        const login = await logIn('factor@example.com', { transport: 'bearer' });
+        const first = login.body.data.sessionToken as string;
+
+        const { confirm, secret } = await armTotp({ Authorization: `Bearer ${first}` });
+
+        const second = confirm.body.data.sessionToken as string;
+        expect(second).toMatch(/^ses_[\w-]{43}$/);
+        expect(second).not.toBe(first);
+        expect(setCookie(confirm, '__Host-session')).toBeUndefined();
+        expect(await statusOfBearer(first)).toBe(401);
+        expect(await statusOfBearer(second)).toBe(200);
+
+        const disabled = await api()
+            .delete('/account/2fa')
+            .set('Authorization', `Bearer ${second}`)
+            .set('Origin', FRONTEND)
+            .send({ code: await codeFor(secret, 1) });
+
+        expect(disabled.status).toBe(200);
+        const third = disabled.body.data.sessionToken as string;
+        expect(await statusOfBearer(second)).toBe(401);
+        expect(await statusOfBearer(third)).toBe(200);
+    });
+
     it('names the device from the User-Agent at sign-in, and keeps it through a re-proof', async () => {
         const user = await createUser({ email: 'device@example.com', verifiedAt: new Date() });
         const login = await logIn(user.email).set(

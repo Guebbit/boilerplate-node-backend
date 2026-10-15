@@ -217,11 +217,11 @@ paths:
                         Password changed. `data` normally carries a fresh access token for this
                         session, but is ABSENT on the rare degraded success where the re-mint
                         itself fails after the password write already committed — see B23 on
-                        `ChangePasswordResponseEnvelope`.
+                        `SessionRenewedEnvelope`.
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/ChangePasswordResponseEnvelope'
+                                $ref: '#/components/schemas/SessionRenewedEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 # A wrong current password is a 422 with a translated message, NOT a 401: a 401
                 # here would read as "your token expired" to every client interceptor and log
@@ -356,7 +356,16 @@ paths:
                         schema:
                             $ref: '#/components/schemas/TwoFactorCodeRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '200':
+                    description: >-
+                        Two-factor authentication is off. The change revoked every session, this one
+                        included, and replaced it. A bearer client of a `cookie`-mode deployment
+                        has no cookie to refresh, so `data.sessionToken` carries its replacement
+                        `ses_…` id: the old one no longer works.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionRenewedEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
                 '500': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/InternalError' }
@@ -460,7 +469,15 @@ paths:
                         schema:
                             $ref: '#/components/schemas/TwoFactorCodeRequest'
             responses:
-                '200': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Success' }
+                '200':
+                    description: >-
+                        The method is removed. The change revoked every session, this one included,
+                        and replaced it. A bearer client of a `cookie`-mode deployment gets its
+                        replacement `ses_…` id in `data.sessionToken`: the old one no longer works.
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/SessionRenewedEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
                 '422': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/ValidationError' }
@@ -911,7 +928,7 @@ paths:
         post:
             tags: [Auth]
             summary: Signup
-            description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `POST /account/refresh` rather than by calling `POST /account/login` again. The new account holds `unverified` until `POST /account/verify-confirm` proves the address — it browses freely and is stopped only at `cart.checkout`.'
+            description: 'Registers a new user account. Takes no image — a stranger writes nothing to the store before registering; the signed-in caller sets an avatar with `PATCH /account`. Returns the newly created user profile on success, and signs the caller in — the refresh cookie is set here, so a client reaches a usable access token through `POST /account/refresh` rather than by calling `POST /account/login` again. The new account holds `unverified` until `POST /account/verify-confirm` proves the address — it browses freely and is stopped only at `cart.checkout`. Signup takes no `transport`: a bearer client signs in with `POST /account/login` afterwards.'
             operationId: signup
             security: []
             parameters:
@@ -1222,12 +1239,13 @@ components:
                 data:
                     $ref: '#/components/schemas/AuthTokens'
 
-        # `POST /account/password` alone can degrade to 200 with `data` absent — the
-        # password write and the session revoke already committed by the time the re-mint runs,
-        # so a 500 would misreport a change that DID succeed. `reauth` and `loginTwoFactor` never
-        # degrade this way (see their controllers), so they keep the stricter AuthTokensEnvelope;
-        # only this operation's 200 uses this schema.
-        ChangePasswordResponseEnvelope:
+        # The 200 of every change that replaces the caller's own session: the password change and
+        # the two factor removals. `data` is absent when there is nothing new to hand back (a
+        # browser's cookie was refreshed in place) and on the rare degraded success where the
+        # re-mint itself failed — the write and the session revoke already committed by then, so
+        # a 500 would misreport a change that DID succeed. `reauth` and `loginTwoFactor` never
+        # degrade this way (see their controllers), so they keep the stricter AuthTokensEnvelope.
+        SessionRenewedEnvelope:
             type: object
             additionalProperties: false
             required: [success, status, message]
@@ -1570,6 +1588,13 @@ components:
                 backupCodesRemaining:
                     type: integer
                     description: How many unused backup codes the account now holds.
+                sessionToken:
+                    type: string
+                    description: >-
+                        The replacement `ses_…` id, for a bearer client of a `cookie`-mode
+                        deployment: arming a factor revoked every session, this one included, and
+                        the old id no longer works. Absent otherwise (a browser's cookie was
+                        refreshed in place).
 
         TwoFactorConfirmEnvelope:
             type: object

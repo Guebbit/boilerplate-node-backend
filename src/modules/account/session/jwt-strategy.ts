@@ -269,17 +269,21 @@ export const jwtStrategy: SessionStrategy = {
             .then((snapshot) => {
                 const { remember } = snapshot;
                 const maxAgeMs = cookieMaxAgeOf(remember, snapshot);
-                return continueSession(userId, amr, remember, snapshot).then((refreshToken) => {
-                    createSessionCookie(response, refreshToken, maxAgeMs);
-                    createLoggedCookie(response, maxAgeMs);
-                });
+                return continueSession(userId, amr, remember, snapshot).then(
+                    (refreshToken): IssuedSession => {
+                        createSessionCookie(response, refreshToken, maxAgeMs);
+                        createLoggedCookie(response, maxAgeMs);
+                        return {};
+                    }
+                );
             })
-            .catch((error: unknown) => {
+            .catch((error: unknown): IssuedSession => {
                 logger.warn({
                     message: 'The session change succeeded, but the re-mint failed.',
                     userId,
                     error
                 });
+                return {};
             }),
 
     resolveBearer,

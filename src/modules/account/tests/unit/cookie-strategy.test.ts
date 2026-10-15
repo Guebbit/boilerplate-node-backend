@@ -480,17 +480,18 @@ describe('reissue', () => {
 });
 
 describe('remint', () => {
-    it('does nothing for a bearer client: it holds no cookie to refresh', async () => {
+    it('hands a bearer client its replacement id, and sets no cookie', async () => {
         const { cookie, response } = recordingResponse();
 
-        await cookieStrategy.remint(
+        const issued = await cookieStrategy.remint(
             requestWith({ authorization: `Bearer ${SOME_ID}`, via: 'bearer' }),
             response,
             USER_ID,
-            { amr: ['pwd', 'otp'] }
+            { amr: ['pwd', 'otp'], snapshot: {} }
         );
 
-        expect(sessions.insert).not.toHaveBeenCalled();
+        expect(insertedRow().amr).toEqual(['pwd', 'otp']);
+        expect(issued.sessionToken).toMatch(/^ses_/);
         expect(cookie).not.toHaveBeenCalled();
     });
 
@@ -520,7 +521,7 @@ describe('remint', () => {
                 amr: ['pwd'],
                 snapshot: {}
             })
-        ).resolves.toBeUndefined();
+        ).resolves.toEqual({});
         expect(cookie).not.toHaveBeenCalled();
     });
 });
