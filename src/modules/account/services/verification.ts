@@ -12,11 +12,15 @@
 import { t } from '@infrastructure/i18n';
 import { accountConfig } from '../config';
 import { userService, type UserDocument } from '@modules/users';
-import { issueToken, tokenSentAt } from './tokens';
+import { issueToken, tokenSentAt, redeemLiveToken, refuseLink } from './tokens';
 import { verifyRequestEmail, recipientLocale, greetableName } from '../emails';
 import { sendAccountMail } from './mail';
 import { revokeFor } from './revocation';
-import { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
+import {
+    EMAIL_VERIFY_TOKEN_TYPE,
+    EMAIL_CHANGE_TOKEN_TYPE,
+    EMAIL_CHANGE_UNDO_TOKEN_TYPE
+} from '../token-types';
 
 import { generateSuccess, generateReject } from '@infrastructure/http/response';
 import { cooldownRemaining, resendTooSoon } from '../cooldown';
@@ -345,8 +349,6 @@ export const completeEmailChange = (
         );
 };
 
-export { EMAIL_VERIFY_TOKEN_TYPE, EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
-
 /**
  * Spend an undo link's work: put the account back as it was before the change. While the change is
  * still pending it is cancelled and its confirmation link dies; once the new address was confirmed
@@ -378,3 +380,68 @@ export const undoEmailChange = (
         .then((saved) =>
             auditProvenAddress(saved, context, accountAuditActions.AUTH_EMAIL_CHANGE_UNDONE)
         );
+
+/**
+ * `POST /account/verify-confirm` — spend the verification link and mark the address verified.
+ * Find then spend: the find is a read two simultaneous clicks both pass; only the atomic spend
+ * picks a winner, and the loser gets the same "token not found" an invented token would.
+ *
+ * @param token - the token from the mailed link
+ * @param context - the caller
+ * @returns success, or a 422 for a link that is unknown, expired or already used
+ */
+export const confirmEmailVerification = (
+    token: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token).then((user) =>
+        user
+            ? completeEmailVerification(user, context).then(() =>
+                  generateSuccess(undefined, 200, t('account.verify.success'))
+              )
+            : refuseLink(context, 'email_verify', 'account.verify.token-not-found')
+    );
+
+/**
+ * `POST /account/email-change-confirm` — spend the `email-change` link and swap `pendingEmail` into
+ * `email`. A `verify` token never matches this type: the two prove different addresses and must
+ * not do each other's work.
+ *
+ * @param token - the token from the mailed link
+ * @param context - the caller
+ * @returns success, or a 422 for a link that is unknown, expired or already used
+ * @throws a duplicate-key error when another account took the new address meanwhile
+ */
+export const confirmEmailChange = (
+    token: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    redeemLiveToken(EMAIL_CHANGE_TOKEN_TYPE, token).then((user) =>
+        user
+            ? completeEmailChange(user, context).then(() =>
+                  generateSuccess(undefined, 200, t('account.email-change.success'))
+              )
+            : refuseLink(context, 'email_change', 'account.email-change.token-not-found')
+    );
+
+/**
+ * `POST /account/email-change-undo` — spend the undo link mailed to the OLD address and put the
+ * account back as it was. Refusals are recorded like every other flow's: the endpoint is public
+ * and the token is the credential.
+ *
+ * @param token - the token from the mailed link
+ * @param context - the caller
+ * @returns success, or a 422 for a link that is unknown, expired or already used
+ * @throws a duplicate-key error when another account took the previous address meanwhile
+ */
+export const undoEmailChangeByToken = (
+    token: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    redeemLiveToken(EMAIL_CHANGE_UNDO_TOKEN_TYPE, token).then((user) =>
+        user
+            ? undoEmailChange(user, context).then(() =>
+                  generateSuccess(undefined, 200, t('account.email-change.undone'))
+              )
+            : refuseLink(context, 'email_change_undo', 'account.email-change.token-not-found')
+    );

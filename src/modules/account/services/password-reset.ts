@@ -4,12 +4,11 @@
  * link, write, then tell the owner. Asking for the link is `./password-reset-request`.
  */
 
-import { t } from '@infrastructure/i18n';
 import { logger } from '@infrastructure/adapters/logger';
 import { resetConfirmEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { markVerified } from './verification';
-import { findLiveToken, spendLiveToken, recordOneTimeTokenRejected } from './tokens';
+import { findLiveToken, spendLiveToken, refuseLink } from './tokens';
 import {
     generateReject,
     type ResponseSuccess,
@@ -104,10 +103,8 @@ const afterReset = (
  *
  * @param context - the caller
  */
-const resetLinkRefused = (context: CallerContext): ResponseReject => {
-    recordOneTimeTokenRejected(context, 'password_reset');
-    return generateReject(422, [t('account.reset.token-not-found')]);
-};
+const resetLinkRefused = (context: CallerContext): ResponseReject =>
+    refuseLink(context, 'password_reset', 'account.reset.token-not-found');
 
 /**
  * The tail of {@link completePasswordReset} once the link is FOUND: breach check, then the

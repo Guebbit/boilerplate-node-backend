@@ -49,6 +49,7 @@ describe('an unknown one-time token', () => {
         ['password_reset', 'post', '/account/reset-confirm'],
         ['email_verify', 'post', '/account/verify-confirm'],
         ['email_change', 'post', '/account/email-change-confirm'],
+        ['email_change_undo', 'post', '/account/email-change-undo'],
         ['account_delete', 'delete', '/account/delete-confirm']
     ] as const)('is audited and counted by the %s flow', async (flow, method, route) => {
         authOneTimeTokenRejectedTotal.reset();

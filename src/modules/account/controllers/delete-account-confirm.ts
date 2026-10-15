@@ -5,14 +5,13 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { ConfirmAccountDeleteBody } from '@api/schemas.zod';
-import { accountService, ACCOUNT_DELETE_TOKEN_TYPE } from '../services';
+import { accountService } from '../services';
 import { destroySessionCookie, destroyLoggedCookie } from '../session/cookies';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import { rejectDatabaseError } from '@infrastructure/http/errors';
 import type { AccountDeleteConfirmRequest } from '@types';
-import { parseBody } from '@infrastructure/http/controller';
+import { parseBody, refused } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
@@ -26,30 +25,14 @@ export const deleteAccountConfirm = (
     const body = parseBody(ConfirmAccountDeleteBody, request.body, response);
     if (!body) return;
 
-    const { token } = body;
-
     return accountService
-        .redeemLiveToken(ACCOUNT_DELETE_TOKEN_TYPE, token)
-        .then((user) => {
-            if (!user) {
-                accountService.recordOneTimeTokenRejected(
-                    callerContextOf(request),
-                    'account_delete'
-                );
-                rejectResponse(response, 422, [t('account.delete.token-not-found')]);
-                return;
-            }
+        .confirmAccountDeletion(body.token, callerContextOf(request))
+        .then((result) => {
+            if (refused(response, result)) return;
 
-            /*
-             * Hard-delete the account. The goodbye mail is published by the service, which is also
-             * the only layer that can still read the address: after this resolves there is no
-             * document left to take one from.
-             */
-            return accountService.removeOwnAccount(user, callerContextOf(request)).then(() => {
-                destroySessionCookie(response);
-                destroyLoggedCookie(response);
-                successResponse<undefined>(response, undefined, 200, t('account.delete.success'));
-            });
+            destroySessionCookie(response);
+            destroyLoggedCookie(response);
+            successResponse<undefined>(response, undefined, result.status, result.message);
         })
         .catch((error: unknown) => {
             // Same interpreter every other write path answers through, so a recognised database

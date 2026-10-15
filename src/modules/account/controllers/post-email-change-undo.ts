@@ -5,21 +5,19 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { ConfirmEmailChangeBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 // Both token endpoints take `{ token }`, so orval names the TYPE after the shared schema.
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailChangeUndoTotal } from '../metrics';
-import { accountService, EMAIL_CHANGE_UNDO_TOKEN_TYPE } from '../services';
-import { rejectValidation, catchAs } from '@infrastructure/http/controller';
+import { accountService } from '../services';
+import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/email-change-undo — spends an `email-change-undo` token and reverts the change.
- * Public, like `email-change-confirm`: the token in the body is the credential. Find then spend
- * for the race, as every token confirm does (`services/tokens.ts`); a confirmation or verify token
- * never matches this type, so the links cannot do each other's work.
+ * Public, like `email-change-confirm`: the token in the body is the credential. A confirmation or
+ * verify token never matches this type, so the links cannot do each other's work.
  */
 export const postEmailChangeUndo = (
     request: Request<unknown, unknown, VerifyEmailConfirmRequest>,
@@ -33,18 +31,14 @@ export const postEmailChangeUndo = (
     }
 
     return accountService
-        .redeemLiveToken(EMAIL_CHANGE_UNDO_TOKEN_TYPE, parseResult.data.token)
-        .then((user) => {
-            if (!user) {
+        .undoEmailChangeByToken(parseResult.data.token, callerContextOf(request))
+        .then((result) => {
+            if (refused(response, result)) {
                 authEmailChangeUndoTotal.inc({ status: 'failure' });
-                rejectResponse(response, 422, [t('account.email-change.token-not-found')]);
                 return;
             }
-
-            return accountService.undoEmailChange(user, callerContextOf(request)).then(() => {
-                authEmailChangeUndoTotal.inc({ status: 'success' });
-                successResponse(response, undefined, 200, t('account.email-change.undone'));
-            });
+            authEmailChangeUndoTotal.inc({ status: 'success' });
+            successResponse(response, undefined, result.status, result.message);
         })
         .catch((error: unknown) => {
             authEmailChangeUndoTotal.inc({ status: 'failure' });

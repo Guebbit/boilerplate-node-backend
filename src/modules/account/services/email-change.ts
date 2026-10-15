@@ -8,8 +8,12 @@ import { t } from '@infrastructure/i18n';
 import { emailChangeNoticeEmail, greetableName, recipientLocale } from '../emails';
 import { sendAccountMail } from './mail';
 import { emailChangeNext, emailChangeStateOf } from '../domain';
-import { sendVerificationEmail, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
-import { EMAIL_CHANGE_UNDO_TOKEN_TYPE, EMAIL_CHANGE_UNDO_TTL_MS } from '../token-types';
+import { sendVerificationEmail } from './verification';
+import {
+    EMAIL_CHANGE_TOKEN_TYPE,
+    EMAIL_CHANGE_UNDO_TOKEN_TYPE,
+    EMAIL_CHANGE_UNDO_TTL_MS
+} from '../token-types';
 import {
     generateSuccess,
     generateReject,

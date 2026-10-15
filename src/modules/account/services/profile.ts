@@ -7,7 +7,8 @@
 import { z } from 'zod';
 import { t } from '@infrastructure/i18n';
 import { mailRecipientRefusal } from '../mail-budget';
-import { resendCooldownRemaining, EMAIL_CHANGE_TOKEN_TYPE } from './verification';
+import { resendCooldownRemaining } from './verification';
+import { EMAIL_CHANGE_TOKEN_TYPE } from '../token-types';
 import { resendTooSoon } from '../cooldown';
 import { ERROR_CODES } from '@api/error-codes';
 import { UpdateAccountBody } from '@api/schemas.zod';

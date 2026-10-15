@@ -17,6 +17,8 @@ import { authOneTimeTokenRejectedTotal } from '../metrics';
 import { userService, type UserDocument } from '@modules/users';
 import { verificationTokenRepository, type VerificationTokenRow } from '../repository';
 import type { VerificationTokenType } from '../token-types';
+import { t } from '@infrastructure/i18n';
+import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 
 /**
  * Issue a one-time token for an account and return its plaintext, for the emailed link or the
@@ -143,11 +145,12 @@ export const redeemLiveToken = (
         );
     });
 
-/** The four confirm flows that spend a one-time link token. */
+/** The confirm flows that spend a one-time link token. */
 export type OneTimeTokenFlow =
     | 'password_reset'
     | 'email_verify'
     | 'email_change'
+    | 'email_change_undo'
     | 'account_delete';
 
 /**
@@ -169,4 +172,21 @@ export const recordOneTimeTokenRejected = (
         outcome: 'failure',
         metadata: { flow }
     });
+};
+
+/**
+ * The 422 every dead confirm link answers with, counted and audited. Unknown, expired and already
+ * used read alike on purpose: a caller must not be able to tell them apart.
+ *
+ * @param context - the caller context of the refused request
+ * @param flow - which confirm flow refused the link
+ * @param messageKey - the flow's own "token not found" copy
+ */
+export const refuseLink = (
+    context: CallerContext,
+    flow: OneTimeTokenFlow,
+    messageKey: string
+): ResponseReject => {
+    recordOneTimeTokenRejected(context, flow);
+    return generateReject(422, [t(messageKey)]);
 };

@@ -5,21 +5,18 @@
  */
 
 import type { Request, Response } from 'express';
-import { t } from '@infrastructure/i18n';
 import { ConfirmEmailVerificationBody } from '@api/schemas.zod';
-import { successResponse, rejectResponse } from '@infrastructure/http/response';
+import { successResponse } from '@infrastructure/http/response';
 import type { VerifyEmailConfirmRequest } from '@types';
 import { authEmailVerifyTotal } from '../metrics';
-import { accountService, EMAIL_VERIFY_TOKEN_TYPE } from '../services';
-import { rejectValidation, catchAs } from '@infrastructure/http/controller';
+import { accountService } from '../services';
+import { rejectValidation, refused, catchAs } from '@infrastructure/http/controller';
 import { callerContextOf } from '@infrastructure/http/request';
 
 /**
  * POST /account/verify-confirm — spends a one-time verification token, marks the email verified.
  * Public deliberately (like `reset-confirm`/`delete-confirm`): the token in the body is the
- * credential, not a login. Find then spend for the race — the find is a read two simultaneous
- * clicks both pass; only the atomic spend picks a winner, and the loser gets the same "token not
- * found" an invented token would. See `services/tokens.ts`, which owns both halves.
+ * credential, not a login. `accountService.confirmEmailVerification` owns the find-then-spend.
  */
 export const postVerifyConfirm = (
     request: Request<unknown, unknown, VerifyEmailConfirmRequest>,
@@ -31,24 +28,15 @@ export const postVerifyConfirm = (
         return rejectValidation(response, parseResult.error);
     }
 
-    const { token } = parseResult.data;
-
     return accountService
-        .redeemLiveToken(EMAIL_VERIFY_TOKEN_TYPE, token)
-        .then((user) => {
-            if (!user) {
+        .confirmEmailVerification(parseResult.data.token, callerContextOf(request))
+        .then((result) => {
+            if (refused(response, result)) {
                 authEmailVerifyTotal.inc({ status: 'failure' });
-                accountService.recordOneTimeTokenRejected(callerContextOf(request), 'email_verify');
-                rejectResponse(response, 422, [t('account.verify.token-not-found')]);
                 return;
             }
-
-            return accountService
-                .completeEmailVerification(user, callerContextOf(request))
-                .then(() => {
-                    authEmailVerifyTotal.inc({ status: 'success' });
-                    successResponse(response, undefined, 200, t('account.verify.success'));
-                });
+            authEmailVerifyTotal.inc({ status: 'success' });
+            successResponse(response, undefined, result.status, result.message);
         })
         .catch((error: unknown) => {
             authEmailVerifyTotal.inc({ status: 'failure' });

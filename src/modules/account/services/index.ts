@@ -48,20 +48,23 @@ import * as reauth from './reauth';
  * allowed on purpose, same as the module barrel itself (CLAUDE.md's "Module barrels"): a caller
  * reaching for a name not listed here copies the logic instead of adding the export it needed.
  */
-export { PASSWORD_RESET_TOKEN_TYPE, ACCOUNT_DELETE_TOKEN_TYPE } from '../token-types';
+export {
+    PASSWORD_RESET_TOKEN_TYPE,
+    ACCOUNT_DELETE_TOKEN_TYPE,
+    EMAIL_VERIFY_TOKEN_TYPE,
+    EMAIL_CHANGE_TOKEN_TYPE,
+    EMAIL_CHANGE_UNDO_TOKEN_TYPE
+} from '../token-types';
 export { RESET_REQUEST_SECONDS } from './password-reset-request';
 export { amrAfterReauth } from './reauth';
 export { passwordChangeWithCurrent } from './password';
 export { updateProfile } from './profile';
 export {
     sendVerificationEmail,
-    EMAIL_VERIFY_TOKEN_TYPE,
-    EMAIL_CHANGE_TOKEN_TYPE,
     VERIFY_RESEND_SECONDS,
     completeEmailChange,
     undoEmailChange
 } from './verification';
-export { EMAIL_CHANGE_UNDO_TOKEN_TYPE } from '../token-types';
 export { reapLapsedPreviousEmails } from './previous-email-cleanup';
 export { reapExpiredExports } from './export-rows';
 export { reapInactiveAccounts } from './reap-inactive';
@@ -107,6 +110,10 @@ export const accountService = {
     requestEmailVerification: verification.requestEmailVerification,
     requestEmailVerificationFor: verification.requestEmailVerificationFor,
     resendPendingEmailVerificationFor: verification.resendPendingEmailVerificationFor,
+    confirmEmailVerification: verification.confirmEmailVerification,
+    confirmEmailChange: verification.confirmEmailChange,
+    undoEmailChangeByToken: verification.undoEmailChangeByToken,
+    confirmAccountDeletion: selfDelete.confirmAccountDeletion,
     completeEmailVerification: verification.completeEmailVerification,
     completeEmailChange: verification.completeEmailChange,
     undoEmailChange: verification.undoEmailChange,

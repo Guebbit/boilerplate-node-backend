@@ -12,6 +12,14 @@ import { recordAudit } from '@infrastructure/observability/audit';
 import { accountAnalyticsEvents } from '../analytics';
 import { accountAuditActions } from '../audit';
 import { isUnrestrictedCaller } from '../roles';
+import { t } from '@infrastructure/i18n';
+import {
+    generateSuccess,
+    type ResponseReject,
+    type ResponseSuccess
+} from '@infrastructure/http/response';
+import { redeemLiveToken, refuseLink } from './tokens';
+import { ACCOUNT_DELETE_TOKEN_TYPE } from '../token-types';
 
 /**
  * Hard-delete the caller's own account, confirmed by a one-time token.
@@ -62,3 +70,24 @@ export const removeOwnAccount = (
         })
     );
 };
+
+/**
+ * `DELETE /account/delete-confirm` — spend the deletion link and hard-delete the account. The
+ * goodbye mail is published by {@link removeOwnAccount}, the only layer that can still read the
+ * address once the document is gone.
+ *
+ * @param token - the token from the mailed link
+ * @param context - the caller
+ * @returns success, or a 422 for a link that is unknown, expired or already used
+ */
+export const confirmAccountDeletion = (
+    token: string,
+    context: CallerContext
+): Promise<ResponseSuccess<undefined> | ResponseReject> =>
+    redeemLiveToken(ACCOUNT_DELETE_TOKEN_TYPE, token).then((user) =>
+        user
+            ? removeOwnAccount(user, context).then(() =>
+                  generateSuccess(undefined, 200, t('account.delete.success'))
+              )
+            : refuseLink(context, 'account_delete', 'account.delete.token-not-found')
+    );
