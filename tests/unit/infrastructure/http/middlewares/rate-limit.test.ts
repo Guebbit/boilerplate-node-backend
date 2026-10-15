@@ -10,6 +10,7 @@
  * `tests/unit/metrics-scraper.test.ts`.
  */
 import { createHash } from 'node:crypto';
+import { ipKeyGenerator } from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
 import { rateLimitConfig } from '@infrastructure/http/config';
@@ -106,6 +107,9 @@ describe("the global budget's skip", () => {
 /** The block a caller at `ip` is bucketed in. */
 const blockOf = (ip: string | undefined) => addressBlockOf(asStub<Request>({ ip }));
 
+const uploaderKey = (request: Partial<Request>) =>
+    budgetNamed('Image uploads').keyGenerator?.(asStub<Request>(request));
+
 describe('addressBlockOf', () => {
     // Node listens dual-stack, so on a direct deploy every IPv4 caller is `::ffff:a.b.c.d`. It used
     // to fall past the /24 mask and get a bucket of its own per address.
@@ -123,10 +127,17 @@ describe('addressBlockOf', () => {
         expect(blockOf('203.0.113.5')).not.toBe(blockOf('203.0.114.5'));
     });
 
-    it('buckets an IPv6 caller by its /64', () => {
-        expect(blockOf('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1:2::/64');
-        expect(blockOf('2001:db8:1:2::1')).toBe(blockOf('2001:db8:1:2:ffff::9'));
-        expect(blockOf('2001:db8:1:3::1')).not.toBe(blockOf('2001:db8:1:2::1'));
+    it('buckets an IPv6 caller by its /48, the coarser partner of the default key', () => {
+        expect(blockOf('2001:db8:1:2:aaaa:bbbb:cccc:dddd')).toBe('2001:db8:1::/48');
+        expect(blockOf('2001:db8:1:2::1')).toBe(blockOf('2001:db8:1:ffff::9'));
+        expect(blockOf('2001:db8:2:2::1')).not.toBe(blockOf('2001:db8:1:2::1'));
+    });
+
+    // The "address" budgets take the library's own default key; the block must stay the wider of
+    // the two, so this pins the /56 that default masks IPv6 to.
+    it('stays coarser than the library default key, which masks IPv6 to a /56', () => {
+        expect(ipKeyGenerator('2001:db8:1:2::1')).toBe('2001:db8:1::/56');
+        expect(blockOf('2001:db8:1:2::1')).toBe('2001:db8:1::/48');
     });
 
     it('gives a request with no address one stable key instead of throwing', () => {
@@ -323,15 +334,32 @@ describe('the three budgets this file owns — what each one declares', () => {
         expect(budgetNamed('Image uploads').onStoreError).toBeUndefined();
     });
 
-    it('keys the global and upload budgets on the address, the api-key budget on its credential', () => {
+    it('keys the global budget on the address, the api-key budget on its credential', () => {
         expect(budgetNamed('Browsing (global)').keyedBy).toBe(KEYED_BY_ADDRESS);
-        expect(budgetNamed('Image uploads').keyedBy).toBe(KEYED_BY_ADDRESS);
+        expect(budgetNamed('Image uploads').keyedBy).toMatch(/uploader/);
         expect(budgetNamed('Api-key requests').keyedBy).toMatch(/credential/);
         expect(
             budgetNamed('Api-key requests').keyGenerator?.(
                 asStub<Request>({ credentialId: 'key-1' })
             )
         ).toBe('key-1');
+    });
+
+    describe('the upload budget key', () => {
+        it('counts an api-key upload against its credential', () => {
+            expect(uploaderKey({ credentialId: 'key-1', ip: '203.0.113.5' })).toBe('key:key-1');
+        });
+
+        it('counts a signed-in upload against the account, whatever address it comes from', () => {
+            const authContext = asStub<NonNullable<Request['authContext']>>({ id: 'user-1' });
+
+            expect(uploaderKey({ authContext, ip: '203.0.113.5' })).toBe('account:user-1');
+            expect(uploaderKey({ authContext, ip: '198.51.100.9' })).toBe('account:user-1');
+        });
+
+        it('falls back to the address block when nobody was resolved', () => {
+            expect(uploaderKey({ ip: '203.0.113.5' })).toBe('203.0.113.0/24');
+        });
     });
 
     it('gives every keyedBy label words, and no two labels the same words', () => {

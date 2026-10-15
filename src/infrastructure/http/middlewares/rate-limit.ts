@@ -219,10 +219,10 @@ export const chargeBudget = async (budget: RateLimitBudget, key: string): Promis
  * budget's row in the generated table (`docs/tools/security.md#the-rate-limit-budgets`) reads as
  * the same sentence.
  */
-export const KEYED_BY_ADDRESS = 'address';
+export const KEYED_BY_ADDRESS = 'address (IPv6 /56)';
 
 /** `keyedBy` label for a budget bucketed on the caller's address BLOCK — see {@link addressBlockOf}. */
-export const KEYED_BY_ADDRESS_BLOCK = 'address block (IPv4 /24, IPv6 /64)';
+export const KEYED_BY_ADDRESS_BLOCK = 'address block (IPv4 /24, IPv6 /48)';
 
 /** `keyedBy` label for a budget bucketed on a submitted email — see {@link identityOf}. */
 export const KEYED_BY_SUBMITTED_EMAIL =
@@ -303,14 +303,16 @@ export const rateLimitInfoOf = (request: Request, property: string): RateLimitIn
 export const priorHits = (info: RateLimitInfo): number => info.used - 1;
 
 /**
- * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /64. A
- * residential-proxy pool costs about $20 for millions of addresses, and one IPv6 customer is
+ * The caller's address, WIDENED to the block it belongs to: an IPv4 /24, an IPv6 /48 — the
+ * coarser partner of the library's own default key, which masks IPv6 to a /56 (so on both families
+ * the block is the wider bucket). RIPE-690 hands a business end site a /48 and a residential one a
+ * /56. A residential-proxy pool costs about $20 for millions of addresses, and one IPv6 customer is
  * allocated 18 quintillion of them — bucketing on the single address lets either look like an
  * unbounded number of callers.
  *
  * `ipKeyGenerator` runs FIRST because Node listens dual-stack, so a plain IPv4 caller arrives as
  * `::ffff:a.b.c.d`. The helper unmaps that form (to the bare IPv4 address) and masks a genuine
- * IPv6 address to its /64. Only then is an IPv4 result masked to its /24 by hand — the library has
+ * IPv6 address to its /48. Only then is an IPv4 result masked to its /24 by hand — the library has
  * no IPv4 block helper. Branching on `isIPv4(ip)` before the helper would send the mapped form
  * past the mask, one bucket per address.
  * https://express-rate-limit.mintlify.app/reference/ipv6
@@ -324,8 +326,8 @@ export const priorHits = (info: RateLimitInfo): number => info.used - 1;
 export const addressBlockOf = (request: Request): string => {
     const { ip } = request;
     if (!ip) return 'unknown';
-    // 64: the IPv6 prefix length kept. An IPv4 input is returned as is, an `::ffff:` one unmapped.
-    const key = ipKeyGenerator(ip, 64);
+    // 48: the IPv6 prefix length kept. An IPv4 input is returned as is, an `::ffff:` one unmapped.
+    const key = ipKeyGenerator(ip, 48);
     return isIPv4(key) ? `${key.split('.').slice(0, 3).join('.')}.0/24` : key;
 };
 
@@ -384,6 +386,27 @@ const API_KEY_RATE_LIMIT_BUDGET: RateLimitBudget = {
  */
 export const apiKeyLimiter: RequestHandler = buildRateLimiter(API_KEY_RATE_LIMIT_BUDGET);
 
+/**
+ * `keyedBy` label for the upload budget: the credential or account that `getAuth` resolved, else
+ * the address block.
+ */
+const KEYED_BY_UPLOADER =
+    'the uploader: the api-key credential, else the authenticated account (falls back to address block when neither resolved)';
+
+/**
+ * The upload budget's `keyGenerator`. Every caller who reaches an upload has already been
+ * resolved by the router-wide `getAuth`, so the budget counts the one who is uploading — an
+ * address key would reset per IP for a stolen session, and make staff behind one office NAT share
+ * a single allowance.
+ *
+ * @param request - the request, after `getAuth`
+ */
+const uploaderOf = (request: Request): string => {
+    if (request.credentialId) return `key:${request.credentialId}`;
+    if (request.authContext) return `account:${request.authContext.id}`;
+    return addressBlockOf(request);
+};
+
 /** This file's own budget: `uploadLimiter`, shared by every module whose routes accept an image upload. */
 const UPLOAD_RATE_LIMIT_BUDGET: RateLimitBudget = {
     name: 'Image uploads',
@@ -391,13 +414,14 @@ const UPLOAD_RATE_LIMIT_BUDGET: RateLimitBudget = {
     environmentVariable: 'NODE_UPLOAD_RATE_LIMIT_MAX',
     defaultMax: DEFAULT_UPLOAD_RATE_LIMIT_MAX,
     windowMs: 'shared',
-    keyedBy: KEYED_BY_ADDRESS,
+    keyedBy: KEYED_BY_UPLOADER,
     bounds:
         'Routes that accept an image upload. Image processing (the `worker.image.digest` ' +
         'pipeline) is CPU-bound, decoding and re-encoding real work whether it runs inline or in ' +
         'a worker consuming one job at a time — a burst of well-formed upload requests is a cheap ' +
         'way to saturate what the global brake alone was sized for ordinary browsing, not this.',
-    audited: true
+    audited: true,
+    keyGenerator: uploaderOf
 };
 
 /**

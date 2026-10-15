@@ -43,10 +43,10 @@ Read these first; the findings below are all departures from them.
 - `buildRateLimiter` is the ONE factory every budget is built from. A limiter
   constructed any other way is a finding on its own.
 - A budget with no `keyGenerator` falls back to `express-rate-limit`'s default: the
-  caller's single address. That is the weakest key available — a residential-proxy
+  caller's single address (the library masks IPv6 to a /56). That is the weakest key available — a residential-proxy
   pool is about $20 for millions of addresses, and one IPv6 customer is allocated
   18 quintillion.
-- `addressBlockOf` widens that to an IPv4 /24 or an IPv6 /64, which is the cheapest
+- `addressBlockOf` widens that to an IPv4 /24 or an IPv6 /48, which is the cheapest
   real defence and the intended default for anything anonymous.
 - `identityOf` hashes the request BODY's `email`/`username`. That key is
   attacker-supplied by construction: it bounds one victim account being guessed at,
@@ -72,7 +72,7 @@ carry it.
 | ----------------- | ------------------------------------------------------- |
 | `identityOf`      | nothing — change one body field                         |
 | default (address) | a proxy hop, cents, or free on IPv6                     |
-| `addressBlockOf`  | a new /24 or /64 — the cheapest key that costs anything |
+| `addressBlockOf`  | a new /24 or /48 — the cheapest key that costs anything |
 | `credentialId`    | a new credential, which you must be issued              |
 | `accountId`       | a new account, through signup, which is itself budgeted |
 

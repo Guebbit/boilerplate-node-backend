@@ -10,7 +10,7 @@ import { appAnswering, statusOf, withReloadedRateLimits } from '@tests/rate-limi
 /**
  * Anti-automation Rung 1 (see `docs/tools/security.md#identity--and-block-keyed-budgets--signup-password-reset-the-contact-form`):
  * `signupLimiters` and `resetRequestLimiters` each add an identity (submitted email) and an
- * address-BLOCK (IPv4 /24, IPv6 /64) dimension on top of the per-address budget — three keys, not
+ * address-BLOCK (IPv4 /24, IPv6 /48) dimension on top of the per-address budget — three keys, not
  * one. Built against trivial handlers, like `submissionLimiter`'s own tests — the property under
  * test belongs to the limiter, not to `postSignup`/`postResetRequest`. `feedback`'s own identity
  * budget (`contactLimiters`) has the same shape and its own test —
@@ -219,7 +219,7 @@ describe('address-block keying', () => {
         expect(await statusOf(attempt('198.51.100.5', 'four@example.com'))).toBe(201);
     });
 
-    it('shares one budget across different IPv6 addresses in the same /64', async () => {
+    it('shares one budget across different IPv6 addresses in the same /48', async () => {
         const signupLimiters = await withAccountRateLimits(
             {
                 NODE_SIGNUP_RATE_LIMIT_MAX: '50',
@@ -235,11 +235,11 @@ describe('address-block keying', () => {
 
         expect(await statusOf(attempt('2001:db8::1', 'one@example.com'))).toBe(201);
         expect(await statusOf(attempt('2001:db8::2', 'two@example.com'))).toBe(201);
-        // Same 2001:db8::/64 as the two above.
+        // Same 2001:db8::/48 as the two above.
         expect(await statusOf(attempt('2001:db8::3', 'three@example.com'))).toBe(429);
 
-        // A different /64 — the 4th hextet changes — is a different block.
-        expect(await statusOf(attempt('2001:db8:0:1::1', 'four@example.com'))).toBe(201);
+        // A different /48 — the 3rd hextet changes — is a different block.
+        expect(await statusOf(attempt('2001:db8:1::1', 'four@example.com'))).toBe(201);
     });
 });
 
