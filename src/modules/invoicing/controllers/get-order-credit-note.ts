@@ -12,6 +12,8 @@ import { invoicingService } from '../services';
 import { rejectResponse } from '@infrastructure/http/response';
 import { isValidObjectId, requireId } from '@infrastructure/http/ids';
 import { catchAs } from '@infrastructure/http/controller';
+import { callerContextOf } from '@infrastructure/http/request';
+import { mayReadCreditNotes } from '../services/credit-note-access';
 import { ERROR_CODES } from '@api/error-codes';
 import { recordStaffRead } from '@kernel/staff-read';
 import { invoicingAuditActions } from '../audit';
@@ -26,7 +28,7 @@ const notIssued = (response: Response): void => {
     ]);
 };
 
-/** GET /orders/:id/credit-notes/:creditNoteId — the credit-note PDF; non-admin callers see only their own order's. */
+/** GET /orders/:id/credit-notes/:creditNoteId — the credit-note PDF; non-admin callers see only their own order's, and staff need the payments staff read. */
 export const getOrderCreditNote = (
     request: Request<{ id?: string; creditNoteId?: string }>,
     response: Response
@@ -45,7 +47,11 @@ export const getOrderCreditNote = (
                 rejectResponse(response, 404, [t('orders.not-found')]);
                 return undefined;
             }
-            if (!isValidObjectId(creditNoteId)) {
+            // Staff who may read the order but not the money get the one answer a stranger gets.
+            if (
+                !isValidObjectId(creditNoteId) ||
+                !mayReadCreditNotes(order, request.authContext, callerContextOf(request))
+            ) {
                 notIssued(response);
                 return undefined;
             }

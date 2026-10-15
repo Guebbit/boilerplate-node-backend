@@ -7,7 +7,7 @@
 
 import { setupTestDb } from '@tests/setup-test-db';
 import { withEnvironment } from '@tests/environment';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { markPaid } from '@modules/orders';
 import { createProduct } from '@modules/products/tests/factories';
 import { createOrder, toOrderItem } from '@modules/orders/tests/factories';
@@ -264,6 +264,61 @@ describe('GET /orders/{id}/credit-notes', () => {
             .set('Authorization', strangerBearer);
 
         expect(response.status).toBe(404);
+    });
+});
+
+/** An order refunded in full, with the credit note issued, and the buyer's bearer. */
+const refundedOrder = async () => {
+    const owner = await authenticateAs('user');
+    const product = await createProduct();
+    const order = await createOrder(owner.user, [toOrderItem(product, 1)]);
+    const orderId = String(order._id);
+    await markPaid(orderId);
+    await waitUntilInvoiced(orderId, owner.bearer);
+    const creditNote = await issueCreditNote({
+        orderId,
+        refundId: 'refund-2',
+        amount: 1,
+        full: true
+    });
+    return { orderId, creditNoteId: String(creditNote?._id) };
+};
+
+describe('the credit notes of an order the caller may read but not its money', () => {
+    it('lists none to the warehouse, which packs the order but may not read refunds', async () => {
+        const { orderId } = await refundedOrder();
+        const warehouse = await authenticateAsRole('warehouse');
+
+        const response = await api()
+            .get(`/orders/${orderId}/credit-notes`)
+            .set('Authorization', warehouse.bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toEqual([]);
+    });
+
+    it('answers the warehouse a download with the same 404 a stranger gets', async () => {
+        const { orderId, creditNoteId } = await refundedOrder();
+        const warehouse = await authenticateAsRole('warehouse');
+
+        const response = await api()
+            .get(`/orders/${orderId}/credit-notes/${creditNoteId}`)
+            .set('Authorization', warehouse.bearer);
+
+        expect(response.status).toBe(404);
+        expect(response.body.errors[0].code).toBe('ORDER_CREDIT_NOTE_NOT_ISSUED');
+    });
+
+    it('lists them to the support desk, which reads payments', async () => {
+        const { orderId } = await refundedOrder();
+        const support = await authenticateAsRole('support');
+
+        const response = await api()
+            .get(`/orders/${orderId}/credit-notes`)
+            .set('Authorization', support.bearer);
+
+        expect(response.status).toBe(200);
+        expect(response.body.data).toHaveLength(1);
     });
 });
 
