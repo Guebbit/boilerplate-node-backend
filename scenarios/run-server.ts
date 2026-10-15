@@ -21,9 +21,9 @@
  *
  * See: docs/tools/demo-profile.md
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { parse as parseDotenv } from 'dotenv';
+import { parseEnv } from 'node:util';
 // Before any model loads: Mongoose defaults are read at schema build.
 import '@infrastructure/runtime/mongoose-boot';
 import { currentEnvironment, installEnvironment } from '@infrastructure/config/store';
@@ -33,22 +33,16 @@ import { startInProcessMongod } from './support/ephemeral-mongod';
 import { DEMO_BANK_TRANSFER, SCRIPTED_RATE_LIMITS } from './rate-limits';
 
 /**
- * `.env` read in isolation — never `import 'dotenv/config'` here: that would load every key, and
- * `.env`'s real rate limits and token secrets are exactly what `REQUIRED_DEFAULTS`/
- * `SCRIPTED_RATE_LIMITS` below exist to override for this throwaway profile. `dotenv.parse` only
- * reads the file into a plain object, with no `process.env` write.
- * https://github.com/motdotla/dotenv#parse
- * @returns the file's keys, or an empty object when `.env` is missing
+ * `.env` read in isolation, once — never `import 'dotenv/config'` here: that would load every key,
+ * and `.env`'s real rate limits and token secrets are exactly what `REQUIRED_DEFAULTS`/
+ * `SCRIPTED_RATE_LIMITS` below exist to override for this throwaway profile. `parseEnv` only reads
+ * the text into a plain object, with no `process.env` write; a checkout with no `.env` gets an
+ * empty one, and `REQUIRED_DEFAULTS`' own fallbacks cover it.
+ * https://nodejs.org/api/util.html#utilparseenvcontent
  */
-const dotenvValues = (): Partial<Record<string, string>> => {
-    const environmentPath = path.join(process.cwd(), '.env');
-    try {
-        return parseDotenv(readFileSync(environmentPath, 'utf8'));
-    } catch {
-        // No `.env` in this checkout — REQUIRED_DEFAULTS' own fallback below covers it.
-        return {};
-    }
-};
+const DOTENV: Partial<Record<string, string>> = existsSync(path.join(process.cwd(), '.env'))
+    ? parseEnv(readFileSync(path.join(process.cwd(), '.env'), 'utf8'))
+    : {};
 
 /**
  * A variable the SHELL set, as opposed to one `.env` supplied.
@@ -62,7 +56,7 @@ const dotenvValues = (): Partial<Record<string, string>> => {
  */
 const shellValue = (key: string): string | undefined => {
     const current = process.env[key]?.trim();
-    return current && current !== dotenvValues()[key] ? current : undefined;
+    return current && current !== DOTENV[key] ? current : undefined;
 };
 
 /**
@@ -110,8 +104,7 @@ const REQUIRED_DEFAULTS: Record<string, string> = {
     // Falls back to both standard local frontend ports: the dev server (8080) and the e2e preview
     // (8085). Without the second, a browser on the preview is refused by CORS while every
     // Node-side call passes.
-    NODE_CORS_ORIGIN:
-        dotenvValues().NODE_CORS_ORIGIN ?? 'http://localhost:8080,http://localhost:8085',
+    NODE_CORS_ORIGIN: DOTENV.NODE_CORS_ORIGIN ?? 'http://localhost:8080,http://localhost:8085',
     ...DEMO_BANK_TRANSFER
 };
 
