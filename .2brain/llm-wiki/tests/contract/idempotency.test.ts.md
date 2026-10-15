@@ -1,7 +1,7 @@
 ---
 source: tests/contract/idempotency.test.ts
-sha256: 3f4b1d2157521bb8ac088cb7910a0c18e04b6c1e8abfcd0cddce4699a3e89ade
-generated_at: 2026-09-23T19:51:50.205412+00:00
+sha256: d46d5c4a4ea0ab09bc00f65ffed1c4171b5826d967382ba8a78a9e6afe92111e
+generated_at: 2026-10-15T12:32:23.176388+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,27 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Contract test exercising the `Idempotency-Key` middleware's three-way branching logic (replay, mismatch, in-flight) against a real database. It drives the simplest opted-in route — `POST /feedback/contact` (public, single-field, no auth) — to verify ledger behaviour and response shapes without fighting authentication. Complements the pure-fingerprinting unit test in `tests/unit/infrastructure/http/middlewares/idempotency.test.ts`.
+Integration (contract) test that drives the `Idempotency-Key` middleware through real HTTP requests against a live database, using `POST /feedback/contact` as the target route. It verifies the three runtime branches of the middleware — replay, key/body mismatch, and in-flight collision — plus two edge cases (malformed key, absent key). The unit test at `tests/unit/infrastructure/http/middlewares/idempotency.test.ts` covers pure fingerprinting logic; this file covers the observable three-way decision against a persisted ledger.
 
 ## Key elements
 
-- **`setupTestDb()`** — called at module load; provisions a real (ephemeral) database for the suite.
-- **`PAYLOAD`** — shared request body (name/email/subject/message) used across all test cases.
-- **`describe('Idempotency-Key — POST /feedback/contact')`** — five test cases:
-    - _Replay_ — same key + same body → 201, `idempotent-replay: true` header, identical body, exactly one ledger row.
-    - _Mismatch_ — same key + different body → 422, error code `IDEMPOTENCY_KEY_MISMATCH`.
-    - _In-flight_ — same key while record is in `in-flight` state → 409, error code `IDEMPOTENCY_IN_FLIGHT`.
-    - _Malformed key_ — key containing a space → 422, zero ledger rows written.
-    - _No key_ — request without the header → 201, zero ledger rows.
+- **`PAYLOAD`** – Fixed fixture object (`name`, `email`, `subject`, `message`) used as the request body across all tests.
+- **`setupTestDb()`** – Called at module scope; provisions a real database for the suite.
+- **Test: "replays the first response verbatim…"** – Sends the same key + body twice; asserts second response is `201`, carries `idempotent-replay: true`, has identical body, and that exactly one ledger row and one feedback record exist.
+- **Test: "answers 422 when the same key is reused with a different body"** – Same key, mutated `subject`; expects `422` with error code `IDEMPOTENCY_KEY_MISMATCH`.
+- **Test: "answers 409 while a request with the same key is still in flight"** – Manually flips the ledger row to `state: 'in-flight'` after the first request completes, then retries; expects `409` with error code `IDEMPOTENCY_IN_FLIGHT`.
+- **Test: "rejects a malformed key before writing to the ledger"** – Key containing a space; expects `422` and zero ledger rows.
+- **Test: "runs normally, with no ledger row at all, when no key is sent"** – Omits the header entirely; expects `201` and zero ledger rows.
 
 ## Relationships
 
-- **`src/infrastructure/http/middlewares/idempotency-model.ts`** — imports `idempotencyRecordModel` to assert ledger row counts directly and to force a record's `state` back to `'in-flight'` (simulating a race that two sequential HTTP calls cannot produce).
-- **`tests/support/contract.ts`** — side-effect import; registers the `toSatisfyApiSpec()` matcher used in every assertion.
-- **`tests/support/http.ts`** — provides the `api()` helper for issuing HTTP requests against the running server.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()` to create/seed the real database before tests run.
+- **`src/infrastructure/http/middlewares/idempotency-model.ts`** – Exports `idempotencyRecordModel`, used here to (a) assert row counts via `countDocuments` and (b) force the `in-flight` state via `updateOne` to simulate a concurrent race.
+- **`tests/support/contract.ts`** – Imported for side effects; sets up global contract-test configuration (e.g. app instance, test hooks).
+- **`tests/support/http.ts`** – Provides the `api()` supertest-style client used to issue requests.
+- **`tests/support/setup-test-db.ts`** – Provides `setupTestDb()` to create and tear down a real database instance for the suite.
 
 ## Notes
 
-- The in-flight test **mutates the ledger directly** (`idempotencyRecordModel.updateOne`) to force `state: 'in-flight'` after the first request has already completed. This is the only way to reach that branch without spawning two truly concurrent sockets.
-- The route `POST /feedback/contact` is deliberately chosen because it is public and single-field; no auth token or complex body is needed.
-- Every response assertion is followed by `toSatisfyApiSpec()` to enforce the shared API envelope contract.
-- Tests assume a clean ledger per case; they rely on the test DB being fresh (no isolation helper is visible in the file).
+- The **in-flight** test cannot use two truly concurrent sockets; instead it completes the first request, then mutates the DB row back to `state: 'in-flight'` before issuing the second request. This is the only way to exercise that branch without a dedicated concurrency harness.
+- The route was chosen deliberately: `POST /feedback/contact` is public and single-field, so tests don't need to handle auth, tokens, or role checks.
+- The `idempotent-replay: true` response header is the observable signal that a stored response was returned rather than the handler re-executing.

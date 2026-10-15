@@ -97,12 +97,11 @@ export const scoresFromReport = (report: MutationReport): Record<string, number>
 /**
  * The scores from the last single run's JSON report.
  *
- * @param root - repo root; defaults to the working directory
  * @returns percentage per file
  * @throws Error when no report exists yet
  */
-export const readReport = (root = process.cwd()): Record<string, number> => {
-    const reportPath = path.join(root, REPORT_PATH);
+export const readReport = (): Record<string, number> => {
+    const reportPath = path.join(process.cwd(), REPORT_PATH);
     if (!existsSync(reportPath))
         throw new Error(
             `No mutation report at ${reportPath}. Run \`npm run mutation\` or \`npm run ` +
@@ -137,11 +136,10 @@ export const readReportsUnder = (directory: string): Record<string, number> => {
 /**
  * The recorded baseline.
  *
- * @param root - repo root; defaults to the working directory
  * @returns the baseline, or `undefined` when none has been recorded yet
  */
-export const readBaseline = (root = process.cwd()): MutationBaseline | undefined => {
-    const baselinePath = path.join(root, BASELINE_PATH);
+export const readBaseline = (): MutationBaseline | undefined => {
+    const baselinePath = path.join(process.cwd(), BASELINE_PATH);
     if (!existsSync(baselinePath)) return undefined;
     return JSON.parse(readFileSync(baselinePath, 'utf8')) as MutationBaseline;
 };
@@ -150,10 +148,12 @@ export const readBaseline = (root = process.cwd()): MutationBaseline | undefined
  * Write the baseline as indented JSON with a trailing newline.
  *
  * @param baseline - what to record
- * @param root - repo root; defaults to the working directory
  */
-export const writeBaseline = (baseline: MutationBaseline, root = process.cwd()): void => {
-    writeFileSync(path.join(root, BASELINE_PATH), `${JSON.stringify(baseline, undefined, 4)}\n`);
+export const writeBaseline = (baseline: MutationBaseline): void => {
+    writeFileSync(
+        path.join(process.cwd(), BASELINE_PATH),
+        `${JSON.stringify(baseline, undefined, 4)}\n`
+    );
 };
 
 /**
@@ -193,23 +193,8 @@ export const compareToBaseline = (
 export const compareMerged = (
     current: Record<string, number>,
     baseline?: MutationBaseline
-): FileComparison[] => {
-    const previous = baseline?.files ?? {};
-
-    return Object.keys(current)
-        .toSorted()
-        .map((file) => {
-            const before = previous[file] as number | undefined;
-            const now = current[file];
-
-            if (before === undefined) return { file, current: now, verdict: 'new' as const };
-            if (now < before - SCORE_TOLERANCE)
-                return { file, baseline: before, current: now, verdict: 'regressed' as const };
-            if (now > before)
-                return { file, baseline: before, current: now, verdict: 'improved' as const };
-            return { file, baseline: before, current: now, verdict: 'held' as const };
-        });
-};
+): FileComparison[] =>
+    compareToBaseline(current, baseline).filter(({ verdict }) => verdict !== 'removed');
 
 /**
  * The baseline to commit after a MERGE, as opposed to a full `--update`.

@@ -29,7 +29,8 @@ import {
     readReport,
     readReportsUnder,
     writeBaseline,
-    BASELINE_PATH
+    BASELINE_PATH,
+    type FileComparison
 } from './baseline';
 import { flagValue } from '../cli';
 
@@ -94,12 +95,13 @@ if (!baseline) {
 }
 
 /**
- * `--merge` mode: record new and improved files, report regressions, then exit — the rest of
- * this file is the single-run path.
+ * Prints the files that are new or improved. Printed even on a passing run: the ratchet is only
+ * trustworthy if people can see it moving, and a silent pass looks identical to a check that is
+ * not running.
+ *
+ * @param comparisons - the verdicts of this run
  */
-if (merge) {
-    const comparisons = compareMerged(current, baseline);
-
+const printProgress = (comparisons: readonly FileComparison[]): void => {
     for (const { file, current: score } of comparisons.filter(({ verdict }) => verdict === 'new'))
         console.log(`[mutation-baseline] new file recorded: ${file} at ${score!.toFixed(2)}%`);
 
@@ -109,6 +111,16 @@ if (merge) {
         console.log(
             `[mutation-baseline] improved: ${file} ${before!.toFixed(2)}% -> ${after!.toFixed(2)}%`
         );
+};
+
+/**
+ * `--merge` mode: record new and improved files, report regressions, then exit — the rest of
+ * this file is the single-run path.
+ */
+if (merge) {
+    const comparisons = compareMerged(current, baseline);
+
+    printProgress(comparisons);
 
     writeBaseline(mergeIntoBaseline(current, baseline));
     console.log(
@@ -164,20 +176,7 @@ const counts = {
     removed: comparisons.filter(({ verdict }) => verdict === 'removed').length
 };
 
-/*
- * New and improved files are printed even on a passing run. The ratchet is only trustworthy if
- * people can see it moving: a silent pass looks identical to a check that is not running.
- */
-for (const { file, current: score } of comparisons.filter(({ verdict }) => verdict === 'new'))
-    console.log(`[mutation-baseline] new file recorded: ${file} at ${score!.toFixed(2)}%`);
-
-// Files that scored higher than their baseline.
-for (const { file, baseline: before, current: after } of comparisons.filter(
-    ({ verdict }) => verdict === 'improved'
-))
-    console.log(
-        `[mutation-baseline] improved: ${file} ${before!.toFixed(2)}% -> ${after!.toFixed(2)}%`
-    );
+printProgress(comparisons);
 
 // Files the baseline knows that this run did not measure.
 for (const { file } of comparisons.filter(({ verdict }) => verdict === 'removed'))

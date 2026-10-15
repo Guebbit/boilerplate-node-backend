@@ -103,31 +103,29 @@ const cut = (unit: Unit, parts: number): Unit[] => {
 };
 
 /** A file as the first wave sees it: whole when it fits a shard, sliced when it doesn't. */
-export const unitsOf = (file: ScopeFile, shardLines = SHARD_LINES): Unit[] =>
-    file.lines <= shardLines ? [file] : cut(file, Math.ceil(file.lines / shardLines));
+export const unitsOf = (file: ScopeFile): Unit[] =>
+    file.lines <= SHARD_LINES ? [file] : cut(file, Math.ceil(file.lines / SHARD_LINES));
 
 /**
  * Splits a unit that ran out of time, or `undefined` when it is already too small to split.
- *
- * @param factor how many pieces
  */
-export const splitUnit = (unit: Unit, factor = SPLIT_FACTOR): Unit[] | undefined => {
+export const splitUnit = (unit: Unit): Unit[] | undefined => {
     const { from, to } = spanOf(unit);
-    return to - from + 1 < factor * MIN_SLICE_LINES ? undefined : cut(unit, factor);
+    return to - from + 1 < SPLIT_FACTOR * MIN_SLICE_LINES ? undefined : cut(unit, SPLIT_FACTOR);
 };
 
 /**
  * Groups units into shards: a slice alone (its `MUTATION_SLICE` covers the whole run), whole files
- * first-fit-decreasing up to `shardLines` — a hard cap, unlike `sharding.ts`'s balanced bins.
+ * first-fit-decreasing up to {@link SHARD_LINES} — a hard cap, unlike `sharding.ts`'s balanced bins.
  *
  * @returns unnamed shards, slices first — they are the ones most likely to be slow
  */
-export const packUnits = (units: readonly Unit[], shardLines = SHARD_LINES): Unit[][] => {
+export const packUnits = (units: readonly Unit[]): Unit[][] => {
     const slices = units.filter((unit) => unit.slice).map((unit) => [unit]);
     const bins: { units: Unit[]; lines: number }[] = [];
 
     for (const unit of units.filter((each) => !each.slice).toSorted((a, b) => b.lines - a.lines)) {
-        const bin = bins.find(({ lines }) => lines + unit.lines <= shardLines);
+        const bin = bins.find(({ lines }) => lines + unit.lines <= SHARD_LINES);
         if (bin) {
             bin.units.push(unit);
             bin.lines += unit.lines;
@@ -156,18 +154,11 @@ const scheduleWave = (
     };
 };
 
-/**
- * The first wave: the whole scope, big files pre-sliced.
- *
- * @param shardLines lines per shard, defaulting to {@link SHARD_LINES}
- */
-export const firstWave = (scope: readonly ScopeFile[], shardLines = SHARD_LINES): WavePlan =>
+/** The first wave: the whole scope, big files pre-sliced. */
+export const firstWave = (scope: readonly ScopeFile[]): WavePlan =>
     scheduleWave(
         1,
-        packUnits(
-            scope.flatMap((file) => unitsOf(file, shardLines)),
-            shardLines
-        ).map((units) => ({ units, errors: 0 })),
+        packUnits(scope.flatMap((file) => unitsOf(file))).map((units) => ({ units, errors: 0 })),
         { scope: [...scope], abandoned: [] }
     );
 
