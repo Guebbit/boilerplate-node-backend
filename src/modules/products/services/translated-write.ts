@@ -4,7 +4,9 @@
  */
 
 import type { z } from 'zod';
-import { getFallbackLocale } from '@infrastructure/i18n';
+import { getFallbackLocale, t } from '@infrastructure/i18n';
+import { holdsKey } from '@kernel/ability';
+import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { fillOmittedWithNull } from '@infrastructure/object-guards';
 import {
     isTranslationPlan,
@@ -20,6 +22,7 @@ import type {
     ServerImageFields
 } from '@types';
 import {
+    generateReject,
     generateSuccess,
     type ResponseReject,
     type ResponseSuccess
@@ -72,11 +75,41 @@ const prefixTranslationErrors = (rejection: ResponseReject): ResponseReject => (
     )
 });
 
+/** The key that books stock: an opening count on a new product is a stock movement. */
+const OPENING_STOCK_KEY = 'inventory.any.create';
+
+/**
+ * `403 FORBIDDEN` for an opening count the caller may not book. `onHand` on `POST /products` writes
+ * a `receive` stock movement, and a role that edits the catalogue (`products.any.create`) is not
+ * thereby one that moves stock — otherwise sellable units appear that nobody with a stock key
+ * counted. Audited like the route guard's own refusal.
+ *
+ * @param onHand - the opening count the body asked for
+ * @param context - the caller
+ * @returns the refusal, or `undefined` when there is no count or the caller may book it
+ */
+const openingStockRefusal = (
+    onHand: number | undefined,
+    context: CallerContext
+): ResponseReject | undefined => {
+    if (!onHand || holdsKey(context.caller, OPENING_STOCK_KEY)) return undefined;
+
+    recordAudit(context, {
+        action: coreAuditActions.SECURITY_FORBIDDEN,
+        outcome: 'failure',
+        targetType: 'product',
+        metadata: { reason: 'missing_permission', permission: OPENING_STOCK_KEY }
+    });
+
+    return generateReject(403, [t('generic.error-forbidden')]);
+};
+
 /**
  * Create a product and its translation rows in ONE transaction — the create door of the
  * multilingual product write surface.
  *
- * Before:  the translations batch's locales and field names — `planTranslations`; nothing written
+ * Before:  an opening count the caller may not book is refused (`inventory.any.create`); then the
+ *          translations batch's locales and field names — `planTranslations`; nothing written
  *          yet (a bad batch costs no transaction). `data` arrives already validated by
  *          `zodProductCreateSchema` at the controller, which also refuses a missing or `null`
  *          fallback locale.
@@ -92,6 +125,9 @@ export const writeCreate = async (
     context: CallerContext,
     imageExtras: ServerImageFields = {}
 ): Promise<ResponseSuccess<ProductDocument> | ResponseReject> => {
+    const unearned = openingStockRefusal(data.onHand, context);
+    if (unearned) return unearned;
+
     const plan = await planTranslations('product', toUpsertTranslationsRequest(data.translations));
     if (!isTranslationPlan(plan)) return prefixTranslationErrors(plan);
 

@@ -74,6 +74,11 @@ included, gets `inStock` (is anything available) and `lowStock` (available at or
 representation, so a client never has to guess from an absent number. A cached public list is
 keyed by the caller's reach, so one reader's counters are never served to another.
 
+**An opening count is a stock movement.** `POST /products` with `onHand` above zero books a `receive`
+movement, so it needs `inventory.any.create` on top of `products.any.create`: an editor or a manager
+who may write the catalogue but holds no stock key is refused `403 FORBIDDEN` (audited like any
+missing key, `translated-write.ts#openingStockRefusal`) and nothing is written.
+
 Deletion is soft by default: it stamps `deletedAt` (and leaves `active` alone), with a restore route, because an order that
 embedded a product still has to render months later. An admin can still ask for a hard delete
 (`hardDelete: true`), which destroys the row outright — see

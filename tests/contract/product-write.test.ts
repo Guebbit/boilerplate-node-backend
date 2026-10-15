@@ -9,7 +9,7 @@ import '@tests/contract';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
-import { createProduct } from '@modules/products/tests/factories';
+import { createProduct, productRepository } from '@modules/products/tests/factories';
 import { localeRepository } from '@modules/locales/repository';
 import { makeLocale } from '@modules/locales/factories';
 import { translator } from '@infrastructure/i18n';
@@ -562,10 +562,11 @@ describe('the stock counters on the product writes follow inventory.any.read', (
         const editor = await authenticateAsRole('editor');
         const admin = await authenticateAsRole('admin');
 
+        // An editor books no opening count (no `inventory.any.create`), so the count is the admin's.
         const byEditor = await api()
             .post('/products')
             .set('Authorization', editor.bearer)
-            .send(bodyTitled('Editor desk'));
+            .send({ price: 10, translations: { en: { title: 'Editor desk' } } });
         const byAdmin = await api()
             .post('/products')
             .set('Authorization', admin.bearer)
@@ -583,9 +584,27 @@ describe('the stock counters on the product writes follow inventory.any.read', (
         const adminRead = await api()
             .get(`/products/${String(byAdmin.body.data.id)}`)
             .set('Authorization', admin.bearer);
-        expect(editorRead.body.data.inStock).toBe(true);
+        expect(editorRead.body.data.inStock).toBe(false);
         expect(adminRead.body.data).toMatchObject({ onHand: 7, available: 7 });
     });
+
+    // Opening stock is a stock movement: a role that edits the catalogue but holds no stock key may
+    // not book it, and nothing is written.
+    it.each(['editor', 'manager'])(
+        'refuses a %s an opening count, and creates no product',
+        async (role) => {
+            const caller = await authenticateAsRole(role);
+
+            const response = await api()
+                .post('/products')
+                .set('Authorization', caller.bearer)
+                .send(bodyTitled('Counted by an editor'));
+
+            expect(response.status).toBe(403);
+            expect(response.body.errors[0].code).toBe('FORBIDDEN');
+            expect(await productRepository.count({})).toBe(0);
+        }
+    );
 
     it('hides them on the editor’s all-languages read, and shows them to a stock reader', async () => {
         const product = await createProduct({ onHand: 9 });

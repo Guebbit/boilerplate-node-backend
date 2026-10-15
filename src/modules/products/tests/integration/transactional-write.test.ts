@@ -7,7 +7,7 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { testCallerContext } from '@tests/callers';
+import { callerContextAs, testCallerContext } from '@tests/callers';
 import { outboxEventModel, settleOutboxNudges } from '@kernel/outbox';
 import { registerTranslationPort } from '@kernel/translation';
 import { createProduct, readProduct } from '@modules/products/tests/factories';
@@ -72,7 +72,7 @@ describe('productService.writeCreate is one transaction', () => {
                 onHand: 4,
                 translations: { [FALLBACK]: { title: 'Standing Desk' } }
             }),
-            testCallerContext
+            callerContextAs('admin')
         )) as ResponseSuccess<ProductDocument>;
 
         await settleOutboxNudges();
