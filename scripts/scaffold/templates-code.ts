@@ -346,7 +346,7 @@ export const search = (
  * @param payload - the changes
  * @returns the saved document
  */
-export const update = (
+const applyUpdate = (
     ${names.entityCamel}: ${names.entity}Document,
     payload: Update${names.entity}Request
 ): Promise<ResponseSuccess<${names.entity}Document>> => {
@@ -357,7 +357,7 @@ export const update = (
 };
 
 /**
- * Load by id, apply {@link update}, audit on success.
+ * Load by id, apply {@link applyUpdate}, audit on success.
  * @param id - the record id
  * @param payload - the changes
 ${contextDocument(options, 'who acted')} * @returns a 404 reject when the id names nothing, otherwise the saved document
@@ -368,7 +368,7 @@ export const updateById = (
 ): Promise<ResponseSuccess<${names.entity}Document> | ResponseReject> =>
     ${names.entityCamel}Repository.findById(id).then<ResponseSuccess<${names.entity}Document> | ResponseReject>((found) => {
         if (!found) return generateReject(404, [t('generic.error-not-found')]);
-        return update(found, payload)${thenAudit(
+        return applyUpdate(found, payload)${thenAudit(
             names,
             options,
             'result',
@@ -403,7 +403,7 @@ export const remove = (
     });
 
 /** The module's service object, used by the controllers in ./controllers. */
-export const ${names.entityCamel}Service = { create, search, update, updateById, remove };
+export const ${names.entityCamel}Service = { create, search, updateById, remove };
 `;
 
 /** The one place a document becomes the wire shape. */
@@ -561,6 +561,8 @@ import { present${names.entity} } from '../presenter';
 /** PUT and PATCH ${names.basePath}/:id - one handler pair over updateById, which audits itself. */
 export const { replace: replace${names.entity}, update: update${names.entity} } =
     createUpdateController({
+        // The scaffolded contract declares no If-Match: add the header there, then flip this.
+        versioned: false,
         entity: '${names.entityCamel}',
         notFoundKey: 'generic.error-not-found',
         replaceSchema: Replace${names.entity}Body,

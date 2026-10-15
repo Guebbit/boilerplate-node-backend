@@ -63,6 +63,7 @@ paths:
             operationId: list${names.plural}
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '${ROOT}#/components/parameters/PageParam'
                 - $ref: '${ROOT}#/components/parameters/PageSizeParam'
@@ -81,6 +82,7 @@ ${KEYED_ERRORS}
             operationId: create${names.entity}
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             requestBody:
                 required: true
                 content:
@@ -106,6 +108,7 @@ ${KEYED_ERRORS}
             operationId: replace${names.entity}
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             requestBody:
@@ -129,6 +132,7 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             operationId: update${names.entity}
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             requestBody:
@@ -155,6 +159,7 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             operationId: delete${names.entity}
             security:
                 - bearerAuth: []
+                - apiKeyAuth: []
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             responses:
