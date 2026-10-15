@@ -16,7 +16,7 @@ import { translationsWithFallback } from './lookups';
  * Which products a caller is allowed to read.
  *
  * Takes `request.caller`, not the session: a session and an API key both resolve to one, so a key
- * holding `products.any.read` sees what a session holding it sees. `{}` for an unrestricted
+ * holding `display:Product` sees what a session holding it sees. `{}` for an unrestricted
  * caller, the published catalogue for everyone else. Why the scope rides in the read rather than
  * being checked after it is the shared rule's to explain — see `accessibleFilterFor`.
  *
@@ -54,7 +54,7 @@ export const getById = (
 
 /**
  * `GET /products/:id` — get a product, as `context.caller` may see it: the exact stock counters
- * stay for a holder of `inventory.any.read` — see `./stock-view`.
+ * stay for a holder of `read:StockLevel` — see `./stock-view`.
  *
  * Wraps rather than folds into `getById()`: most callers (unit tests, other services resolving a
  * product they already know about) have no `CallerContext`. A view is NOT reported from here: the

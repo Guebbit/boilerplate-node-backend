@@ -68,7 +68,7 @@ describe('a key that demands step-up', () => {
     it('lets a freshly proved caller through', () => {
         const next = jest.fn();
 
-        requirePermission('users.any.delete')(
+        requirePermission('delete', 'User')(
             makeRequest({ ...asAdmin('u1'), authTime: NOW() }),
             makeResponse(),
             asStub<NextFunction>(next)
@@ -81,7 +81,7 @@ describe('a key that demands step-up', () => {
         const response = makeResponse();
         const next = jest.fn();
 
-        requirePermission('users.any.delete')(
+        requirePermission('delete', 'User')(
             // Yesterday. `authTime` is carried from the token's own claim, never derived.
             makeRequest({ ...asAdmin('u1'), authTime: NOW() - 86_400 }),
             response,
@@ -98,7 +98,7 @@ describe('a key that demands step-up', () => {
         withEnvironment('NODE_REAUTH_TIME_CRITICAL', '60', () => {
             const response = makeResponse();
 
-            requirePermission('users.any.delete')(
+            requirePermission('delete', 'User')(
                 makeRequest({ ...asAdmin('u1'), authTime: NOW() - 61 }),
                 response,
                 asStub<NextFunction>(jest.fn())
@@ -116,7 +116,7 @@ describe('a key that demands step-up', () => {
     it('carries both dialects of the challenge', () => {
         const response = makeResponse();
 
-        requirePermission('users.any.delete')(
+        requirePermission('delete', 'User')(
             makeRequest({ ...asAdmin('u1'), authTime: 0 }),
             response,
             asStub<NextFunction>(jest.fn())
@@ -138,7 +138,7 @@ describe('a key that demands step-up', () => {
     });
 
     it('records that the challenge was demanded, and for which key', () => {
-        requirePermission('users.any.delete')(
+        requirePermission('delete', 'User')(
             makeRequest({ ...asAdmin('u1'), authTime: 0 }),
             makeResponse(),
             asStub<NextFunction>(jest.fn())
@@ -149,7 +149,7 @@ describe('a key that demands step-up', () => {
                 action: 'security.reauth_required',
                 outcome: 'failure',
                 metadata: expect.objectContaining({
-                    permission: 'users.any.delete',
+                    permission: 'delete:User',
                     tier: 'critical'
                 })
             })
@@ -159,7 +159,7 @@ describe('a key that demands step-up', () => {
     it('refuses a caller without the key rather than challenging them', () => {
         const response = makeResponse();
 
-        requirePermission('users.any.delete')(
+        requirePermission('delete', 'User')(
             makeRequest({ ...asCustomer('u1'), authTime: 0 }),
             response,
             asStub<NextFunction>(jest.fn())
@@ -178,7 +178,7 @@ describe('a key that does not demand step-up', () => {
     it('lets an ancient session through', () => {
         const next = jest.fn();
 
-        requirePermission('users.any.update')(
+        requirePermission('update', 'User')(
             makeRequest({ ...asAdmin('u1'), authTime: 0 }),
             makeResponse(),
             asStub<NextFunction>(next)

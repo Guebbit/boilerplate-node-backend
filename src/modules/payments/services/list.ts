@@ -1,7 +1,7 @@
 /**
  * @module
  * The staff reads behind the Payments page: the list, the refunds across every payment, and what
- * needs a person. All three are `payments.any.read` routes, so every row carries the provider ids.
+ * needs a person. All three are `display:Payment` routes, so every row carries the provider ids.
  *
  * Composition: the list asks `orders` for the page's order numbers and emails in one batch
  * (`orderService.findManyByIds`), the same shape `inventory` uses to name products.
@@ -45,7 +45,7 @@ const staffRow = (
  * One page of payments, filtered and sorted, with each row's order number and email.
  *
  * @param filters - the validated search
- * @param authContext - the caller (already known to hold `payments.any.read`)
+ * @param authContext - the caller (already known to hold `display:Payment`)
  */
 export const listPayments = (
     filters: SearchPaymentsRequest,

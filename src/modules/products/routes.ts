@@ -35,7 +35,7 @@ export const router = Router();
 /*
  * `getAuth` on everything, no identity guard here: the reads below are a storefront and must
  * answer an anonymous browser. Each write names its own guard instead, and that guard is
- * `isAuthOrCredential` — catalogue writes are `products.any.*`/`translations.any.*` keys over
+ * `isAuthOrCredential` — catalogue writes are `Product`/`Translation` rules over
  * the tenant's own data, so a PIM or a supplier feed may hold them. See
  * docs/tools/security.md#machine-to-machine-credentials.
  */
@@ -72,16 +72,16 @@ router.post('/search', cacheProductsSearch, getProducts);
 // GET /products — public
 router.get('/', cacheProductsSearch, getProducts);
 
-// POST /products — admin only (create). Two keys: `products.any.create` for the record itself,
-// `translations.any.update` since the same write always carries every language's copy alongside it.
+// POST /products — admin only (create). Two keys: `create:Product` for the record itself,
+// `update:Translation` since the same write always carries every language's copy alongside it.
 // Both are required: neither key alone completes this write, which is what stops a rewording
 // from becoming a repricing.
 router.post(
     '/',
     uploadLimiter,
     isAuthOrCredential,
-    requirePermission('products.any.create'),
-    requirePermission('translations.any.update'),
+    requirePermission('create', 'Product'),
+    requirePermission('update', 'Translation'),
     invalidateCache(['products']),
     upload.image(),
     createProduct
@@ -91,7 +91,7 @@ router.post(
 router.delete(
     '/',
     isAuthOrCredential,
-    requirePermission('products.any.delete'),
+    requirePermission('delete', 'Product'),
     invalidateCache(['products']),
     deleteProducts
 );
@@ -128,8 +128,8 @@ router.put(
     '/:id',
     uploadLimiter,
     isAuthOrCredential,
-    requirePermission('products.any.update'),
-    requirePermission('translations.any.update'),
+    requirePermission('update', 'Product'),
+    requirePermission('update', 'Translation'),
     invalidateCache(['products']),
     upload.image(),
     replaceProduct
@@ -140,8 +140,8 @@ router.patch(
     '/:id',
     uploadLimiter,
     isAuthOrCredential,
-    requirePermission('products.any.update'),
-    requirePermission('translations.any.update'),
+    requirePermission('update', 'Product'),
+    requirePermission('update', 'Translation'),
     invalidateCache(['products']),
     upload.image(),
     updateProduct
@@ -152,8 +152,8 @@ router.patch(
 router.get(
     '/:id/admin',
     isAuthOrCredential,
-    requirePermission('products.any.update'),
-    requirePermission('translations.any.read'),
+    requirePermission('update', 'Product'),
+    requirePermission('read', 'Translation'),
     getProductAdmin
 );
 
@@ -161,7 +161,7 @@ router.get(
 router.delete(
     '/:id',
     isAuthOrCredential,
-    requirePermission('products.any.delete'),
+    requirePermission('delete', 'Product'),
     invalidateCache(['products']),
     deleteProducts
 );
@@ -170,7 +170,7 @@ router.delete(
 router.post(
     '/:id/restore',
     isAuthOrCredential,
-    requirePermission('products.any.delete'),
+    requirePermission('delete', 'Product'),
     invalidateCache(['products']),
     restoreProducts
 );
@@ -179,7 +179,7 @@ router.post(
 router.delete(
     '/:id/hard',
     isAuthOrCredential,
-    requirePermission('products.any.delete'),
+    requirePermission('delete', 'Product'),
     invalidateCache(['products']),
     routeFlag('hardDelete'),
     deleteProducts

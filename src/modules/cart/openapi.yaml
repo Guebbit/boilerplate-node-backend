@@ -15,7 +15,7 @@ x-error-codes:
     CART_BILLING_ADDRESS_REQUIRED: { status: 422, description: 'No billing address could be resolved — none was named, nothing ships, and the address book has no default.' }
     CART_CHANGED: { status: 409, description: 'The cart changed between the request that read it and this write — reload and retry.' }
     CART_EMPTY: { status: 409, description: 'Checkout was attempted on a cart with no lines.' }
-    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`inventory.any.read`).' }
+    CART_INSUFFICIENT_STOCK: { status: 409, description: 'One or more lines cannot be bought as they stand — see `errors[].details.lines`, one entry per refused line with its `productId`, `title`, the `requested` quantity and its `availability` (`insufficient_stock`, `out_of_stock` or `unavailable`, so the client picks the message). The number left is not part of the answer: exact stock is for callers who read it (`read:StockLevel`).' }
     CART_OPEN_ORDER_LIMIT: { status: 409, description: 'The account already holds `NODE_MAX_OPEN_UNPAID_ORDERS_PER_ACCOUNT` unpaid orders, whatever their payment method — each holds stock. `errors[].details.orderIds` names them: pay one (`POST /payments/intent`) or cancel one (`POST /orders/{id}/cancel`), then check out again.' }
     CART_PAYMENT_METHOD_NOT_AVAILABLE: { status: 409, description: 'The chosen payment method is not enabled for this deployment or this cart.' }
     CART_PRODUCT_UNAVAILABLE: { status: 409, description: 'A line references a product that was deleted or hidden (`active: false`) since it was added: its `availability` is `removed`. A product merely taken off sale is `unavailable` and refused as `CART_INSUFFICIENT_STOCK`.' }
@@ -497,7 +497,7 @@ components:
                 - `removed`: the product is hidden (`active: false`) or deleted. The line is kept,
                   and returns to a stock value if the product is shown again.
 
-                Never a number: exact stock stays behind `inventory.any.read`.
+                Never a number: exact stock stays behind `read:StockLevel`.
             enum: [in_stock, preorder, insufficient_stock, out_of_stock, unavailable, removed]
 
         MergeLineReason:
@@ -735,7 +735,7 @@ components:
                     type: integer
                     minimum: 1
                 # Whether `quantity` can be bought right now, never the number left: exact
-                # stock is for callers holding `inventory.any.read`, the same level of
+                # stock is for callers holding `read:StockLevel`, the same level of
                 # disclosure as checkout's `CART_INSUFFICIENT_STOCK`. Read from the stock
                 # ledger and the catalogue by the cart view, the merge and checkout
                 # through one rule; `POST /cart` and `PUT` do not refuse a line for stock

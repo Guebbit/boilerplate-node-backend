@@ -7,23 +7,20 @@
 
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
-import {
-    getObservabilityEvents,
-    OBSERVABILITY_READ_KEY
-} from '@modules/observability/controllers/get-observability-events';
+import { getObservabilityEvents } from '@modules/observability/controllers/get-observability-events';
 import { streamObservabilityMetrics } from '@modules/observability/services/stream';
-import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
+import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
 
 jest.mock('@modules/observability/services/stream', () => ({
     __esModule: true,
     streamObservabilityMetrics: jest.fn()
 }));
 
-// Only `stillHoldsKeyViaCookie` is replaced — the module's other guards are untouched here.
+// Only `stillHoldsRuleViaCookie` is replaced — the module's other guards are untouched here.
 jest.mock('@kernel/middlewares/authorizations', () => ({
     ...jest.requireActual('@kernel/middlewares/authorizations'),
     __esModule: true,
-    stillHoldsKeyViaCookie: jest.fn()
+    stillHoldsRuleViaCookie: jest.fn()
 }));
 
 /** What `requirePermissionViaCookie` leaves behind once it admitted the caller. */
@@ -45,7 +42,7 @@ describe('GET /observability/events', () => {
     it('wires the recheck to the key and the request the stream connected with', () => {
         const response = asStub<Response>({});
         const request = cookieRequest();
-        jest.mocked(stillHoldsKeyViaCookie).mockResolvedValueOnce(true);
+        jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
 
         getObservabilityEvents(request, response);
         const [, recheck] = jest.mocked(streamObservabilityMetrics).mock.calls[0] as [
@@ -54,6 +51,10 @@ describe('GET /observability/events', () => {
         ];
         void recheck();
 
-        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(request, OBSERVABILITY_READ_KEY);
+        expect(stillHoldsRuleViaCookie).toHaveBeenCalledWith(
+            request,
+            'read',
+            'ObservabilitySnapshot'
+        );
     });
 });

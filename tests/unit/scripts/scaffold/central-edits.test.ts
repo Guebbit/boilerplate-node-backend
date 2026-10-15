@@ -44,20 +44,20 @@ describe('the four central edits', () => {
     );
 });
 
-describe('the admin key lists', () => {
+describe('the admin set list', () => {
     const yamlList = `roles:
     - name: admin
-      permissions: &admin_permissions
-          - a.any.read
-          - b.any.read
+      sets: &admin_sets
+          - AlphaDisplay
+          - BetaDisplay
 
     - name: system
-      permissions: *admin_permissions
+      sets: *admin_sets
 `;
 
-    it('append the four keys after the last entry, at its indentation', () => {
+    it('append the new set after the last entry, at its indentation', () => {
         expect(editFor('shared/authorization-roles.yaml')(yamlList)).toContain(
-            '          - b.any.read\n          - scaffoldprobe.any.read\n          - scaffoldprobe.any.create\n          - scaffoldprobe.any.update\n          - scaffoldprobe.any.delete\n\n    - name: system'
+            '          - BetaDisplay\n          - ScaffoldProbeManagement\n\n    - name: system'
         );
     });
 

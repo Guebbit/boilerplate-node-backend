@@ -14,7 +14,7 @@ import { api, authenticateAs } from '@tests/http';
 import { unpackRules } from '@casl/ability/extra';
 import { createMongoAbility, subject, type MongoAbility } from '@casl/ability';
 import { setupTestDb } from '@tests/setup-test-db';
-import { permissionModelVersion, PERMISSION_KEYS, PERMISSION_SUBJECTS } from '@kernel/permissions';
+import { permissionModelVersion, PERMISSION_RULES, PERMISSION_SUBJECTS } from '@kernel/permissions';
 
 setupTestDb();
 
@@ -134,15 +134,15 @@ describe('GET /account/abilities', () => {
         ).toBe(false);
     });
 
-    it('states a version that moves with the KEYS, not with a role', async () => {
+    it('states a version that moves with the RULES, not with a role', async () => {
         // A client caches these. The version is what tells it the cache is about a different
         // model rather than merely a different person — so it is a fingerprint of the declared
-        // key set (a plain count would miss a rename or a key-for-key swap), and editing a role
+        // rule set (a plain count would miss a rename or a rule-for-rule swap), and editing a role
         // cannot change it.
         const response = await api().get('/account/abilities').expect(200);
 
         expect(response.body.data.version).toBe(
-            permissionModelVersion(PERMISSION_KEYS.map((entry) => entry.key))
+            permissionModelVersion(PERMISSION_RULES.map((entry) => entry.id))
         );
     });
 

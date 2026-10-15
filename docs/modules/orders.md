@@ -96,7 +96,7 @@ The status enum is the module's public vocabulary:
 | `shipped` · `delivered` | fulfilment                                   | [`delivery`](./delivery.md): `shipped` once the LAST unit has left (an order shipped in parts stays `processing` until then), `delivered` once the last shipment arrived |
 | `cancelled`             | units released, refund issued if one was due | admin, or an expired hold. A product hidden, taken off sale or removed afterwards does not cancel it ([why](./products.md#hiding-taking-off-sale-removing))              |
 
-An operator's cancel (a caller holding `orders.any.update`) asks for a fresh session first, since it
+An operator's cancel (a caller holding `update:Order`) asks for a fresh session first, since it
 can refund or keep a paid order's money (`401 REAUTH_REQUIRED` on a stale one); the buyer's own
 cancel is never prompted. Holding the key is the whole rule: there is no rank, so an operator
 cancels a staff member's order, or their own, like anyone's.
@@ -249,7 +249,7 @@ override all ASK for a move, never assign the field themselves. See
 | Move                                        | Who asks                                                                         | Through                                                                                                                                                              |
 | ------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pending` → `paid`                          | `system`                                                                         | `payments`' settlement, on confirm                                                                                                                                   |
-| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `delivery.any.start` — or `POST /orders/{id}/status-override`, `orders.any.override`                                              |
+| `paid` → `processing`                       | `system`                                                                         | `POST /delivery/order/{id}/start`, `start:Shipment` — or `POST /orders/{id}/status-override`, `override:Order`                                                       |
 | `processing` → `shipped`                    | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/shipments` — only the shipment that leaves **nothing** remaining                                                             |
 | `shipped` → `delivered`                     | `system`                                                                         | `POST /delivery/shipments/{id}/deliver` — only the last arrival, with nothing left to ship                                                                           |
 | `processing` → `delivered`                  | `system`                                                                         | `POST /delivery/fulfillment-orders/{id}/fulfill` (digital), or a remainder cancel after every shipment arrived — `markFulfilmentComplete`, the one named double move |
@@ -319,7 +319,7 @@ summary), `shipped`, `fulfilled`. The edges between statuses are not traits; the
 ### The admin override
 
 A correction the ordinary table above cannot express — a mis-scanned parcel, a shipment recorded
-against the wrong order — needs `orders.any.override`, a step-up permission granted to `admin` by
+against the wrong order — needs `override:Order`, a step-up permission granted to `admin` by
 name. Two modes, both requiring a `reason`, both writing a `status_overridden` row on the
 [timeline](#the-timeline) (who, when, from → to, mode, reason):
 
@@ -426,7 +426,7 @@ accountant. A staff-only door, and a sharp one: the file holds every matching cu
 
 ```mermaid
 flowchart LR
-    R[GET /orders/export] --> K{orders.any.export<br/>and a fresh session?}
+    R[GET /orders/export] --> K{export:Order<br/>and a fresh session?}
     K -- no --> X[403 / step-up challenge]
     K -- yes --> L{within the<br/>per-account budget?}
     L -- no --> T[429]
@@ -440,7 +440,7 @@ flowchart LR
 
 | Question              | Answer                                                                                                                                                                                                                                   |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Who                   | `orders.any.export`: manager and admin, `stepUp: sensitive` (the same tier as exporting your own data). A support desk that can read every order cannot export them (Shopify's separate Export permission)                               |
+| Who                   | `export:Order`: manager and admin, `stepUp: sensitive` (the same tier as exporting your own data). A support desk that can read every order cannot export them (Shopify's separate Export permission)                                    |
 | API keys              | Cannot: the step-up needs a session, which a key never has (`requireFreshAuth` refuses without an `authContext`)                                                                                                                         |
 | Synchronous, streamed | No file on disk, no reaper, no mailed link: a file that exists can be forgotten and a link forwarded (Art. 5(1)(e)). The account export is a job because it walks every module, not because exports must be                              |
 | Route order           | Mounted before `/:id`, or `requireId` answers 404 for the word `export`                                                                                                                                                                  |
@@ -470,7 +470,7 @@ full-width `＝＋－＠` variants: that gap is known and not handled. See
   `paymentStatus` and `returnStatus`, and sort by `paidAt`. The two statuses are derived on read,
   so each filter value is mapped back to the stored fields behind it (`domain/projections.ts`); the
   integration suite checks every value both ways. `paidAt` is on the wire: the buyer's own fact.
-  Scope stays the permission key: `orders.self.read` alone sees its own orders.
+  Scope stays the permission key: `read:Order` alone sees its own orders.
 - `GET /orders` sorts by `payBy` (index `{status, payBy}`), which is how the Awaiting-transfer tab
   reads: `?paymentMethod=bank_transfer&status=pending&sort=payBy`.
 

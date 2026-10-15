@@ -3,7 +3,7 @@
  * Route table for inventory. Every route is staff's — the customer-facing half of this module is
  * deliberately not a route at all: a shopper learns about stock from `available` on the product
  * they are looking at — but not every route needs the same key: `manager` reads levels without
- * moving stock, `warehouse` moves stock through `inventory.any.create`.
+ * moving stock, `warehouse` moves stock through `create:StockMovement`.
  *
  * See: docs/modules/inventory.md
  */
@@ -33,33 +33,33 @@ export const router = Router();
 router.use(getAuth, isAuthOrCredential);
 
 // GET /inventory/levels — the stock board, scarcest first
-router.get('/levels', requirePermission('inventory.any.read'), getInventoryLevels);
+router.get('/levels', requirePermission('read', 'StockLevel'), getInventoryLevels);
 
 // GET /inventory/preorders — the preorder board: allowance, outstanding, paid vs unpaid
-router.get('/preorders', requirePermission('inventory.any.read'), getPreorderLevels);
+router.get('/preorders', requirePermission('read', 'StockLevel'), getPreorderLevels);
 
 // PUT /inventory/levels/:productId/preorder-limit — how many units may be preordered at once.
-// `inventory.any.create`, the warehouse's own key: it is a promise about stock that does not exist
+// `create:StockMovement`, the warehouse's own key: it is a promise about stock that does not exist
 // yet, and absolute, so a retried request is harmless without an idempotency key.
 router.put(
     '/levels/:productId/preorder-limit',
-    requirePermission('inventory.any.create'),
+    requirePermission('create', 'StockMovement'),
     putPreorderLimit
 );
 
 // GET /inventory/movements — the ledger, newest first
-router.get('/movements', requirePermission('inventory.any.read'), getStockMovements);
+router.get('/movements', requirePermission('read', 'StockLevel'), getStockMovements);
 
-// POST /inventory/receipts — a supplier delivery lands. `inventory.any.create`: the key stock never
+// POST /inventory/receipts — a supplier delivery lands. `create:StockMovement`: the key stock never
 // moves without — see `shared/authorization-keys.yaml`. `idempotencyKey`: a retried receipt must
 // replay, not count the delivery twice.
-router.post('/receipts', requirePermission('inventory.any.create'), idempotencyKey, postReceipt);
+router.post('/receipts', requirePermission('create', 'StockMovement'), idempotencyKey, postReceipt);
 
 // POST /inventory/adjustments — a stocktake correction, signed. Same replay guard as receipts:
 // a retried delta applied twice is a wrong stock count.
 router.post(
     '/adjustments',
-    requirePermission('inventory.any.create'),
+    requirePermission('create', 'StockMovement'),
     idempotencyKey,
     postAdjustment
 );
@@ -70,4 +70,4 @@ router.post(
 // scheduler that prefers HTTP over a cron container. `sweep`, not `manage`: no preset role is
 // meant to reach it directly, and CRUD has no verb for "clear expired holds on demand" — see
 // `shared/authorization-keys.yaml`.
-router.post('/reservations/sweep', requirePermission('inventory.any.sweep'), postReservationsSweep);
+router.post('/reservations/sweep', requirePermission('sweep', 'StockLevel'), postReservationsSweep);

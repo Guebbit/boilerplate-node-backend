@@ -43,7 +43,7 @@ x-error-codes:
     ROLE_MANAGEMENT_REQUIRED:
         {
             status: 403,
-            description: "The caller holds the permission this route requires, but the account it would change holds a staff role, and only a holder of `roles.any.assign` may change such an account. Staff without it change customers only. The caller's own account is never refused."
+            description: "The caller holds the permission this route requires, but the account it would change holds a staff role, and only a holder of `assign:Role` may change such an account. Staff without it change customers only. The caller's own account is never refused."
         }
     NOT_FOUND:
         {
@@ -745,7 +745,7 @@ components:
                 # absent until it is. Self-signup starts absent and confirms by email;
                 # admin-created and OAuth accounts start set because an operator or the provider
                 # already vouches for the address. Set, the account is a `customer`; absent, it is
-                # `unverified` and holds no `cart.self.checkout` (see `GET /account/abilities`) — so
+                # `unverified` and holds no `checkout:Cart` (see `GET /account/abilities`) — so
                 # a client renders this as a banner, never as a wall of its own.
                 verifiedAt:
                     type: [string, 'null']
@@ -824,26 +824,26 @@ components:
             description: >-
                 What the requesting caller may do to this account. Each is the route's permission
                 key AND the protection of staff accounts: an account that holds a staff role is
-                `false` for all three unless the caller holds `roles.any.assign`; the caller's own
+                `false` for all three unless the caller holds `assign:Role`; the caller's own
                 account is judged by the keys alone.
             properties:
                 update:
                     type: boolean
                     description: >-
                         Whether `PUT`/`PATCH /users/{id}` would be accepted for the profile fields
-                        — `users.any.update`, and the account is not a staff account the caller may not manage. Never covers
+                        — `update:User`, and the account is not a staff account the caller may not manage. Never covers
                         a credential: no caller changes another person's email, password or second
                         factor.
                 ban:
                     type: boolean
                     description: >-
-                        Whether the account may be deactivated or reactivated — `users.any.ban`,
+                        Whether the account may be deactivated or reactivated — `ban:User`,
                         and the account is not a staff account the caller may not manage.
                 delete:
                     type: boolean
                     description: >-
                         Whether `DELETE /users/{id}` (soft or hard) and `POST /users/{id}/restore`
-                        would be accepted — `users.any.delete`, and the account is not a staff
+                        would be accepted — `delete:User`, and the account is not a staff
                         account the caller may not manage.
 
         # For the path-form deletes, which need no id — `{id}` already carries it — but do

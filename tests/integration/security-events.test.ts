@@ -84,7 +84,7 @@ describe('a refused bearer JWT', () => {
 
 describe('a refused sk_ credential', () => {
     it('audits a key presented with its real secret after revocation', async () => {
-        const secret = await credentialHolding(['products.any.read']);
+        const secret = await credentialHolding(['display:Product']);
         const stored = await apiKeyRepository.findAnyByPrefix(secret.slice(3, 11));
         await apiKeyRepository.revokeMany([String(stored?._id)], new Date());
         auditSpy.mockClear();

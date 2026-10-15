@@ -37,11 +37,11 @@ flowchart LR
 
 **One collection, two readers, and neither is this module's own write path.** The write side is headless — see the tip below. The read side has two doors.
 [`observability`](./observability.md)'s `GET /observability/audit` is gated on
-`platform.observability.any.read` — a key only the platform operator holds, and therefore useless to a
+`read:ObservabilitySnapshot` — a key only the platform operator holds, and therefore useless to a
 shop's own staff.
 
 This module owns the tenant-facing door onto the same collection: `GET /audit`, gated on
-`audit.any.read` — held by `manager`, `moderator` and `admin` in `shared/authorization-roles.yaml`.
+`read:AuditLog` — held by `manager`, `moderator` and `admin` in `shared/authorization-roles.yaml`.
 Same rows, same shape, different audience: `observability`'s route answers "what happened across
 every shop", this module's own route answers "what happened in mine". Enabling this module without
 `observability` gives a working `GET /audit` and no platform-wide view — a legitimate build, just a
@@ -109,8 +109,8 @@ flowchart LR
     P -.->|"the sink, installed by onRegistered"| R["record<br/><i>fire-and-forget</i>"]
     R --> M[("auditlogs")]
     M -->|"TTL · NODE_AUDIT_RETENTION_DAYS"| X(("gone after<br/>retention"))
-    O["observability<br/><i>GET /observability/audit</i><br/>platform.observability.any.read"] --> M
-    S["this module's own route<br/><i>GET /audit</i><br/>audit.any.read"] --> M
+    O["observability<br/><i>GET /observability/audit</i><br/>read:ObservabilitySnapshot"] --> M
+    S["this module's own route<br/><i>GET /audit</i><br/>read:AuditLog"] --> M
 
     classDef caller fill:#dbeafe,stroke:#2563eb,color:#111827;
     classDef seam fill:#f1f5f9,stroke:#94a3b8,color:#111827,stroke-dasharray:4 3;
@@ -134,7 +134,7 @@ and holding no shop key was never meant to include reading a shop's customers.
 ## Related pages
 
 - [`observability`](./observability.md) — the module's OTHER reader, `GET /observability/audit`
-- [Authorization](../theory/authorization.md) — `audit.any.read`, and why a bare key can never answer a platform question
+- [Authorization](../theory/authorization.md) — `read:AuditLog`, and why a bare key can never answer a platform question
 - [Winston & Audit Logs](../tools/winston.md) — what gets audited and under what action names
 - [Modules](../theory/modules.md#the-manifest) — the headless half of the manifest, for the write side
 - [MongoDB & Mongoose](../tools/mongodb-mongoose.md) — TTL indexes

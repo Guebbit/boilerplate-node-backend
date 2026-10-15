@@ -1,8 +1,14 @@
-keys:
+rules:
     # -- audit-logs ----------------------------------------------------------------------------
-    - key: audit.any.read
-      module: audit-logs
+    - action: read
       subject: AuditLog
-      action: read
+      module: audit-logs
       scope: tenant
       description: Read the audit trail. There is no write key — nothing edits an audit row.
+
+sets:
+    - name: AuditDisplay
+      module: audit-logs
+      description: Read the audit trail.
+      rules:
+          - read:AuditLog

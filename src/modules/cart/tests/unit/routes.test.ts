@@ -1,8 +1,8 @@
 /**
  * @module
  * The cart route table. Every route is authenticated at the router level and needs
- * `cart.self.update` (shoppers only: staff and administrators own no basket); `/checkout` also
- * needs `cart.self.checkout`, since an unproven address must not be able to spend, see
+ * `update:Cart` (shoppers only: staff and administrators own no basket); `/checkout` also
+ * needs `checkout:Cart`, since an unproven address must not be able to spend, see
  * `shared/authorization-keys.yaml`. Mostly guards ORDER: `/summary`, `/checkout`,
  * `/reorder/:orderId`, `/all` and `/shipping-method` compete with `/:productId`, and Express takes
  * the first match — declared the other way round, `DELETE /cart/all` becomes a product lookup for

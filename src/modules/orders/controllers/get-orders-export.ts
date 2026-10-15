@@ -1,7 +1,7 @@
 /**
  * @module
  * GET /orders/export — the list's filters, answered as a CSV file. Streamed, never read into
- * memory: the response is the cursor. Reached only through `orders.any.export` (itself step-up
+ * memory: the response is the cursor. Reached only through `export:Order` (itself step-up
  * gated) and the export's own rate budget, both mounted on the route.
  */
 

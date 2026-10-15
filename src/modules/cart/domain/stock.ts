@@ -14,7 +14,7 @@
  * Equal fits. An unknown availability (`null` or absent: the product is gone or hidden) fits
  * nothing, "nothing to sell" being the safe direction to be wrong in for a rule that guards a
  * purchase. Callers turn the verdict into a refusal or a flag; none may turn it into a number, since
- * exact stock is for whoever holds `inventory.any.read` (`docs/theory/defences/authorization.md`).
+ * exact stock is for whoever holds `read:StockLevel` (`docs/theory/defences/authorization.md`).
  *
  * @param quantity - units the line holds
  * @param available - units a customer may buy right now, or `null` when unknown

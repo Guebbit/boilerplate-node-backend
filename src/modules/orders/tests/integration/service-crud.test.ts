@@ -419,7 +419,7 @@ describe('create', () => {
             const manager = callerAs('manager');
             const blind = {
                 ...manager,
-                permissions: manager.permissions.filter((key) => key !== 'inventory.any.read')
+                permissions: manager.permissions.filter((key) => key !== 'read:StockLevel')
             };
 
             const lines = await refusedLines(blind);

@@ -9,23 +9,20 @@
 
 import type { Request, Response } from 'express';
 import { asStub } from '@tests/stub';
-import {
-    getNotificationsStream,
-    NOTIFICATIONS_READ_KEY
-} from '@modules/notifications/controllers/get-notifications-stream';
+import { getNotificationsStream } from '@modules/notifications/controllers/get-notifications-stream';
 import { streamNotifications } from '@modules/notifications/services';
-import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
+import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
 
 jest.mock('@modules/notifications/services', () => ({
     __esModule: true,
     streamNotifications: jest.fn()
 }));
 
-// Only `stillHoldsKeyViaCookie` is replaced — the module's other guards are untouched here.
+// Only `stillHoldsRuleViaCookie` is replaced — the module's other guards are untouched here.
 jest.mock('@kernel/middlewares/authorizations', () => ({
     ...jest.requireActual('@kernel/middlewares/authorizations'),
     __esModule: true,
-    stillHoldsKeyViaCookie: jest.fn()
+    stillHoldsRuleViaCookie: jest.fn()
 }));
 
 /** What `requirePermissionViaCookie` leaves on a request it admitted. */
@@ -52,9 +49,9 @@ describe('GET /notifications/stream', () => {
         expect(streamNotifications).toHaveBeenCalledWith(response, 'user-1', expect.any(Function));
     });
 
-    it('wires the recheck to the key and the request the stream connected with', () => {
+    it('wires the recheck to the rule and the request the stream connected with', () => {
         const request = admittedRequest();
-        jest.mocked(stillHoldsKeyViaCookie).mockResolvedValueOnce(true);
+        jest.mocked(stillHoldsRuleViaCookie).mockResolvedValueOnce(true);
 
         getNotificationsStream(request, makeResponse().response);
         const call = jest.mocked(streamNotifications).mock.calls[0] as [
@@ -64,7 +61,7 @@ describe('GET /notifications/stream', () => {
         ];
         void call[2]();
 
-        expect(stillHoldsKeyViaCookie).toHaveBeenCalledWith(request, NOTIFICATIONS_READ_KEY);
+        expect(stillHoldsRuleViaCookie).toHaveBeenCalledWith(request, 'read', 'Notification');
     });
 
     it.each([

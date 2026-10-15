@@ -46,7 +46,7 @@ describe('GET /orders — the filters it now publishes', () => {
     });
 
     /*
-     * The bug this pins: `orders.any.read` is held by name, not through the scope wildcard a
+     * The bug this pins: `display:Order` is held by name, not through the scope wildcard a
      * moderator never holds — asking for the wildcard alone silently dropped this filter for
      * them, so a moderator narrowing to one customer's orders got everyone's instead.
      */

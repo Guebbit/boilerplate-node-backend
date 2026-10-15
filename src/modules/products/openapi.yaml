@@ -103,7 +103,7 @@ paths:
                 present and non-null, since a product with nothing to fall back to cannot exist.
                 See `PATCH /products/{id}` for the three-way table a locale entry follows. A body naming
                 an opening count (`onHand` above zero) books a stock movement, so it also needs
-                `inventory.any.create`: a caller who edits the catalogue without it is refused `403`
+                `create:StockMovement`: a caller who edits the catalogue without it is refused `403`
                 and nothing is written.
             operationId: createProduct
             security:
@@ -587,7 +587,7 @@ components:
                     readOnly: true
                     description: See `Product.lowStock`.
                 # The three counters follow `Product`: present only for a caller holding
-                # `inventory.any.read`.
+                # `read:StockLevel`.
                 onHand:
                     type: integer
                     minimum: 0
@@ -1316,7 +1316,7 @@ components:
                 #
                 # `inStock` and `lowStock` are on every response, for every caller. The exact
                 # numbers behind them are not: `onHand`, `reserved` and `available` are present
-                # ONLY for a caller holding `inventory.any.read` (the manager, the warehouse and
+                # ONLY for a caller holding `read:StockLevel` (the manager, the warehouse and
                 # the admin), because exact counters leak sales velocity to a competitor and help
                 # plan a denial of inventory. A storefront reads the two flags; an admin screen
                 # reads the counters so it can explain a low availability ("forty here,
@@ -1344,19 +1344,19 @@ components:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: Units physically present, whether or not they are spoken for. Only for a caller holding `inventory.any.read`.
+                    description: Units physically present, whether or not they are spoken for. Only for a caller holding `read:StockLevel`.
                 reserved:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: Units held by an open order — present, but not for sale. Only for a caller holding `inventory.any.read`.
+                    description: Units held by an open order — present, but not for sale. Only for a caller holding `read:StockLevel`.
                 # Derived (`onHand - reserved`), never stored, so it cannot disagree with the
                 # pair it comes from.
                 available:
                     type: integer
                     minimum: 0
                     readOnly: true
-                    description: Units a customer may actually buy, derived from the two counters above. Only for a caller holding `inventory.any.read`.
+                    description: Units a customer may actually buy, derived from the two counters above. Only for a caller holding `read:StockLevel`.
                 description:
                     type: string
                 active:

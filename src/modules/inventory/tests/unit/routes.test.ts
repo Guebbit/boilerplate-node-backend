@@ -1,7 +1,7 @@
 /**
  * @module
  * Inventory route table tests. Every route here is staff's, reached past one
- * `router.use(getAuth, isAuthOrCredential)` at the top plus the `inventory.any.*` key each mount
+ * `router.use(getAuth, isAuthOrCredential)` at the top plus the stock rule each mount
  * names — the customer-facing half of this module is deliberately not a route at all, since a
  * shopper learns about stock from `available` on the product page. A route mounted above the
  * guard, or a mount losing its `requirePermission`, would publish the counters and the ledger

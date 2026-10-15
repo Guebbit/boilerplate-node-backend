@@ -88,8 +88,8 @@ paths:
             description: >-
                 Reports that fulfilment has started — the order moves `paid → processing`. No
                 shipment exists yet at this point; that comes later, at
-                `POST /delivery/fulfillment-orders/{id}/shipments`. Narrower than `orders.any.update` on
-                purpose — `delivery.any.start` lets the warehouse begin work on an order without
+                `POST /delivery/fulfillment-orders/{id}/shipments`. Narrower than `update:Order` on
+                purpose — `start:Shipment` lets the warehouse begin work on an order without
                 being handed the run of the order record. Refuses an order that is not `paid`
                 with a named 409.
             operationId: startFulfilment
@@ -125,7 +125,7 @@ paths:
                 waiting for stock, and expected within the next N days — see it coming, since a slip moved before
                 the date passes is a notice, and one moved after is a question.
 
-                Same audience as the orders it belongs to: staff holding `orders.any.read` see every row, anyone
+                Same audience as the orders it belongs to: staff holding `display:Order` see every row, anyone
                 else only their own orders'. `delivered` is true once nothing remains and every shipment arrived.
             operationId: listPreorderFulfillmentOrders
             security:
@@ -579,7 +579,7 @@ components:
             description: >-
                 What the requesting caller may do to this fulfillment order, decided by the server so
                 a client renders its controls from this. `ship`, `fulfill`, `hold` and `release` are
-                false for anyone without `delivery.any.update`; `confirmWait` is the order's own buyer's.
+                false for anyone without `update:Shipment`; `confirmWait` is the order's own buyer's.
             properties:
                 ship:
                     type: boolean
@@ -848,7 +848,7 @@ components:
                     description: The carrier's handle on the parcel. Required when the order's shipping method is tracked; optional otherwise.
                 forced:
                     type: boolean
-                    description: Skip the `start` step — ship from `paid`. The caller must hold `orders.any.override`, and `reason` is then required. Never ships from `on_hold`.
+                    description: Skip the `start` step — ship from `paid`. The caller must hold `override:Order`, and `reason` is then required. Never ships from `on_hold`.
                 reason:
                     type: string
                     maxLength: 1000
@@ -861,7 +861,7 @@ components:
             properties:
                 forced:
                     type: boolean
-                    description: Record the arrival without a carrier confirmation — the caller must hold `orders.any.override`, and `reason` is then required.
+                    description: Record the arrival without a carrier confirmation — the caller must hold `override:Order`, and `reason` is then required.
                 reason:
                     type: string
                     maxLength: 1000

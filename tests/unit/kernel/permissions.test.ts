@@ -15,7 +15,8 @@ import {
     callerInScope,
     keysDocumentSchema,
     permissionModelVersion,
-    PERMISSION_KEYS,
+    PERMISSION_RULES,
+    PERMISSION_SETS,
     PRESET_ROLES,
     rolesDocumentSchema
 } from '@kernel/permissions';
@@ -24,16 +25,24 @@ import { asRole, callerAs } from '@tests/callers';
 /** A minimal, otherwise-valid keys document — each test below breaks exactly one field of it. */
 const validKeysDocument = {
     version: 1,
-    actions: ['read'],
+    actions: ['read', 'display'],
+    implies: { display: ['read'] },
     scopes: { tenant: 'Content belonging to one shop.', platform: 'Shared operational data.' },
-    keys: [
+    rules: [
         {
-            key: 'products.self.read',
             module: 'products',
             subject: 'Product',
             action: 'read',
             scope: 'tenant',
             description: 'Read active products.'
+        }
+    ],
+    sets: [
+        {
+            name: 'ProductStorefront',
+            module: 'products',
+            description: 'What the storefront shows.',
+            rules: ['read:Product']
         }
     ]
 };
@@ -43,23 +52,23 @@ describe('keysDocumentSchema', () => {
         expect(keysDocumentSchema.safeParse(validKeysDocument).success).toBe(true);
     });
 
-    it('refuses an action outside the declared vocabulary, naming the offending key', () => {
+    it('refuses an action outside the declared vocabulary, naming the offending rule', () => {
         const result = keysDocumentSchema.safeParse({
             ...validKeysDocument,
-            keys: [{ ...validKeysDocument.keys[0], action: 'raed' }]
+            rules: [{ ...validKeysDocument.rules[0], action: 'raed' }]
         });
 
         expect(result.success).toBe(false);
         if (result.success) return;
-        expect(z.prettifyError(result.error)).toContain('keys');
+        expect(z.prettifyError(result.error)).toContain('rules');
         expect(z.prettifyError(result.error)).toContain('action');
     });
 
-    it('refuses a key missing its scope', () => {
-        const { scope: _scope, ...keyWithoutScope } = validKeysDocument.keys[0];
+    it('refuses a rule missing its scope', () => {
+        const { scope: _scope, ...ruleWithoutScope } = validKeysDocument.rules[0];
         const result = keysDocumentSchema.safeParse({
             ...validKeysDocument,
-            keys: [keyWithoutScope]
+            rules: [ruleWithoutScope]
         });
 
         expect(result.success).toBe(false);
@@ -68,7 +77,7 @@ describe('keysDocumentSchema', () => {
     it('refuses an unknown stepUp tier', () => {
         const result = keysDocumentSchema.safeParse({
             ...validKeysDocument,
-            keys: [{ ...validKeysDocument.keys[0], stepUp: 'criticl' }]
+            rules: [{ ...validKeysDocument.rules[0], stepUp: 'criticl' }]
         });
 
         expect(result.success).toBe(false);
@@ -77,7 +86,7 @@ describe('keysDocumentSchema', () => {
     it('refuses conditions that are not an object', () => {
         const result = keysDocumentSchema.safeParse({
             ...validKeysDocument,
-            keys: [{ ...validKeysDocument.keys[0], conditions: 'active' }]
+            rules: [{ ...validKeysDocument.rules[0], conditions: 'active' }]
         });
 
         expect(result.success).toBe(false);
@@ -88,7 +97,7 @@ describe('keysDocumentSchema', () => {
 const validAudience = Object.fromEntries(
     AUDIENCE_NAMES.map((name) => [
         name,
-        { title: `The ${name}`, description: 'd', permissions: ['products.self.read'] }
+        { title: `The ${name}`, description: 'd', sets: ['ProductStorefront'] }
     ])
 );
 
@@ -103,7 +112,7 @@ describe('rolesDocumentSchema', () => {
                         scope: 'tenant',
                         title: 'The moderator',
                         description: 'Accounts and orders.',
-                        permissions: ['users.any.read']
+                        sets: ['UserDisplay']
                     }
                 ],
                 audience: validAudience
@@ -111,7 +120,7 @@ describe('rolesDocumentSchema', () => {
         ).toBe(true);
     });
 
-    it('refuses a role with no permissions array', () => {
+    it('refuses a role with no sets array', () => {
         const result = rolesDocumentSchema.safeParse({
             version: 1,
             roles: [{ name: 'moderator', scope: 'tenant', title: 't', description: 'd' }],
@@ -134,43 +143,42 @@ describe('rolesDocumentSchema', () => {
 });
 
 describe('the real shared authorization files', () => {
-    it('parsed without throwing at import — every declared key and preset role loaded', () => {
+    it('parsed without throwing at import — every declared rule, set and preset role loaded', () => {
         // If either file had failed its schema, importing `@kernel/permissions` above would
         // already have thrown and this whole test file would fail to load — these assertions are
         // the visible proof that didn't happen.
-        expect(PERMISSION_KEYS.length).toBeGreaterThan(0);
+        expect(PERMISSION_RULES.length).toBeGreaterThan(0);
+        expect(PERMISSION_SETS.length).toBeGreaterThan(0);
         expect(PRESET_ROLES.length).toBeGreaterThan(0);
         expect(AUDIENCE_ROLES.guest.permissions.length).toBeGreaterThan(0);
     });
 
-    // There is no wildcard: `admin` is unrestricted only because it lists every tenant key by
-    // name — bar the ones the `customer` audience already gives every signed-in account. This is
-    // what stops a newly declared key from being silently forgotten off it, the same guarantee a
+    // There is no wildcard: `admin` is unrestricted only because it lists every tenant set by
+    // name — bar the rules the `customer` audience already gives every signed-in account. This is
+    // what stops a newly declared set from being silently forgotten off it, the same guarantee a
     // scope wildcard would give for free.
-    it('grants admin every declared tenant key by name, bar the customer audience’s', () => {
+    it('grants admin every declared tenant rule by name, bar the customer audience’s', () => {
         const admin = PRESET_ROLES.find((role) => role.name === 'admin');
         expect(admin).toBeDefined();
 
-        const audienceKeys = new Set(AUDIENCE_ROLES.customer.permissions);
-        const tenantKeys = PERMISSION_KEYS.filter(
-            (key) => key.scope === 'tenant' && !audienceKeys.has(key.key)
-        ).map((key) => key.key);
+        const audienceRules = new Set(AUDIENCE_ROLES.customer.permissions);
+        const tenantRules = PERMISSION_RULES.filter(
+            (rule) => rule.scope === 'tenant' && !audienceRules.has(rule.id)
+        ).map((rule) => rule.id);
         const held = new Set(admin!.permissions);
-        const missing = tenantKeys.filter((key) => !held.has(key));
+        const missing = tenantRules.filter((id) => !held.has(id));
 
         expect(missing).toEqual([]);
     });
 
-    // Every account shops, staff included: a staff role lists none of the audience's keys, since
-    // the audience is unioned in. A key on both would say one thing twice and drift.
-    it('lists no audience key on a staff role', () => {
-        const audienceKeys = new Set(
+    // Every account shops, staff included: a staff role lists none of the audience's sets, since
+    // the audience is unioned in. A set on both would say one thing twice and drift.
+    it('lists no audience rule on a staff role', () => {
+        const audienceRules = new Set(
             AUDIENCE_NAMES.flatMap((name) => AUDIENCE_ROLES[name].permissions)
         );
         const doubled = PRESET_ROLES.flatMap((role) =>
-            role.permissions
-                .filter((key) => audienceKeys.has(key))
-                .map((key) => `${role.name}:${key}`)
+            role.permissions.filter((id) => audienceRules.has(id)).map((id) => `${role.name}:${id}`)
         );
 
         expect(doubled).toEqual([]);
@@ -184,51 +192,51 @@ describe('the real shared authorization files', () => {
         );
     });
 
-    // The mirror case: admin is tenant-scoped only, so it must never pick up a platform key —
+    // The mirror case: admin is tenant-scoped only, so it must never pick up a platform rule —
     // holding one would let a shop's own role reach across the tenant/platform wall the two-scope
     // split exists to prevent.
-    it('grants admin no platform key', () => {
+    it('grants admin no platform rule', () => {
         const admin = PRESET_ROLES.find((role) => role.name === 'admin');
         expect(admin).toBeDefined();
 
-        const platformKeys = PERMISSION_KEYS.filter((key) => key.scope === 'platform').map(
-            (key) => key.key
+        const platformRules = PERMISSION_RULES.filter((rule) => rule.scope === 'platform').map(
+            (rule) => rule.id
         );
         const held = new Set(admin!.permissions);
 
-        expect(platformKeys.some((key) => held.has(key))).toBe(false);
+        expect(platformRules.some((id) => held.has(id))).toBe(false);
     });
 });
 
 /*
- * A plain `PERMISSION_KEYS.length` cannot tell "the same keys" from "different keys of the
- * same count" — a rename or a key-for-key swap left the version untouched, so a client's cached
+ * A plain `PERMISSION_RULES.length` cannot tell "the same rules" from "different rules of the
+ * same count" — a rename or a rule-for-rule swap left the version untouched, so a client's cached
  * rules would go stale silently. These pin the fingerprint's actual properties instead.
  */
 describe('permissionModelVersion', () => {
-    it('changes when a key is swapped for a different one, count unchanged', () => {
-        const before = permissionModelVersion(['products.self.read', 'orders.self.read']);
-        const after = permissionModelVersion(['products.self.read', 'orders.self.write']);
+    it('changes when a rule is swapped for a different one, count unchanged', () => {
+        const before = permissionModelVersion(['read:Product', 'read:Order']);
+        const after = permissionModelVersion(['read:Product', 'write:Order']);
 
         expect(after).not.toBe(before);
     });
 
-    it('does not change when the same keys are merely reordered', () => {
-        const forward = permissionModelVersion(['products.self.read', 'orders.self.read']);
-        const backward = permissionModelVersion(['orders.self.read', 'products.self.read']);
+    it('does not change when the same rules are merely reordered', () => {
+        const forward = permissionModelVersion(['read:Product', 'read:Order']);
+        const backward = permissionModelVersion(['read:Order', 'read:Product']);
 
         expect(backward).toBe(forward);
     });
 
-    it('changes when a key is added or removed', () => {
-        const smaller = permissionModelVersion(['products.self.read']);
-        const larger = permissionModelVersion(['products.self.read', 'orders.self.read']);
+    it('changes when a rule is added or removed', () => {
+        const smaller = permissionModelVersion(['read:Product']);
+        const larger = permissionModelVersion(['read:Product', 'read:Order']);
 
         expect(larger).not.toBe(smaller);
     });
 
     it('is a non-negative integer', () => {
-        const version = permissionModelVersion(PERMISSION_KEYS.map((entry) => entry.key));
+        const version = permissionModelVersion(PERMISSION_RULES.map((entry) => entry.id));
 
         expect(Number.isInteger(version)).toBe(true);
         expect(version).toBeGreaterThanOrEqual(0);
@@ -236,14 +244,12 @@ describe('permissionModelVersion', () => {
 });
 
 /*
- * What protects people is a key, not a rank: `roles.any.assign`, held by the administrator and by
- * nobody else. A staff role is only a bundle of keys.
+ * What protects people is a rule, not a rank: `assign:Role`, held by the administrator and by
+ * nobody else. A staff role is only a list of sets.
  */
 describe('role management', () => {
     it('is held by admin and the system actor that aliases it, and by no other role', () => {
-        const holders = PRESET_ROLES.filter((role) =>
-            role.permissions.includes('roles.any.assign')
-        );
+        const holders = PRESET_ROLES.filter((role) => role.permissions.includes('assign:Role'));
 
         expect(holders.map((role) => role.name)).toEqual(['admin', 'system']);
     });
@@ -254,7 +260,7 @@ describe('role management', () => {
 });
 
 /*
- * The audience is computed per request, never stored: the same staff role is a customer's keys plus
+ * The audience is computed per request, never stored: the same staff role is a customer's rules plus
  * its own, and `verifiedAt` alone moves an account between `unverified` and `customer`.
  */
 describe('audience roles', () => {
@@ -270,21 +276,21 @@ describe('audience roles', () => {
     });
 
     it('lets only a proven address spend a basket', () => {
-        expect(callerAs('customer').permissions).toContain('cart.self.checkout');
-        expect(callerAs('unverified').permissions).not.toContain('cart.self.checkout');
-        expect(callerAs('unverified').permissions).toContain('cart.self.update');
+        expect(callerAs('customer').permissions).toContain('checkout:Cart');
+        expect(callerAs('unverified').permissions).not.toContain('checkout:Cart');
+        expect(callerAs('unverified').permissions).toContain('update:Cart');
     });
 
-    it('gives a staff member the customer keys on top of the role’s own', () => {
+    it('gives a staff member the customer rules on top of the role’s own', () => {
         const manager = callerAs('manager').permissions;
 
         expect(manager).toEqual(expect.arrayContaining(AUDIENCE_ROLES.customer.permissions));
-        expect(manager).toContain('orders.any.read');
+        expect(manager).toContain('display:Order');
     });
 
-    it('gives a platform caller no shop key from its audience', () => {
+    it('gives a platform caller no shop rule from its audience', () => {
         expect(keysInScope('operator', 'platform', 'customer')).toEqual([
-            'platform.observability.any.read'
+            'read:ObservabilitySnapshot'
         ]);
     });
 });

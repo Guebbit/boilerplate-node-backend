@@ -105,7 +105,7 @@ so a line cannot read as fitting and then be refused at checkout.
 | **View**     | every answer that carries the cart | The line carries its `availability`; a client polling `GET /cart` learns it |
 
 **No number is ever disclosed.** The value says short, not how many are left: exact stock is for
-callers holding `inventory.any.read` ([Reading the shelf](../theory/defences/authorization.md)).
+callers holding `read:StockLevel` ([Reading the shelf](../theory/defences/authorization.md)).
 That is also why the merge never lowers a short line: lowering it to what is for sale would let
 anyone read the stock by merging 999.
 

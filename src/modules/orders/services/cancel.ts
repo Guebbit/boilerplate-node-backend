@@ -219,7 +219,7 @@ export const cancelById = (
      * theirs to waive. Only an operator chooses, because only an operator has a reason to cancel
      * without returning the money: a replacement going out, a correction, a refund handled apart.
      *
-     * `orders.any.update` by name: a manager or moderator holds exactly this key, and asking for
+     * `update:Order` by name: a manager or moderator holds exactly this key, and asking for
      * anything broader would have missed them, silently treating them as a customer and forcing a
      * refund they had a reason not to make.
      */

@@ -32,7 +32,7 @@ setupTestDb();
 
 describe('an api key over the real chain', () => {
     it('reaches a tenant route its permission covers', async () => {
-        const secret = await credentialHolding(['users.any.read']);
+        const secret = await credentialHolding(['read:User']);
 
         const response = await api().get('/users').set('Authorization', `Bearer ${secret}`);
 
@@ -46,7 +46,7 @@ describe('an api key over the real chain', () => {
      * identity guard rejected a valid credential, the same failure at a different status.
      */
     it('is refused with 403 on a tenant route its permission does not cover', async () => {
-        const secret = await credentialHolding(['users.any.read']);
+        const secret = await credentialHolding(['read:User']);
 
         const response = await api()
             .get('/webhooks/subscriptions')
@@ -71,7 +71,7 @@ describe('an api key over the real chain', () => {
             .filter(({ owner }) => isDeployed(owner))
             .map(({ method, route }) => [method, route])
     )('answers 401, never 500, on %s %s', async (method, route) => {
-        const secret = await credentialHolding(['users.any.read']);
+        const secret = await credentialHolding(['read:User']);
 
         const response = await api()
             [method.toLowerCase() as 'get'](route)
@@ -95,13 +95,13 @@ describe('an api key over the real chain', () => {
      * mint credentials never has to be rotated.
      */
     it('cannot mint another credential with a credential', async () => {
-        // `apikeys.any.create` itself cannot be minted (step-up), so the key holds the read.
-        const secret = await credentialHolding(['apikeys.any.read']);
+        // `create:ApiKey` itself cannot be minted (step-up), so the key holds the read.
+        const secret = await credentialHolding(['read:ApiKey']);
 
         const response = await api()
             .post('/api-keys')
             .set('Authorization', `Bearer ${secret}`)
-            .send({ name: 'second key', permissions: ['apikeys.any.read'] });
+            .send({ name: 'second key', permissions: ['read:ApiKey'] });
 
         expect(response.status).toBe(401);
     });

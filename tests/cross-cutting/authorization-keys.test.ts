@@ -2,7 +2,7 @@
  * The two shared artefacts are internally consistent, and every preset role is expressible.
  *
  * The conformance suite next door proves the two backends AGREE. This proves the files they both
- * read are not nonsense in the first place — a preset role naming a key nobody declares seeds a
+ * read are not nonsense in the first place — a preset role naming a set nobody declares seeds a
  * shop whose staff silently cannot work, and the shape of that failure is a role that looks
  * populated and grants nothing.
  *
@@ -14,68 +14,102 @@ import {
     AUDIENCE_NAMES,
     AUDIENCE_ROLES,
     assertDeclared,
+    findRule,
+    IMPLIED_ACTIONS,
     isUnrestrictedRole,
-    PERMISSION_KEYS,
+    PERMISSION_RULES,
+    PERMISSION_SETS,
     PRESET_ROLES,
-    scopeOfKey,
+    ruleId,
     type RoleLookup
 } from '@kernel/permissions';
 import { ERROR_CODES } from '@api/error-codes';
 
-const declared = new Set(PERMISSION_KEYS.map((key) => key.key));
+const declared = new Set(PERMISSION_RULES.map((rule) => rule.id));
 const audiences: RoleLookup[] = AUDIENCE_NAMES.map((name) => ({
     name,
     scope: 'tenant',
-    permissions: AUDIENCE_ROLES[name].permissions,
-    level: 'user'
+    permissions: AUDIENCE_ROLES[name].permissions
 }));
 const roles: RoleLookup[] = [...PRESET_ROLES, ...audiences];
 
-describe('the declared keys', () => {
-    it('spell their scope the way the resolver reads it', () => {
-        for (const key of PERMISSION_KEYS) {
-            expect(scopeOfKey(key.key)).toBe(key.scope);
+describe('the declared rules', () => {
+    it('are unique by action and subject', () => {
+        expect(declared.size).toBe(PERMISSION_RULES.length);
+    });
+
+    it('carry an id that is their action and subject', () => {
+        for (const rule of PERMISSION_RULES) {
+            expect(rule.id).toBe(`${rule.action}:${rule.subject}`);
         }
     });
 
-    it('are unique', () => {
-        expect(declared.size).toBe(PERMISSION_KEYS.length);
-    });
-
-    it('name the action their key ends with', () => {
-        for (const key of PERMISSION_KEYS) {
-            expect(key.key.endsWith(`.${key.action}`)).toBe(true);
+    it('have a PascalCase subject and a lower-case action, because ids are stored in credentials', () => {
+        for (const rule of PERMISSION_RULES) {
+            expect(rule.subject).toMatch(/^[A-Z][A-Za-z]*$/);
+            expect(rule.action).toMatch(/^[a-z]+$/);
         }
     });
 
-    it('are lower-case and dotted, because they are stored and renaming one is a migration', () => {
-        for (const key of PERMISSION_KEYS) {
-            expect(key.key).toMatch(/^[a-z][.a-z]*[a-z]$/);
+    it('never put self or any in a name', () => {
+        for (const rule of PERMISSION_RULES) {
+            expect(rule.id).not.toMatch(/\b(self|any)\b/i);
         }
     });
 
     it('name a deniedCode some module actually declares', () => {
-        for (const key of PERMISSION_KEYS) {
-            if (key.deniedCode) expect(ERROR_CODES).toHaveProperty(key.deniedCode);
+        for (const rule of PERMISSION_RULES) {
+            if (rule.deniedCode) expect(ERROR_CODES).toHaveProperty(rule.deniedCode);
         }
+    });
+
+    it('imply only actions the vocabulary declares, and only on a subject that has the plain rule or none', () => {
+        for (const [staff, plain] of Object.entries(IMPLIED_ACTIONS)) {
+            expect(staff).toMatch(/^[a-z]+$/);
+            expect(plain.length).toBeGreaterThan(0);
+        }
+    });
+});
+
+describe('the permission sets', () => {
+    it('are named once, in PascalCase', () => {
+        const names = PERMISSION_SETS.map((set) => set.name);
+
+        expect(new Set(names).size).toBe(names.length);
+        for (const name of names) expect(name).toMatch(/^[A-Z][A-Za-z]+$/);
+    });
+
+    it("bundle only rules some module declares, and each rule of the set's own module", () => {
+        for (const set of PERMISSION_SETS) {
+            for (const id of set.rules) {
+                expect(findRule(id)?.module).toBe(set.module);
+            }
+        }
+    });
+
+    it('leave no declared rule outside every set, since a rule no set bundles grants nothing', () => {
+        const bundled = new Set(PERMISSION_SETS.flatMap((set) => set.rules));
+
+        expect([...declared].filter((id) => !bundled.has(id))).toEqual([]);
     });
 });
 
 describe('the preset roles', () => {
     it.each(roles.map((role) => [role.name, role] as const))(
-        '%s holds only keys some module declares',
+        '%s holds only rules some module declares',
         (_name, role) => {
-            for (const key of role.permissions) {
-                expect(() => assertDeclared(key)).not.toThrow();
+            for (const id of role.permissions) {
+                const [action, subject] = id.split(':', 2);
+                expect(() => assertDeclared(action, subject)).not.toThrow();
             }
         }
     );
 
     it.each(roles.map((role) => [role.name, role] as const))(
-        '%s holds only keys from its own scope',
+        '%s holds only rules from its own scope',
         (_name, role) => {
-            for (const key of role.permissions) {
-                expect(scopeOfKey(key)).toBe(role.scope);
+            for (const id of role.permissions) {
+                expect(findRule(id)?.scope).toBe(role.scope);
             }
         }
     );
@@ -85,34 +119,38 @@ describe('the preset roles', () => {
             (role) => role.scope === 'tenant' && isUnrestrictedRole(role.name, role.scope)
         );
 
-        // `system` holds `admin`'s own permission list via a YAML alias in
-        // `authorization-roles.yaml`, so it is unrestricted for the identical reason and can never
-        // drift from it — see `kernel/permissions.ts`'s `SYSTEM_ACTOR`.
+        // `system` lists `admin`'s own sets via a YAML alias in `authorization-roles.yaml`, so it
+        // is unrestricted for the identical reason and can never drift from it — see
+        // `kernel/permissions.ts`'s `SYSTEM_ACTOR`.
         expect(unrestricted.map((role) => role.name)).toEqual(['admin', 'system']);
     });
 
-    // "Unrestricted" is a derived fact now — holds every key its own scope currently declares —
-    // not a token, so it can be trivially true where a scope declares very few keys. `operator` is
-    // the honest example: platform scope has exactly one declared key today
-    // (`platform.observability.any.read`), so holding it alone already satisfies "every platform
-    // key". That is NOT the same claim as "operator is a super-admin" — `operator` still holds no
-    // bare (tenant) key, so it cannot touch a single shop's content, which is the invariant that
+    // "Unrestricted" is a derived fact — holds every rule its own scope currently declares — not
+    // a token, so it can be trivially true where a scope declares very few rules. `operator` is
+    // the honest example: platform scope has exactly one declared rule today
+    // (`read:ObservabilitySnapshot`), so holding it alone already satisfies "every platform
+    // rule". That is NOT the same claim as "operator is a super-admin" — `operator` still holds no
+    // tenant rule, so it cannot touch a single shop's content, which is the invariant that
     // actually matters and is asserted elsewhere (`shared/authorization-roles.yaml`'s own
-    // description, and the contract suite). This pins today's fact so a second platform key being
+    // description, and the contract suite). This pins today's fact so a second platform rule being
     // declared — which would make it false — is a deliberate change to notice, not a surprise.
-    it('marks operator unrestricted in platform scope, today — one declared platform key', () => {
-        const platformKeys = PERMISSION_KEYS.filter((key) => key.scope === 'platform');
-        expect(platformKeys).toHaveLength(1);
+    it('marks operator unrestricted in platform scope, today — one declared platform rule', () => {
+        const platformRules = PERMISSION_RULES.filter((rule) => rule.scope === 'platform');
+        expect(platformRules).toHaveLength(1);
         expect(isUnrestrictedRole('operator', 'platform')).toBe(true);
     });
 });
 
 describe('assertDeclared', () => {
-    it('refuses a key no module declares', () => {
-        expect(() => assertDeclared('products.publish')).toThrow(/not declared/);
+    it('refuses a rule no module declares', () => {
+        expect(() => assertDeclared('publish', 'Product')).toThrow(/not declared/);
     });
 
     it('refuses a plausible near-miss rather than guessing', () => {
-        expect(() => assertDeclared('product.read')).toThrow(/not declared/);
+        expect(() => assertDeclared('read', 'Products')).toThrow(/not declared/);
+    });
+
+    it('returns the declared rule for one that exists', () => {
+        expect(assertDeclared('display', 'Order').id).toBe(ruleId('display', 'Order'));
     });
 });

@@ -1,7 +1,8 @@
-# Every permission key that exists. Generated — `npm run authorization:bundle` splices this file
-# from one fragment per owning module (`src/modules/<name>/authorization.yaml`) plus this root
-# residual for the app-level `core` keys. A key is introduced in its owning fragment, never in the
-# bundle directly; `--check` (wired into `complete`) fails the build if the bundle drifts from them.
+# Every permission rule and permission set that exists. Generated — `npm run authorization:bundle`
+# splices this file from one fragment per owning module (`src/modules/<name>/authorization.yaml`)
+# plus this root residual for the app-level `core` rules. A rule or a set is introduced in its
+# owning fragment, never in the bundle directly; `--check` (wired into `complete`) fails the build
+# if the bundle drifts from them.
 #
 # Committed with identical bytes in `boilerplate-node-backend` and
 # `boilerplate-php-laravel-backend`. Neither repo's formatter touches it — see the exclusion in
@@ -9,22 +10,28 @@
 # formatters over one shared artefact is a silent fork.
 #
 # ROLES ARE DATA, PERMISSIONS ARE CODE. A deployment may create roles at runtime. It may never
-# invent a key, because a key nothing checks grants nothing while looking like it grants
+# invent a rule, because a rule nothing checks grants nothing while looking like it grants
 # something. Assignment validates against this file, not against a string.
 #
+# THREE LAYERS, the CanCan model as Solidus uses it:
+#   rule            one `action` on one `subject`, optionally narrowed by `conditions`. Its id is
+#                   `<action>:<subject>` (`display:Order`) and no two rules share one.
+#   permission set  a named bundle of rules per module (`OrderDisplay`). Declared beside the rules,
+#                   listed by roles in `authorization-roles.yaml`.
+#   role            a list of sets. Nothing else: no level, no rank, no wildcard.
+# A guard asks `(action, subject)` and nothing else; no rule or set name appears in a route.
+#
+# NO `self` / `any` IN A NAME. "Own rows" is a CONDITION on a rule (`userId: $caller.id`), the way
+# Solidus' `DefaultCustomer` writes it. What tells a staff door from a customer's own-rows rule is
+# the action: `display` is "every row" where `read` is "my rows", and `admin` is "edit or remove
+# any row" where `update` and `delete` are "mine". Both are declared in `implies:` below, so a
+# holder of `display` also passes a `read` check, which is what keeps one query for both.
+#
 # THE ONE INVARIANT, and the reason `scope` is a field rather than a naming convention:
-#   a bare key can never be satisfied by a platform-scope caller, and a `platform.` key can never
+#   a tenant rule can never be satisfied by a platform-scope caller, and a platform rule can never
 #   be satisfied by a tenant-scope caller.
 # A platform operator administers shared reference data and is not a super-member. Mapping that
 # person onto the old `admin` boolean was one line to write and a total confidentiality failure.
-#
-# THE SHAPE: `<family>.<breadth>.<action>`, breadth ALWAYS written — `orders.self.read`,
-# `orders.any.read`, `products.any.create`. Breadth is `self` where the key is genuinely scoped to
-# the caller's own rows (`cart.self.checkout`) or to the narrow, default reading a family gives a
-# customer (`products.self.read`); `any` everywhere else, including every key with no owner to
-# scope by at all. An omitted breadth reads as "someone forgot one" — a key you can grep for by
-# shape beats a key you have to know the default of. There is no wildcard of any kind, per-family
-# or scope-wide; see the note at the foot of this file.
 
 version: 1
 
@@ -32,38 +39,33 @@ version: 1
 # is not a declared action, since there is no wildcard of any kind, per-family or scope-wide —
 # see the note at the foot of this file for why — so `manage` names nothing here.
 #
-# `write` is deliberately absent. It collapses create, update and delete into one key, and the
+# `write` is deliberately absent. It collapses create, update and delete into one rule, and the
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export` and `assign` are the eight additions beyond
-# CASL's own CRUD vocabulary, and all eight follow the same rule: a verb is added only when CRUD cannot say the
-# thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
-#   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
-#     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
-#     someone else's behalf) and `update` said nothing about what changed.
-#   - `sweep` is `inventory.any.sweep`'s action, and nowhere else. A sweep clears expired
-#     reservation holds on a schedule: no noun it creates, no row whose update names the action.
-#   - `override` is `orders.any.override`'s action, and nowhere else. It skips the normal
-#     lifecycle gate to force a delivery move or correct a status by hand, with a recorded
-#     reason — `update` would hide that this write deliberately bypasses the ordinary rule.
-#   - `start` is `delivery.any.start`'s action, and nowhere else. Moving a paid order into
-#     `processing` creates no shipment yet — there is no parcel row to `update` — and it is a
-#     narrower grant than `orders.any.update`, which lets an admin rewrite the order outright.
-#   - `receive` is `returns.any.receive`'s action, and nowhere else. It records that returned goods
-#     arrived, which puts the units back on sale and pays the customer back — `update` on `Return`
-#     is the decision to approve it, a narrower hand than the one that holds the parcel.
-#   - `ban` is `users.any.ban`'s action, and nowhere else. Deactivating an account locks a person
-#     out, which is a wider hand than correcting their profile — `update` on `User` would give a
-#     support agent the first by granting the second.
-#   - `export` is `orders.any.export`'s action, and nowhere else. It takes every customer's order
-#     out of the application as a file, which is a wider hand than reading them one at a time —
-#     `read` on `Order` would give the warehouse and the support desk the first by granting the
-#     second. Shopify keeps a separate Export permission for the same reason.
-#   - `assign` is `roles.any.assign`'s action, and nowhere else. It hands a staff role to an account
-#     or takes it away, and it is what lets someone change an account that already holds a staff
-#     role. No `Role` row is created, updated or deleted — the roles are data in a file — so no CRUD
-#     verb says it. Solidus names the same thing `RoleManagement`.
+# `checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export` and `assign` are additions beyond
+# CASL's own CRUD vocabulary, and all follow the same rule: a verb is added only when CRUD cannot say
+# the thing, never when CRUD is merely inconvenient, and the reason is recorded on the rule itself.
+#   - `checkout` is `checkout:Cart`'s action. CRUD has no verb for "spend the basket": `create` on
+#     `Cart` would have said nothing about what changed.
+#   - `sweep` clears expired reservation holds on a schedule: no noun it creates, no row whose
+#     update names the action.
+#   - `override` skips the normal lifecycle gate to force a delivery move or correct a status by
+#     hand, with a recorded reason — `update` would hide that this write bypasses the ordinary rule.
+#   - `start` moves a paid order into `processing`. No shipment exists yet, and it is a narrower
+#     grant than `update:Order`, which lets an admin rewrite the order outright.
+#   - `receive` records that returned goods arrived, which puts the units back on sale and pays the
+#     customer back — `update` on `Return` is the decision to approve it, a narrower hand.
+#   - `ban` locks a person out, a wider hand than correcting their profile.
+#   - `export` takes every customer's order out of the application as a file, a wider hand than
+#     reading them one at a time. Shopify keeps a separate Export permission for the same reason.
+#   - `assign` hands a staff role to an account or takes it away, and is what lets someone change
+#     an account that already holds one. No `Role` row is written (roles are data in a file), so no
+#     CRUD verb says it. Solidus names the same thing `RoleManagement`.
+#   - `display` and `admin` are Solidus' two staff doors. `display` reads every row of a subject
+#     that also has an own-rows or public `read`; `admin` edits or removes any row of a subject
+#     whose `update` and `delete` are own-rows. They exist so a staff door cannot be opened by the
+#     rule every signed-in account holds. A subject with no own-rows rule keeps plain `read`.
 #
 # THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
 # `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
@@ -80,27 +82,39 @@ actions:
     - ban
     - export
     - assign
+    - display
+    - admin
+
+# Which plain actions a staff action also answers. The ability emits each implied rule beside the
+# staff one, so `can('read', Order)` is yes for a holder of `display:Order` and `accessibleBy`
+# compiles one filter from the own-rows rule and the staff rule together.
+implies:
+    display:
+        - read
+    admin:
+        - update
+        - delete
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
-    tenant: Content belonging to one shop. Keys are bare.
-    platform: Shared operational data, across shops. Keys are prefixed `platform.`.
+    tenant: Content belonging to one shop.
+    platform: Shared operational data, across shops. A rule on platform data.
 
-# Step-up — the third axis, declared on the KEY rather than on a route.
+# Step-up — the third axis, declared on the RULE rather than on a route.
 #
-# A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
+# A rule may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
 # caller proved themselves within that window before it lets them through. The tiers are the ones
 # `NODE_REAUTH_TIME_CRITICAL` / `NODE_REAUTH_TIME_SENSITIVE` set, so this adds a place to say WHICH
 # actions are worth a challenge, not a second mechanism for making one.
 #
-# On the key and not the route because the key is what the action IS: erasing somebody's account
+# On the rule and not the route because the rule is what the action IS: erasing somebody's account
 # deserves a fresh session wherever it is reached from, and a second route that reaches it would
 # otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
 # rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
 
 # Conditions — the ABAC half, and the reason this is not pure RBAC.
 #
-# A key may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
+# A rule may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
 # shape CASL takes as its third argument and the same shape both repositories already spread into
 # a query, which is what lets it be compiled INTO the read instead of checked after it.
 #
@@ -113,13 +127,13 @@ scopes:
 # is the condition set, and each backend generates its own query from it.
 #
 # Tenancy is NOT written here. Every tenant-scope rule has `tenantId: $caller.tenantId` injected
-# by the resolver, so no key can forget it and no request parameter can supply it.
+# by the resolver, so no rule can forget it and no request parameter can supply it.
 #
-# A key with no `conditions` is unconditional within its scope. `products.self.read` sees active,
-# undeleted rows; `products.any.read` sees every row — which is why breadth and condition move
-# together on the four families where the narrow reading is filtered at all.
+# A rule with no `conditions` is unconditional within its scope. `read:Product` sees active,
+# undeleted rows; `display:Product` sees every row — which is why a staff action and a condition
+# move together on the families where the narrow reading is filtered at all.
 #
-# `deletedAt: null` is on the `self` reads of `Product` and `Order`, the subjects whose soft delete
+# `deletedAt: null` is on the narrow reads of `Product` and `Order`, the subjects whose soft delete
 # hides a row from the storefront. A payment is a record of money moving and is never withdrawn from view, so it carries
 # no such column and no such condition; a rule naming a column the table lacks is a query that
 # throws rather than one that narrows.
@@ -130,33 +144,33 @@ scopes:
 # that is absent as well as one that is set to nothing, which is what an "unset to restore" write
 # leaves behind.
 
-# The keys themselves.
+# The rules themselves.
 #
-# `subject` is the CASL subject type the key authorises — the concrete thing a rule is about. The
-# key's own first segment is the resource FAMILY, which is plural and matches the module folder;
-# the subject is the singular type. They differ on purpose: `orders.any.read` is a permission,
-# `Order` is a thing.
+# `subject` is the CASL subject type — the concrete thing a rule is about, singular. A module's
+# folder name is plural; the two differ on purpose: `display:Order` is a permission, `Order` is a
+# thing.
 #
-# Modules absent from this list have no keys, and that is a decision rather than an omission:
+# Modules absent from this list have no rules, and that is a decision rather than an omission:
 # `wishlist` and `account` are *your own things*. What you may do with them follows from being
-# signed in, not from a role, and giving them keys would invite a role that grants access to
-# someone else's basket. `cart` is nearly the same — its exceptions are `cart.self.update` and
-# `cart.self.checkout` below: whether the account shops at all (staff and administrators do not),
-# and a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
-# contents, which stay keyless.
+# signed in, not from a role, and giving them rules would invite a role that grants access to
+# someone else's basket. `cart` is nearly the same — its exceptions are `update:Cart` and
+# `checkout:Cart` below: whether the account shops at all, and a fact about the ACCOUNT (has this
+# address been proven?) rather than about the basket's contents, which stay ruleless.
 
-# %AUTHORIZATION_KEYS%
+# %AUTHORIZATION_RULES%
 
-# WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
+# The permission sets. A set is the unit a role lists, so a role never names a rule directly.
+# Each module declares its own beside its rules, and a new module's sets are listed in
+# `authorization-roles.yaml` by `admin`.
+
+# %AUTHORIZATION_SETS%
+
+# WHY THERE IS NO WILDCARD OF ANY KIND
 #
-# There is no per-family `manage` key. One that expanded to every action its family declared would
-# make the family's own write keys reachable through a route asking only for the wide read, and
-# would make breadth something a wildcard implied rather than something a role stated. Breadth is
-# written on the keys themselves.
+# There is no `manage` action and no `all`. One that expanded to every action a subject declares
+# would make a subject's own write rules reachable through a route asking only for the wide read.
 #
-# `all.manage` — the SCOPE wildcard, `admin`'s alone — is worth naming as the one remaining case:
-# the same argument applies one level up — "a key no module declares grants nothing" is only true
-# of the wildcard as long as nothing reads it as a shortcut instead. `admin` holds every declared
-# tenant key BY NAME, spelled out in `authorization-roles.yaml`, the same way every other role
-# does. A new key that should reach `admin` is a line in that file, not an assumption the wildcard
-# already covers it — the property this whole file exists for, applied to `admin` too.
+# `admin` is the one role that holds everything, and it does so BY NAME: it lists every set in
+# `authorization-roles.yaml`, the same way every other role does. A new set that should reach
+# `admin` is a line in that file, not an assumption a wildcard already covers it — the property
+# this whole file exists for, applied to `admin` too.

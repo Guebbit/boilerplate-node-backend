@@ -8,7 +8,8 @@ import {
     deriveNames,
     isValidEntityName,
     isValidModuleName,
-    permissionKeys
+    permissionRules,
+    permissionSetName
 } from '../../../../scripts/scaffold/names';
 
 describe('isValidModuleName', () => {
@@ -38,7 +39,6 @@ describe('deriveNames', () => {
         expect(deriveNames('field-notes')).toEqual({
             kebab: 'field-notes',
             identifier: 'fieldNotes',
-            family: 'fieldnotes',
             entity: 'FieldNote',
             entityCamel: 'fieldNote',
             entitySnake: 'field_note',
@@ -70,13 +70,17 @@ describe('deriveNames', () => {
     });
 });
 
-describe('permissionKeys', () => {
-    it('spells a key with no hyphen, one per action', () => {
-        expect(permissionKeys(deriveNames('field-notes'))).toEqual([
-            'fieldnotes.any.read',
-            'fieldnotes.any.create',
-            'fieldnotes.any.update',
-            'fieldnotes.any.delete'
+describe('permissionRules', () => {
+    it('spells a rule as action and entity, one per action', () => {
+        expect(permissionRules(deriveNames('field-notes'))).toEqual([
+            'read:FieldNote',
+            'create:FieldNote',
+            'update:FieldNote',
+            'delete:FieldNote'
         ]);
+    });
+
+    it('names the one set that bundles them after the entity', () => {
+        expect(permissionSetName(deriveNames('field-notes'))).toBe('FieldNoteManagement');
     });
 });

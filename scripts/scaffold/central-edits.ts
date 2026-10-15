@@ -6,7 +6,7 @@
  * | file                                            | why a module is named there                  |
  * | ----------------------------------------------- | -------------------------------------------- |
  * | `src/modules.ts`                                | the registry: import, array, `ModuleName`    |
- * | `shared/authorization-roles.yaml`               | admin (and so system) lists every key by name |
+ * | `shared/authorization-roles.yaml`               | admin (and so system) lists every set by name |
  * | `shared/authorization-conformance.yaml`         | its fixture copy of the admin list           |
  * | `tests/cross-cutting/replace-patch-parity.test.ts` | the exact set of PUT/PATCH pairs          |
  *
@@ -14,7 +14,7 @@
  * scaffold before anything is written instead of being silently skipped.
  */
 
-import { permissionKeys, type ModuleNames } from './names';
+import { permissionRules, permissionSetName, type ModuleNames } from './names';
 import { registerModule } from './registry';
 
 /** One edit to an existing file. */
@@ -93,13 +93,12 @@ export const centralEdits = (names: ModuleNames): CentralEdit[] => [
     { path: 'src/modules.ts', apply: (source) => registerModule(source, names) },
     {
         path: 'shared/authorization-roles.yaml',
-        apply: (source) =>
-            appendToList(source, 'permissions: &admin_permissions', permissionKeys(names))
+        apply: (source) => appendToList(source, 'sets: &admin_sets', [permissionSetName(names)])
     },
     {
         path: 'shared/authorization-conformance.yaml',
         apply: (source) =>
-            appendToList(source, 'admin-permissions: &admin_permissions', permissionKeys(names))
+            appendToList(source, 'admin-permissions: &admin_permissions', permissionRules(names))
     },
     {
         path: 'tests/cross-cutting/replace-patch-parity.test.ts',

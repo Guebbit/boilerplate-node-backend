@@ -34,7 +34,7 @@ import { reportProgress, settleOrder } from './progress';
 
 /** What staff sends to record an arrival. */
 export interface DeliverInput {
-    /** Record it without a carrier confirmation. Needs `orders.any.override` and a `reason`. */
+    /** Record it without a carrier confirmation. Needs `override:Order` and a `reason`. */
     forced?: boolean | undefined;
     /** Why; recorded on the order's override history. */
     reason?: string | undefined;

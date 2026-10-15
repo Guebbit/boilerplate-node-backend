@@ -6,7 +6,7 @@
 
 import type { Request } from 'express';
 import { callerForSubject } from '@kernel/permissions';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { SearchOrdersBody } from '@api/schemas.zod';
 import { orderService } from '../services';
 import { callerContextOf } from '@infrastructure/http/request';
@@ -26,9 +26,9 @@ export const searchOrdersQuerySchema = SearchOrdersBody.extend({
 });
 
 /**
- * A caller without `orders.any.read` cannot filter by arbitrary userId; orderService.callerScope enforces their
- * own. `orders.any.read` by name, asked of the held KEYS rather than of CASL: `holdsKey`
- * answers true for `orders.self.read` too, since both are `read` on `Order`.
+ * A caller without `display:Order` cannot filter by arbitrary userId; orderService.callerScope enforces their
+ * own. `display:Order` by name, asked of the held KEYS rather than of CASL: `holds`
+ * answers true for `read:Order` too, since both are `read` on `Order`.
  * Shared with the export, which filters by the same rule.
  *
  * @param input - the merged request input
@@ -40,7 +40,7 @@ export const honourUserIdFilter = (
 ): Record<string, unknown> => ({
     userId:
         request.authContext &&
-        heldKeys(callerForSubject(request.authContext, 'Order')).has('orders.any.read')
+        heldRules(callerForSubject(request.authContext, 'Order')).has('display:Order')
             ? input.userId
             : undefined
 });
@@ -48,7 +48,7 @@ export const honourUserIdFilter = (
 /**
  * GET /orders
  * List/search orders via query parameters or request body.
- * A caller holding only `orders.self.read` is scoped to their own orders and the userId filter is ignored; `orders.any.read` reads every order.
+ * A caller holding only `read:Order` is scoped to their own orders and the userId filter is ignored; `display:Order` reads every order.
  */
 export const getOrders = createSearchController({
     entity: 'orders',

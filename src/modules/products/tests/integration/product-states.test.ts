@@ -80,7 +80,7 @@ describe('GET /products/:id', () => {
         expect([first.status, second.status]).toEqual([404, 404]);
     });
 
-    it('shows an inactive product to staff holding products.any.read', async () => {
+    it('shows an inactive product to staff holding display:Product', async () => {
         const { bearer } = await authenticateAsRole('editor');
         const states = await seedStates();
         const hidden = states[2];

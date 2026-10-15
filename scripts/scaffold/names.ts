@@ -10,8 +10,6 @@ export interface ModuleNames {
     kebab: string;
     /** The default-import identifier in `src/modules.ts`: `fieldNotes`. */
     identifier: string;
-    /** Permission-key family — hyphens removed, since a key is `[a-z.]` only: `fieldnotes`. */
-    family: string;
     /** One record's type name: `FieldNote`. */
     entity: string;
     /** One record's variable name: `fieldNote`. */
@@ -28,15 +26,14 @@ export interface ModuleNames {
     words: string;
 }
 
-/** A folder name a module may carry: lower-case letters only, hyphen-separated, so a key is legal. */
+/** A folder name a module may carry: lower-case letters only, hyphen-separated. */
 const MODULE_NAME = /^[a-z]+(-[a-z]+)*$/;
 
 /** A PascalCase entity name. */
 const ENTITY_NAME = /^[A-Z][A-Za-z]*$/;
 
 /**
- * Whether `name` may name a module. Digits are refused on purpose: the permission-key grammar is
- * `[a-z.]` only, and the family is the folder name minus its hyphens.
+ * Whether `name` may name a module. Digits are refused on purpose: a folder name is letters only.
  * @param name - the candidate folder name
  * @returns true when the name is usable
  */
@@ -112,7 +109,6 @@ export const deriveNames = (kebab: string, entityOverride?: string): ModuleNames
     return {
         kebab,
         identifier: lowerFirst(folder),
-        family: kebab.replaceAll('-', ''),
         entity,
         entityCamel: lowerFirst(entity),
         entitySnake: snake(entity),
@@ -123,13 +119,20 @@ export const deriveNames = (kebab: string, entityOverride?: string): ModuleNames
     };
 };
 
-/** The actions a scaffolded module's permission keys cover, in declaration order. */
-export const KEY_ACTIONS = ['read', 'create', 'update', 'delete'] as const;
+/** The actions a scaffolded module's permission rules cover, in declaration order. */
+export const RULE_ACTIONS = ['read', 'create', 'update', 'delete'] as const;
 
 /**
- * The permission keys a scaffolded module introduces.
+ * The permission rules a scaffolded module introduces.
  * @param names - the module's spellings
- * @returns one key per action, e.g. `fieldnotes.any.read`
+ * @returns one rule id per action, e.g. `read:FieldNote`
  */
-export const permissionKeys = (names: ModuleNames): string[] =>
-    KEY_ACTIONS.map((action) => `${names.family}.any.${action}`);
+export const permissionRules = (names: ModuleNames): string[] =>
+    RULE_ACTIONS.map((action) => `${action}:${names.entity}`);
+
+/**
+ * The one permission set a scaffolded module introduces, bundling all its rules.
+ * @param names - the module's spellings
+ * @returns the set's name, e.g. `FieldNoteManagement`
+ */
+export const permissionSetName = (names: ModuleNames): string => `${names.entity}Management`;

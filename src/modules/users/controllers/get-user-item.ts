@@ -25,7 +25,7 @@ export const getUserItem = createItemController({
         userService.getById(id).then((user) => {
             if (!user) return undefined;
             recordStaffRead(request, {
-                key: 'users.any.read',
+                key: 'read:User',
                 action: usersAuditActions.ADMIN_USER_VIEWED,
                 targetType: 'user',
                 targetId: id,

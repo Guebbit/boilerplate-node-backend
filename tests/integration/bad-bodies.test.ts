@@ -156,7 +156,7 @@ describe('a body express never parsed', () => {
     /**
      * `< 500` alone is true for a 401 too, which every guarded route answers on ANY unauthorized
      * request — a body-parsing bug behind the guard would still pass. A real session (or, for
-     * `/users`, a caller with `users.any.create`) proves the request actually reached the
+     * `/users`, a caller with `create:User`) proves the request actually reached the
      * controller's own guard, not the auth middleware in front of it.
      */
     it.each(BODY_READING_ROUTES)(

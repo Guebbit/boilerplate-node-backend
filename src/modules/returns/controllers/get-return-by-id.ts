@@ -25,7 +25,7 @@ export const getReturnById = (request: Request<{ id?: string }>, response: Respo
         .then((result) => {
             if (refused(response, result)) return;
             recordStaffRead(request, {
-                key: 'returns.any.read',
+                key: 'read:Return',
                 action: returnsAuditActions.ADMIN_RETURN_VIEWED,
                 targetType: 'return',
                 targetId: id

@@ -3,25 +3,25 @@
 The `/observability/*` routes expose operational data for dashboards and monitoring tooling.
 
 **None of these are public.** Every one of them is a PLATFORM-scope route: they answer about the
-installation, not about one shop, so the key they check is `platform.observability.any.read` and a
+installation, not about one shop, so the key they check is `read:ObservabilitySnapshot` and a
 shop's own unrestricted role can never satisfy it — see
 [Authorization](../theory/authorization.md). `/observability/events` and `/observability/metrics`
 each carry their own guard rather than a bearer token, because neither caller can present one: an
 `EventSource` cannot set an `Authorization` header, and a Prometheus scraper is not a user.
 
-- **`platform.observability.any.read` via bearer token**: `/observability/health`, `/observability/metrics/overview`, `/observability/audit`
-- **`platform.observability.any.read` via refresh cookie**: `/observability/events` (`requirePermissionViaCookie`)
+- **`read:ObservabilitySnapshot` via bearer token**: `/observability/health`, `/observability/metrics/overview`, `/observability/audit`
+- **`read:ObservabilitySnapshot` via refresh cookie**: `/observability/events` (`requirePermissionViaCookie`)
 - **Scrape credential**: `/observability/metrics` (`isMetricsScraper` — `Bearer $NODE_METRICS_TOKEN`; with the variable unset the route answers 503 to everyone)
 
 ## Available endpoints
 
 | Endpoint | Auth | Description | Observability equivalent |
 | --- | --- | --- | --- |
-| `GET /observability/events` | `platform.observability.any.read`, by cookie | SSE stream: live metrics snapshot every 5 s | [Frontend Observability](../tools/frontend-observability.md) |
+| `GET /observability/events` | `read:ObservabilitySnapshot`, by cookie | SSE stream: live metrics snapshot every 5 s | [Frontend Observability](../tools/frontend-observability.md) |
 | `GET /observability/metrics` | scraper | Raw Prometheus exposition (text/plain) | [Prometheus](../tools/prometheus.md) scrape target |
-| `GET /observability/health` | `platform.observability.any.read` | Full health snapshot: DB status, memory, CPU, integrations, uptime | [Grafana](../tools/grafana.md) health panels |
-| `GET /observability/metrics/overview` | `platform.observability.any.read` | Curated KPI JSON: HTTP totals, error rate, latency p50/p95, auth & business counters | [Prometheus](../tools/prometheus.md) / [Grafana](../tools/grafana.md) KPI panels |
-| `GET /observability/audit` | `platform.observability.any.read` | A page of incident events from the persisted audit trail, newest first | [Loki](../tools/loki.md) log search |
+| `GET /observability/health` | `read:ObservabilitySnapshot` | Full health snapshot: DB status, memory, CPU, integrations, uptime | [Grafana](../tools/grafana.md) health panels |
+| `GET /observability/metrics/overview` | `read:ObservabilitySnapshot` | Curated KPI JSON: HTTP totals, error rate, latency p50/p95, auth & business counters | [Prometheus](../tools/prometheus.md) / [Grafana](../tools/grafana.md) KPI panels |
+| `GET /observability/audit` | `read:ObservabilitySnapshot` | A page of incident events from the persisted audit trail, newest first | [Loki](../tools/loki.md) log search |
 
 ## Observability API vs Grafana
 

@@ -1,10 +1,10 @@
 /**
  * @module
- * The two shared authorization files that name a removed module's permission keys by hand:
- * `shared/authorization-roles.yaml` (every role lists its keys) and
- * `shared/authorization-conformance.yaml` (callers hold keys, cases ask about subjects).
+ * The two shared authorization files that name a removed module's permissions by hand:
+ * `shared/authorization-roles.yaml` (every role lists its permission sets) and
+ * `shared/authorization-conformance.yaml` (callers hold rules, cases ask about subjects).
  *
- * The bundle (`shared/authorization-keys.yaml`) drops a module's keys on its own, because it is
+ * The bundle (`shared/authorization-keys.yaml`) drops a module's rules and sets on its own, because it is
  * assembled from the fragments that were deleted with the folder. These two are edited FROM the
  * fragments, so they are read BEFORE the folders go: {@link readRemovedAuthorization}.
  *
@@ -18,10 +18,12 @@ import type { RemovalNote } from './demo-remove-registry';
 import { modulesWith } from '../modules-on-disk';
 import { readAuthorizationFragment } from '../contracts/fragments';
 
-/** What a set of removed modules declared: their permission keys, and the CASL subjects only they used. */
+/** What a set of removed modules declared: their rules and sets, and the CASL subjects only they used. */
 export interface RemovedAuthorization {
-    /** Every key the removed modules' fragments declared. */
-    keys: ReadonlySet<string>;
+    /** The id (`display:Order`) of every rule the removed modules' fragments declared. */
+    rules: ReadonlySet<string>;
+    /** The name of every permission set the removed modules' fragments declared. */
+    sets: ReadonlySet<string>;
     /** Subjects no surviving fragment (or the core one) still declares. */
     subjects: ReadonlySet<string>;
 }
@@ -39,39 +41,41 @@ export const readRemovedAuthorization = (
     const fragmentOf = (name: string): string => path.join(modulesRoot, name, 'authorization.yaml');
     const survivors = modulesWith(modulesRoot, 'authorization.yaml')
         .filter((name) => !names.includes(name))
-        .flatMap((name) => readAuthorizationFragment(fragmentOf(name)).keys);
+        .flatMap((name) => readAuthorizationFragment(fragmentOf(name)).rules);
     const core = readAuthorizationFragment(
         path.join(repoRoot, 'shared', 'contracts', 'authorization-keys.core.yaml')
-    ).keys;
-    const removed = names.flatMap((name) => readAuthorizationFragment(fragmentOf(name)).keys);
+    ).rules;
+    const removedFragments = names.map((name) => readAuthorizationFragment(fragmentOf(name)));
+    const removed = removedFragments.flatMap((fragment) => fragment.rules);
 
     const stillUsed = new Set([...survivors, ...core].map((entry) => entry.subject));
     return {
-        keys: new Set(removed.map((entry) => entry.key)),
+        rules: new Set(removed.map((entry) => `${entry.action}:${entry.subject}`)),
+        sets: new Set(removedFragments.flatMap((fragment) => fragment.sets.map((set) => set.name))),
         subjects: new Set(
             removed.map((entry) => entry.subject).filter((subject) => !stillUsed.has(subject))
         )
     };
 };
 
-/** A list item naming exactly one key: `    - orders.any.read`. */
-const KEY_LINE = /^\s*-\s+([\w.-]+)\s*$/;
+/** A list item naming exactly one rule or set: `    - display:Order`, `    - OrderDisplay`. */
+const NAME_LINE = /^\s*-\s+([\w.:-]+)\s*$/;
 
 /**
- * Drop each removed key's list item from `shared/authorization-roles.yaml`; a role left with no
- * key at all keeps an explicit empty list so the file still parses.
+ * Drop each removed set's list item from `shared/authorization-roles.yaml`; a role left with no
+ * set at all keeps an explicit empty list so the file still parses.
  */
 export const stripRoleGrants = (repoRoot: string, removed: RemovedAuthorization): RemovalNote => {
     const file = path.join(repoRoot, 'shared', 'authorization-roles.yaml');
     const lines = readFileSync(file, 'utf8')
         .split('\n')
-        .filter((line) => !removed.keys.has(KEY_LINE.exec(line)?.[1] ?? ''));
+        .filter((line) => !removed.sets.has(NAME_LINE.exec(line)?.[1] ?? ''));
 
     const out = lines.map((line, index) => {
-        const emptied = /^(\s*)permissions:(?: &\w+)?\s*$/.exec(line);
+        const emptied = /^(\s*)sets:(?: &\w+)?\s*$/.exec(line);
         // Comments may sit between the heading and its first item; only a real line decides.
         const next = lines.slice(index + 1).find((each) => !/^\s*(?:#.*)?$/.test(each)) ?? '';
-        return emptied && !KEY_LINE.test(next) ? line.replace(/\s*$/, ' []') : line;
+        return emptied && !NAME_LINE.test(next) ? line.replace(/\s*$/, ' []') : line;
     });
     writeFileSync(file, out.join('\n'));
     return {
@@ -89,7 +93,7 @@ const INLINE_PERMISSIONS = /permissions:\s*\[([^\]]*)]/g;
 /**
  * Prune one case chunk: `undefined` when the case is about a removed subject or was left holding
  * no key at all (a deny that would now pass for the wrong reason), else the chunk minus the
- * removed keys.
+ * removed rules.
  */
 const pruneCase = (chunk: string, removed: RemovedAuthorization): string | undefined => {
     const subject = /^\s*subject:\s*(\w+)/m.exec(chunk)?.[1];
@@ -102,7 +106,7 @@ const pruneCase = (chunk: string, removed: RemovedAuthorization): string | undef
             .filter(Boolean)
     );
     const emptied = lists.some(
-        (all) => all.length > 0 && all.every((key) => removed.keys.has(key))
+        (all) => all.length > 0 && all.every((key) => removed.rules.has(key))
     );
     if (emptied) return undefined;
 
@@ -110,14 +114,14 @@ const pruneCase = (chunk: string, removed: RemovedAuthorization): string | undef
         const kept = inner
             .split(',')
             .map((key) => key.trim())
-            .filter((key) => key !== '' && !removed.keys.has(key));
+            .filter((key) => key !== '' && !removed.rules.has(key));
         return `permissions: [${kept.join(', ')}]`;
     });
 };
 
 /**
- * Edit `shared/authorization-conformance.yaml`: drop the shared admin key list's removed keys,
- * every case about a removed subject, and every case whose caller held only removed keys.
+ * Edit `shared/authorization-conformance.yaml`: drop the shared admin rule list's removed rules,
+ * every case about a removed subject, and every case whose caller held only removed rules.
  */
 export const stripConformanceCases = (
     repoRoot: string,
@@ -129,7 +133,7 @@ export const stripConformanceCases = (
 
     const headKept = head
         .split('\n')
-        .filter((line) => !removed.keys.has(KEY_LINE.exec(line)?.[1] ?? ''))
+        .filter((line) => !removed.rules.has(NAME_LINE.exec(line)?.[1] ?? ''))
         .join('\n');
     const casesKept = splitCases(cases)
         .map((chunk) => pruneCase(chunk, removed))

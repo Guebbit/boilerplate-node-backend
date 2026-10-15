@@ -1,19 +1,18 @@
 /**
  * @module
  * The protection of people: an account that holds a staff role is changed only by a holder of
- * `roles.any.assign`, and a money step on one's own order is flagged in the audit trail.
+ * `assign:Role`, and a money step on one's own order is flagged in the audit trail.
  *
  * See: docs/theory/authorization.md#protecting-people
  */
 
 import type { CallerContext } from '@types';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { t } from '@infrastructure/i18n';
 import { recordAudit, coreAuditActions } from '@infrastructure/observability/audit';
 import { generateReject, type ResponseReject } from '@infrastructure/http/response';
 import { ERROR_CODES } from '@api/error-codes';
-import { ASSIGN_KEY } from './grants';
 import { membershipsOf, rolesOfMany } from './memberships';
 
 /** The `metadata.reason` of a `security.forbidden` row for a refusal because the account holds a staff role. */
@@ -50,7 +49,7 @@ export const staffHoldersAmong = (userIds: readonly string[]): Promise<Set<strin
 
 /**
  * May this caller change the account `accountId`? An account that holds a staff role may only be
- * changed by a holder of `roles.any.assign`, asked AFTER the route's own key: a moderator who may
+ * changed by a holder of `assign:Role`, asked AFTER the route's own key: a moderator who may
  * erase accounts erases customers, never the administrator.
  *
  * Answers yes, without a lookup, for:
@@ -58,7 +57,7 @@ export const staffHoldersAmong = (userIds: readonly string[]): Promise<Set<strin
  *   - no context at all — self-erasure and the other self-service paths have no caller to protect from;
  *   - the system actor — a sweep or the reaper acts for nobody;
  *   - the caller's OWN account;
- *   - a holder of `roles.any.assign`.
+ *   - a holder of `assign:Role`.
  *
  * @param context - the caller, or `undefined` for a self-service path with no request behind it
  * @param accountId - the account about to be changed
@@ -71,12 +70,12 @@ export const canChangeAccount = (
         !context ||
         context.caller.system ||
         context.caller.id === accountId ||
-        holdsKey(context.caller, ASSIGN_KEY)
+        holds(context.caller, 'assign', 'Role')
     ) {
         return Promise.resolve(true);
     }
 
-    return holdsStaffRole(accountId).then((holds) => !holds);
+    return holdsStaffRole(accountId).then((staff) => !staff);
 };
 
 /**

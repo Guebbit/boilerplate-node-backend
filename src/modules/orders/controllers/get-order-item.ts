@@ -37,7 +37,7 @@ export const getOrderItem = (
                 return;
             }
             recordStaffRead(request, {
-                key: 'orders.any.read',
+                key: 'display:Order',
                 action: ordersAuditActions.ADMIN_ORDER_VIEWED,
                 targetType: 'order',
                 targetId: id,

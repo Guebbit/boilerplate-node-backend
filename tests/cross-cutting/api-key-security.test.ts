@@ -18,7 +18,7 @@ import path from 'node:path';
 import { parse } from 'yaml';
 import { everyMountedRoute } from '@tests/contract-routes';
 import { isDeployed, REPO_ROOT } from '@tests/paths';
-import { findKey } from '@kernel/permissions';
+import { findRule, ruleId } from '@kernel/permissions';
 
 /** An operation's security requirements, as the bundle holds them. */
 type Security = Record<string, string[]>[];
@@ -70,8 +70,9 @@ describe('apiKeyAuth in the contract matches the routes that admit a key', () =>
         (operation, route) => {
             const admitsKey =
                 route.guards.includes('isAuthOrCredential') &&
-                (route.permissionKey === undefined ||
-                    findKey(route.permissionKey)?.stepUp === undefined);
+                (route.permission === undefined ||
+                    findRule(ruleId(route.permission.action, route.permission.subject))?.stepUp ===
+                        undefined);
 
             expect(listsApiKey(security.get(operation))).toBe(
                 admitsKey || KEY_AWARE_OPTIONAL_READS.has(operation)

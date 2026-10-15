@@ -7,28 +7,21 @@
  */
 
 import type { Request, Response } from 'express';
-import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
+import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
 import { streamObservabilityMetrics } from '../services/stream';
-
-/**
- * The one permission key every route in this module guards on. Exported from here, rather than
- * from `routes.ts`, because this handler is the one place that needs the key's VALUE — for the
- * recheck below — and not just a guard built from it.
- */
-export const OBSERVABILITY_READ_KEY = 'platform.observability.any.read';
 
 /**
  * GET /observability/events
  *
  * Re-checks the permission every 30 seconds for as long as the stream stays open — the one place
  * in this codebase where a revoked caller does not lose access on their very next request, because
- * there is no next request until this recheck ends the stream. See `stillHoldsKeyViaCookie` and
+ * there is no next request until this recheck ends the stream. See `stillHoldsRuleViaCookie` and
  * `streamObservabilityMetrics`.
  */
 export const getObservabilityEvents = (request: Request, response: Response) => {
-    // `requirePermissionViaCookie` already resolved a key-holding caller and left its recheck on
+    // `requirePermissionViaCookie` already resolved a rule-holding caller and left its recheck on
     // the request, or this handler would never run.
     streamObservabilityMetrics(response, () =>
-        stillHoldsKeyViaCookie(request, OBSERVABILITY_READ_KEY)
+        stillHoldsRuleViaCookie(request, 'read', 'ObservabilitySnapshot')
     );
 };

@@ -1,7 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Router } from 'express';
-import { effectiveRouteTable } from '@tests/routes';
+import { effectiveRouteTable, type PermissionAsk } from '@tests/routes';
+import { findRule, ruleId } from '@kernel/permissions';
 import { ROUTED_MODULES } from '@tests/routed-modules';
 import { MODULES_ROOT } from '@tests/paths';
 
@@ -83,15 +84,15 @@ const handlersMountedUnauthenticated = (router: Router): Set<string> => {
 };
 
 /**
- * Every `requirePermission` key guarding a route mounted behind `isAuthOrCredential`, module by
- * module — router-level `use` or per-route, same lookup {@link handlersMountedUnauthenticated}
- * makes for `isAuth`.
+ * Every rule a `requirePermission` guard asks for on a route mounted behind `isAuthOrCredential`,
+ * module by module — router-level `use` or per-route, same lookup
+ * {@link handlersMountedUnauthenticated} makes for `isAuth`.
  */
-const permissionKeysBehindCredentialGuard = (router: Router): string[] =>
+const permissionsBehindCredentialGuard = (router: Router): PermissionAsk[] =>
     effectiveRouteTable(router)
         .filter((row) => [...row.applies, ...row.chain].includes('isAuthOrCredential'))
-        .map((row) => row.permissionKey)
-        .filter((key): key is string => key !== undefined);
+        .map((row) => row.permission)
+        .filter((ask): ask is PermissionAsk => ask !== undefined);
 
 describe('every controller reading the caller is mounted behind isAuth', () => {
     it('finds no handler asserting an auth context its route does not guarantee', () => {
@@ -120,33 +121,36 @@ describe('every controller reading the caller is mounted behind isAuth', () => {
 
 /**
  * The other half of `isAuthOrCredential`'s own docblock claim (`src/kernel/middlewares/
- * authorizations.ts`): every guard behind it is a tenant-scoped `<family>.any.<action>` key. A
- * `<family>.self.<action>` key behind this guard would be satisfied by
+ * authorizations.ts`): every guard behind it asks for a tenant-scoped rule with no owner
+ * condition. A rule pinned to the caller's own rows behind this guard would be satisfied by
  * `callerInScope(authContext, 'tenant')` for a human caller and by nothing for a credential,
  * which is real breakage the first time a credential reaches the route — not a policing rule.
  */
-describe('every requirePermission key behind isAuthOrCredential is tenant-scoped .any.', () => {
-    it('finds no key with a different breadth segment', () => {
+describe('every requirePermission behind isAuthOrCredential asks for a tenant rule with no owner condition', () => {
+    it('finds no rule pinned to an owner or to the platform', () => {
         const offenders = moduleNames().flatMap((name) => {
             const router = ROUTED_MODULES[name];
             if (router === undefined) return [];
 
-            return permissionKeysBehindCredentialGuard(router)
-                .filter((key) => !key.split('.').includes('any'))
-                .map((key) => `${name}: ${key}`);
+            return permissionsBehindCredentialGuard(router)
+                .filter((ask) => {
+                    const declared = findRule(ruleId(ask.action, ask.subject));
+                    return declared?.scope !== 'tenant' || declared.conditions !== undefined;
+                })
+                .map((ask) => `${name}: ${ruleId(ask.action, ask.subject)}`);
         });
 
         expect(offenders).toEqual([]);
     });
 
-    it('actually finds keys to check', () => {
+    it('actually finds rules to check', () => {
         // A canary matching the one above `handlersReadingAuthContext` has: an empty result must
-        // mean "every key is .any.", never "no route mounts isAuthOrCredential at all".
+        // mean "every rule qualifies", never "no route mounts isAuthOrCredential at all".
         const total = moduleNames().reduce(
             (count, name) =>
                 count +
                 (ROUTED_MODULES[name]
-                    ? permissionKeysBehindCredentialGuard(ROUTED_MODULES[name]).length
+                    ? permissionsBehindCredentialGuard(ROUTED_MODULES[name]).length
                     : 0),
             0
         );

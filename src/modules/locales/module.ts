@@ -72,7 +72,7 @@ export default {
      * English regardless of what they asked for.
      */
     locales: path.join(__dirname, 'locales'),
-    // `translatedBy` is staff attribution on a `translations.any.update` action — the caller's own
+    // `translatedBy` is staff attribution on a `update:Translation` action — the caller's own
     // user id, a pointer rather than a copy of anything (`services/translations.ts` sets it from
     // `context?.caller.id`). Not an end-customer's own data either way — nothing here is ever
     // reachable by a `POST /account/export` subject.

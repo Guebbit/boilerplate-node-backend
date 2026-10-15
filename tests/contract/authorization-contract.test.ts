@@ -15,10 +15,10 @@
  * resolves to cannot change a 401/403 outcome — a route where it did would be the defect this
  * sweep exists to catch.
  *
- * WHY THIS MATTERS: a route guarded by the wrong key (`users.any.update` where the role file only
- * grants `users.any.read`) makes an ALLOWED role 403 where it should not be — a bug the single-generic-caller
+ * WHY THIS MATTERS: a route guarded by the wrong key (`update:User` where the role file only
+ * grants `read:User`) makes an ALLOWED role 403 where it should not be — a bug the single-generic-caller
  * version of this sweep could never see, because that caller was always refused everywhere. Asking
- * `holdsKey` the same question the guard itself asks is what makes "should this role reach this
+ * `holds` the same question the guard itself asks is what makes "should this role reach this
  * route" a fact the test derives from the model, rather than one somebody has to keep in sync by
  * hand.
  */
@@ -26,7 +26,8 @@ import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { everyMountedRoute, type MountedRoute } from '@tests/contract-routes';
-import { holdsKey } from '@kernel/ability';
+import type { PermissionAsk } from '@tests/routes';
+import { holds } from '@kernel/ability';
 import { callerAs } from '@tests/callers';
 import { isUnrestrictedRole, PRESET_ROLES } from '@kernel/permissions';
 
@@ -77,14 +78,14 @@ describe('every route requiring a caller (contract-derived)', () => {
 });
 
 describe('every route requiring an admin (contract-derived)', () => {
-    // A key a plain `customer` holds by design (`cart.self.checkout`, the `notifications.self.*`
-    // keys; see `shared/authorization-roles.yaml`) is excluded: `authenticateAs('user')` below is
+    // A key a plain `customer` holds by design (`checkout:Cart`, the `Notification`
+    // rules; see `shared/authorization-roles.yaml`) is excluded: `authenticateAs('user')` below is
     // genuinely allowed through those routes. The per-role sweep below already covers them correctly.
     const requiresAdmin = routes.filter(
         (route) =>
             route.guards.includes('requirePermissionGuard') &&
-            (route.permissionKey === undefined ||
-                !holdsKey(callerAs('customer'), route.permissionKey))
+            (route.permission === undefined ||
+                !holds(callerAs('customer'), route.permission.action, route.permission.subject))
     );
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(
@@ -119,19 +120,19 @@ const NON_ADMIN_TENANT_ROLES: readonly string[] = [
 
 describe('every guarded route agrees with the role file, for every non-admin role (contract-derived)', () => {
     const guarded = routes.filter(
-        (route): route is MountedRoute & { permissionKey: string } =>
-            route.permissionKey !== undefined
+        (route): route is MountedRoute & { permission: PermissionAsk } =>
+            route.permission !== undefined
     );
 
     it.each(guarded.map((route) => [signature(route), route] as const))(
-        '%s answers 403 to exactly the roles that lack its key',
+        '%s answers 403 to exactly the roles that lack its rule',
         async (_signature, route) => {
             for (const role of NON_ADMIN_TENANT_ROLES) {
                 // The same question `requirePermissionGuard` asks of the caller it resolves — a
                 // tenant-scope role never holds a `platform.` key, so a platform route's answer is
                 // "false" for every one of these, and the loop asserts 403 across the board.
                 const caller = callerAs(role);
-                const allowed = holdsKey(caller, route.permissionKey);
+                const allowed = holds(caller, route.permission.action, route.permission.subject);
                 const { bearer } = await authenticateAsRole(role);
                 const response = await request(
                     route.method as HttpMethod,

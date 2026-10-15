@@ -30,7 +30,7 @@ export const getOrderByReference = (request: Request, response: Response) => {
 
             // The lookup hands staff the buyer's contact data, so it is a read of that order.
             recordStaffRead(request, {
-                key: 'orders.any.read',
+                key: 'display:Order',
                 action: paymentsAuditActions.ADMIN_ORDER_LOOKED_UP,
                 targetType: 'order',
                 targetId: String(result.data._id),

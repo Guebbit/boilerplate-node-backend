@@ -43,7 +43,7 @@ export const getOrderInvoice = (request: Request<{ id?: string }>, response: Res
                 }
 
                 recordStaffRead(request, {
-                    key: 'orders.any.read',
+                    key: 'display:Order',
                     action: invoicingAuditActions.ADMIN_INVOICE_VIEWED,
                     targetType: 'invoice',
                     // The row id, not the number: the invoice and credit-note series both restart

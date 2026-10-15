@@ -35,7 +35,7 @@ flowchart LR
 
 ::: tip Yes, the editor can change a price
 It is tempting to read "editor" as "words and pictures only", but there is no separate key for
-that — a product's price is a field on the same record as its title, and `products.any.update`
+that — a product's price is a field on the same record as its title, and `update:Product`
 grants the record, not a subset of it. If a deployment wants price locked to someone else, that is
 a new, narrower key to add, not something this role already enforces.
 :::
@@ -44,10 +44,10 @@ a new, narrower key to add, not something this role already enforces.
 
 A product's copy can be reached two ways, and they are genuinely different endpoints:
 
-| Door                                       | Reaches                                                                       | Key                                                     |
-| ------------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `PATCH /products/{id}`                     | the whole record — price, stock flags, and every language's copy in one write | `products.any.update` **and** `translations.any.update` |
-| `PATCH /locales/translations/product/{id}` | that product's words only, never a price                                      | `translations.any.update`                               |
+| Door                                       | Reaches                                                                       | Key                                           |
+| ------------------------------------------ | ----------------------------------------------------------------------------- | --------------------------------------------- |
+| `PATCH /products/{id}`                     | the whole record — price, stock flags, and every language's copy in one write | `update:Product` **and** `update:Translation` |
+| `PATCH /locales/translations/product/{id}` | that product's words only, never a price                                      | `update:Translation`                          |
 
 The second is generic: it is the same endpoint that would translate a category description or a
 CMS page were one added — `product` is simply the only thing the kernel registers as translatable
@@ -55,13 +55,13 @@ today. See [`products`](../modules/products.md#writing-translated-content) for t
 
 ## What this role cannot reach, and why each one is a different reason
 
-| Cannot touch           | Because                                                                            |
-| ---------------------- | ---------------------------------------------------------------------------------- |
-| **Stock**              | A different family — `inventory.*` — which this role holds none of.                |
-| **A delivery rule**    | Delivery pricing is a fixed table, not a product field.                            |
-| **An order**           | No `orders.*` key at all — an editor cannot even read one.                         |
-| **An account**         | No `users.*` key — cannot see who bought anything.                                 |
-| **The action history** | No `audit.any.read` — that is [the moderator's](./moderator.md) key, not this one. |
+| Cannot touch           | Because                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------- |
+| **Stock**              | A different family — `inventory.*` — which this role holds none of.               |
+| **A delivery rule**    | Delivery pricing is a fixed table, not a product field.                           |
+| **An order**           | No `orders.*` key at all — an editor cannot even read one.                        |
+| **An account**         | No `users.*` key — cannot see who bought anything.                                |
+| **The action history** | No `read:AuditLog` — that is [the moderator's](./moderator.md) key, not this one. |
 
 Try it: log in as the editor and open `/users` — a 403, and not a bug in the demo: it is the whole
 reason this account exists rather than everyone sharing the owner's. `/orders` answers differently,
@@ -85,20 +85,20 @@ can each be seen behaving — fixing either is this role's job.
 become a mischarge: the same account that rewrites a title can reach the price.
 
 The separation still exists at the level of KEYS. `Translation` is its own CASL subject, entirely
-separate from `Product`, so `translations.any.update` grants no way to touch a price by itself — a
+separate from `Product`, so `update:Translation` grants no way to touch a price by itself — a
 deployment that wants a words-only person cuts a role holding the `locales.*` and `translations.*`
 keys and gets exactly that. `shared/authorization-conformance.yaml` pins it.
 :::
 
 ## The words we used
 
-| Word                          | In plain terms                                                                                                              |
-| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| **`products.*`**              | The whole Product record, unconditionally — price included.                                                                 |
-| **`locales.*`**               | Every language, every screen phrase, unconditionally.                                                                       |
-| **`translations.any.update`** | Write a translatable entity's words. Never grants a read or write on the entity's own record.                               |
-| **Switched off**              | Not deleted, just not currently for sale — an editor sees these, a visitor does not. → [`products`](../modules/products.md) |
-| **Soft delete**               | Hidden from customers, kept in the records, restorable.                                                                     |
-| **Locale**                    | One language the shop can speak. → [`locales`](../modules/locales.md)                                                       |
-| **Entry**                     | One phrase, in one language, in the shop's own dictionary — not a product's words.                                          |
-| **Translation**               | One entity's words, in one language — a product's `title`/`description`, in V1.                                             |
+| Word                     | In plain terms                                                                                                              |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| **`products.*`**         | The whole Product record, unconditionally — price included.                                                                 |
+| **`locales.*`**          | Every language, every screen phrase, unconditionally.                                                                       |
+| **`update:Translation`** | Write a translatable entity's words. Never grants a read or write on the entity's own record.                               |
+| **Switched off**         | Not deleted, just not currently for sale — an editor sees these, a visitor does not. → [`products`](../modules/products.md) |
+| **Soft delete**          | Hidden from customers, kept in the records, restorable.                                                                     |
+| **Locale**               | One language the shop can speak. → [`locales`](../modules/locales.md)                                                       |
+| **Entry**                | One phrase, in one language, in the shop's own dictionary — not a product's words.                                          |
+| **Translation**          | One entity's words, in one language — a product's `title`/`description`, in V1.                                             |

@@ -1,18 +1,28 @@
-keys:
+rules:
     # -- delivery ------------------------------------------------------------------------------
-    - key: delivery.any.update
-      module: delivery
+    - action: update
       subject: Shipment
-      action: update
+      module: delivery
       scope: tenant
       description: Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, and hold or release a fulfillment order.
-    # Narrower than `orders.any.update` on purpose: the warehouse may begin work on a paid order
+    # Narrower than `update:Order` on purpose: the warehouse may begin work on a paid order
     # without being handed the run of the order record. `paid → processing` is `system`-only in
-    # `orders/domain/lifecycle.ts` — this key gates `POST /delivery/order/{id}/start`, the door
+    # `orders/domain/lifecycle.ts` — this rule gates `POST /delivery/order/{id}/start`, the door
     # that calls `orders/services/status.ts`'s `markProcessing`.
-    - key: delivery.any.start
-      module: delivery
+    - action: start
       subject: Shipment
-      action: start
+      module: delivery
       scope: tenant
       description: Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.
+
+sets:
+    - name: DeliveryManagement
+      module: delivery
+      description: Cut, correct and record shipments; hold or release a fulfillment order.
+      rules:
+          - update:Shipment
+    - name: DeliveryStart
+      module: delivery
+      description: Begin fulfilling a paid order.
+      rules:
+          - start:Shipment

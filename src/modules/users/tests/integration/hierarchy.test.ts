@@ -1,8 +1,8 @@
 /**
  * @module
  * Who may change whom, through `userService` — the refusals an admin write owes after the
- * route's own key: the key a CHANGED field needs (`users.any.ban` for `active`), the protection of
- * an account that holds a staff role (only a holder of `roles.any.assign` may change one, the
+ * route's own key: the key a CHANGED field needs (`ban:User` for `active`), the protection of
+ * an account that holds a staff role (only a holder of `assign:Role` may change one, the
  * caller's own excepted), and the same key for handing a role out.
  *
  * Driven through the service rather than the route so each cell names the caller's role and what
@@ -64,7 +64,7 @@ const refusalCode = (result: { success: boolean }): string | undefined => {
     return (result as ResponseReject).errors[0]?.code;
 };
 
-describe('users.any.ban — the key a ban needs', () => {
+describe('ban:User — the key a ban needs', () => {
     it('refuses support a ban, though it may edit the same account', async () => {
         const target = await accountHolding('customer');
 

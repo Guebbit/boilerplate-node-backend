@@ -2,7 +2,7 @@
  * @module
  * Product reads for an `sk_...` credential: its permissions mean what the same keys mean on a
  * session. `callerScope` takes `request.caller`, which a session and a key both resolve to, so a
- * key holding `products.any.read` sees drafts and soft-deleted rows, and a key without it reads
+ * key holding `display:Product` sees drafts and soft-deleted rows, and a key without it reads
  * exactly the published catalogue a stranger reads.
  */
 
@@ -20,9 +20,9 @@ setupTestDb();
 const bearerOf = (secret: string): string => `Bearer ${secret}`;
 
 describe('GET /products/:id with an api key', () => {
-    it('shows a soft-deleted product to a key holding products.any.read', async () => {
+    it('shows a soft-deleted product to a key holding display:Product', async () => {
         const product = await createProduct({ title: 'Withdrawn', deletedAt: new Date() });
-        const secret = await credentialHolding(['products.any.read']);
+        const secret = await credentialHolding(['display:Product']);
 
         const response = await api()
             .get(`/products/${String(product._id)}`)
@@ -31,9 +31,9 @@ describe('GET /products/:id with an api key', () => {
         expect(response.status).toBe(200);
     });
 
-    it('hides a soft-deleted product from a key without products.any.read', async () => {
+    it('hides a soft-deleted product from a key without display:Product', async () => {
         const product = await createProduct({ title: 'Withdrawn', deletedAt: new Date() });
-        const secret = await credentialHolding(['users.any.read']);
+        const secret = await credentialHolding(['read:User']);
 
         const response = await api()
             .get(`/products/${String(product._id)}`)
@@ -44,7 +44,7 @@ describe('GET /products/:id with an api key', () => {
 
     it('still shows a published product to a key minted for something else', async () => {
         const product = await createProduct({ title: 'On sale', active: true });
-        const secret = await credentialHolding(['users.any.read']);
+        const secret = await credentialHolding(['read:User']);
 
         const response = await api()
             .get(`/products/${String(product._id)}`)
@@ -63,11 +63,11 @@ const titlesAt = async (secret: string): Promise<string[]> => {
 };
 
 describe('GET /products with an api key', () => {
-    it('lists drafts for a key holding products.any.read', async () => {
+    it('lists drafts for a key holding display:Product', async () => {
         await createProduct({ title: 'Live', active: true });
         await createProduct({ title: 'Draft', active: false });
 
-        expect(await titlesAt(await credentialHolding(['products.any.read']))).toEqual([
+        expect(await titlesAt(await credentialHolding(['display:Product']))).toEqual([
             'Draft',
             'Live'
         ]);
@@ -77,7 +77,7 @@ describe('GET /products with an api key', () => {
         await createProduct({ title: 'Live', active: true });
         await createProduct({ title: 'Draft', active: false });
 
-        expect(await titlesAt(await credentialHolding(['users.any.read']))).toEqual(['Live']);
+        expect(await titlesAt(await credentialHolding(['read:User']))).toEqual(['Live']);
     });
 });
 
@@ -86,7 +86,7 @@ describe('the cache scope of a key caller', () => {
      * The cache middleware shares the guest's entry only when this is true, so a key that reads
      * more than a guest must make it false, or its wider answer would be stored under the guest's key.
      */
-    it('is not the guest scope for a caller holding products.any.read', () => {
+    it('is not the guest scope for a caller holding display:Product', () => {
         expect(hasAnonymousReadScope(callerScope, callerAs('admin'))).toBe(false);
     });
 

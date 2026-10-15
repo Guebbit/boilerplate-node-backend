@@ -103,18 +103,27 @@ describe('the generated module.yaml', () => {
 });
 
 describe('the generated declarations', () => {
-    it('declares one key per action, in the module family', () => {
-        const { keys } = parseYaml(contentOf(OPTIONS, 'authorization.yaml')) as {
-            keys: { key: string; module: string }[];
+    it('declares one rule per action on the entity, bundled in one set', () => {
+        const { rules, sets } = parseYaml(contentOf(OPTIONS, 'authorization.yaml')) as {
+            rules: { action: string; subject: string; module: string }[];
+            sets: { name: string; module: string; rules: string[] }[];
         };
+        const ids = rules.map((rule) => `${rule.action}:${rule.subject}`);
 
-        expect(keys.map((key) => key.key)).toEqual([
-            'fieldnotes.any.read',
-            'fieldnotes.any.create',
-            'fieldnotes.any.update',
-            'fieldnotes.any.delete'
+        expect(ids).toEqual([
+            'read:FieldNote',
+            'create:FieldNote',
+            'update:FieldNote',
+            'delete:FieldNote'
         ]);
-        expect(new Set(keys.map((key) => key.module))).toEqual(new Set(['field-notes']));
+        expect(new Set(rules.map((rule) => rule.module))).toEqual(new Set(['field-notes']));
+        expect(sets).toEqual([
+            expect.objectContaining({
+                name: 'FieldNoteManagement',
+                module: 'field-notes',
+                rules: ids
+            })
+        ]);
     });
 
     it('declares the paths, one operation id each, and the Replace/Update pair', () => {

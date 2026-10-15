@@ -382,7 +382,7 @@ export const userSchema = new Schema<UserDocument, UserModel>(
         },
         /*
          * WHEN the address was confirmed via the verify flow, or `null` until it is.
-         * Enforcement is the membership role (`unverified` holds no `cart.self.checkout`, see
+         * Enforcement is the membership role (`unverified` holds no `checkout:Cart`, see
          * `shared/authorization-keys.yaml`) — this is the record of fact, kept separately because
          * the role can be reassigned: the moment an operator grants a staff role to an unproven
          * address, that grant would otherwise be the only evidence the address was never proven.
@@ -673,7 +673,7 @@ export type UserWire = Omit<
  * also `select: false` on the schema; this is defense in depth, not the only guard. Exported so
  * lean results (which bypass `toJSON`) can be mapped through the same logic — see `./service`
  * `search()`. `active` and `deletedAt` pass through untouched: both are in the `User` contract,
- * and every route serving a `User` list requires `users.any.read`.
+ * and every route serving a `User` list requires `read:User`.
  *
  * This is schema plumbing (a Mongoose-level omit), not the `User` contract itself — `./presenter`
  * is where a document becomes the wire shape; see `presentUser` there.

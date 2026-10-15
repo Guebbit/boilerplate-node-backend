@@ -120,7 +120,7 @@ components:
                     type: array
                     items: { type: string }
                     minItems: 1
-                    description: The permission keys this credential was minted with. Re-floored against the minter's CURRENT permissions on every request; this is the snapshot taken at mint time.
+                    description: The permission rules this credential was minted with, each spelled `<action>:<Subject>` (`display:Order`). Re-floored against the minter's CURRENT permissions on every request; this is the snapshot taken at mint time.
                 lastUsedAt:
                     type: string
                     format: date-time
@@ -190,7 +190,7 @@ components:
                     type: array
                     items: { type: string, maxLength: 100 }
                     minItems: 1
-                    description: The permission keys to mint this credential with. Must be a subset of the caller's own current permissions, or the request is refused with 422.
+                    description: The permission rules to mint this credential with, each spelled `<action>:<Subject>` (`display:Order`). Must be a subset of the caller's own current permissions, or the request is refused with 422.
                 expiresAt:
                     type: string
                     format: date-time

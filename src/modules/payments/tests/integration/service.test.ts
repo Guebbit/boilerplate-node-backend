@@ -340,7 +340,7 @@ describe('getForOrder', () => {
     });
 
     /*
-     * The bug this pins: `payments.any.update` is held by name, not through the scope wildcard
+     * The bug this pins: `create:Refund` is held by name, not through the scope wildcard
      * a moderator never holds — asking for the wildcard alone hid the refund action from them
      * despite the key they do hold, on a payment an operator has every reason to refund.
      */

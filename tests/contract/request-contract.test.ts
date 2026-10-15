@@ -569,7 +569,7 @@ const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
     // `otp` is optional and only legal for an account with a second factor armed; the generated
     // account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
     reauth: { password: () => PLAIN_PASSWORD, otp: () => undefined },
-    mintApiKey: { permissions: () => ['users.any.read'] },
+    mintApiKey: { permissions: () => ['read:User'] },
     // An event name is legal only if the catalogue lists it, which the schema cannot say: `*` always is.
     createWebhookSubscription: { eventTypes: () => ['*'] },
     replaceWebhookSubscription: { eventTypes: () => ['*'] },

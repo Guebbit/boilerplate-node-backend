@@ -1,52 +1,57 @@
-keys:
+rules:
     # -- examples ------------------------------------------------------------------------------
-    # `self` is the caller's own rows (the condition rides into the query), `any` is everyone's.
-    # An admin holds both; delete this file with the module and its keys leave with it.
-    - key: examples.self.read
-      module: example
+    # The plain actions are the caller's own rows (the condition rides into the query). `display`
+    # and `admin` are the staff doors: every row, whoever owns it. An admin holds both; delete this
+    # file with the module and its rules and sets leave with it.
+    - action: read
       subject: Example
-      action: read
+      module: example
       scope: tenant
       description: Read the caller's own examples, drafts included.
       conditions:
           userId: $caller.id
-    - key: examples.self.create
-      module: example
+    - action: create
       subject: Example
-      action: create
+      module: example
       scope: tenant
       description: Write a new example of one's own.
-    - key: examples.self.update
-      module: example
+    - action: update
       subject: Example
-      action: update
+      module: example
       scope: tenant
       description: Edit the caller's own examples, and move them through draft, published and archived.
       conditions:
           userId: $caller.id
-    - key: examples.self.delete
-      module: example
+    - action: delete
       subject: Example
-      action: delete
+      module: example
       scope: tenant
       description: Remove the caller's own examples.
       conditions:
           userId: $caller.id
-    - key: examples.any.read
-      module: example
+    - action: display
       subject: Example
-      action: read
+      module: example
       scope: tenant
       description: Read every example, whoever owns it.
-    - key: examples.any.update
-      module: example
+    - action: admin
       subject: Example
-      action: update
-      scope: tenant
-      description: Edit any example, whoever owns it.
-    - key: examples.any.delete
       module: example
-      subject: Example
-      action: delete
       scope: tenant
-      description: Remove any example, whoever owns it.
+      description: Edit or remove any example, whoever owns it.
+
+sets:
+    - name: ExampleOwn
+      module: example
+      description: Read, write, edit and remove one's own examples.
+      rules:
+          - read:Example
+          - create:Example
+          - update:Example
+          - delete:Example
+    - name: ExampleManagement
+      module: example
+      description: Read, edit and remove every example, whoever owns it.
+      rules:
+          - display:Example
+          - admin:Example

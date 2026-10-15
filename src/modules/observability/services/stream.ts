@@ -102,7 +102,7 @@ const writeMetricsEvent = (response: Response, eventName: ObservabilityChannel) 
  * @param reverify - re-answers "does this caller still hold the permission that opened the
  *   stream", polled by `openSseStream`. Kept a plain callback, not a specific auth
  *   call, so this module stays agnostic of how a caller is authenticated — the route wires it to
- *   `kernel/middlewares/authorizations.ts#stillHoldsKeyViaCookie`.
+ *   `kernel/middlewares/authorizations.ts#stillHoldsRuleViaCookie`.
  */
 export const streamObservabilityMetrics = (
     response: Response,

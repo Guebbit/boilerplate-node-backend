@@ -1,14 +1,14 @@
 #!/usr/bin/env tsx
 /**
  * `shared/authorization-keys.yaml`, assembled from one fragment per module plus a root residual
- * file for the app-level keys — `npm run authorization:bundle`.
+ * file for the app-level rules — `npm run authorization:bundle`.
  *
- * Each key is defined in its own module's `authorization.yaml`, so a module's keys
+ * Each rule and set is defined in its own module's `authorization.yaml`, so a module's rules
  * never outlive its own deletion — a fact about this bundle (it reads only fragments that exist),
  * checked below, rather than two hand-kept lists reconciled by a test.
  *
  * Spliced as TEXT, not merged through the YAML AST the way `asyncapi-bundles.ts` merges channel
- * maps: every key here is a flat, self-contained list item with no cross-fragment reference to
+ * maps: every entry here is a flat, self-contained list item with no cross-fragment reference to
  * resolve, so a structural merge would buy nothing and risks the stringifier re-wrapping a
  * description or re-quoting a scalar. A straight splice keeps every authored byte, which matters
  * more here than for AsyncAPI — `shared/authorization-keys.yaml` is read by the PHP twin too.
@@ -28,17 +28,23 @@ import { REPO_ROOT, MODULES_ROOT, modulesWith } from '../modules-on-disk';
 import { readAuthorizationFragment } from './fragments';
 import { writeOrCheck } from './generated-file';
 
-/** The root residual file: everything no module owns — preamble, `version`, `actions`, `scopes`, the closing note. */
+/** The root residual file: everything no module owns — preamble, `version`, `actions`, `implies`, `scopes`, the closing note. */
 const ROOT_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-keys.root.yaml');
 
-/** The app-level keys — `translations.any.*` — that belong to `core`, not to one module. See `kernel/translation.ts`'s translation port, which the fragment's own comment explains. */
+/** The app-level rules and sets — `read:Translation`, `update:Translation` — that belong to `core`, not to one module. See `kernel/translation.ts`'s translation port, which the fragment's own comment explains. */
 const CORE_FILE = path.join(REPO_ROOT, 'shared', 'contracts', 'authorization-keys.core.yaml');
 
 /** The committed bundle every backend reads at boot. */
 const OUTPUT_FILE = path.join(REPO_ROOT, 'shared', 'authorization-keys.yaml');
 
-/** Where the root file's own `keys:` section goes — a YAML comment, so the file still parses as one document with no `keys` field of its own. */
-const SPLICE_MARKER = '# %AUTHORIZATION_KEYS%';
+/** Where the root file's `rules:` section goes — a YAML comment, so the file still parses as one document with no `rules` field of its own. */
+const RULES_MARKER = '# %AUTHORIZATION_RULES%';
+
+/** Where the root file's `sets:` section goes; same reasoning as {@link RULES_MARKER}. */
+const SETS_MARKER = '# %AUTHORIZATION_SETS%';
+
+/** The heading line that separates a fragment's rules from its sets. */
+const SETS_HEADING = /^sets:\r?\n/m;
 
 /**
  * The order the original hand-written file had its sections in, kept so a PHP port's own diff of
@@ -72,29 +78,31 @@ const fragmentPath = (section: string): string =>
         : path.join(REPO_ROOT, 'src', 'modules', section, 'authorization.yaml');
 
 /**
- * The raw `keys:` list text a fragment contributes, its own `keys:` heading stripped — what gets
- * spliced under the bundle's single `keys:` line. Also the fail-closed check that
- * guarantee leans on: a fragment whose own key names a DIFFERENT module than the folder it lives in is a typo the
- * bundle refuses to launder.
+ * The raw text a fragment contributes: its `rules:` list and its `sets:` list, each with its own
+ * heading stripped — what gets spliced under the bundle's single `rules:` and `sets:` lines.
+ * Also the fail-closed check the "never outlive its module" guarantee leans on: a fragment whose
+ * own rule or set names a DIFFERENT module than the folder it lives in is a typo the bundle
+ * refuses to launder.
  * @param section - the module name, or `core` for the app-level fragment
- * @throws Error if the fragment is missing, malformed, or misattributes one of its own keys
+ * @throws Error if the fragment is missing, malformed, or misattributes one of its own entries
  */
-const fragmentKeysBlock = (section: string): string => {
+const fragmentBlocks = (section: string): { rules: string; sets: string } => {
     const file = fragmentPath(section);
     if (!existsSync(file)) throw new Error(`[authorization] missing fragment: ${file}`);
 
     const raw = readFileSync(file, 'utf8');
     const parsed = readAuthorizationFragment(file);
-    const owner = section === 'core' ? 'core' : section;
-    const misattributed = parsed.keys.filter((key) => key.module !== owner);
+    const misattributed = [...parsed.rules, ...parsed.sets].filter(
+        (entry) => entry.module !== section
+    );
     if (misattributed.length > 0)
         throw new Error(
-            `[authorization] ${file}: every key must declare module: ${owner} — found ` +
-                misattributed.map((key) => key.module).join(', ')
+            `[authorization] ${file}: every rule and set must declare module: ${section} — found ` +
+                misattributed.map((entry) => entry.module).join(', ')
         );
 
-    const withoutHeading = raw.replace(/^keys:\r?\n/, '');
-    return withoutHeading.replace(/\n+$/, '');
+    const [rulesPart, setsPart = ''] = raw.replace(/^rules:\r?\n/, '').split(SETS_HEADING);
+    return { rules: rulesPart.replace(/\n+$/, ''), sets: setsPart.replace(/\n+$/, '') };
 };
 
 /** Every section that has a fragment on disk: each module folder carrying an `authorization.yaml`, plus `core`. */
@@ -106,15 +114,26 @@ const sectionsOnDisk = (): string[] => [...modulesWith(MODULES_ROOT, 'authorizat
  */
 export const assembleAuthorizationKeys = (): string => {
     const root = readFileSync(ROOT_FILE, 'utf8');
-    if (!root.includes(SPLICE_MARKER))
-        throw new Error(`[authorization] ${ROOT_FILE} is missing the ${SPLICE_MARKER} marker`);
-    const [before, after] = root.split(SPLICE_MARKER);
+    for (const marker of [RULES_MARKER, SETS_MARKER])
+        if (!root.includes(marker))
+            throw new Error(`[authorization] ${ROOT_FILE} is missing the ${marker} marker`);
+    const [beforeRules, afterRules] = root.split(RULES_MARKER);
+    const [betweenText, afterSets] = afterRules.split(SETS_MARKER);
 
-    const keys = orderSections(PREFERRED_ORDER, sectionsOnDisk())
-        .map((section) => fragmentKeysBlock(section))
+    const blocks = orderSections(PREFERRED_ORDER, sectionsOnDisk()).map((section) =>
+        fragmentBlocks(section)
+    );
+    const rules = blocks.map((block) => block.rules).join('\n\n');
+    const sets = blocks
+        .map((block) => block.sets)
+        .filter((block) => block !== '')
         .join('\n\n');
 
-    return `${before.replace(/\n+$/, '')}\nkeys:\n${keys}\n${after.replace(/^\n+/, '\n')}`;
+    return (
+        `${beforeRules.replace(/\n+$/, '')}\nrules:\n${rules}\n` +
+        `${betweenText.replace(/^\n+/, '\n').replace(/\n+$/, '')}\nsets:\n${sets}\n` +
+        afterSets.replace(/^\n+/, '\n')
+    );
 };
 
 /** The bundle as the fragments say it should read: written, or under `--check` compared. */

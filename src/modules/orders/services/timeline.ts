@@ -14,7 +14,7 @@ import type { ClientSession } from 'mongoose';
 import { logger } from '@infrastructure/adapters/logger';
 import { toObjectId } from '@infrastructure/persistence/create-repository';
 import { callerForSubject } from '@kernel/permissions';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import type { AuthContext, OrderTimelineEntry } from '@types';
 import { orderEventRepository } from '../repository';
 import { ownOrderIds } from './read';
@@ -88,13 +88,13 @@ export const withTimeline =
 
 /**
  * Whether the caller reads every order: the staff view of a timeline. By the held key, not by the
- * CASL action — `orders.self.read` shares the action, so asking CASL would admit every buyer.
+ * CASL action — `read:Order` shares the action, so asking CASL would admit every buyer.
  *
  * @param authContext - the caller
  */
 const readsEveryOrder = (authContext: AuthContext | undefined): boolean =>
     authContext !== undefined &&
-    heldKeys(callerForSubject(authContext, 'Order')).has('orders.any.read');
+    heldRules(callerForSubject(authContext, 'Order')).has('display:Order');
 
 /**
  * An order's timeline as this caller may read it, oldest first. The order itself is already

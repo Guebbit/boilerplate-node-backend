@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
 import { PERMISSION_ACTIONS } from '@api/permission-actions';
-import { PERMISSION_KEYS } from '@kernel/permissions';
+import { PERMISSION_RULES } from '@kernel/permissions';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 
@@ -24,8 +24,8 @@ describe('permission actions', () => {
         expect([...PERMISSION_ACTIONS]).toEqual(yamlActions);
     });
 
-    it('cover every action a declared key carries', () => {
-        for (const key of PERMISSION_KEYS) expect(yamlActions).toContain(key.action);
+    it('cover every action a declared rule carries', () => {
+        for (const rule of PERMISSION_RULES) expect(yamlActions).toContain(rule.action);
     });
 
     it('are not typed a second time in the kernel', () => {

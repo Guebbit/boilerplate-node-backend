@@ -7,6 +7,7 @@
  */
 import type { Router } from 'express';
 import { effectiveRouteTable } from '@tests/routes';
+import type { PermissionAsk } from '@tests/routes';
 import { enabledModules } from '../../src/modules';
 
 /** One mounted endpoint, as {@link everyMountedRoute} reports it. */
@@ -17,8 +18,8 @@ export interface MountedRoute {
     path: string;
     /** Router-level and per-route guards, in the order they actually run. */
     guards: string[];
-    /** The `requirePermission` key guarding this route, `undefined` for one with no such guard. */
-    permissionKey?: string;
+    /** What the `requirePermission` guard on this route asks, `undefined` for one with no such guard. */
+    permission?: PermissionAsk;
 }
 
 /**
@@ -35,11 +36,11 @@ export const everyMountedRoute = (): MountedRoute[] =>
         )
         .flatMap((appModule) =>
             effectiveRouteTable(appModule.routes).map(
-                ({ method, path, applies, chain, permissionKey }) => ({
+                ({ method, path, applies, chain, permission }) => ({
                     method,
                     path: `${appModule.basePath}${path}`,
                     guards: [...applies, ...chain],
-                    permissionKey
+                    permission
                 })
             )
         );

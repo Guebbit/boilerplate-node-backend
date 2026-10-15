@@ -148,7 +148,7 @@ describe('who may read what', () => {
         expect(await getById(String(mine._id), other)).toBeNull();
     });
 
-    it('lets a caller holding examples.any.read read anyone’s', async () => {
+    it('lets a caller holding display:Example read anyone’s', async () => {
         const { user } = await aCustomer();
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: user.id });
@@ -198,7 +198,7 @@ describe('search', () => {
         expect(meta.totalItems).toBe(1);
     });
 
-    it('lists everyone’s for a caller holding examples.any.read, each with its own owner name', async () => {
+    it('lists everyone’s for a caller holding display:Example, each with its own owner name', async () => {
         const { user } = await aCustomer('ada');
         const { user: other } = await aCustomer('grace');
         const { context: admin } = await anAdmin();
@@ -271,7 +271,7 @@ describe('update', () => {
         expect(await fieldOf(String(theirs._id), 'title')).toBe('Theirs');
     });
 
-    it('lets examples.any.update edit anyone’s', async () => {
+    it('lets admin:Example edit anyone’s', async () => {
         const { user } = await aCustomer();
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: user.id });
@@ -467,7 +467,7 @@ describe('remove', () => {
         expect(await exampleRepository.findById(String(theirs._id))).toBeNull();
     });
 
-    it('lets examples.any.delete remove anyone’s, and audits it', async () => {
+    it('lets admin:Example remove anyone’s, and audits it', async () => {
         const { user } = await aCustomer();
         const { context: admin } = await anAdmin();
         const theirs = await createExample({ userId: user.id });

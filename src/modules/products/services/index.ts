@@ -44,7 +44,7 @@ export { canSeeStock } from './stock-view';
 
 /**
  * A product document as the wire shape `caller` may see — the counters only for a holder of
- * `inventory.any.read`, the `inStock`/`lowStock` flags for everyone.
+ * `read:StockLevel`, the `inStock`/`lowStock` flags for everyone.
  *
  * @param document - the stored product
  * @param caller - `request.caller`, or `undefined` for a path with no request (sees no counters)

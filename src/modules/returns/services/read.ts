@@ -1,6 +1,6 @@
 /**
  * @module
- * Reading returns. Who sees what: staff holding `returns.any.read` see every return; anyone else
+ * Reading returns. Who sees what: staff holding `read:Return` see every return; anyone else
  * sees the returns on THEIR OWN orders — ownership is the order's, because a return is keyed by
  * `orderId` and never by `userId`, so it has no owner of its own to filter on.
  */
@@ -13,7 +13,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { callerForSubject } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { ownOrderIds } from '@modules/orders';
 import type { AuthContext, Return, ReturnActions } from '@types';
 import type { PaginatedMeta } from '@infrastructure/persistence/search';
@@ -34,7 +34,7 @@ export interface ReturnFilters {
 
 /** Whether this caller works the returns queue — the wide read. */
 const isStaff = (authContext: AuthContext): boolean =>
-    holdsKey(callerForSubject(authContext, 'Return'), 'returns.any.read');
+    holds(callerForSubject(authContext, 'Return'), 'read', 'Return');
 
 /**
  * What this caller may do to this return, decided here so no client re-implements the lifecycle.
@@ -46,14 +46,13 @@ const isStaff = (authContext: AuthContext): boolean =>
 export const actionsFor = (returned: ReturnDocument, authContext: AuthContext): ReturnActions => {
     const caller = callerForSubject(authContext, 'Return');
     const decidable =
-        DECIDABLE_RETURN_STATUSES.includes(returned.status) &&
-        holdsKey(caller, 'returns.any.update');
+        DECIDABLE_RETURN_STATUSES.includes(returned.status) && holds(caller, 'update', 'Return');
 
     return {
         approve: decidable,
         decline: decidable,
         receive:
-            holdsKey(caller, 'returns.any.receive') &&
+            holds(caller, 'receive', 'Return') &&
             RECEIVABLE_RETURN_STATUSES.includes(returned.status)
     };
 };

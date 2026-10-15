@@ -33,7 +33,7 @@ router.get('/published/:id', getAuth, privateNoCache, getPublishedExample);
 
 /*
  * Everything below is signed-in, and POSITIONAL: the guard covers routes under it, not above.
- * `isAuth`, not `isAuthOrCredential`: the `self` keys narrow by WHO is asking, and an API key
+ * `isAuth`, not `isAuthOrCredential`: the own-rows rules narrow by WHO is asking, and an API key
  * resolves to no session to narrow by.
  */
 router.use(getAuth, isAuth);
@@ -42,25 +42,25 @@ router.use(getAuth, isAuth);
  * `search` is declared before `/:id` so the word cannot be read as an id. A POST answer is never
  * cached (`noStore`); the GET may be kept by the browser alone, since the answer depends on who asks.
  */
-router.post('/search', requirePermission('examples.self.read'), noStore, getExamples);
+router.post('/search', requirePermission('read', 'Example'), noStore, getExamples);
 
 // GET /examples — the caller's own examples, filtered by the query string.
-router.get('/', requirePermission('examples.self.read'), privateNoCache, getExamples);
+router.get('/', requirePermission('read', 'Example'), privateNoCache, getExamples);
 
 // `createExampleLimiter` first: a spent budget should not cost a database write.
-router.post('/', requirePermission('examples.self.create'), createExampleLimiter, postExample);
+router.post('/', requirePermission('create', 'Example'), createExampleLimiter, postExample);
 
 // GET /examples/:id — one example. `privateNoCache`: the browser may keep it, revalidated.
-router.get('/:id', requirePermission('examples.self.read'), privateNoCache, getExample);
+router.get('/:id', requirePermission('read', 'Example'), privateNoCache, getExample);
 
 // PUT /examples/:id — replace the whole example.
-router.put('/:id', requirePermission('examples.self.update'), replaceExample);
+router.put('/:id', requirePermission('update', 'Example'), replaceExample);
 
 // PATCH /examples/:id — change the fields sent.
-router.patch('/:id', requirePermission('examples.self.update'), updateExample);
+router.patch('/:id', requirePermission('update', 'Example'), updateExample);
 
 // DELETE /examples/:id — remove the example.
-router.delete('/:id', requirePermission('examples.self.delete'), deleteExample);
+router.delete('/:id', requirePermission('delete', 'Example'), deleteExample);
 
 /*
  * The cover upload. `uploadLimiter` and `upload.image()` run before the controller; the
@@ -68,7 +68,7 @@ router.delete('/:id', requirePermission('examples.self.delete'), deleteExample);
  */
 router.put(
     '/:id/cover',
-    requirePermission('examples.self.update'),
+    requirePermission('update', 'Example'),
     uploadLimiter,
     upload.image(),
     putExampleCover

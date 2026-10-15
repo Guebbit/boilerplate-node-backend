@@ -59,7 +59,7 @@ flowchart LR
 ::: tip What the desk may and may not do to an account
 Support fixes a customer's details (a phone number, a name) and nothing that is the customer's own
 to prove: there is no password, email or second-factor reset on anyone's behalf, because those are
-the owner's alone. It cannot ban or reactivate an account either: that is `users.any.ban`, the
+the owner's alone. It cannot ban or reactivate an account either: that is `ban:User`, the
 [moderator's](./moderator.md) key. And it works only on customers: another staff member's account
 holds a role only a role manager may touch, so an edit is refused with
 `403 ROLE_MANAGEMENT_REQUIRED`.

@@ -1,11 +1,14 @@
 /**
  * @module
- * The declared permission keys and the preset roles, read from the two shared artefacts that the
- * PHP twin reads byte-for-byte identically — `shared/authorization-keys.yaml` and
+ * The declared permission rules and sets, and the preset roles, read from the two shared artefacts
+ * that the PHP twin reads byte-for-byte identically — `shared/authorization-keys.yaml` and
  * `shared/authorization-roles.yaml`.
  *
+ * Three layers, the CanCan model as Solidus uses it: a RULE is one action on one subject, a SET
+ * is a named bundle of rules, a ROLE is a list of sets. A rule's id is `<action>:<subject>`.
+ *
  * ROLES ARE DATA, PERMISSIONS ARE CODE. What a role holds is fixed by these two files, the same
- * for every deployment; a deployment may never invent a key, because a key nothing checks grants
+ * for every deployment; a deployment may never invent a rule, because a rule nothing checks grants
  * nothing while looking like it grants something. `assertDeclared` is where that stops being a
  * sentence.
  *
@@ -32,57 +35,57 @@ import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { PERMISSION_ACTIONS, type PermissionAction } from '@api/permission-actions';
 
 /**
- * The prefix that marks a platform key.
+ * The id of the rule that does `action` to `subject`: `display:Order`.
  *
- * Bare keys are tenant keys and prefixed ones are platform keys, and that asymmetry is the whole
- * safety property: a bare key can never be satisfied by a platform-scope caller, and a
- * `platform.` key can never be satisfied by a tenant-scope one.
+ * The one spelling every list of rules uses — a role's expanded permissions, a credential's
+ * `permissions`, an audit row's `permission`, the conformance fixtures. No two declared rules
+ * share an id; that is checked when the file is read.
+ *
+ * @param action - a declared action, e.g. `display`
+ * @param subject - the CASL subject the rule is about, e.g. `Order`
  */
-const PLATFORM_PREFIX = 'platform.';
-
-/** Which scope a key belongs to, read from its spelling rather than from a lookup. */
-export const scopeOfKey = (key: string): AuthorizationScope =>
-    key.startsWith(PLATFORM_PREFIX) ? 'platform' : 'tenant';
+export const ruleId = (action: string, subject: string): string => `${action}:${subject}`;
 
 /**
- * The action vocabulary a declared KEY may carry, generated from `shared/authorization-keys.yaml`'s
+ * The action vocabulary a declared RULE may carry, generated from `shared/authorization-keys.yaml`'s
  * `actions:` so the type and the Zod schema below draw on the one list. `manage` is deliberately
  * absent: there is no wildcard of any kind, so nothing declares it as ITS action.
  * See docs/tools/permission-actions.md.
  */
 export type { PermissionAction } from '@api/permission-actions';
 
-/** The two scopes a key or role may carry — kept here as a runtime array purely to validate the shared YAML against {@link AuthorizationScope} without duplicating the literal elsewhere. */
+/** The two scopes a rule or role may carry — kept here as a runtime array purely to validate the shared YAML against {@link AuthorizationScope} without duplicating the literal elsewhere. */
 const AUTHORIZATION_SCOPES = [
     'tenant',
     'platform'
 ] as const satisfies readonly AuthorizationScope[];
 
-/** How recently a caller must have proved themselves to use a key that demands it. */
+/** How recently a caller must have proved themselves to use a rule that demands it. */
 export type StepUpTier = 'critical' | 'sensitive';
 
 /** Runtime validator for {@link StepUpTier}, applied to the shared YAML's `stepUp` fields. */
 const stepUpTierSchema = z.enum(['critical', 'sensitive']);
 
 /**
- * One declared key.
+ * One declared rule: an action on a subject, narrowed by its conditions.
  *
- * `subject` is the CASL subject type — the concrete thing a rule is about — while the key's own
- * first segment is the resource family. `orders.self.read` is a permission, `Order` is a thing.
+ * `subject` is the CASL subject type — the concrete thing a rule is about. A module's folder is
+ * plural; the subject is the singular type, so `display:Order` is a permission and `Order` is a
+ * thing.
  */
-export interface PermissionKey {
-    key: string;
+export interface PermissionRule {
+    /** The module that owns the rule; the one whose fragment declares it. */
     module: string;
     subject: string;
     action: PermissionAction;
     scope: AuthorizationScope;
     description: string;
     /**
-     * Whether this key demands a recently proved session, and how recently.
+     * Whether this rule demands a recently proved session, and how recently.
      *
-     * On the KEY rather than on a route because the tier is a property of what the action IS:
+     * On the RULE rather than on a route because the tier is a property of what the action IS:
      * erasing somebody's account deserves a fresh session wherever it is reached from, and a
-     * second route reaching the same key would otherwise have to remember. Absent for almost
+     * second route reaching the same rule would otherwise have to remember. Absent for almost
      * everything — a challenge people learn to dismiss protects nothing.
      */
     stepUp?: StepUpTier;
@@ -93,10 +96,10 @@ export interface PermissionKey {
      */
     conditions?: Record<string, unknown>;
     /**
-     * The `errors[].code` a refusal of THIS key answers, in place of `requirePermission`'s generic
-     * `FORBIDDEN`. Absent for almost every key — a generic "you do not have permission" is the
-     * right answer everywhere the caller genuinely lacks a role. `cart.self.checkout` is the exception:
-     * the caller has a role, just not this key yet, and the actionable answer is "confirm your
+     * The `errors[].code` a refusal of THIS rule answers, in place of `requirePermission`'s generic
+     * `FORBIDDEN`. Absent for almost every rule — a generic "you do not have permission" is the
+     * right answer everywhere the caller genuinely lacks a role. `checkout:Cart` is the exception:
+     * the caller has a role, just not this rule yet, and the actionable answer is "confirm your
      * email", not a permissions error. The message is looked up as `generic.error-<code,
      * kebab-cased>` — the same locale key `FORBIDDEN` itself resolves to via that same rule.
      * Checked against the generated error-code catalogue by
@@ -108,9 +111,8 @@ export interface PermissionKey {
     deniedCode?: string;
 }
 
-/** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `keys` list. */
-const permissionKeySchema = z.object({
-    key: z.string(),
+/** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `rules` list. */
+const permissionRuleSchema = z.object({
     module: z.string(),
     subject: z.string(),
     action: z.enum(PERMISSION_ACTIONS),
@@ -119,14 +121,38 @@ const permissionKeySchema = z.object({
     stepUp: stepUpTierSchema.optional(),
     conditions: z.record(z.string(), z.unknown()).optional(),
     deniedCode: z.string().optional()
-}) satisfies z.ZodType<PermissionKey>;
+}) satisfies z.ZodType<PermissionRule>;
 
-/** A role the seeders create, and the keys it holds. Roles are data; the keys they name are not. */
+/**
+ * A named bundle of rules, declared by the module that owns them — Solidus' `OrderDisplay`.
+ * A role lists sets and never a rule, so granting access reads as a decision about a job and
+ * not about an action.
+ */
+export interface PermissionSet {
+    name: string;
+    module: string;
+    description: string;
+    /** The ids (`display:Order`) of the rules the set bundles. */
+    rules: readonly string[];
+}
+
+/** Runtime shape for one entry of `shared/authorization-keys.yaml`'s `sets` list. */
+const permissionSetSchema = z.object({
+    name: z.string(),
+    module: z.string(),
+    description: z.string(),
+    rules: z.array(z.string())
+}) satisfies z.ZodType<PermissionSet>;
+
+/** A role the seeders create: the sets it lists, and the rules those sets expand to. Roles are data; the rules they name are not. */
 export interface PresetRole {
     name: string;
     scope: AuthorizationScope;
     title: string;
     description: string;
+    /** The names of the permission sets the role lists, as `shared/authorization-roles.yaml` writes them. */
+    sets: readonly string[];
+    /** The ids of every rule the role's sets bundle, expanded once when the file is read. */
     permissions: readonly string[];
     /**
      * `false` for a role no request may hand to an account — `system`, the actor background work
@@ -135,15 +161,15 @@ export interface PresetRole {
     assignable?: boolean;
 }
 
-/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list. */
+/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `roles` list, before its sets are expanded. */
 const presetRoleSchema = z.object({
     name: z.string(),
     scope: z.enum(AUTHORIZATION_SCOPES),
     title: z.string(),
     description: z.string(),
-    permissions: z.array(z.string()),
+    sets: z.array(z.string()),
     assignable: z.boolean().optional()
-}) satisfies z.ZodType<PresetRole>;
+});
 
 /**
  * The three audience roles, in the order a request can grow out of them.
@@ -156,34 +182,38 @@ export const AUDIENCE_NAMES = ['guest', 'unverified', 'customer'] as const;
 /** One of {@link AUDIENCE_NAMES}. */
 export type AudienceName = (typeof AUDIENCE_NAMES)[number];
 
-/** An audience role as `shared/authorization-roles.yaml` declares it: a name for a bundle of keys. */
+/** An audience role as `shared/authorization-roles.yaml` declares it: a name for a list of sets. */
 export interface AudienceRole {
     title: string;
     description: string;
+    sets: readonly string[];
+    /** The ids of every rule the audience's sets bundle, expanded once when the file is read. */
     permissions: readonly string[];
 }
 
-/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `audience` block. */
+/** Runtime shape for one entry of `shared/authorization-roles.yaml`'s `audience` block, before its sets are expanded. */
 const audienceRoleSchema = z.object({
     title: z.string(),
     description: z.string(),
-    permissions: z.array(z.string())
-}) satisfies z.ZodType<AudienceRole>;
+    sets: z.array(z.string())
+});
 
 /**
- * The full shape of `shared/authorization-keys.yaml`. `version`, `actions` and `scopes` are
- * validated for shape (a malformed one should still fail loudly) even though only `keys` is read
- * downstream today. Exported so a unit test can assert on malformed fixtures directly, rather than
- * reaching for the private `readShared`/filesystem path this module resolves at import.
+ * The full shape of `shared/authorization-keys.yaml`. `version` and `scopes` are validated for
+ * shape (a malformed one should still fail loudly) even though only the rest is read downstream.
+ * Exported so a unit test can assert on malformed fixtures directly, rather than reaching for the
+ * private `readShared`/filesystem path this module resolves at import.
  */
 export const keysDocumentSchema = z.object({
     version: z.number(),
     actions: z.array(z.enum(PERMISSION_ACTIONS)),
+    implies: z.partialRecord(z.enum(PERMISSION_ACTIONS), z.array(z.enum(PERMISSION_ACTIONS))),
     scopes: z.record(z.enum(AUTHORIZATION_SCOPES), z.string()),
-    keys: z.array(permissionKeySchema)
+    rules: z.array(permissionRuleSchema),
+    sets: z.array(permissionSetSchema)
 });
 
-/** The full shape of `shared/authorization-roles.yaml`. See {@link keysDocumentSchema}. */
+/** The full shape of `shared/authorization-roles.yaml`, before its sets are expanded. See {@link keysDocumentSchema}. */
 export const rolesDocumentSchema = z.object({
     version: z.number(),
     roles: z.array(presetRoleSchema),
@@ -222,19 +252,87 @@ const readShared = <T>(file: string, schema: z.ZodType<T>): T => {
 /** The parsed, validated `authorization-keys.yaml`. */
 const keysDocument = readShared('authorization-keys.yaml', keysDocumentSchema);
 
-/** The parsed, validated `authorization-roles.yaml`. */
+/** The parsed, validated `authorization-roles.yaml`, its sets not yet expanded. */
 const rolesDocument = readShared('authorization-roles.yaml', rolesDocumentSchema);
 
-/** Every declared key, in the order the shared file lists them. */
-export const PERMISSION_KEYS: readonly PermissionKey[] = keysDocument.keys;
+/** A declared rule together with its id — what every lookup below hands back. */
+export interface DeclaredRule extends PermissionRule {
+    /** `<action>:<subject>`, see {@link ruleId}. */
+    id: string;
+}
+
+/** Every declared rule, in the order the shared file lists them. */
+export const PERMISSION_RULES: readonly DeclaredRule[] = keysDocument.rules.map((rule) => ({
+    ...rule,
+    id: ruleId(rule.action, rule.subject)
+}));
+
+/** Every declared rule, indexed by its id for {@link findRule}'s O(1) lookup. */
+const byId = new Map(PERMISSION_RULES.map((rule) => [rule.id, rule]));
+
+if (byId.size !== PERMISSION_RULES.length) {
+    throw new Error(
+        '[permissions] shared/authorization-keys.yaml declares two rules with one action and subject.'
+    );
+}
+
+/** Every declared permission set, in the order the shared file lists them. */
+export const PERMISSION_SETS: readonly PermissionSet[] = keysDocument.sets;
+
+/** Every declared set, indexed by name for {@link expandSets}. */
+const setsByName = new Map(PERMISSION_SETS.map((set) => [set.name, set]));
+
+for (const set of PERMISSION_SETS) {
+    const undeclared = set.rules.filter((id) => !byId.has(id));
+
+    if (undeclared.length > 0) {
+        throw new Error(
+            `[permissions] set "${set.name}" lists rules no module declares: ${undeclared.join(', ')}.`
+        );
+    }
+}
 
 /**
- * A fingerprint of a permission-key set, for `GET /account/abilities`' cache-busting `version`.
+ * Which plain actions a staff action also answers — the `implies:` block of the shared rules file.
+ * `display` implies `read`, `admin` implies `update` and `delete`: the ability emits the implied
+ * rule beside the staff one, so one query serves a customer's own rows and a staff member's every
+ * row, while a route guard asking for the staff action is still not opened by the own-rows rule.
+ */
+export const IMPLIED_ACTIONS: Readonly<
+    Partial<Record<PermissionAction, readonly PermissionAction[]>>
+> = keysDocument.implies;
+
+/**
+ * The rule ids a list of set names expands to, each once.
  *
- * A plain COUNT (the previous version of this) cannot tell "the same 40 keys" from "40 DIFFERENT
- * keys" — a key rename or a key-for-key swap leaves the length untouched, so a client's cached
- * rules would silently go stale. Hashing the sorted key names instead catches any change to the
- * SET: sorted first, so declaring the same keys in a different order (a YAML edit that reorders
+ * @param owner - what lists the sets (a role name), for the error message
+ * @param names - the permission sets, as the roles file writes them
+ * @throws Error when a name is not a declared set — a typo would otherwise read as a role that
+ *   grants nothing
+ */
+const expandSets = (owner: string, names: readonly string[]): string[] => [
+    ...new Set(
+        names.flatMap((name) => {
+            const set = setsByName.get(name);
+
+            if (!set) {
+                throw new Error(
+                    `[permissions] "${owner}" lists the set "${name}", which no module declares.`
+                );
+            }
+
+            return set.rules;
+        })
+    )
+];
+
+/**
+ * A fingerprint of a permission-rule set, for `GET /account/abilities`' cache-busting `version`.
+ *
+ * A plain COUNT (the previous version of this) cannot tell "the same 40 rules" from "40 DIFFERENT
+ * rules" — a rule rename or a rule-for-rule swap leaves the length untouched, so a client's cached
+ * rules would silently go stale. Hashing the sorted rule names instead catches any change to the
+ * SET: sorted first, so declaring the same rules in a different order (a YAML edit that reorders
  * without adding or removing anything) is not itself a version bump.
  *
  * `sha256`, node's own — not reimplemented — over the newline-joined, sorted names; the first 4
@@ -242,31 +340,47 @@ export const PERMISSION_KEYS: readonly PermissionKey[] = keysDocument.keys;
  * ever needs to change or not, never to be collision-proof against an adversary.
  * https://nodejs.org/api/crypto.html#cryptocreatehashalgorithm-options
  *
- * @param keys - the declared keys' own `key` names
+ * @param ids - the declared rules' ids
  * @returns a non-negative integer, stable under reordering, that changes when the SET changes
  */
-export const permissionModelVersion = (keys: readonly string[]): number => {
-    const digest = createHash('sha256').update(keys.toSorted().join('\n')).digest();
+export const permissionModelVersion = (ids: readonly string[]): number => {
+    const digest = createHash('sha256').update(ids.toSorted().join('\n')).digest();
     return digest.readUInt32BE(0);
 };
 
 /**
- * Every CASL subject a declared key names, deduplicated and sorted — published on
+ * Every CASL subject a declared rule names, deduplicated and sorted — published on
  * `GET /account/abilities` so a client's `meta.can` rules can be typed against the real set
  * instead of an unchecked string.
  */
 export const PERMISSION_SUBJECTS: readonly string[] = [
-    ...new Set(PERMISSION_KEYS.map((entry) => entry.subject))
+    ...new Set(PERMISSION_RULES.map((entry) => entry.subject))
 ].toSorted();
 
 /** Every preset role, read once at import — fixed data, not a runtime-editable set; see this module's own docblock. */
-export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles;
+export const PRESET_ROLES: readonly PresetRole[] = rolesDocument.roles.map((role) => ({
+    ...role,
+    permissions: expandSets(role.name, role.sets)
+}));
 
 /**
- * The audience roles, read once at import. The keys every request holds before a staff role is
+ * The audience roles, read once at import. The rules every request holds before a staff role is
  * added: a stranger's, a signed-in account's with an unproven address, and one with a proven one.
  */
-export const AUDIENCE_ROLES: Readonly<Record<AudienceName, AudienceRole>> = rolesDocument.audience;
+export const AUDIENCE_ROLES: Readonly<Record<AudienceName, AudienceRole>> = {
+    guest: {
+        ...rolesDocument.audience.guest,
+        permissions: expandSets('guest', rolesDocument.audience.guest.sets)
+    },
+    unverified: {
+        ...rolesDocument.audience.unverified,
+        permissions: expandSets('unverified', rolesDocument.audience.unverified.sets)
+    },
+    customer: {
+        ...rolesDocument.audience.customer,
+        permissions: expandSets('customer', rolesDocument.audience.customer.sets)
+    }
+};
 
 /**
  * Is `name` one of the computed audience roles rather than a stored staff role? A staff role is
@@ -292,9 +406,6 @@ export const audienceOf = (context: Pick<AuthContext, 'verified'> | undefined): 
     return context.verified ? 'customer' : 'unverified';
 };
 
-/** Every declared key, indexed by its own name for {@link findKey}'s O(1) lookup. */
-const byKey = new Map(PERMISSION_KEYS.map((entry) => [entry.key, entry]));
-
 /** What every caller of {@link findRole} actually reads off its result. */
 export type RoleLookup = Pick<PresetRole, 'name' | 'scope' | 'permissions' | 'assignable'>;
 
@@ -313,7 +424,7 @@ const byRoleName = new Map<string, RoleLookup>(PRESET_ROLES.map((role) => [role.
 export const findRole = (name: string): RoleLookup | undefined => byRoleName.get(name);
 
 /**
- * The keys a role holds.
+ * The rules a role holds, by id.
  *
  * @throws Error when no role of that name is declared — a caller resolved to a role nothing
  *   defines would be denied everything, which reads as a permissions bug and is really a typo.
@@ -349,56 +460,43 @@ export const anonymousCaller = (): Caller => ({
     system: false
 });
 
-/** A declared key by name, or `undefined`. Wildcards are not declared keys and never resolve. */
-export const findKey = (key: string): PermissionKey | undefined => byKey.get(key);
+/** A declared rule by id, or `undefined`. Wildcards are not declared rules and never resolve. */
+export const findRule = (id: string): DeclaredRule | undefined => byId.get(id);
 
 /**
- * Refuse a key no module declares — on ASSIGNMENT, not at check time.
+ * Refuse a rule no module declares — on ASSIGNMENT and at route mount, not at check time.
  *
- * At check time an undeclared key is merely inert, which reads as a role that grants nothing and
- * looks like a role that grants something. Failing where the grant is made is the only place the
- * mistake is still attached to whoever made it.
+ * At check time an undeclared rule is merely inert, which reads as a role that grants nothing and
+ * looks like a role that grants something. Failing where the grant or the guard is written is the
+ * only place the mistake is still attached to whoever made it.
  *
- * @throws Error when no module declares the key
+ * @param action - the action the guard or grant asks for
+ * @param subject - the subject it asks about
+ * @returns the declared rule
+ * @throws Error when no module declares a rule for that action and subject
  */
-export const assertDeclared = (key: string): void => {
-    if (byKey.has(key)) {
-        return;
+export const assertDeclared = (action: string, subject: string): DeclaredRule => {
+    const declared = byId.get(ruleId(action, subject));
+
+    if (declared) {
+        return declared;
     }
 
     throw new Error(
-        `[permissions] "${key}" is not declared in shared/authorization-keys.yaml. ` +
-            `Roles are data; permissions are code — declare the key beside its module's routes first.`
+        `[permissions] "${ruleId(action, subject)}" is not declared in shared/authorization-keys.yaml. ` +
+            `Roles are data; permissions are code — declare the rule beside its module's routes first.`
     );
 };
 
 /**
- * The `Caller` an `AuthContext` becomes, for ONE key.
+ * Every rule a caller holds in a scope: their audience's, plus their staff role's.
  *
- * A person may hold a role in the shop AND over the installation; a REQUEST acts in exactly one
- * scope. The key being checked is what settles which — a bare key is answered from the tenant
- * role, a `platform.` key from the platform one. That is why this takes the key: answering from
- * the wrong role is precisely the privilege confusion the two-role split exists to prevent.
- *
- * A caller with no staff role in the key's scope still gets their audience's permissions rather
- * than an empty list, so the denial comes from the model rather than from an accident of assembly.
- *
- * @param context - the resolved session
- * @param key - the permission key about to be checked, e.g. `orders.self.read` or `platform.tenants.any.read`
- * @returns the caller as the evaluator sees them, in the key's scope
- */
-export const callerFor = (context: AuthContext, key: string): Caller =>
-    callerInScope(context, scopeOfKey(key));
-
-/**
- * Every key a caller holds in a scope: their audience's, plus their staff role's.
- *
- * Tenant:   the audience role's keys UNIONED with the staff role's — signing in may only ever
+ * Tenant:   the audience role's rules UNIONED with the staff role's — signing in may only ever
  *           widen what a person can see. Without the union a role is free to hold nothing a visitor
  *           holds, and `accessibleBy` then compiles an empty-result filter for a collection the
  *           same person could read while logged out: the shop's catalogue disappearing on login,
  *           reported as an empty shop rather than as a refusal.
- * Platform: the platform role's keys alone. Folding bare tenant keys into a PLATFORM caller is the
+ * Platform: the platform role's rules alone. Folding bare tenant rules into a PLATFORM caller is the
  *           privilege confusion the two-scope split exists to prevent — an operator administers
  *           the installation and reads no shop's rows.
  *
@@ -406,7 +504,7 @@ export const callerFor = (context: AuthContext, key: string): Caller =>
  * the same "never trust a cached list" shape this file's own callers already need.
  *
  * @param roleName - the staff role held in this scope, or `null` for none
- * @param scope - which world the keys are for
+ * @param scope - which world the rules are for
  * @param audience - the request's audience; `guest` when none is given, which is what an API key gets
  */
 export const keysInScope = (
@@ -438,7 +536,7 @@ const SYSTEM_ACTOR_ID = 'system';
  * @param id - who they are, `null`/`undefined` for a stranger
  * @param tenantId - the shop this caller acts in, or `null` for a platform caller
  * @param scope - which of the two worlds this caller acts in
- * @param permissions - every key this caller currently holds in `scope`
+ * @param permissions - every rule this caller currently holds in `scope`
  */
 export const assembleCaller = (
     id: string | null | undefined,
@@ -454,13 +552,13 @@ export const assembleCaller = (
         tenantId,
         scope,
         permissions,
-        unrestricted: holdsEveryDeclaredKey(scope, permissions),
+        unrestricted: holdsEveryDeclaredRule(scope, permissions),
         system: id === SYSTEM_ACTOR_ID
     }) as Caller;
 
 /**
- * The `Caller` an `AuthContext` becomes in a named scope — the primitive {@link callerFor} and
- * {@link callerForSubject} both resolve to.
+ * The `Caller` an `AuthContext` becomes in a named scope — the primitive {@link callerForSubject}
+ * resolves through.
  *
  * Overloaded on `scope`, because the argument already decides the arm: a literal `'tenant'` gets a
  * `TenantCaller` whose `tenantId` is a `string`, so a caller built for a shop needs no narrowing
@@ -485,66 +583,66 @@ export function callerInScope(context: AuthContext, scope: AuthorizationScope): 
 }
 
 /**
- * Which scope a SUBJECT's rows live in, read from the keys that declare it.
+ * Which scope a SUBJECT's rows live in, read from the rules that declare it.
  *
- * A scope-narrowing rule knows its subject (`Order`, `Product`) but no single key, so this is how
+ * A scope-narrowing rule knows its subject (`Order`, `Product`) but no single rule, so this is how
  * it reaches a caller. Defaults to `tenant` for a subject nothing declares — the narrower of the
  * two, so an unknown subject is restricted rather than opened.
  */
 const scopeOfSubject = (subject: string): AuthorizationScope =>
-    PERMISSION_KEYS.find((entry) => entry.subject === subject)?.scope ?? 'tenant';
+    PERMISSION_RULES.find((entry) => entry.subject === subject)?.scope ?? 'tenant';
 
 /** The `Caller` an `AuthContext` becomes for a SUBJECT's rows — see {@link scopeOfSubject}. */
 export const callerForSubject = (context: AuthContext, subject: string): Caller =>
     callerInScope(context, scopeOfSubject(subject));
 
 /**
- * Every key declared in one scope that a role has to hold itself — the set a caller must hold
+ * Every rule declared in one scope that a role has to hold itself — the set a caller must hold
  * entirely to count as unrestricted, now that no single wildcard token stands in for it. The
- * `customer` audience's keys are left out: every signed-in account gets them from its audience, so
+ * `customer` audience's rules are left out: every signed-in account gets them from its audience, so
  * a role listing them would say nothing, and an `admin` whose address is unproven must not stop
- * being unrestricted. Computed once: `PERMISSION_KEYS` is fixed for the process's lifetime.
+ * being unrestricted. Computed once: `PERMISSION_RULES` is fixed for the process's lifetime.
  */
-const declaredKeysOfScope = new Map<AuthorizationScope, readonly string[]>(
+const declaredRulesOfScope = new Map<AuthorizationScope, readonly string[]>(
     AUTHORIZATION_SCOPES.map((scope) => [
         scope,
-        PERMISSION_KEYS.filter(
+        PERMISSION_RULES.filter(
             (entry) =>
-                entry.scope === scope && !AUDIENCE_ROLES.customer.permissions.includes(entry.key)
-        ).map((entry) => entry.key)
+                entry.scope === scope && !AUDIENCE_ROLES.customer.permissions.includes(entry.id)
+        ).map((entry) => entry.id)
     ])
 );
 
 /**
- * Holds every key a scope declares — the property "unrestricted" actually tests, independent of
+ * Holds every rule a scope declares — the property "unrestricted" actually tests, independent of
  * any particular `Caller` shape. `callerInScope` calls this directly (a `Caller` isn't built yet
  * at that point — this is what its own `unrestricted` field is filled from); {@link isUnrestricted}
  * is the same question asked of one already built.
  */
-const holdsEveryDeclaredKey = (
+const holdsEveryDeclaredRule = (
     scope: AuthorizationScope,
     permissions: readonly string[]
 ): boolean => {
     const held = new Set(permissions);
-    const declared = declaredKeysOfScope.get(scope) ?? [];
+    const declared = declaredRulesOfScope.get(scope) ?? [];
     // A scope with nothing declared makes nobody unrestricted — `every` over an empty list is
     // vacuously true, which would mark every caller in it as an admin.
     return declared.length > 0 && declared.every((key) => held.has(key));
 };
 
 /**
- * Does this caller hold EVERY declared key in their own scope — unrestricted, within that scope
+ * Does this caller hold EVERY declared rule in their own scope — unrestricted, within that scope
  * only.
  *
- * Role names are data a deployment may rename or add to; "holds every key" is a property of the
+ * Role names are data a deployment may rename or add to; "holds every rule" is a property of the
  * permission model itself, which is why `requirePermission` and the domain actor ask this rather
  * than comparing a name. There is no single token for it: `admin` is unrestricted because
- * `authorization-roles.yaml` lists every tenant key by name, not because it holds a shortcut that
+ * `authorization-roles.yaml` lists every tenant rule by name, not because it holds a shortcut that
  * means the same thing — see `authorization-keys.yaml`'s closing note. Equivalent to reading
  * `caller.unrestricted`, kept for callers that only have a permission list without a full `Caller`.
  */
 export const isUnrestricted = (caller: Pick<Caller, 'scope' | 'permissions'>): boolean =>
-    holdsEveryDeclaredKey(caller.scope, caller.permissions);
+    holdsEveryDeclaredRule(caller.scope, caller.permissions);
 
 /**
  * The application acting on nobody's behalf — a sweep, a job, a domain event with no request
@@ -610,7 +708,7 @@ export const systemCallerContext = (subject: string): CallerContext => ({
  *
  * Roles are data a deployment may rename or add to; the trail's vocabulary is closed and its
  * values outlive them. So the question asked of a role name is never "is it called admin" but
- * "does it hold every key its scope declares", which stays true through any renaming.
+ * "does it hold every rule its scope declares", which stays true through any renaming.
  *
  * @param name - a role name, or `null`/`undefined` for an account with none in that scope
  * @param scope - which world the question is about; the shop unless stated
@@ -618,4 +716,4 @@ export const systemCallerContext = (subject: string): CallerContext => ({
 export const isUnrestrictedRole = (
     name: string | null | undefined,
     scope: AuthorizationScope = 'tenant'
-): boolean => (name ? holdsEveryDeclaredKey(scope, permissionsOfRole(name)) : false);
+): boolean => (name ? holdsEveryDeclaredRule(scope, permissionsOfRole(name)) : false);

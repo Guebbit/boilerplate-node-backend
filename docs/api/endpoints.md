@@ -22,7 +22,7 @@ A minimal root endpoint used to verify the process is alive.
 
 > The domain behind these routes: [`observability`](../modules/observability.md) · routes and middleware: `src/modules/observability/routes.ts`
 
-Endpoints for health checks, metrics, and audit logs. None of these is public. The live dashboard's SSE stream needs `platform.observability.any.read` (by session cookie, since an `EventSource` cannot set a header), Prometheus scrapes `/observability/metrics` with a static token, and the rest need `platform.observability.any.read` and are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
+Endpoints for health checks, metrics, and audit logs. None of these is public. The live dashboard's SSE stream needs `read:ObservabilitySnapshot` (by session cookie, since an `EventSource` cannot set a header), Prometheus scrapes `/observability/metrics` with a static token, and the rest need `read:ObservabilitySnapshot` and are intended for internal tooling. See the dedicated [Observability Endpoints](./observability.md) page for response shapes and tool links.
 
 ## Account & Auth
 
@@ -39,7 +39,7 @@ has lapsed. There is no endpoint for it: a manual run is `npm run reap:previous-
 
 > The domain behind these routes: [`products`](../modules/products.md) · routes and middleware: `src/modules/products/routes.ts`
 
-Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `products.any.create`, `products.any.update` or `products.any.delete` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
+Standard CRUD for the product catalogue. Read endpoints are public and Redis-cached. Write endpoints need `create:Product`, `update:Product` or `delete:Product` respectively, and invalidate the cache on change. Both single-item and bulk operations are supported.
 
 Stock is read-only on this surface. `onHand`, `reserved` and `available` are serialized on every product, but the only body that accepts a counter is `POST /products` — a new product's opening `onHand`. The update bodies carry none: an absolute stock write on an edit form overwrites whatever sold while the form was open, so changing an existing product's stock is `POST /inventory/receipts` or `POST /inventory/adjustments`, both signed and both audited.
 
@@ -61,7 +61,7 @@ Per-user saved products — ids only, joined client-side like the cart's lines. 
 
 Orders are normally created via checkout but can also be created manually (a correction, not a sales channel — see [orders](../modules/orders.md#creating-an-order)). Each order has a PDF invoice available for download. Reads are scoped to the caller's own orders unless they hold a wider `orders.*` key, in which case the same route answers for the whole shop — one route, narrowed by the rules rather than branched on a role.
 
-`orders` is the only writer of a `status` — `payments` and `delivery` each report a move through it rather than writing the field themselves. `POST /orders/{id}/status-override` and the `forced`/`reason` fields on delivery's own doors are the one exception: an `orders.any.override` holder correcting a status the ordinary rules refuse, always with a reason, always recorded (see [orders](../modules/orders.md#the-admin-override)).
+`orders` is the only writer of a `status` — `payments` and `delivery` each report a move through it rather than writing the field themselves. `POST /orders/{id}/status-override` and the `forced`/`reason` fields on delivery's own doors are the one exception: an `override:Order` holder correcting a status the ordinary rules refuse, always with a reason, always recorded (see [orders](../modules/orders.md#the-admin-override)).
 
 ## Payments
 
@@ -102,7 +102,7 @@ Both reads page and report `meta.totalItems`, and neither is bounded in the serv
 
 > The domain behind these routes: [`users`](../modules/users.md) · routes and middleware: `src/modules/users/routes.ts`
 
-Full user management, behind `users.any.read` / `users.any.create` / `users.any.update` / `users.any.delete` per route. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
+Full user management, behind `read:User` / `create:User` / `update:User` / `delete:User` per route. Supports individual and bulk operations. The equivalent self-service actions (profile read, account deletion) live under `/account`.
 
 The three `/hard` routes are not extra operations in disguise. Each mounts the same handler as its
 `:id` sibling behind `routeFlag('hardDelete')`, so the destructive variant has a URL of its own —
@@ -140,7 +140,7 @@ The caller's own address book, mounted under `/account/addresses`. Every respons
 
 > The domain behind these routes: [`returns`](../modules/returns.md) · routes and middleware: `src/modules/returns/routes.ts`
 
-A customer asks to send goods back (`POST /returns`, idempotent by key); staff holding `returns.any.update` approve or decline, then mark the goods received. Received goods go back on sale and the refund runs through `payments`.
+A customer asks to send goods back (`POST /returns`, idempotent by key); staff holding `update:Return` approve or decline, then mark the goods received. Received goods go back on sale and the refund runs through `payments`.
 
 ## Notifications
 
@@ -164,7 +164,7 @@ Mint, list and revoke machine credentials (`/api-keys`), each behind an `apikeys
 
 > The domain behind these routes: [`audit-logs`](../modules/audit-logs.md) · routes and middleware: `src/modules/audit-logs/routes.ts`
 
-One read, `GET /audit`, behind `audit.any.read` — the queryable trail, kept for the window its TTL index enforces.
+One read, `GET /audit`, behind `read:AuditLog` — the queryable trail, kept for the window its TTL index enforces.
 
 ## Antibot
 

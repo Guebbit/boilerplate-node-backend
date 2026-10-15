@@ -16,7 +16,7 @@ import {
     type ResponseSuccess
 } from '@infrastructure/http/response';
 import { callerForSubject } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { remainderOptions, shippedQuantities } from '@modules/delivery';
 import { orderService, isExcludedFromWithdrawal } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
@@ -28,7 +28,7 @@ import { cancellationRefundOn } from './cancellation-refund';
 import { ownOrder } from './ownership';
 
 /**
- * The order a caller may ask about: staff holding `returns.any.read` see any; anyone else only
+ * The order a caller may ask about: staff holding `read:Return` see any; anyone else only
  * their own.
  * @param orderId - the order
  * @param authContext - the caller
@@ -37,7 +37,7 @@ const readableOrder = (
     orderId: string,
     authContext: AuthContext
 ): Promise<OrderDocument | undefined> =>
-    holdsKey(callerForSubject(authContext, 'Return'), 'returns.any.read')
+    holds(callerForSubject(authContext, 'Return'), 'read', 'Return')
         ? orderService.getById(orderId)
         : ownOrder(orderId, authContext);
 

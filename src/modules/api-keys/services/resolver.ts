@@ -11,7 +11,7 @@
 import { logger } from '@infrastructure/adapters/logger';
 import type { Resolution, ResolvedCredential } from '@kernel/authentication';
 import { keysInScope, assembleCaller } from '@kernel/permissions';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { rolesOf } from '@modules/access';
 import { userService } from '@modules/users';
 import type { Caller } from '@types';
@@ -26,8 +26,8 @@ import type { ApiKeyDocument } from '../model';
  * `kernel/permissions.ts#keysInScope`'s own caller flooring: never trust a cached list, re-derive
  * from the authoritative source on every check — `keysInScope` itself is what does that
  * derivation, `roles.tenant` and all, so this stays a call rather than a second copy of it.
- * `heldKeys` is what then reads the result — the keys the CASL ability was built from, never its
- * collapsed `can(action, subject)` answer, which cannot tell a `self` key from an `any` one.
+ * `heldRules` is what then reads the result — the rules the CASL ability was built from, never its
+ * answer to a plain action, which cannot tell a customer's own-rows rule from a staff one.
  *
  * `findAuthenticatableById` — not `findById` — for the same reason `account/module.ts`'s own
  * resolver uses it: a deactivated or soft-deleted minter must stop granting access on their very
@@ -93,10 +93,9 @@ export const fromBearerToken = (token: string): Promise<Resolution<ResolvedCrede
                 });
             });
 
-            // The literal keys, not CASL's collapsed answer: `orders.self.read` and
-            // `orders.any.read` are both `read` on `Order`, so a minter who is now a customer
-            // would otherwise still pass for the wide read a key was minted with.
-            const minterKeys = currentCaller ? heldKeys(currentCaller) : new Set<string>();
+            // The literal rules: a minter who is now only a customer holds `read:Order`, not the
+            // `display:Order` the credential was minted with, and must not pass for it.
+            const minterKeys = currentCaller ? heldRules(currentCaller) : new Set<string>();
             const held = currentCaller
                 ? apiKey.permissions.filter((key) => minterKeys.has(key))
                 : [];

@@ -95,7 +95,7 @@ router.post(
     '/',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.create'),
+    requirePermission('create', 'Locale'),
     invalidateCache(['locales']),
     createLocale
 );
@@ -104,7 +104,7 @@ router.put(
     '/:locale',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     replaceLocale
 );
@@ -114,7 +114,7 @@ router.patch(
     '/:locale',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     updateLocale
 );
@@ -124,20 +124,20 @@ router.delete(
     '/:locale',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.delete'),
+    requirePermission('delete', 'Locale'),
     invalidateCache(['locales']),
     deleteLocale
 );
 
 // Uncached on purpose — see the controller for why the editing screen is the one read that is not.
-// `locales.any.update`, not `locales.self.read`: every visitor holds the read key — it is how
+// `update:Locale`, not `read:Locale`: every visitor holds the read key — it is how
 // the shop renders in their language — and this is the EDITING screen, which lists every string
 // including the ones no page has asked for yet.
 router.get(
     '/:locale/entries',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     getLocaleEntries
 );
 // One app's slice of the entries is a resource of its own — the app is a path segment, so a
@@ -146,7 +146,7 @@ router.get(
     '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     getAppLocaleEntries
 );
 
@@ -155,7 +155,7 @@ router.post(
     '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.create'),
+    requirePermission('create', 'Locale'),
     invalidateCache(['locales']),
     createLocaleEntry
 );
@@ -165,7 +165,7 @@ router.put(
     '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     replaceLocaleEntries
 );
@@ -175,7 +175,7 @@ router.patch(
     '/:locale/apps/:app/entries',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     mergeLocaleEntries
 );
@@ -185,7 +185,7 @@ router.put(
     '/:locale/apps/:app/entries/:entryId',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.update'),
+    requirePermission('update', 'Locale'),
     invalidateCache(['locales']),
     updateLocaleEntry
 );
@@ -195,7 +195,7 @@ router.delete(
     '/:locale/apps/:app/entries/:entryId',
     getAuth,
     isAuthOrCredential,
-    requirePermission('locales.any.delete'),
+    requirePermission('delete', 'Locale'),
     invalidateCache(['locales']),
     deleteLocaleEntry
 );
@@ -211,7 +211,7 @@ router.get(
     '/translations/:entityType/:id',
     getAuth,
     isAuthOrCredential,
-    requirePermission('translations.any.read'),
+    requirePermission('read', 'Translation'),
     getEntityTranslations
 );
 // PUT replaces (a stored locale not sent is deleted), PATCH merges.
@@ -219,7 +219,7 @@ router.put(
     '/translations/:entityType/:id',
     getAuth,
     isAuthOrCredential,
-    requirePermission('translations.any.update'),
+    requirePermission('update', 'Translation'),
     replaceEntityTranslations
 );
 
@@ -228,6 +228,6 @@ router.patch(
     '/translations/:entityType/:id',
     getAuth,
     isAuthOrCredential,
-    requirePermission('translations.any.update'),
+    requirePermission('update', 'Translation'),
     upsertEntityTranslations
 );

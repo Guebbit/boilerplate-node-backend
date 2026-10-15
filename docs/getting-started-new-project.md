@@ -73,7 +73,7 @@ flowchart TD
     Names["read every module.yaml,\ncollect group: shop"] --> Folders["rm -rf each\nsrc/modules/&lt;shop module&gt;"]
     Folders --> Registry["edit src/modules.ts"]
     Registry --> Ops["delete the reap/sweep scripts\na shop module owns, their\npackage.json + docker/crontab lines"]
-    Ops --> Shared["edit the shared files: the roles' and conformance\ncases' permission keys, the scenario fixtures"]
+    Ops --> Shared["edit the shared files: the roles' permission sets and the conformance\ncases' rules, the scenario fixtures"]
     Shared --> Scenario["delete the demo catalogue's\nown scenario data; drop the shop's\nhistory-drive step; default scenario\nbecomes blank"]
     Scenario --> Report["delete every test that imports\na deleted module, then print\nwhat changed"]
 
@@ -108,8 +108,8 @@ branch, or after committing whatever you had in progress. It touches:
   `package.json` scripts without them.
 - **The removed modules' test doubles** (`scenarios/support/doubles/<module>/`, such as the fake
   payment provider) and the lines that register them. See [Test doubles](./tools/test-doubles.md).
-- **The removed modules' permission keys** in `shared/authorization-roles.yaml` (every role's grants)
-  and `shared/authorization-conformance.yaml` (the callers' keys, and every case about a subject only
+- **The removed modules' permission sets** in `shared/authorization-roles.yaml` (every role's sets)
+  and `shared/authorization-conformance.yaml` (the callers' rules, and every case about a subject only
   a removed module declared).
 - **Every test that imports a removed module** — or says `// requires-module: <name>` — along with any
   test helper or test that imported one of those. The report lists each file it deleted.

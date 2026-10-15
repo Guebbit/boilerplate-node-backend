@@ -68,14 +68,14 @@ write to any of the three from anywhere but `inventory`'s own sync is a bug, not
 
 **A shopper sees two flags, not the shelf.** The counters tell a competitor how fast a line sells
 and how much is left, so a response carries `onHand`, `reserved` and `available` only for a caller
-holding `inventory.any.read` (`canSeeStock` in `services/stock-view.ts`). Everyone else, a guest
+holding `read:StockLevel` (`canSeeStock` in `services/stock-view.ts`). Everyone else, a guest
 included, gets `inStock` (is anything available) and `lowStock` (available at or below
 `NODE_LOW_STOCK_THRESHOLD`), derived by `stockFlags` in `domain/stock.ts`. Both flags ride on every
 representation, so a client never has to guess from an absent number. A cached public list is
 keyed by the caller's reach, so one reader's counters are never served to another.
 
 **An opening count is a stock movement.** `POST /products` with `onHand` above zero books a `receive`
-movement, so it needs `inventory.any.create` on top of `products.any.create`: an editor or a manager
+movement, so it needs `create:StockMovement` on top of `create:Product`: an editor or a manager
 who may write the catalogue but holds no stock key is refused `403 FORBIDDEN` (audited like any
 missing key, `translated-write.ts#openingStockRefusal`) and nothing is written.
 
@@ -131,7 +131,7 @@ What each state does to the rest of the shop:
 | Hidden   | 404                 | `removed`, kept            | 404     | refused       | untouched     |
 | Removed  | 404                 | pulled (`product.deleted`) | 404     | n/a           | untouched     |
 
-Who sees a hidden product is settled by `products.any.read` (`manager`, `warehouse`, `editor`,
+Who sees a hidden product is settled by `display:Product` (`manager`, `warehouse`, `editor`,
 `admin`); an off-sale product is public, so `GET /products?purchasable=` is open to everyone. The
 line values and their precedence live in [cart](./cart.md#line-availability).
 

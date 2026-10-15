@@ -7,16 +7,10 @@
  */
 
 import type { Request, Response } from 'express';
-import { stillHoldsKeyViaCookie } from '@kernel/middlewares/authorizations';
+import { stillHoldsRuleViaCookie } from '@kernel/middlewares/authorizations';
 import { t } from '@infrastructure/i18n';
 import { rejectResponse } from '@infrastructure/http/response';
 import { streamNotifications } from '../services';
-
-/**
- * The key every read route in this module guards on. Exported from here, rather than from
- * `routes.ts`, because this handler needs its VALUE for the recheck below, not just a guard.
- */
-export const NOTIFICATIONS_READ_KEY = 'notifications.self.read';
 
 /**
  * GET /notifications/stream
@@ -38,6 +32,6 @@ export const getNotificationsStream = (request: Request, response: Response) => 
     }
 
     streamNotifications(response, user.id, () =>
-        stillHoldsKeyViaCookie(request, NOTIFICATIONS_READ_KEY)
+        stillHoldsRuleViaCookie(request, 'read', 'Notification')
     );
 };

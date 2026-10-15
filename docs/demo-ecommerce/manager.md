@@ -167,7 +167,7 @@ rather than one shipping line they have to reconcile by hand.
 
 The staff side can list, search and open a customer account — enough to answer "who is this" while
 looking at their orders. Editing an account is [the support desk's](./support.md) job; erasing one
-needs `users.any.delete`, which support does not hold but the moderator does alongside `admin`,
+needs `delete:User`, which support does not hold but the moderator does alongside `admin`,
 gated on a freshly proved session either way.
 → [`users`](../modules/users.md)
 

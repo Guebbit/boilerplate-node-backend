@@ -93,7 +93,7 @@ describe('POST /products', () => {
      * `products` never writes `onHand` itself — see `products/services/crud.ts`'s `create()` — so this
      * is the one test proving the opening count still reaches the document, through a real
      * `receive()` movement rather than a direct field write. `owner`, not `editor`: reading the
-     * ledger back needs `inventory.any.read`, which the editor role does not hold.
+     * ledger back needs `read:StockLevel`, which the editor role does not hold.
      */
     it('gives the product its opening stock through a real receive movement', async () => {
         const { bearer } = await authenticateAs('admin');
@@ -258,7 +258,7 @@ describe('PATCH /products/{id}', () => {
         expect(response.body.data.title).toBe('Bed, revised');
     });
 
-    // The write route stacks `products.any.update` AND `translations.any.update`. No preset role
+    // The write route stacks `update:Product` AND `update:Translation`. No preset role
     // holds one without the other, so the "one key alone refuses" half of this cannot be
     // exercised over HTTP today — `shared/authorization-conformance.yaml` asserts it at the
     // ability layer instead ("the dictionary keys do not update a price, even together").
@@ -554,7 +554,7 @@ describe('GET /products/{id}/admin', () => {
 /** A create body with an opening count, titled in the fallback language. */
 const bodyTitled = (title: string) => ({ price: 10, onHand: 7, translations: { en: { title } } });
 
-describe('the stock counters on the product writes follow inventory.any.read', () => {
+describe('the stock counters on the product writes follow read:StockLevel', () => {
     /** The three counters only a stock reader sees. */
     const COUNTERS = ['onHand', 'reserved', 'available'];
 
@@ -562,7 +562,7 @@ describe('the stock counters on the product writes follow inventory.any.read', (
         const editor = await authenticateAsRole('editor');
         const admin = await authenticateAsRole('admin');
 
-        // An editor books no opening count (no `inventory.any.create`), so the count is the admin's.
+        // An editor books no opening count (no `create:StockMovement`), so the count is the admin's.
         const byEditor = await api()
             .post('/products')
             .set('Authorization', editor.bearer)

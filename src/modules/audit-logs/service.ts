@@ -2,7 +2,7 @@
  * @module
  * Audit log service — the persistence sink behind `@infrastructure/observability/audit`, and the
  * read path behind `GET /observability/audit` (the platform operator's view) and `GET /audit`
- * (a tenant staff member's, gated on `audit.any.read`).
+ * (a tenant staff member's, gated on `read:AuditLog`).
  *
  * See: docs/modules/audit-logs.md
  */

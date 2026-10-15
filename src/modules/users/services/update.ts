@@ -11,7 +11,7 @@ import {
     type ResponseSuccess,
     type ResponseReject
 } from '@infrastructure/http/response';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { encryptPii } from '@infrastructure/security/pii-encryption';
 import { imageStore, applyImageWriteback } from '@infrastructure/adapters/image-store';
 import { clearedOrValue } from '@infrastructure/persistence/changes';
@@ -257,11 +257,11 @@ const saveWithRole = (
         .then((savedUser) => finishUpdate(savedUser, data, context, oldImageUrl));
 
 /**
- * The key a writable field needs on top of the route's own `users.any.update` — the one
+ * The key a writable field needs on top of the route's own `update:User` — the one
  * field-to-key map. Every other field (username, image, locale, phone, website, `role`) rides on
- * `users.any.update` alone; a body mixing fields needs every key its CHANGED fields need.
+ * `update:User` alone; a body mixing fields needs every key its CHANGED fields need.
  */
-const FIELD_KEYS = { active: 'users.any.ban' } as const;
+const FIELD_RULES = { active: 'ban:User' } as const;
 
 /**
  * The keys this update needs beyond the route's. A field counts only when it CHANGES: a PUT
@@ -270,11 +270,11 @@ const FIELD_KEYS = { active: 'users.any.ban' } as const;
  * @param user - the loaded document, before the update touches it
  * @param data - the request body
  */
-const extraKeysNeeded = (
+const extraRulesNeeded = (
     user: UserDocument,
     data: Pick<UpdateUserByIdRequest, 'active'>
 ): string[] =>
-    data.active !== undefined && data.active !== (user.active ?? true) ? [FIELD_KEYS.active] : [];
+    data.active !== undefined && data.active !== (user.active ?? true) ? [FIELD_RULES.active] : [];
 
 /**
  * `403 FORBIDDEN` for a field the caller's keys do not cover, audited like the route guard's own
@@ -311,8 +311,8 @@ const refusalFor = (
     context: CallerContext
 ): Promise<ResponseReject | undefined> => {
     const id = String(user._id);
-    const held = heldKeys(context.caller);
-    const missing = extraKeysNeeded(user, data).find((key) => !held.has(key));
+    const held = heldRules(context.caller);
+    const missing = extraRulesNeeded(user, data).find((key) => !held.has(key));
 
     if (missing) return Promise.resolve(missingKeyRefusal(missing, id, context));
 

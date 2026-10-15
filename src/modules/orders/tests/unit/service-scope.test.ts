@@ -71,7 +71,7 @@ describe('actorOf', () => {
     });
 
     it('reads a moderator off the admin lifecycle column, not the customer one', () => {
-        // The bug this pins: `orders.any.update` is held by name, not through the scope
+        // The bug this pins: `update:Order` is held by name, not through the scope
         // wildcard, so asking for the wildcard alone silently treated a moderator as a
         // customer here.
         expect(actorOf(asModerator(USER_ID))).toBe('admin');

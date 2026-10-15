@@ -1,37 +1,59 @@
-keys:
+rules:
     # -- users ---------------------------------------------------------------------------------
-    - key: users.any.read
-      module: users
+    - action: read
       subject: User
-      action: read
+      module: users
       scope: tenant
       description: Read other people's accounts. Reading your own is `account`, not a key.
-    - key: users.any.create
-      module: users
+    - action: create
       subject: User
-      action: create
+      module: users
       scope: tenant
       description: Create an account for someone else.
-    - key: users.any.update
-      module: users
+    - action: update
       subject: User
-      action: update
+      module: users
       scope: tenant
       description: >-
           Change someone else's profile: username, image, locale, phone, website, and the role
           (within the keys the caller holds). Never a credential, and never `active`.
-    - key: users.any.ban
-      module: users
+    - action: ban
       subject: User
-      action: ban
+      module: users
       scope: tenant
       description: Deactivate someone else's account, or lift the deactivation.
-    - key: users.any.delete
-      module: users
+    - action: delete
       subject: User
-      action: delete
+      module: users
       scope: tenant
       description: Erase someone else's account.
       # Irreversible and about somebody else. A stolen session should not be able to reach it on
       # the strength of a login that happened this morning.
       stepUp: critical
+
+sets:
+    - name: UserDisplay
+      module: users
+      description: Read other people's accounts.
+      rules:
+          - read:User
+    - name: UserCreation
+      module: users
+      description: Create an account for someone else.
+      rules:
+          - create:User
+    - name: UserEditing
+      module: users
+      description: Change someone else's profile.
+      rules:
+          - update:User
+    - name: UserBanning
+      module: users
+      description: Deactivate an account, or lift it.
+      rules:
+          - ban:User
+    - name: UserErasure
+      module: users
+      description: Erase someone else's account.
+      rules:
+          - delete:User

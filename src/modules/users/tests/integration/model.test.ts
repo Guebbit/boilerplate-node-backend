@@ -116,7 +116,7 @@ describe('user credential exposure', () => {
                 'updatedAt',
                 'username',
                 // WHEN the address was confirmed, or `null` until it is — in the `User` contract,
-                // informational only: the membership role is what `cart.self.checkout` actually reads.
+                // informational only: the membership role is what `checkout:Cart` actually reads.
                 'verifiedAt'
             ]);
         });

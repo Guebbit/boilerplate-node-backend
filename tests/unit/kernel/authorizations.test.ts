@@ -7,7 +7,7 @@
  *                not "rejected", because it also guards public routes. It must always call
  *                `next()` exactly once, on every path, or the request hangs.
  *   `isAuth`   — *required* identification. Fails closed with 401.
- *   `requirePermission(ADMIN_ONLY_KEY)`  — *required* elevation. Fails closed, and the status says which check refused:
+ *   `requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)`  — *required* elevation. Fails closed, and the status says which check refused:
  *                401 with no credentials at all (as `isAuth` does), 403 for a caller without the key.
  *                Both bodies stay generic; the reason is recorded in the audit trail only.
  *
@@ -24,7 +24,7 @@ import {
     isAuthOrCredential,
     requirePermission,
     requirePermissionViaCookie,
-    stillHoldsKeyViaCookie,
+    stillHoldsRuleViaCookie,
     requireFreshAuth,
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
@@ -71,14 +71,14 @@ jest.mock('@infrastructure/observability/audit', () => {
  *   - resolving `{ ok: undefined }` means the token was fine but names nobody;
  *   - a rejection is an outage.
  *
- * `requirePermissionViaCookie(ADMIN_ONLY_KEY)` turns the first into 401 and the second into 403, so the two must stay
+ * `requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)` turns the first into 401 and the second into 403, so the two must stay
  * distinguishable in the fake exactly as they are in production.
  */
 /**
  * A key only `admin` holds — stands in for "the elevated permission" throughout this file, named
  * explicitly rather than through any scope-wide shortcut, since none exists.
  */
-const ADMIN_ONLY_KEY = 'apikeys.any.delete';
+const [ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT] = ['delete', 'ApiKey'] as const;
 
 /**
  * Runs the staff payments guard for one caller.
@@ -87,7 +87,7 @@ const ADMIN_ONLY_KEY = 'apikeys.any.delete';
 const runPaymentsStaffGuard = (authContext: AuthContext) => {
     const next = jest.fn();
     const response = makeResponseStub();
-    requirePermission('payments.any.read')(makeRequest({ authContext }), response, next);
+    requirePermission('display', 'Payment')(makeRequest({ authContext }), response, next);
     return { next, response };
 };
 
@@ -728,7 +728,7 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(ADMIN_ONLY_KEY)(
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeRequest({ authContext: asAdmin('user-1') }),
             response,
             next
@@ -742,7 +742,7 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(ADMIN_ONLY_KEY)(
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeRequest({ authContext: asCustomer('user-1') }),
             response,
             next
@@ -753,7 +753,7 @@ describe('requirePermission', () => {
     });
 
     it('refuses a caller holding only the narrow key of the same action and subject', () => {
-        // `payments.self.read` and `payments.any.read` are both `read` on `Payment`, and every
+        // `read:Payment` and `display:Payment` are both `read` on `Payment`, and every
         // signed-in account holds the first: the guard asks for the literal key, or a customer
         // reads the staff list.
         const customer = runPaymentsStaffGuard(asCustomer('user-1'));
@@ -770,14 +770,18 @@ describe('requirePermission', () => {
         const next = jest.fn();
         const response = makeResponseStub();
 
-        requirePermission(ADMIN_ONLY_KEY)(makeRequest(), response, next);
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(makeRequest(), response, next);
 
         expect(next).not.toHaveBeenCalled();
         expect(response.status).toHaveBeenCalledWith(401);
     });
 
     it('distinguishes not-authenticated from not-permitted in the audit trail', () => {
-        requirePermission(ADMIN_ONLY_KEY)(makeRequest(), makeResponseStub(), jest.fn());
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+            makeRequest(),
+            makeResponseStub(),
+            jest.fn()
+        );
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -794,7 +798,7 @@ describe('requirePermission', () => {
     it('attributes a not-permitted denial to the actual user, not to anonymous', () => {
         // The whole value of the audit record: "who tried". Falling back to 'anonymous' here
         // would erase the identity of a real user probing admin routes.
-        requirePermission(ADMIN_ONLY_KEY)(
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeRequest({ authContext: asCustomer('user-9') }),
             makeResponseStub(),
             jest.fn()
@@ -820,10 +824,14 @@ describe('requirePermission', () => {
          * trail (`reason`, asserted above), not disclosed to whoever is probing.
          */
         const unauthenticated = makeResponseStub();
-        requirePermission(ADMIN_ONLY_KEY)(makeRequest(), unauthenticated, jest.fn());
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+            makeRequest(),
+            unauthenticated,
+            jest.fn()
+        );
 
         const nonAdmin = makeResponseStub();
-        requirePermission(ADMIN_ONLY_KEY)(
+        requirePermission(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeRequest({ authContext: asCustomer('user-9') }),
             nonAdmin,
             jest.fn()
@@ -835,7 +843,7 @@ describe('requirePermission', () => {
 });
 
 /**
- * `requirePermissionViaCookie(ADMIN_ONLY_KEY)` — admin elevation proved by the refresh COOKIE rather than a bearer header.
+ * `requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)` — admin elevation proved by the refresh COOKIE rather than a bearer header.
  *
  * It exists for the requests a browser makes without JavaScript setting a header: a PDF invoice
  * opened in a new tab, an `EventSource` stream. Those cannot carry `Authorization`, so the
@@ -858,7 +866,7 @@ describe('requirePermissionViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest(),
             response,
             asStub<NextFunction>(next)
@@ -873,7 +881,7 @@ describe('requirePermissionViaCookie', () => {
     it('rejects an empty cookie value the same way as a missing one', () => {
         const response = makeResponseStub();
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest(''),
             response,
             asStub<NextFunction>(jest.fn())
@@ -888,7 +896,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         await runUntilNext(
-            requirePermissionViaCookie(ADMIN_ONLY_KEY),
+            requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT),
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -901,7 +909,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
 
         const next = await runUntilNext(
-            requirePermissionViaCookie(ADMIN_ONLY_KEY),
+            requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT),
             makeCookieRequest('cookie.jwt'),
             makeResponseStub()
         );
@@ -915,7 +923,11 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
         const request = makeCookieRequest('cookie.jwt');
 
-        await runUntilNext(requirePermissionViaCookie(ADMIN_ONLY_KEY), request, makeResponseStub());
+        await runUntilNext(
+            requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT),
+            request,
+            makeResponseStub()
+        );
 
         expect(request.authContext).toEqual(adminUser);
         expect(request.caller).toEqual(callerInScope(adminUser, 'tenant'));
@@ -928,7 +940,7 @@ describe('requirePermissionViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(next)
@@ -944,7 +956,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
         const response = makeResponseStub();
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -957,7 +969,7 @@ describe('requirePermissionViaCookie', () => {
     it('records a forbidden attempt in the audit trail', async () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -977,7 +989,7 @@ describe('requirePermissionViaCookie', () => {
         // `user?.id ?? 'anonymous'` — an audit row with an empty actor is a row nobody can act on.
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: undefined });
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('cookie.jwt'),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -996,7 +1008,7 @@ describe('requirePermissionViaCookie', () => {
         const response = makeResponseStub();
         const next = jest.fn();
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('forged.jwt'),
             response,
             asStub<NextFunction>(next)
@@ -1011,7 +1023,7 @@ describe('requirePermissionViaCookie', () => {
     });
 
     it('audits a request that arrives with no cookie at all', async () => {
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest(),
             makeResponseStub(),
             asStub<NextFunction>(jest.fn())
@@ -1029,7 +1041,7 @@ describe('requirePermissionViaCookie', () => {
         mockedVerifyRefreshToken.mockRejectedValueOnce(new Error('mongo is down'));
         const response = makeResponseStub();
 
-        requirePermissionViaCookie(ADMIN_ONLY_KEY)(
+        requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
             makeCookieRequest('cookie.jwt'),
             response,
             asStub<NextFunction>(jest.fn())
@@ -1048,56 +1060,62 @@ const admittedRequest = () => {
 };
 
 /**
- * `stillHoldsKeyViaCookie` — the same verdict as `requirePermissionViaCookie`, re-run outside the
+ * `stillHoldsRuleViaCookie` — the same verdict as `requirePermissionViaCookie`, re-run outside the
  * request lifecycle for the SSE stream's 30-second recheck. It never rejects: a resolver failure
- * must fail the stream closed exactly like a role that no longer holds the key, since the stream
+ * must fail the stream closed exactly like a role that no longer holds the rule, since the stream
  * cannot tell the two apart and must not hang waiting to find out.
  */
-describe('stillHoldsKeyViaCookie', () => {
+describe('stillHoldsRuleViaCookie', () => {
     const adminUser = { ...asAdmin('admin-1'), username: 'root', imageUrl: '/images/root.png' };
 
-    it('resolves true for a caller who still holds the key', async () => {
+    it('resolves true for a caller who still holds the rule', async () => {
         recheckFamily.mockResolvedValueOnce({ ok: adminUser });
 
-        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(true);
+        await expect(
+            stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
+        ).resolves.toBe(true);
     });
 
-    it('resolves false when the caller no longer holds the key', async () => {
+    it('resolves false when the caller no longer holds the rule', async () => {
         recheckFamily.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
-        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
-            false
-        );
+        await expect(
+            stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
+        ).resolves.toBe(false);
     });
 
     it('resolves false when the session no longer names anyone', async () => {
         recheckFamily.mockResolvedValueOnce({ ok: undefined });
 
-        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
-            false
-        );
+        await expect(
+            stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
+        ).resolves.toBe(false);
     });
 
     it('resolves false once the session family is gone', async () => {
         recheckFamily.mockResolvedValueOnce({ miss: 'revoked' });
 
-        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
-            false
-        );
+        await expect(
+            stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
+        ).resolves.toBe(false);
     });
 
     it('fails closed, not rejected, when the recheck itself throws', async () => {
         // A datastore outage — the stream must close, not hang on an unhandled rejection.
         recheckFamily.mockRejectedValueOnce(new Error('mongo is down'));
 
-        await expect(stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY)).resolves.toBe(
-            false
-        );
+        await expect(
+            stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
+        ).resolves.toBe(false);
     });
 
     it('fails closed for a request the guard never admitted', async () => {
         await expect(
-            stillHoldsKeyViaCookie(makeCookieRequest('cookie.jwt'), ADMIN_ONLY_KEY)
+            stillHoldsRuleViaCookie(
+                makeCookieRequest('cookie.jwt'),
+                ADMIN_ONLY_ACTION,
+                ADMIN_ONLY_SUBJECT
+            )
         ).resolves.toBe(false);
         expect(recheckFamily).not.toHaveBeenCalled();
     });
@@ -1105,7 +1123,7 @@ describe('stillHoldsKeyViaCookie', () => {
     it('audits the refusal the same way the connect-time guard does', async () => {
         recheckFamily.mockResolvedValueOnce({ ok: asCustomer('user-1') });
 
-        await stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY);
+        await stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT);
 
         expect(mockedEmitAuditEvent).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -1119,7 +1137,7 @@ describe('stillHoldsKeyViaCookie', () => {
     it('does not audit a passing recheck', async () => {
         recheckFamily.mockResolvedValueOnce({ ok: adminUser });
 
-        await stillHoldsKeyViaCookie(admittedRequest(), ADMIN_ONLY_KEY);
+        await stillHoldsRuleViaCookie(admittedRequest(), ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT);
 
         expect(mockedEmitAuditEvent).not.toHaveBeenCalled();
     });
@@ -1128,15 +1146,21 @@ describe('stillHoldsKeyViaCookie', () => {
         mockedVerifyRefreshToken.mockResolvedValueOnce({ ok: adminUser });
         const request = makeCookieRequest('cookie.jwt');
         await new Promise<void>((resolve) => {
-            requirePermissionViaCookie(ADMIN_ONLY_KEY)(request, makeResponseStub(), () => {
-                resolve();
-            });
+            requirePermissionViaCookie(ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)(
+                request,
+                makeResponseStub(),
+                () => {
+                    resolve();
+                }
+            );
         });
         recheckFamily.mockResolvedValueOnce({ ok: adminUser });
         // The cookie rotates after connect; the old value would now be refused.
         request.cookies = { '__Host-session': 'rotated.jwt' };
 
-        await expect(stillHoldsKeyViaCookie(request, ADMIN_ONLY_KEY)).resolves.toBe(true);
+        await expect(
+            stillHoldsRuleViaCookie(request, ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT)
+        ).resolves.toBe(true);
         expect(mockedVerifyRefreshToken).toHaveBeenCalledTimes(1);
     });
 });

@@ -2,26 +2,24 @@
  * @module
  * Who sees how much stock. The exact counters (`onHand`, `reserved`, `available`) leak sales
  * velocity to a competitor and help plan a denial-of-inventory attack, so they go only to a caller
- * holding `inventory.any.read`; everyone else gets the two flags, `inStock` and `lowStock`, which
+ * holding `read:StockLevel`; everyone else gets the two flags, `inStock` and `lowStock`, which
  * every response carries. Shopify's Storefront API draws the same line: a quantity only for a
  * merchant who grants the scope.
  */
 
 import type { Caller, Product } from '@types';
-import { heldKeys } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 
-/** The key that unlocks the counters. */
-const STOCK_KEY = 'inventory.any.read';
-
 /**
- * Does this caller see exact stock? The literal keys, not CASL's collapsed `can`: only the key
- * itself says so.
+ * Does this caller see exact stock? Asks for the rule `read:StockLevel`, which only a stock
+ * reader holds.
+
  *
  * @param caller - `request.caller`, or `undefined` for an anonymous request
  */
 export const canSeeStock = (caller?: Caller): boolean =>
-    caller !== undefined && heldKeys(caller).has(STOCK_KEY);
+    caller !== undefined && holds(caller, 'read', 'StockLevel');
 
 /**
  * A product as `caller` may see it: the counters stay for a stock reader, and go for everyone

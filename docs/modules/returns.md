@@ -325,7 +325,7 @@ sequenceDiagram
 
 **Who may.** The buyer, as part of their withdrawal (`reason: withdrawal`; never on goods Art. 16
 excludes, and inside the window). **Staff** (out of stock for good, a sweep that got no answer) need
-the **refund key**, `payments.any.update` — `stepUp: critical`, so the route asks for a fresh session —
+the **refund key**, `create:Refund` — `stepUp: critical`, so the route asks for a fresh session —
 held by moderator and admin; the manager and the warehouse do not hold it. Holding the key is the
 whole rule, as on every door that sends money out: a refund of one's own order is allowed and its
 audit row is flagged `ownOrder` ([your own money](../theory/authorization.md#your-own-money)). No
@@ -384,7 +384,7 @@ delivery's `remainder_cancelled` already say it.
 still cancel?", so the frontend shows and never counts: `returnable` is the quantity per product that
 has **shipped** and is not already coming back; `cancellable` lists each fulfillment order with a
 remainder and the exact refund cancelling it would owe (the delivery included when it takes the last
-unit). The owner reads their own order's, staff holding `returns.any.read` any. The cancel recomputes
+unit). The owner reads their own order's, staff holding `read:Return` any. The cancel recomputes
 under the lock, so what was quoted is what is refunded unless something moved in between.
 
 ## GDPR
@@ -407,15 +407,15 @@ dates stay. No early wipe on account erasure. The reasoning:
 There is no `returns.self.*` key: a customer opening or reading their own return needs only to be
 signed in, the way an order's own cancel works, and "own" is the ORDER's owner.
 
-| Key                   | Held by                                       | Does                                                                                                             |
-| --------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `returns.any.read`    | manager, warehouse, support, moderator, admin | reads every return                                                                                               |
-| `returns.any.update`  | manager, support, moderator, admin            | approves or declines a request                                                                                   |
-| `returns.any.receive` | manager, warehouse, admin                     | records the goods arriving (`stepUp: critical`)                                                                  |
-| `payments.any.update` | moderator, admin                              | cancels an unshipped remainder, as a refund (`stepUp: critical`) — see [above](#cancelling-what-has-not-shipped) |
+| Key              | Held by                                       | Does                                                                                                             |
+| ---------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `read:Return`    | manager, warehouse, support, moderator, admin | reads every return                                                                                               |
+| `update:Return`  | manager, support, moderator, admin            | approves or declines a request                                                                                   |
+| `receive:Return` | manager, warehouse, admin                     | records the goods arriving (`stepUp: critical`)                                                                  |
+| `create:Refund`  | moderator, admin                              | cancels an unshipped remainder, as a refund (`stepUp: critical`) — see [above](#cancelling-what-has-not-shipped) |
 
-`receive` is narrower than `update` the way `delivery.any.start` is narrower than
-`orders.any.update`: the warehouse holds the parcel and may say it arrived, without being handed the
+`receive` is narrower than `update` the way `start:Shipment` is narrower than
+`update:Order`: the warehouse holds the parcel and may say it arrived, without being handed the
 decision of whether the return was owed.
 
 ## Configuration

@@ -53,7 +53,7 @@ describe('delivery routes', () => {
         expect(guards).not.toContain('requirePermissionGuard');
     });
 
-    it('restricts starting fulfilment to an operator holding delivery.any.start', () => {
+    it('restricts starting fulfilment to an operator holding start:Shipment', () => {
         expect(guardsOn(router, 'POST /order/:orderId/start')).toContain('requirePermissionGuard');
     });
 

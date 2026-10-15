@@ -22,7 +22,7 @@ const searchExamplesQuerySchema = SearchExamplesBody.extend({
     pageSize: pageSizeSchema
 });
 
-/** GET /examples and POST /examples/search — the caller's own examples, or everyone's with `examples.any.read`. */
+/** GET /examples and POST /examples/search — the caller's own examples, or everyone's with `display:Example`. */
 export const getExamples = createSearchController({
     entity: 'examples',
     schema: searchExamplesQuerySchema,

@@ -92,7 +92,7 @@ const searchWithTranslatedText = (
 
 /**
  * `GET /products` / `POST /products/search` — search, as `context.caller` may see it: the exact
- * stock counters stay for a holder of `inventory.any.read` — see `./stock-view`.
+ * stock counters stay for a holder of `read:StockLevel` — see `./stock-view`.
  *
  * Wraps rather than folds into `search()`: every other caller — unit tests, `facets` below — reads
  * the catalogue without a `CallerContext` to give. A search is NOT reported from here: the

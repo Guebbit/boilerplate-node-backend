@@ -24,10 +24,10 @@ export const router = Router();
 router.use(getAuth, isAuth);
 
 // GET /api-keys — list the keys (never their secrets).
-router.get('/', requirePermission('apikeys.any.read'), listApiKeys);
+router.get('/', requirePermission('read', 'ApiKey'), listApiKeys);
 
 // POST /api-keys — mint a key.
-router.post('/', requirePermission('apikeys.any.create'), mintApiKey);
+router.post('/', requirePermission('create', 'ApiKey'), mintApiKey);
 
 // DELETE /api-keys/:id — revoke a key.
-router.delete('/:id', requirePermission('apikeys.any.delete'), revokeApiKey);
+router.delete('/:id', requirePermission('delete', 'ApiKey'), revokeApiKey);

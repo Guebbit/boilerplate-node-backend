@@ -8,19 +8,19 @@ owner's.
 
 ## Key families, three jobs
 
-| Key                                                                   | Buys                                                      |
-| --------------------------------------------------------------------- | --------------------------------------------------------- |
-| `users.any.read` / `.create` / `.update` / `.delete`, `users.any.ban` | Add, edit, erase an account — and ban one.                |
-| `orders.any.read` / `.update`                                         | Read and update any order in the shop, not only your own. |
-| `payments.any.read` / `.create` / `.update`                           | Read any payment, and refund it.                          |
-| `returns.any.read` / `.update`                                        | Read any return request, and approve or decline it.       |
-| `audit.any.read`                                                      | Read the history of what everyone with a key did.         |
+| Key                                                         | Buys                                                      |
+| ----------------------------------------------------------- | --------------------------------------------------------- |
+| `read:User` / `.create` / `.update` / `.delete`, `ban:User` | Add, edit, erase an account — and ban one.                |
+| `display:Order` / `.update`                                 | Read and update any order in the shop, not only your own. |
+| `display:Payment` / `.create` / `.update`                   | Read any payment, and refund it.                          |
+| `read:Return` / `.update`                                   | Read any return request, and approve or decline it.       |
+| `read:AuditLog`                                             | Read the history of what everyone with a key did.         |
 
 ## Banning is its own key
 
 There is no separate "ban" button in the data model. Banning an account **is** setting `active` to
 `false` on it — the same field, the same endpoint, that an edit uses — but changing that one field
-needs `users.any.ban`, a key [support](./support.md) does not hold. A role that fixes a customer's
+needs `ban:User`, a key [support](./support.md) does not hold. A role that fixes a customer's
 phone number should not, by that alone, be able to lock them out:
 
 ```mermaid
@@ -43,7 +43,7 @@ as a plain update. → [`users`](../modules/users.md)
 
 ## Recording a transfer, and why a paid order refuses it
 
-`payments.any.create` is also what lets this role record money that arrived outside the checkout
+`create:Payment` is also what lets this role record money that arrived outside the checkout
 flow — cash at the counter, a bank transfer once its reference is matched — through
 `POST /payments/order/{orderId}/offline`. It settles the order exactly as a card payment would: the
 order moves to `paid`, stock commits, the confirmation fires.
@@ -66,7 +66,7 @@ open a new one asks it before doing anything else. → [`payments`](../modules/p
 
 ## Reading the shop's own history
 
-`audit.any.read` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.
+`read:AuditLog` opens `GET /audit` — this role's own window onto who did what, scoped to this shop.
 It is the same underlying trail [the observability dashboard](../modules/observability.md) reads
 for the platform operator, reached through a different door with a different key: this one asks
 nothing about the platform, only about this shop, which is exactly the key a shop's own staff can
@@ -74,12 +74,12 @@ be handed. → [`audit-logs`](../modules/audit-logs.md)
 
 ## What a moderator protects
 
-An account that holds a staff role may be changed only by a holder of `roles.any.assign`
+An account that holds a staff role may be changed only by a holder of `assign:Role`
 ([the rule](../theory/authorization.md#protecting-people)). A moderator does not hold it: it
 can ban, edit and erase a customer, and it cannot touch another staff member or an administrator,
 whatever the other keys say; the refusal is `403 ROLE_MANAGEMENT_REQUIRED`. It cannot hand out a
 role either. A
-moderator holds no `orders.any.delete` or `orders.any.create`: sorting an order out is updating it,
+moderator holds no `delete:Order` or `create:Order`: sorting an order out is updating it,
 and removing or raising one on someone's behalf is [the manager's](./manager.md) job.
 
 ::: tip What this role cannot touch

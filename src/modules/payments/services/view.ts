@@ -5,7 +5,7 @@
  */
 
 import { callerForSubject } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { t } from '@infrastructure/i18n';
 import {
     generateSuccess,
@@ -53,7 +53,7 @@ export const getForOrder = (
 const isPayerWithCheckout = (payment: PaymentDocument, authContext?: AuthContext): boolean =>
     authContext !== undefined &&
     payment.userId?.toString() === authContext.id &&
-    holdsKey(callerForSubject(authContext, 'Payment'), 'cart.self.checkout');
+    holds(callerForSubject(authContext, 'Payment'), 'checkout', 'Cart');
 
 /**
  * What this caller may do to a payment, as the contract's `PaymentActions`.
@@ -81,11 +81,11 @@ export const withActions = (
             isPayable(order!.status) &&
             isPayerWithCheckout(payment, authContext),
         // Only an operator returns money, and only money that actually arrived.
-        // `payments.any.update` by name — a moderator holds exactly this key, and asking
+        // `create:Refund` by name — a moderator holds exactly this key, and asking
         // for anything broader would have hidden the refund action despite the key they do hold.
         refund:
             authContext !== undefined &&
-            holdsKey(callerForSubject(authContext, 'Payment'), 'payments.any.update') &&
+            holds(callerForSubject(authContext, 'Payment'), 'create', 'Refund') &&
             payment.status === REFUNDABLE_PAYMENT_STATUS &&
             remainingOf(payment) > 0
     }

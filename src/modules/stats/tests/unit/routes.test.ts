@@ -1,6 +1,6 @@
 /**
  * The stats route table. The subject is the guard: every route needs a session and
- * `stats.any.read`, none is public, and none writes — a read that grows a write is a decision
+ * `read:Stats`, none is public, and none writes — a read that grows a write is a decision
  * somebody must make.
  */
 
@@ -30,9 +30,11 @@ describe('stats routes', () => {
         expect(guardsOn(router, signature)).toContain('isAuth');
     });
 
-    it('guards every route on the one key', () => {
-        expect(routeTable(router).map(({ permissionKey }) => permissionKey)).toEqual(
-            Array.from({ length: 8 }, () => 'stats.any.read')
-        );
+    it('guards every route on the one rule', () => {
+        expect(
+            routeTable(router).map(
+                ({ permission }) => `${permission?.action}:${permission?.subject}`
+            )
+        ).toEqual(Array.from({ length: 8 }, () => 'read:Stats'));
     });
 });

@@ -6,7 +6,7 @@ import { setupTestDb } from '@tests/setup-test-db';
 import { setEnvironment } from '@tests/environment';
 import {
     requirePermissionViaCookie,
-    stillHoldsKeyViaCookie
+    stillHoldsRuleViaCookie
 } from '@kernel/middlewares/authorizations';
 import { createUser, createAdminUser, PLAIN_PASSWORD } from '@modules/users/tests/factories';
 import { dropAllSessions } from '@modules/account/tests/factories';
@@ -62,7 +62,7 @@ describe('GET /observability/events', () => {
  * the 30-second recheck must follow the session's family, not the superseded value.
  */
 describe('the recheck of an open stream', () => {
-    const KEY = 'platform.observability.any.read';
+    const [ACTION, SUBJECT] = ['read', 'ObservabilitySnapshot'] as const;
     const FRONTEND = 'https://shop.example';
 
     beforeEach(() => {
@@ -74,7 +74,7 @@ describe('the recheck of an open stream', () => {
         let admitted: express.Request | undefined;
         const guarded = express();
         guarded.use(cookieParser());
-        guarded.get('/stream', requirePermissionViaCookie(KEY), (request, response) => {
+        guarded.get('/stream', requirePermissionViaCookie(ACTION, SUBJECT), (request, response) => {
             admitted = request;
             response.end();
         });
@@ -92,7 +92,7 @@ describe('the recheck of an open stream', () => {
             .set('Cookie', cookie)
             .expect(200);
 
-        await expect(stillHoldsKeyViaCookie(request, KEY)).resolves.toBe(true);
+        await expect(stillHoldsRuleViaCookie(request, ACTION, SUBJECT)).resolves.toBe(true);
     });
 
     it('closes once its session family is revoked', async () => {
@@ -101,6 +101,6 @@ describe('the recheck of an open stream', () => {
 
         await dropAllSessions(String(user._id));
 
-        await expect(stillHoldsKeyViaCookie(request, KEY)).resolves.toBe(false);
+        await expect(stillHoldsRuleViaCookie(request, ACTION, SUBJECT)).resolves.toBe(false);
     });
 });

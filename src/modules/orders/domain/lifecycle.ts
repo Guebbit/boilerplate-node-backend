@@ -46,7 +46,7 @@ export const ORDER_EVENTS = {
     /** The payment settled. `payments` is the only caller — nothing else may set `paid`. */
     pay: { from: [OrderStatus.pending], to: OrderStatus.paid, actors: ['system'] },
     /**
-     * Fulfilment started, recorded through `delivery`'s own door (`delivery.any.start`). `admin`
+     * Fulfilment started, recorded through `delivery`'s own door (`start:Shipment`). `admin`
      * reaches `processing` only through the override door (`canOverrideTo`).
      */
     start: { from: [OrderStatus.paid], to: OrderStatus.processing, actors: ['system'] },
@@ -206,7 +206,7 @@ export const statusesLeadingTo = (to: OrderStatus, actor: OrderActor): readonly 
 /**
  * The part of `OrderActions` this status/actor pairing alone can answer — `start`/`ship`/
  * `deliver`/`override` need the caller's actual permission keys (a warehouse operator holds
- * `delivery.any.start` without `orders.any.update`, and `actor` alone cannot tell them apart from
+ * `start:Shipment` without `update:Order`, and `actor` alone cannot tell them apart from
  * a customer), so `services/scope.ts`'s `withActions` computes those and merges them in.
  */
 type StatusDerivedActions = Pick<OrderActions, 'transitions' | 'cancel' | 'pay'>;

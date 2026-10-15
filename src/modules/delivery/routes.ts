@@ -33,7 +33,7 @@ import {
 
 /**
  * Whether this request is asking to skip the normal gate — the same flag `service.ts`'s
- * `refuseUnearnedForce` reads for its own `orders.any.override` permission check, so a caller who
+ * `refuseUnearnedForce` reads for its own `override:Order` permission check, so a caller who
  * reaches this far without `forced: true` never pays for a step-up prompt a plain ship/deliver
  * never needed.
  */
@@ -49,21 +49,21 @@ router.get('/methods', getShippingMethods);
 // GET /delivery/order/:orderId — the fulfillment orders and shipments behind one of the caller's orders
 router.get('/order/:orderId', getAuth, isAuth, getOrderFulfillment);
 
-// GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `orders.self.read`, the
+// GET /delivery/fulfillment-orders and /summary — the preorder board's reads. `read:Order`, the
 // key of the orders they are about, which every signed-in account holds: the service narrows the
-// rows to the caller's own orders unless they hold `orders.any.read` and read every order.
+// rows to the caller's own orders unless they hold `display:Order` and read every order.
 router.get(
     '/fulfillment-orders',
     getAuth,
     isAuth,
-    requirePermission('orders.self.read'),
+    requirePermission('read', 'Order'),
     getPreorderFulfillmentOrders
 );
 router.get(
     '/fulfillment-orders/summary',
     getAuth,
     isAuth,
-    requirePermission('orders.self.read'),
+    requirePermission('read', 'Order'),
     getPreorderSummary
 );
 
@@ -73,12 +73,12 @@ router.post(
     '/order/:orderId/start',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.start'),
+    requirePermission('start', 'Shipment'),
     postStartOrder
 );
 
 // POST /delivery/fulfillment-orders/:id/shipments — cuts a shipment; the order moves processing ->
-// shipped only when nothing remains anywhere. `requireFreshAuthWhen` at `orders.any.override`'s own
+// shipped only when nothing remains anywhere. `requireFreshAuthWhen` at `override:Order`'s own
 // declared tier: a `forced` write reaches past the ordinary `processing`-only gate, and the
 // service's own permission check has no way to demand a step-up on its own — only a route-mounted
 // guard can challenge before the controller runs.
@@ -86,7 +86,7 @@ router.post(
     '/fulfillment-orders/:id/shipments',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.update'),
+    requirePermission('update', 'Shipment'),
     requireFreshAuthWhen(isForcedRequest, 'critical'),
     postShipFulfillmentOrder
 );
@@ -98,7 +98,7 @@ router.post(
     '/fulfillment-orders/:id/fulfill',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.update'),
+    requirePermission('update', 'Shipment'),
     postFulfillFulfillmentOrder
 );
 
@@ -107,14 +107,14 @@ router.post(
     '/fulfillment-orders/:id/hold',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.update'),
+    requirePermission('update', 'Shipment'),
     postHoldFulfillmentOrder
 );
 router.post(
     '/fulfillment-orders/:id/release',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.update'),
+    requirePermission('update', 'Shipment'),
     postReleaseFulfillmentOrder
 );
 
@@ -128,7 +128,7 @@ router.patch(
     '/shipments/:id',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.update'),
+    requirePermission('update', 'Shipment'),
     patchShipment
 );
 
@@ -138,7 +138,7 @@ router.post(
     '/shipments/:id/deliver',
     getAuth,
     isAuth,
-    requirePermission('delivery.any.update'),
+    requirePermission('update', 'Shipment'),
     requireFreshAuthWhen(isForcedRequest, 'critical'),
     postDeliverShipment
 );

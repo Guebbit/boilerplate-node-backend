@@ -116,7 +116,7 @@ membership row survives the user it points at.
 ## Whose accounts a role may touch
 
 A key says what kind of thing; it never said whose. An account that holds a staff role may be
-changed only by a holder of `roles.any.assign`, or it is a `403 ROLE_MANAGEMENT_REQUIRED`.
+changed only by a holder of `assign:Role`, or it is a `403 ROLE_MANAGEMENT_REQUIRED`.
 `canChangeAccount` answers it for a user id, `roleProtectedRefusal` wraps it into the envelope the
 services return, and `holdsStaffRole` / `staffHoldersAmong` read from the memberships whether an
 account holds a role in either scope. A role has no level and nothing ranks. The rule, its

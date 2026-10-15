@@ -22,7 +22,7 @@ import {
     requireFreshAuthWhen
 } from '@kernel/middlewares/authorizations';
 import { callerForSubject } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { idempotencyKey } from '@infrastructure/http/middlewares/idempotency';
 import { privateNoCache } from '@infrastructure/http/middlewares/cache';
 import { returnsWriteLimiter } from './rate-limits';
@@ -41,7 +41,7 @@ import { postReturnReceive } from './controllers/post-return-receive';
 const isStaffCancellation = (request: Request): boolean =>
     (request.body as { kind?: string } | undefined)?.kind === 'cancellation' &&
     request.authContext !== undefined &&
-    holdsKey(callerForSubject(request.authContext, 'Return'), 'payments.any.update');
+    holds(callerForSubject(request.authContext, 'Return'), 'create', 'Refund');
 
 /** Express router for returns. */
 export const router = Router();
@@ -72,17 +72,17 @@ router.get('/options', privateNoCache, getReturnOptions);
 router.get('/:id', privateNoCache, getReturnById);
 
 // POST /returns/:id/approve — staff accept a `requested` return.
-router.post('/:id/approve', requirePermission('returns.any.update'), postReturnApprove);
+router.post('/:id/approve', requirePermission('update', 'Return'), postReturnApprove);
 
 // POST /returns/:id/decline — staff refuse a `requested` return.
-router.post('/:id/decline', requirePermission('returns.any.update'), postReturnDecline);
+router.post('/:id/decline', requirePermission('update', 'Return'), postReturnDecline);
 
-// POST /returns/:id/receive — the goods arrived. `returns.any.receive` carries `stepUp: critical` in
+// POST /returns/:id/receive — the goods arrived. `receive:Return` carries `stepUp: critical` in
 // `shared/authorization-keys.yaml`: receiving pays the customer back. The `Idempotency-Key` makes a
 // retried receipt land once, though the conditional move already guarantees the restock does.
 router.post(
     '/:id/receive',
-    requirePermission('returns.any.receive'),
+    requirePermission('receive', 'Return'),
     idempotencyKey,
     postReturnReceive
 );

@@ -45,11 +45,11 @@ flowchart LR
 
 Three order lists remain, and they are a PREFERENCE, not a registry:
 
-| List                 | File                                        | What it decides                                             |
-| -------------------- | ------------------------------------------- | ----------------------------------------------------------- |
-| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`       | order only — where its paths sit in the OpenAPI bundle      |
-| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`     | order only — where its channels sit in the AsyncAPI bundle  |
-| `PREFERRED_ORDER`    | `scripts/contracts/authorization-bundle.ts` | order only — where its keys sit in the authorization bundle |
+| List                 | File                                        | What it decides                                                       |
+| -------------------- | ------------------------------------------- | --------------------------------------------------------------------- |
+| `MODULE_ORDER`       | `scripts/contracts/openapi-bundle.ts`       | order only — where its paths sit in the OpenAPI bundle                |
+| `MODULE_ASYNC_ORDER` | `scripts/contracts/asyncapi-bundles.ts`     | order only — where its channels sit in the AsyncAPI bundle            |
+| `PREFERRED_ORDER`    | `scripts/contracts/authorization-bundle.ts` | order only — where its rules and sets sit in the authorization bundle |
 
 MEMBERSHIP is discovered from disk: a module folder either ships an `openapi.yaml` /
 `asyncapi.yaml` / `authorization.yaml` or it doesn't, and `scripts/contracts/section-order.ts` puts
@@ -91,10 +91,10 @@ schema is not one: each module declares its own section as `x-personal-data` in 
 and the bundler assembles `AccountExportResponse` from them):
 
 - **Role grants** in `shared/authorization-roles.yaml` and the cases in
-  `shared/authorization-conformance.yaml`. A module that introduces permission keys decides which
-  roles hold them; the keys themselves live in the module's own `authorization.yaml`.
+  `shared/authorization-conformance.yaml`. A module that introduces permission rules decides which
+  roles list its sets; the rules and sets themselves live in the module's own `authorization.yaml`.
 - **`WRITE_EXCEPTIONS`** in `tests/cross-cutting/write-routes-are-guarded.test.ts`, only for a
-  module whose write route deliberately needs no permission key. A module whose writes all sit
+  module whose write route deliberately needs no permission rule. A module whose writes all sit
   behind `requirePermission` adds nothing.
 
 ---
@@ -102,7 +102,7 @@ and the bundler assembles `AccountExportResponse` from them):
 ## Adding a module
 
 ::: tip Steps 1 to 5 can be generated
-`npm run scaffold:module -- <name>` writes the folder, the contract fragment, the permission keys,
+`npm run scaffold:module -- <name>` writes the folder, the contract fragment, the permission rules and set,
 the smoke tests, the docs page and the registry line, then regenerates. It also makes the three
 edits outside the folder that a keyed module still needs (the admin role list, its conformance
 copy, the PUT/PATCH parity canary). [Module scaffolder](../tools/module-scaffolder.md) has the
@@ -162,7 +162,7 @@ owns; [Contract Ownership & Fragmentation](../api/contract-fragmentation.md) is 
 ::: tip The module to copy is `example`
 Start from `src/modules/example` ([the module template](./modules.md#the-module-template)), not from
 a shop module. It is `group: example` (`npm run demo:remove` deletes it with the shop, since it is mounted in
-production — copy it first), and it depends only on `users`. It carries a public route above a gate, keyed writes with a `self` and an `any` breadth, a
+production — copy it first), and it depends only on `users`. It carries a public route above a gate, guarded writes with an own-rows rule and a staff one, a
 status lifecycle, a rate-limit budget, locales, a mail template, a personal-data section with an
 export and an erasure, an audit vocabulary and a contract slice, and it shows each optional
 capability in its own files. It has no page of its own on purpose, so there is nothing to keep in

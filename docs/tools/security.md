@@ -168,7 +168,7 @@ same defensive shape as `kernel/permissions.ts`'s own caller flooring (never tru
 permission list; re-derive from the authoritative source on every check).
 
 **A key can never hold a step-up permission.** `isMintable` refuses any permission that carries a
-`stepUp` tier (`users.any.delete`, for one) with a 422 at mint time. A credential has no
+`stepUp` tier (`delete:User`, for one) with a 422 at mint time. A credential has no
 `authTime`, so `requirePermission` would answer "re-authenticate" forever: the key would hold a
 permission that is dead on arrival. GitHub's sudo mode likewise keeps sensitive actions to a fresh
 human login.
@@ -193,7 +193,7 @@ a machine credential makes least sense. With the split, a route whose author for
 credentials gets `isAuth` and answers 401 — the direction an auth mistake should fail in.
 
 Mount `isAuthOrCredential` only where both hold, and both are checkable rather than a matter of
-taste: every guard on the route is a tenant-scoped `<family>.any.<action>` key, and no controller
+taste: every guard on the route asks for a tenant-scoped rule with no owner condition, and no controller
 it reaches reads `request.authContext`.
 Both halves are asserted, both by `tests/cross-cutting/authenticated-controllers.test.ts`: it
 reads Express's own resolved chain per route, refusing an `authContext!` read behind anything but
@@ -204,7 +204,7 @@ credential guard fails the suite rather than production.
 module mounts BOTH identity guards — driving a real credential over the real chain.
 
 **A key's read permissions count.** `products` reads narrow through `callerScope(request.caller)`,
-which a session and a key both set, so a key holding `products.any.read` sees drafts and soft-deleted
+which a session and a key both set, so a key holding `display:Product` sees drafts and soft-deleted
 rows exactly as a session with it does, and the response cache bypass follows from the same filter
 (`hasAnonymousReadScope`). A resolved credential never holds fewer keys than a stranger: the public
 baseline is unioned in (`api-keys/services/resolver.ts`), so a key minted for something else still
@@ -567,7 +567,7 @@ email change and both resends can each be pointed at a stranger's address, and `
 ## Why the metrics endpoint has its own credential
 
 `/observability/metrics` cannot use the bearer token the other observability routes check
-`platform.observability.any.read` on: it is scraped by Prometheus, which has no way to log in, refresh
+`read:ObservabilitySnapshot` on: it is scraped by Prometheus, which has no way to log in, refresh
 a token or hold a session. What Prometheus does
 support is a static bearer credential in its `scrape_configs`, so that is the credential here.
 
@@ -673,7 +673,7 @@ The distinction is the client's next move, not a shade of politeness:
 - **403** — "you are known and still refused". Logging in again would only loop.
 
 Every guard follows it: no credentials at all is 401 even on the most tightly keyed route, and a
-verified caller who does not hold the key is 403. The same rule decides what the auth resolver
+verified caller who does not hold the rule is 403. The same rule decides what the auth resolver
 does with a token whose user no longer exists — it resolves `undefined` rather than rejecting, so
 a deleted account gets the same 401 as a bad token, so the answer never tells a caller whether an
 account exists.
@@ -691,7 +691,7 @@ can never be satisfied by an SSE connection.
 
 What `EventSource` does send, given `withCredentials: true`, is cookies, and this app already
 issues an `HttpOnly` refresh cookie at login. So `requirePermissionViaCookie` takes the same
-permission key every other guard takes and verifies that cookie exactly as `POST /account/refresh`
+action and subject every other guard takes and verifies that cookie exactly as `POST /account/refresh`
 does — signature **and** presence on the user document — so a revoked or
 logged-out token is rejected, not merely an expired one.
 

@@ -2,7 +2,7 @@
  * @module
  * The protection of staff accounts in isolation: `holdsStaffRole` reads whether an account holds a
  * role off its memberships, and `canChangeAccount` / `roleProtectedRefusal` let only a holder of
- * `roles.any.assign` change one. The membership rows are a table here, so every cell is a pure
+ * `assign:Role` change one. The membership rows are a table here, so every cell is a pure
  * case; the same rule through real routes and a real database is the integration users suite.
  */
 

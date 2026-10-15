@@ -1,7 +1,7 @@
 /**
  * @module
  * The user-administration route table. Every route needs a caller by one line —
- * `router.use(getAuth, isAuthOrCredential)` — and then the `users.any.*` key its own mount
+ * `router.use(getAuth, isAuthOrCredential)` — and then the `User` rule its own mount
  * names, since `manager` and `support` do not hold the same one. A route added later inherits
  * the identity guard but not a key, and without one the entire directory is readable by any
  * logged-in customer. Both are asserted per endpoint rather than once, so a route mounted above

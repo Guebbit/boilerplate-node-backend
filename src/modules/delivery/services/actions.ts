@@ -1,13 +1,13 @@
 /**
  * @module
  * What a caller may do to a fulfillment order or a shipment, decided here so no client re-derives
- * the rules. Every flag needs the key that names the act (`delivery.any.update`); anyone without
+ * the rules. Every flag needs the key that names the act (`update:Shipment`); anyone without
  * it gets all `false`. The state half of each rule is pure and lives in `../domain`; this file
  * adds the caller and the order.
  */
 
 import { callerForSubject } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { isBuyer } from '@modules/orders';
 import type { OrderDocument } from '@modules/orders';
 import type {
@@ -24,7 +24,7 @@ import { presentFulfillmentOrder, presentShipment } from '../presenter';
 
 /** How the caller stands to an order: may they update fulfilment, and are they its buyer. */
 export interface Standing {
-    /** The caller holds `delivery.any.update`. */
+    /** The caller holds `update:Shipment`. */
     staff: boolean;
     /** The caller is the order's own buyer — the one who may answer "keep waiting". */
     owner: boolean;
@@ -38,7 +38,7 @@ export interface Standing {
 export const standingOn = (order: OrderDocument, authContext: AuthContext | undefined): Standing =>
     authContext
         ? {
-              staff: holdsKey(callerForSubject(authContext, 'Shipment'), 'delivery.any.update'),
+              staff: holds(callerForSubject(authContext, 'Shipment'), 'update', 'Shipment'),
               owner: isBuyer(order, authContext)
           }
         : { staff: false, owner: false };

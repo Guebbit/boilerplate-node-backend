@@ -146,7 +146,7 @@ board's `lowOnly` view is unchanged, since a restocker wants to see it.
 `GET /inventory/preorders` is the preorder board's read: per product the cap, `preordered`, its split
 between `held` (unpaid, frees itself) and `paid`, `left`, and `ordered`, the lifetime count read off the
 ledger's `preorder` rows. `PUT /inventory/levels/{productId}/preorder-limit` sets the allowance under
-`inventory.any.create`; it is not a stock movement and leaves no ledger row, only an audit entry.
+`create:StockMovement`; it is not a stock movement and leaves no ledger row, only an audit entry.
 
 ## Exactly-once, without a lock
 

@@ -1,7 +1,7 @@
 /**
  * @module
  * Who may hand out which role: a role nothing declares is refused, and so is a granter without
- * `roles.any.assign`. Every rule here is a REFUSAL rather than a note in a docblock — the check
+ * `assign:Role`. Every rule here is a REFUSAL rather than a note in a docblock — the check
  * that is not executed is the check that is not true.
  *
  * See: docs/theory/authorization.md · `shared/authorization-roles.yaml`
@@ -18,7 +18,7 @@ import { auditRoleChange } from './role-audit';
  * The one permission that protects people: whoever holds it may hand out a staff role and change an
  * account that already holds one. Declared in this module's `authorization.yaml`.
  */
-export const ASSIGN_KEY = 'roles.any.assign';
+export const ASSIGN_RULE = 'assign:Role';
 
 /**
  * Raised when a write would assign a role nothing declares, or grant more than the granter holds.
@@ -50,7 +50,7 @@ type GrantVerdict = { lowered: string } | { refusal: string };
  *     one by construction —`tests/cross-cutting/authorization-keys.test.ts` is what proves that
  *     for every preset, once, rather than this function re-checking it on every grant. `customer`,
  *     `unverified` and `guest` are such names: an audience is computed, never granted;
- *   - **a granter without `roles.any.assign`** — handing out a staff role is the one act that
+ *   - **a granter without `assign:Role`** — handing out a staff role is the one act that
  *     widens a person's powers, so it has one permission of its own instead of being implied by
  *     the keys of the roles being handed out.
  *
@@ -77,10 +77,10 @@ const checkGrant = (
         return { refusal: `[access] "${roleName}" is never assigned to an account.` };
     }
 
-    if (granter && !granter.includes(ASSIGN_KEY)) {
+    if (granter && !granter.includes(ASSIGN_RULE)) {
         return {
             refusal:
-                `[access] cannot grant "${roleName}": the granter does not hold ${ASSIGN_KEY}. ` +
+                `[access] cannot grant "${roleName}": the granter does not hold ${ASSIGN_RULE}. ` +
                 `A role editor that allows this is a privilege-escalation endpoint.`
         };
     }

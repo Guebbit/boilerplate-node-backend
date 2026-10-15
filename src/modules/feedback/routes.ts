@@ -42,7 +42,7 @@ router.post('/contact', contactLimiters, humanChallengeGate, idempotencyKey, pos
  * the one public route sits alone at the top. `tests/cross-cutting/authenticated-controllers.test.ts`
  * catches a misplaced route that also reads the caller.
  *
- * `isAuthOrCredential`: everything below is the operator's view, gated by `feedback.any.*` keys
+ * `isAuthOrCredential`: everything below is the operator's view, gated by the `Feedback` rules
  * and reading no `authContext`. The public submission route above is unaffected.
  */
 router.use(getAuth, isAuthOrCredential);
@@ -54,16 +54,16 @@ router.use(getAuth, isAuthOrCredential);
  * Never Redis-cached: an admin-only queue, which a shared cache must never hold — RFC 9111 §3.5.
  * `noStore`, like every POST answer.
  */
-router.post('/search', requirePermission('feedback.any.read'), noStore, getFeedback);
+router.post('/search', requirePermission('read', 'Feedback'), noStore, getFeedback);
 
 // `privateNoCache`: the browser may keep its own copy, revalidated every time.
-router.get('/', requirePermission('feedback.any.read'), privateNoCache, getFeedback);
+router.get('/', requirePermission('read', 'Feedback'), privateNoCache, getFeedback);
 
 // PUT /feedback/:id — replace the entry's status
-router.put('/:id', requirePermission('feedback.any.update'), replaceFeedbackStatus);
+router.put('/:id', requirePermission('update', 'Feedback'), replaceFeedbackStatus);
 
 // PATCH /feedback/:id — merge the fields sent
-router.patch('/:id', requirePermission('feedback.any.update'), updateFeedbackStatus);
+router.patch('/:id', requirePermission('update', 'Feedback'), updateFeedbackStatus);
 
 // DELETE /feedback/:id — remove the entry
-router.delete('/:id', requirePermission('feedback.any.delete'), deleteFeedback);
+router.delete('/:id', requirePermission('delete', 'Feedback'), deleteFeedback);

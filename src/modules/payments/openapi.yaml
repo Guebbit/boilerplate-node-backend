@@ -49,7 +49,7 @@ paths:
             summary: List payments (staff)
             description: >-
                 Every payment in the shop, newest first, for the staff Payments page. Needs
-                `payments.any.read`; the payer reads their own through `GET /payments/order/{orderId}`.
+                `display:Payment`; the payer reads their own through `GET /payments/order/{orderId}`.
                 `displayStatus` filters by the label the page shows, and the server maps each label to
                 the stored fields behind it. Each row carries its order's `orderNumber` and `email`,
                 composed from `orders`. The provider references (`providerRef`, each refund's
@@ -153,7 +153,7 @@ paths:
             description: >-
                 One row per refund across every payment, newest first, for the Refunds tab. Read
                 only: a refund is opened and settled through `POST /payments/order/{orderId}/refund`
-                and the cancel path. Needs `payments.any.read`.
+                and the cancel path. Needs `display:Payment`.
             operationId: listRefunds
             security:
                 - bearerAuth: []
@@ -201,7 +201,7 @@ paths:
                 whose stock commit is still owed, and orders whose refund is still owed after a
                 cancel. Oldest first, each source capped at 100 rows. An amount mismatch is not
                 here: it is an audit row (`payment.amount_mismatch`), not stored state. Needs
-                `payments.any.read`.
+                `display:Payment`.
             operationId: listPaymentAttention
             security:
                 - bearerAuth: []
@@ -272,7 +272,7 @@ paths:
         get:
             tags: [Payments]
             summary: Get the payment behind an order
-            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. A caller holding `payments.any.read` reads anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
+            description: The payment record for one of the caller's orders, so a reload mid-flow finds the intent and its status again. A caller holding `display:Payment` reads anyone's. No intent yet is a 404 — absence is an answer, the client starts the flow with `POST /payments/intent`.
             operationId: getPaymentByOrder
             security:
                 - bearerAuth: []
@@ -346,7 +346,7 @@ paths:
             description: >-
                 Returns money without touching the order's status — the operator action for a
                 goodwill refund, and the second half of "cancel and refund" when a client sends both.
-                Needs `payments.any.update`. Refunding one's own order is allowed and the audit row
+                Needs `create:Refund`. Refunding one's own order is allowed and the audit row
                 is flagged `ownOrder`. Without a body it returns everything still refundable; with an `amount`
                 it returns that part, and the payment stays `succeeded` until the parts add up to
                 what was paid. Each call is one `Refund` record on the payment. Answers 200 with
@@ -661,12 +661,12 @@ components:
                         table: docs/modules/payments.md#status-transitions
                 displayStatus:
                     $ref: '#/components/schemas/PaymentDisplayStatus'
-                # Staff only (`payments.any.read`): the handle that finds the payment at the provider.
+                # Staff only (`display:Payment`): the handle that finds the payment at the provider.
                 providerRef:
                     type: string
                     description: >-
                         The provider's own id for the payment intent (Stripe's `pi_…`). Sent only to
-                        a caller holding `payments.any.read`, so support can look the payment up at
+                        a caller holding `display:Payment`, so support can look the payment up at
                         the provider; never to the payer. Absent on a `manual` payment.
                 # Only on the staff lists, composed from `orders`.
                 orderNumber:
@@ -737,7 +737,7 @@ components:
             description: >-
                 One attempt to give money back — a record per attempt, not a field on the payment.
                 The idempotency key is stored but never published. The provider's refund id and a
-                failed refund's `failureReason` go to staff only (`payments.any.read`); the
+                failed refund's `failureReason` go to staff only (`display:Payment`); the
                 provider's own error wording stays in the logs.
             properties:
                 id:
@@ -782,7 +782,7 @@ components:
             enum: [declined, insufficient_funds, expired_or_canceled_card, lost_or_stolen_card, provider_unavailable, unknown]
             description: >-
                 Why the provider last refused a refund, as a closed code. Staff only
-                (`payments.any.read`). `unknown` is anything the provider's adapter did not
+                (`display:Payment`). `unknown` is anything the provider's adapter did not
                 classify; the raw wording stays in the logs.
 
         RefundStatus:
@@ -1014,7 +1014,7 @@ components:
                     description: >-
                         Whether `POST /payments/{id}/confirm` would be accepted — the payment is
                         awaiting confirmation or retryable after a decline, AND the order can still
-                        reach `paid`, AND the caller is the payer and holds `cart.self.checkout`
+                        reach `paid`, AND the caller is the payer and holds `checkout:Cart`
                         (staff reading the payment are never offered it).
                 refund:
                     type: boolean

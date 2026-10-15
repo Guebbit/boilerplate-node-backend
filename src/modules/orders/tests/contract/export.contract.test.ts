@@ -1,7 +1,7 @@
 /**
  * @module
  * `GET /orders/export` over HTTP: reached through the router (`/export` is not an order id), behind
- * `orders.any.export` and a fresh session, never cached, and refusing an oversized result before a
+ * `export:Order` and a fresh session, never cached, and refusing an oversized result before a
  * byte of the file. The CSV's content and the cap's arithmetic are the service suite's.
  */
 import '@tests/contract';

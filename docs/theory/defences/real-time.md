@@ -6,7 +6,7 @@ A socket is authorized once and then lives for hours, during which the role can 
 can be revoked, and the messages keep arriving.
 
 Two surfaces here, both Server-Sent Events: `GET /observability/events`
-(`platform.observability.any.read` only) and `GET /notifications/stream` (`notifications.self.read`,
+(`read:ObservabilitySnapshot` only) and `GET /notifications/stream` (`read:Notification`,
 each frame routed to the one user it is about). SSE rather than WebSocket is itself the design
 decision most of this page rests on.
 
@@ -52,6 +52,6 @@ RabbitMQ is the other real-time surface, and it is not reachable from outside �
 ## Related
 
 - [Data layer](data-layer.md) — the broker half of this family
-- [Authorization](authorization.md) — the permission key this stream demands
+- [Authorization](authorization.md) — the permission rule this stream demands
 - [Information disclosure](disclosure.md#logs-and-telemetry) — what the metrics surface reveals
 - [Observability layer](../../tools/observability-layer.md) — what the stream is for

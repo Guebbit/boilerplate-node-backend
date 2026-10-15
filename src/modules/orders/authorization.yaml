@@ -1,55 +1,85 @@
-keys:
+rules:
     # -- orders --------------------------------------------------------------------------------
-    - key: orders.self.read
-      module: orders
+    - action: read
       subject: Order
-      action: read
+      module: orders
       scope: tenant
       description: Read the caller's own orders.
       conditions:
           userId: $caller.id
           deletedAt: null
-    - key: orders.any.read
-      module: orders
+    - action: display
       subject: Order
-      action: read
+      module: orders
       scope: tenant
       description: Read every order in the shop — the support desk and the warehouse, who help with or pack an order that is never their own.
-    - key: orders.any.create
-      module: orders
+    - action: create
       subject: Order
-      action: create
+      module: orders
       scope: tenant
       description: Raise an order on someone else's behalf. Checking out is not this key.
-    - key: orders.any.update
-      module: orders
+    - action: update
       subject: Order
-      action: update
+      module: orders
       scope: tenant
       description: Move an order along its status path.
-    - key: orders.any.delete
-      module: orders
+    - action: delete
       subject: Order
-      action: delete
+      module: orders
       scope: tenant
       description: Remove an order.
-    - key: orders.any.override
-      module: orders
+    - action: override
       subject: Order
-      action: override
+      module: orders
       scope: tenant
       description: Skip the normal lifecycle gate to force a delivery move, or correct a status by hand, with a recorded reason.
       # An override exists precisely to bypass the ordinary rule — the same reasoning
-      # payments.any.update carries this tier for: a stolen access token proves nothing about how
+      # create:Refund carries this tier for: a stolen access token proves nothing about how
       # recently its holder typed their password, and this key's damage (a wrong parcel/status
       # written on the record) is not undone by another ordinary request.
       stepUp: critical
-    - key: orders.any.export
-      module: orders
+    - action: export
       subject: Order
-      action: export
+      module: orders
       scope: tenant
       description: Take every order out of the shop as a CSV file, customer emails included. An API key cannot use it, since its step-up needs a person.
       # Exporting everyone's orders cannot need less proof than exporting your own data does
       # (`POST /account/export`, also `sensitive`): the file leaves the application whole.
       stepUp: sensitive
+
+sets:
+    - name: OrderOwn
+      module: orders
+      description: Read one's own orders.
+      rules:
+          - read:Order
+    - name: OrderDisplay
+      module: orders
+      description: Read every order in the shop.
+      rules:
+          - display:Order
+    - name: OrderCreation
+      module: orders
+      description: Raise an order on someone else's behalf.
+      rules:
+          - create:Order
+    - name: OrderEditing
+      module: orders
+      description: Move an order along its status path.
+      rules:
+          - update:Order
+    - name: OrderRemoval
+      module: orders
+      description: Remove an order.
+      rules:
+          - delete:Order
+    - name: OrderOverride
+      module: orders
+      description: Force a status or delivery move past the lifecycle gate.
+      rules:
+          - override:Order
+    - name: OrderExport
+      module: orders
+      description: Take every order out as a file.
+      rules:
+          - export:Order

@@ -42,7 +42,7 @@ export interface OfflinePaymentInput {
  * Record a payment that arrived outside the provider, and settle it exactly as a card payment
  * would.
  *
- * The order lookup is unscoped: this is an operator action reached only once `payments.any.create` has
+ * The order lookup is unscoped: this is an operator action reached only once `create:Payment` has
  * already been checked at the route, not a customer reading their own order. Recording money on
  * one's own order is allowed and flagged `ownOrder` on the audit row.
  *

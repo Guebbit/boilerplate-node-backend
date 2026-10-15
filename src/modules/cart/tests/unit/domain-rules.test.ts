@@ -94,7 +94,7 @@ describe('evaluateCheckout', () => {
         });
     });
 
-    // Exact stock is for stock readers (`inventory.any.read`), and no shopper is one.
+    // Exact stock is for stock readers (`read:StockLevel`), and no shopper is one.
     it('names the short line without the number left', () => {
         const verdict = evaluateCheckout([line(6, 5)]);
 

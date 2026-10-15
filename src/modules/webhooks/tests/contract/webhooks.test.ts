@@ -99,8 +99,8 @@ describe('POST /webhooks/subscriptions', () => {
         expect(response.status).toBe(422);
     });
 
-    it('403s a role holding only webhooks.any.read', async () => {
-        // No preset role holds webhooks.any.read without also holding the write keys today, so
+    it('403s a role holding only read:WebhookSubscription', async () => {
+        // No preset role holds read:WebhookSubscription without also holding the write keys today, so
         // this asserts the negative the other way: a role with NEITHER key is refused too.
         const { bearer } = await authenticateAsRole('customer');
 

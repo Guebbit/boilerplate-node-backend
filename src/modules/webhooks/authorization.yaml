@@ -1,29 +1,39 @@
-keys:
+rules:
     # -- webhooks --------------------------------------------------------------------------------
-    - key: webhooks.any.read
-      module: webhooks
+    - action: read
       subject: WebhookSubscription
-      action: read
+      module: webhooks
       scope: tenant
       description: Read this shop's webhook subscriptions, delivery log and event catalogue.
-    - key: webhooks.any.create
-      module: webhooks
+    - action: create
       subject: WebhookSubscription
-      action: create
+      module: webhooks
       scope: tenant
       description: Add a subscription, minting its first secret.
-    - key: webhooks.any.update
-      module: webhooks
+    - action: update
       subject: WebhookSubscription
-      action: update
+      module: webhooks
       scope: tenant
       description: >-
           Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The
           blast radius of all three is the same — a party this shop did not intend gets signed
           deliveries — so they share one key.
-    - key: webhooks.any.delete
-      module: webhooks
+    - action: delete
       subject: WebhookSubscription
-      action: delete
+      module: webhooks
       scope: tenant
       description: Remove a subscription. Separate from update because the blast radius is.
+
+sets:
+    - name: WebhookDisplay
+      module: webhooks
+      description: Read subscriptions, deliveries and the event catalogue.
+      rules:
+          - read:WebhookSubscription
+    - name: WebhookManagement
+      module: webhooks
+      description: Add, change, replay and remove subscriptions.
+      rules:
+          - create:WebhookSubscription
+          - update:WebhookSubscription
+          - delete:WebhookSubscription

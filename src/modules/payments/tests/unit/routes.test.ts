@@ -83,14 +83,15 @@ describe('payment routes', () => {
     it('admin-guards the staff reads, the refund, the offline record and the reference lookup, and nothing else', () => {
         // The three routes an operator drives instead of a customer's own checkout — money moving
         // back out, a claim that money moved in some way the provider never saw, or finding the
-        // order that claim is about. The shopper's keys are excluded: `cart.self.update` and
-        // `cart.self.checkout` gate the three customer-facing card steps below and are the
+        // order that claim is about. The shopper's keys are excluded: `update:Cart` and
+        // `checkout:Cart` gate the three customer-facing card steps below and are the
         // customer's own, not admin ones — see the module docblock's "Verified" row.
-        const shopperKeys = new Set(['cart.self.update', 'cart.self.checkout']);
+        const shopperRules = new Set(['update:Cart', 'checkout:Cart']);
         const adminGuarded = routeTable(router)
             .filter(
-                ({ permissionKey }) =>
-                    permissionKey !== undefined && !shopperKeys.has(permissionKey)
+                ({ permission }) =>
+                    permission !== undefined &&
+                    !shopperRules.has(`${permission.action}:${permission.subject}`)
             )
             .map(({ method, path }) => `${method} ${path}`);
 

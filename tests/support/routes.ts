@@ -38,6 +38,12 @@ import type { Router } from 'express';
 import { asStub } from '@tests/stub';
 import type { StepUpTier } from '@kernel/permissions';
 
+/** The action and subject a `requirePermission` guard asks for. */
+export interface PermissionAsk {
+    action: string;
+    subject: string;
+}
+
 /** Where a mocked factory records the call that produced a middleware. Internal: see finding 3. */
 const ROUTE_LABEL = Symbol.for('tests.routeLabel');
 
@@ -45,8 +51,8 @@ const ROUTE_LABEL = Symbol.for('tests.routeLabel');
 interface LabelledMiddleware {
     [ROUTE_LABEL]?: string;
     name?: string;
-    /** The key a `requirePermission(key)` guard closed over — real code, not a test label. */
-    permissionKey?: string;
+    /** What a `requirePermission(action, subject)` guard closed over — real code, not a test label. */
+    permission?: PermissionAsk;
 }
 
 /** One mounted endpoint. Internal: the walker's return type, not referenced outside this file. */
@@ -58,10 +64,10 @@ interface RouteRow {
     /** Every handler on the route, in mount order, named or labelled. */
     chain: string[];
     /**
-     * The `requirePermission` key guarding this route, own stack or router-level `use`,
+     * What the `requirePermission` guard on this route asks, own stack or router-level `use`,
      * `undefined` for a route with no such guard.
      */
-    permissionKey?: string;
+    permission?: PermissionAsk;
 }
 
 /**
@@ -321,8 +327,8 @@ const walk = (
 ): { rows: (RouteRow & { applies: string[] })[]; middleware: string[] } => {
     const layers = asStub<{ stack: Layer[] }>(router).stack;
     const applies: string[] = [];
-    // Parallel to `applies`, kept only long enough to read `.permissionKey` back off a
-    // `router.use(..., requirePermission('key'))` layer — the string form has already thrown that
+    // Parallel to `applies`, kept only long enough to read `.permission` back off a
+    // `router.use(..., requirePermission('read', 'Stats'))` layer — the string form has already thrown that
     // away by the time a row is built.
     const appliesHandles: LabelledMiddleware[] = [];
     const rows: (RouteRow & { applies: string[] })[] = [];
@@ -334,12 +340,12 @@ const walk = (
             continue;
         }
 
-        const ownKey = layer.route.stack
-            .map(({ handle }) => handle.permissionKey)
-            .find((key): key is string => key !== undefined);
-        const inheritedKey = appliesHandles
-            .map((handle) => handle.permissionKey)
-            .find((key): key is string => key !== undefined);
+        const own = layer.route.stack
+            .map(({ handle }) => handle.permission)
+            .find((ask): ask is PermissionAsk => ask !== undefined);
+        const inherited = appliesHandles
+            .map((handle) => handle.permission)
+            .find((ask): ask is PermissionAsk => ask !== undefined);
         for (const method of Object.keys(layer.route.methods).filter(
             (each) => layer.route!.methods[each]
         ))
@@ -347,7 +353,7 @@ const walk = (
                 method: method.toUpperCase(),
                 path: layer.route.path,
                 chain: layer.route.stack.map(({ handle }) => handlerName(handle)),
-                permissionKey: ownKey ?? inheritedKey,
+                permission: own ?? inherited,
                 // Copied, not shared: later `use` layers must not appear to guard earlier routes.
                 applies: [...applies]
             });

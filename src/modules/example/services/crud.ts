@@ -124,7 +124,7 @@ export const create = (
 };
 
 /**
- * One example the caller may read: their own, or any when they hold `examples.any.read`.
+ * One example the caller may read: their own, or any when they hold `display:Example`.
  *
  * @param id - the example's id
  * @param context - the caller

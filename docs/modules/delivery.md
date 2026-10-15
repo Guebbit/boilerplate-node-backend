@@ -302,9 +302,9 @@ and expected within N days: a slip moved before the date passes is a notice, and
 question. The queue key stock is allocated by is the hold's `committedAt`, stamped in the payment's own
 transaction, so `paidAt` here orders the buyers the way `inventory` does.
 
-**Who reads it** is the audience of the orders themselves: the key is `orders.any.read` (decided A5.2,
+**Who reads it** is the audience of the orders themselves: the key is `display:Order` (decided A5.2,
 because there is one audience and one permission for it). A route guard cannot tell that key from a
-buyer's own `orders.self.read`, which collapses onto it, so the scope is in the query: staff who read
+buyer's own `read:Order`, which collapses onto it, so the scope is in the query: staff who read
 every order see every row; anyone else sees only their own orders' fulfillment orders. The buyer and
 `paidAt` come from `orders`, one batched read a page (`orderBriefsByIds`).
 
@@ -377,7 +377,7 @@ shipment leaves **nothing** remaining anywhere; until then it stays `processing`
 
 `forced` lets staff skip a step, never a rule: ship from `paid` without `start` (the order then moves
 `paid → processing → …` by itself), or record a delivery without a carrier confirmation. It needs
-`orders.any.override` (itself step-up gated, and the route asks for the fresh session before the
+`override:Order` (itself step-up gated, and the route asks for the fresh session before the
 controller runs) and a `reason`. It leaves a `status_overridden` row on the order's [timeline](./orders.md#the-timeline) —
 `orderService.recordForcedFulfilment` appends it without a move of its own — and the shipment is stored with `forced: true`.
 
@@ -455,17 +455,17 @@ date this order was expecting, not the product's previous date.
 
 ## Routes and events
 
-| Route                                                      | Key                   | Answers                                                             |
-| ---------------------------------------------------------- | --------------------- | ------------------------------------------------------------------- |
-| `POST /delivery/fulfillment-orders/{id}/confirm-wait`      | the order's buyer     | the fulfillment order, `consent: confirmed`                         |
-| `GET /delivery/fulfillment-orders` · `/summary`            | `orders.any.read`     | [the preorder board](#the-preorder-board)'s two reads               |
-| `GET /delivery/order/{orderId}`                            | the owner, or staff   | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
-| `POST /delivery/order/{orderId}/start`                     | `delivery.any.start`  | the order, `processing`                                             |
-| `POST /delivery/fulfillment-orders/{id}/shipments`         | `delivery.any.update` | `201` + the shipment                                                |
-| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `delivery.any.update` | the shipment, delivered                                             |
-| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `delivery.any.update` | the fulfillment order                                               |
-| `PATCH /delivery/shipments/{id}`                           | `delivery.any.update` | the shipment, tracking corrected while it is out                    |
-| `POST /delivery/shipments/{id}/deliver`                    | `delivery.any.update` | the shipment                                                        |
+| Route                                                      | Key                 | Answers                                                             |
+| ---------------------------------------------------------- | ------------------- | ------------------------------------------------------------------- |
+| `POST /delivery/fulfillment-orders/{id}/confirm-wait`      | the order's buyer   | the fulfillment order, `consent: confirmed`                         |
+| `GET /delivery/fulfillment-orders` · `/summary`            | `display:Order`     | [the preorder board](#the-preorder-board)'s two reads               |
+| `GET /delivery/order/{orderId}`                            | the owner, or staff | `{ fulfillmentOrders[], shipments[] }`, each with its own `actions` |
+| `POST /delivery/order/{orderId}/start`                     | `start:Shipment`    | the order, `processing`                                             |
+| `POST /delivery/fulfillment-orders/{id}/shipments`         | `update:Shipment`   | `201` + the shipment                                                |
+| `POST /delivery/fulfillment-orders/{id}/fulfill`           | `update:Shipment`   | the shipment, delivered                                             |
+| `POST /delivery/fulfillment-orders/{id}/hold` · `/release` | `update:Shipment`   | the fulfillment order                                               |
+| `PATCH /delivery/shipments/{id}`                           | `update:Shipment`   | the shipment, tracking corrected while it is out                    |
+| `POST /delivery/shipments/{id}/deliver`                    | `update:Shipment`   | the shipment                                                        |
 
 Every button a client draws comes from the record's own `actions` (or `GET /returns/options`): the
 frontend never re-derives a rule. Every staff door asks the key and nothing else: [no rank](../theory/authorization.md#protecting-people).

@@ -152,7 +152,7 @@ production follow-up if a query turns out slow.
 
 ## Access
 
-One key, `stats.any.read`, held by `admin` (and `system` through the YAML alias) and `manager`. A
+One key, `read:Stats`, held by `admin` (and `system` through the YAML alias) and `manager`. A
 session, not an API key.
 
 ## Related pages

@@ -1,7 +1,8 @@
-# Every permission key that exists. Generated — `npm run authorization:bundle` splices this file
-# from one fragment per owning module (`src/modules/<name>/authorization.yaml`) plus this root
-# residual for the app-level `core` keys. A key is introduced in its owning fragment, never in the
-# bundle directly; `--check` (wired into `complete`) fails the build if the bundle drifts from them.
+# Every permission rule and permission set that exists. Generated — `npm run authorization:bundle`
+# splices this file from one fragment per owning module (`src/modules/<name>/authorization.yaml`)
+# plus this root residual for the app-level `core` rules. A rule or a set is introduced in its
+# owning fragment, never in the bundle directly; `--check` (wired into `complete`) fails the build
+# if the bundle drifts from them.
 #
 # Committed with identical bytes in `boilerplate-node-backend` and
 # `boilerplate-php-laravel-backend`. Neither repo's formatter touches it — see the exclusion in
@@ -9,22 +10,28 @@
 # formatters over one shared artefact is a silent fork.
 #
 # ROLES ARE DATA, PERMISSIONS ARE CODE. A deployment may create roles at runtime. It may never
-# invent a key, because a key nothing checks grants nothing while looking like it grants
+# invent a rule, because a rule nothing checks grants nothing while looking like it grants
 # something. Assignment validates against this file, not against a string.
 #
+# THREE LAYERS, the CanCan model as Solidus uses it:
+#   rule            one `action` on one `subject`, optionally narrowed by `conditions`. Its id is
+#                   `<action>:<subject>` (`display:Order`) and no two rules share one.
+#   permission set  a named bundle of rules per module (`OrderDisplay`). Declared beside the rules,
+#                   listed by roles in `authorization-roles.yaml`.
+#   role            a list of sets. Nothing else: no level, no rank, no wildcard.
+# A guard asks `(action, subject)` and nothing else; no rule or set name appears in a route.
+#
+# NO `self` / `any` IN A NAME. "Own rows" is a CONDITION on a rule (`userId: $caller.id`), the way
+# Solidus' `DefaultCustomer` writes it. What tells a staff door from a customer's own-rows rule is
+# the action: `display` is "every row" where `read` is "my rows", and `admin` is "edit or remove
+# any row" where `update` and `delete` are "mine". Both are declared in `implies:` below, so a
+# holder of `display` also passes a `read` check, which is what keeps one query for both.
+#
 # THE ONE INVARIANT, and the reason `scope` is a field rather than a naming convention:
-#   a bare key can never be satisfied by a platform-scope caller, and a `platform.` key can never
+#   a tenant rule can never be satisfied by a platform-scope caller, and a platform rule can never
 #   be satisfied by a tenant-scope caller.
 # A platform operator administers shared reference data and is not a super-member. Mapping that
 # person onto the old `admin` boolean was one line to write and a total confidentiality failure.
-#
-# THE SHAPE: `<family>.<breadth>.<action>`, breadth ALWAYS written — `orders.self.read`,
-# `orders.any.read`, `products.any.create`. Breadth is `self` where the key is genuinely scoped to
-# the caller's own rows (`cart.self.checkout`) or to the narrow, default reading a family gives a
-# customer (`products.self.read`); `any` everywhere else, including every key with no owner to
-# scope by at all. An omitted breadth reads as "someone forgot one" — a key you can grep for by
-# shape beats a key you have to know the default of. There is no wildcard of any kind, per-family
-# or scope-wide; see the note at the foot of this file.
 
 version: 1
 
@@ -32,38 +39,33 @@ version: 1
 # is not a declared action, since there is no wildcard of any kind, per-family or scope-wide —
 # see the note at the foot of this file for why — so `manage` names nothing here.
 #
-# `write` is deliberately absent. It collapses create, update and delete into one key, and the
+# `write` is deliberately absent. It collapses create, update and delete into one rule, and the
 # shop needs them apart: a support agent may update a user and may not delete one, a warehouse
 # operator may adjust stock and may not delete a product.
 #
-# `checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export` and `assign` are the eight additions beyond
-# CASL's own CRUD vocabulary, and all eight follow the same rule: a verb is added only when CRUD cannot say the
-# thing, never when CRUD is merely inconvenient, and the reason is recorded on the key itself.
-#   - `checkout` is `cart.self.checkout`'s action, and nowhere else. CRUD has no verb for "spend
-#     the basket": `create` on `Cart` collided with `orders.any.create` (raising an order on
-#     someone else's behalf) and `update` said nothing about what changed.
-#   - `sweep` is `inventory.any.sweep`'s action, and nowhere else. A sweep clears expired
-#     reservation holds on a schedule: no noun it creates, no row whose update names the action.
-#   - `override` is `orders.any.override`'s action, and nowhere else. It skips the normal
-#     lifecycle gate to force a delivery move or correct a status by hand, with a recorded
-#     reason — `update` would hide that this write deliberately bypasses the ordinary rule.
-#   - `start` is `delivery.any.start`'s action, and nowhere else. Moving a paid order into
-#     `processing` creates no shipment yet — there is no parcel row to `update` — and it is a
-#     narrower grant than `orders.any.update`, which lets an admin rewrite the order outright.
-#   - `receive` is `returns.any.receive`'s action, and nowhere else. It records that returned goods
-#     arrived, which puts the units back on sale and pays the customer back — `update` on `Return`
-#     is the decision to approve it, a narrower hand than the one that holds the parcel.
-#   - `ban` is `users.any.ban`'s action, and nowhere else. Deactivating an account locks a person
-#     out, which is a wider hand than correcting their profile — `update` on `User` would give a
-#     support agent the first by granting the second.
-#   - `export` is `orders.any.export`'s action, and nowhere else. It takes every customer's order
-#     out of the application as a file, which is a wider hand than reading them one at a time —
-#     `read` on `Order` would give the warehouse and the support desk the first by granting the
-#     second. Shopify keeps a separate Export permission for the same reason.
-#   - `assign` is `roles.any.assign`'s action, and nowhere else. It hands a staff role to an account
-#     or takes it away, and it is what lets someone change an account that already holds a staff
-#     role. No `Role` row is created, updated or deleted — the roles are data in a file — so no CRUD
-#     verb says it. Solidus names the same thing `RoleManagement`.
+# `checkout`, `sweep`, `override`, `start`, `receive`, `ban`, `export` and `assign` are additions beyond
+# CASL's own CRUD vocabulary, and all follow the same rule: a verb is added only when CRUD cannot say
+# the thing, never when CRUD is merely inconvenient, and the reason is recorded on the rule itself.
+#   - `checkout` is `checkout:Cart`'s action. CRUD has no verb for "spend the basket": `create` on
+#     `Cart` would have said nothing about what changed.
+#   - `sweep` clears expired reservation holds on a schedule: no noun it creates, no row whose
+#     update names the action.
+#   - `override` skips the normal lifecycle gate to force a delivery move or correct a status by
+#     hand, with a recorded reason — `update` would hide that this write bypasses the ordinary rule.
+#   - `start` moves a paid order into `processing`. No shipment exists yet, and it is a narrower
+#     grant than `update:Order`, which lets an admin rewrite the order outright.
+#   - `receive` records that returned goods arrived, which puts the units back on sale and pays the
+#     customer back — `update` on `Return` is the decision to approve it, a narrower hand.
+#   - `ban` locks a person out, a wider hand than correcting their profile.
+#   - `export` takes every customer's order out of the application as a file, a wider hand than
+#     reading them one at a time. Shopify keeps a separate Export permission for the same reason.
+#   - `assign` hands a staff role to an account or takes it away, and is what lets someone change
+#     an account that already holds one. No `Role` row is written (roles are data in a file), so no
+#     CRUD verb says it. Solidus names the same thing `RoleManagement`.
+#   - `display` and `admin` are Solidus' two staff doors. `display` reads every row of a subject
+#     that also has an own-rows or public `read`; `admin` edits or removes any row of a subject
+#     whose `update` and `delete` are own-rows. They exist so a staff door cannot be opened by the
+#     rule every signed-in account holds. A subject with no own-rows rule keeps plain `read`.
 #
 # THIS LIST IS THE ONE HOME of the vocabulary: `npm run gen:api` turns it into
 # `api/permission-actions.ts` (and the frontend's copy), so no code types it a second time.
@@ -80,27 +82,39 @@ actions:
     - ban
     - export
     - assign
+    - display
+    - admin
+
+# Which plain actions a staff action also answers. The ability emits each implied rule beside the
+# staff one, so `can('read', Order)` is yes for a holder of `display:Order` and `accessibleBy`
+# compiles one filter from the own-rows rule and the staff rule together.
+implies:
+    display:
+        - read
+    admin:
+        - update
+        - delete
 
 # The two scopes. Never both, never derived from a flag — a caller resolves to exactly one.
 scopes:
-    tenant: Content belonging to one shop. Keys are bare.
-    platform: Shared operational data, across shops. Keys are prefixed `platform.`.
+    tenant: Content belonging to one shop.
+    platform: Shared operational data, across shops. A rule on platform data.
 
-# Step-up — the third axis, declared on the KEY rather than on a route.
+# Step-up — the third axis, declared on the RULE rather than on a route.
 #
-# A key may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
+# A rule may carry `stepUp: critical | sensitive`, and `requirePermission` then demands that the
 # caller proved themselves within that window before it lets them through. The tiers are the ones
 # `NODE_REAUTH_TIME_CRITICAL` / `NODE_REAUTH_TIME_SENSITIVE` set, so this adds a place to say WHICH
 # actions are worth a challenge, not a second mechanism for making one.
 #
-# On the key and not the route because the key is what the action IS: erasing somebody's account
+# On the rule and not the route because the rule is what the action IS: erasing somebody's account
 # deserves a fresh session wherever it is reached from, and a second route that reaches it would
 # otherwise have to remember. `amr` may also be named, so a future passkey tier is a line here
 # rather than a guard change — the reason `amr` was carried as a list rather than a boolean.
 
 # Conditions — the ABAC half, and the reason this is not pure RBAC.
 #
-# A key may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
+# A rule may carry `conditions`: a filter fragment that must ALSO hold of the row. It is the same
 # shape CASL takes as its third argument and the same shape both repositories already spread into
 # a query, which is what lets it be compiled INTO the read instead of checked after it.
 #
@@ -113,13 +127,13 @@ scopes:
 # is the condition set, and each backend generates its own query from it.
 #
 # Tenancy is NOT written here. Every tenant-scope rule has `tenantId: $caller.tenantId` injected
-# by the resolver, so no key can forget it and no request parameter can supply it.
+# by the resolver, so no rule can forget it and no request parameter can supply it.
 #
-# A key with no `conditions` is unconditional within its scope. `products.self.read` sees active,
-# undeleted rows; `products.any.read` sees every row — which is why breadth and condition move
-# together on the four families where the narrow reading is filtered at all.
+# A rule with no `conditions` is unconditional within its scope. `read:Product` sees active,
+# undeleted rows; `display:Product` sees every row — which is why a staff action and a condition
+# move together on the families where the narrow reading is filtered at all.
 #
-# `deletedAt: null` is on the `self` reads of `Product` and `Order`, the subjects whose soft delete
+# `deletedAt: null` is on the narrow reads of `Product` and `Order`, the subjects whose soft delete
 # hides a row from the storefront. A payment is a record of money moving and is never withdrawn from view, so it carries
 # no such column and no such condition; a rule naming a column the table lacks is a query that
 # throws rather than one that narrows.
@@ -130,78 +144,67 @@ scopes:
 # that is absent as well as one that is set to nothing, which is what an "unset to restore" write
 # leaves behind.
 
-# The keys themselves.
+# The rules themselves.
 #
-# `subject` is the CASL subject type the key authorises — the concrete thing a rule is about. The
-# key's own first segment is the resource FAMILY, which is plural and matches the module folder;
-# the subject is the singular type. They differ on purpose: `orders.any.read` is a permission,
-# `Order` is a thing.
+# `subject` is the CASL subject type — the concrete thing a rule is about, singular. A module's
+# folder name is plural; the two differ on purpose: `display:Order` is a permission, `Order` is a
+# thing.
 #
-# Modules absent from this list have no keys, and that is a decision rather than an omission:
+# Modules absent from this list have no rules, and that is a decision rather than an omission:
 # `wishlist` and `account` are *your own things*. What you may do with them follows from being
-# signed in, not from a role, and giving them keys would invite a role that grants access to
-# someone else's basket. `cart` is nearly the same — its exceptions are `cart.self.update` and
-# `cart.self.checkout` below: whether the account shops at all (staff and administrators do not),
-# and a fact about the ACCOUNT (has this address been proven?) rather than about the basket's
-# contents, which stay keyless.
-keys:
+# signed in, not from a role, and giving them rules would invite a role that grants access to
+# someone else's basket. `cart` is nearly the same — its exceptions are `update:Cart` and
+# `checkout:Cart` below: whether the account shops at all, and a fact about the ACCOUNT (has this
+# address been proven?) rather than about the basket's contents, which stay ruleless.
+rules:
     # -- products ------------------------------------------------------------------------------
-    - key: products.self.read
-      module: products
+    - action: read
       subject: Product
-      action: read
+      module: products
       scope: tenant
       description: Read active, undeleted products — the storefront's own view.
       conditions:
           active: true
           deletedAt: null
-    - key: products.any.read
-      module: products
+    - action: display
       subject: Product
-      action: read
+      module: products
       scope: tenant
       description: Read every product regardless of publish state — what staff need to see a draft.
-    - key: products.any.create
-      module: products
+    - action: create
       subject: Product
-      action: create
+      module: products
       scope: tenant
       description: Add a product to the catalogue.
-    - key: products.any.update
-      module: products
+    - action: update
       subject: Product
-      action: update
+      module: products
       scope: tenant
       description: Change a product, including its price and its published state.
-    - key: products.any.delete
-      module: products
+    - action: delete
       subject: Product
-      action: delete
+      module: products
       scope: tenant
       description: Remove a product. Separate from update because the blast radius is.
 
     # -- cart ----------------------------------------------------------------------------------
-    # `cart` otherwise declares no keys — see the note above on `keys` — because a basket is your
-    # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
-    # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
-    # must not be able to place an order — and a fact about the account belongs on a key, not a
-    # route mount. `cart.self.update` is the coarser fact: whether this account shops at all, and
+    # A basket is your own thing, so `cart` otherwise declares no rules. This exception is not
+    # about the basket's CONTENTS (still ruleless: add, remove, set quantity) but about spending
+    # it, which is a fact about the ACCOUNT — an unproven address must not be able to place an
+    # order — and a fact about the account belongs on a rule, not a route mount. `update:Cart` is the coarser fact: whether this account shops at all, and
     # every signed-in account does, staff included (the audience roles in
     # `shared/authorization-roles.yaml`).
-    # `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
+    # `checkout`, not `create` on `Order`: `create:Order` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
-    # indistinguishable once packed for the browser. `self` because this is the one key that is
-    # genuinely about the caller's own basket — see docs/theory/authorization.md.
-    - key: cart.self.update
-      module: cart
+    # indistinguishable once packed for the browser. Docs: docs/theory/authorization.md.
+    - action: update
       subject: Cart
-      action: update
+      module: cart
       scope: tenant
       description: Use a basket at all — add to it, change it, reorder into it. Held by every signed-in account.
-    - key: cart.self.checkout
-      module: cart
+    - action: checkout
       subject: Cart
-      action: checkout
+      module: cart
       scope: tenant
       description: Spend the caller's own basket — place an order and start paying for it.
       # The 403 keeps its specific wording rather than `requirePermission`'s generic one: a
@@ -210,54 +213,47 @@ keys:
       deniedCode: EMAIL_NOT_VERIFIED
 
     # -- orders --------------------------------------------------------------------------------
-    - key: orders.self.read
-      module: orders
+    - action: read
       subject: Order
-      action: read
+      module: orders
       scope: tenant
       description: Read the caller's own orders.
       conditions:
           userId: $caller.id
           deletedAt: null
-    - key: orders.any.read
-      module: orders
+    - action: display
       subject: Order
-      action: read
+      module: orders
       scope: tenant
       description: Read every order in the shop — the support desk and the warehouse, who help with or pack an order that is never their own.
-    - key: orders.any.create
-      module: orders
+    - action: create
       subject: Order
-      action: create
+      module: orders
       scope: tenant
       description: Raise an order on someone else's behalf. Checking out is not this key.
-    - key: orders.any.update
-      module: orders
+    - action: update
       subject: Order
-      action: update
+      module: orders
       scope: tenant
       description: Move an order along its status path.
-    - key: orders.any.delete
-      module: orders
+    - action: delete
       subject: Order
-      action: delete
+      module: orders
       scope: tenant
       description: Remove an order.
-    - key: orders.any.override
-      module: orders
+    - action: override
       subject: Order
-      action: override
+      module: orders
       scope: tenant
       description: Skip the normal lifecycle gate to force a delivery move, or correct a status by hand, with a recorded reason.
       # An override exists precisely to bypass the ordinary rule — the same reasoning
-      # payments.any.update carries this tier for: a stolen access token proves nothing about how
+      # create:Refund carries this tier for: a stolen access token proves nothing about how
       # recently its holder typed their password, and this key's damage (a wrong parcel/status
       # written on the record) is not undone by another ordinary request.
       stepUp: critical
-    - key: orders.any.export
-      module: orders
+    - action: export
       subject: Order
-      action: export
+      module: orders
       scope: tenant
       description: Take every order out of the shop as a CSV file, customer emails included. An API key cannot use it, since its step-up needs a person.
       # Exporting everyone's orders cannot need less proof than exporting your own data does
@@ -265,162 +261,142 @@ keys:
       stepUp: sensitive
 
     # -- payments ------------------------------------------------------------------------------
-    - key: payments.self.read
-      module: payments
+    - action: read
       subject: Payment
-      action: read
+      module: payments
       scope: tenant
       description: Read the caller's own payments.
       conditions:
           userId: $caller.id
-    - key: payments.any.read
-      module: payments
+    - action: display
       subject: Payment
-      action: read
+      module: payments
       scope: tenant
       description: Read every payment in the shop — the support desk helping with an order that is never their own, and the shop manager seeing the money behind the orders they handle.
-    - key: payments.any.create
-      module: payments
+    - action: create
       subject: Payment
-      action: create
+      module: payments
       scope: tenant
       description: Record a payment that arrived outside the provider — cash, a transfer, by hand.
       # Money the shop is now on the hook to have actually received. Same tier as
-      # payments.any.update: the admin's word is the only proof, and a stolen access token proves
+      # create:Refund: the admin's word is the only proof, and a stolen access token proves
       # nothing about how recently its holder typed their password.
       stepUp: critical
-    - key: payments.any.update
+    - action: create
+      subject: Refund
       module: payments
-      subject: Payment
-      action: update
       scope: tenant
-      description: Reconcile a payment against the provider, or return the money.
+      description: Return money to the payer — refund a payment, whole or in part.
       # Money leaving the shop. The one action here whose damage cannot be undone by another
       # request.
       stepUp: critical
 
     # -- inventory -----------------------------------------------------------------------------
-    - key: inventory.any.read
-      module: inventory
+    - action: read
       subject: StockLevel
-      action: read
+      module: inventory
       scope: tenant
       description: Read stock levels and the movements behind them.
-    - key: inventory.any.create
-      module: inventory
+    - action: create
       subject: StockMovement
-      action: create
+      module: inventory
       scope: tenant
       description: Record a receipt or an adjustment, or set a product's preorder limit. Stock never moves without one.
     # Not a CRUD verb — see `actions:` above. Guards the one route that clears expired reservation
     # holds on a schedule; granted to no preset role but `admin`, who holds it by name like every
     # other key. See `inventory/routes.ts`.
-    - key: inventory.any.sweep
-      module: inventory
+    - action: sweep
       subject: StockLevel
-      action: sweep
+      module: inventory
       scope: tenant
       description: Clear expired reservation holds. The expiry tick, not a role's own tool.
 
     # -- delivery ------------------------------------------------------------------------------
-    - key: delivery.any.update
-      module: delivery
+    - action: update
       subject: Shipment
-      action: update
+      module: delivery
       scope: tenant
       description: Cut a shipment from a fulfillment order, record its arrival, correct its tracking code, and hold or release a fulfillment order.
-    # Narrower than `orders.any.update` on purpose: the warehouse may begin work on a paid order
+    # Narrower than `update:Order` on purpose: the warehouse may begin work on a paid order
     # without being handed the run of the order record. `paid → processing` is `system`-only in
-    # `orders/domain/lifecycle.ts` — this key gates `POST /delivery/order/{id}/start`, the door
+    # `orders/domain/lifecycle.ts` — this rule gates `POST /delivery/order/{id}/start`, the door
     # that calls `orders/services/status.ts`'s `markProcessing`.
-    - key: delivery.any.start
-      module: delivery
+    - action: start
       subject: Shipment
-      action: start
+      module: delivery
       scope: tenant
       description: Begin fulfilling a paid order — the move into `processing`, before any parcel exists to record.
 
     # -- returns -------------------------------------------------------------------------------
-    # There is no `returns.self.*` key. A customer making or reading their own return needs only to
+    # There is no own-rows rule on `Return`. A customer making or reading their own return needs only to
     # be signed in — the same rule an order's own cancel follows — and "own" is decided by who owns
     # the ORDER (a return is keyed by `orderId`, never by `userId`, so erasing the account leaves
     # the record without a personal link).
-    - key: returns.any.read
-      module: returns
+    - action: read
       subject: Return
-      action: read
+      module: returns
       scope: tenant
       description: Read every return in the shop — the queue staff work through.
-    - key: returns.any.update
-      module: returns
+    - action: update
       subject: Return
-      action: update
+      module: returns
       scope: tenant
       description: Decide a return request — approve it, or decline it with a reason.
-    # Narrower than `returns.any.update` on purpose, the way `delivery.any.start` is narrower than
-    # `orders.any.update`: the warehouse holds the parcel and may say it arrived, without being
+    # Narrower than `update:Return` on purpose, the way `start:Shipment` is narrower than
+    # `update:Order`: the warehouse holds the parcel and may say it arrived, without being
     # handed the decision of whether the return was owed.
-    - key: returns.any.receive
-      module: returns
+    - action: receive
       subject: Return
-      action: receive
+      module: returns
       scope: tenant
       description: Record that the returned goods arrived — puts the units back on sale and returns the customer's money.
-      # Receiving pays the customer back. Same tier as `payments.any.update`: a stolen access token
+      # Receiving pays the customer back. Same tier as `create:Refund`: a stolen access token
       # proves nothing about how recently its holder typed their password.
       stepUp: critical
 
     # -- feedback ------------------------------------------------------------------------------
-    - key: feedback.any.read
-      module: feedback
+    - action: read
       subject: Feedback
-      action: read
+      module: feedback
       scope: tenant
       description: Read messages sent through the contact form.
-    - key: feedback.any.update
-      module: feedback
+    - action: update
       subject: Feedback
-      action: update
+      module: feedback
       scope: tenant
       description: Change a message's handling status.
-    - key: feedback.any.delete
-      module: feedback
+    - action: delete
       subject: Feedback
-      action: delete
+      module: feedback
       scope: tenant
       description: Remove a message.
 
     # -- locales -------------------------------------------------------------------------------
-    - key: locales.self.read
-      module: locales
+    - action: read
       subject: Locale
-      action: read
+      module: locales
       scope: tenant
       description: Read active locales and their dictionaries — the storefront's own view.
       conditions:
           active: true
-    - key: locales.any.read
-      module: locales
+    - action: display
       subject: Locale
-      action: read
+      module: locales
       scope: tenant
       description: Read every locale regardless of publish state — what staff need to see a draft language.
-    - key: locales.any.create
-      module: locales
+    - action: create
       subject: Locale
-      action: create
+      module: locales
       scope: tenant
       description: Add a locale.
-    - key: locales.any.update
-      module: locales
+    - action: update
       subject: Locale
-      action: update
+      module: locales
       scope: tenant
       description: Change a locale or one of its entries.
-    - key: locales.any.delete
-      module: locales
+    - action: delete
       subject: Locale
-      action: delete
+      module: locales
       scope: tenant
       description: Remove a locale or one of its entries.
 
@@ -434,53 +410,46 @@ keys:
     # is `kernel/translation.ts`'s port, which every module writing translatable content reaches
     # regardless of whether `locales` is installed to answer it. Deleting `locales` deletes its
     # own module and keys; it must not also delete the ability to gate a rewording on this key.
-    - key: translations.any.read
-      module: core
+    - action: read
       subject: Translation
-      action: read
+      module: core
       scope: tenant
       description: Read an entity's translated fields, in the admin shape (every locale at once).
-    - key: translations.any.update
-      module: core
+    - action: update
       subject: Translation
-      action: update
+      module: core
       scope: tenant
       description: >-
           Write an entity's translated fields. Never grants a write on the entity itself — that is
-          `products.any.update`, and the two are stacked on the product write route precisely so
+          `update:Product`, and the two are stacked on the product write route precisely so
           one alone cannot turn a rewording into a repricing.
 
     # -- users ---------------------------------------------------------------------------------
-    - key: users.any.read
-      module: users
+    - action: read
       subject: User
-      action: read
+      module: users
       scope: tenant
       description: Read other people's accounts. Reading your own is `account`, not a key.
-    - key: users.any.create
-      module: users
+    - action: create
       subject: User
-      action: create
+      module: users
       scope: tenant
       description: Create an account for someone else.
-    - key: users.any.update
-      module: users
+    - action: update
       subject: User
-      action: update
+      module: users
       scope: tenant
       description: >-
           Change someone else's profile: username, image, locale, phone, website, and the role
           (within the keys the caller holds). Never a credential, and never `active`.
-    - key: users.any.ban
-      module: users
+    - action: ban
       subject: User
-      action: ban
+      module: users
       scope: tenant
       description: Deactivate someone else's account, or lift the deactivation.
-    - key: users.any.delete
-      module: users
+    - action: delete
       subject: User
-      action: delete
+      module: users
       scope: tenant
       description: Erase someone else's account.
       # Irreversible and about somebody else. A stolen session should not be able to reach it on
@@ -490,63 +459,55 @@ keys:
     # -- roles ---------------------------------------------------------------------------------
     # The one permission that protects PEOPLE. Whoever holds it may hand a staff role to an account
     # or take it away, and may edit, ban or erase an account that already holds one. Everyone else
-    # with a users key changes customers only, so a moderator who may erase accounts cannot erase
-    # the administrator's. A role is a bundle of keys and nothing else: there is no level to rank.
-    - key: roles.any.assign
-      module: access
+    # with a users rule changes customers only, so a moderator who may erase accounts cannot erase
+    # the administrator's. A role is a bundle of permission sets and nothing else: there is no level to rank.
+    - action: assign
       subject: Role
-      action: assign
+      module: access
       scope: tenant
       description: Hand a staff role to an account or take it away, and change an account that holds one — edit, ban, erase. Held by administrators.
 
     # -- audit-logs ----------------------------------------------------------------------------
-    - key: audit.any.read
-      module: audit-logs
+    - action: read
       subject: AuditLog
-      action: read
+      module: audit-logs
       scope: tenant
       description: Read the audit trail. There is no write key — nothing edits an audit row.
 
     # -- webhooks --------------------------------------------------------------------------------
-    - key: webhooks.any.read
-      module: webhooks
+    - action: read
       subject: WebhookSubscription
-      action: read
+      module: webhooks
       scope: tenant
       description: Read this shop's webhook subscriptions, delivery log and event catalogue.
-    - key: webhooks.any.create
-      module: webhooks
+    - action: create
       subject: WebhookSubscription
-      action: create
+      module: webhooks
       scope: tenant
       description: Add a subscription, minting its first secret.
-    - key: webhooks.any.update
-      module: webhooks
+    - action: update
       subject: WebhookSubscription
-      action: update
+      module: webhooks
       scope: tenant
       description: >-
           Change a subscription, rotate or drop a secret from its ring, and replay a delivery. The
           blast radius of all three is the same — a party this shop did not intend gets signed
           deliveries — so they share one key.
-    - key: webhooks.any.delete
-      module: webhooks
+    - action: delete
       subject: WebhookSubscription
-      action: delete
+      module: webhooks
       scope: tenant
       description: Remove a subscription. Separate from update because the blast radius is.
 
     # -- api-keys --------------------------------------------------------------------------------
-    - key: apikeys.any.read
-      module: api-keys
+    - action: read
       subject: ApiKey
-      action: read
+      module: api-keys
       scope: tenant
       description: List this shop's machine-to-machine credentials. Never returns a key's secret.
-    - key: apikeys.any.create
-      module: api-keys
+    - action: create
       subject: ApiKey
-      action: create
+      module: api-keys
       scope: tenant
       description: >-
           Mint a credential. Carries its own floor on top of this key: a credential can never hold
@@ -555,10 +516,9 @@ keys:
       # could mint one would turn ten minutes of access into a long-lived key. GitHub's sudo mode
       # asks for the same before creating a token.
       stepUp: critical
-    - key: apikeys.any.delete
-      module: api-keys
+    - action: delete
       subject: ApiKey
-      action: delete
+      module: api-keys
       scope: tenant
       description: Revoke a credential. Soft and immediate; the row stays readable.
 
@@ -566,105 +526,357 @@ keys:
     # The only platform-scope module in the boilerplate, and it is what makes the invariant
     # testable here rather than only in a downstream project: health, metrics and the operational
     # audit are about the INSTALLATION, not about one shop's content.
-    - key: platform.observability.any.read
-      module: observability
+    - action: read
       subject: ObservabilitySnapshot
-      action: read
+      module: observability
       scope: platform
       description: Read health, metrics overview and the operational audit.
 
     # -- examples ------------------------------------------------------------------------------
-    # `self` is the caller's own rows (the condition rides into the query), `any` is everyone's.
-    # An admin holds both; delete this file with the module and its keys leave with it.
-    - key: examples.self.read
-      module: example
+    # The plain actions are the caller's own rows (the condition rides into the query). `display`
+    # and `admin` are the staff doors: every row, whoever owns it. An admin holds both; delete this
+    # file with the module and its rules and sets leave with it.
+    - action: read
       subject: Example
-      action: read
+      module: example
       scope: tenant
       description: Read the caller's own examples, drafts included.
       conditions:
           userId: $caller.id
-    - key: examples.self.create
-      module: example
+    - action: create
       subject: Example
-      action: create
+      module: example
       scope: tenant
       description: Write a new example of one's own.
-    - key: examples.self.update
-      module: example
+    - action: update
       subject: Example
-      action: update
+      module: example
       scope: tenant
       description: Edit the caller's own examples, and move them through draft, published and archived.
       conditions:
           userId: $caller.id
-    - key: examples.self.delete
-      module: example
+    - action: delete
       subject: Example
-      action: delete
+      module: example
       scope: tenant
       description: Remove the caller's own examples.
       conditions:
           userId: $caller.id
-    - key: examples.any.read
-      module: example
+    - action: display
       subject: Example
-      action: read
+      module: example
       scope: tenant
       description: Read every example, whoever owns it.
-    - key: examples.any.update
-      module: example
+    - action: admin
       subject: Example
-      action: update
-      scope: tenant
-      description: Edit any example, whoever owns it.
-    - key: examples.any.delete
       module: example
-      subject: Example
-      action: delete
       scope: tenant
-      description: Remove any example, whoever owns it.
+      description: Edit or remove any example, whoever owns it.
 
     # -- notifications -------------------------------------------------------------------------
-    # Only `self`: an inbox is somebody's own, and no role reads or clears another person's. The
-    # service filters every query by the caller's id, so there is no `any` breadth to declare.
+    # Own rows only: an inbox is somebody's own, and no role reads or clears another person's. The
+    # service filters every query by the caller's id, so there is no staff door to declare.
     # Held by every role that is a signed-in account — a staff member is a person with an inbox
     # too, even though staff own no basket.
-    - key: notifications.self.read
-      module: notifications
+    - action: read
       subject: Notification
-      action: read
+      module: notifications
       scope: tenant
       description: Read the caller's own notifications, follow them live, and mark them read.
       conditions:
           userId: $caller.id
-    - key: notifications.self.delete
-      module: notifications
+    - action: delete
       subject: Notification
-      action: delete
+      module: notifications
       scope: tenant
       description: Delete the caller's own notifications, one or all at once.
       conditions:
           userId: $caller.id
 
     # -- stats ---------------------------------------------------------------------------------
-    - key: stats.any.read
-      module: stats
+    - action: read
       subject: Stats
-      action: read
+      module: stats
       scope: tenant
       description: Read the shop's sales numbers — revenue, orders, products, customers, the payments mix.
 
-# WHY THERE IS NO WILDCARD OF ANY KIND ANY MORE
+# The permission sets. A set is the unit a role lists, so a role never names a rule directly.
+# Each module declares its own beside its rules, and a new module's sets are listed in
+# `authorization-roles.yaml` by `admin`.
+sets:
+    - name: ProductStorefront
+      module: products
+      description: What the storefront shows anybody, which is active and undeleted products.
+      rules:
+          - read:Product
+    - name: ProductDisplay
+      module: products
+      description: Every product, drafts and removed ones included.
+      rules:
+          - display:Product
+    - name: ProductManagement
+      module: products
+      description: Add, change and remove products.
+      rules:
+          - create:Product
+          - update:Product
+          - delete:Product
+
+    - name: CartShopping
+      module: cart
+      description: Use a basket at all.
+      rules:
+          - update:Cart
+    - name: CartCheckout
+      module: cart
+      description: Spend the basket, which places an order and starts paying.
+      rules:
+          - checkout:Cart
+
+    - name: OrderOwn
+      module: orders
+      description: Read one's own orders.
+      rules:
+          - read:Order
+    - name: OrderDisplay
+      module: orders
+      description: Read every order in the shop.
+      rules:
+          - display:Order
+    - name: OrderCreation
+      module: orders
+      description: Raise an order on someone else's behalf.
+      rules:
+          - create:Order
+    - name: OrderEditing
+      module: orders
+      description: Move an order along its status path.
+      rules:
+          - update:Order
+    - name: OrderRemoval
+      module: orders
+      description: Remove an order.
+      rules:
+          - delete:Order
+    - name: OrderOverride
+      module: orders
+      description: Force a status or delivery move past the lifecycle gate.
+      rules:
+          - override:Order
+    - name: OrderExport
+      module: orders
+      description: Take every order out as a file.
+      rules:
+          - export:Order
+
+    - name: PaymentOwn
+      module: payments
+      description: Read one's own payments.
+      rules:
+          - read:Payment
+    - name: PaymentDisplay
+      module: payments
+      description: Read every payment in the shop.
+      rules:
+          - display:Payment
+    - name: PaymentRecording
+      module: payments
+      description: Record a payment that arrived outside the provider.
+      rules:
+          - create:Payment
+    - name: PaymentRefunding
+      module: payments
+      description: Return money to the payer.
+      rules:
+          - create:Refund
+
+    - name: InventoryDisplay
+      module: inventory
+      description: Read stock levels and the movements behind them.
+      rules:
+          - read:StockLevel
+    - name: InventoryManagement
+      module: inventory
+      description: Record a receipt or an adjustment.
+      rules:
+          - create:StockMovement
+    - name: InventorySweep
+      module: inventory
+      description: Clear expired reservation holds.
+      rules:
+          - sweep:StockLevel
+
+    - name: DeliveryManagement
+      module: delivery
+      description: Cut, correct and record shipments; hold or release a fulfillment order.
+      rules:
+          - update:Shipment
+    - name: DeliveryStart
+      module: delivery
+      description: Begin fulfilling a paid order.
+      rules:
+          - start:Shipment
+
+    - name: ReturnDisplay
+      module: returns
+      description: Read every return.
+      rules:
+          - read:Return
+    - name: ReturnManagement
+      module: returns
+      description: Approve or decline a return request.
+      rules:
+          - update:Return
+    - name: ReturnReceiving
+      module: returns
+      description: Record that returned goods arrived.
+      rules:
+          - receive:Return
+
+    - name: FeedbackDisplay
+      module: feedback
+      description: Read contact-form messages.
+      rules:
+          - read:Feedback
+    - name: FeedbackManagement
+      module: feedback
+      description: Change a message's handling status, or remove it.
+      rules:
+          - update:Feedback
+          - delete:Feedback
+
+    - name: LocaleStorefront
+      module: locales
+      description: Active locales and their dictionaries.
+      rules:
+          - read:Locale
+    - name: LocaleDisplay
+      module: locales
+      description: Every locale, drafts included.
+      rules:
+          - display:Locale
+    - name: LocaleManagement
+      module: locales
+      description: Add, change and remove locales and their entries.
+      rules:
+          - create:Locale
+          - update:Locale
+          - delete:Locale
+
+    - name: TranslationDisplay
+      module: core
+      description: Read an entity's translated fields in the admin shape.
+      rules:
+          - read:Translation
+    - name: TranslationManagement
+      module: core
+      description: Write an entity's translated fields.
+      rules:
+          - update:Translation
+
+    - name: UserDisplay
+      module: users
+      description: Read other people's accounts.
+      rules:
+          - read:User
+    - name: UserCreation
+      module: users
+      description: Create an account for someone else.
+      rules:
+          - create:User
+    - name: UserEditing
+      module: users
+      description: Change someone else's profile.
+      rules:
+          - update:User
+    - name: UserBanning
+      module: users
+      description: Deactivate an account, or lift it.
+      rules:
+          - ban:User
+    - name: UserErasure
+      module: users
+      description: Erase someone else's account.
+      rules:
+          - delete:User
+
+    - name: RoleManagement
+      module: access
+      description: Hand a staff role out or take it away, and change an account that holds one.
+      rules:
+          - assign:Role
+
+    - name: AuditDisplay
+      module: audit-logs
+      description: Read the audit trail.
+      rules:
+          - read:AuditLog
+
+    - name: WebhookDisplay
+      module: webhooks
+      description: Read subscriptions, deliveries and the event catalogue.
+      rules:
+          - read:WebhookSubscription
+    - name: WebhookManagement
+      module: webhooks
+      description: Add, change, replay and remove subscriptions.
+      rules:
+          - create:WebhookSubscription
+          - update:WebhookSubscription
+          - delete:WebhookSubscription
+
+    - name: ApiKeyDisplay
+      module: api-keys
+      description: List the shop's credentials.
+      rules:
+          - read:ApiKey
+    - name: ApiKeyManagement
+      module: api-keys
+      description: Mint and revoke credentials.
+      rules:
+          - create:ApiKey
+          - delete:ApiKey
+
+    - name: ObservabilityDisplay
+      module: observability
+      description: Read health, metrics and the operational audit.
+      rules:
+          - read:ObservabilitySnapshot
+
+    - name: ExampleOwn
+      module: example
+      description: Read, write, edit and remove one's own examples.
+      rules:
+          - read:Example
+          - create:Example
+          - update:Example
+          - delete:Example
+    - name: ExampleManagement
+      module: example
+      description: Read, edit and remove every example, whoever owns it.
+      rules:
+          - display:Example
+          - admin:Example
+
+    - name: NotificationOwn
+      module: notifications
+      description: Read and clear one's own notifications.
+      rules:
+          - read:Notification
+          - delete:Notification
+
+    - name: StatsDisplay
+      module: stats
+      description: Read the shop's sales numbers.
+      rules:
+          - read:Stats
+
+# WHY THERE IS NO WILDCARD OF ANY KIND
 #
-# There is no per-family `manage` key. One that expanded to every action its family declared would
-# make the family's own write keys reachable through a route asking only for the wide read, and
-# would make breadth something a wildcard implied rather than something a role stated. Breadth is
-# written on the keys themselves.
+# There is no `manage` action and no `all`. One that expanded to every action a subject declares
+# would make a subject's own write rules reachable through a route asking only for the wide read.
 #
-# `all.manage` — the SCOPE wildcard, `admin`'s alone — is worth naming as the one remaining case:
-# the same argument applies one level up — "a key no module declares grants nothing" is only true
-# of the wildcard as long as nothing reads it as a shortcut instead. `admin` holds every declared
-# tenant key BY NAME, spelled out in `authorization-roles.yaml`, the same way every other role
-# does. A new key that should reach `admin` is a line in that file, not an assumption the wildcard
-# already covers it — the property this whole file exists for, applied to `admin` too.
+# `admin` is the one role that holds everything, and it does so BY NAME: it lists every set in
+# `authorization-roles.yaml`, the same way every other role does. A new set that should reach
+# `admin` is a line in that file, not an assumption a wildcard already covers it — the property
+# this whole file exists for, applied to `admin` too.

@@ -45,7 +45,7 @@ export interface ShipInput {
     lines?: ProductQuantity[] | undefined;
     /** The carrier's handle; required when the order's shipping method is tracked. */
     trackingCode?: string | undefined;
-    /** Skip the `start` step: ship from `paid`. Needs `orders.any.override` and a `reason`. */
+    /** Skip the `start` step: ship from `paid`. Needs `override:Order` and a `reason`. */
     forced?: boolean | undefined;
     /** Why the normal door did not apply; recorded on the order's override history. */
     reason?: string | undefined;

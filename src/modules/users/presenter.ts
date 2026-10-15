@@ -9,7 +9,7 @@
 import type { Caller, User, UserActions } from '@types';
 import { carryVersion } from '@infrastructure/persistence/versioning';
 import { decryptPii } from '@infrastructure/security/pii-encryption';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { rolesOf, rolesOfMany, staffHoldersAmong } from '@modules/access';
 import { DEPLOYMENT_TENANT_ID } from '@kernel/access/tenant';
 import { phoneAad, type UserDocument, type UserWire } from './model';
@@ -68,7 +68,7 @@ export const presentUser = (document: UserWire, role: string | null, actions?: U
 /**
  * What `caller` may do to one account: each route's key AND the protection of staff accounts. The
  * caller's own account is judged by the keys alone; one that holds a staff role is reachable only
- * with `roles.any.assign`.
+ * with `assign:Role`.
  *
  * @param ownerId - the account being described
  * @param ownerHoldsRole - whether it holds a staff role, in the shop or over the installation
@@ -79,13 +79,13 @@ export const userActionsFor = (
     ownerHoldsRole: boolean,
     caller: Caller
 ): UserActions => {
-    const held = heldKeys(caller);
-    const reachable = caller.id === ownerId || !ownerHoldsRole || held.has('roles.any.assign');
+    const held = heldRules(caller);
+    const reachable = caller.id === ownerId || !ownerHoldsRole || held.has('assign:Role');
 
     return {
-        update: reachable && held.has('users.any.update'),
-        ban: reachable && held.has('users.any.ban'),
-        delete: reachable && held.has('users.any.delete')
+        update: reachable && held.has('update:User'),
+        ban: reachable && held.has('ban:User'),
+        delete: reachable && held.has('delete:User')
     };
 };
 

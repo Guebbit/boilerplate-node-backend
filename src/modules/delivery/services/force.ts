@@ -6,12 +6,12 @@
 
 import { t } from '@infrastructure/i18n';
 import { fieldError, generateReject, type ResponseReject } from '@infrastructure/http/response';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import type { CallerContext } from '@types';
 import { ERROR_CODES } from '@api/error-codes';
 
 /**
- * A `forced: true` caller must hold `orders.any.override` (the route's own `delivery.any.update`
+ * A `forced: true` caller must hold `override:Order` (the route's own `update:Shipment`
  * gate is not enough — forcing is a second, stricter permission) and must give a `reason`.
  * @param context - the caller
  * @param forced - the request body's own flag
@@ -24,7 +24,7 @@ export const refuseUnearnedForce = (
     reason: string | undefined
 ): ResponseReject | undefined => {
     if (!forced) return undefined;
-    if (!holdsKey(context.caller, 'orders.any.override'))
+    if (!holds(context.caller, 'override', 'Order'))
         return generateReject(403, [t('generic.error-forbidden')]);
     if (!reason)
         return generateReject(422, [

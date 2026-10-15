@@ -1,6 +1,6 @@
 /**
  * @module
- * The `/stats` router: reads only, all behind `stats.any.read`, none of them cached — the answer is
+ * The `/stats` router: reads only, all behind `read:Stats`, none of them cached — the answer is
  * the shop's money. A session, not an API key: this is a dashboard, and a credential reaching a
  * sales figure is a decision nobody has made.
  *
@@ -24,8 +24,8 @@ import {
 /** Express router for the sales numbers. */
 export const router = Router();
 
-// `stats.any.read` has no narrower sibling, so the plain guard is exact.
-router.use(getAuth, isAuth, requirePermission('stats.any.read'));
+// `read:Stats` has no narrower sibling, so the plain guard is exact.
+router.use(getAuth, isAuth, requirePermission('read', 'Stats'));
 
 // `privateNoCache`: the browser may keep its own copy, revalidated every time; never a shared cache.
 router.get('/sales', privateNoCache, getSalesStats);

@@ -39,13 +39,13 @@ Do not restate the routes or the fields; they live in \`src/modules/${names.keba
 ## The pipeline
 
 Scaffolded from the core of the \`example\` module ([the module template](../theory/modules.md#the-module-template)): every route sits behind one gate and one
-permission key.
+permission rule.
 
 \`\`\`mermaid
 %%{init: {'flowchart': {'nodeSpacing': 30, 'rankSpacing': 55}}}%%
 flowchart LR
     A["admin"] --> G["getAuth + isAuthOrCredential"]
-    G --> K["requirePermission<br/><i>${names.family}.any.read · create · update · delete</i>"]
+    G --> K["requirePermission<br/><i>read · create · update · delete on ${names.entity}</i>"]
     K --> C["controller"]
     C --> S["service${options.audit ? '<br/><i>records an audit row</i>' : ''}"]
     S --> R["repository"]

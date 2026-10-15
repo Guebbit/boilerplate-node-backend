@@ -39,7 +39,7 @@ describe('an api key in use', () => {
         const minted = await mint(
             {
                 name: 'ci',
-                permissions: ['apikeys.any.read'],
+                permissions: ['read:ApiKey'],
                 expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
             },
             context

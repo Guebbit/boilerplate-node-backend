@@ -1,8 +1,14 @@
-keys:
+rules:
     # -- stats ---------------------------------------------------------------------------------
-    - key: stats.any.read
-      module: stats
+    - action: read
       subject: Stats
-      action: read
+      module: stats
       scope: tenant
       description: Read the shop's sales numbers — revenue, orders, products, customers, the payments mix.
+
+sets:
+    - name: StatsDisplay
+      module: stats
+      description: Read the shop's sales numbers.
+      rules:
+          - read:Stats

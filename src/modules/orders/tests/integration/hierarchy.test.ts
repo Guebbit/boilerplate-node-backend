@@ -35,7 +35,7 @@ const orderOf = async (role: string, status: OrderStatus = OrderStatus.pending) 
 const statusOf = (id: string) => orderRepository.findById(id).then((order) => order?.status);
 
 describe('cancelById — the write’s own scope', () => {
-    // A warehouse and a support agent both hold `orders.any.read`: that is a read, not a cancel.
+    // A warehouse and a support agent both hold `display:Order`: that is a read, not a cancel.
     it.each(['warehouse', 'support'])(
         'refuses a %s a customer’s pending order, which it can read',
         async (role) => {
@@ -84,7 +84,7 @@ describe('cancelById — the write’s own scope', () => {
     });
 
     it.each(['moderator', 'manager', 'admin'])(
-        'lets a %s, holding orders.any.update, cancel a customer’s order',
+        'lets a %s, holding update:Order, cancel a customer’s order',
         async (role) => {
             const order = await orderOf('customer');
 

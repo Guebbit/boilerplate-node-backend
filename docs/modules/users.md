@@ -85,11 +85,11 @@ shared factory.
 **What an edit needs, beyond the route's key.** Three rules sit in `services/update.ts` and
 `services/remove.ts`, asked before anything is written:
 
-| Rule                           | Refusal                        | Why                                                                     |
-| ------------------------------ | ------------------------------ | ----------------------------------------------------------------------- |
-| the field's own key            | `403 FORBIDDEN`                | `active` needs `users.any.ban`, a different key from `users.any.update` |
-| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED` | [R1](../theory/authorization.md#protecting-people)                      |
-| handing a role out             | `409` (the grant is refused)   | only a holder of `roles.any.assign` hands out a staff role              |
+| Rule                           | Refusal                        | Why                                                           |
+| ------------------------------ | ------------------------------ | ------------------------------------------------------------- |
+| the field's own key            | `403 FORBIDDEN`                | `active` needs `ban:User`, a different key from `update:User` |
+| the account holds a staff role | `403 ROLE_MANAGEMENT_REQUIRED` | [R1](../theory/authorization.md#protecting-people)            |
+| handing a role out             | `409` (the grant is refused)   | only a holder of `assign:Role` hands out a staff role         |
 
 A key is asked only when the field **changes**: a `PUT` resends `active` and `role` on every save,
 and resending what the account already has is no ban and no role change (`role: null` is a plain

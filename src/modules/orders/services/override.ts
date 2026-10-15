@@ -59,7 +59,7 @@ const applyOverride = (
     context: CallerContext
 ): Promise<OrderDocument | null> => {
     // `caller.id` is optional on the type only because a stranger genuinely has none — this
-    // function is never reached without `orders.any.override`, which no stranger holds. Rejected,
+    // function is never reached without `override:Order`, which no stranger holds. Rejected,
     // not resolved to `null`: `null` here means "lost a race", which this is not, and
     // `overrideStatus` would otherwise report a genuinely missing actor as a 409 conflict rather
     // than the invariant violation it actually is.
@@ -67,7 +67,7 @@ const applyOverride = (
     if (!actorUserId)
         return Promise.reject(
             new Error(
-                '[orders] applyOverride reached with no caller id — orders.any.override should be unreachable for a stranger'
+                '[orders] applyOverride reached with no caller id — override:Order should be unreachable for a stranger'
             )
         );
 
@@ -154,7 +154,7 @@ const awaitingStock = (): ResponseReject =>
  * @param to - the status to move it to; refused unless `canOverrideTo` allows it from wherever the
  *   order actually stands
  * @param reason - required, never empty — the schema layer already refused an empty one
- * @param context - the override holder; the route's `requirePermission('orders.any.override')`
+ * @param context - the override holder; the route's `requirePermission('override', 'Order')`
  *   has already confirmed they hold the key
  */
 export const overrideStatus = (

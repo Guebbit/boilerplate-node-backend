@@ -12,7 +12,7 @@
  * ROUTE — checking out, changing your own address, ending every session — and those are about the
  * caller's own record, which no permission key names. Where freshness is a property of the ACTION,
  * `shared/authorization-keys.yaml` says so with `stepUp:` and `requirePermission` enforces it:
- * `users.any.delete` and `payments.any.update` are both there, and neither route mounts anything.
+ * `delete:User` and `create:Refund` are both there, and neither route mounts anything.
  * `tests/unit/kernel/step-up.test.ts` covers that path; the sweep below covers this one.
  */
 import type { Router } from 'express';
@@ -89,7 +89,7 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // as disabling a factor.
     'account POST /2fa/backup-codes': `requireFreshAuth(critical)`,
     // Freshness here is a property of the REQUEST, not the route: a plain ship/deliver never
-    // needs it, a `forced: true` one does — the same `orders.any.override` tier the direct
+    // needs it, a `forced: true` one does — the same `override:Order` tier the direct
     // status-override route inherits automatically through `requirePermission`, restated here
     // because the service's own permission check has no way to demand a step-up on its own.
     'delivery POST /fulfillment-orders/:id/shipments': `requireFreshAuthWhen(critical)`,
@@ -98,7 +98,7 @@ const STEP_UP_ROUTES: Record<string, string> = {
     // key's own tier; the buyer's own withdrawal, on the same route, is never prompted.
     'returns POST /': `requireFreshAuthWhen(critical)`,
     // An operator's cancel can keep or refund a paid order's money; a customer's own is never
-    // prompted (the predicate asks `orders.any.update`).
+    // prompted (the predicate asks `update:Order`).
     'orders POST /:id/cancel': `requireFreshAuthWhen(critical)`,
     // Handing a staff role out, or taking one away, widens or narrows a person's powers: the same
     // critical tier minting an API key asks. A write that names no role is never prompted.

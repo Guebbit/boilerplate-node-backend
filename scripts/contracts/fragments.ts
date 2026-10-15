@@ -55,26 +55,35 @@ export const readOpenApiFragment = (file: string): OpenApiFragment =>
 export const readModuleFragment = (modulesRoot: string, module: string): OpenApiFragment =>
     readOpenApiFragment(path.join(modulesRoot, module, 'openapi.yaml'));
 
-/** One key an `authorization.yaml` declares — only the fields the build steps read. */
-export interface AuthorizationKey {
-    key: string;
+/** One rule an `authorization.yaml` declares — only the fields the build steps read. */
+export interface AuthorizationRule {
+    action: string;
     subject: string;
     module: string;
 }
 
+/** One permission set an `authorization.yaml` declares — only the fields the build steps read. */
+export interface AuthorizationSet {
+    name: string;
+    module: string;
+    rules: string[];
+}
+
 /** An `authorization.yaml`, as far as the build steps look. */
 export interface AuthorizationFragment {
-    keys: AuthorizationKey[];
+    rules: AuthorizationRule[];
+    sets: AuthorizationSet[];
 }
 
 /**
  * Read an `authorization.yaml`-shaped file.
  *
  * @param file - the file's path
- * @returns its keys; none when the file is absent
+ * @returns its rules and sets; none when the file is absent, and no sets when it declares none
  */
-export const readAuthorizationFragment = (file: string): AuthorizationFragment =>
-    existsSync(file)
-        ? // `yaml`'s YAML 1.2 loader; the `as` narrows its `any` to the shape every fragment has.
-          (parseYaml(readFileSync(file, 'utf8')) as AuthorizationFragment)
-        : { keys: [] };
+export const readAuthorizationFragment = (file: string): AuthorizationFragment => {
+    if (!existsSync(file)) return { rules: [], sets: [] };
+    // `yaml`'s YAML 1.2 loader; the `as` narrows its `any` to the shape every fragment has.
+    const parsed = parseYaml(readFileSync(file, 'utf8')) as Partial<AuthorizationFragment>;
+    return { rules: parsed.rules ?? [], sets: parsed.sets ?? [] };
+};

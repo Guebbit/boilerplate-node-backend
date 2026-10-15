@@ -1,6 +1,6 @@
 /**
  * @module
- * Who sees the exact stock counters: only a caller holding `inventory.any.read`, read as the
+ * Who sees the exact stock counters: only a caller holding `read:StockLevel`, read as the
  * literal key. `redactStock` takes the counters away and leaves the flags and the row's version.
  */
 import { callerAs, strangerCaller } from '@tests/callers';

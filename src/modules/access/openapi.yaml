@@ -96,7 +96,7 @@ components:
                 version:
                     type: integer
                     description: |
-                        The permission model's own version, bumped when the KEYS change rather than
+                        The permission model's own version, bumped when the RULES change rather than
                         when a role does. A client caches these; this is what tells it the cache is
                         about a different model, not merely a different person. One number for both
                         lists — the keys file they are declared in is one file.

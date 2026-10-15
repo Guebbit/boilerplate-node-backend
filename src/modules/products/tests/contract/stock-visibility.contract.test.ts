@@ -1,7 +1,7 @@
 /**
  * @module
  * Who sees how much stock. Everyone gets `inStock` and `lowStock`; the exact counters (`onHand`,
- * `reserved`, `available`) go only to a caller holding `inventory.any.read`, because exact numbers
+ * `reserved`, `available`) go only to a caller holding `read:StockLevel`, because exact numbers
  * leak sales velocity and help plan a denial of inventory. Asserted on the reads, for a guest, a
  * customer, a role with the product keys but no stock key (the editor), and each role that does
  * hold it. The writes that answer a product are in `tests/contract/product-write.test.ts`, which
@@ -30,7 +30,7 @@ const rows = (response: { body: { data: { items: Record<string, unknown>[] } } }
 const dataOf = (response: { body: { data: unknown } }) =>
     response.body.data as Record<string, unknown>;
 
-describe('GET /products/{id} — the counters follow inventory.any.read', () => {
+describe('GET /products/{id} — the counters follow read:StockLevel', () => {
     it.each([
         ['a guest', undefined],
         ['a customer', 'customer'],

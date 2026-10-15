@@ -36,7 +36,7 @@ paths:
             tags: [Returns]
             summary: List returns (paginated)
             description: >-
-                Staff (`returns.any.read`) see every return; anyone else sees the returns on their
+                Staff (`read:Return`) see every return; anyone else sees the returns on their
                 own orders. Filter by `orderId` to see one order's, which is how an order page
                 shows what has happened to a withdrawal.
             operationId: listReturns
@@ -90,7 +90,7 @@ paths:
                 `closed`, its `lines` are the remainder, and the refund of those lines follows (plus
                 the delivery when it takes the last unit of the order). The buyer uses it as part of
                 their withdrawal; staff may use it too (out of stock for good), and then need
-                `payments.any.update` — the refund key, `stepUp: critical`. `GET /returns/options` says what each door would
+                `create:Refund` — the refund key, `stepUp: critical`. `GET /returns/options` says what each door would
                 take and refund.
 
                 A return answers for goods that left (`kind: return`, the default); only the order's
@@ -116,7 +116,7 @@ paths:
                             schema:
                                 $ref: '#/components/schemas/ReturnEnvelope'
                 '401': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Unauthorized' }
-                # A staff `cancellation` by a caller without the refund key (`payments.any.update`).
+                # A staff `cancellation` by a caller without the refund key (`create:Refund`).
                 '403': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/Forbidden' }
                 # Not the caller's order, or no such order.
                 '404': { $ref: '../../../shared/contracts/openapi.root.yaml#/components/responses/NotFound' }
@@ -139,7 +139,7 @@ paths:
                 still has a remainder, with the exact refund cancelling it would owe (the delivery
                 included when it takes the last unit of the order). `cancellable` is empty while
                 nothing has shipped — the whole order is cancelled instead (`Order.actions.cancel`).
-                The caller must own the order, or hold `returns.any.read`.
+                The caller must own the order, or hold `read:Return`.
             operationId: getReturnOptions
             security:
                 - bearerAuth: []

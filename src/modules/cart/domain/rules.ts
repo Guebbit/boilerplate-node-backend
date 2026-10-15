@@ -43,7 +43,7 @@ export interface UnavailableCartLine {
 
 /**
  * One line the cart cannot check out. Names the product and what was asked for, never the number
- * left: exact stock is for whoever holds `inventory.any.read`, and no shopper does.
+ * left: exact stock is for whoever holds `read:StockLevel`, and no shopper does.
  */
 export interface CheckoutShortfall {
     productId: string;

@@ -19,10 +19,7 @@ import {
 } from '@kernel/middlewares/authorizations';
 import { requireAllowedOrigin } from '@infrastructure/http/middlewares/origin';
 import { getNotifications } from './controllers/get-notifications';
-import {
-    getNotificationsStream,
-    NOTIFICATIONS_READ_KEY
-} from './controllers/get-notifications-stream';
+import { getNotificationsStream } from './controllers/get-notifications-stream';
 import { postReadAll } from './controllers/post-read-all';
 import { postDismissAll } from './controllers/post-dismiss-all';
 import { deleteNotification } from './controllers/delete-notification';
@@ -35,7 +32,7 @@ export const router = Router();
 router.get(
     '/stream',
     requireAllowedOrigin,
-    requirePermissionViaCookie(NOTIFICATIONS_READ_KEY),
+    requirePermissionViaCookie('read', 'Notification'),
     getNotificationsStream
 );
 
@@ -43,13 +40,13 @@ router.get(
 router.use(getAuth, isAuth);
 
 // GET /notifications
-router.get('/', requirePermission(NOTIFICATIONS_READ_KEY), getNotifications);
+router.get('/', requirePermission('read', 'Notification'), getNotifications);
 
 // POST /notifications/read-all — the bell opened: the badge goes to zero, the messages stay.
-router.post('/read-all', requirePermission(NOTIFICATIONS_READ_KEY), postReadAll);
+router.post('/read-all', requirePermission('read', 'Notification'), postReadAll);
 
 // POST /notifications/dismiss-all — empty the inbox.
-router.post('/dismiss-all', requirePermission('notifications.self.delete'), postDismissAll);
+router.post('/dismiss-all', requirePermission('delete', 'Notification'), postDismissAll);
 
 // DELETE /notifications/:id — one of the caller's own.
-router.delete('/:id', requirePermission('notifications.self.delete'), deleteNotification);
+router.delete('/:id', requirePermission('delete', 'Notification'), deleteNotification);

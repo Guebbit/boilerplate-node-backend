@@ -102,7 +102,7 @@ export const postSignup = (
 
             /*
              * Signed in from here, as an `unverified` audience: the role model already lets an unproven
-             * address browse freely and stops it only at `cart.self.checkout`, so a second login
+             * address browse freely and stops it only at `checkout:Cart`, so a second login
              * before reaching that state would be friction with no security benefit.
              *
              * Cookies only, and the body stays `User` — the frontend's `POST /account/refresh`

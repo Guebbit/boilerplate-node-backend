@@ -1,11 +1,17 @@
-keys:
+rules:
     # -- observability -------------------------------------------------------------------------
     # The only platform-scope module in the boilerplate, and it is what makes the invariant
     # testable here rather than only in a downstream project: health, metrics and the operational
     # audit are about the INSTALLATION, not about one shop's content.
-    - key: platform.observability.any.read
-      module: observability
+    - action: read
       subject: ObservabilitySnapshot
-      action: read
+      module: observability
       scope: platform
       description: Read health, metrics overview and the operational audit.
+
+sets:
+    - name: ObservabilityDisplay
+      module: observability
+      description: Read health, metrics and the operational audit.
+      rules:
+          - read:ObservabilitySnapshot

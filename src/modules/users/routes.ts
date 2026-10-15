@@ -44,22 +44,22 @@ export const router = Router();
 // role file granted. Each mount below states the one key its own action needs.
 //
 // `isAuthOrCredential`, not `isAuth`: an `sk_...` api key may reach this module. Every route
-// here is a `users.any.*` key over the tenant's directory — a partner integration syncing
+// here is a `User` rule over the tenant's directory — a partner integration syncing
 // accounts is the documented use case. No controller reads `authContext`.
 router.use(getAuth, isAuthOrCredential);
 
 // POST /users/search — must come before /:id to avoid matching "search" as an id. Never
 // Redis-cached: an admin-only answer, which a shared cache must never hold — RFC 9111 §3.5.
 // `noStore`, like every POST answer.
-router.post('/search', requirePermission('users.any.read'), noStore, getUsers);
+router.post('/search', requirePermission('read', 'User'), noStore, getUsers);
 
 // GET /users. `privateNoCache`: the browser may keep its own copy, revalidated every time.
-router.get('/', requirePermission('users.any.read'), privateNoCache, getUsers);
+router.get('/', requirePermission('read', 'User'), privateNoCache, getUsers);
 
 // POST /users (create)
 router.post(
     '/',
-    requirePermission('users.any.create'),
+    requirePermission('create', 'User'),
     uploadLimiter,
     upload.image(),
     requireFreshAuthWhen(namesARole, 'critical'),
@@ -67,15 +67,15 @@ router.post(
 );
 
 // DELETE /users — id in body
-router.delete('/', requirePermission('users.any.delete'), deleteUsers);
+router.delete('/', requirePermission('delete', 'User'), deleteUsers);
 
 // GET /users/:id — never Redis-cached, same reasoning as the search routes above.
-router.get('/:id', requirePermission('users.any.read'), privateNoCache, getUserItem);
+router.get('/:id', requirePermission('read', 'User'), privateNoCache, getUserItem);
 
 // PUT /users/:id — replace the user.
 router.put(
     '/:id',
-    requirePermission('users.any.update'),
+    requirePermission('update', 'User'),
     uploadLimiter,
     upload.image(),
     requireFreshAuthWhen(namesARole, 'critical'),
@@ -85,7 +85,7 @@ router.put(
 // PATCH /users/:id — merge the fields sent.
 router.patch(
     '/:id',
-    requirePermission('users.any.update'),
+    requirePermission('update', 'User'),
     uploadLimiter,
     upload.image(),
     requireFreshAuthWhen(namesARole, 'critical'),
@@ -93,15 +93,15 @@ router.patch(
 );
 
 // DELETE /users/:id — soft delete unless ?hardDelete=true
-router.delete('/:id', requirePermission('users.any.delete'), deleteUsers);
+router.delete('/:id', requirePermission('delete', 'User'), deleteUsers);
 
 // POST /users/:id/restore — undo a soft delete; a second DELETE never does
-router.post('/:id/restore', requirePermission('users.any.delete'), restoreUsers);
+router.post('/:id/restore', requirePermission('delete', 'User'), restoreUsers);
 
 // DELETE /users/:id/hard — the same operation, with the flag spelled in the path
 router.delete(
     '/:id/hard',
-    requirePermission('users.any.delete'),
+    requirePermission('delete', 'User'),
     routeFlag('hardDelete'),
     deleteUsers
 );

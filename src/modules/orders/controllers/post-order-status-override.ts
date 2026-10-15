@@ -1,7 +1,7 @@
 /**
  * @module
  * Admin override controller — `POST /orders/:id/status-override`, the status-only door. Thin
- * wiring onto `orderService.overrideStatus`; the route's own `requirePermission('orders.any.override')`
+ * wiring onto `orderService.overrideStatus`; the route's own `requirePermission('override', 'Order')`
  * has already confirmed the caller holds the (step-up gated) key before this runs.
  */
 

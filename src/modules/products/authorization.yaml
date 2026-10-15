@@ -1,35 +1,49 @@
-keys:
+rules:
     # -- products ------------------------------------------------------------------------------
-    - key: products.self.read
-      module: products
+    - action: read
       subject: Product
-      action: read
+      module: products
       scope: tenant
       description: Read active, undeleted products — the storefront's own view.
       conditions:
           active: true
           deletedAt: null
-    - key: products.any.read
-      module: products
+    - action: display
       subject: Product
-      action: read
+      module: products
       scope: tenant
       description: Read every product regardless of publish state — what staff need to see a draft.
-    - key: products.any.create
-      module: products
+    - action: create
       subject: Product
-      action: create
+      module: products
       scope: tenant
       description: Add a product to the catalogue.
-    - key: products.any.update
-      module: products
+    - action: update
       subject: Product
-      action: update
+      module: products
       scope: tenant
       description: Change a product, including its price and its published state.
-    - key: products.any.delete
-      module: products
+    - action: delete
       subject: Product
-      action: delete
+      module: products
       scope: tenant
       description: Remove a product. Separate from update because the blast radius is.
+
+sets:
+    - name: ProductStorefront
+      module: products
+      description: What the storefront shows anybody, which is active and undeleted products.
+      rules:
+          - read:Product
+    - name: ProductDisplay
+      module: products
+      description: Every product, drafts and removed ones included.
+      rules:
+          - display:Product
+    - name: ProductManagement
+      module: products
+      description: Add, change and remove products.
+      rules:
+          - create:Product
+          - update:Product
+          - delete:Product

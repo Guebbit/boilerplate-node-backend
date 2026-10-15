@@ -23,7 +23,7 @@ import {
     anonymousCaller,
     callerInScope,
     permissionModelVersion,
-    PERMISSION_KEYS,
+    PERMISSION_RULES,
     PERMISSION_SUBJECTS
 } from '@kernel/permissions';
 import type { AuthContext } from '@types';
@@ -31,13 +31,13 @@ import type { AuthContext } from '@types';
 /**
  * The permission model's own version.
  *
- * Bumped when the KEYS change, not when a role does — a client caches these, and this is what
+ * Bumped when the RULES change, not when a role does — a client caches these, and this is what
  * tells it the cache is about a different model rather than merely a different person. A
  * fingerprint of the declared set (see {@link permissionModelVersion}) rather than typed in or a
- * plain count, so a key rename or swap cannot be forgotten either: only reordering the same set
+ * plain count, so a rule rename or swap cannot be forgotten either: only reordering the same set
  * leaves it unchanged, and editing a role never touches it at all.
  */
-const modelVersion = permissionModelVersion(PERMISSION_KEYS.map((entry) => entry.key));
+const modelVersion = permissionModelVersion(PERMISSION_RULES.map((entry) => entry.id));
 
 /**
  * One scope's rules, in CASL's wire format.
@@ -56,7 +56,7 @@ const rulesFor = (caller: Parameters<typeof buildAbility>[0]) =>
  * Answer the caller's own rules, in BOTH scopes.
  *
  * Both, because a request acts in one scope and a CLIENT renders from two: the shop's screens read
- * tenant keys, the health dashboard reads `platform.observability.any.read`, and they share one
+ * tenant keys, the health dashboard reads `read:ObservabilitySnapshot`, and they share one
  * navigation. Publishing tenant rules alone would leave the platform screens with nothing to grey
  * out, forcing them to gate on a tenant key that merely correlates — the guess this endpoint
  * abolishes everywhere else. The two lists stay apart, because the model refuses to let either

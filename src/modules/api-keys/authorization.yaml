@@ -1,15 +1,13 @@
-keys:
+rules:
     # -- api-keys --------------------------------------------------------------------------------
-    - key: apikeys.any.read
-      module: api-keys
+    - action: read
       subject: ApiKey
-      action: read
+      module: api-keys
       scope: tenant
       description: List this shop's machine-to-machine credentials. Never returns a key's secret.
-    - key: apikeys.any.create
-      module: api-keys
+    - action: create
       subject: ApiKey
-      action: create
+      module: api-keys
       scope: tenant
       description: >-
           Mint a credential. Carries its own floor on top of this key: a credential can never hold
@@ -18,9 +16,21 @@ keys:
       # could mint one would turn ten minutes of access into a long-lived key. GitHub's sudo mode
       # asks for the same before creating a token.
       stepUp: critical
-    - key: apikeys.any.delete
-      module: api-keys
+    - action: delete
       subject: ApiKey
-      action: delete
+      module: api-keys
       scope: tenant
       description: Revoke a credential. Soft and immediate; the row stays readable.
+
+sets:
+    - name: ApiKeyDisplay
+      module: api-keys
+      description: List the shop's credentials.
+      rules:
+          - read:ApiKey
+    - name: ApiKeyManagement
+      module: api-keys
+      description: Mint and revoke credentials.
+      rules:
+          - create:ApiKey
+          - delete:ApiKey

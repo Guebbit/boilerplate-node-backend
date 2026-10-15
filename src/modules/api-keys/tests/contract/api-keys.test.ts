@@ -54,7 +54,7 @@ describe('GET /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['orders.self.read'],
+                permissions: ['read:Order'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -77,14 +77,14 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['orders.self.read'],
+                permissions: ['read:Order'],
                 expiresAt: IN_A_WEEK()
             });
 
         expect(response.status).toBe(201);
         expect(typeof response.body.data.secret).toBe('string');
         expect(response.body.data.secret.startsWith('sk_')).toBe(true);
-        expect(response.body.data.permissions).toEqual(['orders.self.read']);
+        expect(response.body.data.permissions).toEqual(['read:Order']);
     });
 
     it('answers no-store: the one-time secret is never kept by a cache', async () => {
@@ -95,7 +95,7 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['orders.self.read'],
+                permissions: ['read:Order'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -112,14 +112,14 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'over-reaching',
-                permissions: ['platform.observability.any.read'],
+                permissions: ['read:ObservabilitySnapshot'],
                 expiresAt: IN_A_WEEK()
             });
 
         expect(response.status).toBe(422);
         expect(response.body.errors[0]).toMatchObject({
             code: 'VALIDATION_ERROR',
-            details: { field: 'permissions', permissions: ['platform.observability.any.read'] }
+            details: { field: 'permissions', permissions: ['read:ObservabilitySnapshot'] }
         });
     });
 
@@ -144,7 +144,7 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['orders.self.read'],
+                permissions: ['read:Order'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -158,7 +158,7 @@ describe('POST /api-keys', () => {
         const response = await api()
             .post('/api-keys')
             .set('Authorization', bearer)
-            .send({ name: 'forever', permissions: ['orders.self.read'] });
+            .send({ name: 'forever', permissions: ['read:Order'] });
 
         expect(response.status).toBe(422);
     });
@@ -169,7 +169,7 @@ describe('POST /api-keys', () => {
             api()
                 .post('/api-keys')
                 .set('Authorization', bearer)
-                .send({ name: 'bounded', permissions: ['orders.self.read'], expiresAt });
+                .send({ name: 'bounded', permissions: ['read:Order'], expiresAt });
 
         const tooFar = await mint(ahead(367));
         const fine = await mint(ahead(360));
@@ -190,7 +190,7 @@ describe('POST /api-keys', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'partner integration',
-                permissions: ['orders.self.read'],
+                permissions: ['read:Order'],
                 expiresAt: IN_A_WEEK()
             });
 
@@ -206,7 +206,7 @@ describe('DELETE /api-keys/:id', () => {
             .set('Authorization', bearer)
             .send({
                 name: 'short-lived',
-                permissions: ['orders.self.read'],
+                permissions: ['read:Order'],
                 expiresAt: IN_A_WEEK()
             });
 

@@ -10,7 +10,7 @@
  */
 
 import type { ScaffoldOptions } from './options';
-import { KEY_ACTIONS, type ModuleNames } from './names';
+import { RULE_ACTIONS, permissionSetName, type ModuleNames } from './names';
 
 /** The `module.yaml` body. */
 export const moduleYaml = (options: ScaffoldOptions): string =>
@@ -43,7 +43,7 @@ export const moduleManifest = (names: ModuleNames): string => `/**
 import type { AppModule } from '@kernel/registry';
 import { router } from './routes';
 
-/** This module's manifest entry: one admin router, keyed by ${names.family}.* permissions. */
+/** This module's manifest entry: one admin router, guarded by ${names.entity} permissions. */
 export default {
     name: '${names.kebab}',
     basePath: '${names.basePath}',
@@ -96,24 +96,30 @@ declare module '@infrastructure/observability/audit' {
 }
 `;
 
-/** The permission keys this module introduces. */
+/** The permission rules and the one set this module introduces. */
 export const authorizationYaml = (names: ModuleNames): string =>
     [
-        'keys:',
-        ...KEY_ACTIONS.flatMap((action) => [
-            `    - key: ${names.family}.any.${action}`,
-            `      module: ${names.kebab}`,
+        'rules:',
+        ...RULE_ACTIONS.flatMap((action) => [
+            `    - action: ${action}`,
             `      subject: ${names.entity}`,
-            `      action: ${action}`,
+            `      module: ${names.kebab}`,
             '      scope: tenant',
             `      description: ${describeAction(action)} ${names.words}.`
         ]),
+        '',
+        'sets:',
+        `    - name: ${permissionSetName(names)}`,
+        `      module: ${names.kebab}`,
+        `      description: Read, add, edit and remove ${names.words}.`,
+        '      rules:',
+        ...RULE_ACTIONS.map((action) => `          - ${action}:${names.entity}`),
         ''
     ].join('\n');
 
 /**
- * The verb phrase a key's description opens with.
- * @param action - the key's action
+ * The verb phrase a rule's description opens with.
+ * @param action - the rule's action
  * @returns the phrase
  */
 const describeAction = (action: string): string =>
@@ -453,15 +459,15 @@ router.use(getAuth, isAuthOrCredential);
 
 // privateNoCache: the browser may keep its own copy, revalidated every time. Never Redis-cached,
 // because this is one admin's view, not a shared answer.
-router.get('/', requirePermission('${names.family}.any.read'), privateNoCache, get${names.plural});
+router.get('/', requirePermission('read', '${names.entity}'), privateNoCache, get${names.plural});
 
-router.post('/', requirePermission('${names.family}.any.create'), post${names.entity});
+router.post('/', requirePermission('create', '${names.entity}'), post${names.entity});
 
 // PUT replaces, PATCH merges.
-router.put('/:id', requirePermission('${names.family}.any.update'), replace${names.entity});
-router.patch('/:id', requirePermission('${names.family}.any.update'), update${names.entity});
+router.put('/:id', requirePermission('update', '${names.entity}'), replace${names.entity});
+router.patch('/:id', requirePermission('update', '${names.entity}'), update${names.entity});
 
-router.delete('/:id', requirePermission('${names.family}.any.delete'), delete${names.entity});
+router.delete('/:id', requirePermission('delete', '${names.entity}'), delete${names.entity});
 `;
 
 /**

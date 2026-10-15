@@ -1,29 +1,37 @@
-keys:
+rules:
     # -- cart ----------------------------------------------------------------------------------
-    # `cart` otherwise declares no keys — see the note above on `keys` — because a basket is your
-    # own thing. This one exception is not about the basket's CONTENTS (still keyless: add, remove,
-    # set quantity) but about spending it, which is a fact about the ACCOUNT — an unproven address
-    # must not be able to place an order — and a fact about the account belongs on a key, not a
-    # route mount. `cart.self.update` is the coarser fact: whether this account shops at all, and
+    # A basket is your own thing, so `cart` otherwise declares no rules. This exception is not
+    # about the basket's CONTENTS (still ruleless: add, remove, set quantity) but about spending
+    # it, which is a fact about the ACCOUNT — an unproven address must not be able to place an
+    # order — and a fact about the account belongs on a rule, not a route mount. `update:Cart` is the coarser fact: whether this account shops at all, and
     # every signed-in account does, staff included (the audience roles in
     # `shared/authorization-roles.yaml`).
-    # `checkout`, not `create` on `Order`: `orders.any.create` already means "raise an
+    # `checkout`, not `create` on `Order`: `create:Order` already means "raise an
     # order on someone else's behalf", and reusing it here would be the identical CASL tuple,
-    # indistinguishable once packed for the browser. `self` because this is the one key that is
-    # genuinely about the caller's own basket — see docs/theory/authorization.md.
-    - key: cart.self.update
-      module: cart
+    # indistinguishable once packed for the browser. Docs: docs/theory/authorization.md.
+    - action: update
       subject: Cart
-      action: update
+      module: cart
       scope: tenant
       description: Use a basket at all — add to it, change it, reorder into it. Held by every signed-in account.
-    - key: cart.self.checkout
-      module: cart
+    - action: checkout
       subject: Cart
-      action: checkout
+      module: cart
       scope: tenant
       description: Spend the caller's own basket — place an order and start paying for it.
       # The 403 keeps its specific wording rather than `requirePermission`'s generic one: a
       # customer refused THIS key is being told to confirm their email, not that they lack
       # permission in the abstract. `t('generic.error-<deniedCode, kebab-cased>')`.
       deniedCode: EMAIL_NOT_VERIFIED
+
+sets:
+    - name: CartShopping
+      module: cart
+      description: Use a basket at all.
+      rules:
+          - update:Cart
+    - name: CartCheckout
+      module: cart
+      description: Spend the basket, which places an order and starts paying.
+      rules:
+          - checkout:Cart

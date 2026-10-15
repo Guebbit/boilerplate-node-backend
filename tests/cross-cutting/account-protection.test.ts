@@ -1,7 +1,7 @@
 /**
  * The protection of staff accounts, row by row, through the real app and a real database. A holder
  * of a users key changes a plain customer's account, and an account that holds a staff role only if
- * they also hold `roles.any.assign` — which, of the preset roles, is the administrator alone.
+ * they also hold `assign:Role` — which, of the preset roles, is the administrator alone.
  *
  * Each row of `tests/support/account-protection-rows.ts` is run as every role that holds the row's
  * key, against every kind of account: a customer, a staff account, an administrator, a
@@ -33,8 +33,7 @@ const holdersOf = (key: string): string[] =>
 
 /** Whether a role may change an account that holds a staff role. */
 const managesRoles = (role: string): boolean =>
-    TENANT_ROLES.find((each) => each.name === role)?.permissions.includes('roles.any.assign') ===
-    true;
+    TENANT_ROLES.find((each) => each.name === role)?.permissions.includes('assign:Role') === true;
 
 /** What one request answered, reduced to the two facts the rule is about. */
 const outcomeOf = (response: { status: number; body: unknown }): string => {
@@ -127,7 +126,7 @@ const patchAsKey = async (secret: string, owner: Owner): Promise<string> =>
 
 describe('an API key holds exactly the keys it was minted with', () => {
     it('reaches a customer, and is refused a staff account', async () => {
-        const secret = await credentialHolding(['users.any.update']);
+        const secret = await credentialHolding(['update:User']);
         const customer = await createOwner('owner-customer', null);
         const admin = await createOwner('owner-admin', 'admin');
 
@@ -138,7 +137,7 @@ describe('an API key holds exactly the keys it was minted with', () => {
     });
 
     it('reaches a staff account once it was minted with role management', async () => {
-        const secret = await credentialHolding(['users.any.update', 'roles.any.assign']);
+        const secret = await credentialHolding(['update:User', 'assign:Role']);
         const admin = await createOwner('owner-admin', 'admin');
 
         expect(await patchAsKey(secret, admin)).toBe('passed');

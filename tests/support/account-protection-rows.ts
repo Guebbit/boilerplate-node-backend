@@ -50,7 +50,7 @@ const onUser =
 export const PROTECTION_ROWS: readonly ProtectionRow[] = [
     {
         route: 'users PUT /:id',
-        key: 'users.any.update',
+        key: 'update:User',
         prepare: onUser('put', '', (owner) => ({
             username: 'protection-check',
             role: owner.role,
@@ -59,23 +59,23 @@ export const PROTECTION_ROWS: readonly ProtectionRow[] = [
     },
     {
         route: 'users PATCH /:id',
-        key: 'users.any.update',
+        key: 'update:User',
         prepare: onUser('patch', '', () => ({ username: 'protection-check' }))
     },
-    { route: 'users DELETE /:id', key: 'users.any.delete', prepare: onUser('delete', '') },
+    { route: 'users DELETE /:id', key: 'delete:User', prepare: onUser('delete', '') },
     {
         route: 'users DELETE /:id/hard',
-        key: 'users.any.delete',
+        key: 'delete:User',
         prepare: onUser('delete', '/hard')
     },
     {
         route: 'users POST /:id/restore',
-        key: 'users.any.delete',
+        key: 'delete:User',
         prepare: onUser('post', '/restore')
     },
     {
         route: 'users DELETE /',
-        key: 'users.any.delete',
+        key: 'delete:User',
         prepare: (owner) => ({ method: 'delete', url: '/users', body: { id: owner.user.id } })
     }
 ];

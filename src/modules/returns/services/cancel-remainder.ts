@@ -24,7 +24,7 @@ import { generateReject } from '@infrastructure/http/response';
 import { withTransaction } from '@infrastructure/runtime/database';
 import { enqueueOutboxEvent, nudgeOutbox } from '@kernel/outbox';
 import { callerForSubject, systemCallerContext } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { cancelRemainder, remainderOptions, waitHasExpired, ActRefusal } from '@modules/delivery';
 import { inventoryService } from '@modules/inventory';
 import { isBuyer, orderService, isExcludedFromWithdrawal } from '@modules/orders';
@@ -61,7 +61,7 @@ interface Cancelled {
 
 /**
  * The 403 for a staff caller without the refund key: a remainder cancel is a refund with
- * consequences, so it needs the key that returns money (`payments.any.update`, `stepUp: critical`).
+ * consequences, so it needs the key that returns money (`create:Refund`, `stepUp: critical`).
  */
 const forbidden = (): CreateReturnOutcome =>
     refused(generateReject(403, [t('generic.error-forbidden')]));
@@ -258,7 +258,7 @@ const refuseCaller = (
             : undefined;
     }
 
-    return holdsKey(callerForSubject(authContext, 'Return'), 'payments.any.update')
+    return holds(callerForSubject(authContext, 'Return'), 'create', 'Refund')
         ? undefined
         : forbidden();
 };

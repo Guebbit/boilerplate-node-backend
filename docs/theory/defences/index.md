@@ -563,5 +563,5 @@ described in four places is a control that will be wrong in three of them.
 ## Related
 
 - [Security](../../tools/security.md) — the tools, keys and budgets, from the operator's side
-- [Authorization](../authorization.md) — how permission keys and roles are designed
+- [Authorization](../authorization.md) — how permission rules, sets and roles are designed
 - [Data protection](../data-protection.md) — the same files under a privacy lens

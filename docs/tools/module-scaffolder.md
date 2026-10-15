@@ -24,7 +24,7 @@ npm run scaffold:module -- audits-lite --no-audit
 
 The template is the core of `example`, cut to an admin collection: a required `name` and optional
 `notes`, listed, created, replaced (PUT), merged (PATCH) and deleted behind one gate and four
-permission keys. It is deliberately not a shop module, so it depends on nothing. Every file opens
+permission rules. It is deliberately not a shop module, so it depends on nothing. Every file opens
 with the header `example` gives its twin: the file's role in any module, then what it does here,
 then the docs to read. The optional capabilities `example` shows (events, mail, a webhook, a cover
 image, translations) are left out, and
@@ -79,7 +79,7 @@ edited by the scaffolder, and each is a candidate for deletion rather than for m
 It prints these instead of guessing:
 
 - **Personal data.** `personalData: 'none'` until a record names a person.
-- **Roles.** Only `admin` (and `system`) hold the new keys.
+- **Roles.** Only `admin` (and `system`) list the new set.
 - **Rate limits.** None declared. Add a budget for any public or expensive route.
 - **Frontend.** Nothing is generated over there. Declare `module.yaml#frontend` if the paired
   module has another name.

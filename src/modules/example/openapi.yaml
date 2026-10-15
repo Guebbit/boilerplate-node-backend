@@ -44,7 +44,7 @@ paths:
         get:
             tags: [Examples]
             summary: List examples
-            description: Returns the caller's own examples, newest first by default. A caller holding `examples.any.read` sees everyone's.
+            description: Returns the caller's own examples, newest first by default. A caller holding `display:Example` sees everyone's.
             operationId: listExamples
             security:
                 - bearerAuth: []
@@ -139,7 +139,7 @@ paths:
         get:
             tags: [Examples]
             summary: Read an example
-            description: Returns one example the caller may read — their own, or any when they hold `examples.any.read`. Another person's example answers `404`, never `403`, so an id reveals nothing about who owns it.
+            description: Returns one example the caller may read — their own, or any when they hold `display:Example`. Another person's example answers `404`, never `403`, so an id reveals nothing about who owns it.
             operationId: getExampleById
             security:
                 - bearerAuth: []

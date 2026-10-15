@@ -2,14 +2,14 @@
  * @module
  * Express guards built on `kernel/authentication.ts`'s resolver: `getAuth` populates
  * `request.authContext` when a token is present, `isAuth` rejects when it is missing,
- * `requirePermission` rejects when the caller's role does not hold a given key,
+ * `requirePermission` rejects when the caller's role does not hold a given rule,
  * `requirePermissionViaCookie` is the SSE-only variant that authenticates by session cookie
  * instead of an `Authorization` header (in `cookie` session mode `getAuth` takes the cookie too), and `requireFreshAuth`/`requireFreshAuthWhen` gate an
  * already-authenticated caller on HOW RECENTLY they proved it. Every rejection from the
  * identity guards is audited before the response is sent, so a denied request always leaves a
  * trail.
  *
- * A guard takes a PERMISSION KEY, never a role name. A role is data a deployment may edit; a key
+ * A guard takes an ACTION AND A SUBJECT, never a role name. A role is data a deployment may edit; a rule
  * is code, declared beside the routes that check it, and `assertDeclared` refuses one no module
  * owns — so a typo in a mount is a boot failure rather than a route nobody can reach.
  *
@@ -28,14 +28,13 @@ import {
     type Resolution,
     type ResolveMissReason
 } from '@kernel/authentication';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import { bearerOf, readSessionCookie } from '@kernel/cookies';
 import {
     assertDeclared,
-    callerFor,
+    callerForSubject,
     callerInScope,
-    findKey,
-    scopeOfKey,
+    ruleId,
     type StepUpTier
 } from '@kernel/permissions';
 import { t } from '@infrastructure/i18n';
@@ -61,7 +60,7 @@ import type { AuthContext, ResolveOptions } from '@types';
 /**
  * The `errors[].code` locale key follows one rule everywhere in this codebase: `FORBIDDEN` reads
  * `generic.error-forbidden`, `EMAIL_NOT_VERIFIED` reads `generic.error-email-not-verified`. One
- * rule for both `requirePermission`'s own default and a key's `deniedCode` override
+ * rule for both `requirePermission`'s own default and a rule's `deniedCode` override
  * (`kernel/permissions.ts`'s `PermissionKey`), so a new override needs nothing added to
  * `locales/*.json` beyond the matching key.
  */
@@ -471,30 +470,32 @@ const challengeForFreshAuth = (
 };
 
 /**
- * Reject with 403 unless the resolved caller's role holds `key`. MUST run after `isAuth`.
+ * Reject with 403 unless the resolved caller holds a rule for `action` on `subject`. MUST run
+ * after `isAuth`.
  *
- * The key is checked against the declared set at MOUNT time, not at request time: a route guarded
- * by a key no module owns would otherwise answer 403 to everyone and look like a permissions
- * problem for as long as nobody tried it.
+ * The rule is checked against the declared set at MOUNT time, not at request time: a route
+ * guarded by a rule no module owns would otherwise answer 403 to everyone and look like a
+ * permissions problem for as long as nobody tried it.
  *
- * @param key - the permission key this route requires, e.g. `products.any.update`. The very key,
- *   never its action and subject: every signed-in account holds `payments.self.read`, and that must
- *   not open `payments.any.read`'s staff list.
- * @throws Error at mount time when no module declares the key
+ * @param action - the action this route requires, e.g. `display`. A STAFF door asks the staff
+ *   action (`display`, `admin`), never the plain one: every signed-in account holds `read:Payment`,
+ *   and that must not open `display:Payment`'s staff list.
+ * @param subject - the CASL subject the action is taken on, e.g. `Payment`
+ * @throws Error at mount time when no module declares a rule for the pair
  */
-export const requirePermission = (key: string) => {
-    assertDeclared(key);
-    const declared = findKey(key);
+export const requirePermission = (action: string, subject: string) => {
+    const declared = assertDeclared(action, subject);
+    const permission = ruleId(action, subject);
     // The one place this guard's own scope is known — everything it audits below states it
     // explicitly, because `buildAuditEvent`'s default (`context.caller.scope`) is always
-    // `'tenant'` and would misreport every platform-key refusal as a tenant one.
-    const scope = scopeOfKey(key);
-    // `FORBIDDEN` unless the key names its own — see `PermissionKey.deniedCode`'s docblock.
-    // `deniedCode` is a plain `string` on `PermissionKey` (not `ErrorCode`) so that
+    // `'tenant'` and would misreport every platform-rule refusal as a tenant one.
+    const { scope } = declared;
+    // `FORBIDDEN` unless the rule names its own — see `PermissionRule.deniedCode`'s docblock.
+    // `deniedCode` is a plain `string` on `PermissionRule` (not `ErrorCode`) so that
     // `kernel/permissions.ts` never needs the generated catalogue at boot; the cast is safe
     // because `tests/cross-cutting/authorization-keys.test.ts` proves every declared `deniedCode`
     // is a real one.
-    const deniedCode = (declared?.deniedCode as ErrorCode | undefined) ?? ERROR_CODES.FORBIDDEN;
+    const deniedCode = (declared.deniedCode as ErrorCode | undefined) ?? ERROR_CODES.FORBIDDEN;
     const deniedMessageKey = errorLocaleKeyFor(deniedCode);
 
     // Named, not anonymous: `tests/cross-cutting/write-routes-are-guarded.test.ts` and each
@@ -523,49 +524,51 @@ export const requirePermission = (key: string) => {
 
         /*
          * An api-key is tenant-scoped by construction (docs/tools/security.md#machine-to-machine-credentials)
-         * and can never satisfy a platform key. Refused here, distinctly from a missing
-         * permission, rather than left to fall through to `holdsKey` for the same 403 — the audit
+         * and can never satisfy a platform rule. Refused here, distinctly from a missing
+         * permission, rather than left to fall through to `holds` for the same 403 — the audit
          * trail should say WHY, not just that the check failed.
          */
         if (!request.authContext && scope === 'platform') {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
                 actorScope: scope,
-                metadata: { reason: 'credential_wrong_scope', permission: key }
+                metadata: { reason: 'credential_wrong_scope', permission }
             });
             rejectResponse(response, 403);
             return;
         }
 
         /*
-         * The guard asks the ability, not the key list, so a route and a query agree by
-         * construction: both read the same rules. It asks about the ACTION and SUBJECT rather
-         * than about the row, because a route guard runs before anything is fetched — which is
-         * the whole point of keeping the row restriction in the read instead.
+         * The guard asks the rules, so a route and a query agree by construction: both read the
+         * same ones. It asks about the ACTION and SUBJECT rather than about the row, because a
+         * route guard runs before anything is fetched — which is the whole point of keeping the
+         * row restriction in the read instead.
          *
-         * `authContext` re-derives the caller PER KEY, because a human may hold both a tenant and
-         * a platform role and the key being checked is what decides which (`callerFor`'s own
-         * docblock). An api-key's caller has no such ambiguity — tenant-scoped only — and is
+         * `authContext` re-derives the caller PER SUBJECT, because a human may hold both a tenant
+         * and a platform role and the subject being checked is what decides which
+         * (`callerForSubject`'s own docblock). An api-key's caller has no such ambiguity — tenant-scoped only — and is
          * already fixed at credential-resolve time, so it is used as-is.
          *
          * `!` is safe, not a suppression: the two guards above already returned for "neither
-         * present" and "no `authContext` and a platform key", so reaching here with no
+         * present" and "no `authContext` and a platform rule", so reaching here with no
          * `authContext` guarantees `request.caller` is set — a fact the compiler cannot follow
          * across the two earlier `if`s and their side-effecting calls.
          */
-        const caller = request.authContext ? callerFor(request.authContext, key) : request.caller!;
-        const allowed = holdsKey(caller, key);
+        const caller = request.authContext
+            ? callerForSubject(request.authContext, subject)
+            : request.caller!;
+        const allowed = holds(caller, action, subject);
 
         /*
-         * Step-up is asked AFTER the key check, and the order is the argument: telling somebody
+         * Step-up is asked AFTER the rule check, and the order is the argument: telling somebody
          * to re-authenticate for an action they could never take either way hands them a fact
          * about the permission model they had not earned. Refused first, challenged second.
          */
-        if (allowed && declared?.stepUp && !provedRecentlyEnough(request, declared.stepUp)) {
+        if (allowed && declared.stepUp && !provedRecentlyEnough(request, declared.stepUp)) {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_REAUTH_REQUIRED,
                 actorScope: scope,
-                metadata: { reason: 'step_up_required', permission: key, tier: declared.stepUp }
+                metadata: { reason: 'step_up_required', permission, tier: declared.stepUp }
             });
             challengeForFreshAuth(response, reauthWindowSeconds(declared.stepUp));
 
@@ -576,7 +579,7 @@ export const requirePermission = (key: string) => {
             auditRefusal(request, {
                 action: coreAuditActions.SECURITY_FORBIDDEN,
                 actorScope: scope,
-                metadata: { reason: 'missing_permission', permission: key }
+                metadata: { reason: 'missing_permission', permission }
             });
             rejectResponse(response, 403, [{ code: deniedCode, message: t(deniedMessageKey) }]);
             return;
@@ -585,45 +588,47 @@ export const requirePermission = (key: string) => {
         next();
     }
 
-    // The key this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
+    // The rule this guard closes over, otherwise invisible once mounted — `tests/support/routes.ts`
     // reads it back so the contract sweep can ask, per route, WHICH roles a 403 is correct for,
     // rather than only whether a guard is present at all.
-    return Object.assign(requirePermissionGuard, { permissionKey: key });
+    return Object.assign(requirePermissionGuard, { permission: { action, subject } });
 };
 
 /**
- * Judges a resolved cookie against `key`, auditing a refusal exactly as {@link requirePermissionViaCookie}
- * answers one — shared by that connect-time guard and by {@link stillHoldsKeyViaCookie}'s periodic
- * recheck of an already-open stream, so the two can never disagree about who holds `key`.
+ * Judges a resolved cookie against a rule, auditing a refusal exactly as {@link requirePermissionViaCookie}
+ * answers one — shared by that connect-time guard and by {@link stillHoldsRuleViaCookie}'s periodic
+ * recheck of an already-open stream, so the two can never disagree about who holds the rule.
  *
  * Throws when the credential is refused (forged, expired, revoked), and leaves that distinct from
- * "resolved to nobody, or resolved but lacks the key" on purpose: the two callers below disagree
+ * "resolved to nobody, or resolved but lacks the rule" on purpose: the two callers below disagree
  * about what a refusal should mean (401 to a connecting client; fail-closed to an already-open
  * stream that cannot be told apart from a revoked one), so only they may decide.
  *
  * @param request - only for the audit trail; never re-authenticated from it
  * @param resolution - what the session cookie resolved to
- * @param key - the permission key to check
- * @returns the resolved user when they hold `key`, otherwise `undefined`
+ * @param action - the action to check
+ * @param subject - the subject it is asked about
+ * @returns the resolved user when they hold the rule, otherwise `undefined`
  * @throws {Error} when the credential itself was refused
  */
-const judgeKeyHolder = (
+const judgeRuleHolder = (
     request: Request,
     resolution: Resolution<AuthContext | undefined>,
-    key: string
+    action: string,
+    subject: string
 ) => {
     if ('miss' in resolution) {
         noteMiss(request, 'session', resolution.miss);
         throw new Error(`Session cookie refused: ${resolution.miss}`);
     }
     const user = resolution.ok;
-    const allowed = user !== undefined && holdsKey(callerFor(user, key), key);
+    const allowed = user !== undefined && holds(callerForSubject(user, subject), action, subject);
 
     if (!allowed) {
         auditRefusal(request, {
             action: coreAuditActions.SECURITY_FORBIDDEN,
             actorUserId: user?.id ?? 'anonymous',
-            metadata: { reason: 'missing_permission', permission: key }
+            metadata: { reason: 'missing_permission', permission: ruleId(action, subject) }
         });
     }
 
@@ -641,11 +646,12 @@ const judgeKeyHolder = (
  *
  * See: docs/tools/security.md#why-the-sse-endpoints-authenticate-by-cookie
  *
- * @param key - the permission key this route requires
- * @throws Error at mount time when no module declares the key
+ * @param action - the action this route requires
+ * @param subject - the subject it is taken on
+ * @throws Error at mount time when no module declares the rule
  */
-export const requirePermissionViaCookie = (key: string) => {
-    assertDeclared(key);
+export const requirePermissionViaCookie = (action: string, subject: string) => {
+    assertDeclared(action, subject);
 
     // Named for the same reason as `requirePermissionGuard` above.
     return function requirePermissionViaCookieGuard(
@@ -663,10 +669,11 @@ export const requirePermissionViaCookie = (key: string) => {
 
         watchCookie(sessionToken)
             .then((watch) => {
-                const user = judgeKeyHolder(
+                const user = judgeRuleHolder(
                     request,
                     'miss' in watch ? watch : { ok: watch.ok.context },
-                    key
+                    action,
+                    subject
                 );
                 if (!user || 'miss' in watch) {
                     rejectResponse(response, 403, [t('generic.error-forbidden')]);
@@ -691,17 +698,22 @@ export const requirePermissionViaCookie = (key: string) => {
  * the stream calls this every 30 seconds and ends on `false`.
  *
  * Fails closed: a resolver error (a revoked family, a datastore outage) answers `false`, the same
- * as a role that no longer holds `key` — indistinguishable from outside, and both mean the stream
+ * as a role that no longer holds the rule — indistinguishable from outside, and both mean the stream
  * stops. A request the guard never admitted has nothing to recheck, which is the same answer.
  *
  * @param request - the request that opened the stream, carrying the guard's recheck
- * @param key - the permission key to re-check
- * @returns whether the caller still holds `key`
+ * @param action - the action to re-check
+ * @param subject - the subject it is asked about
+ * @returns whether the caller still holds the rule
  */
-export const stillHoldsKeyViaCookie = (request: Request, key: string): Promise<boolean> =>
+export const stillHoldsRuleViaCookie = (
+    request: Request,
+    action: string,
+    subject: string
+): Promise<boolean> =>
     Promise.resolve()
         .then(() => request.sessionRecheck?.() ?? { miss: 'revoked' as const })
-        .then((resolution) => judgeKeyHolder(request, resolution, key) !== undefined)
+        .then((resolution) => judgeRuleHolder(request, resolution, action, subject) !== undefined)
         .catch(() => false);
 
 /** What {@link requireFreshAuth} may additionally demand, beyond how recently. */

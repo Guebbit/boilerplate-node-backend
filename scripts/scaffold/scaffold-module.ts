@@ -17,7 +17,7 @@ import { REPO_ROOT } from '../modules-on-disk';
 /** The decisions the scaffolder cannot make for the author, printed after a successful run. */
 const OPEN_DECISIONS = [
     'personalData is "none": change it if a record names a person (module.ts).',
-    'Roles: only admin holds the new keys; grant them in shared/authorization-roles.yaml.',
+    'Roles: only admin lists the new set; grant it in shared/authorization-roles.yaml.',
     'Rate limits: none declared; add a budget for any public or expensive route.',
     'Frontend: no counterpart is generated; declare module.yaml#frontend if the name differs.',
     'Fill in the TODOs in module.yaml, module.ts and docs/modules/<name>.md.'

@@ -5,7 +5,7 @@
 
 import { accessibleFilter } from '@kernel/access/query';
 import { callerForSubject } from '@kernel/permissions';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { orderService } from '@modules/orders';
 import type { AuthContext } from '@types';
 import { paymentRepository } from '../repository';
@@ -20,7 +20,7 @@ export const callerScope = (context?: AuthContext) => accessibleFilter(context, 
 /**
  * Which payments a caller may CONFIRM or SYNC: their own, and nobody else's. These are the
  * customer's money steps, so the scope is the payer's — never {@link callerScope}, the READ scope,
- * which a role holding `payments.any.read` would otherwise stretch across everyone's.
+ * which a role holding `display:Payment` would otherwise stretch across everyone's.
  *
  * @param context - the caller; with none, the anonymous read scope, which matches nothing
  */
@@ -29,7 +29,7 @@ export const payerScope = (context?: AuthContext): Record<string, unknown> =>
 
 /**
  * Which orders a caller may open a payment intent on: their own live ones. The same reasoning as
- * {@link payerScope} — paying is the buyer's step, not whatever `orders.any.read` reaches.
+ * {@link payerScope} — paying is the buyer's step, not whatever `display:Order` reaches.
  *
  * @param context - the caller; with none, the anonymous read scope, which matches nothing
  */
@@ -38,10 +38,9 @@ export const buyerOrderScope = (context?: AuthContext): Record<string, unknown> 
 
 /**
  * Whether the caller reads every payment, and so may be sent the provider's own ids and a refund's
- * failure reason. By key name: `holdsKey` would also say yes to `payments.self.read`.
+ * failure reason. By key name: `holds` would also say yes to `read:Payment`.
  *
  * @param context - the caller, or `undefined` for no request behind this read
  */
 export const readsAllPayments = (context?: AuthContext): boolean =>
-    context !== undefined &&
-    heldKeys(callerForSubject(context, 'Payment')).has('payments.any.read');
+    context !== undefined && heldRules(callerForSubject(context, 'Payment')).has('display:Payment');

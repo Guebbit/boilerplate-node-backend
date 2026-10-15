@@ -155,15 +155,15 @@ See [Observability Endpoints](../api/observability.md) for the full list. Key ro
 | Route                                 | Auth                                  | Returns                                                                                   |
 | ------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `GET /observability/metrics`          | scraper bearer (`NODE_METRICS_TOKEN`) | Raw Prometheus exposition (text/plain) — scrape target                                    |
-| `GET /observability/health`           | `platform.observability.any.read`     | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
-| `GET /observability/metrics/overview` | `platform.observability.any.read`     | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
-| `GET /observability/audit`            | `platform.observability.any.read`     | Recent incidents from the persisted audit trail, newest first                             |
+| `GET /observability/health`           | `read:ObservabilitySnapshot`          | Full health snapshot: DB status, memory, CPU, integration flags, uptime                   |
+| `GET /observability/metrics/overview` | `read:ObservabilitySnapshot`          | KPI summary: HTTP totals, error rate, in-flight count, p50/p95 latency, business counters |
+| `GET /observability/audit`            | `read:ObservabilitySnapshot`          | Recent incidents from the persisted audit trail, newest first                             |
 
 These endpoints return **curated, domain-shaped summaries** — they are the data layer for a custom frontend, not raw Prometheus query results.
 
 ## SSE metrics stream
 
-- `GET /observability/events` (`text/event-stream`, authenticated by refresh cookie, needs `platform.observability.any.read`)
+- `GET /observability/events` (`text/event-stream`, authenticated by refresh cookie, needs `read:ObservabilitySnapshot`)
 
 Emits `metrics.snapshot` immediately on connect, then `metrics.updated` every 5 s and a `heartbeat` every 15 s.
 

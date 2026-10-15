@@ -9,7 +9,7 @@ tags:
       description: Placing, reading and managing orders and their lifecycle.
 
 x-error-codes:
-    ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`inventory.any.read`).' }
+    ORDER_INSUFFICIENT_STOCK: { status: 409, description: 'An admin-created order references a quantity beyond the product''s available stock. `errors[].details.lines` names each short line with its `productId`, `title` and `requested` quantity; `available` is added only for a caller who reads stock (`read:StockLevel`).' }
     ORDER_EXPORT_TOO_LARGE: { status: 422, description: 'The export would carry more orders than `NODE_ORDER_EXPORT_MAX_ROWS` allows. The message names the cap; narrow the filters and ask again.' }
     ORDER_INVOICED: { status: 409, description: 'This action is not allowed once an order has been invoiced.' }
     ORDER_LINE_LIMIT_EXCEEDED: { status: 422, description: 'An admin-created order has more lines, or a larger quantity on one line, than this deployment allows (`NODE_ADMIN_ORDER_MAX_LINES`, `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY`). The message names the limit.' }
@@ -41,7 +41,7 @@ paths:
             summary: List orders (paginated)
             description: |
                 Returns a paginated list of orders.
-                A caller holding `orders.self.read` alone sees their own orders, and the `userId` filter is ignored for them; `orders.any.read` reads every order and may narrow by `userId`.
+                A caller holding `read:Order` alone sees their own orders, and the `userId` filter is ignored for them; `display:Order` reads every order and may narrow by `userId`.
             operationId: listOrders
             security:
                 - bearerAuth: []
@@ -214,7 +214,7 @@ paths:
                 `currency`, `paymentMethod`, `paidAt`. No address: both are encrypted at rest and an export is
                 no reason to read them.
 
-                Requires `orders.any.export` (manager and admin), which is step-up gated (`sensitive`): the file
+                Requires `export:Order` (manager and admin), which is step-up gated (`sensitive`): the file
                 carries every customer's email, so the caller must have proved themselves recently. An API key
                 holds no session and cannot export. Over `NODE_ORDER_EXPORT_MAX_ROWS` rows the answer is `422`
                 `ORDER_EXPORT_TOO_LARGE`, before any byte of the file; narrow the filters. A cell that would
@@ -305,7 +305,7 @@ paths:
             summary: Search orders (DTO-friendly)
             description: |
                 Searches and filters orders via a JSON request body. Functionally equivalent to `GET /orders`.
-                A caller holding `orders.self.read` alone sees their own orders, and the `userId` filter is ignored for them; `orders.any.read` reads every order and may narrow by `userId`.
+                A caller holding `read:Order` alone sees their own orders, and the `userId` filter is ignored for them; `display:Order` reads every order and may narrow by `userId`.
             operationId: searchOrders
             x-alias-of: listOrders
             security:
@@ -510,7 +510,7 @@ paths:
                 the order's held stock in every case. Whether the MONEY goes back is `refund`:
                 a customer is always refunded and cannot waive it, an operator chooses. Later
                 statuses need their own flow (a return). A customer can cancel only their own
-                orders; an operator (a caller holding `orders.any.update`) can cancel anyone's, and must have proved
+                orders; an operator (a caller holding `update:Order`) can cancel anyone's, and must have proved
                 themselves recently: a stale session answers `401 REAUTH_REQUIRED`, while the buyer's own
                 cancel is never prompted. The check and the write are one atomic statement, so a cancel racing a status change resolves
                 to exactly one winner.
@@ -548,7 +548,7 @@ paths:
             description: >-
                 What happened to the order, oldest first: status moves, payments and refunds,
                 shipments, returns, documents. Every caller who may read the order may read this,
-                but not the same rows. A caller holding `orders.any.read` sees every row, with the
+                but not the same rows. A caller holding `display:Order` sees every row, with the
                 `actor` who made it and any `text` staff wrote. The buyer sees only the
                 buyer-visible types and never an `actor`: a manual correction, a hold and a failed
                 refund stay with staff.
@@ -584,7 +584,7 @@ paths:
                 which is `paid` or later: an order still `pending` is refused, since leaving
                 `pending` goes only through the offline-payment door, which records the money and
                 issues the invoice. Never into `paid` (that stays system-only in absolute terms)
-                and never `cancelled` (`POST /orders/{id}/cancel` is that door). Requires `orders.any.override`, itself
+                and never `cancelled` (`POST /orders/{id}/cancel` is that door). Requires `override:Order`, itself
                 step-up gated, and a non-empty `reason` recorded on the order's timeline (`status_overridden`).
                 Webhooks still fire for this move; no shipped email does.
             operationId: overrideOrderStatus
@@ -1208,7 +1208,7 @@ components:
                     description: >-
                         The statuses `POST /orders/{id}/status-override` would accept as a
                         destination for this caller right now — empty for anyone without
-                        `orders.any.override`, or once the order has left every overridable status.
+                        `override:Order`, or once the order has left every overridable status.
                     example: [processing, shipped, delivered]
                 withdraw:
                     type: boolean

@@ -74,7 +74,7 @@ describe('applyScaffold', () => {
             "import scaffoldProbe from './modules/scaffold-probe/module';"
         );
         expect(readFileSync(path.join(root, 'shared/authorization-roles.yaml'), 'utf8')).toContain(
-            '- scaffoldprobe.any.delete'
+            '- ScaffoldProbeManagement'
         );
     });
 

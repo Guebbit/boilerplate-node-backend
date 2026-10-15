@@ -59,7 +59,7 @@ export const getOrderCreditNote = (
                     }
 
                     recordStaffRead(request, {
-                        key: 'orders.any.read',
+                        key: 'display:Order',
                         action: invoicingAuditActions.ADMIN_CREDIT_NOTE_VIEWED,
                         targetType: 'credit_note',
                         // The row id, not the number: it repeats across the invoice series.

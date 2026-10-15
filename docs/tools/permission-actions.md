@@ -33,7 +33,7 @@ runs the same script again because its `rm -rf ./api` removes the file.
 ## What consumes it
 
 - Backend: `kernel/permissions.ts` re-exports the `PermissionAction` type and hands
-  `PERMISSION_ACTIONS` to the Zod schemas that validate every key in the shared file.
+  `PERMISSION_ACTIONS` to the Zod schemas that validate every rule in the shared file.
 - Frontend: `PermissionAction` in `<frontend>/src/infrastructure/session.ts` is the generated type, so a screen
   can only ask `can()` for an action the backend declares.
 
@@ -41,7 +41,7 @@ runs the same script again because its `rm -rf ./api` removes the file.
 
 1. Add it to `actions:` in `shared/contracts/authorization-keys.root.yaml`, with the reason CRUD
    cannot say it.
-2. Declare a key that carries it, in the module's `authorization.yaml`.
+2. Declare a rule that carries it, in the module's `authorization.yaml`, and list it in a set.
 3. `npm run regenerate`. Nothing else is typed by hand.
 
 ## Guards

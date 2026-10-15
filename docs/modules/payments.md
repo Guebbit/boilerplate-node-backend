@@ -401,7 +401,7 @@ asked BEFORE the status moves: a rejection leaves the payment `succeeded`, so th
 (`ORDER_REFUND_OWED`, above) can actually retry it, instead of a failed attempt being recorded as a
 successful one.
 
-Requires `payments.any.create`, the same fresh-session tier as a refund (`payments.any.update`) — an
+Requires `create:Payment`, the same fresh-session tier as a refund (`create:Refund`) — an
 admin's own word that money arrived is exactly as consequential as one that it left.
 
 The webhook is not on this diagram because it does not add an edge the diagram doesn't already
@@ -538,7 +538,7 @@ flowchart LR
 
 ## The staff Payments page
 
-Four reads behind one admin page, all `payments.any.read` (support, manager, admin) and never
+Four reads behind one admin page, all `display:Payment` (support, manager, admin) and never
 shared-cached. A payer reads their own payment through `GET /payments/order/{orderId}` only.
 
 | Read                                     | Answers                                                                                                                                                         |

@@ -20,7 +20,7 @@ paths:
                 is dated by `paidAt`, a reversal by the credit note's `issuedAt`, and days are the
                 shop's (`NODE_SHOP_TIMEZONE`), so a bucket edge is shop-local midnight. `from` and
                 `to` are shop-local calendar days, both inclusive; the range may not pass two years
-                or 400 buckets. Needs `stats.any.read`. Never cached: it is the shop's money.
+                or 400 buckets. Needs `read:Stats`. Never cached: it is the shop's money.
             operationId: getSalesStats
             security:
                 - bearerAuth: []
@@ -48,7 +48,7 @@ paths:
                 The products that sold most in the period, by net sales: units ordered, units
                 reversed by returns received in the period, net units and net sales (VAT out).
                 Reads the order lines as they were frozen, so a deleted order drops out. Needs
-                `stats.any.read`.
+                `read:Stats`.
             operationId: getProductStats
             security:
                 - bearerAuth: []
@@ -78,7 +78,7 @@ paths:
             description: >-
                 Units ordered and units reversed for one product, per bucket, plus its title as
                 the orders froze it. The orders behind it are `GET /orders?productId=…&paidFrom=…`.
-                Needs `stats.any.read`.
+                Needs `read:Stats`.
             operationId: getProductSalesSeries
             security:
                 - bearerAuth: []
@@ -111,7 +111,7 @@ paths:
             description: >-
                 Net sales and units per category, from the categories each order line froze. A
                 product in two categories counts in both, so the rows do not add up to the total.
-                Needs `stats.any.read`.
+                Needs `read:Stats`.
             operationId: getCategoryStats
             security:
                 - bearerAuth: []
@@ -136,7 +136,7 @@ paths:
             summary: Payments mix (staff)
             description: >-
                 Payments that took money in the period (`succeeded`, refunded or not), by
-                method and provider, with their count and amount. Needs `stats.any.read`.
+                method and provider, with their count and amount. Needs `read:Stats`.
             operationId: getPaymentMixStats
             security:
                 - bearerAuth: []
@@ -162,7 +162,7 @@ paths:
             description: >-
                 Cancellation rate as a cohort (orders placed in the period that ended cancelled),
                 return rate (units returned ÷ units ordered, Shopify's `returned_quantity_rate`)
-                and refund rate (credit notes ÷ invoices, VAT included). Needs `stats.any.read`.
+                and refund rate (credit notes ÷ invoices, VAT included). Needs `read:Stats`.
             operationId: getOperationsStats
             security:
                 - bearerAuth: []
@@ -188,7 +188,7 @@ paths:
             description: >-
                 Customers who paid in the period, split into new (their first paid order falls in
                 the period) and returning. Matched by account only, never by email: every erased
-                account shares one placeholder address. Needs `stats.any.read`.
+                account shares one placeholder address. Needs `read:Stats`.
             operationId: getCustomerStats
             security:
                 - bearerAuth: []
@@ -213,7 +213,7 @@ paths:
             summary: What is waiting right now (staff)
             description: >-
                 A snapshot, not a period: bank transfers awaiting money (count, amount incl. VAT,
-                the nearest `payBy`) and paid orders not yet shipped. Needs `stats.any.read`.
+                the nearest `payBy`) and paid orders not yet shipped. Needs `read:Stats`.
             operationId: getPipelineStats
             security:
                 - bearerAuth: []

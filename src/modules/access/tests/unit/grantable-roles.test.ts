@@ -25,7 +25,7 @@ const assignableTenantRoles = PRESET_ROLES.filter(
 ).map((role) => role.name);
 
 describe('grantableRoles', () => {
-    // The rule is "hold `roles.any.assign`", so only a role manager hands out roles, and any of
+    // The rule is "hold `assign:Role`", so only a role manager hands out roles, and any of
     // them. `customer` and `unverified` are not roles at all: an audience is computed, so there is
     // nothing to grant.
     it.each([

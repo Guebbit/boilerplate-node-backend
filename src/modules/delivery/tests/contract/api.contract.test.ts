@@ -185,7 +185,7 @@ describe('POST /delivery/order/{orderId}/start', () => {
         expect(response.status).toBe(409);
     });
 
-    it('matches the error contract for a customer, who holds no delivery.any.start', async () => {
+    it('matches the error contract for a customer, who holds no start:Shipment', async () => {
         const { bearer, user } = await authenticateAs('user');
         const order = await createOrder(user, [toOrderItem(await createProduct(), 1)], {
             status: OrderStatus.paid
@@ -369,7 +369,7 @@ describe('POST /delivery/fulfillment-orders/{id}/fulfill', () => {
         expect(response.body.errors[0].code).toBe('ORDER_NOT_PROCESSING');
     });
 
-    it('matches the error contract for a customer, who holds no delivery.any.update', async () => {
+    it('matches the error contract for a customer, who holds no update:Shipment', async () => {
         const { bearer, user } = await authenticateAs('user');
         const digital = await createProduct({ requiresShipping: false });
         const order = await createOrder(user, [toOrderItem(digital, 1)], {

@@ -1,35 +1,33 @@
 #!/usr/bin/env tsx
 /**
- * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: which keys a role actually holds,
- * per role, per module. Same shape as `generate-module-graph.ts` — markers in the page, prose
- * around them untouched, `--check` in `complete`.
+ * The EFFECTIVE role matrix in `docs/demo-ecommerce/index.md`: which rules a role actually holds,
+ * per role, per module. Same shape as `generate-module-graph.ts` — markers in the page, prose around
+ * them untouched, `--check` in `complete`.
  *
  * ONE TABLE, and only this one. What a role DECLARES is prose on the page, written by hand from
  * `shared/authorization-roles.yaml`'s own `title` and `description` — that file documents itself,
- * and a generated copy of its key lists said less than the descriptions it ignored.
+ * and a generated copy of its set lists said less than the descriptions it ignored.
  *
  * What it answers cannot be written by hand, which is why this survives: `admin` alone holds most
- * of the declared tenant keys, spelled out by name, and every signed-in caller is a customer first
+ * of the declared tenant sets, spelled out by name, and every signed-in caller is a customer first
  * (see `keysInScope` in `kernel/permissions.ts`). That is many cells nobody can derive reliably by
  * eye.
  *
- * Asked through `heldKeys` rather than by re-expanding the keys here: a second expander is a
+ * Asked through `heldRules` rather than by re-expanding the sets here: a second expander is a
  * second answer to "what may this role do", and the one in the docs would be the one nobody runs.
- * Not `holdsKey`: that collapses two keys sharing an action and a subject but differing in
- * breadth into one yes/no, which is right for a route guard and wrong for enumerating exactly
- * which keys a role holds.
  */
 
 import path from 'node:path';
 import {
     AUDIENCE_NAMES,
-    PERMISSION_KEYS,
+    IMPLIED_ACTIONS,
+    PERMISSION_RULES,
     PRESET_ROLES,
     assembleCaller,
     keysInScope,
     type AudienceName
 } from '@kernel/permissions';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { applyMarkerBlocks } from './marker-block';
 import type { AuthorizationScope, Caller } from '@types';
 import { REPO_ROOT as ROOT } from '../modules-on-disk';
@@ -75,8 +73,8 @@ const personas: Persona[] = [
     )
 ];
 
-/** Every module that declares a key, in declaration order — the table's columns. */
-const modules = [...new Set(PERMISSION_KEYS.map((key) => key.module))];
+/** Every module that declares a rule, in declaration order — the table's columns. */
+const modules = [...new Set(PERMISSION_RULES.map((rule) => rule.module))];
 
 /**
  * The caller a persona resolves to, as the evaluator sees it.
@@ -111,27 +109,29 @@ const codes: Record<string, string> = {
     override: 'o'
 };
 
-/** The breadth segment of a key — always the one before its action. `orders.any.read` is `any`. */
-const breadthOf = (key: string): string => key.split('.').at(-2) ?? '';
-
 /**
- * What a role may do in one module: one code letter per action it holds, UPPERCASE when the
- * caller holds the `any`-breadth key for it (every row, not only their own), lowercase for `self`,
- * and an em dash for nothing.
+ * What a role may do in one module: one code letter per action it holds, UPPERCASE when a rule
+ * for it carries no condition (every row, not only the caller's own), lowercase when a condition
+ * narrows it, and an em dash for nothing. A staff action also counts for the plain ones it
+ * implies: `display` shows as `R`.
  */
 const cell = (caller: Caller, module: string): string => {
-    const heldByCaller = heldKeys(caller);
-    const held = PERMISSION_KEYS.filter(
-        (key) => key.module === module && heldByCaller.has(key.key)
+    const heldByCaller = heldRules(caller);
+    const held = PERMISSION_RULES.filter(
+        (rule) => rule.module === module && heldByCaller.has(rule.id)
     );
 
     if (held.length === 0) return '—';
 
+    const actionsOf = (rule: (typeof held)[number]): string[] => [
+        rule.action,
+        ...(IMPLIED_ACTIONS[rule.action] ?? [])
+    ];
     const wide = new Set(
-        held.filter((key) => breadthOf(key.key) === 'any').map((key) => key.action)
+        held.filter((rule) => rule.conditions === undefined).flatMap((rule) => actionsOf(rule))
     );
 
-    return [...new Set(held.map((key) => key.action))]
+    return [...new Set(held.flatMap((rule) => actionsOf(rule)))]
         .map((action) => {
             const code = codes[action] ?? action;
 
@@ -140,7 +140,7 @@ const cell = (caller: Caller, module: string): string => {
         .join('');
 };
 
-/** The effective table: which keys `heldKeys` answers, per module. */
+/** The effective table: which rules `heldRules` answers, per module. */
 const effectiveTable = (): string =>
     [
         `| Role | ${modules.join(' | ')} |`,
@@ -162,7 +162,7 @@ const body = (): string =>
         '',
         effectiveTable(),
         '',
-        'UPPERCASE — the `any`-breadth key, every row · lowercase — `self`, the caller’s own · ' +
+        'UPPERCASE — a rule with no condition, every row · lowercase — narrowed to the caller’s own or the published rows · ' +
             '`r` read · `c` create · `u` update · `d` delete · `x` checkout · `s` sweep · ' +
             '`o` override · — nothing',
         '',

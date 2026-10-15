@@ -6,7 +6,7 @@
  *
  * The second invariant matters as much as the first: the value is a name and NEVER the number
  * left. "Reading the shelf" (`docs/theory/defences/authorization.md`) gives exact stock to
- * `inventory.any.read` only, so no field of any cart answer may vary with what is on the shelf
+ * `read:StockLevel` only, so no field of any cart answer may vary with what is on the shelf
  * beyond that one name.
  */
 

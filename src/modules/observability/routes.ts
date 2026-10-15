@@ -21,10 +21,7 @@ import { getObservabilityHealth } from './controllers/get-observability-health';
 import { getObservabilityMetricsOverview } from './controllers/get-observability-metrics-overview';
 import { getObservabilityAuditLogs } from './controllers/get-observability-audit';
 import { getObservabilityMetrics } from './controllers/get-observability-metrics';
-import {
-    getObservabilityEvents,
-    OBSERVABILITY_READ_KEY
-} from './controllers/get-observability-events';
+import { getObservabilityEvents } from './controllers/get-observability-events';
 
 /** Express router for observability endpoints mounted at /observability. */
 export const router = Router();
@@ -41,7 +38,7 @@ router.get(
     '/events',
     // The cookie alone authenticates this stream, so a page on another origin must not open it.
     requireAllowedOrigin,
-    requirePermissionViaCookie(OBSERVABILITY_READ_KEY),
+    requirePermissionViaCookie('read', 'ObservabilitySnapshot'),
     getObservabilityEvents
 );
 
@@ -55,7 +52,7 @@ router.get(
     '/health',
     getAuth,
     isAuth,
-    requirePermission(OBSERVABILITY_READ_KEY),
+    requirePermission('read', 'ObservabilitySnapshot'),
     getObservabilityHealth
 );
 
@@ -64,7 +61,7 @@ router.get(
     '/metrics/overview',
     getAuth,
     isAuth,
-    requirePermission(OBSERVABILITY_READ_KEY),
+    requirePermission('read', 'ObservabilitySnapshot'),
     getObservabilityMetricsOverview
 );
 
@@ -73,6 +70,6 @@ router.get(
     '/audit',
     getAuth,
     isAuth,
-    requirePermission(OBSERVABILITY_READ_KEY),
+    requirePermission('read', 'ObservabilitySnapshot'),
     getObservabilityAuditLogs
 );

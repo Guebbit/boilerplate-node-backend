@@ -1,21 +1,21 @@
 /**
  * @module
  * The audit entry for staff reading someone else's record: `admin.<resource>.viewed`. A customer
- * reading their own order is not an event, so only a caller holding the resource's wide-read key
- * (`*.any.read`) is recorded, and not when the record is their own. Detail reads only — a list
+ * reading their own order is not an event, so only a caller holding the resource's staff read rule
+ * (`display:<Subject>` or `read:<Subject>`) is recorded, and not when the record is their own. Detail reads only — a list
  * would write one entry per page, and the entry that matters is the one naming a record.
  *
  * See: docs/theory/defences/authentication.md
  */
 
 import type { Request } from 'express';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { callerContextOf } from '@infrastructure/http/request';
 import { recordAudit, type AuditAction } from '@infrastructure/observability/audit';
 
 /** What one staff read names. */
 export interface StaffReadTarget {
-    /** The wide-read permission key whose holder is "staff" for this resource, e.g. `orders.any.read`. */
+    /** The wide-read permission key whose holder is "staff" for this resource, e.g. `display:Order`. */
     key: string;
     /** The `admin.<resource>.viewed` action to record. */
     action: AuditAction;
@@ -36,7 +36,7 @@ export interface StaffReadTarget {
  */
 export const recordStaffRead = (request: Request, target: StaffReadTarget): void => {
     const { caller } = request;
-    if (!caller || !heldKeys(caller).has(target.key)) return;
+    if (!caller || !heldRules(caller).has(target.key)) return;
     if (target.ownerId !== undefined && target.ownerId === caller.id) return;
 
     recordAudit(callerContextOf(request), {

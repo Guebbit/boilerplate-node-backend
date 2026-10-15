@@ -14,7 +14,7 @@ import { mint } from '@modules/api-keys/services/api-keys';
 /**
  * Mint a credential holding exactly `permissions` and return its plaintext secret.
  *
- * @param permissions - the keys the credential holds, e.g. `['products.any.read']`; the minter
+ * @param permissions - the keys the credential holds, e.g. `['display:Product']`; the minter
  *   is an admin, so any declared key is mintable
  * @returns the plaintext secret, for an `Authorization: Bearer` header
  */

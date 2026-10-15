@@ -1,23 +1,37 @@
-keys:
+rules:
     # -- inventory -----------------------------------------------------------------------------
-    - key: inventory.any.read
-      module: inventory
+    - action: read
       subject: StockLevel
-      action: read
+      module: inventory
       scope: tenant
       description: Read stock levels and the movements behind them.
-    - key: inventory.any.create
-      module: inventory
+    - action: create
       subject: StockMovement
-      action: create
+      module: inventory
       scope: tenant
       description: Record a receipt or an adjustment, or set a product's preorder limit. Stock never moves without one.
     # Not a CRUD verb — see `actions:` above. Guards the one route that clears expired reservation
     # holds on a schedule; granted to no preset role but `admin`, who holds it by name like every
     # other key. See `inventory/routes.ts`.
-    - key: inventory.any.sweep
-      module: inventory
+    - action: sweep
       subject: StockLevel
-      action: sweep
+      module: inventory
       scope: tenant
       description: Clear expired reservation holds. The expiry tick, not a role's own tool.
+
+sets:
+    - name: InventoryDisplay
+      module: inventory
+      description: Read stock levels and the movements behind them.
+      rules:
+          - read:StockLevel
+    - name: InventoryManagement
+      module: inventory
+      description: Record a receipt or an adjustment.
+      rules:
+          - create:StockMovement
+    - name: InventorySweep
+      module: inventory
+      description: Clear expired reservation holds.
+      rules:
+          - sweep:StockLevel

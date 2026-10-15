@@ -2,8 +2,8 @@
  * @module
  * The notifications route table.
  *
- * An inbox is somebody's, so every route is authenticated and gated on a `notifications.self.*`
- * key. Two things can silently break: ORDER — the literal segments must precede `/:id` — and the
+ * An inbox is somebody's, so every route is authenticated and gated on a `Notification`
+ * rule. Two things can silently break: ORDER — the literal segments must precede `/:id` — and the
  * stream's credential, which is the refresh cookie and must NOT be a bearer guard (an
  * `EventSource` cannot send the header).
  */

@@ -233,7 +233,7 @@ describe('userService.getById', () => {
 describe('userService.create', () => {
     it('creates a user and returns the Mongoose document', async () => {
         // `callerContextAs('admin')`, not `testCallerContext`: a real route guard would already
-        // have enforced `users.any.create`, which an anonymous caller does not hold.
+        // have enforced `create:User`, which an anonymous caller does not hold.
         const user = await expectCreated(
             {
                 email: 'created@example.com',
@@ -296,7 +296,7 @@ describe('userService.create', () => {
 
     it('lets a moderator create a plain customer, who holds no role at all', async () => {
         // A customer is computed from `verifiedAt` (set on every admin create), never granted, so
-        // naming no role writes no membership and needs no key beyond `users.any.create`.
+        // naming no role writes no membership and needs no key beyond `create:User`.
         const user = await expectCreated(
             {
                 email: 'moderator-made@example.com',

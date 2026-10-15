@@ -45,7 +45,7 @@ const notPaid = (): ResponseReject =>
 /**
  * Report that fulfilment has started on a paid order — the `paid → processing` door, before any
  * shipment exists to record. Makes the order's fulfillment orders too if the `paid` listener has not
- * yet. No `forced` variant: the admin override (`orders.any.override`,
+ * yet. No `forced` variant: the admin override (`override:Order`,
  * `POST /orders/{id}/status-override`) is the other reachable path onto `processing`, and adding
  * a second forcing shape here would only duplicate it.
  * @param orderId - the order to start fulfilling

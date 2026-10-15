@@ -99,7 +99,7 @@ revoking the keys fails, the row stays pending and the relay retries it, so a re
 report success while the keys stay live. Revoking is idempotent (only active keys are touched, and
 a person with none live gets neither audit row nor mail), so a redelivery does nothing twice.
 
-- **Minting needs a fresh session** (`stepUp: critical` on `apikeys.any.create`): a stolen access
+- **Minting needs a fresh session** (`stepUp: critical` on `create:ApiKey`): a stolen access
   token must not turn ten minutes into a long-lived key. GitHub's sudo mode asks the same.
 - **Every key expires**, at most one year out. A key that never expires never gets rotated.
 - **The minter is mailed** when a key is created, and again — with the list — when logout-everywhere,
@@ -128,7 +128,7 @@ for one instead of throwing, exactly like a build with no `account` has no JWTs 
 
 ## Managing it
 
-**Revoking is not protected.** Any holder of `apikeys.any.delete` revokes any key in the tenant, a
+**Revoking is not protected.** Any holder of `delete:ApiKey` revokes any key in the tenant, a
 fellow administrator's included: revoking only takes access away, so the
 [protection of staff accounts](../theory/authorization.md#protecting-people) has nothing to guard.
 

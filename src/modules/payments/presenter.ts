@@ -13,7 +13,7 @@ import type { Payment, Refund } from '@types';
 import { displayStatusOf } from './domain';
 import type { PaymentDocument, RefundRecord } from './model';
 
-/** The stored fields only a caller holding `payments.any.read` is sent. */
+/** The stored fields only a caller holding `display:Payment` is sent. */
 export interface StaffFields {
     providerRef?: string;
     refunds: Pick<RefundRecord, 'providerRefundRef' | 'failureReason'>[];

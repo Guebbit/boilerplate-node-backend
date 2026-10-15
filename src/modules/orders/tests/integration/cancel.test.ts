@@ -255,7 +255,7 @@ describe('cancelById — who gets their money back', () => {
     });
 
     it('lets a moderator cancel without returning the money too', async () => {
-        // The bug this pins: `orders.any.update` is held by name, not through the scope
+        // The bug this pins: `update:Order` is held by name, not through the scope
         // wildcard a moderator never holds — asking for the wildcard alone forced a refund
         // this operator had a reason not to make.
         const user = await createUser();
@@ -654,8 +654,8 @@ describe('withActions', () => {
         }
     });
 
-    it("gives the warehouse `start` on a paid order, without `orders.any.update`'s admin column", async () => {
-        // Holds `delivery.any.start` but not `orders.any.update` — `actorOf` alone would read
+    it("gives the warehouse `start` on a paid order, without `update:Order`'s admin column", async () => {
+        // Holds `start:Shipment` but not `update:Order` — `actorOf` alone would read
         // this caller as a plain customer, which must not decide `start`.
         const user = await createUser();
         const order = await seedOrder(user);
@@ -724,7 +724,7 @@ describe('withActions', () => {
     });
 
     it('offers an override holder every forward destination, on a customer-only status too', async () => {
-        // `admin` holds `orders.any.override`, which `overridableTargetsFrom` answers from the
+        // `admin` holds `override:Order`, which `overridableTargetsFrom` answers from the
         // index-based rule alone — a `paid` order can be overridden straight to any later status.
         const user = await createUser();
         const order = await seedOrder(user);
@@ -735,7 +735,7 @@ describe('withActions', () => {
         expect(body.actions!.override).toEqual(['processing', 'shipped', 'delivered']);
     });
 
-    it("never offers the warehouse `orders.any.override`'s destinations", async () => {
+    it("never offers the warehouse `override:Order`'s destinations", async () => {
         const user = await createUser();
         const order = await seedOrder(user);
         const paid = await orderRepository.updateStatusIfIn(String(order._id), ['pending'], 'paid');

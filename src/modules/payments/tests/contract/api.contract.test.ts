@@ -369,7 +369,7 @@ const preparedPayment = async () => {
 };
 
 /**
- * The card steps spend a basket, so they ask `cart.self.checkout`: an account whose address is not
+ * The card steps spend a basket, so they ask `checkout:Cart`: an account whose address is not
  * proven is told to confirm it (`deniedCode`), not that it lacks permission in the abstract.
  */
 describe('the card steps — who may pay', () => {

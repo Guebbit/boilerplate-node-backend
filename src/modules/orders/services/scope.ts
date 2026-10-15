@@ -6,7 +6,7 @@
  */
 
 import { callerForSubject, isSystemActor } from '@kernel/permissions';
-import { holdsKey } from '@kernel/ability';
+import { holds } from '@kernel/ability';
 import type { AuthContext, Order, OrderActions } from '@types';
 import type { OrderDocument } from '../model';
 import { accessibleFilter } from '@kernel/access/query';
@@ -38,10 +38,10 @@ export const callerScope = (context?: AuthContext) => accessibleFilter(context, 
 
 /**
  * Which orders a caller may CANCEL — the write's own scope, never the read one. A warehouse
- * operator or a support agent can READ every order (`orders.any.read`) without being allowed to
+ * operator or a support agent can READ every order (`display:Order`) without being allowed to
  * cancel any: asking `callerScope` here would have scoped a write by a read key.
  *
- * - an operator (`orders.any.update`): the update scope, every live order that key reaches;
+ * - an operator (`update:Order`): the update scope, every live order that key reaches;
  * - anyone else, or a withdrawal (the consumer's own right, never an operator's): the caller's own
  *   live orders, and nothing at all for a caller with no id.
  *
@@ -87,26 +87,26 @@ export const ownLiveScope = (userId: string): Record<string, unknown> => ({
  * own `AuthContext`, and no request may claim the same column by holding the admin role alone.
  *
  * `SYSTEM_ACTOR` carries `roles.tenant: 'admin'` for every ORDINARY permission check, so this must
- * ask the identity question FIRST — an `authContext && holdsKey(...)` check alone would read it as
+ * ask the identity question FIRST — an `authContext && holds(...)` check alone would read it as
  * a plain admin and hand the sweep's expiry the admin column's wider `cancelled` rule, exactly the
  * race this rule closes (see `../domain/lifecycle.ts`'s own comment on `pending.cancelled`).
  *
- * Otherwise gated on `orders.any.update` by name, the same key `cancelById` asks for its own
+ * Otherwise gated on `update:Order` by name, the same key `cancelById` asks for its own
  * operator/customer split — a broader check would have missed a moderator or manager and
  * silently reduced them to the customer's lifecycle column.
  * @returns the actor whose permissions apply
  */
 export const actorOf = (authContext?: AuthContext): OrderActor => {
     if (isSystemActor(authContext)) return 'system';
-    return authContext && holdsKey(callerForSubject(authContext, 'Order'), 'orders.any.update')
+    return authContext && holds(callerForSubject(authContext, 'Order'), 'update', 'Order')
         ? 'admin'
         : 'customer';
 };
 
 /**
  * `delivery`'s start door, plus `orders`' own override — neither decided by `actorOf`'s
- * customer/admin split, since a warehouse operator holds `delivery.any.start` without
- * `orders.any.update` and would otherwise read as a plain customer. Each is asked of the caller's
+ * customer/admin split, since a warehouse operator holds `start:Shipment` without
+ * `update:Order` and would otherwise read as a plain customer. Each is asked of the caller's
  * OWN key, at the same tenant scope `actorOf` already resolves. The ship, deliver and fulfil doors
  * are not here: they act on a fulfillment order or a shipment, each of which carries its own
  * `actions` (`delivery`'s presenter).
@@ -126,9 +126,9 @@ const startAndOverrideActions = (
     // read `start` as true for an order already `processing`.
     const reachesProcessing = (ORDER_EVENTS.start.from as readonly OrderStatus[]).includes(status);
     return {
-        start: holdsKey(caller, 'delivery.any.start') && reachesProcessing,
+        start: holds(caller, 'start', 'Shipment') && reachesProcessing,
         // The door's own stock guard, so no target is offered that answers 409.
-        override: holdsKey(caller, 'orders.any.override')
+        override: holds(caller, 'override', 'Order')
             ? overridableTargetsFrom(status, isDigitalOnlyOrder(order.items)).filter(
                   (to) => !shipsAwaitedStock(to, order.fulfillment)
               )
@@ -165,7 +165,7 @@ const withoutCancelOnceShipped = <T extends { transitions: OrderStatus[]; cancel
 const canRecordPayment = (status: OrderStatus, authContext: AuthContext | undefined): boolean =>
     authContext !== undefined &&
     isPayable(status) &&
-    holdsKey(callerForSubject(authContext, 'Order'), 'payments.any.create');
+    holds(callerForSubject(authContext, 'Order'), 'create', 'Payment');
 
 /**
  * Whether the caller may spend a basket at all — the key `POST /payments/intent` and the other card
@@ -175,8 +175,7 @@ const canRecordPayment = (status: OrderStatus, authContext: AuthContext | undefi
  * @param authContext - the caller, or `undefined` for no request behind this read
  */
 const holdsCheckout = (authContext: AuthContext | undefined): boolean =>
-    authContext !== undefined &&
-    holdsKey(callerForSubject(authContext, 'Order'), 'cart.self.checkout');
+    authContext !== undefined && holds(callerForSubject(authContext, 'Order'), 'checkout', 'Cart');
 
 /**
  * The withdrawal button, decided here so no client counts days: offered to the order's own buyer

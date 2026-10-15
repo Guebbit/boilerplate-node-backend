@@ -13,7 +13,7 @@
  * Fresh session: every route that moves money requires `requireFreshAuth('critical')` —
  *                a stolen access token proves nothing about how recently the holder typed their
  *                password.
- * Verified:      the three routes the customer drives directly also require the `cart.self.checkout`
+ * Verified:      the three routes the customer drives directly also require the `checkout:Cart`
  *                key — an unproven address must not be able to pay and start receiving payment
  *                mail at an inbox nobody confirmed. `cart` owns the key; `payments` mounts it, the
  *                same as `products/routes.ts` mounts `locales`-owned `translations.*`.
@@ -72,12 +72,12 @@ router.use(getAuth, isAuth);
 // The staff Payments page. Static segments, and none of them collides with `/:id/...` below (those
 // are all POSTs on a longer path). Never shared-cached: the answer is the whole shop's money, and
 // `noStore` is the POST rule — RFC 9111 §3.5.
-router.get('/', requirePermission('payments.any.read'), privateNoCache, getPayments);
-router.post('/search', requirePermission('payments.any.read'), noStore, getPayments);
-router.get('/refunds', requirePermission('payments.any.read'), privateNoCache, getRefunds);
+router.get('/', requirePermission('display', 'Payment'), privateNoCache, getPayments);
+router.post('/search', requirePermission('display', 'Payment'), noStore, getPayments);
+router.get('/refunds', requirePermission('display', 'Payment'), privateNoCache, getRefunds);
 router.get(
     '/attention',
-    requirePermission('payments.any.read'),
+    requirePermission('display', 'Payment'),
     privateNoCache,
     getPaymentAttention
 );
@@ -88,7 +88,7 @@ router.get(
 router.post(
     '/intent',
     requireFreshAuth('critical'),
-    requirePermission('cart.self.checkout'),
+    requirePermission('checkout', 'Cart'),
     paymentIntentLimiter,
     postPaymentIntent
 );
@@ -98,28 +98,28 @@ router.get('/order/:orderId', getPaymentByOrder);
 
 // GET /payments/order-by-reference — the admin's RF-code lookup, same authority as offline below.
 // A literal segment, not `/order/:something`: it names no order yet, that's the whole point of it.
-router.get('/order-by-reference', requirePermission('payments.any.create'), getOrderByReference);
+router.get('/order-by-reference', requirePermission('create', 'Payment'), getOrderByReference);
 
 // POST /payments/order/:orderId/refund — the operator returns the money, order untouched. The key
 // is REQUIRED: a retried refund would otherwise return the money twice.
 /*
- * No `requireFreshAuth` here: `payments.any.update` carries `stepUp: critical` in
+ * No `requireFreshAuth` here: `create:Refund` carries `stepUp: critical` in
  * `shared/authorization-keys.yaml`, so the guard demands the fresh session and audits that it did.
  * The tier belongs to the ACTION — money leaving the shop — rather than to this one route, and a
  * second route reaching the same key would otherwise have to remember.
  */
 router.post(
     '/order/:orderId/refund',
-    requirePermission('payments.any.update'),
+    requirePermission('create', 'Refund'),
     requireIdempotencyKey,
     postPaymentRefund
 );
 
 // POST /payments/order/:orderId/offline — the admin recording money by hand. Same `stepUp`
-// arrangement as the refund: `payments.any.create` carries it in `shared/authorization-keys.yaml`.
+// arrangement as the refund: `create:Payment` carries it in `shared/authorization-keys.yaml`.
 router.post(
     '/order/:orderId/offline',
-    requirePermission('payments.any.create'),
+    requirePermission('create', 'Payment'),
     idempotencyKey,
     postPaymentOffline
 );
@@ -130,7 +130,7 @@ router.post(
 router.post(
     '/:id/confirm',
     requireFreshAuth('critical'),
-    requirePermission('cart.self.checkout'),
+    requirePermission('checkout', 'Cart'),
     paymentConfirmAttemptLimiter,
     paymentConfirmDeclineLimiter,
     paymentConfirmDeclineBlockLimiter,
@@ -146,7 +146,7 @@ router.post(
 router.post(
     '/:id/sync',
     requireFreshAuth('critical'),
-    requirePermission('cart.self.checkout'),
+    requirePermission('checkout', 'Cart'),
     paymentIntentLimiter,
     postPaymentSync
 );

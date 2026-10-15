@@ -5,15 +5,15 @@
  * consent state and the hold, so it is the one that can answer; the buyer and `paidAt` come from
  * `orders`, one batched read a page.
  *
- * Who may read: the audience of the orders themselves. The route asks `orders.self.read`, which every
- * signed-in account holds, so the scope is in the query: staff holding `orders.any.read` see every
+ * Who may read: the audience of the orders themselves. The route asks `read:Order`, which every
+ * signed-in account holds, so the scope is in the query: staff holding `display:Order` see every
  * row, anyone else only their own orders'.
  *
  * See: docs/modules/delivery.md#the-preorder-board
  */
 
 import { callerForSubject } from '@kernel/permissions';
-import { heldKeys } from '@kernel/ability';
+import { heldRules } from '@kernel/ability';
 import { orderBriefsByIds, ownOrderIds } from '@modules/orders';
 import {
     buildPaginatedMeta,
@@ -43,7 +43,7 @@ export interface BoardQuery extends PaginationInput {
 }
 
 /**
- * The orders the caller may read, or `undefined` for all of them. Staff holding `orders.any.read`
+ * The orders the caller may read, or `undefined` for all of them. Staff holding `display:Order`
  * read every order; anyone else reads their own, and a caller with no id reads none.
  *
  * @param authContext - the caller
@@ -52,7 +52,7 @@ const readableOrders = (
     authContext: AuthContext | undefined
 ): Promise<readonly string[] | undefined> => {
     if (!authContext) return Promise.resolve([]);
-    const readsEvery = heldKeys(callerForSubject(authContext, 'Order')).has('orders.any.read');
+    const readsEvery = heldRules(callerForSubject(authContext, 'Order')).has('display:Order');
     return readsEvery ? Promise.resolve(undefined) : ownOrderIds(authContext.id);
 };
 

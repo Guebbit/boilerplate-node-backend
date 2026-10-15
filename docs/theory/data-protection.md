@@ -97,7 +97,7 @@ here.
 | Rectification          | 16      | `PUT /account`                                                                              | the subject only                      | —                                                                                                                                                                                                                                                                                                                                                            |
 | Objection to profiling | 21      | `analyticsConsent: false` via `PUT /account`, or the `X-Analytics-Consent` header pre-login | the subject, or anonymous per-request | does not retroactively delete events already sent to the provider — that is the provider's own deletion tooling                                                                                                                                                                                                                                              |
 
-Separately from the subject's own export, staff holding `orders.any.export` (manager, admin;
+Separately from the subject's own export, staff holding `export:Order` (manager, admin;
 step-up gated, audited, rate-limited and row-capped) can take the order list out as a CSV carrying
 each customer's email — [why that is acceptable, and how it is guarded](../modules/orders.md#the-csv-export).
 

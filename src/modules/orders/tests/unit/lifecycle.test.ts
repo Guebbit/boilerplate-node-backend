@@ -123,7 +123,7 @@ describe('who may write `processing`', () => {
 
     it('refuses an admin writing it by hand', () => {
         // `PUT /orders/:id` never carries `status` at all; the admin override
-        // (`orders.any.override`, step-up) is the only reachable path onto this status today.
+        // (`override:Order`, step-up) is the only reachable path onto this status today.
         expect(canTransition(OrderStatus.paid, OrderStatus.processing, 'admin')).toBe(false);
     });
 });

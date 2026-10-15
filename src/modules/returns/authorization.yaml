@@ -1,30 +1,44 @@
-keys:
+rules:
     # -- returns -------------------------------------------------------------------------------
-    # There is no `returns.self.*` key. A customer making or reading their own return needs only to
+    # There is no own-rows rule on `Return`. A customer making or reading their own return needs only to
     # be signed in — the same rule an order's own cancel follows — and "own" is decided by who owns
     # the ORDER (a return is keyed by `orderId`, never by `userId`, so erasing the account leaves
     # the record without a personal link).
-    - key: returns.any.read
-      module: returns
+    - action: read
       subject: Return
-      action: read
+      module: returns
       scope: tenant
       description: Read every return in the shop — the queue staff work through.
-    - key: returns.any.update
-      module: returns
+    - action: update
       subject: Return
-      action: update
+      module: returns
       scope: tenant
       description: Decide a return request — approve it, or decline it with a reason.
-    # Narrower than `returns.any.update` on purpose, the way `delivery.any.start` is narrower than
-    # `orders.any.update`: the warehouse holds the parcel and may say it arrived, without being
+    # Narrower than `update:Return` on purpose, the way `start:Shipment` is narrower than
+    # `update:Order`: the warehouse holds the parcel and may say it arrived, without being
     # handed the decision of whether the return was owed.
-    - key: returns.any.receive
-      module: returns
+    - action: receive
       subject: Return
-      action: receive
+      module: returns
       scope: tenant
       description: Record that the returned goods arrived — puts the units back on sale and returns the customer's money.
-      # Receiving pays the customer back. Same tier as `payments.any.update`: a stolen access token
+      # Receiving pays the customer back. Same tier as `create:Refund`: a stolen access token
       # proves nothing about how recently its holder typed their password.
       stepUp: critical
+
+sets:
+    - name: ReturnDisplay
+      module: returns
+      description: Read every return.
+      rules:
+          - read:Return
+    - name: ReturnManagement
+      module: returns
+      description: Approve or decline a return request.
+      rules:
+          - update:Return
+    - name: ReturnReceiving
+      module: returns
+      description: Record that returned goods arrived.
+      rules:
+          - receive:Return
