@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/adapters/image-store.test.ts
-sha256: b41ae19e64a33e7262650982f7f94b39f3dc312144a7f3ac16401012905e6e7d
-generated_at: 2026-09-27T16:03:38.761706+00:00
+sha256: 29f5274090d03d46f31c939d5395f23fac1451b16391ac7fb4b559d7326d082f
+generated_at: 2026-10-15T13:06:12.844467+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,29 +9,30 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `filesystemImageStore` adapter, exercising every public method against a **real** temporary directory rather than a mocked `fs`. The explicit rationale (in the file's docblock) is that the critical property under test is *which* path string gets resolved, not that `unlink` was called at all — a mock cannot verify that.
+Unit tests for `filesystemImageStore`, verifying that the single module responsible for translating `imageUrl` strings to filesystem paths does so correctly. Tests use a real temp directory (not a mocked `fs`) because the property under test is *which* path string is produced, not merely that a string is produced.
 
 ## Key elements
 
-- **`makeImage(name)`** – helper that writes a file under `<root>/images/<name>` and returns both the absolute path and the public `/images/<name>` URL.
-- **`makeThumbnail(stem)`** – helper that creates `images/thumbs/v1/<stem>.webp`, the derivative `remove()` must clean up.
-- **`stageUpload(name, contents)`** – helper that writes a file into a `<root>/staging` directory, simulating a pre-publication upload.
-- **`describe('filesystemImageStore.quarantine')`** – verifies the staged file is moved into `<root>/quarantine/`, the original is consumed (no copy remains), and the quarantine directory is created on demand.
-- **`describe('filesystemImageStore.readQuarantined')`** – round-trip read after quarantine; rejection for unknown keys.
-- **`describe('filesystemImageStore.removeQuarantined')`** – deletion of a quarantined file; `false` for missing keys.
-- **`describe('filesystemImageStore.promote')`** – writes digested bytes under `images/`, derives extension from MIME type (png/jpg/webp), returns a URL (never a path), creates the directory on demand, is idempotent for duplicate stems, and leaves no temp-file residue.
-- **`describe('filesystemImageStore.putDerivative')`** – writes a thumbnail at `images/thumbs/v1/<stem>.webp` regardless of the source extension.
-- **`describe('filesystemImageStore.remove')`** – the largest block: deletes the named file, returns `false` for missing/empty/`undefined` URLs, deletes the co-located thumbnail, tolerates a missing thumbnail, **refuses absolute/protocol-relative remote URLs** (e.g. `https://…`, `//…`), and **refuses path-traversal payloads** (`/../…`) that would escape the public directory.
+- **`makeImage(name)`** – Helper that writes a file at `<root>/images/<name>` and returns both the absolute path and the stored URL (`/images/<name>`).
+- **`makeThumbnail(stem)`** – Helper that creates `<root>/images/thumbs/v1/<stem>.webp` to simulate a derivative.
+- **`stageUpload(name, contents)`** – Helper that places a file in `<root>/staging/`, standing in for an unvalidated upload.
+- **`beforeEach` / `afterEach`** – Create a fresh `mkdtemp` root, set `NODE_PUBLIC_PATH` and `NODE_QUARANTINE_PATH` via `setEnvironment`, and tear down the temp tree after each test.
+- **`describe('filesystemImageStore.quarantine')`** – Verifies the staged file is moved (not copied) into the quarantine directory and the key is returned.
+- **`describe('filesystemImageStore.readQuarantined')`** – Round-trip read after quarantine; rejection for missing keys.
+- **`describe('filesystemImageStore.removeQuarantined')`** – Deletion and boolean return for missing keys.
+- **`describe('filesystemImageStore.promote')`** – MIME-to-extension mapping (png/jpg/webp), URL (not path) return shape, idempotent overwrite for duplicate stems, directory creation on demand, and absence of leftover temp files.
+- **`describe('filesystemImageStore.putDerivative')`** – Thumbnail always written as `.webp` under `images/thumbs/v1/`.
+- **`describe('filesystemImageStore.remove')`** – Deletion of the main image *and* its thumbnail; `false` for missing/undefined/empty/remote/protocol-relative URLs; path-traversal containment (refuses `../` escapes); refusal to delete the public directory itself.
 
 ## Relationships
 
-- **`src/infrastructure/adapters/image-store.ts`** – the module under test. The file imports `filesystemImageStore` from `@infrastructure/adapters/image-store` and exercises every method on that object. All assertions are about its observable filesystem side-effects and return values.
-- **`tests/unit/scripts/pairing/spec-identity.test.ts`** – listed as a graph neighbor, but no direct import or interaction with this file is visible in the source.
+- **`src/infrastructure/adapters/image-store.ts`** – The module under test. Provides `filesystemImageStore` (all method suites above) and `applyImageWriteback` (imported; exercised indirectly if at all in the truncated portion).
+- **`tests/support/environment.ts`** – Supplies `setEnvironment`, used in `beforeEach` to point `NODE_PUBLIC_PATH` and `NODE_QUARANTINE_PATH` at the per-test temp root so the adapter resolves paths against the test fixture rather than a real deployment path.
 
 ## Notes
 
-- **No `fs` mocking.** The file deliberately uses `node:fs/promises` against a real `mkdtemp` directory. If you refactor the adapter, you must keep the real-fs contract or the security tests (path traversal, remote-URL rejection) become meaningless.
-- **Environment variables are mutated and restored.** `NODE_PUBLIC_PATH` and `NODE_QUARANTINE_PATH` are set in `beforeEach` and restored in `afterEach`. Running this suite in parallel with other tests that read those vars will cause flakiness.
-- **The protocol-relative URL test (`//images/flat.png`)** is called out in its own comment as the *only* remote-URL case that would fail if the `isRemoteUrl` guard were removed, because it happens to resolve to a valid local subdirectory. The other remote-URL cases (`https://cdn…`) would be caught by the images-directory check regardless.
-- **`promote` idempotency test** documents that a duplicate digest run (redelivered job, reclaimed lease) must silently overwrite, not throw a "file exists" error.
-- **`remove` thumbnail-cleanup test** asserts that the thumbnail stem is derived from the image key's stem (e.g. `stored.jpg` → `stored.webp`), not from the file extension.
+- **Why real `fs`:** The file's header comment explains that a mocked `fs` would only assert "unlink was called with a string," missing the actual invariant (the correct string). All assertions read/write real bytes.
+- **Protocol-relative URL pin (`//images/flat.png`):** This single case is the *only* test that isolates the `isRemoteUrl` guard. Other remote URLs (e.g. `https://cdn…`) would also be caught by the images-directory check if that guard were removed, so they do not pin the protocol-relative logic.
+- **Security contract:** `imageUrl` is client-supplied and typed as `uri-reference`. The path-traversal and remote-URL tests encode the guarantee that no caller can cause deletion outside `<publicPath>/images/`.
+- **`remove()` is the sole cleanup point for thumbnails:** The test asserting thumbnail deletion alongside the main image encodes that no other call site is expected to clean `thumbs/v1/`.
+- **`promote` idempotency:** Two promotes with the same stem overwrite silently (last writer wins); this is what makes redelivered digest jobs harmless.

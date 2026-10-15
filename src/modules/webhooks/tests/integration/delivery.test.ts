@@ -435,7 +435,7 @@ describe('sustained failure', () => {
 
     it('notifies the subscription owner once auto-disabled', async () => {
         const auditSpy = observePort(auditPort.emitAuditEvent);
-        const owner = await createUser({ email: 'owner@example.com' });
+        const owner = await createUser({ email: 'owner@example.com', locale: 'it' });
         const subscription = await createSubscription(
             `${server.url}/hook`,
             ['*'],
@@ -454,7 +454,7 @@ describe('sustained failure', () => {
         expect(enqueueEmailMock).toHaveBeenCalledWith(
             expect.objectContaining({ to: 'owner@example.com' }),
             'webhooks.subscription-disabled',
-            expect.objectContaining({ url: `${server.url}/hook` })
+            expect.objectContaining({ url: `${server.url}/hook`, locale: 'it' })
         );
 
         expect(auditSpy).toHaveBeenCalledWith(

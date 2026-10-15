@@ -59,7 +59,10 @@ const notifyOwnerOfAutoDisable = (subscription: WebhookSubscriptionDocument | nu
         .getById(subscription.ownerUserId)
         .then((owner) => {
             if (!owner) return;
-            const mail = subscriptionDisabledEmail(getDefaultLocale(), subscription.url);
+            const mail = subscriptionDisabledEmail(
+                owner.locale ?? getDefaultLocale(),
+                subscription.url
+            );
             void enqueueEmail({ to: owner.email, subject: mail.subject }, mail.template, mail.data);
         })
         .catch((error: unknown) => {

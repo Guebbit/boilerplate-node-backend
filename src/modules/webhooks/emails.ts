@@ -15,8 +15,7 @@ import { translator } from '@infrastructure/i18n';
  * subscription is a separate, operator-facing signal (the `QueueJobsParked`-style alert on parked
  * deliveries), never this — the two never share a channel.
  *
- * @param locale - the shop's default locale; auto-disable is a system event with no request behind
- *   it to carry the owner's own preference
+ * @param locale - the owner's stored language; the shop's default only when the account has none
  * @param url - the disabled subscription's endpoint, so the notice is unambiguous about which one
  */
 export const subscriptionDisabledEmail = (locale: string, url: string): EmailContent => {

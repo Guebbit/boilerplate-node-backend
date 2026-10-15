@@ -1,7 +1,7 @@
 ---
 source: tests/unit/infrastructure/surfaces/create-update-controller.test.ts
-sha256: 23c2a911074433b138c6dd2ceb6ab44bf724e86dcb27193dd937e9e38efc87db
-generated_at: 2026-09-27T16:11:03.908664+00:00
+sha256: 0cbd9432757197d1452cdb8d076a7234bb367baac1507f9a559bad1cb2396061
+generated_at: 2026-10-15T13:21:11.790987+00:00
 model: ollama:qwen3.8:27b
 ---
 
@@ -9,27 +9,32 @@ model: ollama:qwen3.8:27b
 
 ## Purpose
 
-Unit tests for the `createUpdateController` factory and its two exported helpers (`clearableFields`, `fillOmittedWithNull`). The tests pin the PUT/PATCH contract—PUT fills omitted clearable fields with `null` before calling `update()`, while PATCH forwards only what the caller sent—plus edge cases around validation, id resolution, multipart boolean decoding, and response shaping. The helpers are tested in isolation because a mutation in either would slip past route-level tests that never omit a field.
+Unit tests for `createUpdateController`, the shared PUT/PATCH controller factory. The core property under test is the split between PUT (fills every omitted clearable field with `null` before delegating to `update()`) and PATCH (forwards only the fields the caller sent). The file also pins the helpers `clearableFields` and `fillOmittedWithNull` in isolation, because a mutant in either would still pass any route-level test that never omits a field. A final suite covers conditional-write (ETag / `If-Match`) behavior.
 
 ## Key elements
 
-- **`replaceSchema` / `patchSchema`** – Zod schemas exercising all three field categories (required, nullable+optional, optional-but-non-nullable) used throughout the suite.
-- **`makeController(overrides?)`** – Builds a `createUpdateController` spec with a default `update` mock returning `generateSuccess`; each test overrides only what it targets.
-- **`makeRequest(body, id?, multipart?)`** – Wraps a plain object in an Express `Request` stub via `asStub`; the `multipart` flag makes `request.is('multipart/form-data')` return the type.
-- **`describe('createUpdateController')`** – Nine cases covering: null-filling on PUT, pass-through on PATCH, explicit-null idempotency, multipart boolean decode, 422 on bad id, 422 on schema violation, service-reject passthrough (409), `present()` shaping on 200, and `idFrom` as the sole id source (no `:id` param).
-- **`describe('clearableFields')`** – Asserts the function returns exactly the nullable-optional keys from a schema.
-- **`describe('fillOmittedWithNull')`** – Four cases: leaves present fields alone, fills only declared fields, does not invent keys, and never mutates the input object.
+- **`replaceSchema` / `patchSchema`** — Zod test schemas: one required field, one clearable-nullable field, one non-nullable optional field; `patchSchema` is the `.partial()` of `replaceSchema`.
+- **`makeController(overrides?, idSource?)`** — builds a fully stubbed controller over the widget schemas; every test case overrides only what it exercises (`update`, `completeReplace`, `present`, `keptWhenOmitted`, `input`, etc.).
+- **`makeRequest(body, id?, multipart?, ifMatch?)`** — constructs an Express `Request` stub via `asStub`; supports `multipart/form-data` detection and `If-Match` header.
+- **`makeResponse()`** — response stub extended with `setHeader` (needed for ETag assertions in conditional-write tests).
+- **`savingUpdate(write)`** — an `update` mock that calls `fencedSave` with a fixed `editRevision`, modelling a real service save.
+- **`describe('createUpdateController')`** — PUT/PATCH pipeline: null-filling, `completeReplace` passthrough, `keptWhenOmitted`, multipart boolean decoding, 404 for bad id, 422 for schema violation, service-reject passthrough (409), `present()` shaping, `idFrom` alternative id source.
+- **`describe('clearableFields')`** — asserts it returns exactly the nullable-optional field names.
+- **`describe('fillOmittedWithNull')`** — asserts it fills absent declared keys, leaves present keys, ignores undeclared keys, and never mutates the input.
+- **`describe('createUpdateController — conditional writes')`** — 412 on stale `If-Match`, successful write when `If-Match` matches the loaded revision (using `etagOf` / `fencedSave`).
 
 ## Relationships
 
-- **`src/infrastructure/surfaces/create-update-controller.ts`** – Module under test. Imports `createUpdateController`, `clearableFields`, `fillOmittedWithNull`, and the `UpdateControllerSpec` type.
-- **`src/infrastructure/http/response.ts`** – Provides `generateSuccess` / `generateReject` used to mock the `update()` return value in every controller case.
-- **`tests/support/express.ts`** – Provides `makeResponseStub`, the canned Express `Response` object whose `.status` and `.json` calls are asserted.
-- **`tests/support/stub.ts`** – Provides `asStub`, which wraps a plain object into a Jest-`as`-typed stub typed as `Request`.
+- **`src/infrastructure/surfaces/create-update-controller.ts`** — the module under test; provides `createUpdateController`, `clearableFields`, `fillOmittedWithNull`, and the `UpdateControllerSpec` / `UpdateIdSource` types.
+- **`src/infrastructure/http/response.ts`** — source of `generateSuccess` / `generateReject`, used to simulate the shape the service layer returns so the controller's response branch is exercised.
+- **`src/infrastructure/persistence/versioning.ts`** — source of `fencedSave` (revision-guarded write) and `etagOf` (ETag derivation); used in the conditional-write suite.
+- **`tests/support/express.ts`** — provides `makeResponseStub`, the base response object most cases assert against.
+- **`tests/support/stub.ts`** — provides `asStub`, used by `makeRequest` to cast a plain object to a typed Express `Request`.
 
 ## Notes
 
-- `VALID_ID` is a real 24-hex ObjectId; any other string triggers the module's `extractAndValidateId` 422 path. Use it as-is when writing new cases.
-- The multipart-boolean test requires **both** the `multipart` flag on the request stub **and** `input: { booleans: ['featured'] }` in the spec—either alone will not exercise the decode branch.
-- The `idFrom` test passes `id: undefined` to `makeRequest`, deliberately omitting `params.id` to mirror a self-service route (e.g. `/account`) that has no `:id` segment.
-- `fillOmittedWithNull` is asserted to be **non-mutating**; a future refactor to in-place assignment will break the last case in that block.
+- `keptWhenOmitted` (e.g. file-upload fields) suppresses null-filling on omission but still honours an explicit `null` — a distinct semantic from the default clearable behaviour.
+- The malformed-id tests assert the 404 fires *before* body validation, so a bad body cannot mask the 404.
+- `idFrom` (a function returning an id) fully replaces the path `:id`; the test passes `id: undefined` to prove no path param is read.
+- `fillOmittedWithNull` is verified to be a pure function (no mutation of its input object).
+- `LOADED_REVISION = 4` is a module-level constant shared by all conditional-write cases; change it in one place if the fixture revision changes.
