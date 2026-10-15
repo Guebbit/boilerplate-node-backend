@@ -64,10 +64,11 @@ interface RouteRow {
     /** Every handler on the route, in mount order, named or labelled. */
     chain: string[];
     /**
-     * What the `requirePermission` guard on this route asks, own stack or router-level `use`,
-     * `undefined` for a route with no such guard.
+     * What every `requirePermission` guard on this route asks, own stack and router-level `use`
+     * alike, in mount order — empty for a route with no such guard. A route may stack several
+     * (a product write asks for the product AND the translation), and every one must hold.
      */
-    permission?: PermissionAsk;
+    permissions: PermissionAsk[];
 }
 
 /**
@@ -340,12 +341,9 @@ const walk = (
             continue;
         }
 
-        const own = layer.route.stack
-            .map(({ handle }) => handle.permission)
-            .find((ask): ask is PermissionAsk => ask !== undefined);
-        const inherited = appliesHandles
+        const asks = [...appliesHandles, ...layer.route.stack.map(({ handle }) => handle)]
             .map((handle) => handle.permission)
-            .find((ask): ask is PermissionAsk => ask !== undefined);
+            .filter((ask): ask is PermissionAsk => ask !== undefined);
         for (const method of Object.keys(layer.route.methods).filter(
             (each) => layer.route!.methods[each]
         ))
@@ -353,7 +351,7 @@ const walk = (
                 method: method.toUpperCase(),
                 path: layer.route.path,
                 chain: layer.route.stack.map(({ handle }) => handlerName(handle)),
-                permission: own ?? inherited,
+                permissions: asks,
                 // Copied, not shared: later `use` layers must not appear to guard earlier routes.
                 applies: [...applies]
             });

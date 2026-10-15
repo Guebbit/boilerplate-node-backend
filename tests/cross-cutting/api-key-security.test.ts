@@ -70,9 +70,9 @@ describe('apiKeyAuth in the contract matches the routes that admit a key', () =>
         (operation, route) => {
             const admitsKey =
                 route.guards.includes('isAuthOrCredential') &&
-                (route.permission === undefined ||
-                    findRule(ruleId(route.permission.action, route.permission.subject))?.stepUp ===
-                        undefined);
+                route.permissions.every(
+                    (ask) => findRule(ruleId(ask.action, ask.subject))?.stepUp === undefined
+                );
 
             expect(listsApiKey(security.get(operation))).toBe(
                 admitsKey || KEY_AWARE_OPTIONAL_READS.has(operation)

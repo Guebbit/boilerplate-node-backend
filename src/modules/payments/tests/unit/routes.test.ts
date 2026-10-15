@@ -88,10 +88,8 @@ describe('payment routes', () => {
         // customer's own, not admin ones — see the module docblock's "Verified" row.
         const shopperRules = new Set(['update:Cart', 'checkout:Cart']);
         const adminGuarded = routeTable(router)
-            .filter(
-                ({ permission }) =>
-                    permission !== undefined &&
-                    !shopperRules.has(`${permission.action}:${permission.subject}`)
+            .filter(({ permissions }) =>
+                permissions.some(({ action, subject }) => !shopperRules.has(`${action}:${subject}`))
             )
             .map(({ method, path }) => `${method} ${path}`);
 

@@ -25,8 +25,7 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
-import { everyMountedRoute, type MountedRoute } from '@tests/contract-routes';
-import type { PermissionAsk } from '@tests/routes';
+import { everyMountedRoute } from '@tests/contract-routes';
 import { holds } from '@kernel/ability';
 import { callerAs } from '@tests/callers';
 import { isUnrestrictedRole, PRESET_ROLES } from '@kernel/permissions';
@@ -84,8 +83,10 @@ describe('every route requiring an admin (contract-derived)', () => {
     const requiresAdmin = routes.filter(
         (route) =>
             route.guards.includes('requirePermissionGuard') &&
-            (route.permission === undefined ||
-                !holds(callerAs('customer'), route.permission.action, route.permission.subject))
+            (route.permissions.length === 0 ||
+                route.permissions.some(
+                    (ask) => !holds(callerAs('customer'), ask.action, ask.subject)
+                ))
     );
 
     it.each(requiresAdmin.map((route) => [signature(route), route] as const))(
@@ -119,10 +120,7 @@ const NON_ADMIN_TENANT_ROLES: readonly string[] = [
 ];
 
 describe('every guarded route agrees with the role file, for every non-admin role (contract-derived)', () => {
-    const guarded = routes.filter(
-        (route): route is MountedRoute & { permission: PermissionAsk } =>
-            route.permission !== undefined
-    );
+    const guarded = routes.filter((route) => route.permissions.length > 0);
 
     it.each(guarded.map((route) => [signature(route), route] as const))(
         '%s answers 403 to exactly the roles that lack its rule',
@@ -132,7 +130,11 @@ describe('every guarded route agrees with the role file, for every non-admin rol
                 // tenant-scope role never holds a `platform.` key, so a platform route's answer is
                 // "false" for every one of these, and the loop asserts 403 across the board.
                 const caller = callerAs(role);
-                const allowed = holds(caller, route.permission.action, route.permission.subject);
+                // A route that stacks guards (a product write asks for the product AND the
+                // translation) is open only to a role that holds every one of them.
+                const allowed = route.permissions.every((ask) =>
+                    holds(caller, ask.action, ask.subject)
+                );
                 const { bearer } = await authenticateAsRole(role);
                 const response = await request(
                     route.method as HttpMethod,

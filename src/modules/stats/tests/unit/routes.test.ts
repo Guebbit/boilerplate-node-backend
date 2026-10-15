@@ -32,8 +32,8 @@ describe('stats routes', () => {
 
     it('guards every route on the one rule', () => {
         expect(
-            routeTable(router).map(
-                ({ permission }) => `${permission?.action}:${permission?.subject}`
+            routeTable(router).map(({ permissions }) =>
+                permissions.map(({ action, subject }) => `${action}:${subject}`).join(',')
             )
         ).toEqual(Array.from({ length: 8 }, () => 'read:Stats'));
     });

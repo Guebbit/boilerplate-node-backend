@@ -91,8 +91,7 @@ const handlersMountedUnauthenticated = (router: Router): Set<string> => {
 const permissionsBehindCredentialGuard = (router: Router): PermissionAsk[] =>
     effectiveRouteTable(router)
         .filter((row) => [...row.applies, ...row.chain].includes('isAuthOrCredential'))
-        .map((row) => row.permission)
-        .filter((ask): ask is PermissionAsk => ask !== undefined);
+        .flatMap((row) => row.permissions);
 
 describe('every controller reading the caller is mounted behind isAuth', () => {
     it('finds no handler asserting an auth context its route does not guarantee', () => {
